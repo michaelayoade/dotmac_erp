@@ -461,6 +461,7 @@ class TestPaymentIntentMatching:
             force_match=True,
             source_type="PAYMENT_INTENT",
             source_id=intent.intent_id,
+            match_state="suggested",
         )
 
     def test_happy_path_reference_in_description(
@@ -994,6 +995,7 @@ class TestSplynxPaymentMatching:
             force_match=True,
             source_type="CUSTOMER_PAYMENT",
             source_id=pmt.payment_id,
+            match_state="suggested",
         )
 
     def test_splynx_ref_in_description(

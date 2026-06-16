@@ -93,7 +93,9 @@ def test_employee_detail_context_includes_assigned_assets_when_allowed(monkeypat
         captured["employee_id"] = employee_id
         return [assigned_asset]
 
-    monkeypatch.setattr("app.services.people.hr.web.employee_web.OrgResolver", _Resolver)
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrgResolver", _Resolver
+    )
     monkeypatch.setattr(
         "app.services.people.hr.lifecycle.LifecycleService",
         _LifecycleService,
@@ -151,7 +153,9 @@ def test_employee_detail_context_skips_assigned_assets_without_access(monkeypatc
         def get_onboarding_for_employee(self, _org_id, _employee_id):
             return None
 
-    monkeypatch.setattr("app.services.people.hr.web.employee_web.OrgResolver", _Resolver)
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrgResolver", _Resolver
+    )
     monkeypatch.setattr(
         "app.services.people.hr.lifecycle.LifecycleService",
         _LifecycleService,

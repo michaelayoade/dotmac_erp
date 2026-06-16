@@ -166,6 +166,22 @@
     </div>
 
     <div id="results-container">
+        {% if not search %}
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <p class="text-slate-500 dark:text-slate-400">
+                {% if collapsed %}
+                Showing <span class="font-medium text-slate-700 dark:text-slate-300">top-level accounts</span> — reseller balances roll up their sub-accounts. Expand a row to see them.
+                {% else %}
+                Showing <span class="font-medium text-slate-700 dark:text-slate-300">all accounts</span>, including sub-accounts.
+                {% endif %}
+            </p>
+            <a href="/finance/ar/customers{{ '' if show_subs else '?show_subs=1' }}"
+               class="inline-flex items-center gap-1.5 font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                {{ icon_svg("users", "h-4 w-4") }}
+                {{ 'Collapse sub-accounts' if show_subs else 'Show all sub-accounts' }}
+            </a>
+        </div>
+        {% endif %}
     {# Customers Table with Bulk Selection #}
         <div x-data="bulkActions({ entityName: 'customers' })">
             <div class="card">
@@ -185,11 +201,19 @@
                                 <th scope="col" class="text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
                             {% for customer in customers %}
+                            <tbody x-data="{ expanded: false }">
                             <tr class="group">
                                 {{ bulk_select_cell(customer.customer_id) }}
                                 <td>
+                                    {% if customer.sub_accounts %}
+                                    <button type="button" @click="expanded = !expanded"
+                                            :aria-expanded="expanded ? 'true' : 'false'"
+                                            aria-label="Toggle sub-accounts"
+                                            class="mr-1 align-middle text-slate-400 hover:text-teal-600 dark:hover:text-teal-400">
+                                        <span class="inline-block transition-transform duration-150" :class="expanded && 'rotate-90'">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }}</span>
+                                    </button>
+                                    {% endif %}
                                     <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ customer.customer_code }}</span>
                                 </td>
                                 <td>
@@ -238,14 +262,36 @@
                                     ) }}
                                 </td>
                             </tr>
+                            {% if customer.sub_accounts %}
+                            <tr x-show="expanded" x-cloak class="bg-slate-50/60 dark:bg-slate-800/30">
+                                <td></td>
+                                <td colspan="9" class="py-2">
+                                    <div class="space-y-1">
+                                        {% for sub in customer.sub_accounts %}
+                                        <div class="flex items-center justify-between gap-4 rounded px-2 py-1 hover:bg-white dark:hover:bg-slate-800">
+                                            <div class="flex min-w-0 items-center gap-2">
+                                                <span class="text-slate-300 dark:text-slate-600">&crarr;</span>
+                                                <span class="font-mono text-xs text-slate-400 dark:text-slate-500">{{ sub.customer_code }}</span>
+                                                <a href="/finance/ar/customers/{{ sub.customer_id }}" class="truncate text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">{{ sub.customer_name }}</a>
+                                                {{ status_badge('active' if sub.is_active else 'inactive', 'sm') }}
+                                            </div>
+                                            <span class="font-mono tabular-nums text-sm text-slate-600 dark:text-slate-300">{{ sub.balance }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            </tbody>
                             {% else %}
+                            <tbody>
                             <tr>
                                 <td colspan="10" class="py-12">
                                     {{ empty_state('No customers found', 'Get started by adding your first customer', 'users', 'Add Customer', '/finance/ar/customers/new') }}
                                 </td>
                             </tr>
+                            </tbody>
                             {% endfor %}
-                        </tbody>
                     </table>
                 </div>
 

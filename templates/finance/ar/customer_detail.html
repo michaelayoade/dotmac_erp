@@ -18,6 +18,11 @@
 {% block header_actions %}
 {% if customer %}
 <div class="flex items-center gap-2">
+    <a href="/finance/ar/customers/{{ customer.customer_id }}/statement"
+       class="btn btn-secondary">
+        {{ icon_svg("document", "h-4 w-4") }}
+        {{ 'Consolidated Statement' if is_consolidated else 'Statement' }}
+    </a>
     <a href="/finance/ar/customers/{{ customer.customer_id }}/edit"
        class="btn btn-secondary">
         {{ icon_svg("edit", "h-4 w-4") }}
@@ -32,6 +37,13 @@
             Delete
         </button>
     </form>
+    {% if is_consolidated %}
+    <a href="/finance/ar/customers/{{ customer.customer_id }}/consolidated-payment"
+       class="btn btn-secondary">
+        {{ icon_svg("credit-card", "h-4 w-4") }}
+        Consolidated Payment
+    </a>
+    {% endif %}
     <a href="/finance/ar/receipts/new?customer_id={{ customer.customer_id }}"
        class="btn btn-secondary">
         {{ icon_svg("credit-card", "h-4 w-4") }}
@@ -76,11 +88,24 @@
             <div class="flex items-center gap-3">
                 {{ status_badge('active' if customer.is_active else 'inactive', 'sm') }}
                 <div class="text-right">
-                    <p class="text-xs uppercase tracking-wide text-slate-500">Balance</p>
+                    <p class="text-xs uppercase tracking-wide text-slate-500">{{ 'Consolidated Balance' if is_consolidated else 'Balance' }}</p>
                     <p class="text-lg font-semibold font-mono tabular-nums text-slate-900 dark:text-white">{{ customer.balance | default("0.00") }}</p>
                 </div>
             </div>
         </div>
+        {% if is_consolidated %}
+        <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm dark:border-teal-800 dark:bg-teal-900/20">
+            <span class="inline-flex items-center gap-1.5 font-medium text-teal-700 dark:text-teal-300">
+                {{ icon_svg("users", "h-4 w-4") }} Consolidated account
+            </span>
+            <span class="text-teal-700 dark:text-teal-300">
+                Rolling up <span class="font-semibold">{{ family_count - 1 }}</span> sub-account{{ 's' if (family_count - 1) != 1 else '' }} — invoices, receipts and totals below cover the whole family.
+            </span>
+            <span class="text-teal-700 dark:text-teal-300">
+                Own balance: <span class="font-mono tabular-nums font-medium">{{ own_balance }}</span>
+            </span>
+        </div>
+        {% endif %}
         <div class="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Currency</p>
@@ -180,6 +205,7 @@
                 <thead>
                     <tr>
                         <th scope="col">Invoice #</th>
+                        {% if is_consolidated %}<th scope="col">Sub-account</th>{% endif %}
                         <th scope="col">Date</th>
                         <th scope="col">Due Date</th>
                         <th scope="col" class="text-right">Total</th>
@@ -195,6 +221,7 @@
                                 {{ inv.invoice_number }}
                             </a>
                         </td>
+                        {% if is_consolidated %}<td class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ inv.sub_account if inv.sub_account else '' }}</td>{% endif %}
                         <td class="text-sm text-slate-600 dark:text-slate-300">{{ inv.invoice_date }}</td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">{{ inv.due_date }}</td>
                         <td class="table-cell-amount">{{ inv.total_amount }}</td>
@@ -203,7 +230,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="py-8">
+                        <td colspan="{{ 7 if is_consolidated else 6 }}" class="py-8">
                             {{ empty_state('No invoices', 'No invoices for this customer yet.') }}
                         </td>
                     </tr>
@@ -328,6 +355,7 @@
                     <tr>
                         <th scope="col">Code</th>
                         <th scope="col">Customer Name</th>
+                        <th scope="col" class="text-right">Open Balance</th>
                         <th scope="col" class="text-center">Status</th>
                     </tr>
                 </thead>
@@ -340,6 +368,7 @@
                                 {{ child.customer_name }}
                             </a>
                         </td>
+                        <td class="table-cell-amount">{{ child.balance if child.balance else '' }}</td>
                         <td class="text-center">{{ status_badge('active' if child.is_active else 'inactive', 'sm') }}</td>
                     </tr>
                     {% endfor %}

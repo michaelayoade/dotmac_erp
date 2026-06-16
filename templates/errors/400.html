@@ -51,9 +51,15 @@
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-white mb-3">
             We Need a Few Details
         </h1>
+        {% if message %}
+        <p class="text-slate-700 dark:text-slate-200 mb-8 text-left whitespace-pre-line">
+            {{ message }}
+        </p>
+        {% else %}
         <p class="text-slate-600 dark:text-slate-300 mb-8">
             Some information is missing or needs correcting. Please review the form and try again.
         </p>
+        {% endif %}
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
             <a href="javascript:history.back()" class="btn btn-secondary">
                 {{ icon_svg("arrow-left", "w-4 h-4 mr-2") }}

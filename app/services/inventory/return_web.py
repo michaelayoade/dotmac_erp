@@ -31,7 +31,12 @@ from app.models.inventory.inventory_transaction import (
 )
 from app.models.people.hr import Employee
 from app.models.person import Person
-from app.services.common import coerce_uuid
+from app.services.common import (
+    PaginationParams,
+    coerce_uuid,
+    paginate,
+    pagination_context,
+)
 from app.services.finance.common import format_file_size
 from app.services.finance.common.attachment import attachment_service
 from app.services.inventory.transaction import (
@@ -84,43 +89,25 @@ class InventoryReturnWebService:
     ) -> dict[str, Any]:
         """Build context for the inventory returns list."""
         org_id = coerce_uuid(organization_id)
-        offset = (page - 1) * limit
 
-        total_count = (
-            db.scalar(
-                select(func.count())
-                .select_from(InventoryReturn)
-                .where(InventoryReturn.organization_id == org_id)
+        stmt = (
+            select(InventoryReturn)
+            .options(
+                joinedload(InventoryReturn.item),
+                joinedload(InventoryReturn.source_warehouse),
+                joinedload(InventoryReturn.destination_warehouse),
+                joinedload(InventoryReturn.material_request),
             )
-            or 0
+            .where(InventoryReturn.organization_id == org_id)
+            .order_by(
+                InventoryReturn.return_date.desc(),
+                InventoryReturn.created_at.desc(),
+            )
         )
-
-        returns = list(
-            db.scalars(
-                select(InventoryReturn)
-                .options(
-                    joinedload(InventoryReturn.item),
-                    joinedload(InventoryReturn.source_warehouse),
-                    joinedload(InventoryReturn.destination_warehouse),
-                    joinedload(InventoryReturn.material_request),
-                )
-                .where(InventoryReturn.organization_id == org_id)
-                .order_by(
-                    InventoryReturn.return_date.desc(),
-                    InventoryReturn.created_at.desc(),
-                )
-                .offset(offset)
-                .limit(limit)
-            ).all()
-        )
-
-        total_pages = max(1, (total_count + limit - 1) // limit)
+        result = paginate(db, stmt, PaginationParams.from_page(page, limit))
         return {
-            "returns": returns,
-            "page": page,
-            "limit": limit,
-            "total_count": total_count,
-            "total_pages": total_pages,
+            "returns": result.items,
+            **pagination_context(result),
         }
 
     @staticmethod

@@ -7,7 +7,7 @@ Both API and Web routes can use this service layer.
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from fastapi import UploadFile
@@ -174,7 +174,12 @@ class ImportWebService:
                 f"{', '.join(missing)}. Configure accounts or import chart of accounts first."
             )
 
-        return inventory_account, cogs_account, revenue_account, adjustment_account
+        # The `if missing` guard above guarantees all four are non-None here;
+        # cast narrows for mypy without an `assert` (which ruff S101 forbids).
+        return cast(
+            "tuple[UUID, UUID, UUID, UUID]",
+            (inventory_account, cogs_account, revenue_account, adjustment_account),
+        )
 
     @staticmethod
     def _get_importer(entity_type: str, db: Session, config: ImportConfig):

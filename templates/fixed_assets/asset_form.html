@@ -130,8 +130,8 @@
                         <option value="">Select category</option>
                         {% set selected_category = form_category_id if form_category_id is defined else '' %}
                         {% for category in categories %}
-                        <option value="{{ category.category_id }}" {{ 'selected' if selected_category == category.category_id|string else '' }}>
-                            {{ category.category_name }}
+                        <option value="{{ category.category_id }}" {{ 'selected' if selected_category == category.category_id else '' }}>
+                            {{ category.label if category.label is defined else category.category_name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -160,7 +160,7 @@
                         <option value="">Select department</option>
                         {% for department in departments_list %}
                         <option value="{{ department.department_id }}" {{ 'selected' if selected_department == department.department_id else '' }}>
-                            {{ department.department_code }} - {{ department.department_name }}
+                            {{ department.label if department.label is defined else department.department_code ~ ' - ' ~ department.department_name }}
                         </option>
                         {% endfor %}
                     </select>

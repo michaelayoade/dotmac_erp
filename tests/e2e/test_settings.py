@@ -477,7 +477,7 @@ class TestFeatureFlags:
 
         # Look for multi-currency feature toggle or text
         multi_currency = authenticated_page.locator(
-            "text=Multi Currency, text=multi_currency, text=Multi-Currency"
+            ":text('Multi Currency'), :text('multi_currency'), :text('Multi-Currency')"
         )
         expect(multi_currency.first).to_be_visible()
 
@@ -486,7 +486,7 @@ class TestFeatureFlags:
         goto_settings_page(authenticated_page, f"{base_url}/settings/features")
         authenticated_page.wait_for_load_state("networkidle")
 
-        budgeting = authenticated_page.locator("text=Budgeting, text=budgeting")
+        budgeting = authenticated_page.locator(":text('Budgeting'), :text('budgeting')")
         expect(budgeting.first).to_be_visible()
 
     def test_features_has_inventory_toggle(self, authenticated_page, base_url):
@@ -494,7 +494,7 @@ class TestFeatureFlags:
         goto_settings_page(authenticated_page, f"{base_url}/settings/features")
         authenticated_page.wait_for_load_state("networkidle")
 
-        inventory = authenticated_page.locator("text=Inventory, text=inventory")
+        inventory = authenticated_page.locator(":text('Inventory'), :text('inventory')")
         expect(inventory.first).to_be_visible()
 
     def test_features_has_fixed_assets_toggle(self, authenticated_page, base_url):
@@ -502,7 +502,9 @@ class TestFeatureFlags:
         goto_settings_page(authenticated_page, f"{base_url}/settings/features")
         authenticated_page.wait_for_load_state("networkidle")
 
-        assets = authenticated_page.locator("text=Fixed Assets, text=fixed_assets")
+        assets = authenticated_page.locator(
+            ":text('Fixed Assets'), :text('fixed_assets')"
+        )
         expect(assets.first).to_be_visible()
 
     def test_features_has_leases_toggle(self, authenticated_page, base_url):
@@ -510,7 +512,7 @@ class TestFeatureFlags:
         goto_settings_page(authenticated_page, f"{base_url}/settings/features")
         authenticated_page.wait_for_load_state("networkidle")
 
-        leases = authenticated_page.locator("text=Leases, text=leases")
+        leases = authenticated_page.locator(":text('Leases'), :text('leases')")
         expect(leases.first).to_be_visible()
 
     def test_features_toggles_are_buttons(self, authenticated_page, base_url):
@@ -545,7 +547,7 @@ class TestNumberingSequences:
 
         # Should have sequence type labels
         sequences = authenticated_page.locator(
-            "text=Invoice, text=Credit Note, text=Payment, text=Journal"
+            ":text('Invoice'), :text('Credit Note'), :text('Payment'), :text('Journal')"
         )
         expect(sequences.first).to_be_visible()
 
@@ -636,7 +638,7 @@ class TestNumberingSequenceEdit:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Should have a preview section
-            preview = authenticated_page.locator("text=Preview, text=preview")
+            preview = authenticated_page.locator(":text('Preview'), :text('preview')")
             expect(preview.first).to_be_visible()
 
 

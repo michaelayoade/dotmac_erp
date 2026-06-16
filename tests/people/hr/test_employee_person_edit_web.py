@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -95,6 +96,25 @@ def _stub_new_employee_form_dependencies(monkeypatch, db_session) -> None:
     monkeypatch.setattr(
         db_session, "execute", lambda stmt: SimpleNamespace(all=lambda: [])
     )
+
+
+def _stub_salary_structure_lookup(
+    db_session, monkeypatch, organization_id, structure_id
+):
+    original_scalar = db_session.scalar
+    salary_structure = SimpleNamespace(
+        structure_id=structure_id,
+        organization_id=organization_id,
+        is_active=True,
+    )
+
+    def _scalar(stmt):
+        if "salary_structure" in str(stmt):
+            return salary_structure
+        return original_scalar(stmt)
+
+    monkeypatch.setattr(db_session, "scalar", _scalar)
+    return salary_structure
 
 
 @pytest.mark.asyncio
@@ -304,7 +324,11 @@ async def test_create_employee_response_passes_selected_position_id(
     service = HRWebService()
     position_id = uuid4()
     employee_id = uuid4()
+    structure_id = uuid4()
     captured: dict[str, object] = {}
+    _stub_salary_structure_lookup(
+        db_session, monkeypatch, person.organization_id, structure_id
+    )
 
     def _capture_create(self, person_id, data):
         captured["person_id"] = person_id
@@ -328,12 +352,18 @@ async def test_create_employee_response_passes_selected_position_id(
         "_update_tax_profile",
         lambda self, *, auth, db, employee, form: None,
     )
+    monkeypatch.setattr(
+        HRWebService,
+        "_create_initial_salary_assignment",
+        staticmethod(lambda **kwargs: None),
+    )
 
     request = _make_new_employee_request(
         {
             "linked_person_id": str(person.id),
             "date_of_joining": "2026-01-01",
             "position_id": str(position_id),
+            "salary_structure_id": str(structure_id),
         }
     )
     auth = _make_auth(person.id, person.organization_id, ["people:write"])
@@ -350,11 +380,205 @@ async def test_create_employee_response_passes_selected_position_id(
 
 
 @pytest.mark.asyncio
+async def test_create_employee_response_creates_initial_salary_assignment(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    employee_id = uuid4()
+    structure_id = uuid4()
+    captured: dict[str, object] = {}
+    salary_structure = _stub_salary_structure_lookup(
+        db_session, monkeypatch, person.organization_id, structure_id
+    )
+
+    def _capture_assignment(**kwargs):
+        captured["organization_id"] = kwargs["organization_id"]
+        captured["employee_id"] = kwargs["employee"].employee_id
+        captured["salary_structure"] = kwargs["salary_structure"]
+        captured["base"] = kwargs["base"]
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.create_employee",
+        lambda self, person_id, data: SimpleNamespace(
+            employee_id=employee_id,
+            person_id=person_id,
+            date_of_joining=date(2026, 1, 1),
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.send_employee_access_invite",
+        lambda self, employee_id, app_url: None,
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_update_tax_profile",
+        lambda self, *, auth, db, employee, form: None,
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_create_initial_salary_assignment",
+        staticmethod(_capture_assignment),
+    )
+
+    request = _make_new_employee_request(
+        {
+            "linked_person_id": str(person.id),
+            "date_of_joining": "2026-01-01",
+            "salary_structure_id": str(structure_id),
+            "ctc": "1200000",
+        }
+    )
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = await service.create_employee_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 303
+    assert captured["organization_id"] == person.organization_id
+    assert captured["employee_id"] == employee_id
+    assert captured["salary_structure"] is salary_structure
+    assert str(captured["base"]) == "1200000"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_response_requires_salary_structure_before_create(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    _stub_new_employee_form_dependencies(monkeypatch, db_session)
+
+    def _fail_create(self, person_id, data):
+        raise AssertionError("employee should not be created")
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.create_employee",
+        _fail_create,
+    )
+
+    request = _make_new_employee_request(
+        {
+            "linked_person_id": str(person.id),
+            "date_of_joining": "2026-01-01",
+        }
+    )
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = await service.create_employee_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.context["error"]
+        == "Salary structure is required for employee creation."
+    )
+    assert response.context["errors"] == {}
+    assert response.context["form_data"]["current_tab"] == "employment"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_response_rejects_invalid_salary_structure_before_create(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    _stub_new_employee_form_dependencies(monkeypatch, db_session)
+
+    def _fail_create(self, person_id, data):
+        raise AssertionError("employee should not be created")
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.create_employee",
+        _fail_create,
+    )
+
+    request = _make_new_employee_request(
+        {
+            "linked_person_id": str(person.id),
+            "date_of_joining": "2026-01-01",
+            "salary_structure_id": "not-a-uuid",
+        }
+    )
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = await service.create_employee_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.context["error"]
+        == "Select a valid active salary structure for this organization."
+    )
+    assert response.context["errors"] == {}
+    assert response.context["form_data"]["salary_structure_id"] == "not-a-uuid"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_response_rejects_country_name_before_create(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    structure_id = uuid4()
+    _stub_new_employee_form_dependencies(monkeypatch, db_session)
+    _stub_salary_structure_lookup(
+        db_session, monkeypatch, person.organization_id, structure_id
+    )
+
+    def _fail_create(self, person_id, data):
+        raise AssertionError("employee should not be created")
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.create_employee",
+        _fail_create,
+    )
+
+    request = _make_new_employee_request(
+        {
+            "first_name": "Mir",
+            "last_name": "David",
+            "email": f"country-name-{uuid4().hex[:8]}@example.com",
+            "country_code": "Nicaragua",
+            "date_of_joining": "2026-01-01",
+            "salary_structure_id": str(structure_id),
+        }
+    )
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = await service.create_employee_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.context["error"]
+        == "Country Code must be a 2-letter code like NI, not the country name."
+    )
+    assert response.context["errors"] == {
+        "country_code": "Use a 2-letter country code like NI, not the country name."
+    }
+    assert response.context["form_data"]["country_code"] == "Nicaragua"
+    assert response.context["form_data"]["current_tab"] == "personal"
+
+
+@pytest.mark.asyncio
 async def test_create_employee_response_does_not_fail_when_invite_fails(
     db_session, person, monkeypatch
 ):
     service = HRWebService()
     employee_id = uuid4()
+    structure_id = uuid4()
+    _stub_salary_structure_lookup(
+        db_session, monkeypatch, person.organization_id, structure_id
+    )
 
     monkeypatch.setattr(
         "app.services.people.hr.web.employee_web.EmployeeService.create_employee",
@@ -376,11 +600,17 @@ async def test_create_employee_response_does_not_fail_when_invite_fails(
         "_update_tax_profile",
         lambda self, *, auth, db, employee, form: None,
     )
+    monkeypatch.setattr(
+        HRWebService,
+        "_create_initial_salary_assignment",
+        staticmethod(lambda **kwargs: None),
+    )
 
     request = _make_new_employee_request(
         {
             "linked_person_id": str(person.id),
             "date_of_joining": "2026-01-01",
+            "salary_structure_id": str(structure_id),
         }
     )
     auth = _make_auth(person.id, person.organization_id, ["people:write"])

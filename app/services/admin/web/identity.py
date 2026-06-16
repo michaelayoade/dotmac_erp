@@ -22,7 +22,7 @@ from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.auth_flow import hash_password
-from app.services.common import coerce_uuid
+from app.services.common import PaginationParams, coerce_uuid, paginate
 from app.services.formatters import format_datetime as _format_datetime
 
 from .common import (
@@ -61,7 +61,6 @@ class AdminIdentityMixin:
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
-        offset = (page - 1) * limit
         now = datetime.now(UTC)
         conditions = []
         search_value = search.strip() if search else ""
@@ -80,17 +79,11 @@ class AdminIdentityMixin:
         if status_enum:
             conditions.append(Person.status == status_enum)
 
-        total = db.scalar(select(func.count(Person.id)).where(*conditions)) or 0
-        total_pages = max(1, (total + limit - 1) // limit)
-        persons = list(
-            db.scalars(
-                select(Person)
-                .where(*conditions)
-                .order_by(Person.created_at.desc())
-                .offset(offset)
-                .limit(limit)
-            ).all()
-        )
+        stmt = select(Person).where(*conditions).order_by(Person.created_at.desc())
+        result = paginate(db, stmt, PaginationParams.from_page(page, limit))
+        total = result.total
+        total_pages = result.total_pages
+        persons = list(result.items)
 
         person_ids = [p.id for p in persons]
         person_roles_map: dict[UUID, list[str]] = {}
@@ -147,15 +140,15 @@ class AdminIdentityMixin:
             )
             credential = credential_map.get(person.id)
             locked_until = credential.get("locked_until") if credential else None
-            failed_login_attempts = int(
-                credential.get("failed_login_attempts") or 0
-            ) if credential else 0
+            failed_login_attempts = (
+                int(credential.get("failed_login_attempts") or 0) if credential else 0
+            )
             credential_active = bool(credential and credential.get("is_active"))
             is_locked = bool(
                 _datetime_after(locked_until, now) or failed_login_attempts >= 5
             )
-            person_active = (
-                person.status == PersonStatus.active and bool(person.is_active)
+            person_active = person.status == PersonStatus.active and bool(
+                person.is_active
             )
             account_is_active = person_active and credential_active and not is_locked
             if account_is_active:
@@ -242,14 +235,16 @@ class AdminIdentityMixin:
                 )
             )
             now = datetime.now(UTC)
-            failed_login_attempts = credential.failed_login_attempts if credential else 0
+            failed_login_attempts = (
+                credential.failed_login_attempts if credential else 0
+            )
             locked_until = credential.locked_until if credential else None
             credential_active = bool(credential and credential.is_active)
             is_locked = bool(
                 _datetime_after(locked_until, now) or failed_login_attempts >= 5
             )
-            person_active = (
-                person.status == PersonStatus.active and bool(person.is_active)
+            person_active = person.status == PersonStatus.active and bool(
+                person.is_active
             )
             account_is_active = person_active and credential_active and not is_locked
             if account_is_active:
@@ -655,7 +650,6 @@ class AdminIdentityMixin:
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
-        offset = (page - 1) * limit
         conditions = []
         search_value = search.strip() if search else ""
         if search_value:
@@ -684,18 +678,10 @@ class AdminIdentityMixin:
         status_flag = _parse_status_filter(status)
         if status_flag is not None:
             role_conditions.append(Role.is_active == status_flag)
-        total_count = (
-            db.scalar(select(func.count(Role.id)).where(*role_conditions)) or 0
-        )
-        roles = list(
-            db.scalars(
-                select(Role)
-                .where(*role_conditions)
-                .order_by(Role.name)
-                .limit(limit)
-                .offset(offset)
-            ).all()
-        )
+        stmt = select(Role).where(*role_conditions).order_by(Role.name)
+        result = paginate(db, stmt, PaginationParams.from_page(page, limit))
+        total_count = result.total
+        roles = list(result.items)
         role_ids = [role.id for role in roles]
         permission_counts: dict[UUID, int] = {}
         member_counts: dict[UUID, int] = {}

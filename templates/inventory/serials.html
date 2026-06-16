@@ -348,7 +348,7 @@
          aria-modal="true"
          aria-labelledby="missing-serial-modal-title">
         <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" @click="closeSerialModal()"></div>
-        <div class="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <div class="fixed left-1/2 top-1/2 z-[1010] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <form method="post" action="/inventory/serials/missing/add" class="space-y-5 p-5 sm:p-6">
                 {{ request.state.csrf_form | safe }}
                 <input type="hidden" name="item_id" :value="serialModal.itemId">

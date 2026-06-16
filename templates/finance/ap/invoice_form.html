@@ -513,8 +513,13 @@
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Finance</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Accounts Payable</a></li>
+        {% if is_credit_note %}
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/credit-notes" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Supplier Credit Notes</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if invoice else "New Credit Note" }}</span></li>
+        {% else %}
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AP Invoices</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span></li>
+        {% endif %}
     </ol>
 </nav>
 {% endblock %}
@@ -528,7 +533,7 @@
         <!-- Page Header -->
         <div class="fade-up">
             <h2 class="font-display text-3xl font-bold text-[var(--ink)] dark:text-white tracking-tight">
-                {{ "Edit Invoice" if invoice else "New AP Invoice" }}
+                {% if is_credit_note %}{{ "Edit Supplier Credit Note" if invoice else "New Supplier Credit Note" }}{% else %}{{ "Edit Invoice" if invoice else "New AP Invoice" }}{% endif %}
             </h2>
             <p class="mt-2 text-[var(--ink-muted)] dark:text-white/50">
                 Enter the supplier invoice details and line items below.
@@ -1119,6 +1124,7 @@ function invoiceForm() {
         isSubmitting: false,
         form: {
             invoice_id: '{{ invoice.invoice_id if invoice else "" }}',
+            invoice_type: '{{ invoice.invoice_type.value if invoice else (default_invoice_type | default("STANDARD")) }}',
             supplier_id: '{{ invoice.supplier_id if invoice else "" }}' || (selectedSupplier?.supplier_id || ''),
             supplier_name: (selectedSupplier ? `${selectedSupplier.supplier_code || ''} - ${selectedSupplier.supplier_name || ''}`.trim().replace(/^-\s*/, '') : ''),
             invoice_number: '{{ invoice.invoice_number if invoice else "" }}',

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models.coach.insight import CoachInsight
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
-from app.services.common import coerce_uuid
+from app.services.common import PaginationParams, coerce_uuid, paginate
 from app.services.people.hr.org_resolver import OrgResolver
 
 logger = logging.getLogger(__name__)
@@ -199,10 +199,8 @@ class CoachService:
             .where(CoachReport.organization_id == org_id)
             .order_by(CoachReport.created_at.desc())
         )
-        total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-        offset = (page - 1) * per_page
-        items = list(self.db.scalars(stmt.limit(per_page).offset(offset)).all())
-        return items, int(total)
+        result = paginate(self.db, stmt, PaginationParams.from_page(page, per_page))
+        return list(result.items), result.total
 
     def get_report(
         self,
@@ -272,13 +270,8 @@ class CoachService:
         stmt = stmt.where(self._scope_predicate(scope))
         stmt = self._apply_ordering(stmt)
 
-        total = self.db.scalar(select(func.count()).select_from(stmt.subquery()))
-        if total is None:
-            total = 0
-
-        offset = (page - 1) * per_page
-        items = list(self.db.scalars(stmt.limit(per_page).offset(offset)).all())
-        return items, int(total)
+        result = paginate(self.db, stmt, PaginationParams.from_page(page, per_page))
+        return list(result.items), result.total
 
     def _normalize_category(self, category: str | None) -> str | None:
         """Normalize user-provided category query values for DB filtering."""

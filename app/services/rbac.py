@@ -77,8 +77,7 @@ class Roles(ListResponseMixin):
         _, _, Role, _ = _rbac_models()
         role = Role(**payload.model_dump())
         db.add(role)
-        db.commit()
-        db.refresh(role)
+        db.flush()
         return cast(RoleModel, role)
 
     @staticmethod
@@ -120,8 +119,7 @@ class Roles(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Role not found")
         for key, value in payload.model_dump(exclude_unset=True).items():
             setattr(role, key, value)
-        db.commit()
-        db.refresh(role)
+        db.flush()
         return cast(RoleModel, role)
 
     @staticmethod
@@ -131,7 +129,7 @@ class Roles(ListResponseMixin):
         if not role:
             raise HTTPException(status_code=404, detail="Role not found")
         role.is_active = False
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 class Permissions(ListResponseMixin):
@@ -140,8 +138,7 @@ class Permissions(ListResponseMixin):
         Permission, _, _, _ = _rbac_models()
         permission = Permission(**payload.model_dump())
         db.add(permission)
-        db.commit()
-        db.refresh(permission)
+        db.flush()
         return cast(PermissionModel, permission)
 
     @staticmethod
@@ -185,8 +182,7 @@ class Permissions(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Permission not found")
         for key, value in payload.model_dump(exclude_unset=True).items():
             setattr(permission, key, value)
-        db.commit()
-        db.refresh(permission)
+        db.flush()
         return cast(PermissionModel, permission)
 
     @staticmethod
@@ -196,7 +192,7 @@ class Permissions(ListResponseMixin):
         if not permission:
             raise HTTPException(status_code=404, detail="Permission not found")
         permission.is_active = False
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 class RolePermissions(ListResponseMixin):
@@ -211,8 +207,7 @@ class RolePermissions(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Permission not found")
         link = RolePermission(**payload.model_dump())
         db.add(link)
-        db.commit()
-        db.refresh(link)
+        db.flush()
         return cast(RolePermissionModel, link)
 
     @staticmethod
@@ -268,8 +263,7 @@ class RolePermissions(ListResponseMixin):
                 raise HTTPException(status_code=404, detail="Permission not found")
         for key, value in data.items():
             setattr(link, key, value)
-        db.commit()
-        db.refresh(link)
+        db.flush()
         return cast(RolePermissionModel, link)
 
     @staticmethod
@@ -279,7 +273,7 @@ class RolePermissions(ListResponseMixin):
         if not link:
             raise HTTPException(status_code=404, detail="Role permission not found")
         db.delete(link)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 def get_users_with_permission(
@@ -323,8 +317,7 @@ class PersonRoles(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Role not found")
         link = PersonRole(**payload.model_dump())
         db.add(link)
-        db.commit()
-        db.refresh(link)
+        db.flush()
         return cast(PersonRoleModel, link)
 
     @staticmethod
@@ -376,8 +369,7 @@ class PersonRoles(ListResponseMixin):
                 raise HTTPException(status_code=404, detail="Role not found")
         for key, value in data.items():
             setattr(link, key, value)
-        db.commit()
-        db.refresh(link)
+        db.flush()
         return cast(PersonRoleModel, link)
 
     @staticmethod
@@ -387,7 +379,7 @@ class PersonRoles(ListResponseMixin):
         if not link:
             raise HTTPException(status_code=404, detail="Person role not found")
         db.delete(link)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 roles = Roles()

@@ -17,7 +17,6 @@ from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
-from app.rls import set_current_organization_sync
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
@@ -145,9 +144,7 @@ class ReportDefinitionService(ListResponseMixin):
         )
 
         db.add(definition)
-        db.commit()
-        set_current_organization_sync(db, org_id)
-        db.refresh(definition)
+        db.flush()
 
         return definition
 
@@ -206,9 +203,7 @@ class ReportDefinitionService(ListResponseMixin):
         if supported_formats is not None:
             definition.supported_formats = supported_formats
 
-        db.commit()
-        db.refresh(definition)
-
+        db.flush()
         return definition
 
     @staticmethod
@@ -255,9 +250,7 @@ class ReportDefinitionService(ListResponseMixin):
         # Increment template version
         definition.template_version += 1
 
-        db.commit()
-        db.refresh(definition)
-
+        db.flush()
         return definition
 
     @staticmethod
@@ -291,9 +284,7 @@ class ReportDefinitionService(ListResponseMixin):
         definition.data_source_type = data_source_type
         definition.data_source_config = data_source_config
 
-        db.commit()
-        db.refresh(definition)
-
+        db.flush()
         return definition
 
     @staticmethod
@@ -327,9 +318,7 @@ class ReportDefinitionService(ListResponseMixin):
             )
 
         definition.is_active = False
-        db.commit()
-        db.refresh(definition)
-
+        db.flush()
         return definition
 
     @staticmethod
@@ -401,9 +390,7 @@ class ReportDefinitionService(ListResponseMixin):
         )
 
         db.add(clone)
-        db.commit()
-        db.refresh(clone)
-
+        db.flush()
         return clone
 
     @staticmethod

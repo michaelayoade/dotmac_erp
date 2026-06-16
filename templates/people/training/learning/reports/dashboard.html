@@ -11,6 +11,7 @@
 <div class="space-y-6">
     {% call(filter_attrs) compact_filters(base_url="/people/training/learning-dashboard", active_filters=[], date_range=true, start_date=start_date, end_date=end_date, auto_submit=false, show_apply_button=true) %}{% endcall %}
 
+    <div id="results-container" class="space-y-6">
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
         {% for label, value, icon in [
             ("Active Courses", report.active_courses, "book"),
@@ -50,6 +51,7 @@
         <a class="btn btn-secondary" href="/people/training/reports/learning/assessment-results">Assessment Results</a>
         <a class="btn btn-secondary" href="/people/training/reports/learning/outstanding-mandatory">Outstanding Mandatory</a>
         <a class="btn btn-secondary" href="/people/training/reports/learning/question-analysis">Question Analysis</a>
+    </div>
     </div>
 </div>
 {% endblock %}

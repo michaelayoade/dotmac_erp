@@ -27,6 +27,7 @@ from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalType
 from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.common import coerce_uuid
+from app.services.finance.common.source_types import AP_INVOICE_SOURCE
 from app.services.finance.ap.posting.helpers import (
     create_assets_for_capitalizable_lines,
     create_tax_transactions,
@@ -121,7 +122,7 @@ def post_invoice(
     existing_journal = db.scalar(
         select(JournalEntry).where(
             JournalEntry.source_module == "AP",
-            JournalEntry.source_document_type == "SUPPLIER_INVOICE",
+            JournalEntry.source_document_type == AP_INVOICE_SOURCE,
             JournalEntry.source_document_id == inv_id,
             JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
             JournalEntry.journal_type != JEJournalType.REVERSAL,
@@ -419,7 +420,7 @@ def post_invoice(
         exchange_rate_type_id=invoice.exchange_rate_type_id,
         lines=journal_lines,
         source_module="AP",
-        source_document_type="SUPPLIER_INVOICE",
+        source_document_type=AP_INVOICE_SOURCE,
         source_document_id=inv_id,
         correlation_id=invoice.correlation_id,
     )

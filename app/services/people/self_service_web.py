@@ -1009,9 +1009,7 @@ class SelfServiceWebService:
                 Ticket.assigned_to_id == employee_id,
             ),
         ]
-        total = (
-            db.scalar(select(func.count()).select_from(Ticket).where(*filters)) or 0
-        )
+        total = db.scalar(select(func.count()).select_from(Ticket).where(*filters)) or 0
         tickets = list(
             db.execute(
                 select(Ticket)
@@ -1036,7 +1034,10 @@ class SelfServiceWebService:
             {
                 "tickets": tickets,
                 "categories": [
-                    {"value": str(category.category_id), "label": category.category_name}
+                    {
+                        "value": str(category.category_id),
+                        "label": category.category_name,
+                    }
                     for category in categories
                 ],
                 "priorities": [priority.value for priority in TicketPriority],

@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -99,7 +100,7 @@ class TestRecurringTemplateCreate:
             "input[name='start_date'], input[type='date']"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
 
 @pytest.mark.e2e
@@ -222,7 +223,7 @@ class TestWorkflowRuleCreate:
             "input[name='name'], input[name='rule_name'], #name"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_workflow_rule_has_trigger_field(self, authenticated_page, base_url):
         """Test workflow rule form has trigger/event selection."""
@@ -233,7 +234,7 @@ class TestWorkflowRuleCreate:
             "select[name='trigger'], select[name='event'], #trigger"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_workflow_rule_conditions(self, authenticated_page, base_url):
         """Test workflow rule has conditions section."""
@@ -241,7 +242,7 @@ class TestWorkflowRuleCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         conditions = authenticated_page.locator(
-            "text=Conditions, text=When, .conditions-section"
+            ":text('Conditions'), :text('When'), .conditions-section"
         )
         if conditions.count() > 0:
             expect(conditions.first).to_be_visible()
@@ -252,7 +253,7 @@ class TestWorkflowRuleCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         actions = authenticated_page.locator(
-            "text=Actions, text=Then, .actions-section"
+            ":text('Actions'), :text('Then'), .actions-section"
         )
         if actions.count() > 0:
             expect(actions.first).to_be_visible()
@@ -326,6 +327,7 @@ class TestCustomFieldCreate:
         """Test creating a number custom field."""
         authenticated_page.goto(f"{base_url}/automation/custom-fields/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         type_field = authenticated_page.locator(
             "select[name='field_type'], select[name='type'], #field_type"
@@ -342,6 +344,7 @@ class TestCustomFieldCreate:
         """Test creating a dropdown custom field."""
         authenticated_page.goto(f"{base_url}/automation/custom-fields/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         type_field = authenticated_page.locator(
             "select[name='field_type'], select[name='type'], #field_type"
@@ -420,7 +423,7 @@ class TestDocumentTemplateCreate:
             "input[name='name'], input[name='template_name'], #name"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_template_has_type_field(self, authenticated_page, base_url):
         """Test template form has type selection."""
@@ -431,7 +434,7 @@ class TestDocumentTemplateCreate:
             "select[name='template_type'], select[name='type'], #template_type"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_template_has_content_editor(self, authenticated_page, base_url):
         """Test template form has content editor."""

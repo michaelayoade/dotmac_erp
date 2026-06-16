@@ -252,6 +252,21 @@
                     </div>
                 </div>
 
+                {% if not employee %}
+                <div>
+                    <label for="salary_structure_id" class="form-label">Salary Structure <span class="text-red-500">*</span></label>
+                    <select name="salary_structure_id" id="salary_structure_id" class="form-input w-full">
+                        <option value="">Select Salary Structure</option>
+                        {% for structure in salary_structures %}
+                        <option value="{{ structure.structure_id }}" {{ 'selected' if form_data.salary_structure_id == structure.structure_id | string }}>
+                            {{ structure.structure_name }}{% if structure.structure_code %} ({{ structure.structure_code }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Creates the employee's initial payroll assignment from the joining date.</p>
+                </div>
+                {% endif %}
+
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         {% if employee %}

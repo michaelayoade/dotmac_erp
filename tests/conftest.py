@@ -245,6 +245,8 @@ class MockSettings:
     avatar_max_size_bytes = 2 * 1024 * 1024
     avatar_allowed_types = "image/jpeg,image/png,image/gif,image/webp"
     avatar_url_prefix = "/static/avatars"
+    s3_connect_timeout_s = 3.0
+    s3_read_timeout_s = 10.0
     brand_name = "Starter Template"
     brand_tagline = "FastAPI starter"
     brand_logo_url = None
@@ -485,6 +487,41 @@ def auth_env():
     # Environment variables are set at module level above
     # This fixture ensures they're available for each test
     pass
+
+
+@pytest.fixture(autouse=True)
+def _strip_leaked_global_session_listeners():
+    """Stop process-wide SQLAlchemy ``Session`` listeners from leaking between tests.
+
+    Importing the real application (web-route tests build the full app via the
+    ``client`` fixture) registers global ``do_orm_execute`` (org filter) and
+    flush (audit) listeners on ``sqlalchemy.orm.Session``. Because they live on
+    the global class, they persist after that test and make every later unit
+    test — which uses an unprimed, SQLite-backed session — raise
+    ``MissingOrgContextError`` or hit the PostgreSQL-only ``current_setting``.
+    The blast radius depends on collection order, which is why the suite fails
+    different tests run to run. Strip the leaked listeners after each test;
+    tests that genuinely exercise them register via their own fixtures, so this
+    teardown (which runs after those fixtures' own teardown) is an idempotent
+    no-op for them.
+    """
+    yield
+    import importlib
+
+    from sqlalchemy import event
+    from sqlalchemy.orm import Session
+
+    for modname, evt, fname in (
+        ("app.db.org_listener", "do_orm_execute", "_add_org_filter"),
+        ("app.services.audit_listener", "before_flush", "_on_before_flush"),
+        ("app.services.audit_listener", "after_flush", "_on_after_flush"),
+    ):
+        try:
+            fn = getattr(importlib.import_module(modname), fname, None)
+            if fn is not None and event.contains(Session, evt, fn):
+                event.remove(Session, evt, fn)
+        except Exception:
+            pass
 
 
 # ============ FastAPI Test Client Fixtures ============

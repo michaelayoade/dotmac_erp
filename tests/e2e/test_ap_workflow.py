@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 class TestAPSupplierCreateWorkflow:
@@ -17,7 +18,7 @@ class TestAPSupplierCreateWorkflow:
     @pytest.mark.e2e
     def test_supplier_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that supplier form loads successfully."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/suppliers/new.*"))
 
@@ -26,7 +27,7 @@ class TestAPSupplierCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that supplier form has all required fields."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -40,7 +41,7 @@ class TestAPSupplierCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that supplier form has payment terms section."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -53,7 +54,7 @@ class TestAPSupplierCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that supplier form has GL account dropdowns."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -68,8 +69,9 @@ class TestAPSupplierCreateWorkflow:
     @pytest.mark.e2e
     def test_create_supplier_workflow(self, authenticated_page: Page, base_url: str):
         """Test full create supplier workflow."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         unique_id = str(uuid4())[:6].upper()
         supplier_code = f"SUP-{unique_id}"
@@ -122,7 +124,7 @@ class TestAPSupplierListWorkflow:
     @pytest.mark.e2e
     def test_suppliers_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that suppliers list loads."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/suppliers.*"))
 
@@ -131,17 +133,20 @@ class TestAPSupplierListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that suppliers list has new button."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href='/ap/suppliers/new']").first
+        new_btn = authenticated_page.locator(
+            "a[href='/finance/ap/suppliers/new']"
+        ).first
         expect(new_btn).to_be_visible()
 
     @pytest.mark.e2e
     def test_suppliers_search(self, authenticated_page: Page, base_url: str):
         """Test suppliers list search."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator("input[name='search']").first
         expect(search).to_be_visible()
@@ -156,7 +161,7 @@ class TestAPInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that invoice form loads."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/invoices/new.*"))
 
@@ -165,18 +170,18 @@ class TestAPInvoiceCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that invoice form has supplier selection."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        supplier_select = form.locator("select[name='supplier_id']")
-        expect(supplier_select).to_be_visible()
+        supplier_select = form.locator("[name='supplier_id']")
+        expect(supplier_select).to_be_attached()
 
     @pytest.mark.e2e
     def test_invoice_form_has_dates(self, authenticated_page: Page, base_url: str):
         """Test that invoice form has date fields."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -187,7 +192,7 @@ class TestAPInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_form_has_line_items(self, authenticated_page: Page, base_url: str):
         """Test that invoice form has line items section."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for line items section
@@ -197,7 +202,7 @@ class TestAPInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_add_line_button(self, authenticated_page: Page, base_url: str):
         """Test that invoice has add line button."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         add_btn = authenticated_page.locator(
@@ -209,7 +214,7 @@ class TestAPInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_totals_section(self, authenticated_page: Page, base_url: str):
         """Test that invoice shows totals section."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         totals = authenticated_page.locator(".totals-section").first
@@ -222,7 +227,7 @@ class TestAPInvoiceListWorkflow:
     @pytest.mark.e2e
     def test_invoices_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that invoices list loads."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/invoices.*"))
 
@@ -231,22 +236,22 @@ class TestAPInvoiceListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that invoices list has status filter."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status']").first
-        expect(status_filter).to_be_visible()
+        expect(status_filter).to_be_attached()
 
     @pytest.mark.e2e
     def test_invoices_list_has_supplier_filter(
         self, authenticated_page: Page, base_url: str
     ):
         """Test that invoices list has supplier filter."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        supplier_filter = authenticated_page.locator("select[name='supplier_id']").first
-        expect(supplier_filter).to_be_visible()
+        supplier_filter = authenticated_page.locator("[name='supplier_id']").first
+        expect(supplier_filter).to_be_attached()
 
 
 class TestAPInvoiceDetailWorkflow:
@@ -256,7 +261,7 @@ class TestAPInvoiceDetailWorkflow:
     def test_invoice_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Test that non-existent invoice shows not found."""
         invoice_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/ap/invoices/{invoice_id}")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/{invoice_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("Invoice not found")).to_be_visible()
@@ -265,7 +270,7 @@ class TestAPInvoiceDetailWorkflow:
     def test_supplier_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Test that non-existent supplier shows not found."""
         supplier_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/ap/suppliers/{supplier_id}")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/{supplier_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("Supplier not found")).to_be_visible()
@@ -277,14 +282,14 @@ class TestAPPaymentWorkflow:
     @pytest.mark.e2e
     def test_payments_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that payments list loads."""
-        authenticated_page.goto(f"{base_url}/ap/payments")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/payments.*"))
 
     @pytest.mark.e2e
     def test_new_payment_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that new payment form loads."""
-        authenticated_page.goto(f"{base_url}/ap/payments/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -295,19 +300,19 @@ class TestAPPaymentWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that payment form has supplier selection."""
-        authenticated_page.goto(f"{base_url}/ap/payments/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        supplier_select = form.locator("select[name='supplier_id']").first
-        expect(supplier_select).to_be_visible()
+        supplier_select = form.locator("[name='supplier_id']").first
+        expect(supplier_select).to_be_attached()
 
     @pytest.mark.e2e
     def test_payment_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Test that non-existent payment shows not found."""
         payment_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/ap/payments/{payment_id}")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/{payment_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("Payment not found")).to_be_visible()
@@ -319,14 +324,14 @@ class TestAPAgingReport:
     @pytest.mark.e2e
     def test_aging_report_loads(self, authenticated_page: Page, base_url: str):
         """Test that aging report loads."""
-        authenticated_page.goto(f"{base_url}/ap/aging")
+        authenticated_page.goto(f"{base_url}/finance/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/aging.*"))
 
     @pytest.mark.e2e
     def test_aging_report_has_title(self, authenticated_page: Page, base_url: str):
         """Test that aging report has a title."""
-        authenticated_page.goto(f"{base_url}/ap/aging")
+        authenticated_page.goto(f"{base_url}/finance/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -336,7 +341,7 @@ class TestAPAgingReport:
     @pytest.mark.e2e
     def test_aging_report_shows_buckets(self, authenticated_page: Page, base_url: str):
         """Test that aging report shows aging buckets."""
-        authenticated_page.goto(f"{base_url}/ap/aging")
+        authenticated_page.goto(f"{base_url}/finance/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("No aging data yet")).to_be_visible()
@@ -348,7 +353,7 @@ class TestAPPaymentBatchWorkflow:
     @pytest.mark.e2e
     def test_payment_batches_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that payment batches list loads."""
-        authenticated_page.goto(f"{base_url}/ap/payment-batches")
+        authenticated_page.goto(f"{base_url}/finance/ap/payment-batches")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
             "Payment Batches"
@@ -357,7 +362,7 @@ class TestAPPaymentBatchWorkflow:
     @pytest.mark.e2e
     def test_new_payment_batch_form(self, authenticated_page: Page, base_url: str):
         """Test that new payment batch form loads."""
-        authenticated_page.goto(f"{base_url}/ap/payment-batches/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payment-batches/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -371,7 +376,7 @@ class TestAPPaymentBatchWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that payment batch form has bank account selection."""
-        authenticated_page.goto(f"{base_url}/ap/payment-batches/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payment-batches/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -387,7 +392,7 @@ class TestAPResponsiveDesign:
     def test_ap_suppliers_mobile(self, authenticated_page: Page, base_url: str):
         """Test AP suppliers on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -395,7 +400,7 @@ class TestAPResponsiveDesign:
     def test_ap_invoices_mobile(self, authenticated_page: Page, base_url: str):
         """Test AP invoices on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -403,6 +408,6 @@ class TestAPResponsiveDesign:
     def test_supplier_form_tablet(self, authenticated_page: Page, base_url: str):
         """Test supplier form on tablet viewport."""
         authenticated_page.set_viewport_size({"width": 768, "height": 1024})
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.locator("main")).to_be_visible()

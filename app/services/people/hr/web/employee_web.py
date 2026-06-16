@@ -45,6 +45,7 @@ from app.models.people.hr import (
 from app.models.people.hr.employee import SalaryMode
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
+from app.models.people.payroll.salary_structure import SalaryStructure
 from app.models.person import Gender, Person
 from app.net import get_request_host, get_request_scheme
 from app.schemas.person import PersonUpdate
@@ -785,6 +786,7 @@ class HRWebService:
         salary_mode_raw = self._form_str(form, "salary_mode")
         ctc = self._parse_decimal(ctc_raw)
         salary_mode = self._parse_salary_mode(salary_mode_raw)
+        salary_structure_id = self._form_str(form, "salary_structure_id")
 
         tin = self._form_str(form, "tin")
         tax_state = self._form_str(form, "tax_state")
@@ -796,6 +798,12 @@ class HRWebService:
         if (
             not linked_person_id and (not first_name or not last_name or not email)
         ) or not date_of_joining:
+            self._log_employee_create_validation(
+                request,
+                reason="missing_required_identity_or_joining_date",
+                current_tab=current_tab,
+                has_salary_structure=bool(salary_structure_id),
+            )
             errors = {
                 "first_name": "Required" if not first_name else "",
                 "last_name": "Required" if not last_name else "",
@@ -845,6 +853,7 @@ class HRWebService:
                     "bank_branch_code": bank_branch_code,
                     "ctc": ctc_raw,
                     "salary_mode": salary_mode_raw,
+                    "salary_structure_id": salary_structure_id,
                     "notes": notes,
                     "tin": tin,
                     "tax_state": tax_state,
@@ -857,6 +866,80 @@ class HRWebService:
             )
 
         org_id = coerce_uuid(auth.organization_id)
+        normalized_country_code = country_code.upper() if country_code else ""
+        if normalized_country_code and len(normalized_country_code) != 2:
+            self._log_employee_create_validation(
+                request,
+                reason="invalid_country_code",
+                current_tab=current_tab,
+                has_salary_structure=bool(salary_structure_id),
+            )
+            return self.employee_new_form_response(
+                request,
+                auth,
+                db,
+                error=(
+                    "Country Code must be a 2-letter code like NI, "
+                    "not the country name."
+                ),
+                form_data={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "phone": phone,
+                    "date_of_birth": date_of_birth,
+                    "gender": gender,
+                    "address_line1": address_line1,
+                    "address_line2": address_line2,
+                    "city": city,
+                    "region": region,
+                    "postal_code": postal_code,
+                    "country_code": country_code,
+                    "employee_code": employee_code,
+                    "department_id": department_id,
+                    "designation_id": designation_id,
+                    "employment_type_id": employment_type_id,
+                    "grade_id": grade_id,
+                    "position_id": position_id,
+                    "reports_to_id": reports_to_id,
+                    "expense_approver_id": expense_approver_id,
+                    "assigned_location_id": assigned_location_id,
+                    "default_shift_type_id": default_shift_type_id,
+                    "linked_person_id": linked_person_id,
+                    "cost_center_id": cost_center_id,
+                    "current_tab": "personal",
+                    "date_of_joining": date_of_joining,
+                    "probation_end_date": probation_end_date,
+                    "confirmation_date": confirmation_date,
+                    "nysc_start_date": nysc_start_date,
+                    "nysc_end_date": nysc_end_date,
+                    "status": status,
+                    "personal_email": personal_email,
+                    "personal_phone": personal_phone,
+                    "emergency_contact_name": emergency_contact_name,
+                    "emergency_contact_phone": emergency_contact_phone,
+                    "bank_name": bank_name,
+                    "bank_account_name": bank_account_name,
+                    "bank_account_number": bank_account_number,
+                    "bank_branch_code": bank_branch_code,
+                    "ctc": ctc_raw,
+                    "salary_mode": salary_mode_raw,
+                    "salary_structure_id": salary_structure_id,
+                    "notes": notes,
+                    "tin": tin,
+                    "tax_state": tax_state,
+                    "rsa_pin": rsa_pin,
+                    "pfa_code": pfa_code,
+                    "pension_rate": pension_rate_raw,
+                    "nhf_number": nhf_number,
+                },
+                errors={
+                    "country_code": (
+                        "Use a 2-letter country code like NI, not the country name."
+                    )
+                },
+            )
+
         nysc_errors, nysc_start_value, nysc_end_value = self._validate_nysc_dates(
             db=db,
             organization_id=org_id,
@@ -865,6 +948,12 @@ class HRWebService:
             nysc_end_date=nysc_end_date,
         )
         if nysc_errors:
+            self._log_employee_create_validation(
+                request,
+                reason="missing_required_nysc_dates",
+                current_tab=current_tab,
+                has_salary_structure=bool(salary_structure_id),
+            )
             return self.employee_new_form_response(
                 request,
                 auth,
@@ -911,6 +1000,7 @@ class HRWebService:
                     "bank_branch_code": bank_branch_code,
                     "ctc": ctc_raw,
                     "salary_mode": salary_mode_raw,
+                    "salary_structure_id": salary_structure_id,
                     "notes": notes,
                     "tin": tin,
                     "tax_state": tax_state,
@@ -921,6 +1011,152 @@ class HRWebService:
                 },
                 errors=nysc_errors,
             )
+
+        selected_salary_structure: SalaryStructure | None = None
+        if not salary_structure_id:
+            self._log_employee_create_validation(
+                request,
+                reason="missing_salary_structure",
+                current_tab=current_tab,
+                has_salary_structure=False,
+            )
+            return self.employee_new_form_response(
+                request,
+                auth,
+                db,
+                error="Salary structure is required for employee creation.",
+                form_data={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "phone": phone,
+                    "date_of_birth": date_of_birth,
+                    "gender": gender,
+                    "address_line1": address_line1,
+                    "address_line2": address_line2,
+                    "city": city,
+                    "region": region,
+                    "postal_code": postal_code,
+                    "country_code": country_code,
+                    "employee_code": employee_code,
+                    "department_id": department_id,
+                    "designation_id": designation_id,
+                    "employment_type_id": employment_type_id,
+                    "grade_id": grade_id,
+                    "position_id": position_id,
+                    "reports_to_id": reports_to_id,
+                    "expense_approver_id": expense_approver_id,
+                    "assigned_location_id": assigned_location_id,
+                    "default_shift_type_id": default_shift_type_id,
+                    "linked_person_id": linked_person_id,
+                    "cost_center_id": cost_center_id,
+                    "current_tab": "employment",
+                    "date_of_joining": date_of_joining,
+                    "probation_end_date": probation_end_date,
+                    "confirmation_date": confirmation_date,
+                    "nysc_start_date": nysc_start_date,
+                    "nysc_end_date": nysc_end_date,
+                    "status": status,
+                    "personal_email": personal_email,
+                    "personal_phone": personal_phone,
+                    "emergency_contact_name": emergency_contact_name,
+                    "emergency_contact_phone": emergency_contact_phone,
+                    "bank_name": bank_name,
+                    "bank_account_name": bank_account_name,
+                    "bank_account_number": bank_account_number,
+                    "bank_branch_code": bank_branch_code,
+                    "ctc": ctc_raw,
+                    "salary_mode": salary_mode_raw,
+                    "salary_structure_id": salary_structure_id,
+                    "notes": notes,
+                    "tin": tin,
+                    "tax_state": tax_state,
+                    "rsa_pin": rsa_pin,
+                    "pfa_code": pfa_code,
+                    "pension_rate": pension_rate_raw,
+                    "nhf_number": nhf_number,
+                },
+            )
+
+        if salary_structure_id:
+            try:
+                structure_uuid = coerce_uuid(salary_structure_id, raise_http=False)
+            except (TypeError, ValueError):
+                structure_uuid = None
+
+            if structure_uuid:
+                selected_salary_structure = db.scalar(
+                    select(SalaryStructure).where(
+                        SalaryStructure.organization_id == org_id,
+                        SalaryStructure.structure_id == structure_uuid,
+                        SalaryStructure.is_active.is_(True),
+                    )
+                )
+
+            if not selected_salary_structure:
+                self._log_employee_create_validation(
+                    request,
+                    reason="invalid_salary_structure",
+                    current_tab=current_tab,
+                    has_salary_structure=True,
+                )
+                return self.employee_new_form_response(
+                    request,
+                    auth,
+                    db,
+                    error="Select a valid active salary structure for this organization.",
+                    form_data={
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "email": email,
+                        "phone": phone,
+                        "date_of_birth": date_of_birth,
+                        "gender": gender,
+                        "address_line1": address_line1,
+                        "address_line2": address_line2,
+                        "city": city,
+                        "region": region,
+                        "postal_code": postal_code,
+                        "country_code": country_code,
+                        "employee_code": employee_code,
+                        "department_id": department_id,
+                        "designation_id": designation_id,
+                        "employment_type_id": employment_type_id,
+                        "grade_id": grade_id,
+                        "position_id": position_id,
+                        "reports_to_id": reports_to_id,
+                        "expense_approver_id": expense_approver_id,
+                        "assigned_location_id": assigned_location_id,
+                        "default_shift_type_id": default_shift_type_id,
+                        "linked_person_id": linked_person_id,
+                        "cost_center_id": cost_center_id,
+                        "current_tab": "employment",
+                        "date_of_joining": date_of_joining,
+                        "probation_end_date": probation_end_date,
+                        "confirmation_date": confirmation_date,
+                        "nysc_start_date": nysc_start_date,
+                        "nysc_end_date": nysc_end_date,
+                        "status": status,
+                        "personal_email": personal_email,
+                        "personal_phone": personal_phone,
+                        "emergency_contact_name": emergency_contact_name,
+                        "emergency_contact_phone": emergency_contact_phone,
+                        "bank_name": bank_name,
+                        "bank_account_name": bank_account_name,
+                        "bank_account_number": bank_account_number,
+                        "bank_branch_code": bank_branch_code,
+                        "ctc": ctc_raw,
+                        "salary_mode": salary_mode_raw,
+                        "salary_structure_id": salary_structure_id,
+                        "notes": notes,
+                        "tin": tin,
+                        "tax_state": tax_state,
+                        "rsa_pin": rsa_pin,
+                        "pfa_code": pfa_code,
+                        "pension_rate": pension_rate_raw,
+                        "nhf_number": nhf_number,
+                    },
+                )
 
         joining_date = self._parse_date(date_of_joining)
         dob = self._parse_date(date_of_birth)
@@ -950,6 +1186,12 @@ class HRWebService:
             svc = EmployeeService(db, org_id)
             existing_emp = svc.get_employee_by_person(existing_person.id)
             if existing_emp:
+                self._log_employee_create_validation(
+                    request,
+                    reason="person_already_has_employee",
+                    current_tab=current_tab,
+                    has_salary_structure=bool(salary_structure_id),
+                )
                 return self.employee_new_form_response(
                     request,
                     auth,
@@ -976,6 +1218,7 @@ class HRWebService:
                         "bank_branch_code": bank_branch_code,
                         "ctc": ctc_raw,
                         "salary_mode": salary_mode_raw,
+                        "salary_structure_id": salary_structure_id,
                         "tin": tin,
                         "tax_state": tax_state,
                         "rsa_pin": rsa_pin,
@@ -989,6 +1232,12 @@ class HRWebService:
             if linked_person_id:
                 person = db.get(Person, coerce_uuid(linked_person_id))
                 if not person or person.organization_id != org_id:
+                    self._log_employee_create_validation(
+                        request,
+                        reason="linked_person_not_found",
+                        current_tab=current_tab,
+                        has_salary_structure=bool(salary_structure_id),
+                    )
                     return self.employee_new_form_response(
                         request,
                         auth,
@@ -1031,6 +1280,7 @@ class HRWebService:
                             "bank_branch_code": bank_branch_code,
                             "ctc": ctc_raw,
                             "salary_mode": salary_mode_raw,
+                            "salary_structure_id": salary_structure_id,
                             "notes": notes,
                             "tin": tin,
                             "tax_state": tax_state,
@@ -1055,7 +1305,7 @@ class HRWebService:
                     city=city or None,
                     region=region or None,
                     postal_code=postal_code or None,
-                    country_code=country_code or None,
+                    country_code=normalized_country_code or None,
                 )
                 db.add(person)
                 db.flush()
@@ -1105,6 +1355,14 @@ class HRWebService:
             raise HTTPException(status_code=400, detail="Person not found")
         employee = svc.create_employee(person.id, data)
         self._update_tax_profile(auth=auth, db=db, employee=employee, form=form)
+        if selected_salary_structure:
+            self._create_initial_salary_assignment(
+                db=db,
+                organization_id=org_id,
+                employee=employee,
+                salary_structure=selected_salary_structure,
+                base=ctc,
+            )
         employee_id = employee.employee_id
         app_url = self._resolve_app_url(request)
         db.commit()
@@ -1116,13 +1374,14 @@ class HRWebService:
                 employee_id,
                 app_url=app_url,
             )
-            invite_recipient_kind = invite_result.recipient_kind
-            invite_recipient_email = invite_result.recipient_email
             if not invite_result:
                 invite_status = "failed"
                 logger.warning(
                     "Employee access invite was not sent for %s", employee_id
                 )
+            else:
+                invite_recipient_kind = getattr(invite_result, "recipient_kind", "")
+                invite_recipient_email = getattr(invite_result, "recipient_email", "")
         except ServiceError:
             invite_status = "failed"
             logger.exception("Employee access invite failed for %s", employee_id)
@@ -1434,11 +1693,14 @@ class HRWebService:
         invite_recipient_kind = ""
         invite_recipient_email = ""
         try:
-            invite_result = svc.send_employee_access_invite(employee_id, app_url=app_url)
-            invite_recipient_kind = invite_result.recipient_kind
-            invite_recipient_email = invite_result.recipient_email
+            invite_result = svc.send_employee_access_invite(
+                employee_id, app_url=app_url
+            )
             if not invite_result:
                 invite_status = "failed"
+            else:
+                invite_recipient_kind = getattr(invite_result, "recipient_kind", "")
+                invite_recipient_email = getattr(invite_result, "recipient_email", "")
         except ServiceError:
             invite_status = "failed"
             logger.exception("Employee access invite resend failed for %s", employee_id)
@@ -2122,6 +2384,7 @@ class HRWebService:
             )
             .items
         )
+        salary_structures = self._list_active_salary_structures(db, org_id)
         pfas = self._list_pfas(db)
         user_rows = db.execute(
             select(UserCredential, Person)
@@ -2158,6 +2421,7 @@ class HRWebService:
             "cost_centers": cost_centers,
             "locations": locations,
             "shift_types": shift_types,
+            "salary_structures": salary_structures,
             "user_accounts": user_accounts,
             "statuses": [
                 s.value for s in EmployeeStatus if s != EmployeeStatus.TERMINATED
@@ -2177,6 +2441,60 @@ class HRWebService:
             request,
             "people/hr/employee_form.html",
             context,
+        )
+
+    @staticmethod
+    def _list_active_salary_structures(
+        db: Session, organization_id: UUID
+    ) -> list[SalaryStructure]:
+        return list(
+            db.scalars(
+                select(SalaryStructure)
+                .where(
+                    SalaryStructure.organization_id == organization_id,
+                    SalaryStructure.is_active.is_(True),
+                )
+                .order_by(SalaryStructure.structure_name)
+            ).all()
+        )
+
+    @staticmethod
+    def _create_initial_salary_assignment(
+        *,
+        db: Session,
+        organization_id: UUID,
+        employee: Employee,
+        salary_structure: SalaryStructure,
+        base: Decimal | None,
+    ) -> SalaryStructureAssignment:
+        assignment = SalaryStructureAssignment(
+            organization_id=organization_id,
+            employee_id=employee.employee_id,
+            structure_id=salary_structure.structure_id,
+            from_date=employee.date_of_joining or date.today(),
+            base=base or Decimal("0"),
+            variable=Decimal("0"),
+        )
+        db.add(assignment)
+        db.flush()
+        return assignment
+
+    @staticmethod
+    def _log_employee_create_validation(
+        request: Request,
+        *,
+        reason: str,
+        current_tab: str,
+        has_salary_structure: bool,
+    ) -> None:
+        logger.info(
+            "Employee create form re-rendered after validation failure",
+            extra={
+                "request_id": getattr(request.state, "request_id", None),
+                "reason": reason,
+                "current_tab": current_tab or None,
+                "has_salary_structure": has_salary_structure,
+            },
         )
 
     @staticmethod

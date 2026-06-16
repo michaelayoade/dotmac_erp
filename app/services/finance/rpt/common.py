@@ -56,6 +56,7 @@ __all__ = [
     "_parse_date",
     "_iso_date",
     "_build_csv",
+    "_build_xlsx",
     "_ifrs_label",
     "_report_type_label",
     "_amount_from_category",
@@ -85,6 +86,77 @@ def _build_csv(headers: list[str], rows: list[list[str]]) -> str:
     writer.writerow(headers)
     writer.writerows(rows)
     return output.getvalue()
+
+
+def _coerce_xlsx_cell(value: Any) -> Any:
+    """Coerce a string cell to a number where it round-trips cleanly.
+
+    Report rows are built as strings (shared with the CSV path). For Excel we
+    want numeric columns to be real numbers so totals/sorting work, so attempt
+    a clean int/float conversion and fall back to the original string.
+    """
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text:
+        return value
+    try:
+        if text.lstrip("-").isdigit():
+            return int(text)
+        return float(text)
+    except (ValueError, TypeError):
+        return value
+
+
+def _build_xlsx(
+    headers: list[str],
+    rows: list[list[str]],
+    *,
+    sheet_name: str = "Report",
+    numeric_from: int | None = None,
+) -> bytes:
+    """Build an .xlsx workbook (bytes) from headers and rows.
+
+    ``numeric_from`` is the column index at/after which string cells are
+    coerced to numbers (e.g. amount columns); ``None`` keeps every cell as-is.
+    Shared by report exporters so Excel output stays consistent.
+    """
+    import io
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = sheet_name[:31] or "Report"
+
+    worksheet.append(headers)
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True)
+
+    for row in rows:
+        out_row = [
+            _coerce_xlsx_cell(v)
+            if numeric_from is not None and i >= numeric_from
+            else v
+            for i, v in enumerate(row)
+        ]
+        worksheet.append(out_row)
+
+    # Reasonable column widths from header/content length.
+    for idx, header in enumerate(headers, start=1):
+        longest = max(
+            [len(str(header))]
+            + [len(str(r[idx - 1])) for r in rows if idx - 1 < len(r)]
+            or [len(str(header))]
+        )
+        worksheet.column_dimensions[
+            worksheet.cell(row=1, column=idx).column_letter
+        ].width = min(max(longest + 2, 10), 48)
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
 
 
 def _ifrs_label(category: IFRSCategory | str | None) -> str:

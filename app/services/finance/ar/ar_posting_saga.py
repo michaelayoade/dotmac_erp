@@ -29,6 +29,7 @@ from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.services.common import coerce_uuid
+from app.services.finance.common.source_types import AR_INVOICE_SOURCE
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
@@ -312,7 +313,10 @@ class ARInvoicePostingSaga(SagaOrchestrator):
             exchange_rate_type_id=invoice.exchange_rate_type_id,
             lines=journal_lines,
             source_module="AR",
-            source_document_type="CUSTOMER_INVOICE",
+            # Canonical AR invoice tag (was "CUSTOMER_INVOICE") so a journal
+            # posted via this saga is excluded from the Journal Proper exactly
+            # like one from the live AR poster — see source_types.py.
+            source_document_type=AR_INVOICE_SOURCE,
             source_document_id=invoice_id,
             correlation_id=invoice.correlation_id,
         )

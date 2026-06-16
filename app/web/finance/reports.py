@@ -53,6 +53,17 @@ def _pdf_response(content: bytes, filename: str) -> StreamingResponse:
     )
 
 
+def _xlsx_response(content: bytes, filename: str) -> StreamingResponse:
+    """Build a StreamingResponse for Excel (.xlsx) download."""
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def reports_dashboard(
@@ -222,6 +233,252 @@ def export_ar_aging(
         return _pdf_response(pdf, "ar_aging.pdf")
     pdf = reports_web_service.export_ar_aging_pdf(org_id, db, as_of_date)
     return _pdf_response(pdf, "ar_aging.pdf")
+
+
+@router.get("/sales-day-book", response_class=HTMLResponse)
+def sales_day_book_report(
+    request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Sales Day Book report page (AR invoices, chronological)."""
+    return reports_web_service.sales_day_book_response(
+        request, auth, start_date, end_date, status, db
+    )
+
+
+@router.get("/sales-day-book/export")
+def export_sales_day_book(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    fmt: str = Query("csv", alias="format"),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> StreamingResponse:
+    """Export the Sales Day Book as Excel, PDF or CSV."""
+    org_id = str(auth.organization_id)
+    if fmt == "pdf":
+        pdf = reports_web_service.export_sales_day_book_pdf(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _pdf_response(pdf, "sales_day_book.pdf")
+    if fmt in ("xlsx", "excel"):
+        xlsx = reports_web_service.export_sales_day_book_xlsx(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _xlsx_response(xlsx, "sales_day_book.xlsx")
+    csv = reports_web_service.export_sales_day_book_csv(
+        org_id, db, start_date, end_date, status=status
+    )
+    return _csv_response(csv, "sales_day_book.csv")
+
+
+@router.get("/purchases-day-book", response_class=HTMLResponse)
+def purchases_day_book_report(
+    request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Purchases Day Book report page (AP invoices, chronological)."""
+    return reports_web_service.purchases_day_book_response(
+        request, auth, start_date, end_date, status, db
+    )
+
+
+@router.get("/purchases-day-book/export")
+def export_purchases_day_book(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    fmt: str = Query("csv", alias="format"),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> StreamingResponse:
+    """Export the Purchases Day Book as Excel, PDF or CSV."""
+    org_id = str(auth.organization_id)
+    if fmt == "pdf":
+        pdf = reports_web_service.export_purchases_day_book_pdf(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _pdf_response(pdf, "purchases_day_book.pdf")
+    if fmt in ("xlsx", "excel"):
+        xlsx = reports_web_service.export_purchases_day_book_xlsx(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _xlsx_response(xlsx, "purchases_day_book.xlsx")
+    csv = reports_web_service.export_purchases_day_book_csv(
+        org_id, db, start_date, end_date, status=status
+    )
+    return _csv_response(csv, "purchases_day_book.csv")
+
+
+@router.get("/cash-book", response_class=HTMLResponse)
+def cash_book_report(
+    request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Cash Book report page (receipts + payments, chronological)."""
+    return reports_web_service.cash_book_response(
+        request, auth, start_date, end_date, db
+    )
+
+
+@router.get("/cash-book/export")
+def export_cash_book(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    fmt: str = Query("csv", alias="format"),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> StreamingResponse:
+    """Export the Cash Book as Excel, PDF or CSV."""
+    org_id = str(auth.organization_id)
+    if fmt == "pdf":
+        pdf = reports_web_service.export_cash_book_pdf(org_id, db, start_date, end_date)
+        return _pdf_response(pdf, "cash_book.pdf")
+    if fmt in ("xlsx", "excel"):
+        xlsx = reports_web_service.export_cash_book_xlsx(
+            org_id, db, start_date, end_date
+        )
+        return _xlsx_response(xlsx, "cash_book.xlsx")
+    csv = reports_web_service.export_cash_book_csv(org_id, db, start_date, end_date)
+    return _csv_response(csv, "cash_book.csv")
+
+
+@router.get("/journal-day-book", response_class=HTMLResponse)
+def journal_day_book_report(
+    request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Journal day book report page (posted GL journal entries)."""
+    return reports_web_service.journal_day_book_response(
+        request, auth, start_date, end_date, status, db
+    )
+
+
+@router.get("/journal-day-book/export")
+def export_journal_day_book(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    fmt: str = Query("csv", alias="format"),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> StreamingResponse:
+    """Export the Journal day book as Excel, PDF or CSV."""
+    org_id = str(auth.organization_id)
+    if fmt == "pdf":
+        pdf = reports_web_service.export_journal_day_book_pdf(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _pdf_response(pdf, "journal_day_book.pdf")
+    if fmt in ("xlsx", "excel"):
+        xlsx = reports_web_service.export_journal_day_book_xlsx(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _xlsx_response(xlsx, "journal_day_book.xlsx")
+    csv = reports_web_service.export_journal_day_book_csv(
+        org_id, db, start_date, end_date, status=status
+    )
+    return _csv_response(csv, "journal_day_book.csv")
+
+
+@router.get("/sales-returns-day-book", response_class=HTMLResponse)
+def sales_returns_day_book_report(
+    request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Sales Returns Day Book report page (AR credit notes)."""
+    return reports_web_service.sales_returns_day_book_response(
+        request, auth, start_date, end_date, status, db
+    )
+
+
+@router.get("/sales-returns-day-book/export")
+def export_sales_returns_day_book(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    fmt: str = Query("csv", alias="format"),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> StreamingResponse:
+    """Export the Sales Returns Day Book as Excel, PDF or CSV."""
+    org_id = str(auth.organization_id)
+    if fmt == "pdf":
+        pdf = reports_web_service.export_sales_returns_day_book_pdf(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _pdf_response(pdf, "sales_returns_day_book.pdf")
+    if fmt in ("xlsx", "excel"):
+        xlsx = reports_web_service.export_sales_returns_day_book_xlsx(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _xlsx_response(xlsx, "sales_returns_day_book.xlsx")
+    csv = reports_web_service.export_sales_returns_day_book_csv(
+        org_id, db, start_date, end_date, status=status
+    )
+    return _csv_response(csv, "sales_returns_day_book.csv")
+
+
+@router.get("/purchases-returns-day-book", response_class=HTMLResponse)
+def purchases_returns_day_book_report(
+    request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Purchases Returns Day Book report page (supplier credit notes)."""
+    return reports_web_service.purchases_returns_day_book_response(
+        request, auth, start_date, end_date, status, db
+    )
+
+
+@router.get("/purchases-returns-day-book/export")
+def export_purchases_returns_day_book(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+    fmt: str = Query("csv", alias="format"),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> StreamingResponse:
+    """Export the Purchases Returns Day Book as Excel, PDF or CSV."""
+    org_id = str(auth.organization_id)
+    if fmt == "pdf":
+        pdf = reports_web_service.export_purchases_returns_day_book_pdf(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _pdf_response(pdf, "purchases_returns_day_book.pdf")
+    if fmt in ("xlsx", "excel"):
+        xlsx = reports_web_service.export_purchases_returns_day_book_xlsx(
+            org_id, db, start_date, end_date, status=status
+        )
+        return _xlsx_response(xlsx, "purchases_returns_day_book.xlsx")
+    csv = reports_web_service.export_purchases_returns_day_book_csv(
+        org_id, db, start_date, end_date, status=status
+    )
+    return _csv_response(csv, "purchases_returns_day_book.csv")
 
 
 @router.get("/general-ledger", response_class=HTMLResponse)

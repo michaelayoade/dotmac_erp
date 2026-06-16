@@ -180,16 +180,22 @@ class LearningAssessmentWebService:
 
     @staticmethod
     def _departments(db: Session, org_id: UUID) -> list:
-        return OrganizationService(db, org_id).list_departments(
-            pagination=PaginationParams(limit=200)
-        ).items
+        return (
+            OrganizationService(db, org_id)
+            .list_departments(pagination=PaginationParams(limit=200))
+            .items
+        )
 
     @staticmethod
     def _employees(db: Session, org_id: UUID) -> list:
-        return OrganizationService(db, org_id).list_employees(
-            pagination=PaginationParams(limit=500),
-            eager_load=True,
-        ).items
+        return (
+            OrganizationService(db, org_id)
+            .list_employees(
+                pagination=PaginationParams(limit=500),
+                eager_load=True,
+            )
+            .items
+        )
 
     @staticmethod
     def _roles(db: Session) -> list[Role]:
@@ -200,14 +206,19 @@ class LearningAssessmentWebService:
         )
 
     @staticmethod
-    def _course_counts(db: Session, org_id: UUID) -> tuple[dict[UUID, int], dict[UUID, int]]:
+    def _course_counts(
+        db: Session, org_id: UUID
+    ) -> tuple[dict[UUID, int], dict[UUID, int]]:
         module_rows = db.execute(
             select(TrainingCourseModule.course_id, func.count(TrainingCourseModule.id))
             .where(TrainingCourseModule.organization_id == org_id)
             .group_by(TrainingCourseModule.course_id)
         ).all()
         assignment_rows = db.execute(
-            select(TrainingCourseAssignment.course_id, func.count(TrainingCourseAssignment.id))
+            select(
+                TrainingCourseAssignment.course_id,
+                func.count(TrainingCourseAssignment.id),
+            )
             .where(TrainingCourseAssignment.organization_id == org_id)
             .group_by(TrainingCourseAssignment.course_id)
         ).all()
@@ -288,11 +299,13 @@ class LearningAssessmentWebService:
         )
         assignments = {
             item.course_id: item
-            for item in AssignmentService(db).list_assignments(
+            for item in AssignmentService(db)
+            .list_assignments(
                 org_id,
                 employee_id=employee_id,
                 pagination=PaginationParams(limit=1000),
-            ).items
+            )
+            .items
         }
         items = result.items
         if status == "overdue":
@@ -365,7 +378,9 @@ class LearningAssessmentWebService:
             )
         except Exception as exc:
             module = ModuleService(db).get_module(org_id, lesson.module_id)
-            return _redirect(_error_url(f"/people/training/my-courses/{module.course_id}", exc))
+            return _redirect(
+                _error_url(f"/people/training/my-courses/{module.course_id}", exc)
+            )
         module = ModuleService(db).get_module(org_id, lesson.module_id)
         course = CourseService(db).get_course(org_id, module.course_id)
         state = ProgressService(db).get_course_learning_state(
@@ -515,15 +530,21 @@ class LearningAssessmentWebService:
                 coerce_uuid(attempt_id),
                 _employee_id(auth),
             )
-            attempts = ExamService(db).list_attempts(
-                coerce_uuid(auth.organization_id),
-                _employee_id(auth),
-                assessment_id=attempt.assessment_id,
-                pagination=PaginationParams(limit=100),
-            ).items
+            attempts = (
+                ExamService(db)
+                .list_attempts(
+                    coerce_uuid(auth.organization_id),
+                    _employee_id(auth),
+                    assessment_id=attempt.assessment_id,
+                    pagination=PaginationParams(limit=100),
+                )
+                .items
+            )
         except Exception as exc:
             return _redirect(_error_url("/people/training/my-courses", exc))
-        attempt_number = len([item for item in attempts if item.started_at <= attempt.started_at])
+        attempt_number = len(
+            [item for item in attempts if item.started_at <= attempt.started_at]
+        )
         context = base_context(request, auth, "Assessment Result", "training", db=db)
         context.update({"attempt": attempt, "attempt_number": attempt_number})
         return templates.TemplateResponse(
@@ -549,13 +570,15 @@ class LearningAssessmentWebService:
             assessment_id=parse_uuid(assessment_id),
             pagination=PaginationParams.from_page(page, per_page=25),
         )
-        context = base_context(request, auth, "Pending Essay Reviews", "training", db=db)
+        context = base_context(
+            request, auth, "Pending Essay Reviews", "training", db=db
+        )
         context.update(
             {
                 "answers": result.items,
-                "courses": CourseService(db).list_courses(
-                    org_id, pagination=PaginationParams(limit=500)
-                ).items,
+                "courses": CourseService(db)
+                .list_courses(org_id, pagination=PaginationParams(limit=500))
+                .items,
                 "assessments": self._assessments(db, org_id),
                 "course_id": course_id,
                 "assessment_id": assessment_id,
@@ -641,7 +664,13 @@ class LearningAssessmentWebService:
             end_date=parse_date(end_date),
         )
         context = base_context(request, auth, "Learning Dashboard", "training", db=db)
-        context.update({"report": report, "start_date": start_date or "", "end_date": end_date or ""})
+        context.update(
+            {
+                "report": report,
+                "start_date": start_date or "",
+                "end_date": end_date or "",
+            }
+        )
         return templates.TemplateResponse(
             request, "people/training/learning/reports/dashboard.html", context
         )
@@ -681,9 +710,9 @@ class LearningAssessmentWebService:
             {
                 "employees": self._employees(db, org_id),
                 "departments": self._departments(db, org_id),
-                "courses": CourseService(db).list_courses(
-                    org_id, pagination=PaginationParams(limit=500)
-                ).items,
+                "courses": CourseService(db)
+                .list_courses(org_id, pagination=PaginationParams(limit=500))
+                .items,
                 "assessments": self._assessments(db, org_id),
                 "employee_id": employee_id,
                 "department_id": department_id,
@@ -788,11 +817,15 @@ class LearningAssessmentWebService:
             assignment_source=assignment_source,
             pagination=pagination,
         )
-        courses = CourseService(db).list_courses(
-            org_id,
-            status=TrainingCourseStatus.PUBLISHED,
-            pagination=PaginationParams(limit=500),
-        ).items
+        courses = (
+            CourseService(db)
+            .list_courses(
+                org_id,
+                status=TrainingCourseStatus.PUBLISHED,
+                pagination=PaginationParams(limit=500),
+            )
+            .items
+        )
         context = base_context(request, auth, "Course Assignments", "training", db=db)
         context.update(
             {
@@ -835,7 +868,9 @@ class LearningAssessmentWebService:
         form_data = await request.form()
         try:
             course_id = coerce_uuid(form_data["course_id"])
-            employee_ids = [coerce_uuid(value) for value in form_data.getlist("employee_ids")]
+            employee_ids = [
+                coerce_uuid(value) for value in form_data.getlist("employee_ids")
+            ]
             AssignmentService(db).assign_employees(
                 coerce_uuid(auth.organization_id),
                 course_id,
@@ -995,7 +1030,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{course_id}?success=Course+updated")
+            return _redirect(
+                f"/people/training/courses/{course_id}?success=Course+updated"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("update_course_response: failed")
@@ -1018,10 +1055,14 @@ class LearningAssessmentWebService:
             course = CourseService(db).get_course(org_id, coerce_uuid(course_id))
         except Exception:
             return _redirect("/people/training/courses?error=Course+not+found")
-        available_prerequisites = CourseService(db).list_courses(
-            org_id,
-            pagination=PaginationParams(limit=200),
-        ).items
+        available_prerequisites = (
+            CourseService(db)
+            .list_courses(
+                org_id,
+                pagination=PaginationParams(limit=200),
+            )
+            .items
+        )
         assessment_counts: dict[UUID, int] = {
             assessment_id: count
             for assessment_id, count in db.execute(
@@ -1065,7 +1106,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{course_id}?success=Course+published")
+            return _redirect(
+                f"/people/training/courses/{course_id}?success=Course+published"
+            )
         except Exception as exc:
             db.rollback()
             return _redirect(_error_url(f"/people/training/courses/{course_id}", exc))
@@ -1084,7 +1127,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{course_id}?success=Course+archived")
+            return _redirect(
+                f"/people/training/courses/{course_id}?success=Course+archived"
+            )
         except Exception as exc:
             db.rollback()
             return _redirect(_error_url(f"/people/training/courses/{course_id}", exc))
@@ -1106,7 +1151,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{course_id}?success=Prerequisite+added")
+            return _redirect(
+                f"/people/training/courses/{course_id}?success=Prerequisite+added"
+            )
         except Exception as exc:
             db.rollback()
             return _redirect(_error_url(f"/people/training/courses/{course_id}", exc))
@@ -1127,7 +1174,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{course_id}?success=Prerequisite+removed")
+            return _redirect(
+                f"/people/training/courses/{course_id}?success=Prerequisite+removed"
+            )
         except Exception as exc:
             db.rollback()
             return _redirect(_error_url(f"/people/training/courses/{course_id}", exc))
@@ -1188,7 +1237,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{course_id}?success=Module+added")
+            return _redirect(
+                f"/people/training/courses/{course_id}?success=Module+added"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("create_module_response: failed")
@@ -1221,7 +1272,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{module.course_id}?success=Module+updated")
+            return _redirect(
+                f"/people/training/courses/{module.course_id}?success=Module+updated"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("update_module_response: failed")
@@ -1244,7 +1297,9 @@ class LearningAssessmentWebService:
         _require_any(auth, COURSE_UPDATE_PERMISSIONS)
         form_data = await request.form()
         try:
-            ordered_ids = [coerce_uuid(value) for value in form_data.getlist("module_ids")]
+            ordered_ids = [
+                coerce_uuid(value) for value in form_data.getlist("module_ids")
+            ]
             ModuleService(db).reorder_modules(
                 coerce_uuid(auth.organization_id),
                 coerce_uuid(course_id),
@@ -1252,7 +1307,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{course_id}?success=Modules+reordered")
+            return _redirect(
+                f"/people/training/courses/{course_id}?success=Modules+reordered"
+            )
         except Exception as exc:
             db.rollback()
             return _redirect(_error_url(f"/people/training/courses/{course_id}", exc))
@@ -1328,7 +1385,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{module.course_id}?success=Lesson+added")
+            return _redirect(
+                f"/people/training/courses/{module.course_id}?success=Lesson+added"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("create_lesson_response: failed")
@@ -1355,7 +1414,9 @@ class LearningAssessmentWebService:
             lesson = LessonService(db).update_lesson(
                 org_id,
                 coerce_uuid(lesson_id),
-                lesson_type=_enum(TrainingLessonType, str(form_data.get("lesson_type") or "")),
+                lesson_type=_enum(
+                    TrainingLessonType, str(form_data.get("lesson_type") or "")
+                ),
                 title=str(form_data.get("title") or ""),
                 description=_form_str(form_data, "description"),
                 sequence=_form_int(form_data, "sequence"),
@@ -1366,7 +1427,9 @@ class LearningAssessmentWebService:
             )
             module = ModuleService(db).get_module(org_id, lesson.module_id)
             db.commit()
-            return _redirect(f"/people/training/courses/{module.course_id}?success=Lesson+updated")
+            return _redirect(
+                f"/people/training/courses/{module.course_id}?success=Lesson+updated"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("update_lesson_response: failed")
@@ -1400,7 +1463,9 @@ class LearningAssessmentWebService:
         question_counts: dict[UUID, int] = {
             question_bank_id: count
             for question_bank_id, count in db.execute(
-                select(TrainingQuestion.question_bank_id, func.count(TrainingQuestion.id))
+                select(
+                    TrainingQuestion.question_bank_id, func.count(TrainingQuestion.id)
+                )
                 .where(TrainingQuestion.organization_id == org_id)
                 .group_by(TrainingQuestion.question_bank_id)
             ).all()
@@ -1442,7 +1507,9 @@ class LearningAssessmentWebService:
             try:
                 bank = QuestionBankService(db).get_bank(org_id, coerce_uuid(bank_id))
             except Exception:
-                return _redirect("/people/training/question-banks?error=Question+bank+not+found")
+                return _redirect(
+                    "/people/training/question-banks?error=Question+bank+not+found"
+                )
         context = base_context(request, auth, "Question Bank", "training", db=db)
         context.update(
             {
@@ -1475,7 +1542,9 @@ class LearningAssessmentWebService:
                 created_by=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/question-banks/{bank.id}?success=Question+bank+created")
+            return _redirect(
+                f"/people/training/question-banks/{bank.id}?success=Question+bank+created"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("create_question_bank_response: failed")
@@ -1504,7 +1573,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/question-banks/{bank_id}?success=Question+bank+updated")
+            return _redirect(
+                f"/people/training/question-banks/{bank_id}?success=Question+bank+updated"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("update_question_bank_response: failed")
@@ -1532,7 +1603,9 @@ class LearningAssessmentWebService:
                 coerce_uuid(auth.organization_id), coerce_uuid(bank_id)
             )
         except Exception:
-            return _redirect("/people/training/question-banks?error=Question+bank+not+found")
+            return _redirect(
+                "/people/training/question-banks?error=Question+bank+not+found"
+            )
         context = base_context(request, auth, bank.name, "training", db=db)
         context.update(
             {
@@ -1581,7 +1654,9 @@ class LearningAssessmentWebService:
                 question = QuestionBankService(db).get_question(
                     org_id, coerce_uuid(question_id)
                 )
-                bank = QuestionBankService(db).get_bank(org_id, question.question_bank_id)
+                bank = QuestionBankService(db).get_bank(
+                    org_id, question.question_bank_id
+                )
             elif bank_id:
                 bank = QuestionBankService(db).get_bank(org_id, coerce_uuid(bank_id))
         except Exception:
@@ -1592,7 +1667,9 @@ class LearningAssessmentWebService:
                 "bank": bank,
                 "question": question,
                 "question_types": [item.value for item in TrainingQuestionType],
-                "difficulty_levels": [item.value for item in TrainingQuestionDifficulty],
+                "difficulty_levels": [
+                    item.value for item in TrainingQuestionDifficulty
+                ],
                 "form_data": form_data or {},
                 "error": error,
                 **self._permissions(auth),
@@ -1638,7 +1715,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/question-banks/{bank_id}?success=Question+created")
+            return _redirect(
+                f"/people/training/question-banks/{bank_id}?success=Question+created"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("create_question_response: failed")
@@ -1694,7 +1773,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/question-banks/{question.question_bank_id}?success=Question+updated")
+            return _redirect(
+                f"/people/training/question-banks/{question.question_bank_id}?success=Question+updated"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("update_question_response: failed")
@@ -1776,7 +1857,9 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/courses/{module.course_id}?success=Assessment+created")
+            return _redirect(
+                f"/people/training/courses/{module.course_id}?success=Assessment+created"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("create_assessment_response: failed")
@@ -1814,7 +1897,9 @@ class LearningAssessmentWebService:
             )
             module = ModuleService(db).get_module(org_id, assessment.module_id)
             db.commit()
-            return _redirect(f"/people/training/courses/{module.course_id}?success=Assessment+updated")
+            return _redirect(
+                f"/people/training/courses/{module.course_id}?success=Assessment+updated"
+            )
         except Exception as exc:
             db.rollback()
             logger.exception("update_assessment_response: failed")
@@ -1841,10 +1926,16 @@ class LearningAssessmentWebService:
             )
             module = ModuleService(db).get_module(org_id, assessment.module_id)
             db.commit()
-            return _redirect(f"/people/training/courses/{module.course_id}?success=Assessment+published")
+            return _redirect(
+                f"/people/training/courses/{module.course_id}?success=Assessment+published"
+            )
         except Exception as exc:
             db.rollback()
-            return _redirect(_error_url(f"/people/training/assessments/{assessment_id}/questions", exc))
+            return _redirect(
+                _error_url(
+                    f"/people/training/assessments/{assessment_id}/questions", exc
+                )
+            )
 
     def archive_assessment_response(
         self,
@@ -1860,10 +1951,16 @@ class LearningAssessmentWebService:
             )
             module = ModuleService(db).get_module(org_id, assessment.module_id)
             db.commit()
-            return _redirect(f"/people/training/courses/{module.course_id}?success=Assessment+archived")
+            return _redirect(
+                f"/people/training/courses/{module.course_id}?success=Assessment+archived"
+            )
         except Exception as exc:
             db.rollback()
-            return _redirect(_error_url(f"/people/training/assessments/{assessment_id}/questions", exc))
+            return _redirect(
+                _error_url(
+                    f"/people/training/assessments/{assessment_id}/questions", exc
+                )
+            )
 
     def assessment_questions_response(
         self,
@@ -1884,15 +1981,21 @@ class LearningAssessmentWebService:
             )
         except Exception:
             return _redirect("/people/training/courses?error=Assessment+not+found")
-        banks = QuestionBankService(db).list_banks(
-            org_id, pagination=PaginationParams(limit=200)
-        ).items
-        questions = QuestionBankService(db).list_questions(
-            org_id,
-            bank_id=parse_uuid(bank_id),
-            search=search,
-            pagination=PaginationParams(limit=200),
-        ).items
+        banks = (
+            QuestionBankService(db)
+            .list_banks(org_id, pagination=PaginationParams(limit=200))
+            .items
+        )
+        questions = (
+            QuestionBankService(db)
+            .list_questions(
+                org_id,
+                bank_id=parse_uuid(bank_id),
+                search=search,
+                pagination=PaginationParams(limit=200),
+            )
+            .items
+        )
         attached_ids = {link.question_id for link in assessment.assessment_questions}
         context = base_context(request, auth, assessment.title, "training", db=db)
         context.update(
@@ -1933,10 +2036,16 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/assessments/{assessment_id}/questions?success=Question+attached")
+            return _redirect(
+                f"/people/training/assessments/{assessment_id}/questions?success=Question+attached"
+            )
         except Exception as exc:
             db.rollback()
-            return _redirect(_error_url(f"/people/training/assessments/{assessment_id}/questions", exc))
+            return _redirect(
+                _error_url(
+                    f"/people/training/assessments/{assessment_id}/questions", exc
+                )
+            )
 
     def detach_question_response(
         self,
@@ -1954,10 +2063,16 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/assessments/{assessment_id}/questions?success=Question+detached")
+            return _redirect(
+                f"/people/training/assessments/{assessment_id}/questions?success=Question+detached"
+            )
         except Exception as exc:
             db.rollback()
-            return _redirect(_error_url(f"/people/training/assessments/{assessment_id}/questions", exc))
+            return _redirect(
+                _error_url(
+                    f"/people/training/assessments/{assessment_id}/questions", exc
+                )
+            )
 
     async def update_assessment_question_response(
         self,
@@ -1980,10 +2095,16 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/assessments/{assessment_id}/questions?success=Question+updated")
+            return _redirect(
+                f"/people/training/assessments/{assessment_id}/questions?success=Question+updated"
+            )
         except Exception as exc:
             db.rollback()
-            return _redirect(_error_url(f"/people/training/assessments/{assessment_id}/questions", exc))
+            return _redirect(
+                _error_url(
+                    f"/people/training/assessments/{assessment_id}/questions", exc
+                )
+            )
 
     async def reorder_assessment_questions_response(
         self,
@@ -2002,7 +2123,13 @@ class LearningAssessmentWebService:
                 actor_id=_actor_id(auth),
             )
             db.commit()
-            return _redirect(f"/people/training/assessments/{assessment_id}/questions?success=Questions+reordered")
+            return _redirect(
+                f"/people/training/assessments/{assessment_id}/questions?success=Questions+reordered"
+            )
         except Exception as exc:
             db.rollback()
-            return _redirect(_error_url(f"/people/training/assessments/{assessment_id}/questions", exc))
+            return _redirect(
+                _error_url(
+                    f"/people/training/assessments/{assessment_id}/questions", exc
+                )
+            )

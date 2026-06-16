@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.config import settings as app_settings
 from app.api.deps import get_db_with_org
 from app.db import SessionLocal
-from app.db.session_context import prime_session
+from app.db.session_context import allow_cross_org, prime_session
 from app.models.auth import ApiKey
 from app.models.person import Person
 from app.rls import set_current_organization_sync
@@ -133,7 +133,11 @@ def require_service_auth(
             coerce_uuid(app_settings.default_organization_id),
         )
 
-    person = db.get(Person, api_key.person_id)
+    # Resolving the API key's person is a cross-tenant bootstrap: the person must
+    # be loaded to discover their organization before org context can be primed.
+    # Without this, org-filter enforcement rejects the lookup (no primed org yet).
+    with allow_cross_org(db):
+        person = db.get(Person, api_key.person_id)
     if not person or not person.organization_id:
         raise HTTPException(
             status_code=403,

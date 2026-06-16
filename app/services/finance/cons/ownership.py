@@ -172,9 +172,7 @@ class OwnershipService(ListResponseMixin):
         )
 
         db.add(ownership)
-        db.commit()
-        db.refresh(ownership)
-
+        db.flush()
         # Update investee consolidation method based on control
         OwnershipService._update_consolidation_method(db, investee, ownership)
 
@@ -223,7 +221,7 @@ class OwnershipService(ListResponseMixin):
         else:
             investee.consolidation_method = ConsolidationMethod.NOT_CONSOLIDATED
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
     @staticmethod
     def calculate_effective_ownership(

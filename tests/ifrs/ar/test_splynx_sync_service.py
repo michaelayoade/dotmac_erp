@@ -387,6 +387,7 @@ class TestSyncSinglePayment:
                 None,  # _has_changed: no existing hash
                 None,  # _get_synced_entity: not yet synced
                 fake_invoice,  # Find invoice by correlation_id
+                None,  # fallback: no existing payment by splynx_id
                 None,  # _record_sync: _get_synced_entity check
             ]
         else:
@@ -467,6 +468,7 @@ class TestSyncSinglePayment:
         db.scalar.side_effect = [
             None,  # _has_changed: no existing hash
             None,  # _get_synced_entity: not yet synced
+            None,  # fallback: no existing payment by splynx_id
             None,  # _record_sync: _get_synced_entity check
         ]
         db.get.return_value = fake_customer  # db.get(Customer, customer_id)
@@ -534,6 +536,53 @@ class TestSyncSinglePayment:
         assert result.created == 1
         added_payment = db.add.call_args_list[0][0][0]
         assert added_payment.created_by_user_id == SYSTEM_USER_ID
+
+    def test_existing_payment_matched_by_splynx_id_when_mapping_missing(
+        self,
+    ) -> None:
+        """Re-import safety: when the ExternalSync mapping is absent but a
+        payment with the same splynx_id already exists, the sync must UPDATE
+        it (and re-record the mapping) instead of inserting a duplicate.
+
+        Regression for the double-sync that created ~800 phantom CLEARED
+        payments (~NGN 39.8M) when a re-import ran without the sync mapping.
+        """
+        db = MagicMock()
+        svc = _make_service(db)
+        svc._payment_method_cache = {
+            1: SplynxPaymentMethod(id=1, name="Paystack", is_active=True)
+        }
+        svc._bank_account_mapping = {1: uuid.uuid4()}
+
+        fake_invoice = FakeInvoice(correlation_id="splynx-inv-1001")
+        existing_payment = MagicMock()
+        existing_payment.payment_id = uuid.uuid4()
+
+        db.scalar.side_effect = [
+            None,  # _has_changed: no existing hash
+            None,  # _get_synced_entity: mapping missing
+            fake_invoice,  # invoice lookup by correlation_id
+            existing_payment,  # fallback: payment found by splynx_id
+            None,  # _update_existing_payment: allocation lookup
+            None,  # _record_sync: _get_synced_entity check
+        ]
+
+        result = SyncResult(success=True, entity_type="payments")
+        pmt = _make_splynx_payment()
+
+        svc._sync_single_payment(pmt, result, USER_ID)
+
+        # Updated in place, not duplicated.
+        assert result.updated == 1
+        assert result.created == 0
+        added_payments = [
+            o
+            for o in (c[0][0] for c in db.add.call_args_list)
+            if isinstance(o, CustomerPayment)
+        ]
+        assert added_payments == []
+        # The pre-existing payment was refreshed and its mapping re-recorded.
+        assert existing_payment.splynx_id == str(pmt.id)
 
 
 # ---------------------------------------------------------------------------
@@ -603,8 +652,11 @@ class TestSyncSingleCreditNote:
         svc._sync_single_credit_note(cn, USER_ID, result)
 
         assert result.updated == 1
-        assert existing.total_amount == Decimal("6000.00")
-        assert existing.subtotal == Decimal("6000.00")
+        # Credit notes are stored with the canonical negative-amount convention
+        # (Splynx sends positive totals; the sync negates them to match
+        # app/services/finance/ar/invoice.py and the AR poster / day-book reports).
+        assert existing.total_amount == Decimal("-6000.00")
+        assert existing.subtotal == Decimal("-6000.00")
 
     def test_skip_credit_note_when_customer_missing(self) -> None:
         """Credit note should be skipped when customer is not synced."""
@@ -1782,10 +1834,25 @@ class TestInvoiceSyncWithTax:
                 break
 
         assert invoice_obj is not None
-        assert invoice_obj.total_amount == Decimal("5375.00")
-        # subtotal = 5375 / 1.075 = 5000
-        assert invoice_obj.subtotal == Decimal("5000.00")
-        assert invoice_obj.tax_amount == Decimal("375.00")
+        # Credit notes use the canonical negative-amount convention (Splynx sends
+        # +5375; the sync negates to match the AR poster / day-book reports).
+        assert invoice_obj.total_amount == Decimal("-5375.00")
+        # subtotal = -(5375 / 1.075) = -5000
+        assert invoice_obj.subtotal == Decimal("-5000.00")
+        assert invoice_obj.tax_amount == Decimal("-375.00")
+
+        # Line amounts must carry the same negative sign as the header.
+        from app.models.finance.ar.invoice_line import InvoiceLine as InvoiceLineModel
+
+        line_obj = None
+        for call in db.add.call_args_list:
+            obj = call[0][0]
+            if isinstance(obj, InvoiceLineModel):
+                line_obj = obj
+                break
+        assert line_obj is not None
+        assert line_obj.line_amount == Decimal("-5000.00")
+        assert line_obj.tax_amount == Decimal("-375.00")
 
     def test_no_tax_code_preserves_legacy_behaviour(self) -> None:
         """When no tax code is configured, behaviour matches legacy (zero tax)."""

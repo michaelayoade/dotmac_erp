@@ -1,0 +1,49 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Purchases Returns Day Book — {{ org_name }}{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_title %}Purchases Returns Day Book{% endblock %}
+{% block report_meta %}
+<p class="meta-line">{{ start_date }} to {{ end_date }} · {{ row_count }} credit note(s)</p>
+{% endblock %}
+
+{% block report_body %}
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 11%;">Date</th>
+      <th style="width: 14%;">Credit Note #</th>
+      <th style="width: 12%;">Supplier Inv #</th>
+      <th>Supplier</th>
+      <th class="num" style="width: 11%;">Net</th>
+      <th class="num" style="width: 11%;">VAT</th>
+      <th class="num" style="width: 11%;">WHT</th>
+      <th class="num" style="width: 12%;">Gross</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="nowrap">{{ row.invoice_date }}</td>
+      <td>{{ row.invoice_number }}</td>
+      <td>{{ row.supplier_invoice_number }}</td>
+      <td>{{ row.supplier_name }}</td>
+      <td class="num">{{ row.net }}</td>
+      <td class="num">{{ row.vat }}</td>
+      <td class="num">{{ row.wht }}</td>
+      <td class="num">{{ row.gross }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="total-row">
+      <td colspan="4">TOTAL</td>
+      <td class="num">{{ total_net }}</td>
+      <td class="num">{{ total_vat }}</td>
+      <td class="num">{{ total_wht }}</td>
+      <td class="num">{{ total_gross }}</td>
+    </tr>
+  </tfoot>
+</table>
+<p class="meta-line" style="margin-top: 12px;">{{ vat_basis_note }}</p>
+{% endblock %}

@@ -15,7 +15,7 @@ from typing import Any, Generic, TypeVar, cast
 from uuid import UUID
 
 from fastapi import HTTPException, Response
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionResult
@@ -322,29 +322,19 @@ class BulkActionService(ABC, Generic[T]):
 
         return query
 
-    async def export_all(
+    def _build_filtered_query(
         self,
         search: str = "",
         status: str = "",
         start_date: str = "",
         end_date: str = "",
         extra_filters: dict[str, Any] | None = None,
-        format: str = "csv",
-    ) -> Response:
+    ):
         """
-        Export all records matching filters to CSV.
+        Build the filtered select shared by export_all() and count_all().
 
-        Args:
-            search: Optional search term
-            status: Optional status filter
-            start_date: Optional start date (ISO format YYYY-MM-DD)
-            end_date: Optional end date (ISO format YYYY-MM-DD)
-            extra_filters: Optional dict of {column_name: value} for
-                entity-specific filters (e.g. customer_id, category)
-            format: Export format (only 'csv' supported currently)
-
-        Returns:
-            Response with CSV data
+        Applies search, an optional status equality filter, a date range on
+        the ``date_field`` column, and entity-specific equality filters.
         """
         from datetime import date as date_type
 
@@ -381,6 +371,56 @@ class BulkActionService(ABC, Generic[T]):
                     col = getattr(self.model, col_name, None)
                     if col is not None:
                         query = query.where(col == value)
+
+        return query
+
+    def count_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, Any] | None = None,
+    ) -> int:
+        """
+        Count records matching the same filters export_all() would use.
+
+        Used to decide between an inline (synchronous) export and a queued
+        background export. ORDER BY is stripped so the count subquery stays
+        cheap and index-friendly.
+        """
+        query = self._build_filtered_query(
+            search, status, start_date, end_date, extra_filters
+        ).order_by(None)
+        return self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, Any] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all records matching filters to CSV.
+
+        Args:
+            search: Optional search term
+            status: Optional status filter
+            start_date: Optional start date (ISO format YYYY-MM-DD)
+            end_date: Optional end date (ISO format YYYY-MM-DD)
+            extra_filters: Optional dict of {column_name: value} for
+                entity-specific filters (e.g. customer_id, category)
+            format: Export format (only 'csv' supported currently)
+
+        Returns:
+            Response with CSV data
+        """
+        query = self._build_filtered_query(
+            search, status, start_date, end_date, extra_filters
+        )
 
         entities = cast(list[T], list(self.db.scalars(query).all()))
 

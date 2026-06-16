@@ -187,8 +187,7 @@ class TestCreateRun:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_run_increments_run_number(
         self, mock_db, group_id, run_input, user_id
@@ -257,7 +256,7 @@ class TestStartRun:
 
         assert mock_consolidation_run.status == ConsolidationStatus.IN_PROGRESS
         assert mock_consolidation_run.started_at is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_start_run_not_found(self, mock_db, group_id):
         """Test starting a non-existent run."""
@@ -336,7 +335,7 @@ class TestCreateEliminationEntry:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
         # Verify run statistics updated
         assert mock_consolidation_run.elimination_entries_count == 1
@@ -484,7 +483,7 @@ class TestGenerateIntercompanyEliminations:
             intercompany_elimination_account_id=uuid.uuid4(),
         )
 
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_generate_ic_eliminations_no_matched_balances(
         self, mock_db, group_id, mock_consolidation_run, mock_legal_entity
@@ -558,7 +557,7 @@ class TestGenerateInvestmentEliminations:
             nci_account_id=uuid.uuid4(),
         )
 
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_generate_investment_eliminations_no_ownership(
         self, mock_db, group_id, mock_consolidation_run, mock_legal_entity
@@ -605,7 +604,7 @@ class TestCompleteRun:
 
         assert mock_consolidation_run.status == ConsolidationStatus.COMPLETED
         assert mock_consolidation_run.completed_at is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_complete_run_not_found(self, mock_db, group_id):
         """Test completing a non-existent run."""
@@ -661,7 +660,7 @@ class TestApproveRun:
         assert mock_consolidation_run.status == ConsolidationStatus.APPROVED
         assert mock_consolidation_run.approved_by_user_id == other_user_id
         assert mock_consolidation_run.approved_at is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_approve_run_not_found(self, mock_db, group_id, other_user_id):
         """Test approving a non-existent run."""
@@ -742,7 +741,7 @@ class TestCreateConsolidatedBalance:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
         # Verify calculations
         added_balance = mock_db.add.call_args[0][0]
@@ -1041,7 +1040,7 @@ class TestRunLifecycle:
             created_by_user_id=user_id,
         )
         mock_db.add.assert_called()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
         # Step 2: Start
         mock_db.get.return_value = mock_run

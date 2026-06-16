@@ -152,3 +152,97 @@ def test_get_db_for_org_closes_session_on_completion():
 
     assert close_calls["count"] == 1
     assert db.in_transaction() is False
+
+
+def test_get_db_for_org_auto_commits_on_successful_yield(monkeypatch):
+    """Regression test for Bug #13.
+
+    Why: routes follow the "services flush, routes commit" rule — they
+    never call ``db.commit()`` themselves. Without an auto-commit in this
+    dep, every web write silently rolled back when the generator finalised.
+    The visible symptom was period-close returning a 303 ``?saved=1``
+    redirect while the DB ``status`` stayed ``OPEN``. The fix is
+    ``db.commit()`` after ``yield db`` in the generator; this test fails
+    the moment that line is removed (or moved into the ``except`` block).
+    """
+    from uuid import uuid4
+
+    from app.web import deps as web_deps
+
+    org_id = uuid4()
+    auth = MagicMock(organization_id=org_id)
+
+    gen = web_deps.get_db_for_org(auth=auth)
+    db = next(gen)
+
+    commit_calls = {"count": 0}
+    rollback_calls = {"count": 0}
+    original_commit = db.commit
+    original_rollback = db.rollback
+
+    def _spy_commit(*a, **kw):
+        commit_calls["count"] += 1
+        return original_commit(*a, **kw)
+
+    def _spy_rollback(*a, **kw):
+        rollback_calls["count"] += 1
+        return original_rollback(*a, **kw)
+
+    db.commit = _spy_commit
+    db.rollback = _spy_rollback
+
+    try:
+        next(gen)
+    except StopIteration:
+        pass
+
+    assert commit_calls["count"] == 1, (
+        "The dep must call db.commit() exactly once on the successful-yield "
+        "path. If this assertion fails, Bug #13 has regressed — web POST "
+        "routes will return 303 ?saved=1 but the DB will be unchanged."
+    )
+    assert rollback_calls["count"] == 0, (
+        "Successful yields must not rollback — that would defeat the "
+        "auto-commit and replay Bug #13's symptoms."
+    )
+
+
+def test_get_db_for_org_rolls_back_on_exception(monkeypatch):
+    """Companion to the auto-commit test: when the route handler raises,
+    the dep must rollback rather than commit a half-built unit of work.
+    """
+    import pytest
+    from uuid import uuid4
+
+    from app.web import deps as web_deps
+
+    org_id = uuid4()
+    auth = MagicMock(organization_id=org_id)
+
+    gen = web_deps.get_db_for_org(auth=auth)
+    db = next(gen)
+
+    commit_calls = {"count": 0}
+    rollback_calls = {"count": 0}
+    original_commit = db.commit
+    original_rollback = db.rollback
+
+    def _spy_commit(*a, **kw):
+        commit_calls["count"] += 1
+        return original_commit(*a, **kw)
+
+    def _spy_rollback(*a, **kw):
+        rollback_calls["count"] += 1
+        return original_rollback(*a, **kw)
+
+    db.commit = _spy_commit
+    db.rollback = _spy_rollback
+
+    class _RouteFailed(RuntimeError):
+        pass
+
+    with pytest.raises(_RouteFailed):
+        gen.throw(_RouteFailed("simulated route failure"))
+
+    assert rollback_calls["count"] == 1
+    assert commit_calls["count"] == 0

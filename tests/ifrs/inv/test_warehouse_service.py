@@ -92,8 +92,7 @@ class TestCreateWarehouse:
         service.create_warehouse(mock_db, org_id, sample_warehouse_input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_warehouse_duplicate_fails(
         self, service, mock_db, org_id, sample_warehouse_input
@@ -263,7 +262,7 @@ class TestDeactivateWarehouse:
             )
 
         assert result.is_active is False
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_deactivate_nonexistent_warehouse_fails(self, service, mock_db, org_id):
         """Test deactivating non-existent warehouse fails."""
@@ -349,7 +348,7 @@ class TestDeactivateLocation:
         result = service.deactivate_location(mock_db, org_id, location.location_id)
 
         assert result.is_active is False
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_deactivate_nonexistent_location_fails(self, service, mock_db, org_id):
         """Test deactivating non-existent location fails."""

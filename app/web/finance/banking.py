@@ -706,16 +706,51 @@ async def reconciliation_multi_match(
     )
 
 
-@router.get("/reconciliations/{reconciliation_id}", response_class=HTMLResponse)
-def view_reconciliation(
+@router.post("/reconciliations/{reconciliation_id}/unmatch")
+async def reconciliation_unmatch(
     request: Request,
     reconciliation_id: str,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
+    """Reverse a confirmed match for a statement line (JSON from Alpine.js fetch)."""
+    return await banking_web_service.reconciliation_unmatch_response(
+        request, auth, db, reconciliation_id
+    )
+
+
+@router.post("/reconciliations/{reconciliation_id}/reconciling-items")
+async def reconciliation_add_reconciling_item(
+    request: Request,
+    reconciliation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Add a reconciling item (adjustment / outstanding) — JSON from Alpine.js."""
+    return await banking_web_service.reconciliation_reconciling_item_response(
+        request, auth, db, reconciliation_id
+    )
+
+
+@router.get("/reconciliations/{reconciliation_id}", response_class=HTMLResponse)
+def view_reconciliation(
+    request: Request,
+    reconciliation_id: str,
+    matched_page: int = Query(1, ge=1),
+    stmt_page: int = Query(1, ge=1),
+    gl_page: int = Query(1, ge=1),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
     """Reconciliation workspace page."""
     return banking_web_service.reconciliation_detail_response(
-        request, auth, db, reconciliation_id
+        request,
+        auth,
+        db,
+        reconciliation_id,
+        matched_page=matched_page,
+        stmt_page=stmt_page,
+        gl_page=gl_page,
     )
 
 

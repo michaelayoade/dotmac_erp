@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
@@ -207,6 +207,7 @@ def _request(path: str) -> Request:
             "type": "http",
             "method": "GET",
             "path": path,
+            "query_string": b"",
             "headers": [],
         }
     )
@@ -644,6 +645,89 @@ def test_submitted_to_me_view_uses_pending_approval_steps(
 
     assert response.status_code == 200
     assert "CLM-301" in response.body.decode()
+
+
+def test_claim_detail_allows_reimbursement_scope_to_open_payment_page(
+    db_session, engine, monkeypatch
+):
+    from app.models.finance.payments.payment_intent import PaymentIntent
+
+    _ensure_hr_tables(engine)
+    attached = {
+        row[1] for row in db_session.execute(text("PRAGMA database_list")).all()
+    }
+    if "payments" not in attached:
+        db_session.execute(text("ATTACH DATABASE ':memory:' AS payments"))
+    for column in PaymentIntent.__table__.columns:
+        default = column.server_default
+        if default is None:
+            continue
+        default_text = str(getattr(default, "arg", default)).lower()
+        if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
+            column.server_default = None
+    PaymentIntent.__table__.create(engine, checkfirst=True)
+
+    org_id = uuid.uuid4()
+
+    claimant_person = _make_person(org_id, "claimant-pay@example.com")
+    claimant = _make_employee(org_id, claimant_person, "EMP-PAY")
+    claim = _make_claim(
+        org_id,
+        claimant.employee_id,
+        "CLM-PAY",
+        status=ExpenseClaimStatus.APPROVED,
+    )
+    db_session.add_all([claimant_person, claimant, claim])
+    db_session.commit()
+
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "app.services.expense.web.base_context",
+        lambda request, auth, title, section: {"user": auth.user},
+    )
+    monkeypatch.setattr(
+        "app.services.expense.web_claims.AuthorizationService.check_any_permission",
+        lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(
+        "app.services.expense.web_claims.AuthorizationService.check_permission",
+        lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(
+        "app.services.expense.web_claims.comment_service.list_comments",
+        lambda *args, **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "app.services.expense.web_claims.get_recent_activity_for_record",
+        lambda *args, **kwargs: [],
+    )
+
+    def _capture_template_response(request, template_name, context):
+        captured.update(context)
+        return HTMLResponse(template_name)
+
+    monkeypatch.setattr(
+        "app.services.expense.web.templates.TemplateResponse",
+        _capture_template_response,
+    )
+
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        scopes=["expense:claims:reimburse"],
+    )
+    response = ExpenseClaimsWebService.claim_detail_response(
+        request=_request(f"/expense/claims/{claim.claim_id}"),
+        auth=auth,
+        db=db_session,
+        claim_id=str(claim.claim_id),
+    )
+
+    assert response.status_code == 200
+    assert captured["can_reimburse_expense"] is True
+    assert captured["can_approve"] is False
 
 
 def test_submitted_to_me_view_retains_latest_round_claims_after_decision(

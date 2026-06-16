@@ -63,17 +63,14 @@ def list_projects(
     from sqlalchemy import func, select
 
     from app.models.finance.core_org.project import Project, ProjectStatus
+    from app.services.common import PaginationParams, apply_search, paginate
 
     org_id = coerce_uuid(auth.organization_id)
 
     # Build query
     stmt = select(Project).where(Project.organization_id == org_id)
 
-    if search:
-        stmt = stmt.where(
-            Project.project_name.ilike(f"%{search}%")
-            | Project.project_code.ilike(f"%{search}%")
-        )
+    stmt = apply_search(stmt, search, Project.project_name, Project.project_code)
     if status:
         try:
             status_key = status.strip().upper().replace("-", "_")
@@ -86,9 +83,9 @@ def list_projects(
 
     # Paginate
     per_page = 20
-    offset = (page - 1) * per_page
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    projects = list(db.scalars(stmt.offset(offset).limit(per_page)).all())
+    result = paginate(db, stmt, PaginationParams.from_page(page, per_page))
+    total = result.total
+    projects = list(result.items)
 
     # Stats counts (unfiltered, for the org)
     base_stmt = (

@@ -1540,14 +1540,12 @@ class OperationsInventoryWebService:
             )
 
         missing_serials_summary = missing_serials_stmt.subquery()
-        missing_serials_row_count, missing_serials_quantity = (
-            db.execute(
-                select(
-                    func.count(),
-                    func.coalesce(func.sum(missing_serials_summary.c.missing_count), 0),
-                ).select_from(missing_serials_summary)
-            ).one()
-        )
+        missing_serials_row_count, missing_serials_quantity = db.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(missing_serials_summary.c.missing_count), 0),
+            ).select_from(missing_serials_summary)
+        ).one()
         missing_serials_count = missing_serials_quantity or 0
         if (
             hasattr(missing_serials_count, "to_integral_value")
@@ -1768,7 +1766,8 @@ class OperationsInventoryWebService:
             )
 
         item = db.scalars(
-            select(Item).where(
+            select(Item)
+            .where(
                 Item.organization_id == org_id,
                 Item.item_id == item_uuid,
                 Item.is_active.is_(True),
@@ -1776,7 +1775,8 @@ class OperationsInventoryWebService:
             .with_for_update()
         ).first()
         warehouse = db.scalars(
-            select(Warehouse).where(
+            select(Warehouse)
+            .where(
                 Warehouse.organization_id == org_id,
                 Warehouse.warehouse_id == warehouse_uuid,
                 Warehouse.is_active.is_(True),
@@ -1794,9 +1794,7 @@ class OperationsInventoryWebService:
 
         normalized_input = (serial_numbers or "").replace(",", "\n")
         parsed_serials = [
-            serial.strip()
-            for serial in normalized_input.splitlines()
-            if serial.strip()
+            serial.strip() for serial in normalized_input.splitlines() if serial.strip()
         ]
         try:
             parsed_serials = InventorySerialService.normalize_serial_numbers(

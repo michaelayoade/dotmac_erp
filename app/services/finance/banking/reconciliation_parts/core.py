@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from app.services.finance.banking.reconciliation_parts.base import (
     AMOUNT_MISMATCH_ABSOLUTE_TOLERANCE,
     AMOUNT_MISMATCH_RELATIVE_THRESHOLD,
@@ -9,6 +11,9 @@ from app.services.finance.banking.reconciliation_parts.base import (
     BankAccount,
     BankReconciliation,
     BankReconciliationLine,
+    BankStatement,
+    BankStatementLine,
+    BankStatementLineMatch,
     Decimal,
     HTTPException,
     JournalEntry,
@@ -116,11 +121,18 @@ class ReconciliationCoreService:
                 detail=f"Reconciliation already exists for {input.reconciliation_date}",
             )
 
-        # Get GL balance as of reconciliation date
-        gl_balance = self._get_gl_balance(
+        # GL opening = cumulative balance BEFORE period_start (i.e. close of prior day)
+        gl_opening = self._get_gl_balance(
             db,
             bank_account.gl_account_id,
-            input.reconciliation_date,
+            input.period_start - timedelta(days=1),
+            organization_id=organization_id,
+        )
+        # GL closing = cumulative balance AS OF period_end
+        gl_closing = self._get_gl_balance(
+            db,
+            bank_account.gl_account_id,
+            input.period_end,
             organization_id=organization_id,
         )
 
@@ -143,8 +155,8 @@ class ReconciliationCoreService:
             period_end=input.period_end,
             statement_opening_balance=input.statement_opening_balance,
             statement_closing_balance=input.statement_closing_balance,
-            gl_opening_balance=gl_balance,  # Would need period start balance
-            gl_closing_balance=gl_balance,
+            gl_opening_balance=gl_opening,
+            gl_closing_balance=gl_closing,
             currency_code=bank_account.currency_code,
             status=ReconciliationStatus.draft,
             prior_outstanding_deposits=prior_deposits,
@@ -157,6 +169,20 @@ class ReconciliationCoreService:
         db.add(reconciliation)
         db.flush()
 
+        # Import any pre-existing matches in this period (e.g. from a prior
+        # CLEAN_SWEEP auto-match run) into bank_reconciliation_lines so the
+        # workspace shows them as matched rather than orphaned. Without this,
+        # statement lines with is_matched=true silently disappear from the
+        # workspace and the matched-count shows zero even though the
+        # underlying bank_statement_line_matches rows exist.
+        imported = self._import_existing_matches(
+            db,
+            reconciliation,
+            bank_account,
+            organization_id,
+            prepared_by,
+        )
+
         # Calculate initial difference
         reconciliation.calculate_difference()
         db.flush()
@@ -168,11 +194,131 @@ class ReconciliationCoreService:
             table_name="reconciliation",
             record_id=str(reconciliation.reconciliation_id),
             action=AuditAction.INSERT,
-            new_values={"bank_account_id": str(bank_account_id), "status": "draft"},
+            new_values={
+                "bank_account_id": str(bank_account_id),
+                "status": "draft",
+                "imported_matches": imported,
+            },
         )
 
         db.flush()
         return reconciliation
+
+    def _import_existing_matches(
+        self,
+        db: Session,
+        reconciliation: BankReconciliation,
+        bank_account: BankAccount,
+        organization_id: UUID,
+        created_by: UUID | None,
+    ) -> int:
+        """Copy pre-existing bank_statement_line_matches into this rec.
+
+        When CLEAN_SWEEP or earlier ad-hoc runs matched statement lines to GL
+        entries outside of any reconciliation record, the matches live only in
+        bank_statement_line_matches. A new period rec needs corresponding
+        bank_reconciliation_lines rows or its workspace shows 0 matched.
+
+        Returns the number of reconciliation lines created.
+        """
+        # Find every statement line in this rec's period that is matched to a GL
+        # journal line, joining through bank_statement_line_matches.
+        rows = db.execute(
+            select(
+                BankStatementLine.line_id.label("statement_line_id"),
+                BankStatementLine.transaction_date,
+                BankStatementLine.transaction_type,
+                BankStatementLine.amount,
+                BankStatementLine.description,
+                BankStatementLine.reference,
+                BankStatementLineMatch.journal_line_id,
+                BankStatementLineMatch.is_primary,
+                BankStatementLineMatch.match_type,
+                JournalEntryLine.debit_amount,
+                JournalEntryLine.credit_amount,
+            )
+            .join(
+                BankStatement,
+                BankStatement.statement_id == BankStatementLine.statement_id,
+            )
+            .join(
+                BankStatementLineMatch,
+                BankStatementLineMatch.statement_line_id == BankStatementLine.line_id,
+            )
+            .join(
+                JournalEntryLine,
+                JournalEntryLine.line_id == BankStatementLineMatch.journal_line_id,
+            )
+            .where(
+                BankStatement.organization_id == organization_id,
+                BankStatement.bank_account_id == reconciliation.bank_account_id,
+                BankStatementLine.transaction_date >= reconciliation.period_start,
+                BankStatementLine.transaction_date <= reconciliation.period_end,
+            )
+        ).all()
+
+        created = 0
+        matched_total = Decimal("0")
+        grouped: dict[UUID, dict] = {}
+        for row in rows:
+            stmt_amt = row.amount or Decimal("0")
+            if getattr(row.transaction_type, "value", row.transaction_type) != "credit":
+                stmt_amt = -stmt_amt
+            gl_amt = (row.debit_amount or Decimal("0")) - (
+                row.credit_amount or Decimal("0")
+            )
+            group = grouped.setdefault(
+                row.statement_line_id,
+                {
+                    "statement_amount": stmt_amt,
+                    "gl_amount": Decimal("0"),
+                    "journal_line_id": row.journal_line_id,
+                    "match_count": 0,
+                    "transaction_date": row.transaction_date,
+                    "description": row.description,
+                    "reference": row.reference,
+                },
+            )
+            group["gl_amount"] += gl_amt
+            group["match_count"] += 1
+            if row.is_primary:
+                group["journal_line_id"] = row.journal_line_id
+
+        for statement_line_id, group in grouped.items():
+            stmt_amt = group["statement_amount"]
+            gl_amt = group["gl_amount"]
+            matched_total += abs(stmt_amt)
+            line = BankReconciliationLine(
+                reconciliation_id=reconciliation.reconciliation_id,
+                match_type=(
+                    ReconciliationMatchType.split
+                    if group["match_count"] > 1
+                    else ReconciliationMatchType.auto_exact
+                ),
+                statement_line_id=statement_line_id,
+                journal_line_id=group["journal_line_id"],
+                transaction_date=group["transaction_date"],
+                description=group["description"],
+                reference=group["reference"],
+                statement_amount=stmt_amt,
+                gl_amount=gl_amt,
+                difference=stmt_amt - gl_amt,
+                is_adjustment=False,
+                is_outstanding=False,
+                is_cleared=True,
+                cleared_at=datetime.utcnow(),
+                created_by=created_by,
+            )
+            db.add(line)
+            created += 1
+
+        # Persist the total so the workspace template's
+        # `{{ reconciliation.total_matched }}` shows the right figure.
+        reconciliation.total_matched = matched_total
+
+        if created:
+            db.flush()
+        return created
 
     def get(
         self, db: Session, organization_id: UUID, reconciliation_id: UUID

@@ -202,9 +202,7 @@ class LeaseModificationService(ListResponseMixin):
         )
 
         db.add(modification)
-        db.commit()
-        db.refresh(modification)
-
+        db.flush()
         return ModificationResult(
             success=True,
             modification=modification,
@@ -313,9 +311,7 @@ class LeaseModificationService(ListResponseMixin):
         if input.revised_lease_term_months:
             contract.lease_term_months = input.revised_lease_term_months
 
-        db.commit()
-        db.refresh(modification)
-
+        db.flush()
         return ModificationResult(
             success=True,
             modification=modification,
@@ -377,9 +373,7 @@ class LeaseModificationService(ListResponseMixin):
         modification.approved_by_user_id = user_id
         modification.approved_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(modification)
-
+        db.flush()
         return modification
 
     @staticmethod

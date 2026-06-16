@@ -214,12 +214,19 @@ class CustomerSyncMixin:
                 data_hash,
             )
 
-        # Resolve parent from Splynx partner_id
+        # Resolve parent from Splynx partner_id.
+        # A reseller carries splynx_partner_id == its own partner_id, so
+        # resolving its own partner returns itself — guard against making a
+        # customer its own parent (self-referential cycle).
         target = existing if existing else customer  # noqa: F821
         partner_id = getattr(splynx_customer, "partner_id", 0)
         if partner_id:
             parent_customer_id = self._resolve_partner_parent(partner_id)
-            if parent_customer_id and target.parent_customer_id != parent_customer_id:
+            if (
+                parent_customer_id
+                and parent_customer_id != target.customer_id
+                and target.parent_customer_id != parent_customer_id
+            ):
                 target.parent_customer_id = parent_customer_id
 
     # -----------------------------------------------------------------

@@ -31,6 +31,8 @@ async def test_get_async_db_for_org_primes_session_with_auth_org_id(monkeypatch)
     fake_sync.info = {}
     fake_async = MagicMock()
     fake_async.sync_session = fake_sync
+    fake_async.commit = AsyncMock()
+    fake_async.rollback = AsyncMock()
 
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=fake_async)
@@ -62,6 +64,8 @@ async def test_get_async_db_for_org_sets_postgres_rls_guc(monkeypatch):
     fake_sync.info = {}
     fake_async = MagicMock()
     fake_async.sync_session = fake_sync
+    fake_async.commit = AsyncMock()
+    fake_async.rollback = AsyncMock()
 
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=fake_async)
@@ -140,6 +144,8 @@ async def test_get_async_db_for_org_closes_session_via_async_with(monkeypatch):
     fake_sync.info = {}
     fake_async = MagicMock()
     fake_async.sync_session = fake_sync
+    fake_async.commit = AsyncMock()
+    fake_async.rollback = AsyncMock()
 
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=fake_async)

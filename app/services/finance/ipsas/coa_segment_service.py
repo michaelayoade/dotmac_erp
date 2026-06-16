@@ -25,8 +25,10 @@ class CoASegmentService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _commit_and_refresh(self, entity) -> None:
-        self.db.commit()
+    def _flush_and_refresh(self, entity) -> None:
+        # Flush (not commit): the request dependency owns the transaction;
+        # committing here would also drop the SET LOCAL RLS GUC mid-request.
+        self.db.flush()
         self.db.refresh(entity)
 
     def list_definitions(self, organization_id: UUID) -> list[CoASegmentDefinition]:
@@ -72,7 +74,7 @@ class CoASegmentService:
             data.segment_type,
             organization_id,
         )
-        self._commit_and_refresh(segment_def)
+        self._flush_and_refresh(segment_def)
         return segment_def
 
     def list_values(self, segment_def_id: UUID) -> list[CoASegmentValue]:
@@ -116,5 +118,5 @@ class CoASegmentService:
             data.segment_code,
             segment_def_id,
         )
-        self._commit_and_refresh(value)
+        self._flush_and_refresh(value)
         return value

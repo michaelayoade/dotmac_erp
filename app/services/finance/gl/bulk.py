@@ -18,6 +18,7 @@ from app.models.finance.gl.account import Account, AccountType
 from app.models.finance.gl.account_balance import AccountBalance
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
 from app.services.common import coerce_uuid
@@ -426,3 +427,68 @@ def get_journal_bulk_service(
 ) -> JournalBulkService:
     """Factory function to create a JournalBulkService instance."""
     return JournalBulkService(db, organization_id, user_id)
+
+
+class LedgerBulkService(BulkActionService[PostedLedgerLine]):
+    """
+    Bulk operations for posted ledger lines.
+
+    Supported actions:
+    - export: Export posted ledger transactions to CSV
+
+    Note: The posted ledger is append-only and immutable (never UPDATE or
+    DELETE), so delete is not supported.
+    """
+
+    model = PostedLedgerLine
+    id_field = "ledger_line_id"
+    org_field = "organization_id"
+    search_fields = ["description", "journal_reference", "account_code"]
+    date_field = "posting_date"
+
+    # Fields to export in CSV
+    export_fields = [
+        ("posting_date", "Posting Date"),
+        ("entry_date", "Entry Date"),
+        ("account_code", "Account Code"),
+        ("description", "Description"),
+        ("journal_reference", "Reference"),
+        ("debit_amount", "Debit"),
+        ("credit_amount", "Credit"),
+        ("original_currency_code", "Currency"),
+        ("source_module", "Source"),
+    ]
+
+    def can_delete(self, entity: PostedLedgerLine) -> tuple[bool, str]:
+        """The posted ledger is immutable — lines can never be deleted."""
+        return (False, "Posted ledger lines are immutable and cannot be deleted")
+
+    def _get_all_query(self, search: str = ""):
+        """Order ledger export chronologically (most recent first)."""
+        query = super()._get_all_query(search)
+        return query.order_by(
+            PostedLedgerLine.posting_date.desc(),
+            PostedLedgerLine.posted_at.desc(),
+        )
+
+    def _get_export_value(self, entity: PostedLedgerLine, field_name: str) -> str:
+        """Handle special field formatting for ledger export."""
+        if field_name in ("posting_date", "entry_date"):
+            val = getattr(entity, field_name, None)
+            return val.isoformat() if val else ""
+
+        return str(super()._get_export_value(entity, field_name))
+
+    def _get_export_filename(self) -> str:
+        """Get ledger export filename."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"ledger_export_{timestamp}.csv"
+
+
+def get_ledger_bulk_service(
+    db: Session,
+    organization_id: UUID,
+    user_id: UUID | None = None,
+) -> LedgerBulkService:
+    """Factory function to create a LedgerBulkService instance."""
+    return LedgerBulkService(db, organization_id, user_id)

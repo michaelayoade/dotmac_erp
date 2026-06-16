@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Generic, TypeVar
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 
@@ -280,3 +280,39 @@ def paginate(
         offset=params.offset,
         limit=params.limit,
     )
+
+
+def apply_search(stmt: Select, search: str | None, *columns) -> Select:
+    """Apply a case-insensitive ``OR``-ilike search across ``columns``.
+
+    Returns ``stmt`` unchanged when ``search`` is falsy. Replaces the
+    hand-rolled ``if search: stmt = stmt.where(or_(col.ilike(f"%{search}%"), ...))``
+    block repeated across ~35 web-service list methods.
+
+    Example:
+        query = apply_search(query, search,
+            Contract.number, Contract.name, Contract.lessor_name)
+    """
+    if not search:
+        return stmt
+    pattern = f"%{search}%"
+    return stmt.where(or_(*[column.ilike(pattern) for column in columns]))
+
+
+def pagination_context(result: PaginatedResult) -> dict[str, int]:
+    """Standard list-page pagination keys for template context.
+
+    Maps a :class:`PaginatedResult` to the conventional dict keys the list
+    templates expect (``total_count`` rather than ``total``)::
+
+        {"page", "limit", "offset", "total_count", "total_pages"}
+
+    Spread into the context dict: ``return {"items": ..., **pagination_context(result)}``.
+    """
+    return {
+        "page": result.page,
+        "limit": result.limit,
+        "offset": result.offset,
+        "total_count": result.total,
+        "total_pages": result.total_pages,
+    }

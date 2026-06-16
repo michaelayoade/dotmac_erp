@@ -448,3 +448,38 @@ class TestReportInstanceServiceCleanup:
         assert result == 1
         mock_db.delete.assert_called_once_with(mock_report_instance)
         mock_db.commit.assert_called_once()
+
+
+class TestStandardDefinitions:
+    """Guards for standard report definitions backing background exports."""
+
+    def test_gl_ledger_is_standard_definition(self):
+        """GL_LEDGER must resolve to a standard definition (else queue 400s)."""
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+
+        definition = ReportInstanceService._standard_definition("GL_LEDGER")
+
+        assert definition is not None
+        assert definition["report_code"] == "GL_LEDGER"
+        assert definition["data_source_type"] == "GL"
+
+    def test_gl_ledger_case_insensitive(self):
+        """Report code lookup is normalised to upper-case."""
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+
+        assert ReportInstanceService._standard_definition("gl_ledger") is not None
+
+
+class TestExportDefinitions:
+    """Guards for the EXPORT_DEFINITIONS registry used by queued exports."""
+
+    def test_gl_ledger_export_definition(self):
+        """GL_LEDGER must be wired to its Celery task and CSV format."""
+        from app.services.finance.rpt.async_exports import EXPORT_DEFINITIONS
+
+        config = EXPORT_DEFINITIONS["GL_LEDGER"]
+
+        assert config["task"] == "process_gl_ledger_export"
+        assert config["download_base"] == "/finance/gl/ledger/exports"
+        assert config["filename_prefix"] == "gl_ledger"
+        assert "CSV" in config["formats"]

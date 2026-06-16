@@ -26,6 +26,7 @@ from app.models.person import Person
 from app.models.sync import IntegrationConfig, IntegrationType
 from app.models.sync.dotmac_crm_sync import CRMEntityType, CRMSyncMapping, CRMSyncStatus
 from app.services.auth import hash_api_key
+from app.services.common import PaginationParams, apply_search, paginate
 from app.templates import templates
 from app.web.deps import WebAuthContext, brand_context, org_brand_context
 
@@ -418,7 +419,6 @@ class CRMSyncWebService:
         org_id = auth.organization_id if auth else None
 
         per_page = 25
-        offset = (page - 1) * per_page
 
         if org_id:
             # Build query
@@ -435,25 +435,21 @@ class CRMSyncWebService:
             if status and status in [s.value for s in CRMSyncStatus]:
                 stmt = stmt.where(CRMSyncMapping.crm_status == CRMSyncStatus(status))
 
-            if search:
-                search_filter = f"%{search}%"
-                stmt = stmt.where(
-                    (CRMSyncMapping.display_name.ilike(search_filter))
-                    | (CRMSyncMapping.display_code.ilike(search_filter))
-                    | (CRMSyncMapping.crm_id.ilike(search_filter))
-                )
-
-            # Count
-            count_stmt = select(func.count()).select_from(stmt.subquery())
-            total_count = db.scalar(count_stmt) or 0
-
-            # Paginate
-            stmt = (
-                stmt.order_by(desc(CRMSyncMapping.synced_at))
-                .offset(offset)
-                .limit(per_page)
+            stmt = apply_search(
+                stmt,
+                search,
+                CRMSyncMapping.display_name,
+                CRMSyncMapping.display_code,
+                CRMSyncMapping.crm_id,
             )
-            entities = list(db.scalars(stmt).all())
+
+            result = paginate(
+                db,
+                stmt.order_by(desc(CRMSyncMapping.synced_at)),
+                PaginationParams.from_page(page, per_page),
+            )
+            entities = list(result.items)
+            total_count = result.total
 
             context["entities"] = entities
             context["total_count"] = total_count

@@ -255,6 +255,35 @@ class JournalService(ListResponseMixin):
                 detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}",
             )
 
+        # Validate that every line targets an account where posting is allowed.
+        # Without this, integration code that hardcodes legacy account IDs
+        # (e.g. "- DT" ERPNext migration accounts) silently keeps posting to
+        # deprecated accounts even after they've been marked
+        # is_posting_allowed=False — surfaced as Bug #12 in the catch-up close.
+        if input.lines:
+            from app.models.finance.gl.account import Account
+
+            line_account_ids = [coerce_uuid(line.account_id) for line in input.lines]
+            blocked = list(
+                db.scalars(
+                    select(Account).where(
+                        Account.account_id.in_(line_account_ids),
+                        Account.is_posting_allowed.is_(False),
+                    )
+                ).all()
+            )
+            if blocked:
+                blocked_codes = ", ".join(
+                    f"{a.account_code} ({a.account_name})" for a in blocked
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Cannot post to accounts where is_posting_allowed is "
+                        f"False: {blocked_codes}"
+                    ),
+                )
+
         # Get fiscal period for posting date
         period = PeriodGuardService.get_period_for_date(db, org_id, input.posting_date)
         if not period:

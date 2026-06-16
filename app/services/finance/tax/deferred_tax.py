@@ -216,9 +216,7 @@ class DeferredTaxService(ListResponseMixin):
         )
 
         db.add(basis)
-        db.commit()
-        db.refresh(basis)
-
+        db.flush()
         return basis
 
     @staticmethod
@@ -288,9 +286,7 @@ class DeferredTaxService(ListResponseMixin):
         basis.is_asset = is_asset
         basis.unrecognized_amount = unrecognized
 
-        db.commit()
-        db.refresh(basis)
-
+        db.flush()
         return DeferredTaxCalculationResult(
             temporary_difference=temp_diff,
             deferred_tax_amount=deferred_tax,
@@ -443,9 +439,7 @@ class DeferredTaxService(ListResponseMixin):
         basis.is_asset = is_asset
         basis.unrecognized_amount = unrecognized
 
-        db.commit()
-        db.refresh(movement)
-
+        db.flush()
         return DeferredTaxMovementResult(
             movement_id=movement.movement_id,
             deferred_tax_movement_pl=dt_movement_pl,

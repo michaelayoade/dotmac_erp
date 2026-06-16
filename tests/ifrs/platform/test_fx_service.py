@@ -447,7 +447,7 @@ class TestFXService:
                     )
 
         mock_db_session.add.assert_called_once()
-        mock_db_session.commit.assert_called_once()
+        mock_db_session.flush.assert_called()
 
     def test_create_rate_raises_400_for_negative_rate(
         self, service, mock_db_session, organization_id

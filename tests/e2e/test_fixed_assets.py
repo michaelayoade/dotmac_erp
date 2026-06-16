@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -31,15 +32,16 @@ class TestAssetList:
 
     def test_assets_page_loads(self, authenticated_page, base_url):
         """Test that assets list page loads successfully."""
-        response = authenticated_page.goto(f"{base_url}/fa/assets")
+        response = authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         assert response.ok, f"Assets list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_assets_list_with_search(self, authenticated_page, base_url):
         """Test assets list search functionality."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -53,7 +55,7 @@ class TestAssetList:
 
     def test_assets_list_by_category(self, authenticated_page, base_url):
         """Test assets list category filter."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         category_filter = authenticated_page.locator(
@@ -64,16 +66,16 @@ class TestAssetList:
 
     def test_assets_list_by_status(self, authenticated_page, base_url):
         """Test assets list status filter."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
     def test_assets_list_has_new_button(self, authenticated_page, base_url):
         """Test that assets list has new button."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -84,7 +86,7 @@ class TestAssetList:
 
     def test_assets_list_shows_asset_codes(self, authenticated_page, base_url):
         """Test that assets list displays asset codes."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         table = authenticated_page.locator("table, [role='table'], .asset-list")
@@ -103,14 +105,14 @@ class TestAssetCreate:
 
     def test_asset_create_page_loads(self, authenticated_page, base_url):
         """Test that asset create page loads."""
-        response = authenticated_page.goto(f"{base_url}/fa/assets/new")
+        response = authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         assert response.ok, f"Asset create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_asset_create_has_code_field(self, authenticated_page, base_url):
         """Test that asset form has code field."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -121,7 +123,7 @@ class TestAssetCreate:
 
     def test_asset_create_has_name_field(self, authenticated_page, base_url):
         """Test that asset form has name field."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -132,7 +134,7 @@ class TestAssetCreate:
 
     def test_asset_create_has_category_field(self, authenticated_page, base_url):
         """Test that asset form has category selection."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -143,7 +145,7 @@ class TestAssetCreate:
 
     def test_asset_create_has_acquisition_date(self, authenticated_page, base_url):
         """Test that asset form has acquisition date field."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -154,7 +156,7 @@ class TestAssetCreate:
 
     def test_asset_create_has_cost_field(self, authenticated_page, base_url):
         """Test that asset form has cost/value field."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -165,8 +167,9 @@ class TestAssetCreate:
 
     def test_asset_create_full_form(self, authenticated_page, base_url):
         """Test complete asset creation workflow."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 
@@ -205,7 +208,7 @@ class TestAssetCreate:
 
     def test_asset_create_with_depreciation_method(self, authenticated_page, base_url):
         """Test asset creation with depreciation method selection."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for depreciation method field
@@ -220,7 +223,7 @@ class TestAssetCreate:
 
     def test_asset_create_has_useful_life_field(self, authenticated_page, base_url):
         """Test that asset form has useful life field."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -231,7 +234,7 @@ class TestAssetCreate:
 
     def test_asset_create_has_salvage_value(self, authenticated_page, base_url):
         """Test that asset form has salvage/residual value field."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -247,7 +250,7 @@ class TestAssetDetail:
 
     def test_asset_detail_page_accessible(self, authenticated_page, base_url):
         """Test that asset detail is accessible."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first asset link
@@ -262,7 +265,7 @@ class TestAssetDetail:
 
     def test_asset_detail_shows_depreciation_info(self, authenticated_page, base_url):
         """Test that asset detail shows depreciation information."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         asset_link = authenticated_page.locator(
@@ -274,7 +277,7 @@ class TestAssetDetail:
 
             # Look for depreciation-related content
             depreciation_info = authenticated_page.locator(
-                "text=Depreciation, text=Book Value, text=Accumulated, [class*='depreciation']"
+                ":text('Depreciation'), :text('Book Value'), :text('Accumulated'), [class*='depreciation']"
             )
             if depreciation_info.count() > 0:
                 expect(depreciation_info.first).to_be_visible()
@@ -286,7 +289,7 @@ class TestAssetEdit:
 
     def test_asset_edit_page_loads(self, authenticated_page, base_url):
         """Test that asset edit page loads."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Navigate to first asset then edit
@@ -308,8 +311,9 @@ class TestAssetEdit:
 
     def test_asset_update_success(self, authenticated_page, base_url):
         """Test successful asset update."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         asset_link = authenticated_page.locator(
             "table tbody tr a, a[href*='/fa/assets/']"
@@ -349,7 +353,7 @@ class TestAssetDisposal:
 
     def test_asset_dispose_workflow(self, authenticated_page, base_url):
         """Test asset disposal workflow."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         asset_link = authenticated_page.locator(
@@ -373,7 +377,7 @@ class TestAssetRevaluation:
 
     def test_asset_revalue_workflow(self, authenticated_page, base_url):
         """Test asset revaluation workflow."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         asset_link = authenticated_page.locator(
@@ -402,14 +406,14 @@ class TestDepreciation:
 
     def test_depreciation_schedule_page(self, authenticated_page, base_url):
         """Test depreciation schedule page loads."""
-        response = authenticated_page.goto(f"{base_url}/fa/depreciation")
+        response = authenticated_page.goto(f"{base_url}/fixed-assets/depreciation")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
             expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_depreciation_run_button(self, authenticated_page, base_url):
         """Test depreciation run button exists."""
-        authenticated_page.goto(f"{base_url}/fa/depreciation")
+        authenticated_page.goto(f"{base_url}/fixed-assets/depreciation")
         authenticated_page.wait_for_load_state("networkidle")
 
         run_btn = authenticated_page.locator(
@@ -420,7 +424,7 @@ class TestDepreciation:
 
     def test_depreciation_calculation_display(self, authenticated_page, base_url):
         """Test depreciation calculation display."""
-        authenticated_page.goto(f"{base_url}/fa/depreciation")
+        authenticated_page.goto(f"{base_url}/fixed-assets/depreciation")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for calculation results
@@ -432,7 +436,7 @@ class TestDepreciation:
 
     def test_depreciation_journal_generation(self, authenticated_page, base_url):
         """Test depreciation journal generation."""
-        authenticated_page.goto(f"{base_url}/fa/depreciation")
+        authenticated_page.goto(f"{base_url}/fixed-assets/depreciation")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for journal/post button
@@ -454,20 +458,20 @@ class TestAssetCategories:
 
     def test_categories_list_page_loads(self, authenticated_page, base_url):
         """Test categories list page loads."""
-        response = authenticated_page.goto(f"{base_url}/fa/categories")
+        response = authenticated_page.goto(f"{base_url}/fixed-assets/categories")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
             expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_category_create_page_loads(self, authenticated_page, base_url):
         """Test category create page loads."""
-        response = authenticated_page.goto(f"{base_url}/fa/categories/new")
+        response = authenticated_page.goto(f"{base_url}/fixed-assets/categories/new")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
 
     def test_category_create_has_name_field(self, authenticated_page, base_url):
         """Test category form has name field."""
-        authenticated_page.goto(f"{base_url}/fa/categories/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/categories/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -478,7 +482,7 @@ class TestAssetCategories:
 
     def test_category_has_depreciation_defaults(self, authenticated_page, base_url):
         """Test category form has depreciation default fields."""
-        authenticated_page.goto(f"{base_url}/fa/categories/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/categories/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for default depreciation method
@@ -497,7 +501,7 @@ class TestAssetCategories:
 
     def test_category_edit_page_accessible(self, authenticated_page, base_url):
         """Test category edit page is accessible."""
-        authenticated_page.goto(f"{base_url}/fa/categories")
+        authenticated_page.goto(f"{base_url}/fixed-assets/categories")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first category link

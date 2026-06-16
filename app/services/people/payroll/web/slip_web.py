@@ -26,7 +26,12 @@ from app.models.people.payroll.salary_slip import (
     SalarySlipStatus,
 )
 from app.models.people.payroll.salary_structure import SalaryStructure
-from app.services.common import coerce_uuid
+from app.services.common import (
+    PaginationParams,
+    apply_search,
+    coerce_uuid,
+    paginate,
+)
 from app.services.people.payroll import (
     PayrollGLAdapter,
     SalarySlipInput,
@@ -86,33 +91,26 @@ class SlipWebService:
             per_page = DEFAULT_PAGE_SIZE
         if per_page not in {25, 50, 100, 200}:
             per_page = DEFAULT_PAGE_SIZE
-        offset = (page - 1) * per_page
-
         query = select(SalarySlip).where(SalarySlip.organization_id == org_id)
-
-        if search:
-            query = query.where(
-                SalarySlip.slip_number.ilike(f"%{search}%")
-                | SalarySlip.employee_name.ilike(f"%{search}%")
-            )
+        query = apply_search(
+            query,
+            search,
+            SalarySlip.slip_number,
+            SalarySlip.employee_name,
+        )
 
         status_enum = parse_slip_status(status)
         if status_enum:
             query = query.where(SalarySlip.status == status_enum)
 
-        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        slips = db.scalars(
-            query.order_by(SalarySlip.created_at.desc()).offset(offset).limit(per_page)
-        ).all()
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        if page > total_pages:
-            page = total_pages
-            offset = (page - 1) * per_page
-            slips = db.scalars(
-                query.order_by(SalarySlip.created_at.desc())
-                .offset(offset)
-                .limit(per_page)
-            ).all()
+        query = query.order_by(SalarySlip.created_at.desc())
+        result = paginate(db, query, PaginationParams.from_page(page, per_page))
+        if page > result.total_pages:
+            page = result.total_pages
+            result = paginate(db, query, PaginationParams.from_page(page, per_page))
+        slips = result.items
+        total = result.total
+        total_pages = result.total_pages
 
         # Get counts by status
         status_counts = {}

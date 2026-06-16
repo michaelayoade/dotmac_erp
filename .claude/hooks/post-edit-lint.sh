@@ -28,6 +28,12 @@ OUTPUT=$(python3 "$PROJECT_DIR/scripts/check_route_logic.py" "$FILE_PATH" 2>&1) 
     exit 2
 }
 
+# --- Session-context validation for Celery tasks (blocks on violation) ---
+SESSION_OUTPUT=$(python3 "$PROJECT_DIR/scripts/check_session_context.py" "$FILE_PATH" 2>&1) || {
+    echo "$SESSION_OUTPUT" >&2
+    exit 2
+}
+
 # --- Track this file for the Stop quality-gate hook ---
 TRACK_DIR="/tmp/.claude_hooks_$(echo "$PROJECT_DIR" | md5sum | cut -d' ' -f1)"
 mkdir -p "$TRACK_DIR" 2>/dev/null || true

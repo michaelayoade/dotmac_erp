@@ -149,9 +149,7 @@ class DisclosureChecklistService(ListResponseMixin):
         )
 
         db.add(item)
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -188,9 +186,7 @@ class DisclosureChecklistService(ListResponseMixin):
             )
 
         item.status = DisclosureStatus.IN_PROGRESS
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -234,9 +230,7 @@ class DisclosureChecklistService(ListResponseMixin):
         item.completed_by_user_id = user_id
         item.completed_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -279,9 +273,7 @@ class DisclosureChecklistService(ListResponseMixin):
         item.completed_by_user_id = user_id
         item.completed_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -331,9 +323,7 @@ class DisclosureChecklistService(ListResponseMixin):
         item.reviewed_by_user_id = user_id
         item.reviewed_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -370,9 +360,7 @@ class DisclosureChecklistService(ListResponseMixin):
         item.completed_by_user_id = None
         item.completed_at = None
 
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod

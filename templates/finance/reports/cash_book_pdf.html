@@ -1,0 +1,77 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Cash Book — {{ org_name }}{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_title %}Cash Book{% endblock %}
+{% block report_meta %}
+<p class="meta-line">{{ start_date }} to {{ end_date }} · {{ account_count }} cash/bank account(s) · {{ row_count }} movement(s)</p>
+{% endblock %}
+
+{% block report_body %}
+<p class="subsection-heading">Balances by account</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Account</th>
+      <th class="num" style="width: 16%;">Opening</th>
+      <th class="num" style="width: 16%;">Inflows</th>
+      <th class="num" style="width: 16%;">Outflows</th>
+      <th class="num" style="width: 16%;">Closing</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in accounts_summary %}
+    <tr>
+      <td>{{ s.account }}</td>
+      <td class="num">{{ s.opening }}</td>
+      <td class="num">{{ s.inflows }}</td>
+      <td class="num">{{ s.outflows }}</td>
+      <td class="num">{{ s.closing }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="total-row">
+      <td>TOTAL</td>
+      <td class="num">{{ total_opening }}</td>
+      <td class="num">{{ total_inflows }}</td>
+      <td class="num">{{ total_outflows }}</td>
+      <td class="num">{{ total_closing }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<p class="subsection-heading">Detail</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 11%;">Date</th>
+      <th style="width: 18%;">Account</th>
+      <th style="width: 14%;">Journal #</th>
+      <th>Description</th>
+      <th class="num" style="width: 13%;">Inflow</th>
+      <th class="num" style="width: 13%;">Outflow</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="nowrap">{{ row.date }}</td>
+      <td>{{ row.account }}</td>
+      <td>{{ row.journal_number }}</td>
+      <td>{{ row.description }}</td>
+      <td class="num">{{ row.inflow }}</td>
+      <td class="num">{{ row.outflow }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="total-row">
+      <td colspan="4">TOTAL</td>
+      <td class="num">{{ total_inflows }}</td>
+      <td class="num">{{ total_outflows }}</td>
+    </tr>
+  </tfoot>
+</table>
+<p class="meta-line" style="margin-top: 12px;">{{ basis_note }}</p>
+{% endblock %}

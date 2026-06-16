@@ -120,18 +120,17 @@ class ExpenseLimitWebService:
 
         # Paginate
         per_page = 25
-        offset = (page - 1) * per_page
 
         result = service.list_rules(
             org_id,
             scope_type=scope_enum,
             is_active=active_filter,
             search=search,
-            pagination=PaginationParams(offset=offset, limit=per_page),
+            pagination=PaginationParams.from_page(page, per_page),
         )
 
         # Calculate pagination
-        total_pages = (result.total + per_page - 1) // per_page
+        total_pages = result.total_pages
 
         active_filters = build_active_filters(
             params={
@@ -527,16 +526,15 @@ class ExpenseLimitWebService:
 
         # Paginate
         per_page = 25
-        offset = (page - 1) * per_page
 
         result = service.list_approver_limits(
             org_id,
             scope_type=scope_type,
             is_active=active_filter,
-            pagination=PaginationParams(offset=offset, limit=per_page),
+            pagination=PaginationParams.from_page(page, per_page),
         )
 
-        total_pages = (result.total + per_page - 1) // per_page
+        total_pages = result.total_pages
 
         context = base_context(request, auth, "Approver Limits", "limits")
         scope_labels = self._build_approver_scope_labels(db, org_id, result.items)
@@ -999,17 +997,16 @@ class ExpenseLimitWebService:
 
         # Paginate
         per_page = 25
-        offset = (page - 1) * per_page
 
         evaluations = service.list_evaluations(
             org_id,
             result=result_enum,
             from_date=from_date_parsed,
             to_date=to_date_parsed,
-            pagination=PaginationParams(offset=offset, limit=per_page),
+            pagination=PaginationParams.from_page(page, per_page),
         )
 
-        total_pages = (evaluations.total + per_page - 1) // per_page
+        total_pages = evaluations.total_pages
 
         context = base_context(request, auth, "Limit Evaluations", "limits")
         active_filters = build_active_filters(

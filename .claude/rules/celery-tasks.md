@@ -8,7 +8,26 @@ All Celery tasks go in `app/tasks/` organized by domain:
 - `app/tasks/sync.py` - ERPNext sync tasks
 - `app/tasks/performance.py` - Performance review automation
 
-## Task Pattern
+## Tenant context — NEVER open a raw `SessionLocal()` (enforced)
+
+Tasks run outside the HTTP request lifecycle, so nothing primes tenant
+context for them. A raw `SessionLocal()` sets **neither** the ORM-listener
+layer (`session.info["organization_id"]`) **nor** the PostgreSQL RLS GUC
+(`SET LOCAL app.current_organization_id`). That is a silent multi-tenant bug:
+queries raise `MissingOrgContextError`, return zero rows under DB-RLS, or
+leak/write across tenants.
+
+Always open sessions through the canonical context managers in
+`app.db.session_context` — they set **both** layers and clean up:
+
+- `session_for_org(org_id)` — single-tenant work (one session per org).
+- `cross_org_session()` — genuine cross-tenant batch (list rows across all
+  orgs, then process each under its own `session_for_org`).
+
+`scripts/check_session_context.py` enforces this: CI, pre-commit, and the
+PostToolUse hook all fail on a raw `SessionLocal()` in `app/tasks/`.
+
+## Task Pattern (single org)
 
 ```python
 """
@@ -19,36 +38,29 @@ Handles:
 """
 
 import logging
+from uuid import UUID
+
 from celery import shared_task
-from app.db import SessionLocal
+
+from app.db.session_context import session_for_org
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task
-def process_something() -> dict:
-    """
-    Brief description of what this task does.
+def process_something(org_id: str) -> dict:
+    """Brief description. Returns a dict with processing statistics."""
+    logger.info("Processing something for org %s", org_id)
 
-    Returns:
-        Dict with processing statistics
-    """
-    logger.info("Processing something")
+    results = {"processed": 0, "errors": []}
 
-    results = {
-        "processed": 0,
-        "errors": [],
-    }
-
-    with SessionLocal() as db:
+    # session_for_org primes BOTH tenant layers and closes on exit.
+    with session_for_org(UUID(org_id)) as db:
         # Import service inside task to avoid circular imports
         from app.services.some_module import SomeService
 
         service = SomeService(db)
-        # Delegate ALL logic to service
-        items = service.get_items_to_process()
-
-        for item in items:
+        for item in service.get_items_to_process():  # delegate ALL logic
             try:
                 service.process_item(item)
                 results["processed"] += 1
@@ -56,22 +68,61 @@ def process_something() -> dict:
                 logger.exception("Failed to process %s", item.id)
                 results["errors"].append(str(e))
 
-        db.commit()
+        db.commit()  # commit once at the end (do NOT commit-and-continue)
 
-    logger.info("Completed: %s processed, %s errors",
-                results["processed"], len(results["errors"]))
+    logger.info(
+        "Completed: %s processed, %s errors",
+        results["processed"],
+        len(results["errors"]),
+    )
     return results
 ```
 
+## Task Pattern (all orgs — fan out)
+
+```python
+from sqlalchemy import select
+
+from app.db.session_context import cross_org_session, session_for_org
+from app.models.people import Organization
+
+
+@shared_task
+def process_all_orgs() -> dict:
+    # Read the org list under a deliberately cross-tenant session...
+    with cross_org_session() as cross_db:
+        org_ids = list(cross_db.scalars(select(Organization.organization_id)).all())
+
+    # ...then do per-org work under one tenant-scoped session each.
+    results = {"orgs": 0, "errors": []}
+    for org_id in org_ids:
+        try:
+            with session_for_org(org_id) as db:
+                SomeService(db).run()
+                db.commit()
+            results["orgs"] += 1
+        except Exception as e:
+            logger.exception("Org %s failed", org_id)
+            results["errors"].append(str(e))
+    return results
+```
+
+`SET LOCAL` is transaction-scoped — a commit *inside* a `session_for_org`
+block silently un-sets the RLS GUC. Prefer one session per org, commit once.
+If you must commit-and-continue, re-prime explicitly (the call site owns that
+contract).
+
 ## Key Rules
 
-1. **Services do the work** - Tasks orchestrate, never contain business logic
-2. **Use context manager** - `with SessionLocal() as db:` ensures cleanup
+1. **Open sessions via `session_for_org` / `cross_org_session`** — never a raw
+   `SessionLocal()` (enforced by `check_session_context.py`).
+2. **Services do the work** - Tasks orchestrate, never contain business logic
 3. **Import inside task** - Avoid circular imports by importing services inside
 4. **Return statistics** - Always return a dict with counts/errors for monitoring
 5. **Log at start/end** - Log when starting and when complete with counts
 6. **Catch exceptions per item** - Don't let one failure stop the batch
-7. **Commit at end** - One commit after all processing, not per item
+7. **Commit at end** - One commit after all processing, not per item; avoid
+   commit-and-continue inside a tenant session
 
 ## Notification Tasks Pattern
 

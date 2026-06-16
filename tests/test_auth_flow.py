@@ -45,9 +45,7 @@ def test_login_reports_wrong_username(db_session):
     assert exc.value.detail == "Wrong username"
 
 
-def test_login_reports_wrong_password_and_tracks_failed_attempt(
-    db_session, person
-):
+def test_login_reports_wrong_password_and_tracks_failed_attempt(db_session, person):
     username = _unique_username()
     credential = UserCredential(
         person_id=person.id,
@@ -60,9 +58,7 @@ def test_login_reports_wrong_password_and_tracks_failed_attempt(
     db_session.commit()
 
     with pytest.raises(HTTPException) as exc:
-        AuthFlow.login(
-            db_session, username, "wrong-password", _make_request(), None
-        )
+        AuthFlow.login(db_session, username, "wrong-password", _make_request(), None)
 
     assert exc.value.status_code == 401
     assert exc.value.detail == "Wrong password"
@@ -85,9 +81,7 @@ def test_login_warns_on_third_failed_password_attempt(db_session, person):
     db_session.commit()
 
     with pytest.raises(HTTPException) as exc:
-        AuthFlow.login(
-            db_session, username, "wrong-password", _make_request(), None
-        )
+        AuthFlow.login(db_session, username, "wrong-password", _make_request(), None)
 
     assert exc.value.status_code == 401
     assert exc.value.detail == (

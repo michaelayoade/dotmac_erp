@@ -26,8 +26,10 @@ class VirementService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _commit_and_refresh(self, virement: Virement) -> None:
-        self.db.commit()
+    def _flush_and_refresh(self, virement: Virement) -> None:
+        # Flush (not commit): the request dependency owns the transaction;
+        # committing here would also drop the SET LOCAL RLS GUC mid-request.
+        self.db.flush()
         self.db.refresh(virement)
 
     def list_for_org(
@@ -100,7 +102,7 @@ class VirementService:
         self.db.flush()
 
         logger.info("Created virement %s: %s", virement_number, virement.virement_id)
-        self._commit_and_refresh(virement)
+        self._flush_and_refresh(virement)
         return virement
 
     def approve(self, virement_id: UUID, approver_id: UUID) -> Virement:
@@ -121,7 +123,7 @@ class VirementService:
         self.db.flush()
 
         logger.info("Approved virement %s by %s", virement_id, approver_id)
-        self._commit_and_refresh(virement)
+        self._flush_and_refresh(virement)
         return virement
 
     def apply(self, virement_id: UUID) -> Virement:
@@ -186,7 +188,7 @@ class VirementService:
             from_approp.appropriation_code,
             to_approp.appropriation_code,
         )
-        self._commit_and_refresh(virement)
+        self._flush_and_refresh(virement)
         return virement
 
     def count_for_org(self, organization_id: UUID) -> int:

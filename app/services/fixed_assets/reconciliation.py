@@ -51,6 +51,8 @@ class DraftCorrectionLine(TypedDict):
     description: str
     debit: Decimal
     credit: Decimal
+
+
 SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 
@@ -392,8 +394,9 @@ class FixedAssetGLReconciliationPackageService:
                     ),
                     category_codes=str(row.get("category_codes") or ""),
                     variance_amount=(
-                        FixedAssetGLReconciliationPackageService
-                        ._actionable_row_variance(row)
+                        FixedAssetGLReconciliationPackageService._actionable_row_variance(
+                            row
+                        )
                     ),
                     evidence_payload=(
                         FixedAssetGLReconciliationPackageService._row_payload(row)
@@ -483,7 +486,10 @@ class FixedAssetGLReconciliationPackageService:
                 detail="Reconciliation package must be approved before drafting a correction journal",
             )
 
-        if Decimal(str(run.cost_variance or 0)).copy_abs() > DEFAULT_RECONCILIATION_TOLERANCE:
+        if (
+            Decimal(str(run.cost_variance or 0)).copy_abs()
+            > DEFAULT_RECONCILIATION_TOLERANCE
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="Draft correction currently supports accumulated depreciation variance only",
@@ -723,7 +729,9 @@ class FixedAssetGLReconciliationPackageService:
             else:
                 allocated = (correction_amount * weight / total_weight).quantize(quant)
                 allocated_total += allocated
-            by_account[account_id] = by_account.get(account_id, Decimal("0")) + allocated
+            by_account[account_id] = (
+                by_account.get(account_id, Decimal("0")) + allocated
+            )
 
         return [
             (account_id, amount)

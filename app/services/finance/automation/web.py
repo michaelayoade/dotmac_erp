@@ -33,7 +33,7 @@ from app.models.finance.automation import (
     WorkflowExecution,
     WorkflowRule,
 )
-from app.services.common import coerce_uuid
+from app.services.common import PaginationParams, coerce_uuid, paginate
 from app.services.common_filters import build_active_filters
 from app.services.finance.automation.custom_fields import (
     CustomFieldInput,
@@ -535,7 +535,6 @@ class AutomationWebService:
     ) -> dict:
         """Get context for recurring templates list page."""
         org_id = coerce_uuid(organization_id)
-        offset = (page - 1) * page_size
 
         # Build query
         query = select(RecurringTemplate).where(
@@ -556,17 +555,16 @@ class AutomationWebService:
             except ValueError:
                 pass
 
-        # Count total
-        count_query = select(func.count()).select_from(query.subquery())
-        total = db.execute(count_query).scalar() or 0
-
-        # Get templates
-        query = query.order_by(
-            RecurringTemplate.status.asc(),
-            RecurringTemplate.next_run_date.asc(),
+        result = paginate(
+            db,
+            query.order_by(
+                RecurringTemplate.status.asc(),
+                RecurringTemplate.next_run_date.asc(),
+            ),
+            PaginationParams.from_page(page, page_size),
         )
-        query = query.offset(offset).limit(page_size)
-        templates = list(db.execute(query).scalars().all())
+        total = result.total
+        templates = result.items
 
         # Get generation counts
         template_ids = [t.template_id for t in templates]

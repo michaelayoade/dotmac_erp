@@ -50,7 +50,7 @@ class TestAssetRevaluationService:
         AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_revaluation_downward(
         self, mock_db, org_id, mock_asset, mock_category, user_id
@@ -311,7 +311,7 @@ class TestAssetRevaluationService:
             mock_db, org_id, revaluation.revaluation_id, user_id
         )
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_approve_revaluation_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent revaluation fails."""

@@ -301,9 +301,7 @@ class InventoryCountService(ListResponseMixin):
 
         InventoryCountService._build_count_snapshot(db, count)
         count.status = CountStatus.IN_PROGRESS
-        db.commit()
-        db.refresh(count)
-
+        db.flush()
         return count
 
     @staticmethod
@@ -366,9 +364,7 @@ class InventoryCountService(ListResponseMixin):
 
         db.add(count)
         db.flush()
-        db.commit()
-        db.refresh(count)
-
+        db.flush()
         return count
 
     @staticmethod
@@ -432,6 +428,9 @@ class InventoryCountService(ListResponseMixin):
             item = db.get(Item, itm_id)
             if not item or item.organization_id != org_id:
                 raise HTTPException(status_code=404, detail="Item not found")
+            warehouse = db.get(Warehouse, wh_id)
+            if not warehouse or warehouse.organization_id != org_id:
+                raise HTTPException(status_code=404, detail="Warehouse not found")
 
             line = InventoryCountLine(
                 count_id=cnt_id,
@@ -457,9 +456,7 @@ class InventoryCountService(ListResponseMixin):
 
         InventoryCountService._recalculate_count_stats(db, count)
 
-        db.commit()
-        db.refresh(line)
-
+        db.flush()
         return line
 
     @staticmethod
@@ -498,9 +495,7 @@ class InventoryCountService(ListResponseMixin):
             updated_lines.append(line)
 
         InventoryCountService._recalculate_count_stats(db, count)
-        db.commit()
-        for line in updated_lines:
-            db.refresh(line)
+        db.flush()
         return updated_lines
 
     @staticmethod
@@ -546,9 +541,7 @@ class InventoryCountService(ListResponseMixin):
             )
 
         count.status = CountStatus.COMPLETED
-        db.commit()
-        db.refresh(count)
-
+        db.flush()
         return count
 
     @staticmethod
@@ -587,9 +580,7 @@ class InventoryCountService(ListResponseMixin):
         count.approved_by_user_id = user_id
         count.approved_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(count)
-
+        db.flush()
         return count
 
     @staticmethod
@@ -687,9 +678,7 @@ class InventoryCountService(ListResponseMixin):
         count.posted_by_user_id = user_id
         count.posted_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(count)
-
+        db.flush()
         return count
 
     @staticmethod
@@ -755,10 +744,15 @@ class InventoryCountService(ListResponseMixin):
     def get(
         db: Session,
         count_id: str,
+        organization_id: str | UUID | None = None,
     ) -> InventoryCount:
-        """Get a count by ID."""
+        """Get a count by ID, optionally enforcing organization scope."""
         count = db.get(InventoryCount, coerce_uuid(count_id))
         if not count:
+            raise HTTPException(status_code=404, detail="Count not found")
+        if organization_id is not None and count.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Count not found")
         return count
 

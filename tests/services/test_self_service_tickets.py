@@ -23,7 +23,9 @@ def test_ticket_create_response_creates_support_ticket() -> None:
             "_get_employee_id",
             return_value=UUID("00000000-0000-0000-0000-000000000003"),
         ),
-        patch("app.services.support.ticket.ticket_service.create_ticket") as create_ticket,
+        patch(
+            "app.services.support.ticket.ticket_service.create_ticket"
+        ) as create_ticket,
     ):
         response = svc.ticket_create_response(
             request=MagicMock(),

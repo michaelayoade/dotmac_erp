@@ -308,6 +308,11 @@ class InvoiceSyncMixin:
                     desc = f"Splynx {label} {splynx_doc.number} - line {seq}"
 
                 line_subtotal, line_tax = self._extract_tax(total)
+                if is_credit_note:
+                    # Match the canonical negative-amount convention for credit
+                    # notes (mirrors app/services/finance/ar/invoice.py).
+                    line_subtotal = -abs(line_subtotal)
+                    line_tax = -abs(line_tax)
 
                 line = InvoiceLine(
                     invoice_id=invoice_id,
@@ -328,6 +333,11 @@ class InvoiceSyncMixin:
                 self._create_line_tax_record(line.line_id, line_subtotal, line_tax)
         else:
             line_subtotal, line_tax = self._extract_tax(splynx_doc.total)
+            if is_credit_note:
+                # Match the canonical negative-amount convention for credit
+                # notes (mirrors app/services/finance/ar/invoice.py).
+                line_subtotal = -abs(line_subtotal)
+                line_tax = -abs(line_tax)
 
             line = InvoiceLine(
                 invoice_id=invoice_id,

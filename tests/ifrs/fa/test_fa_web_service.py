@@ -1959,8 +1959,9 @@ class TestFAWebServiceGLReconciliationPackages:
             )
 
         assert response.status_code == 303
-        assert f"/fixed-assets/reports/gl-reconciliation/packages/{run_id}" in (
-            response.headers["location"]
+        assert (
+            f"/fixed-assets/reports/gl-reconciliation/packages/{run_id}"
+            in (response.headers["location"])
         )
         create_package.assert_called_once_with(
             mock_db,
@@ -1988,14 +1989,12 @@ class TestFAWebServiceGLReconciliationPackages:
         with patch(
             "app.services.fixed_assets.web.ApprovalWorkflowService.approve"
         ) as approve:
-            response = (
-                FixedAssetWebService.approve_gl_reconciliation_package_response(
-                    mock_db,
-                    str(org_id),
-                    str(run_id),
-                    user_id,
-                    comments="Reviewed",
-                )
+            response = FixedAssetWebService.approve_gl_reconciliation_package_response(
+                mock_db,
+                str(org_id),
+                str(run_id),
+                user_id,
+                comments="Reviewed",
             )
 
         assert response.status_code == 303
@@ -2031,21 +2030,21 @@ class TestFAWebServiceGLReconciliationPackages:
                 detail="User is not eligible to approve this level",
             ),
         ):
-            response = (
-                FixedAssetWebService.approve_gl_reconciliation_package_response(
-                    mock_db,
-                    str(org_id),
-                    str(run_id),
-                    user_id,
-                )
+            response = FixedAssetWebService.approve_gl_reconciliation_package_response(
+                mock_db,
+                str(org_id),
+                str(run_id),
+                user_id,
             )
 
         assert response.status_code == 303
-        assert f"/fixed-assets/reports/gl-reconciliation/packages/{run_id}" in (
-            response.headers["location"]
+        assert (
+            f"/fixed-assets/reports/gl-reconciliation/packages/{run_id}"
+            in (response.headers["location"])
         )
-        assert "User%20is%20not%20eligible%20to%20approve%20this%20level" in (
-            response.headers["location"]
+        assert (
+            "User%20is%20not%20eligible%20to%20approve%20this%20level"
+            in (response.headers["location"])
         )
 
     def test_approval_current_level_label_uses_role_name(self):
@@ -2098,8 +2097,9 @@ class TestFAWebServiceGLReconciliationPackages:
             )
 
         assert response.status_code == 303
-        assert f"/fixed-assets/reports/gl-reconciliation/packages/{run_id}" in (
-            response.headers["location"]
+        assert (
+            f"/fixed-assets/reports/gl-reconciliation/packages/{run_id}"
+            in (response.headers["location"])
         )
         create_draft.assert_called_once_with(
             mock_db,

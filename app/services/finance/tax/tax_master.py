@@ -179,9 +179,7 @@ class TaxCodeService(ListResponseMixin):
         )
 
         db.add(tax_code)
-        db.commit()
-        db.refresh(tax_code)
-
+        db.flush()
         return tax_code
 
     @staticmethod
@@ -297,9 +295,7 @@ class TaxCodeService(ListResponseMixin):
         tax_code.effective_from = effective_from
         tax_code.effective_to = None
 
-        db.commit()
-        db.refresh(tax_code)
-
+        db.flush()
         return tax_code
 
     @staticmethod
@@ -318,9 +314,7 @@ class TaxCodeService(ListResponseMixin):
 
         tax_code.is_active = False
 
-        db.commit()
-        db.refresh(tax_code)
-
+        db.flush()
         return tax_code
 
     @staticmethod
@@ -481,9 +475,7 @@ class TaxJurisdictionService(ListResponseMixin):
         )
 
         db.add(jurisdiction)
-        db.commit()
-        db.refresh(jurisdiction)
-
+        db.flush()
         return jurisdiction
 
     @staticmethod
@@ -569,9 +561,7 @@ class TaxJurisdictionService(ListResponseMixin):
         jurisdiction.future_tax_rate = future_rate
         jurisdiction.future_rate_effective_from = effective_from
 
-        db.commit()
-        db.refresh(jurisdiction)
-
+        db.flush()
         return jurisdiction
 
     @staticmethod
@@ -608,9 +598,7 @@ class TaxJurisdictionService(ListResponseMixin):
         jurisdiction.future_tax_rate = None
         jurisdiction.future_rate_effective_from = None
 
-        db.commit()
-        db.refresh(jurisdiction)
-
+        db.flush()
         return jurisdiction
 
     @staticmethod
@@ -729,9 +717,7 @@ class TaxJurisdictionService(ListResponseMixin):
             )
 
         jurisdiction.is_active = False
-        db.commit()
-        db.refresh(jurisdiction)
-
+        db.flush()
         return jurisdiction
 
 

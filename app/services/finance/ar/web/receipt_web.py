@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -782,6 +783,132 @@ class ReceiptWebService:
             context["form_data"] = data
             return templates.TemplateResponse(
                 request, "finance/ar/receipt_form.html", context
+            )
+
+    # =====================================================================
+    # Consolidated (reseller) payments
+    # =====================================================================
+
+    def consolidated_payment_form_context(
+        self,
+        db: Session,
+        organization_id: str,
+        customer_id: str,
+    ) -> dict:
+        """Context for the consolidated (reseller) payment form."""
+        from app.services.finance.ar.consolidated_payment import (
+            ConsolidatedPaymentService,
+        )
+        from app.services.finance.ar.customer_payment import PaymentMethod
+
+        org_id = coerce_uuid(organization_id)
+        parent = customer_service.get(db, org_id, customer_id)
+        if not parent or parent.organization_id != org_id:
+            return {"parent": None}
+        invoices = ConsolidatedPaymentService(db).family_open_invoices(
+            org_id, parent.customer_id
+        )
+        family_balance = sum((inv.balance_due for inv in invoices), Decimal("0"))
+        return {
+            "parent": {
+                "customer_id": str(parent.customer_id),
+                "customer_code": parent.customer_code,
+                "customer_name": customer_display_name(parent),
+            },
+            "bank_accounts": get_accounts(db, org_id, IFRSCategory.ASSETS),
+            "currency_code": parent.currency_code,
+            "family_open_balance": format_currency(
+                family_balance, parent.currency_code
+            ),
+            "family_invoice_count": len(invoices),
+            "payment_methods": [m.value for m in PaymentMethod],
+        }
+
+    def consolidated_payment_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        customer_id: str,
+    ) -> HTMLResponse:
+        """Render the consolidated payment form."""
+        ctx = self.consolidated_payment_form_context(
+            db, str(auth.organization_id), customer_id
+        )
+        if not ctx.get("parent"):
+            raise HTTPException(status_code=404, detail="Customer not found")
+        context = base_context(request, auth, "Consolidated Payment", "ar")
+        context.update(ctx)
+        return templates.TemplateResponse(
+            request, "finance/ar/consolidated_payment_form.html", context
+        )
+
+    async def create_consolidated_payment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        customer_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Record a consolidated reseller payment (FIFO across the family)."""
+        from app.services.finance.ar.consolidated_payment import (
+            ConsolidatedPaymentService,
+        )
+        from app.services.finance.ar.customer_payment import PaymentMethod
+
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        form = await request.form()
+        data: dict[str, str] = {
+            key: value for key, value in form.items() if isinstance(value, str)
+        }
+        try:
+            amount = Decimal(str(data.get("amount") or "0"))
+            if amount <= 0:
+                raise ValueError("Payment amount must be greater than zero")
+            payment_date = parse_date(data.get("payment_date")) or date.today()
+            try:
+                method = PaymentMethod(data.get("payment_method", "BANK_TRANSFER"))
+            except ValueError:
+                method = PaymentMethod.BANK_TRANSFER
+            input_data = ConsolidatedPaymentService(db).build_consolidated_input(
+                coerce_uuid(org_id),
+                coerce_uuid(customer_id),
+                amount=amount,
+                payment_date=payment_date,
+                payment_method=method,
+                bank_account_id=coerce_uuid(data["bank_account_id"]),
+                currency_code=data.get("currency_code") or "NGN",
+                reference=data.get("reference") or None,
+            )
+            payment = customer_payment_service.create_payment(
+                db=db,
+                organization_id=org_id,
+                input=input_data,
+                created_by_user_id=user_id,
+            )
+            return RedirectResponse(
+                url=(
+                    f"/finance/ar/receipts/{payment.payment_id}"
+                    "?success=Consolidated+payment+recorded"
+                ),
+                status_code=303,
+            )
+        except Exception as exc:
+            logger.exception("create_consolidated_payment_response: failed")
+            context = base_context(request, auth, "Consolidated Payment", "ar")
+            context.update(
+                self.consolidated_payment_form_context(
+                    db, str(auth.organization_id), customer_id
+                )
+            )
+            context["error"] = str(exc)
+            context["form_data"] = data
+            return templates.TemplateResponse(
+                request, "finance/ar/consolidated_payment_form.html", context
             )
 
     def delete_receipt_response(

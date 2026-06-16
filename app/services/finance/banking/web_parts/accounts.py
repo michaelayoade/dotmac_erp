@@ -40,6 +40,7 @@ from app.services.finance.banking.web_parts.base import (
     select,
     templates,
 )
+from app.services.common import PaginationParams, paginate
 
 
 class BankingAccountWebService:
@@ -57,7 +58,6 @@ class BankingAccountWebService:
         sort_dir: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
-        offset = (page - 1) * limit
 
         status_value = _parse_account_status(status)
 
@@ -75,12 +75,6 @@ class BankingAccountWebService:
                 )
             )
 
-        total_count = (
-            db.scalar(
-                select(func.count(BankAccount.bank_account_id)).where(*conditions)
-            )
-            or 0
-        )
         account_sort_map: dict[str, Any] = {
             "bank_name": BankAccount.bank_name,
             "account_name": BankAccount.account_name,
@@ -94,7 +88,9 @@ class BankingAccountWebService:
             account_sort_map,
             default=[BankAccount.bank_name.asc(), BankAccount.account_name.asc()],
         )
-        accounts = db.scalars(list_stmt.limit(limit).offset(offset)).all()
+        result = paginate(db, list_stmt, PaginationParams.from_page(page, limit))
+        total_count = result.total
+        accounts = result.items
 
         active_count = (
             db.scalar(
@@ -124,7 +120,7 @@ class BankingAccountWebService:
             or 0
         )
 
-        total_pages = max(1, (total_count + limit - 1) // limit)
+        total_pages = result.total_pages
 
         return {
             "accounts": [_account_view(account) for account in accounts],
@@ -134,7 +130,7 @@ class BankingAccountWebService:
             "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
-            "offset": offset,
+            "offset": result.offset,
             "total_count": total_count,
             "total_pages": total_pages,
             "active_count": active_count,

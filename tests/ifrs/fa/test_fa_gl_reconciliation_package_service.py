@@ -119,7 +119,9 @@ def test_create_package_with_variance_submits_approval_request():
     ):
         run = FixedAssetGLReconciliationPackageService.create_package(db, org_id)
 
-    assert run.status == FixedAssetGLReconciliationPackageService.STATUS_PENDING_APPROVAL
+    assert (
+        run.status == FixedAssetGLReconciliationPackageService.STATUS_PENDING_APPROVAL
+    )
     assert run.approval_request_id == approval_request_id
     assert run.total_variance_abs == Decimal("50.00")
     assert db.add.call_count == 2
@@ -185,7 +187,9 @@ def test_create_draft_correction_journal_requires_approved_package():
     except Exception as exc:
         assert "must be approved" in str(exc)
     else:
-        raise AssertionError("Expected pending approval to block draft journal creation")
+        raise AssertionError(
+            "Expected pending approval to block draft journal creation"
+        )
 
     db.add.assert_not_called()
     db.commit.assert_not_called()
@@ -327,10 +331,12 @@ def test_create_draft_correction_journal_after_approval_creates_draft():
             return_value=lines,
         ),
     ):
-        journal = FixedAssetGLReconciliationPackageService.create_draft_correction_journal(
-            db,
-            org_id,
-            run_id,
+        journal = (
+            FixedAssetGLReconciliationPackageService.create_draft_correction_journal(
+                db,
+                org_id,
+                run_id,
+            )
         )
 
     assert journal.status == JournalStatus.DRAFT

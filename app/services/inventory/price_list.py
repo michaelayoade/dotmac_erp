@@ -143,9 +143,7 @@ class PriceListService(ListResponseMixin):
         )
 
         db.add(price_list)
-        db.commit()
-        db.refresh(price_list)
-
+        db.flush()
         return price_list
 
     @staticmethod
@@ -184,9 +182,7 @@ class PriceListService(ListResponseMixin):
             ]:
                 setattr(price_list, key, value)
 
-        db.commit()
-        db.refresh(price_list)
-
+        db.flush()
         return price_list
 
     @staticmethod
@@ -239,8 +235,7 @@ class PriceListService(ListResponseMixin):
             existing.effective_from = input.effective_from
             existing.effective_to = input.effective_to
             existing.is_active = True
-            db.commit()
-            db.refresh(existing)
+            db.flush()
             return existing
 
         # Create new
@@ -258,9 +253,7 @@ class PriceListService(ListResponseMixin):
         )
 
         db.add(price_item)
-        db.commit()
-        db.refresh(price_item)
-
+        db.flush()
         return price_item
 
     @staticmethod
@@ -283,7 +276,7 @@ class PriceListService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Price list item not found")
 
         db.delete(item)
-        db.commit()
+        db.flush()
 
         return True
 

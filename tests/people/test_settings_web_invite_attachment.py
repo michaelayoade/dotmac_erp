@@ -26,8 +26,7 @@ def test_employee_invite_email_context_matches_invite_flow(db_session, person):
     assert "Reset password" in preview["body_html"]
     assert preview["next_url"] == "/people/self/tax-info"
     assert preview["link_pattern"] == (
-        "{app_url}/reset-password?token=<secure-token>"
-        "&next=/people/self/tax-info"
+        "{app_url}/reset-password?token=<secure-token>&next=/people/self/tax-info"
     )
     assert "Work email first" in preview["recipients"]
     assert preview["email_module"] == "ADMIN"
@@ -71,7 +70,9 @@ async def test_update_default_invite_attachment_stores_org_setting(
             uploaded.pop(key, None)
 
     monkeypatch.setattr("app.services.storage.get_storage", lambda: _Storage())
-    monkeypatch.setattr("app.services.people.settings_web.get_storage", lambda: _Storage())
+    monkeypatch.setattr(
+        "app.services.people.settings_web.get_storage", lambda: _Storage()
+    )
 
     success, error = await people_settings_web_service.update_default_invite_attachment(
         db_session,
@@ -110,7 +111,9 @@ async def test_update_default_invite_attachment_can_clear_existing(
             deleted.append(key)
 
     monkeypatch.setattr("app.services.storage.get_storage", lambda: _Storage())
-    monkeypatch.setattr("app.services.people.settings_web.get_storage", lambda: _Storage())
+    monkeypatch.setattr(
+        "app.services.people.settings_web.get_storage", lambda: _Storage()
+    )
 
     await people_settings_web_service.update_default_invite_attachment(
         db_session,

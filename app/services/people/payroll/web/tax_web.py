@@ -18,7 +18,12 @@ from starlette.datastructures import UploadFile
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.tax_band import TaxBand
-from app.services.common import coerce_uuid
+from app.services.common import (
+    PaginationParams,
+    coerce_uuid,
+    paginate,
+    pagination_context,
+)
 from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -269,7 +274,6 @@ class TaxWebService:
         """Render tax profiles list page."""
         org_id = coerce_uuid(auth.organization_id)
         per_page = DEFAULT_PAGE_SIZE
-        offset = (page - 1) * per_page
 
         query = (
             select(EmployeeTaxProfile)
@@ -280,23 +284,18 @@ class TaxWebService:
             )
         )
 
-        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        profiles = db.scalars(query.offset(offset).limit(per_page)).all()
-        total_pages = (total + per_page - 1) // per_page
+        result = paginate(db, query, PaginationParams.from_page(page, per_page))
 
         context = base_context(request, auth, "Tax Profiles", "payroll", db=db)
         context["request"] = request
         context.update(
             {
-                "profiles": profiles,
+                "profiles": result.items,
                 "search": "",
-                "page": page,
-                "total_pages": total_pages,
-                "total_count": total,
-                "total": total,
-                "limit": per_page,
-                "has_prev": page > 1,
-                "has_next": page < total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+                **pagination_context(result),
             }
         )
         return templates.TemplateResponse(

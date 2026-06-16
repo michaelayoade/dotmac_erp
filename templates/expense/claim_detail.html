@@ -47,10 +47,14 @@
                     </svg>
                     Payment Processing
                 </span>
+                {% if can_reimburse_expense %}
+                <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-secondary">Manage Payment</a>
+                {% else %}
                 <a href="/finance/payments/transfers" class="btn btn-secondary">View Transfer</a>
-                {% elif can_paystack %}
-                <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-primary" onclick="return confirm('Pay this claim via Paystack now?');">
-                    Pay with Paystack
+                {% endif %}
+                {% elif can_reimburse_expense %}
+                <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-primary">
+                    Proceed to Payment
                 </a>
                 {% endif %}
                 {% if can_submit %}

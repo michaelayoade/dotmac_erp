@@ -44,7 +44,7 @@
     </div>
     {% endif %}
 
-    <form id="employee-form" method="post" action="/people/hr/employees/{% if employee %}{{ employee.employee_id }}/edit{% else %}new{% endif %}" class="space-y-6"
+    <form id="employee-form" method="post" action="/people/hr/employees/{% if employee %}{{ employee.employee_id }}/edit{% else %}new{% endif %}" class="space-y-6" novalidate
         x-data='{
             activeTab: {{ (fd["current_tab"] if "current_tab" in fd else "personal") | tojson }},
             loadingTab: null,
@@ -464,6 +464,22 @@
                     </div>
                 </div>
 
+                {% if not employee %}
+                <div>
+                    <label for="salary_structure_id" class="form-label">Salary Structure <span class="text-red-500">*</span></label>
+                    <select name="salary_structure_id" id="salary_structure_id" class="form-input w-full">
+                        <option value="">Select salary structure</option>
+                        {% for structure in salary_structures %}
+                        <option value="{{ structure.structure_id }}"
+                            {{ 'selected' if form_data.salary_structure_id == structure.structure_id | string }}>
+                            {{ structure.structure_name }}{% if structure.structure_code %} ({{ structure.structure_code }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Creates the employee's initial payroll assignment from the joining date.</p>
+                </div>
+                {% endif %}
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         {% if employee %}
@@ -682,6 +698,11 @@
         </div>
 
         {# Form Actions #}
+        {% if error %}
+        <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+            {{ error }}
+        </div>
+        {% endif %}
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/hr/employees{% if employee %}/{{ employee.employee_id }}{% endif %}"
                class="btn btn-secondary">
@@ -699,6 +720,7 @@
         const form = document.getElementById("employee-form");
         if (!form) return;
         const stateKey = "employee-form-state:" + {{ ((employee.employee_id | string) if employee else "new") | tojson }};
+        const hasServerValidation = {{ (true if error or errors else false) | tojson }};
         const currentTabInput = form.querySelector('input[name="current_tab"]');
         const tabButtons = Array.from(
             document.querySelectorAll("[data-tab-trigger]")
@@ -728,47 +750,31 @@
             });
         });
 
-        try {
-            const saved = window.sessionStorage.getItem(stateKey);
-            if (saved) {
-                const payload = JSON.parse(saved);
-                if (payload.activeTab) {
-                    activateTab(payload.activeTab);
+        if (hasServerValidation) {
+            window.sessionStorage.removeItem(stateKey);
+            window.setTimeout(function() {
+                window.scrollTo(0, 0);
+            }, 0);
+        } else {
+            try {
+                const saved = window.sessionStorage.getItem(stateKey);
+                if (saved) {
+                    const payload = JSON.parse(saved);
+                    if (payload.activeTab) {
+                        activateTab(payload.activeTab);
+                    }
+                    if (typeof payload.scrollY === "number") {
+                        window.setTimeout(function() {
+                            window.scrollTo(0, payload.scrollY);
+                        }, 250);
+                    }
                 }
-                if (typeof payload.scrollY === "number") {
-                    window.setTimeout(function() {
-                        window.scrollTo(0, payload.scrollY);
-                    }, 250);
-                }
-            }
-        } catch (e) {}
+            } catch (e) {}
+        }
 
-        form.addEventListener("submit", function(event) {
-            if (currentTabInput) {
-                const invalidField = form.querySelector(":invalid");
-                if (invalidField instanceof HTMLElement) {
-                    const tab = invalidField.getAttribute("data-tab");
-                    if (tab) activateTab(tab);
-                    event.preventDefault();
-                    invalidField.reportValidity();
-                    return;
-                }
-            }
+        form.addEventListener("submit", function() {
             persistState();
         });
-
-        form.addEventListener(
-            "invalid",
-            function(event) {
-            const target = event.target;
-            if (!(target instanceof HTMLElement)) return;
-            const tab = target.getAttribute("data-tab");
-            if (tab) {
-                activateTab(tab);
-            }
-            },
-            true
-        );
 
         window.addEventListener("beforeunload", persistState);
     })();

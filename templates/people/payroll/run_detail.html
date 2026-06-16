@@ -181,6 +181,30 @@
                     Approve All Slips
                 </button>
             </form>
+            {% elif entry.status.value == "POSTED" %}
+            {% if entry.payslips_email_status %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/send-payslips?force=true" class="inline"
+                onsubmit="return confirm('Payslips have already been queued. Re-queue emails for all posted slips?')">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-secondary">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V6a2 2 0 00-2-2H3a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    Resend Payslips
+                </button>
+            </form>
+            {% else %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/send-payslips" class="inline"
+                onsubmit="return confirm('Queue payslip emails for all posted slips in this run?')">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-secondary">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V6a2 2 0 00-2-2H3a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    Send Payslips
+                </button>
+            </form>
+            {% endif %}
             {% endif %}
         </div>
     </div>

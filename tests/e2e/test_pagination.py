@@ -6,6 +6,7 @@ Tests for pagination controls and behavior across list pages.
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 # =============================================================================
 # Pagination Controls Tests
@@ -20,7 +21,7 @@ class TestPaginationControls:
         self, authenticated_page, base_url
     ):
         """Test pagination controls are visible on suppliers list."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for pagination controls
@@ -30,7 +31,7 @@ class TestPaginationControls:
 
         # Also check for page info text
         page_info = authenticated_page.locator(
-            "text=/Page \\d+/, text=/\\d+ of \\d+/, text=/Showing \\d+/"
+            ":text('/Page \\d+/'), :text('/\\d+ of \\d+/'), :text('/Showing \\d+/')"
         )
 
         # Either pagination controls or page info should exist if there's data
@@ -45,7 +46,7 @@ class TestPaginationControls:
         self, authenticated_page, base_url
     ):
         """Test pagination controls are visible on invoices list."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         authenticated_page.locator(
@@ -59,7 +60,7 @@ class TestPaginationControls:
         self, authenticated_page, base_url
     ):
         """Test pagination controls are visible on journals list."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
         authenticated_page.locator(
@@ -75,7 +76,7 @@ class TestPaginationNavigation:
 
     def test_pagination_first_page(self, authenticated_page, base_url):
         """Test first page button works."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for first page button
@@ -97,7 +98,7 @@ class TestPaginationNavigation:
 
     def test_pagination_next_page(self, authenticated_page, base_url):
         """Test next page button works."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for next page button
@@ -123,7 +124,7 @@ class TestPaginationNavigation:
     def test_pagination_previous_page(self, authenticated_page, base_url):
         """Test previous page button works."""
         # First navigate to page 2 if possible
-        authenticated_page.goto(f"{base_url}/ap/suppliers?page=2")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers?page=2")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for previous page button
@@ -144,7 +145,7 @@ class TestPaginationNavigation:
 
     def test_pagination_last_page(self, authenticated_page, base_url):
         """Test last page button works."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for last page button
@@ -165,13 +166,11 @@ class TestPaginationNavigation:
 
     def test_pagination_page_number_click(self, authenticated_page, base_url):
         """Test clicking specific page number works."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for page number links
-        page_numbers = authenticated_page.locator(
-            ".pagination a:has-text(/^\\d+$/), .pagination button:has-text(/^\\d+$/)"
-        )
+        page_numbers = authenticated_page.locator(".pagination a, .pagination button")
 
         if page_numbers.count() > 1:
             # Click on page 2 if available
@@ -191,8 +190,9 @@ class TestPaginationPageSize:
 
     def test_pagination_page_size_change(self, authenticated_page, base_url):
         """Test changing page size works."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Look for page size selector
         page_size = authenticated_page.locator(
@@ -212,8 +212,9 @@ class TestPaginationPageSize:
 
     def test_pagination_with_filters(self, authenticated_page, base_url):
         """Test pagination preserves filters."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Apply a filter first
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -242,12 +243,14 @@ class TestEmptyListPagination:
     def test_empty_list_no_pagination(self, authenticated_page, base_url):
         """Test empty list doesn't show pagination."""
         # Use a search that returns no results
-        authenticated_page.goto(f"{base_url}/ap/suppliers?search=xyznonexistent123")
+        authenticated_page.goto(
+            f"{base_url}/finance/ap/suppliers?search=xyznonexistent123"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for empty state
         empty_state = authenticated_page.locator(
-            "text=No suppliers, text=No results, text=No data, .empty-state"
+            ":text('No suppliers'), :text('No results'), :text('No data'), .empty-state"
         )
 
         # Pagination should not be prominently visible for empty results
@@ -260,7 +263,7 @@ class TestEmptyListPagination:
     def test_single_page_pagination_state(self, authenticated_page, base_url):
         """Test pagination state when only one page exists."""
         # Limit results to ensure single page
-        authenticated_page.goto(f"{base_url}/ap/suppliers?limit=100")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers?limit=100")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check row count
@@ -286,7 +289,7 @@ class TestPaginationURLState:
 
     def test_pagination_updates_url(self, authenticated_page, base_url):
         """Test pagination updates URL with page parameter."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click next page
@@ -306,7 +309,7 @@ class TestPaginationURLState:
     def test_direct_page_url_access(self, authenticated_page, base_url):
         """Test direct URL access to specific page."""
         # Access page 2 directly via URL
-        authenticated_page.goto(f"{base_url}/ap/suppliers?page=2")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers?page=2")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should load successfully
@@ -314,7 +317,7 @@ class TestPaginationURLState:
 
         # Check if page indicator shows page 2
         authenticated_page.locator(
-            ".pagination .active, [aria-current='page'], text=/Page 2/"
+            ".pagination .active, [aria-current='page'], :text('/Page 2/')"
         )
         # Page 2 might be indicated somehow
         # Just verify page loaded

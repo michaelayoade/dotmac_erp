@@ -129,9 +129,7 @@ class AttachmentService:
         )
 
         db.add(attachment)
-        db.commit()
-        db.refresh(attachment)
-
+        db.flush()
         return attachment
 
     @staticmethod
@@ -207,7 +205,7 @@ class AttachmentService:
 
         # Delete database record
         db.delete(attachment)
-        db.commit()
+        db.flush()
 
         return True
 

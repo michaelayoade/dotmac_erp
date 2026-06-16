@@ -184,8 +184,7 @@ class TestCreateReconciliation:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_reconciliation_with_adjustments(
         self, mock_db, org_id, mock_jurisdiction
@@ -308,7 +307,7 @@ class TestReviewReconciliation:
 
         assert reconciliation.reviewed_by_user_id == reviewer_id
         assert reconciliation.reviewed_at is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_review_reconciliation_not_found(self, mock_db, org_id):
         """Test review of non-existent reconciliation."""

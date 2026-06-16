@@ -1,17 +1,35 @@
 """
 Self-service API router for authenticated users.
 
-Currently implements attendance self-service endpoints.
+Covers attendance (incl. geo check-in/out), leave (own + team approvals),
+payslips, expenses (own claims, receipts, advances), the cross-module
+approvals inbox, and notifications.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_with_org, require_tenant_auth
+from app.api.idempotency import (
+    build_cached_response,
+    build_request_hash,
+    check_or_reserve_idempotency,
+)
+from app.services.finance.platform.idempotency import IdempotencyService
 from app.models.people.exp import CashAdvanceStatus, ExpenseClaimStatus
 from app.models.people.leave import LeaveApplicationStatus
 from app.models.people.payroll.salary_slip import SalarySlipStatus
@@ -19,17 +37,32 @@ from app.models.people.perf.appraisal import AppraisalStatus
 from app.schemas.people.attendance import (
     AttendanceListResponse,
     AttendanceRead,
-    AttendanceRecordCheckIn,
-    AttendanceRecordCheckOut,
 )
-from app.schemas.people.expense import CashAdvanceRead, ExpenseClaimRead
+from app.schemas.people.expense import (
+    CashAdvanceRead,
+    ExpenseClaimItemCreate,
+    ExpenseClaimRead,
+)
 from app.schemas.people.leave import LeaveApplicationRead
+from app.schemas.notification import NotificationListResponse, NotificationRead
 from app.schemas.people.payroll import SalarySlipRead
 from app.schemas.people.perf import AppraisalRead, ScorecardRead
+from app.services.approvals_aggregator import (
+    LEAVE_APPROVAL_PERMISSIONS,
+    ApprovalsAggregatorService,
+)
 from app.services.common import PaginationParams
+from app.services.expense.service_common import (
+    ExpenseClaimStatusError,
+    ExpenseLimitBlockedError,
+    ExpenseNotFoundError,
+    ExpenseServiceError,
+)
+from app.services.file_upload import FileUploadError, get_expense_receipt_upload
+from app.services.notification import NotificationService
+from app.services.push import PushService
 from app.services.people.attendance import AttendanceService
 from app.services.people.expense import ExpenseService
-from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.employees import EmployeeService
 from app.services.people.leave import LeaveService
 from app.services.people.payroll.salary_slip_service import salary_slip_service
@@ -50,11 +83,33 @@ def _get_employee_id(db: Session, organization_id: UUID, person_id: UUID) -> UUI
     return employee.employee_id
 
 
-LEAVE_APPROVAL_PERMISSIONS = {
-    "leave:applications:approve:tier1",
-    "leave:applications:approve:tier2",
-    "leave:applications:approve:tier3",
-}
+class MeCheckIn(BaseModel):
+    """Self-service check-in payload (geo optional, captured at clock moment)."""
+
+    check_in_time: datetime | None = None
+    notes: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class MeCheckOut(BaseModel):
+    """Self-service check-out payload (geo optional, captured at clock moment)."""
+
+    check_out_time: datetime | None = None
+    notes: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+def _get_direct_report_ids(
+    db: Session, organization_id: UUID, manager_employee_id: UUID
+) -> set[UUID]:
+    """Position-based direct reports via OrgResolver (hr-hierarchy rule:
+    never read Employee.reports_to_id for routing decisions)."""
+    from app.services.people.hr.org_resolver import OrgResolver
+
+    reports = OrgResolver(db).get_direct_reports(manager_employee_id, organization_id)
+    return {emp.employee_id for emp in reports}
 
 
 def _require_leave_approval_permission(auth: dict) -> None:
@@ -229,12 +284,7 @@ def team_leave_requests(
     person_id = UUID(auth["person_id"])
     manager_employee_id = _get_employee_id(db, organization_id, person_id)
 
-    employee_svc = EmployeeService(db, organization_id)
-    reports = employee_svc.list_employees(
-        filters=EmployeeFilters(reports_to_id=manager_employee_id),
-        pagination=PaginationParams(offset=0, limit=1000),
-    ).items
-    report_ids = [emp.employee_id for emp in reports]
+    report_ids = list(_get_direct_report_ids(db, organization_id, manager_employee_id))
     if not report_ids:
         return {"items": [], "total": 0, "offset": offset, "limit": limit}
 
@@ -277,12 +327,7 @@ def approve_team_leave(
     if application.employee_id == manager_employee_id:
         raise HTTPException(status_code=400, detail="Cannot approve own leave")
 
-    employee_svc = EmployeeService(db, organization_id)
-    reports = employee_svc.list_employees(
-        filters=EmployeeFilters(reports_to_id=manager_employee_id),
-        pagination=PaginationParams(offset=0, limit=1000),
-    ).items
-    report_ids = {emp.employee_id for emp in reports}
+    report_ids = _get_direct_report_ids(db, organization_id, manager_employee_id)
     if application.employee_id not in report_ids:
         raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -308,12 +353,7 @@ def reject_team_leave(
     manager_employee_id = _get_employee_id(db, organization_id, person_id)
 
     application = LeaveService(db).get_application(organization_id, application_id)
-    employee_svc = EmployeeService(db, organization_id)
-    reports = employee_svc.list_employees(
-        filters=EmployeeFilters(reports_to_id=manager_employee_id),
-        pagination=PaginationParams(offset=0, limit=1000),
-    ).items
-    report_ids = {emp.employee_id for emp in reports}
+    report_ids = _get_direct_report_ids(db, organization_id, manager_employee_id)
     if application.employee_id not in report_ids:
         raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -462,7 +502,7 @@ def my_attendance_today(
     status_code=status.HTTP_201_CREATED,
 )
 def my_check_in(
-    payload: AttendanceRecordCheckIn,
+    payload: MeCheckIn,
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db_with_org),
 ):
@@ -477,6 +517,8 @@ def my_check_in(
         employee_id=employee_id,
         check_in_time=payload.check_in_time,
         notes=payload.notes,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
     )
     return AttendanceRead.model_validate(attendance)
 
@@ -487,7 +529,7 @@ def my_check_in(
     status_code=status.HTTP_201_CREATED,
 )
 def my_check_out(
-    payload: AttendanceRecordCheckOut,
+    payload: MeCheckOut,
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db_with_org),
 ):
@@ -502,6 +544,8 @@ def my_check_out(
         employee_id=employee_id,
         check_out_time=payload.check_out_time,
         notes=payload.notes,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
     )
     return AttendanceRead.model_validate(attendance)
 
@@ -674,3 +718,294 @@ def my_cash_advances(
         "offset": offset,
         "limit": limit,
     }
+
+
+class MyExpenseClaimCreate(BaseModel):
+    """Create-own-claim payload — employee is resolved from the token."""
+
+    claim_date: date
+    purpose: str
+    currency_code: str | None = None
+    notes: str | None = None
+    items: list[ExpenseClaimItemCreate] = Field(default_factory=list)
+
+
+@router.post("/expenses/claims", status_code=status.HTTP_201_CREATED)
+def create_my_expense_claim(
+    payload: MyExpenseClaimCreate,
+    request: Request,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
+):
+    """Create an expense claim for the current employee (mobile self-service).
+
+    The Idempotency-Key header is OPTIONAL here (unlike the back-office
+    route): when the mobile offline queue replays a create after a network
+    drop, providing the key returns the original response instead of
+    double-creating the draft.
+    """
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+    employee_id = _get_employee_id(db, organization_id, person_id)
+
+    if idempotency_key:
+        request_hash = build_request_hash(
+            payload,
+            {
+                "organization_id": str(organization_id),
+                "employee_id": str(employee_id),
+            },
+        )
+        replay = check_or_reserve_idempotency(
+            db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            request_hash=request_hash,
+        )
+        if replay:
+            return build_cached_response(replay)
+
+    def _record(status_code: int, body: dict) -> None:
+        if not idempotency_key:
+            return
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status_code,
+            response_body=body,
+        )
+
+    try:
+        claim = ExpenseService(db).create_claim(
+            org_id=organization_id,
+            employee_id=employee_id,
+            claim_date=payload.claim_date,
+            purpose=payload.purpose,
+            currency_code=payload.currency_code,
+            notes=payload.notes,
+            items=[item.model_dump() for item in payload.items],
+            created_by_id=person_id,
+        )
+    except ExpenseNotFoundError:
+        raise  # global handler maps these to 404
+    except ExpenseServiceError as exc:
+        _record(400, {"detail": str(exc)})
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    response = ExpenseClaimRead.model_validate(claim)
+    _record(status.HTTP_201_CREATED, response.model_dump(mode="json"))
+    return response
+
+
+@router.post("/expenses/claims/{claim_id}/submit")
+def submit_my_expense_claim(
+    claim_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Submit one of the current employee's own claims for approval."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+    employee_id = _get_employee_id(db, organization_id, person_id)
+
+    svc = ExpenseService(db)
+    claim = svc.get_claim(organization_id, claim_id)
+    if claim.employee_id != employee_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = svc.submit_claim(organization_id, claim_id, actor_id=person_id)
+    except ExpenseClaimStatusError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ExpenseLimitBlockedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ExpenseClaimRead.model_validate(result.claim)
+
+
+@router.post("/expenses/claims/{claim_id}/items/{item_id}/receipt")
+def upload_my_receipt(
+    claim_id: UUID,
+    item_id: UUID,
+    receipt: UploadFile = File(...),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Attach a receipt to one of my DRAFT claim items (appends, never
+    replaces; rejected claims must be resubmitted to DRAFT first)."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+    employee_id = _get_employee_id(db, organization_id, person_id)
+
+    # Cheap early reject on the declared size before buffering the body;
+    # FileUploadService.save() remains the authoritative validator.
+    max_bytes = get_expense_receipt_upload().config.max_size_bytes
+    if receipt.size is not None and receipt.size > max_bytes:
+        raise HTTPException(status_code=400, detail="File too large")
+    file_data = receipt.file.read()
+    try:
+        item = ExpenseService(db).attach_receipt(
+            organization_id,
+            claim_id=claim_id,
+            item_id=item_id,
+            employee_id=employee_id,
+            file_data=file_data,
+            content_type=receipt.content_type,
+            original_filename=receipt.filename,
+        )
+    except FileUploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ExpenseClaimStatusError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"item_id": str(item.item_id), "receipt_url": item.receipt_url}
+
+
+# =============================================================================
+# Approvals inbox
+# =============================================================================
+
+
+@router.get("/approvals")
+def my_pending_approvals(
+    limit_per_type: int = Query(10, ge=1, le=50),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Aggregate pending approvals across every category the caller may action."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    svc = ApprovalsAggregatorService(db)
+    return svc.list_pending(
+        organization_id=organization_id,
+        person_id=person_id,
+        roles=set(auth.get("roles") or []),
+        scopes=set(auth.get("scopes") or []),
+        limit_per_type=limit_per_type,
+    )
+
+
+# =============================================================================
+# Notifications
+# =============================================================================
+
+
+@router.get("/notifications", response_model=NotificationListResponse)
+def my_notifications(
+    unread_only: bool = Query(False),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """List notifications for the current user (newest first)."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    svc = NotificationService()
+    items = svc.list_notifications(
+        db,
+        person_id,
+        organization_id=organization_id,
+        unread_only=unread_only,
+        offset=offset,
+        limit=limit + 1,
+    )
+    has_more = len(items) > limit
+    unread_count = svc.get_unread_count(db, person_id, organization_id=organization_id)
+    return NotificationListResponse(
+        items=[NotificationRead.model_validate(n) for n in items[:limit]],
+        unread_count=unread_count,
+        offset=offset,
+        limit=limit,
+        has_more=has_more,
+    )
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_my_notification_read(
+    notification_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Mark one of the current user's notifications as read."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    marked = NotificationService().mark_read(
+        db,
+        notification_id,
+        recipient_id=person_id,
+        organization_id=organization_id,
+    )
+    if not marked:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"marked_read": True}
+
+
+@router.post("/notifications/mark-all-read")
+def mark_all_my_notifications_read(
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Mark all of the current user's notifications as read."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    count = NotificationService().mark_all_read(
+        db,
+        person_id,
+        organization_id=organization_id,
+    )
+    return {"marked_read": count}
+
+
+# =============================================================================
+# Devices (mobile push registration — FF-1)
+# =============================================================================
+
+
+class DeviceRegisterRequest(BaseModel):
+    """FCM device registration payload."""
+
+    token: str = Field(min_length=8, max_length=512)
+    platform: str = Field(pattern="^(android|ios|web)$")
+
+
+class DeviceUnregisterRequest(BaseModel):
+    """FCM device unregistration payload (on logout)."""
+
+    token: str = Field(min_length=8, max_length=512)
+
+
+@router.post("/devices", status_code=status.HTTP_201_CREATED)
+def register_my_device(
+    payload: DeviceRegisterRequest,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Register (or refresh) this device's push token for the current user."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    device = PushService(db).register_device(
+        organization_id,
+        person_id,
+        token=payload.token,
+        platform=payload.platform,
+    )
+    return {"device_token_id": str(device.device_token_id)}
+
+
+@router.post("/devices/unregister")
+def unregister_my_device(
+    payload: DeviceUnregisterRequest,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Stop push delivery to this device (idempotent; called on logout)."""
+    person_id = UUID(auth["person_id"])
+
+    revoked = PushService(db).unregister_device(person_id, token=payload.token)
+    return {"revoked": revoked}

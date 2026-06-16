@@ -249,9 +249,7 @@ class ChartOfAccountsService(ListResponseMixin):
         )
 
         db.add(account)
-        db.commit()
-        db.refresh(account)
-
+        db.flush()
         return account
 
     @staticmethod
@@ -308,8 +306,12 @@ class ChartOfAccountsService(ListResponseMixin):
         if updated_by_user_id is not None:
             account.updated_by_user_id = updated_by_user_id
 
-        db.commit()
-        db.refresh(account)
+        # Per CLAUDE.md: services flush, dep (get_db_for_org) commits.
+        # The previous db.commit() + db.refresh() pattern cleared the
+        # `SET LOCAL app.current_organization_id` GUC at commit time, so
+        # the refresh then lazy-loaded through an unprimed RLS context and
+        # raised "Could not refresh instance".
+        db.flush()
 
         return account
 
@@ -444,9 +446,7 @@ class ChartOfAccountsService(ListResponseMixin):
         if updated_by_user_id is not None:
             account.updated_by_user_id = updated_by_user_id
 
-        db.commit()
-        db.refresh(account)
-
+        db.flush()
         return account
 
     @staticmethod

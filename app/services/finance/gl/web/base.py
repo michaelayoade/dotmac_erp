@@ -92,23 +92,30 @@ def category_option_view(category: AccountCategory) -> dict:
 
 
 def account_form_view(account: Account) -> dict:
-    """Transform an account for form editing."""
+    """Transform an account for form editing.
+
+    Nullable string columns are returned as empty strings so the form template
+    renders blank input values rather than the literal string "None" — which
+    happens when Jinja2 stringifies Python None in an `<input value="...">`
+    attribute. Posting "None" back to the server fails the DB length check on
+    short VARCHAR columns (e.g. default_currency_code VARCHAR(3)).
+    """
     return {
         "account_id": account.account_id,
         "account_code": account.account_code,
         "account_name": account.account_name,
-        "description": account.description,
-        "search_terms": account.search_terms,
+        "description": account.description or "",
+        "search_terms": account.search_terms or "",
         "category_id": account.category_id,
         "account_type": account.account_type.value,
         "normal_balance": account.normal_balance.value,
         "is_multi_currency": account.is_multi_currency,
-        "default_currency_code": account.default_currency_code,
+        "default_currency_code": account.default_currency_code or "",
         "is_active": account.is_active,
         "is_posting_allowed": account.is_posting_allowed,
         "is_budgetable": account.is_budgetable,
         "is_reconciliation_required": account.is_reconciliation_required,
-        "subledger_type": account.subledger_type,
+        "subledger_type": account.subledger_type or "",
         "is_cash_equivalent": account.is_cash_equivalent,
         "is_financial_instrument": account.is_financial_instrument,
     }
@@ -139,13 +146,23 @@ def account_detail_view(account: Account) -> dict:
 
 
 def journal_entry_view(entry: JournalEntry) -> dict:
-    """Transform a journal entry for list display."""
+    """Transform a journal entry for both list display and edit form pre-fill.
+
+    Dates are returned as ISO strings (YYYY-MM-DD) so they bind cleanly to
+    `<input type="date">`; templates that need the human-readable form should
+    apply `format_date` themselves.
+    """
+    fiscal_period_id = getattr(entry, "fiscal_period_id", None)
+    exchange_rate = getattr(entry, "exchange_rate", None)
     return {
-        "journal_entry_id": entry.journal_entry_id,
+        "journal_entry_id": str(entry.journal_entry_id)
+        if entry.journal_entry_id
+        else None,
+        "fiscal_period_id": str(fiscal_period_id) if fiscal_period_id else None,
         "journal_number": entry.journal_number,
         "journal_type": entry.journal_type.value,
-        "entry_date": format_date(entry.entry_date),
-        "posting_date": format_date(entry.posting_date),
+        "entry_date": entry.entry_date.isoformat() if entry.entry_date else "",
+        "posting_date": entry.posting_date.isoformat() if entry.posting_date else "",
         "description": entry.description,
         "reference": entry.reference,
         "status": entry.status.value,
@@ -154,9 +171,14 @@ def journal_entry_view(entry: JournalEntry) -> dict:
         "source_document_id": str(entry.source_document_id)
         if entry.source_document_id
         else "",
-        "total_debit": entry.total_debit,
-        "total_credit": entry.total_credit,
+        "total_debit": float(entry.total_debit)
+        if entry.total_debit is not None
+        else 0.0,
+        "total_credit": float(entry.total_credit)
+        if entry.total_credit is not None
+        else 0.0,
         "currency_code": entry.currency_code,
+        "exchange_rate": float(exchange_rate) if exchange_rate is not None else 1.0,
         "created_at": entry.created_at.isoformat() if entry.created_at else "",
     }
 
@@ -166,18 +188,26 @@ def journal_line_view(
     account_name: str | None = None,
     account_code: str | None = None,
 ) -> dict:
-    """Transform a journal entry line for display."""
+    """Transform a journal entry line for display. Returns JSON-safe scalars."""
     return {
-        "line_id": line.line_id,
+        "line_id": str(line.line_id) if line.line_id else None,
         "line_number": line.line_number,
-        "account_id": line.account_id,
+        "account_id": str(line.account_id) if line.account_id else None,
         "account_code": account_code or "",
         "account_name": account_name or "",
         "description": line.description,
-        "debit_amount": line.debit_amount,
-        "credit_amount": line.credit_amount,
-        "debit_amount_functional": line.debit_amount_functional,
-        "credit_amount_functional": line.credit_amount_functional,
+        "debit_amount": float(line.debit_amount)
+        if line.debit_amount is not None
+        else 0.0,
+        "credit_amount": float(line.credit_amount)
+        if line.credit_amount is not None
+        else 0.0,
+        "debit_amount_functional": float(line.debit_amount_functional)
+        if line.debit_amount_functional is not None
+        else 0.0,
+        "credit_amount_functional": float(line.credit_amount_functional)
+        if line.credit_amount_functional is not None
+        else 0.0,
     }
 
 

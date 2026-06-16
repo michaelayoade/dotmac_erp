@@ -8,6 +8,7 @@ import re
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 ALPINE_JS_MARKER = "cdn.jsdelivr.net/npm/alpinejs@"
 
@@ -115,6 +116,7 @@ class TestLoginWithCredentials:
         # Submit form
         page.locator("button[type='submit'], input[type='submit']").first.click()
         page.wait_for_load_state("networkidle")
+        reveal_filters(page)
 
         # Should redirect to dashboard or home
         expect(page).to_have_url(re.compile(r".*(dashboard|home|/).*"))
@@ -136,6 +138,7 @@ class TestLoginWithCredentials:
         # Submit form
         page.locator("button[type='submit'], input[type='submit']").first.click()
         page.wait_for_load_state("networkidle")
+        reveal_filters(page)
 
         # Should show error message or stay on login page
         # Either an error is shown or we're still on login
@@ -173,7 +176,7 @@ class TestLogout:
     def test_logout_redirects_to_login(self, authenticated_page, base_url):
         """Test that logout redirects to login page."""
         # First go to dashboard to ensure we're logged in
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Navigate to logout
@@ -192,7 +195,7 @@ class TestLogout:
         page.context.clear_cookies()
 
         # Try to access protected route
-        goto_auth_page(page, f"{base_url}/dashboard")
+        goto_auth_page(page, f"{base_url}/finance/dashboard")
 
         # Should redirect to login
         expect(page).to_have_url(re.compile(r".*login.*"))
@@ -207,7 +210,7 @@ class TestProtectedRoutes:
         # Clear any existing cookies
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/dashboard")
+        goto_auth_page(page, f"{base_url}/finance/dashboard")
 
         # Should redirect to login
         expect(page).to_have_url(re.compile(r".*login.*"))
@@ -216,7 +219,7 @@ class TestProtectedRoutes:
         """Test that GL accounts requires authentication."""
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/gl/accounts")
+        goto_auth_page(page, f"{base_url}/finance/gl/accounts")
 
         expect(page).to_have_url(re.compile(r".*login.*"))
 
@@ -224,7 +227,7 @@ class TestProtectedRoutes:
         """Test that AP suppliers requires authentication."""
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/ap/suppliers")
+        goto_auth_page(page, f"{base_url}/finance/ap/suppliers")
 
         expect(page).to_have_url(re.compile(r".*login.*"))
 
@@ -232,7 +235,7 @@ class TestProtectedRoutes:
         """Test that AR customers requires authentication."""
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/ar/customers")
+        goto_auth_page(page, f"{base_url}/finance/ar/customers")
 
         expect(page).to_have_url(re.compile(r".*login.*"))
 

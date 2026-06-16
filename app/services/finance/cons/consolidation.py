@@ -168,9 +168,7 @@ class ConsolidationService(ListResponseMixin):
         )
 
         db.add(run)
-        db.commit()
-        db.refresh(run)
-
+        db.flush()
         return run
 
     @staticmethod
@@ -206,9 +204,7 @@ class ConsolidationService(ListResponseMixin):
         run.status = ConsolidationStatus.IN_PROGRESS
         run.started_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(run)
-
+        db.flush()
         return run
 
     @staticmethod
@@ -278,9 +274,7 @@ class ConsolidationService(ListResponseMixin):
         run.total_eliminations_amount += input.debit_amount
         run.total_nci += input.nci_debit_amount
 
-        db.commit()
-        db.refresh(entry)
-
+        db.flush()
         return entry
 
     @staticmethod
@@ -384,7 +378,7 @@ class ConsolidationService(ListResponseMixin):
         )
         run.intercompany_differences = unmatched or Decimal("0")
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         return entries
 
     @staticmethod
@@ -476,7 +470,7 @@ class ConsolidationService(ListResponseMixin):
             )
             entries.append(entry)
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         return entries
 
     @staticmethod
@@ -512,9 +506,7 @@ class ConsolidationService(ListResponseMixin):
         run.status = ConsolidationStatus.COMPLETED
         run.completed_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(run)
-
+        db.flush()
         return run
 
     @staticmethod
@@ -561,9 +553,7 @@ class ConsolidationService(ListResponseMixin):
         run.approved_by_user_id = user_id
         run.approved_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(run)
-
+        db.flush()
         return run
 
     @staticmethod
@@ -640,9 +630,7 @@ class ConsolidationService(ListResponseMixin):
         )
 
         db.add(balance)
-        db.commit()
-        db.refresh(balance)
-
+        db.flush()
         return balance
 
     @staticmethod

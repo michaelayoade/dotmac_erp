@@ -633,8 +633,8 @@ class AdminWebService:
             is_locked = bool(
                 _datetime_after(locked_until, now) or failed_login_attempts >= 5
             )
-            person_active = (
-                person.status == PersonStatus.active and bool(person.is_active)
+            person_active = person.status == PersonStatus.active and bool(
+                person.is_active
             )
             account_is_active = person_active and credential_active and not is_locked
             if account_is_active:
@@ -732,14 +732,16 @@ class AdminWebService:
                 )
             )
             now = datetime.now(UTC)
-            failed_login_attempts = credential.failed_login_attempts if credential else 0
+            failed_login_attempts = (
+                credential.failed_login_attempts if credential else 0
+            )
             locked_until = credential.locked_until if credential else None
             credential_active = bool(credential and credential.is_active)
             is_locked = bool(
                 _datetime_after(locked_until, now) or failed_login_attempts >= 5
             )
-            person_active = (
-                person.status == PersonStatus.active and bool(person.is_active)
+            person_active = person.status == PersonStatus.active and bool(
+                person.is_active
             )
             account_is_active = person_active and credential_active and not is_locked
             if account_is_active:
@@ -3567,7 +3569,9 @@ class AdminWebService:
                 url=f"/admin/users?{urlencode({'error': error})}",
                 status_code=302,
             )
-        return RedirectResponse(url=f"/admin/users/{user_id}?activated=1", status_code=302)
+        return RedirectResponse(
+            url=f"/admin/users/{user_id}?activated=1", status_code=302
+        )
 
     def roles_response(
         self,

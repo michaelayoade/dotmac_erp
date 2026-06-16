@@ -910,7 +910,9 @@ class EmployeeService:
         email = (person.email or "").strip().lower()
         if not email:
             raise ValidationError("Employee user account requires a valid email")
-        personal_email = (getattr(employee, "personal_email", None) or "").strip().lower()
+        personal_email = (
+            (getattr(employee, "personal_email", None) or "").strip().lower()
+        )
         recipients = [email]
         if personal_email and personal_email not in recipients:
             recipients.append(personal_email)

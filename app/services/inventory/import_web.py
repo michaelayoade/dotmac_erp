@@ -326,7 +326,7 @@ class InventoryImportWebService:
             return JSONResponse(
                 content={"detail": f"Unsupported import entity: {entity_type}"},
                 status_code=404,
-        )
+            )
         if not auth.organization_id or not auth.person_id:
             return JSONResponse(
                 content={"detail": "Missing user or organization context."},

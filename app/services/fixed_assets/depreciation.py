@@ -609,9 +609,7 @@ class DepreciationService(ListResponseMixin):
             run.assets_processed = assets_processed
             run.total_depreciation = total_depreciation
 
-            db.commit()
-            db.refresh(run)
-
+            db.flush()
             return run
 
         except Exception as e:
@@ -668,9 +666,7 @@ class DepreciationService(ListResponseMixin):
 
         schedules = list(
             db.scalars(
-                select(DepreciationSchedule).where(
-                    DepreciationSchedule.run_id == r_id
-                )
+                select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
             )
         )
         if not schedules:
@@ -760,9 +756,7 @@ class DepreciationService(ListResponseMixin):
             run.journal_entry_id = result.journal_entry_id
             run.posting_batch_id = result.posting_batch_id
 
-            db.commit()
-            db.refresh(run)
-
+            db.flush()
             return run
 
         except HTTPException:

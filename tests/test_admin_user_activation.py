@@ -82,7 +82,7 @@ def test_admin_user_form_template_has_activation_card():
     assert "User account activated successfully." in template
     assert "/admin/users/{{ user_data.id }}/activate" in template
     assert "setTimeout(() => show = false, 5000)" in template
-    assert "disabled aria-disabled=\"true\"" in template
+    assert 'disabled aria-disabled="true"' in template
     assert "Account Status" in template
     assert "Failed attempts" in template
 

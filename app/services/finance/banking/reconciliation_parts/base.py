@@ -131,6 +131,10 @@ class MatchSuggestion:
     payment_number: str | None = None
     source_url: str = ""
     amount_matched: bool = False
+    # Set when the suggestion was persisted by the Celery auto-engine
+    # (match_state='suggested') rather than recomputed live in the workspace.
+    from_auto_engine: bool = False
+    match_reason: str | None = None
 
 
 def _check_rule_payee_link(

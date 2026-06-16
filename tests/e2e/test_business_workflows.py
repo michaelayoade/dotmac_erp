@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -34,8 +35,9 @@ class TestProcureToPay:
         uid = unique_id()
 
         # Step 1: Create a new supplier
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         supplier_code = authenticated_page.locator(
             "input[name='supplier_code'], input[name='code']"
@@ -60,7 +62,7 @@ class TestProcureToPay:
     def test_po_to_invoice_to_payment_workflow(self, authenticated_page, base_url):
         """Test workflow from PO to invoice to payment."""
         # Navigate to purchase orders
-        authenticated_page.goto(f"{base_url}/ap/purchase-orders")
+        authenticated_page.goto(f"{base_url}/finance/ap/purchase-orders")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for existing POs or new button
@@ -71,7 +73,7 @@ class TestProcureToPay:
             expect(new_btn.first).to_be_visible()
 
         # Navigate to invoices
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for invoice creation from PO
@@ -82,7 +84,7 @@ class TestProcureToPay:
             expect(new_invoice_btn.first).to_be_visible()
 
         # Navigate to payments
-        authenticated_page.goto(f"{base_url}/ap/payments")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for payment creation
@@ -95,12 +97,12 @@ class TestProcureToPay:
     def test_goods_receipt_to_invoice_matching(self, authenticated_page, base_url):
         """Test goods receipt to invoice matching workflow."""
         # Navigate to goods receipts
-        authenticated_page.goto(f"{base_url}/ap/goods-receipts")
+        authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for GR list
         table = authenticated_page.locator("table, [role='table']")
-        empty_state = authenticated_page.locator("text=No goods receipts")
+        empty_state = authenticated_page.locator(":text('No goods receipts')")
         content = table.or_(empty_state)
         if content.count() > 0:
             expect(content.first).to_be_visible()
@@ -129,8 +131,9 @@ class TestOrderToCash:
         uid = unique_id()
 
         # Step 1: Create a new customer
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         customer_code = authenticated_page.locator(
             "input[name='customer_code'], input[name='code']"
@@ -155,26 +158,26 @@ class TestOrderToCash:
     def test_quote_to_order_to_invoice_workflow(self, authenticated_page, base_url):
         """Test workflow from quote to order to invoice."""
         # Navigate to quotes
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for quotes list
         authenticated_page.locator("table, [role='table']")
-        authenticated_page.locator("text=No quotes")
+        authenticated_page.locator(":text('No quotes')")
         authenticated_page.locator("a[href*='/quotes/new'], button:has-text('New')")
 
         # Page should have either data or new button
         expect(authenticated_page.locator("main")).to_be_visible()
 
         # Navigate to sales orders
-        authenticated_page.goto(f"{base_url}/sales-orders")
+        authenticated_page.goto(f"{base_url}/finance/sales-orders")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for sales orders
         expect(authenticated_page.locator("main")).to_be_visible()
 
         # Navigate to AR invoices
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for invoice creation
@@ -187,12 +190,12 @@ class TestOrderToCash:
     def test_credit_note_application_workflow(self, authenticated_page, base_url):
         """Test credit note application to invoice workflow."""
         # Navigate to credit notes
-        authenticated_page.goto(f"{base_url}/ar/credit-notes")
+        authenticated_page.goto(f"{base_url}/finance/ar/credit-notes")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for credit notes list
         table = authenticated_page.locator("table, [role='table']")
-        empty_state = authenticated_page.locator("text=No credit notes")
+        empty_state = authenticated_page.locator(":text('No credit notes')")
         content = table.or_(empty_state)
         if content.count() > 0:
             expect(content.first).to_be_visible()
@@ -223,7 +226,7 @@ class TestPeriodClose:
 
     def test_period_close_full_checklist(self, authenticated_page, base_url):
         """Test full period close checklist workflow."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for checklist items
@@ -242,29 +245,31 @@ class TestPeriodClose:
 
     def test_period_close_with_open_items(self, authenticated_page, base_url):
         """Test period close validation with open items."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for warnings about open items
-        authenticated_page.locator(".alert, .warning, text=open items, text=unposted")
+        authenticated_page.locator(
+            ".alert, .warning, :text('open items'), :text('unposted')"
+        )
         # Just verify page loaded, warnings may or may not exist
         expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_year_end_close_workflow(self, authenticated_page, base_url):
         """Test year-end close workflow."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for year-end close option
         year_end = authenticated_page.locator(
-            "button:has-text('Year End'), button:has-text('Year-End'), text=Year End Close"
+            "button:has-text('Year End'), button:has-text('Year-End'), :text('Year End Close')"
         )
         if year_end.count() > 0:
             expect(year_end.first).to_be_visible()
 
         # Check for retained earnings option
         authenticated_page.locator(
-            "text=Retained Earnings, select[name='retained_earnings_account']"
+            ":text('Retained Earnings'), select[name='retained_earnings_account']"
         )
         # Just verify page loaded
         expect(authenticated_page.locator("main")).to_be_visible()
@@ -282,7 +287,7 @@ class TestReportingWorkflows:
     def test_trial_balance_after_entries(self, authenticated_page, base_url):
         """Test trial balance reflects journal entries."""
         # First check trial balance
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Verify trial balance shows
@@ -291,14 +296,14 @@ class TestReportingWorkflows:
             expect(table.first).to_be_visible()
 
         # Check totals row
-        totals = authenticated_page.locator("tfoot, .totals, text=Total")
+        totals = authenticated_page.locator("tfoot, .totals, :text('Total')")
         if totals.count() > 0:
             expect(totals.first).to_be_visible()
 
     def test_aging_report_accuracy(self, authenticated_page, base_url):
         """Test aging report shows accurate data."""
         # Check AP aging
-        authenticated_page.goto(f"{base_url}/ap/aging")
+        authenticated_page.goto(f"{base_url}/finance/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Verify aging buckets
@@ -309,7 +314,7 @@ class TestReportingWorkflows:
             expect(aging_columns.first).to_be_visible()
 
         # Check AR aging
-        authenticated_page.goto(f"{base_url}/ar/aging")
+        authenticated_page.goto(f"{base_url}/finance/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Verify AR aging shows
@@ -317,7 +322,7 @@ class TestReportingWorkflows:
 
     def test_report_export_pdf(self, authenticated_page, base_url):
         """Test report export to PDF."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for PDF export button
@@ -329,7 +334,7 @@ class TestReportingWorkflows:
 
     def test_report_export_excel(self, authenticated_page, base_url):
         """Test report export to Excel."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for Excel export button
@@ -352,8 +357,9 @@ class TestCrossModuleIntegration:
     def test_invoice_creates_gl_entries(self, authenticated_page, base_url):
         """Test that invoices create corresponding GL entries."""
         # Navigate to journals to check for invoice-related entries
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Search for invoice-related entries
         search = authenticated_page.locator(
@@ -370,7 +376,7 @@ class TestCrossModuleIntegration:
     def test_payment_updates_invoice_status(self, authenticated_page, base_url):
         """Test that payments update invoice status."""
         # Navigate to AP invoices
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for status column
@@ -382,19 +388,19 @@ class TestCrossModuleIntegration:
 
         # Check for paid/partial status indicators
         authenticated_page.locator(
-            "text=Paid, text=Partial, .badge-success, .badge-warning"
+            ":text('Paid'), :text('Partial'), .badge-success, .badge-warning"
         )
         # Just verify page loaded
         expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_bank_reconciliation_updates_statements(self, authenticated_page, base_url):
         """Test bank reconciliation updates statement status."""
-        authenticated_page.goto(f"{base_url}/banking/statements")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for reconciled status column
         status = authenticated_page.locator(
-            "th:has-text('Status'), text=Reconciled, text=Unreconciled"
+            "th:has-text('Status'), :text('Reconciled'), :text('Unreconciled')"
         )
         if status.count() > 0:
             expect(status.first).to_be_visible()

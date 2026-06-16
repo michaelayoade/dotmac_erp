@@ -153,9 +153,7 @@ class LegalEntityService(ListResponseMixin):
         )
 
         db.add(entity)
-        db.commit()
-        db.refresh(entity)
-
+        db.flush()
         return entity
 
     @staticmethod
@@ -204,9 +202,7 @@ class LegalEntityService(ListResponseMixin):
             )
 
         entity.consolidation_method = new_method
-        db.commit()
-        db.refresh(entity)
-
+        db.flush()
         return entity
 
     @staticmethod
@@ -245,9 +241,7 @@ class LegalEntityService(ListResponseMixin):
         entity.is_active = False
         entity.consolidation_method = ConsolidationMethod.NOT_CONSOLIDATED
 
-        db.commit()
-        db.refresh(entity)
-
+        db.flush()
         return entity
 
     @staticmethod
@@ -292,9 +286,7 @@ class LegalEntityService(ListResponseMixin):
             )
 
         entity.accumulated_goodwill_impairment += impairment_amount
-        db.commit()
-        db.refresh(entity)
-
+        db.flush()
         return entity
 
     @staticmethod

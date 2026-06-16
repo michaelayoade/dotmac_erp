@@ -55,8 +55,7 @@ class TestCreateAccount:
         service.create_account(mock_db, org_id, sample_account_input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_account_duplicate_fails(
         self, service, mock_db, org_id, sample_account_input
@@ -111,8 +110,7 @@ class TestUpdateAccount:
             description="Updated description",
         )
 
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
         assert result.account_name == "Updated Cash Account"
 
     def test_update_account_not_found(self, service, mock_db, org_id):

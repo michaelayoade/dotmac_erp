@@ -332,6 +332,7 @@ class ReconciliationEngineHelpers:
         )
 
         recon_svc = BankReconciliationService()
+        # Suggest-only: record a SUGGESTION, never a confirmed match.
         recon_svc.match_statement_line(
             db=ctx.db,
             organization_id=ctx.organization_id,
@@ -341,6 +342,7 @@ class ReconciliationEngineHelpers:
             force_match=True,
             source_type=source_type,
             source_id=source_id,
+            match_state="suggested",
         )
         ctx.matched_line_ids.add(line.line_id)
         if source_id:

@@ -506,9 +506,7 @@ class ARInvoiceService(ListResponseMixin):
                 invoice.invoice_id,
             )
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         fire_audit_event(
             db=db,
             organization_id=org_id,
@@ -755,9 +753,7 @@ class ARInvoiceService(ListResponseMixin):
                     )
                     db.add(line_tax)
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         return invoice
 
     @staticmethod
@@ -1001,9 +997,7 @@ class ARInvoiceService(ListResponseMixin):
                 getattr(invoice, "invoice_id", inv_id),
             )
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         return invoice
 
     @staticmethod
@@ -1074,9 +1068,7 @@ class ARInvoiceService(ListResponseMixin):
             user_id=user_id,
         )
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         return invoice
 
     @staticmethod
@@ -1174,9 +1166,7 @@ class ARInvoiceService(ListResponseMixin):
                 inv_id,
             )
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         return invoice
 
     @staticmethod
@@ -1302,9 +1292,7 @@ class ARInvoiceService(ListResponseMixin):
             reason=reason,
         )
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         return invoice
 
     @staticmethod
@@ -1384,9 +1372,7 @@ class ARInvoiceService(ListResponseMixin):
             reason=reason,
         )
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         return invoice
 
     @staticmethod
@@ -1464,9 +1450,7 @@ class ARInvoiceService(ListResponseMixin):
         else:
             invoice.status = InvoiceStatus.PARTIALLY_PAID
 
-        db.commit()
-        db.refresh(invoice)
-
+        db.flush()
         return invoice
 
     @staticmethod

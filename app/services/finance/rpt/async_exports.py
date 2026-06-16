@@ -18,6 +18,11 @@ from app.services.finance.rpt.report_instance import (
 from app.services.storage import get_storage
 
 
+# Result sets at or below this row count are exported inline (synchronous CSV
+# response); larger sets are queued to a background worker and the requester is
+# emailed a download link when ready.
+INLINE_EXPORT_ROW_THRESHOLD = 5000
+
 EXPORT_DEFINITIONS = {
     "GENERAL_LEDGER": {
         "download_base": "/finance/reports/general-ledger/exports",
@@ -33,6 +38,13 @@ EXPORT_DEFINITIONS = {
         "task": "process_gl_journals_export",
         "formats": {"CSV"},
     },
+    "GL_LEDGER": {
+        "download_base": "/finance/gl/ledger/exports",
+        "filename_prefix": "gl_ledger",
+        "label": "Ledger Transactions",
+        "task": "process_gl_ledger_export",
+        "formats": {"CSV"},
+    },
     "AR_INVOICES": {
         "download_base": "/finance/ar/invoices/exports",
         "filename_prefix": "ar_invoices",
@@ -45,6 +57,20 @@ EXPORT_DEFINITIONS = {
         "filename_prefix": "ar_receipts",
         "label": "AR Receipts",
         "task": "process_ar_receipts_export",
+        "formats": {"CSV"},
+    },
+    "AP_INVOICES": {
+        "download_base": "/finance/ap/invoices/exports",
+        "filename_prefix": "ap_invoices",
+        "label": "AP Invoices",
+        "task": "process_ap_invoices_export",
+        "formats": {"CSV"},
+    },
+    "AP_PAYMENTS": {
+        "download_base": "/finance/ap/payments/exports",
+        "filename_prefix": "ap_payments",
+        "label": "AP Payments",
+        "task": "process_ap_payments_export",
         "formats": {"CSV"},
     },
 }

@@ -19,6 +19,7 @@ from app.models.finance.audit.audit_log import AuditAction, AuditLog
 from app.models.finance.core_org.organization import Organization
 from app.models.person import Person
 from app.models.scheduler import ScheduledTask, ScheduleType
+from app.services.common import PaginationParams, paginate
 from app.services.formatters import format_datetime as _format_datetime
 
 from .common import (
@@ -124,7 +125,6 @@ class AdminOperationsMixin:
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
-        offset = (page - 1) * limit
         conditions = []
         if organization_id:
             conditions.append(AuditEvent.organization_id == organization_id)
@@ -165,18 +165,14 @@ class AdminOperationsMixin:
                 )
             except ValueError:
                 end_date_value = ""
-        total_count = (
-            db.scalar(select(func.count(AuditEvent.id)).where(*conditions)) or 0
+        stmt = (
+            select(AuditEvent)
+            .where(*conditions)
+            .order_by(AuditEvent.occurred_at.desc())
         )
-        events = list(
-            db.scalars(
-                select(AuditEvent)
-                .where(*conditions)
-                .order_by(AuditEvent.occurred_at.desc())
-                .limit(limit)
-                .offset(offset)
-            ).all()
-        )
+        result = paginate(db, stmt, PaginationParams.from_page(page, limit))
+        total_count = result.total
+        events = list(result.items)
         actor_ids = [
             str(event.actor_person_id)
             for event in events
@@ -274,7 +270,6 @@ class AdminOperationsMixin:
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
-        offset = (page - 1) * limit
         conditions = []
         search_value = search.strip() if search else ""
         if search_value:
@@ -290,18 +285,10 @@ class AdminOperationsMixin:
         )
         if status_flag is not None:
             conditions.append(ScheduledTask.enabled == status_flag)
-        total_count = (
-            db.scalar(select(func.count(ScheduledTask.id)).where(*conditions)) or 0
-        )
-        tasks = list(
-            db.scalars(
-                select(ScheduledTask)
-                .where(*conditions)
-                .order_by(ScheduledTask.name)
-                .limit(limit)
-                .offset(offset)
-            ).all()
-        )
+        stmt = select(ScheduledTask).where(*conditions).order_by(ScheduledTask.name)
+        result = paginate(db, stmt, PaginationParams.from_page(page, limit))
+        total_count = result.total
+        tasks = list(result.items)
         tasks_view = []
         for task in tasks:
             args_display = (
@@ -514,7 +501,6 @@ class AdminOperationsMixin:
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
-        offset = (page - 1) * limit
         conditions = []
         if organization_id:
             conditions.append(AuditLog.organization_id == organization_id)
@@ -537,18 +523,10 @@ class AdminOperationsMixin:
                     AuditLog.correlation_id.ilike(search_pattern),
                 )
             )
-        total_count = (
-            db.scalar(select(func.count(AuditLog.audit_id)).where(*conditions)) or 0
-        )
-        logs = list(
-            db.scalars(
-                select(AuditLog)
-                .where(*conditions)
-                .order_by(AuditLog.occurred_at.desc())
-                .limit(limit)
-                .offset(offset)
-            ).all()
-        )
+        stmt = select(AuditLog).where(*conditions).order_by(AuditLog.occurred_at.desc())
+        result = paginate(db, stmt, PaginationParams.from_page(page, limit))
+        total_count = result.total
+        logs = list(result.items)
         user_ids = [str(log.user_id) for log in logs if log.user_id]
         user_name_map = _resolve_person_name_map(
             db=db, person_ids=user_ids, organization_id=organization_id

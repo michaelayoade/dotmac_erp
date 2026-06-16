@@ -28,14 +28,17 @@ docker stop dotmac_erp_app
 docker start dotmac_erp_app
 
 # Step 3: Wait for health check
-echo "→ Waiting for health check..."
-for i in $(seq 1 60); do
+# Cold start with preload_app + 4 workers can exceed 60s on a larger release,
+# so give it up to 150s before treating it as a real failure.
+HEALTH_TIMEOUT=150
+echo "→ Waiting for health check (up to ${HEALTH_TIMEOUT}s)..."
+for i in $(seq 1 "$HEALTH_TIMEOUT"); do
     if curl -sf http://localhost:8003/health > /dev/null 2>&1; then
         echo "  App healthy after ${i}s"
         break
     fi
-    if [ "$i" -eq 60 ]; then
-        echo "  ERROR: App not healthy after 60s!"
+    if [ "$i" -eq "$HEALTH_TIMEOUT" ]; then
+        echo "  ERROR: App not healthy after ${HEALTH_TIMEOUT}s!"
         docker logs dotmac_erp_app --tail 20
         exit 1
     fi

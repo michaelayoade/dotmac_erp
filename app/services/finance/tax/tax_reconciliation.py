@@ -172,9 +172,7 @@ class TaxReconciliationService(ListResponseMixin):
         )
 
         db.add(reconciliation)
-        db.commit()
-        db.refresh(reconciliation)
-
+        db.flush()
         return reconciliation
 
     @staticmethod
@@ -214,9 +212,7 @@ class TaxReconciliationService(ListResponseMixin):
         reconciliation.reviewed_by_user_id = user_id
         reconciliation.reviewed_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(reconciliation)
-
+        db.flush()
         return reconciliation
 
     @staticmethod

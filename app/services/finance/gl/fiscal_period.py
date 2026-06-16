@@ -235,6 +235,27 @@ class FiscalPeriodService(ListResponseMixin):
                 detail=f"Cannot soft close period with status '{period.status.value}'",
             )
 
+        # Bank reconciliation closing-gate. Bug #13's reproduction exposed
+        # that the close service had zero pre-close validation: a period
+        # could be soft-closed with no bank reconciliations done for the
+        # month, producing GL totals that were never tied back to bank
+        # statements. ASCII-only error text (no em dashes etc.) so the
+        # message round-trips cleanly through ``RedirectResponse(url=...)``
+        # in the web-service catch path.
+        missing = FiscalPeriodService._unreconciled_bank_accounts(db, org_id, period)
+        if missing:
+            account_lines = "; ".join(f"{name} ({reason})" for name, reason in missing)
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot close {period.period_name}: "
+                    f"{len(missing)} active bank account(s) lack a completed "
+                    f"reconciliation covering this period -- "
+                    f"{account_lines}. Reconcile each account "
+                    f"(or reject/delete stale draft recs) before closing."
+                ),
+            )
+
         period.status = PeriodStatus.SOFT_CLOSED
         period.soft_closed_at = datetime.now(UTC)
         period.soft_closed_by_user_id = user_id
@@ -256,6 +277,74 @@ class FiscalPeriodService(ListResponseMixin):
             )
 
         return period
+
+    @staticmethod
+    def _unreconciled_bank_accounts(
+        db: Session,
+        organization_id: UUID,
+        period: FiscalPeriod,
+    ) -> list[tuple[str, str]]:
+        """Return active bank accounts that lack a covering reconciliation.
+
+        Returns a list of ``(account_name, reason)`` tuples. An empty list
+        means every active account is reconciled for the period and close
+        may proceed.
+
+        A reconciliation is considered "covering" iff:
+        - ``period_start <= period.start_date``
+        - ``period_end >= period.end_date``
+        - ``status`` in ``{pending_review, approved}`` (draft/rejected are
+          not considered complete)
+
+        Importing inside the function avoids dragging the banking module
+        into the GL service's import graph (would create a cycle —
+        banking already imports from GL).
+        """
+        from app.models.finance.banking.bank_account import (
+            BankAccount,
+            BankAccountStatus,
+        )
+        from app.models.finance.banking.bank_reconciliation import (
+            BankReconciliation,
+            ReconciliationStatus,
+        )
+
+        active_accounts_stmt = select(BankAccount).where(
+            BankAccount.organization_id == organization_id,
+            BankAccount.status == BankAccountStatus.active,
+        )
+        active_accounts = list(db.scalars(active_accounts_stmt).all())
+
+        accepted = {
+            ReconciliationStatus.pending_review,
+            ReconciliationStatus.approved,
+        }
+        missing: list[tuple[str, str]] = []
+
+        for account in active_accounts:
+            cover_stmt = select(BankReconciliation).where(
+                BankReconciliation.organization_id == organization_id,
+                BankReconciliation.bank_account_id == account.bank_account_id,
+                BankReconciliation.period_start <= period.start_date,
+                BankReconciliation.period_end >= period.end_date,
+            )
+            recs = list(db.scalars(cover_stmt).all())
+
+            if not recs:
+                missing.append((account.account_name, "no reconciliation"))
+                continue
+
+            statuses = {r.status for r in recs}
+            if not (statuses & accepted):
+                status_names = sorted(s.value for s in statuses)
+                missing.append(
+                    (
+                        account.account_name,
+                        f"only {','.join(status_names)} recs exist",
+                    )
+                )
+
+        return missing
 
     @staticmethod
     def hard_close_period(

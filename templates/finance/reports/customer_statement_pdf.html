@@ -1,0 +1,66 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Statement of Account — {{ org_name }}{% endblock %}
+{% block report_title %}Statement of Account{% endblock %}
+{% block report_meta %}
+<p class="meta-line">{{ customer.customer_name }} ({{ customer.customer_code }})</p>
+<p class="meta-line">As at {{ statement_date }}{% if is_consolidated %} · Consolidated across {{ family_count - 1 }} sub-account{{ 's' if (family_count - 1) != 1 else '' }}{% endif %}</p>
+{% endblock %}
+
+{% block report_body %}
+<!-- Aging summary -->
+<table class="summary-grid">
+  <tr>
+    <td style="width: 20%;"><p class="summary-label">Current</p><p class="summary-value text-emerald">{{ aging.current }}</p></td>
+    <td style="width: 20%;"><p class="summary-label">1–30 Days</p><p class="summary-value text-amber">{{ aging.d30 }}</p></td>
+    <td style="width: 20%;"><p class="summary-label">31–60 Days</p><p class="summary-value text-amber">{{ aging.d60 }}</p></td>
+    <td style="width: 20%;"><p class="summary-label">61–90 Days</p><p class="summary-value text-rose">{{ aging.d90 }}</p></td>
+    <td style="width: 20%;"><p class="summary-label">90+ Days</p><p class="summary-value text-rose">{{ aging.d90p }}</p></td>
+  </tr>
+</table>
+
+<p class="section-heading">Transactions</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Date</th>
+      <th style="width: 12%;">Type</th>
+      <th>Reference</th>
+      {% if is_consolidated %}<th style="width: 14%;">Sub-account</th>{% endif %}
+      <th class="num" style="width: 16%;">Charges</th>
+      <th class="num" style="width: 16%;">Credits</th>
+      <th class="num" style="width: 16%;">Balance</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for txn in transactions %}
+    <tr>
+      <td class="nowrap">{{ txn.date }}</td>
+      <td>{{ txn.type }}</td>
+      <td>{{ txn.reference }}</td>
+      {% if is_consolidated %}<td>{{ txn.sub_account }}</td>{% endif %}
+      <td class="num">{{ txn.charge }}</td>
+      <td class="num">{{ txn.credit }}</td>
+      <td class="num">{{ txn.balance }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="{{ 7 if is_consolidated else 6 }}">No transactions for this account.</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="{{ 4 if is_consolidated else 3 }}" class="num"><strong>Totals</strong></td>
+      <td class="num"><strong>{{ total_charges }}</strong></td>
+      <td class="num"><strong>{{ total_credits }}</strong></td>
+      <td class="num"><strong>{{ closing_balance }}</strong></td>
+    </tr>
+  </tfoot>
+</table>
+
+<table class="summary-grid" style="margin-top: 12px;">
+  <tr>
+    <td style="width: 70%;"></td>
+    <td style="width: 30%;"><p class="summary-label">Closing Balance</p><p class="summary-value">{{ closing_balance }}</p></td>
+  </tr>
+</table>
+{% endblock %}

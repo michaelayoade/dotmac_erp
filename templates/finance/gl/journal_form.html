@@ -45,9 +45,9 @@
                         <label class="form-label">Fiscal Period <span class="text-rose-500">*</span></label>
                         <select aria-label="Fiscal Period" name="fiscal_period_id" class="form-select form-input" required>
                             <option value="">Select period</option>
-                            {% set selected_period = form_data.fiscal_period_id if form_data else '' %}
-                            {% for period in fiscal_periods %}
-                            <option value="{{ period.period_id }}" {% if selected_period == period.period_id|string %}selected{% endif %}>
+                            {% set selected_period = form_data.fiscal_period_id if form_data else (entry.fiscal_period_id if entry else '') %}
+                            {% for period in periods %}
+                            <option value="{{ period.fiscal_period_id }}" {% if selected_period == period.fiscal_period_id|string %}selected{% endif %}>
                                 {{ period.period_name }} ({{ period.start_date }} - {{ period.end_date }})
                             </option>
                             {% endfor %}
@@ -209,11 +209,19 @@ function journalForm() {
             initialLines = [];
         }
     } else if (existingLines && existingLines.length > 0) {
+        // debit_amount/credit_amount may arrive as Number (current view layer)
+        // or String (legacy formatted "₦100.00"); handle both.
+        const toAmount = (v) => {
+            if (v == null) return 0;
+            if (typeof v === 'number') return v;
+            const cleaned = String(v).replace(/[^0-9.-]/g, '');
+            return parseFloat(cleaned) || 0;
+        };
         initialLines = existingLines.map(line => ({
             account_id: line.account_id || '',
             description: line.description || '',
-            debit: parseFloat(line.debit_amount?.replace(/[^0-9.-]/g, '') || '0') || 0,
-            credit: parseFloat(line.credit_amount?.replace(/[^0-9.-]/g, '') || '0') || 0
+            debit: toAmount(line.debit_amount),
+            credit: toAmount(line.credit_amount)
         }));
     }
 

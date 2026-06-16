@@ -141,9 +141,7 @@ class ItemCategoryService(ListResponseMixin):
         )
 
         db.add(category)
-        db.commit()
-        db.refresh(category)
-
+        db.flush()
         return category
 
     @staticmethod
@@ -184,9 +182,7 @@ class ItemCategoryService(ListResponseMixin):
             if hasattr(category, key):
                 setattr(category, key, value)
 
-        db.commit()
-        db.refresh(category)
-
+        db.flush()
         return category
 
     @staticmethod
@@ -245,9 +241,7 @@ class ItemCategoryService(ListResponseMixin):
             )
 
         category.is_active = False
-        db.commit()
-        db.refresh(category)
-
+        db.flush()
         return category
 
     @staticmethod
@@ -419,9 +413,7 @@ class ItemService(ListResponseMixin):
         )
 
         db.add(item)
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -462,9 +454,7 @@ class ItemService(ListResponseMixin):
             if hasattr(item, key):
                 setattr(item, key, value)
 
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -506,9 +496,7 @@ class ItemService(ListResponseMixin):
         if new_standard_cost is not None:
             item.standard_cost = new_standard_cost
 
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod
@@ -526,9 +514,7 @@ class ItemService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Item not found")
 
         item.is_active = False
-        db.commit()
-        db.refresh(item)
-
+        db.flush()
         return item
 
     @staticmethod

@@ -1,7 +1,7 @@
 {% extends "finance/base_finance.html" %}
 {% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, filter_select_field, list_header_actions, action_buttons, sortable_th, icon_svg %}
 
-{% block page_title %}AP Invoices{% endblock %}
+{% block page_title %}{{ list_title | default("AP Invoices") }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -9,16 +9,16 @@
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Finance</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Accounts Payable</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">AP Invoices</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ list_title | default("AP Invoices") }}</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 {{ list_header_actions(
-    export_url="/finance/ap/invoices/export",
-    new_url="/finance/ap/invoices/new",
-    new_label="Create Invoice"
+    export_url=(export_url | default("/finance/ap/invoices/export")),
+    new_url=(new_url | default("/finance/ap/invoices/new")),
+    new_label=(new_label | default("Create Invoice"))
 ) }}
 {% endblock %}
 
@@ -98,7 +98,7 @@
                 </article>
                 {% else %}
                 <div class="py-8">
-                    {{ empty_state('No invoices found', 'Create your first supplier invoice to get started.', 'document', 'Create Invoice', '/finance/ap/invoices/new') }}
+                    {{ empty_state((empty_title | default('No invoices found')), (empty_desc | default('Create your first supplier invoice to get started.')), 'document', (new_label | default('Create Invoice')), (new_url | default('/finance/ap/invoices/new'))) }}
                 </div>
                 {% endfor %}
             </div>
@@ -162,11 +162,11 @@
                         <tr>
                             <td colspan="11" class="py-12">
                                 {{ empty_state(
-                                    'No invoices found',
-                                    'Create your first supplier invoice to get started' if not (search or status or supplier_id or start_date or end_date) else 'Try adjusting your search or filter criteria',
+                                    (empty_title | default('No invoices found')),
+                                    (empty_desc | default('Create your first supplier invoice to get started')) if not (search or status or supplier_id or start_date or end_date) else 'Try adjusting your search or filter criteria',
                                     'document',
-                                    'Create Invoice' if not (search or status or supplier_id or start_date or end_date) else none,
-                                    '/finance/ap/invoices/new' if not (search or status or supplier_id or start_date or end_date) else none
+                                    (new_label | default('Create Invoice')) if not (search or status or supplier_id or start_date or end_date) else none,
+                                    (new_url | default('/finance/ap/invoices/new')) if not (search or status or supplier_id or start_date or end_date) else none
                                 ) }}
                             </td>
                         </tr>

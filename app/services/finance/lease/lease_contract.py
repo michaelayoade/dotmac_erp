@@ -231,9 +231,7 @@ class LeaseContractService(ListResponseMixin):
         )
 
         db.add(contract)
-        db.commit()
-        db.refresh(contract)
-
+        db.flush()
         return contract
 
     @staticmethod
@@ -279,9 +277,7 @@ class LeaseContractService(ListResponseMixin):
         contract.approved_by_user_id = user_id
         contract.approved_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(contract)
-
+        db.flush()
         return contract
 
     @staticmethod
@@ -338,8 +334,7 @@ class LeaseContractService(ListResponseMixin):
             LeaseClassification.LOW_VALUE,
         ]:
             contract.status = LeaseStatus.ACTIVE
-            db.commit()
-            db.refresh(contract)
+            db.flush()
             return (contract, None, None)
 
         # Calculate initial liability
@@ -402,8 +397,7 @@ class LeaseContractService(ListResponseMixin):
         # Update contract status
         contract.status = LeaseStatus.ACTIVE
 
-        db.commit()
-        db.refresh(contract)
+        db.flush()
         db.refresh(liability)
         db.refresh(asset)
 
@@ -446,9 +440,7 @@ class LeaseContractService(ListResponseMixin):
         contract.status = LeaseStatus.TERMINATED
         contract.end_date = termination_date
 
-        db.commit()
-        db.refresh(contract)
-
+        db.flush()
         return contract
 
     @staticmethod

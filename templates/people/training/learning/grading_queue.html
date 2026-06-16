@@ -19,6 +19,7 @@
         </select>
     {% endcall %}
 
+    <div id="results-container">
     {% if answers %}
     <div class="space-y-4">
         {% for answer in answers %}
@@ -58,5 +59,6 @@
     {{ empty_state("No pending reviews", "Essay and short-answer submissions that need grading will appear here.", "clipboard-check") }}
     {% endif %}
     {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
+    </div>
 </div>
 {% endblock %}

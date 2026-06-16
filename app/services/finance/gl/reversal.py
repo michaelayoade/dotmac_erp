@@ -238,9 +238,7 @@ class ReversalService(ListResponseMixin):
             db.refresh(reversal)
             db.refresh(original)
         else:
-            db.commit()
-            db.refresh(reversal)
-
+            db.flush()
         return ReversalResult(
             success=True,
             reversal_journal_id=reversal.journal_entry_id,

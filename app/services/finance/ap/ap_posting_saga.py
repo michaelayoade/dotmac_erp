@@ -33,6 +33,7 @@ from app.models.finance.ap.supplier_invoice import (
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.services.common import coerce_uuid
+from app.services.finance.common.source_types import AP_INVOICE_SOURCE
 from app.services.finance.ap.posting.helpers import determine_debit_account
 from app.services.finance.gl.journal import (
     JournalInput,
@@ -319,7 +320,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
             exchange_rate_type_id=invoice.exchange_rate_type_id,
             lines=journal_lines,
             source_module="AP",
-            source_document_type="SUPPLIER_INVOICE",
+            source_document_type=AP_INVOICE_SOURCE,
             source_document_id=invoice_id,
             correlation_id=invoice.correlation_id,
         )

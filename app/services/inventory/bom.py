@@ -155,9 +155,7 @@ class BOMService(ListResponseMixin):
         )
 
         db.add(bom)
-        db.commit()
-        db.refresh(bom)
-
+        db.flush()
         return bom
 
     @staticmethod
@@ -214,9 +212,7 @@ class BOMService(ListResponseMixin):
         )
 
         db.add(component)
-        db.commit()
-        db.refresh(component)
-
+        db.flush()
         return component
 
     @staticmethod

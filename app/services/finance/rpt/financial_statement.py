@@ -162,9 +162,7 @@ class FinancialStatementService(ListResponseMixin):
         )
 
         db.add(line)
-        db.commit()
-        db.refresh(line)
-
+        db.flush()
         return line
 
     @staticmethod
@@ -212,9 +210,7 @@ class FinancialStatementService(ListResponseMixin):
         if formatting is not None:
             line.formatting = formatting
 
-        db.commit()
-        db.refresh(line)
-
+        db.flush()
         return line
 
     @staticmethod
@@ -257,9 +253,7 @@ class FinancialStatementService(ListResponseMixin):
         line.account_categories = account_categories
         line.exclude_account_codes = exclude_account_codes
 
-        db.commit()
-        db.refresh(line)
-
+        db.flush()
         return line
 
     @staticmethod
@@ -294,7 +288,7 @@ class FinancialStatementService(ListResponseMixin):
                 line.sequence_number = new_sequence
                 updated_lines.append(line)
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         for line in updated_lines:
             db.refresh(line)
@@ -392,9 +386,7 @@ class FinancialStatementService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Statement line not found")
 
         line.is_active = False
-        db.commit()
-        db.refresh(line)
-
+        db.flush()
         return line
 
     @staticmethod
@@ -471,7 +463,7 @@ class FinancialStatementService(ListResponseMixin):
             if source.parent_line_id and source.parent_line_id in id_map:
                 created_lines[i].parent_line_id = id_map[source.parent_line_id]
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         for line in created_lines:
             db.refresh(line)

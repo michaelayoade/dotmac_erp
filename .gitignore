@@ -85,6 +85,18 @@ tmp_asset_*.sql
 *.png
 !static/img/illustrations/*.png
 
+# Scratch / debug dumps (test output, profiling, hang traces, HTML snapshots)
+# Keep these out of the tracked tree — they are local working artifacts.
+/ans
+importtime.txt
+*-hang.txt
+pytest.txt
+pytest-*.txt
+pytest-one.txt
+*snapshot.md
+go-live-checklist.html
+ui-audit-report.html
+
 # OS
 .DS_Store
 Thumbs.db
@@ -122,3 +134,7 @@ backups/
 .worktrees/
 .agent-run.sh
 .codex
+
+# Secrets
+firebase-service-account.json
+*service-account*.json

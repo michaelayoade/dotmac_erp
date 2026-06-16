@@ -31,6 +31,7 @@ from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
+    SupplierInvoiceType,
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
@@ -100,6 +101,7 @@ class InvoiceWebService:
         limit: int = 50,
         sort: str | None = None,
         sort_dir: str | None = None,
+        invoice_type: SupplierInvoiceType | None = None,
     ) -> dict:
         """Get context for invoice listing page."""
         logger.debug(
@@ -125,6 +127,9 @@ class InvoiceWebService:
             start_date=start_date,
             end_date=end_date,
         )
+
+        if invoice_type is not None:
+            base_stmt = base_stmt.where(SupplierInvoice.invoice_type == invoice_type)
 
         total_count = (
             db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0
@@ -902,6 +907,73 @@ class InvoiceWebService:
                             supplier_obj
                         )
 
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_form.html", context
+        )
+
+    def list_credit_notes_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        page: int,
+        db: Session,
+        limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
+    ) -> HTMLResponse:
+        """Render the supplier credit notes list (AP credit notes)."""
+        context = base_context(request, auth, "Supplier Credit Notes", "ap")
+        context.update(
+            self.list_invoices_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                supplier_id=supplier_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+                limit=limit,
+                sort=sort,
+                sort_dir=sort_dir,
+                invoice_type=SupplierInvoiceType.CREDIT_NOTE,
+            )
+        )
+        context.update(
+            {
+                "list_title": "Supplier Credit Notes",
+                "new_url": "/finance/ap/credit-notes/new",
+                "new_label": "New Credit Note",
+                "export_url": "/finance/ap/invoices/export",
+                "empty_title": "No supplier credit notes",
+                "empty_desc": "Raise a supplier credit note to record a purchase return.",
+            }
+        )
+        return templates.TemplateResponse(request, "finance/ap/invoices.html", context)
+
+    def credit_note_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        supplier_id: str | None,
+        db: Session,
+    ) -> HTMLResponse:
+        """Render the new supplier credit note form (reuses the invoice form)."""
+        context = base_context(request, auth, "New Supplier Credit Note", "ap")
+        context.update(
+            self.invoice_form_context(
+                db,
+                str(auth.organization_id),
+                supplier_id=supplier_id,
+            )
+        )
+        context["is_credit_note"] = True
+        context["default_invoice_type"] = SupplierInvoiceType.CREDIT_NOTE.value
         return templates.TemplateResponse(
             request, "finance/ap/invoice_form.html", context
         )

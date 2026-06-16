@@ -31,7 +31,7 @@ from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntrySt
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.salary_structure import PayrollFrequency, SalaryStructure
-from app.services.common import PaginationParams, coerce_uuid
+from app.services.common import PaginationParams, coerce_uuid, paginate
 from app.services.finance.platform.org_context import org_context_service
 from app.services.people.hr import EmploymentTypeFilters, OrganizationService
 from app.services.people.payroll.eligibility import payroll_employee_eligibility_clause
@@ -214,33 +214,24 @@ class RunWebService:
         """Render payroll runs list page."""
         org_id = coerce_uuid(auth.organization_id)
         per_page = DEFAULT_PAGE_SIZE
-        offset = (page - 1) * per_page
-
-        conditions = [PayrollEntry.organization_id == org_id]
-        query = select(PayrollEntry).where(*conditions)
+        query = select(PayrollEntry).where(PayrollEntry.organization_id == org_id)
 
         status_enum = parse_entry_status(status)
         if status_enum:
-            conditions.append(PayrollEntry.status == status_enum)
             query = query.where(PayrollEntry.status == status_enum)
 
         if year:
-            conditions.append(PayrollEntry.payroll_year == year)
             query = query.where(PayrollEntry.payroll_year == year)
 
         if month:
-            conditions.append(PayrollEntry.payroll_month == month)
             query = query.where(PayrollEntry.payroll_month == month)
 
-        total = (
-            db.scalar(select(func.count(PayrollEntry.entry_id)).where(*conditions)) or 0
+        result = paginate(
+            db,
+            query.order_by(PayrollEntry.created_at.desc()),
+            PaginationParams.from_page(page, per_page),
         )
-        entries = db.scalars(
-            query.order_by(PayrollEntry.created_at.desc())
-            .offset(offset)
-            .limit(per_page)
-        ).all()
-        total_pages = (total + per_page - 1) // per_page
+        entries = result.items
 
         # Get statistics
         draft_count = (
@@ -287,10 +278,10 @@ class RunWebService:
                 "year": year,
                 "month": month,
                 "page": page,
-                "total_pages": total_pages,
-                "total": total,
-                "has_prev": page > 1,
-                "has_next": page < total_pages,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
                 "statuses": ENTRY_STATUSES,
                 "draft_count": draft_count,
                 "pending_count": pending_count,

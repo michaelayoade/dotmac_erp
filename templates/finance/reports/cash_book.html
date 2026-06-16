@@ -1,0 +1,172 @@
+{% extends "finance/base_finance.html" %}
+
+{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
+{% block page_title %}Cash Book{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Cash Book</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/reports/cash-book/export?format=xlsx&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export Excel
+</a>
+<a href="/finance/reports/cash-book/export?format=pdf&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export PDF
+</a>
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            {{ period_shortcuts(mode="range") }}
+            <div class="min-w-[160px]">
+                <label class="form-label">From</label>
+                <input aria-label="From date" type="date" name="start_date" value="{{ start_date_iso }}" class="form-input">
+            </div>
+            <div class="min-w-[160px]">
+                <label class="form-label">To</label>
+                <input aria-label="To date" type="date" name="end_date" value="{{ end_date_iso }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
+                Refresh
+            </button>
+        </form>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="grid gap-4 sm:grid-cols-4">
+        <div class="rounded-xl p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Opening</p>
+            <p class="text-lg font-bold font-mono tabular-nums mt-1 text-slate-900 dark:text-white">{{ total_opening }}</p>
+        </div>
+        <div class="rounded-xl p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Inflows</p>
+            <p class="text-lg font-bold font-mono tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">{{ total_inflows }}</p>
+        </div>
+        <div class="rounded-xl p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Outflows</p>
+            <p class="text-lg font-bold font-mono tabular-nums mt-1 text-rose-600 dark:text-rose-400">{{ total_outflows }}</p>
+        </div>
+        <div class="rounded-xl p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Closing</p>
+            <p class="text-lg font-bold font-mono tabular-nums mt-1 text-blue-600 dark:text-blue-400">{{ total_closing }}</p>
+        </div>
+    </div>
+
+    <!-- Per-account summary -->
+    <div class="card p-6 print:shadow-none print:border-0">
+        {% set doc_title = "Cash Book" %}
+        {% set doc_number = start_date ~ " — " ~ end_date %}
+        {% include "partials/_document_header.html" %}
+        <div class="text-center mb-4 print:mb-2">
+            <p class="text-slate-500 dark:text-slate-400">{{ start_date }} to {{ end_date }} · {{ account_count }} cash/bank account(s) · {{ row_count }} movement(s)</p>
+        </div>
+
+        <div class="mb-6 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 print:hidden">
+            <p class="text-sm text-blue-700 dark:text-blue-300">{{ basis_note }}</p>
+        </div>
+
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Balances by account</h3>
+        <div class="table-container mb-8">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Account</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Opening</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Inflows</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Outflows</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Closing</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in accounts_summary %}
+                    <tr class="border-t border-slate-100 dark:border-slate-800">
+                        <td class="py-2 px-4 font-mono tabular-nums text-xs">{{ s.account }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums">{{ s.opening }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{{ s.inflows }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{{ s.outflows }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums">{{ s.closing }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No cash or bank accounts", "No GL accounts are categorised as Bank or Cash.") }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if accounts_summary %}
+                <tfoot>
+                    <tr class="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 font-bold">
+                        <td class="py-3 px-4">TOTAL</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums">{{ total_opening }}</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{{ total_inflows }}</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{{ total_outflows }}</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums">{{ total_closing }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Detail</h3>
+        <div class="table-container">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Account</th>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Journal #</th>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Inflow</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Outflow</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr class="border-t border-slate-100 dark:border-slate-800">
+                        <td class="py-2 px-4 text-slate-500 whitespace-nowrap">{{ row.date }}</td>
+                        <td class="py-2 px-4 font-mono tabular-nums text-xs">{{ row.account }}</td>
+                        <td class="py-2 px-4 font-mono tabular-nums text-xs">{{ row.journal_number }}</td>
+                        <td class="py-2 px-4">{{ row.description }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{{ row.inflow }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{{ row.outflow }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No cash movements", "No postings to cash or bank accounts in the selected date range.") }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if rows %}
+                <tfoot>
+                    <tr class="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 font-bold">
+                        <td class="py-3 px-4" colspan="4">TOTAL</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{{ total_inflows }}</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{{ total_outflows }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

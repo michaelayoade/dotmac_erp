@@ -89,7 +89,7 @@ def project_time_entries(
         end_date=end_date_parsed,
         is_billable=is_billable,
         billing_status=billing_status_enum,
-        params=PaginationParams(offset=(page - 1) * per_page, limit=per_page),
+        params=PaginationParams.from_page(page, per_page),
     )
 
     time_summary = services["time"].get_project_time_summary(project.project_id)
@@ -114,9 +114,7 @@ def project_time_entries(
         "total": result.total,
         "page": page,
         "per_page": per_page,
-        "total_pages": (result.total + per_page - 1) // per_page
-        if result.total > 0
-        else 1,
+        "total_pages": result.total_pages,
         "time_summary": time_summary,
         "tasks": tasks,
         "employees": employees,

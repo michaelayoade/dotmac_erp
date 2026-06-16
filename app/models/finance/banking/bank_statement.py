@@ -453,6 +453,25 @@ class BankStatementLineMatch(Base):
         comment="PK of the matched source document",
     )
 
+    # Confirmation state (suggest-only model): only 'confirmed' matches set
+    # BankStatementLine.is_matched and count toward a reconciliation. The
+    # matcher/engine write 'suggested'; a human confirms in the workspace.
+    match_state: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default="confirmed",
+        default="confirmed",
+        comment="suggested | confirmed",
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    confirmed_by: Mapped[UUID | None] = mapped_column(
+        SAUUID(as_uuid=True),
+        nullable=True,
+    )
+
     # Relationships
     statement_line: Mapped["BankStatementLine"] = relationship(
         "BankStatementLine",

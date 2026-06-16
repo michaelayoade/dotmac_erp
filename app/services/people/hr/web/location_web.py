@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_org.location import LocationType
-from app.services.common import PaginationParams, coerce_uuid
+from app.services.common import PaginationParams, coerce_uuid, pagination_context
 from app.services.people.hr import OrganizationService
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE
 from app.templates import templates
@@ -67,25 +67,19 @@ class LocationWebService:
         svc = OrganizationService(db, org_id)
 
         limit = DEFAULT_PAGE_SIZE
-        offset = (page - 1) * limit
         result = svc.list_locations(
             search=search,
-            pagination=PaginationParams(offset=offset, limit=limit),
+            pagination=PaginationParams.from_page(page, limit),
         )
-
-        total_pages = (result.total + limit - 1) // limit if result.total else 1
 
         context = {
             **base_context(request, auth, "Branches", "locations"),
             "locations": result.items,
             "search": search or "",
-            "page": page,
-            "total_pages": total_pages,
-            "total_count": result.total,
             "total": result.total,
-            "limit": limit,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
+            "has_prev": result.has_prev,
+            "has_next": result.has_next,
+            **pagination_context(result),
         }
         return templates.TemplateResponse(
             request,

@@ -95,7 +95,9 @@ def ensure_versions_match() -> str:
     versions = current_versions()
     unique = sorted(set(versions.values()))
     if len(unique) != 1:
-        details = "\n".join(f"  {path}: {version}" for path, version in versions.items())
+        details = "\n".join(
+            f"  {path}: {version}" for path, version in versions.items()
+        )
         raise RuntimeError(f"Version files are out of sync:\n{details}")
     return unique[0]
 

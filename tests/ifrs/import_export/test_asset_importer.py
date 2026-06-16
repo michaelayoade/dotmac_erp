@@ -59,9 +59,7 @@ def test_asset_importer_generates_sequence_number_ignoring_file_value(
     assert asset.asset_name == "Workstation"
 
 
-def test_asset_importer_duplicate_check_uses_asset_fingerprint(
-    import_config, mock_db
-):
+def test_asset_importer_duplicate_check_uses_asset_fingerprint(import_config, mock_db):
     existing = SimpleNamespace(
         serial_number="8CC9491MB2",
         asset_name="Workstation",
@@ -229,7 +227,7 @@ def test_asset_importer_resolve_department_name_is_case_insensitive(
     department_id = uuid4()
     importer._department_lookup_loaded = True
     importer._department_by_normalized_name = {
-        "human resources": [(department_id, "Human Resources")]
+        "human resources": [(department_id, "Human Resources", "HR")]
     }
 
     resolved = importer._resolve_department_id(department_name="  HUMAN   resources ")
@@ -241,8 +239,8 @@ def test_asset_importer_department_name_suggests_closest_match(import_config, mo
     importer = _make_importer(mock_db, import_config)
     importer._department_lookup_loaded = True
     importer._department_by_normalized_name = {
-        "admin": [(uuid4(), "Admin")],
-        "finance": [(uuid4(), "Finance")],
+        "admin": [(uuid4(), "Admin", "ADMIN")],
+        "finance": [(uuid4(), "Finance", "FIN")],
     }
 
     try:
@@ -261,8 +259,8 @@ def test_asset_importer_department_name_rejects_ambiguous_match(import_config, m
     importer._department_lookup_loaded = True
     importer._department_by_normalized_name = {
         "finance and admin": [
-            (uuid4(), "Finance & Admin"),
-            (uuid4(), "Finance and Admin"),
+            (uuid4(), "Finance & Admin", "FINADMIN"),
+            (uuid4(), "Finance and Admin", "FIN-ADMIN"),
         ]
     }
 
@@ -274,6 +272,60 @@ def test_asset_importer_department_name_rejects_ambiguous_match(import_config, m
         raise AssertionError("Expected ValueError for ambiguous department")
 
     assert 'Ambiguous department "Finance and Admin"' in message
+
+
+def test_asset_importer_department_name_accepts_exact_duplicate_names(
+    import_config, mock_db
+):
+    importer = _make_importer(mock_db, import_config)
+    kept_department_id = uuid4()
+    duplicate_department_id = uuid4()
+    importer._department_lookup_loaded = True
+    importer._department_by_normalized_name = {
+        "facility maintenance": [
+            (kept_department_id, "Facility Maintenance", "FAC"),
+            (duplicate_department_id, "Facility Maintenance", "FAC-2"),
+        ]
+    }
+
+    resolved = importer._resolve_department_id(department_name="Facility Maintenance")
+
+    assert resolved == kept_department_id
+
+
+def test_asset_importer_resolve_category_code(import_config, mock_db):
+    importer = _make_importer(mock_db, import_config)
+    category_id = uuid4()
+    importer._category_importer._category_lookup_loaded = True
+    importer._category_importer._category_by_code = {
+        "ict": (category_id, "ICT Equipment", "ICT")
+    }
+
+    resolved = importer._category_importer.resolve_category_id(category_code="ict")
+
+    assert resolved == category_id
+
+
+def test_asset_importer_category_name_rejects_ambiguous_match(import_config, mock_db):
+    importer = _make_importer(mock_db, import_config)
+    importer._category_importer._category_lookup_loaded = True
+    importer._category_importer._category_by_normalized_name = {
+        "ict equipment": [
+            (uuid4(), "ICT Equipment", "ICT"),
+            (uuid4(), "ICT Equipment", "IT-EQUIP"),
+        ]
+    }
+
+    try:
+        importer._category_importer.resolve_category_id(category_name="ICT Equipment")
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected ValueError for ambiguous asset category")
+
+    assert 'Ambiguous asset category "ICT Equipment"' in message
+    assert "ICT" in message
+    assert "IT-EQUIP" in message
 
 
 def test_asset_importer_resolve_employee_by_email_and_department(

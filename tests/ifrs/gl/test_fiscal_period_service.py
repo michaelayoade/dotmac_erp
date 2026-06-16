@@ -209,6 +209,181 @@ class TestSoftClosePeriod:
         assert exc.value.status_code == 400
 
 
+class TestBankReconciliationGate:
+    """Tests for the bank-reconciliation closing gate (Bug #13 follow-up).
+
+    Why this exists: a period was once soft-closed without any bank
+    reconciliations because the close service had zero pre-close
+    validation. The gate refuses close if any active bank account lacks
+    a covering, finalised (pending_review / approved) reconciliation.
+    """
+
+    def _make_account(self, org_id, name="Test Bank"):
+        from types import SimpleNamespace
+        from uuid import uuid4
+
+        from app.models.finance.banking.bank_account import BankAccountStatus
+
+        return SimpleNamespace(
+            bank_account_id=uuid4(),
+            organization_id=org_id,
+            account_name=name,
+            status=BankAccountStatus.active,
+        )
+
+    def _make_rec(self, account, period, status):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            bank_account_id=account.bank_account_id,
+            organization_id=account.organization_id,
+            period_start=period.start_date,
+            period_end=period.end_date,
+            status=status,
+        )
+
+    def _wire_scalars(self, mock_db, accounts, rec_map):
+        """Make ``db.scalars(stmt).all()`` return the right rows.
+
+        ``rec_map`` is ``{bank_account_id: [reconciliation, ...]}``. The
+        first scalars() call (in the gate) returns accounts; subsequent
+        calls return recs by account_id. We sniff which is which by
+        inspecting the SELECT's first FROM table — but it's easier and
+        more reliable to use side_effect with positional ordering.
+        """
+        from unittest.mock import MagicMock
+
+        from app.models.finance.banking.bank_account import BankAccount
+
+        def _scalars_side_effect(stmt):
+            sm = MagicMock()
+            # ORM SELECTs expose their first entity on .column_descriptions
+            cols = stmt.column_descriptions
+            entity = cols[0]["entity"] if cols else None
+            if entity is BankAccount:
+                sm.all.return_value = accounts
+            else:
+                # BankReconciliation lookup — find the bank_account_id in
+                # the compiled where clause.
+                params = stmt.compile().params
+                acc_id = params.get("bank_account_id_1") or params.get("param_1")
+                # Fallback: just look at the in-flight where clauses.
+                if not acc_id:
+                    for clause in stmt.whereclause.clauses:
+                        if "bank_account_id" in str(clause):
+                            acc_id = clause.right.value
+                            break
+                sm.all.return_value = rec_map.get(acc_id, [])
+            return sm
+
+        mock_db.scalars.side_effect = _scalars_side_effect
+
+    def test_soft_close_blocked_when_no_rec_exists(
+        self, service, mock_db, org_id, user_id
+    ):
+        """Period close fails with 400 if an active account has no rec."""
+        from fastapi import HTTPException
+
+        period = MockFiscalPeriod(
+            organization_id=org_id,
+            status=PeriodStatus.OPEN,
+            start_date=date(2025, 2, 1),
+            end_date=date(2025, 2, 28),
+            period_name="February 2025",
+        )
+        mock_db.get.return_value = period
+
+        acct = self._make_account(org_id, name="Unreconciled Bank")
+        self._wire_scalars(mock_db, [acct], rec_map={})
+
+        with pytest.raises(HTTPException) as exc:
+            service.soft_close_period(mock_db, org_id, period.fiscal_period_id, user_id)
+
+        assert exc.value.status_code == 400
+        assert "February 2025" in exc.value.detail
+        assert "Unreconciled Bank" in exc.value.detail
+        assert "no reconciliation" in exc.value.detail
+
+    def test_soft_close_blocked_when_only_draft_rec(
+        self, service, mock_db, org_id, user_id
+    ):
+        """Draft / rejected recs do not satisfy the gate."""
+        from fastapi import HTTPException
+
+        from app.models.finance.banking.bank_reconciliation import (
+            ReconciliationStatus,
+        )
+
+        period = MockFiscalPeriod(
+            organization_id=org_id,
+            status=PeriodStatus.OPEN,
+            start_date=date(2025, 2, 1),
+            end_date=date(2025, 2, 28),
+        )
+        mock_db.get.return_value = period
+
+        acct = self._make_account(org_id, name="Draft Only")
+        draft_rec = self._make_rec(acct, period, ReconciliationStatus.draft)
+        rejected_rec = self._make_rec(acct, period, ReconciliationStatus.rejected)
+        self._wire_scalars(
+            mock_db,
+            [acct],
+            rec_map={acct.bank_account_id: [draft_rec, rejected_rec]},
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            service.soft_close_period(mock_db, org_id, period.fiscal_period_id, user_id)
+
+        assert exc.value.status_code == 400
+        assert "Draft Only" in exc.value.detail
+        assert "draft" in exc.value.detail
+        assert "rejected" in exc.value.detail
+
+    def test_soft_close_passes_when_pending_review_rec_present(
+        self, service, mock_db, org_id, user_id
+    ):
+        """A pending_review rec satisfies the gate (workflow default)."""
+        from app.models.finance.banking.bank_reconciliation import (
+            ReconciliationStatus,
+        )
+
+        period = MockFiscalPeriod(
+            organization_id=org_id,
+            status=PeriodStatus.OPEN,
+            start_date=date(2025, 2, 1),
+            end_date=date(2025, 2, 28),
+        )
+        mock_db.get.return_value = period
+
+        acct = self._make_account(org_id)
+        rec = self._make_rec(acct, period, ReconciliationStatus.pending_review)
+        self._wire_scalars(mock_db, [acct], rec_map={acct.bank_account_id: [rec]})
+
+        result = service.soft_close_period(
+            mock_db, org_id, period.fiscal_period_id, user_id
+        )
+
+        assert result.status == PeriodStatus.SOFT_CLOSED
+
+    def test_soft_close_passes_with_no_active_bank_accounts(
+        self, service, mock_db, org_id, user_id
+    ):
+        """If the org has no active bank accounts, the gate doesn't fire.
+
+        New orgs / orgs that closed all their banks must still be able to
+        close their periods.
+        """
+        period = MockFiscalPeriod(organization_id=org_id, status=PeriodStatus.OPEN)
+        mock_db.get.return_value = period
+        self._wire_scalars(mock_db, [], rec_map={})
+
+        result = service.soft_close_period(
+            mock_db, org_id, period.fiscal_period_id, user_id
+        )
+
+        assert result.status == PeriodStatus.SOFT_CLOSED
+
+
 class TestHardClosePeriod:
     """Tests for hard_close_period method."""
 

@@ -74,7 +74,9 @@ class FixedAssetGLReconciliationRun(Base):
     )
     summary_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
-    created_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -110,7 +112,9 @@ class FixedAssetGLReconciliationException(Base):
         ForeignKey("fa.gl_reconciliation_run.run_id", ondelete="CASCADE"),
         nullable=False,
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="OPEN")
     exception_type: Mapped[str] = mapped_column(String(50), nullable=False)
 

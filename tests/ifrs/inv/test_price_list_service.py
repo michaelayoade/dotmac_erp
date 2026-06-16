@@ -200,8 +200,7 @@ class TestCreatePriceList:
         PriceListService.create_price_list(mock_db, org_id, input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_clears_other_defaults_when_setting_default(self, mock_db, org_id):
         """Should clear other default price lists when setting new default."""
@@ -297,7 +296,7 @@ class TestUpdatePriceList:
             {"price_list_name": "Updated Name", "priority": 10},
         )
 
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
         assert mock_price_list.price_list_name == "Updated Name"
         assert mock_price_list.priority == 10
 
@@ -380,7 +379,7 @@ class TestAddItemPrice:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_updates_existing_item_price(
         self, mock_db, org_id, mock_price_list, mock_item
@@ -482,7 +481,7 @@ class TestRemoveItemPrice:
 
         assert result is True
         mock_db.delete.assert_called_once_with(item_price)
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 # ============ Tests for resolve_price ============

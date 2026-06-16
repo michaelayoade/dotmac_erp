@@ -25,7 +25,7 @@ from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.audit_info import get_audit_service
-from app.services.common import coerce_uuid
+from app.services.common import PaginationParams, coerce_uuid, paginate
 from app.services.common_filters import build_active_filters
 from app.services.finance.ap.supplier import SupplierInput, supplier_service
 from app.services.finance.ap.web.base import (
@@ -207,7 +207,6 @@ class SupplierWebService:
             status,
             page,
         )
-        offset = (page - 1) * limit
         org_id = coerce_uuid(organization_id)
         effective_status = "overdue" if overdue == "true" and not status else status
         from app.services.finance.ap.supplier_query import build_supplier_query
@@ -220,9 +219,6 @@ class SupplierWebService:
             overdue=overdue,
         )
 
-        total_count = (
-            db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0
-        )
         supplier_sort_map: dict[str, Any] = {
             "legal_name": Supplier.legal_name,
             "trading_name": Supplier.trading_name,
@@ -237,7 +233,9 @@ class SupplierWebService:
             supplier_sort_map,
             default=Supplier.legal_name.asc(),
         )
-        suppliers = list(db.scalars(sorted_stmt.limit(limit).offset(offset)).all())
+        result = paginate(db, sorted_stmt, PaginationParams.from_page(page, limit))
+        total_count = result.total
+        suppliers = result.items
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
@@ -286,7 +284,7 @@ class SupplierWebService:
             for supplier in suppliers
         ]
 
-        total_pages = max(1, (total_count + limit - 1) // limit)
+        total_pages = result.total_pages
 
         # Calculate stats for template header cards
         total_suppliers = (
@@ -346,7 +344,7 @@ class SupplierWebService:
             "page": page,
             "limit": limit,
             "per_page": limit,
-            "offset": offset,
+            "offset": result.offset,
             "total_count": total_count,
             "total_pages": total_pages,
             "active_filters": active_filters,

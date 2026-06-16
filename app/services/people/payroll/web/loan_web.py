@@ -12,14 +12,20 @@ from decimal import Decimal, InvalidOperation
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee
 from app.models.people.payroll.employee_loan import EmployeeLoan, LoanStatus
 from app.models.people.payroll.loan_type import InterestMethod, LoanCategory, LoanType
 from app.models.person import Person
-from app.services.common import coerce_uuid
+from app.services.common import (
+    PaginationParams,
+    apply_search,
+    coerce_uuid,
+    paginate,
+    pagination_context,
+)
 from app.services.people.payroll.loan_service import LoanApplicationInput, LoanService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -210,13 +216,14 @@ class LoanWebService:
         )
 
         if search:
-            search_term = f"%{search}%"
             stmt = stmt.join(EmployeeLoan.employee).join(Employee.person)
-            stmt = stmt.where(
-                (EmployeeLoan.loan_number.ilike(search_term))
-                | (Person.display_name.ilike(search_term))
-                | (Person.first_name.ilike(search_term))
-                | (Person.last_name.ilike(search_term))
+            stmt = apply_search(
+                stmt,
+                search,
+                EmployeeLoan.loan_number,
+                Person.display_name,
+                Person.first_name,
+                Person.last_name,
             )
 
         if status:
@@ -226,32 +233,21 @@ class LoanWebService:
             except ValueError:
                 pass
 
-        # Count total
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = db.scalar(count_stmt) or 0
-
-        # Paginate
-        offset = (page - 1) * per_page
-        loans = list(db.scalars(stmt.offset(offset).limit(per_page)).unique().all())
-
-        total_pages = (total + per_page - 1) // per_page if total else 1
+        result = paginate(db, stmt, PaginationParams.from_page(page, per_page))
 
         context = base_context(request, auth, "Employee Loans", "payroll", db=db)
         context.update(
             {
-                "loans": loans,
+                "loans": result.items,
                 "search": search or "",
                 "status": status or "",
                 "statuses": [
                     (s.value, s.value.replace("_", " ").title()) for s in LoanStatus
                 ],
-                "page": page,
-                "total_pages": total_pages,
-                "total_count": total,
-                "total": total,
-                "limit": per_page,
-                "has_prev": page > 1,
-                "has_next": page < total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+                **pagination_context(result),
             }
         )
 

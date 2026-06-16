@@ -90,8 +90,7 @@ class TestCreateCategory:
         category_service.create_category(mock_db, org_id, sample_category_input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_category_duplicate_fails(
         self, category_service, mock_db, org_id, sample_category_input
@@ -183,8 +182,7 @@ class TestCreateItem:
         item_service.create_item(mock_db, org_id, sample_item_input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_item_duplicate_code_fails(
         self, item_service, mock_db, org_id, sample_item_input
@@ -302,8 +300,7 @@ class TestUpdateItem:
             mock_db, org_id, item.item_id, {"item_name": "New Name"}
         )
 
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
         assert result.item_name == "New Name"
 
     def test_update_nonexistent_item_fails(self, item_service, mock_db, org_id):
@@ -360,7 +357,7 @@ class TestUpdateCost:
         )
 
         assert result.average_cost == Decimal("15.00")
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_update_multiple_costs(self, item_service, mock_db, org_id):
         """Test updating multiple cost fields."""
@@ -405,7 +402,7 @@ class TestDeactivateItem:
         result = item_service.deactivate_item(mock_db, org_id, item.item_id)
 
         assert result.is_active is False
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_deactivate_nonexistent_item_fails(self, item_service, mock_db, org_id):
         """Test deactivating non-existent item fails."""

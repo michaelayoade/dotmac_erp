@@ -94,7 +94,7 @@ class TestCreateInvoice:
                                 mock_emit.assert_called_once()
 
         mock_db.add.assert_called()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_create_invoice_invalid_customer_fails(self, mock_db, org_id, user_id):
         """Test that invalid customer fails validation."""
@@ -189,7 +189,7 @@ class TestSubmitInvoice:
             mock_emit.assert_called_once()
 
         assert result.status == InvoiceStatus.SUBMITTED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_submit_non_draft_fails(self, mock_db, org_id, user_id):
         """Test submitting non-draft invoice fails."""
@@ -235,7 +235,7 @@ class TestApproveInvoice:
             )
 
         assert result.status == InvoiceStatus.APPROVED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_self_approval_fails_sod(self, mock_db, org_id):
         """Test that self-approval fails segregation of duties."""
@@ -292,7 +292,7 @@ class TestVoidInvoice:
             )
 
         assert result.status == InvoiceStatus.VOID
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_void_paid_invoice_fails(self, mock_db, org_id, user_id):
         """Test that voiding paid invoice fails."""
@@ -446,7 +446,7 @@ class TestPostInvoice:
                 )
 
         assert result.status == InvoiceStatus.POSTED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_post_non_approved_fails(self, mock_db, org_id, user_id):
         """Test that posting non-approved invoice fails."""
@@ -627,7 +627,7 @@ class TestRecordPayment:
 
         assert result.status == InvoiceStatus.PARTIALLY_PAID
         assert result.amount_paid == Decimal("500.00")
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_record_full_payment(self, mock_db, org_id):
         """Test recording full payment."""
@@ -648,7 +648,7 @@ class TestRecordPayment:
             )
 
         assert result.status == InvoiceStatus.PAID
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_record_payment_on_partially_paid(self, mock_db, org_id):
         """Test recording payment on partially paid invoice."""
@@ -670,7 +670,7 @@ class TestRecordPayment:
 
         assert result.status == InvoiceStatus.PAID
         assert result.amount_paid == Decimal("1000.00")
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_record_payment_on_overdue(self, mock_db, org_id):
         """Test recording payment on overdue invoice."""

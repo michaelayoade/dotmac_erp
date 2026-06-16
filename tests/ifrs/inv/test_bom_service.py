@@ -260,7 +260,7 @@ class TestCreateBOM:
         BOMService.create_bom(mock_db, org_id, input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_clears_other_defaults_when_setting_default(
         self, mock_db, org_id, mock_finished_item
@@ -386,7 +386,7 @@ class TestAddComponent:
         BOMService.add_component(mock_db, org_id, mock_bom.bom_id, input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_adds_component_with_warehouse(
         self, mock_db, org_id, mock_bom, mock_component_item, warehouse_id

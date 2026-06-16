@@ -334,6 +334,7 @@ def _reconciliation_line_view(line: BankReconciliationLine) -> dict:
         "reference": line.reference,
         "statement_amount": line.statement_amount,
         "gl_amount": line.gl_amount,
+        "difference": line.difference,
         "match_type": line.match_type.value if line.match_type else "",
         "adjustment_type": line.adjustment_type,
         "is_adjustment": line.is_adjustment,

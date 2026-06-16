@@ -172,15 +172,18 @@ class AutoReconciliationHelperService:
         )
 
         recon_svc = BankReconciliationService()
+        # Suggest-only: the auto-engine records a SUGGESTION, never a confirmed
+        # match. A human confirms it in the reconciliation workspace.
         recon_svc.match_statement_line(
             db=db,
             organization_id=organization_id,
             statement_line_id=line.line_id,
             journal_line_id=journal_line.line_id,
-            matched_by=None,  # System-matched, no user
-            force_match=True,  # We've already validated amounts
+            matched_by=None,  # System-suggested, no user
+            force_match=True,
             source_type=source_type,
             source_id=source_id,
+            match_state="suggested",
         )
 
     @staticmethod

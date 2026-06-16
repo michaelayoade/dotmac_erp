@@ -74,6 +74,18 @@ from app.web.deps import WebAuthContext, base_context
 logger = logging.getLogger(__name__)
 
 
+def _option_label_with_duplicate_suffix(
+    *,
+    option_id: str,
+    label: str,
+    duplicate_count: int,
+) -> str:
+    """Append a short id only when otherwise identical dropdown labels collide."""
+    if duplicate_count <= 1:
+        return label
+    return f"{label} [{option_id[:8]}]"
+
+
 class GLReconciliationTotals(TypedDict):
     """Numeric totals for the fixed asset GL reconciliation page."""
 
@@ -206,14 +218,30 @@ class FixedAssetWebService:
             if selected_employee:
                 selected_department_id = str(selected_employee["department_id"] or "")
 
+        department_base_labels = [
+            f"{department.department_code} - {department.department_name}"
+            for department in departments
+        ]
+        department_label_counts = {
+            label: department_base_labels.count(label)
+            for label in department_base_labels
+        }
+
         return {
             "departments_list": [
                 {
                     "department_id": str(department.department_id),
                     "department_code": department.department_code,
                     "department_name": department.department_name,
+                    "label": _option_label_with_duplicate_suffix(
+                        option_id=str(department.department_id),
+                        label=base_label,
+                        duplicate_count=department_label_counts[base_label],
+                    ),
                 }
-                for department in departments
+                for department, base_label in zip(
+                    departments, department_base_labels, strict=True
+                )
             ],
             "department_employees": employees,
             "selected_department_id": selected_department_id,
@@ -971,14 +999,11 @@ class FixedAssetWebService:
         )
 
         try:
-            journal = (
-                FixedAssetGLReconciliationPackageService
-                .create_draft_correction_journal(
-                    db,
-                    coerce_uuid(organization_id),
-                    coerce_uuid(run_id),
-                    created_by_user_id=current_user_id,
-                )
+            journal = FixedAssetGLReconciliationPackageService.create_draft_correction_journal(
+                db,
+                coerce_uuid(organization_id),
+                coerce_uuid(run_id),
+                created_by_user_id=current_user_id,
             )
             return RedirectResponse(
                 url=(
@@ -2500,6 +2525,32 @@ class FixedAssetWebService:
             )
             .order_by(AssetCategory.category_code)
         ).all()
+        category_base_labels = [
+            (
+                f"{category.category_code} - {category.category_name}"
+                if category.category_code
+                else category.category_name
+            )
+            for category in categories
+        ]
+        category_label_counts = {
+            label: category_base_labels.count(label) for label in category_base_labels
+        }
+        categories_list = [
+            {
+                "category_id": str(category.category_id),
+                "category_code": category.category_code,
+                "category_name": category.category_name,
+                "label": _option_label_with_duplicate_suffix(
+                    option_id=str(category.category_id),
+                    label=base_label,
+                    duplicate_count=category_label_counts[base_label],
+                ),
+            }
+            for category, base_label in zip(
+                categories, category_base_labels, strict=True
+            )
+        ]
 
         sequence = db.scalar(
             select(NumberingSequence).where(
@@ -2586,7 +2637,7 @@ class FixedAssetWebService:
             )
 
         context = {
-            "categories": categories,
+            "categories": categories_list,
             "suppliers_list": suppliers_list,
             "locations_list": locations_list,
             "departments_list": assignment_options["departments_list"],

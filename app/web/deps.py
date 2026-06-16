@@ -1554,6 +1554,17 @@ def get_db_for_org(
         # the audit listener) audit_log INSERTs tripped InsufficientPrivilege.
         set_current_organization_sync(db, auth.organization_id)
         yield db
+        # Mirror ``get_db_with_org`` (API dep): auto-commit on successful yield,
+        # rollback on exception. Without this, web routes that follow the
+        # documented "services flush, routes commit" rule lose data silently —
+        # the route handler builds a RedirectResponse referencing freshly-
+        # flushed UUIDs, then the session closes without committing, and the
+        # caller sees a 404 (or in the period-close case, status stays OPEN
+        # despite a 303 redirect with ?saved=1).
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -1595,7 +1606,15 @@ async def get_async_db_for_org(
         # what the listener actually reads at flush time.
         prime_session(db.sync_session, auth.organization_id)
         await set_current_organization(db, auth.organization_id)
-        yield db
+        try:
+            yield db
+            # Mirror sync dep: auto-commit on successful yield, rollback on
+            # exception. Without this, async web routes lose data the same way
+            # sync routes did before the fix to ``get_db_for_org``.
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
 
 def optional_web_auth(

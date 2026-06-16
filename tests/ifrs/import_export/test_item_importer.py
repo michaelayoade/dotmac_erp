@@ -21,7 +21,9 @@ def _make_importer(mock_db, import_config) -> ItemImporter:
 def test_item_importer_requires_item_name(import_config, mock_db, monkeypatch):
     import_config.dry_run = True
     importer = _make_importer(mock_db, import_config)
-    monkeypatch.setattr(importer._category_importer, "ensure_categories", lambda rows: None)
+    monkeypatch.setattr(
+        importer._category_importer, "ensure_categories", lambda rows: None
+    )
 
     result = importer.import_rows([{"Item Code": "ITEM-001"}])
 
@@ -36,7 +38,9 @@ def test_item_importer_generates_sequence_code_when_missing(
     importer = _make_importer(mock_db, import_config)
     category_id = uuid4()
 
-    monkeypatch.setattr(importer._category_importer, "ensure_categories", lambda rows: None)
+    monkeypatch.setattr(
+        importer._category_importer, "ensure_categories", lambda rows: None
+    )
     monkeypatch.setattr(
         importer._category_importer,
         "get_category_id",
@@ -78,9 +82,7 @@ def test_item_importer_service_items_disable_stock_tracking(import_config, mock_
     assert item.track_serial_numbers is False
 
 
-def test_item_importer_defaults_purchase_and_sales_uom_to_base(
-    import_config, mock_db
-):
+def test_item_importer_defaults_purchase_and_sales_uom_to_base(import_config, mock_db):
     importer = _make_importer(mock_db, import_config)
     importer._category_importer._category_cache["GENERAL"] = uuid4()
 
@@ -98,9 +100,7 @@ def test_item_importer_defaults_purchase_and_sales_uom_to_base(
     assert item.sales_uom == "BOX"
 
 
-def test_item_importer_maps_standard_cost_and_costing_method(
-    import_config, mock_db
-):
+def test_item_importer_maps_standard_cost_and_costing_method(import_config, mock_db):
     importer = _make_importer(mock_db, import_config)
     importer._category_importer._category_cache["GENERAL"] = uuid4()
 

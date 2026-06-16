@@ -148,6 +148,111 @@ def test_create_reconciliation_success_with_prior():
     assert recon.currency_code == "NGN"
 
 
+def test_import_existing_matches_uses_statement_amount_for_total():
+    svc = BankReconciliationService()
+    db = MagicMock()
+    recon = SimpleNamespace(
+        reconciliation_id=uuid4(),
+        bank_account_id=uuid4(),
+        period_start=date(2024, 1, 1),
+        period_end=date(2024, 1, 31),
+        total_matched=Decimal("0"),
+    )
+    statement_line_id = uuid4()
+    journal_line_id = uuid4()
+    db.execute.return_value.all.return_value = [
+        SimpleNamespace(
+            statement_line_id=statement_line_id,
+            transaction_date=date(2024, 1, 15),
+            transaction_type="debit",
+            amount=Decimal("100.00"),
+            description="Supplier payment",
+            reference="PAY-1",
+            journal_line_id=journal_line_id,
+            is_primary=True,
+            match_type="AUTO",
+            debit_amount=Decimal("0"),
+            credit_amount=Decimal("100.00"),
+        )
+    ]
+
+    created = svc._import_existing_matches(
+        db,
+        recon,
+        SimpleNamespace(),
+        uuid4(),
+        created_by=uuid4(),
+    )
+
+    assert created == 1
+    assert recon.total_matched == Decimal("100.00")
+    imported_line = db.add.call_args.args[0]
+    assert imported_line.statement_amount == Decimal("-100.00")
+    assert imported_line.gl_amount == Decimal("-100.00")
+    assert imported_line.difference == Decimal("0.00")
+
+
+def test_import_existing_matches_groups_multiple_gl_lines_per_statement_line():
+    svc = BankReconciliationService()
+    db = MagicMock()
+    recon = SimpleNamespace(
+        reconciliation_id=uuid4(),
+        bank_account_id=uuid4(),
+        period_start=date(2024, 1, 1),
+        period_end=date(2024, 1, 31),
+        total_matched=Decimal("0"),
+    )
+    statement_line_id = uuid4()
+    primary_journal_line_id = uuid4()
+    secondary_journal_line_id = uuid4()
+    db.execute.return_value.all.return_value = [
+        SimpleNamespace(
+            statement_line_id=statement_line_id,
+            transaction_date=date(2024, 1, 15),
+            transaction_type="debit",
+            amount=Decimal("100.00"),
+            description="Supplier payment",
+            reference="PAY-1",
+            journal_line_id=secondary_journal_line_id,
+            is_primary=False,
+            match_type="MANUAL",
+            debit_amount=Decimal("0"),
+            credit_amount=Decimal("40.00"),
+        ),
+        SimpleNamespace(
+            statement_line_id=statement_line_id,
+            transaction_date=date(2024, 1, 15),
+            transaction_type="debit",
+            amount=Decimal("100.00"),
+            description="Supplier payment",
+            reference="PAY-1",
+            journal_line_id=primary_journal_line_id,
+            is_primary=True,
+            match_type="MANUAL",
+            debit_amount=Decimal("0"),
+            credit_amount=Decimal("60.00"),
+        ),
+    ]
+
+    created = svc._import_existing_matches(
+        db,
+        recon,
+        SimpleNamespace(),
+        uuid4(),
+        created_by=uuid4(),
+    )
+
+    assert created == 1
+    assert recon.total_matched == Decimal("100.00")
+    imported_line = db.add.call_args.args[0]
+    assert imported_line.match_type == ReconciliationMatchType.split
+    assert imported_line.statement_line_id == statement_line_id
+    assert imported_line.journal_line_id == primary_journal_line_id
+    assert imported_line.statement_amount == Decimal("-100.00")
+    assert imported_line.gl_amount == Decimal("-100.00")
+    assert imported_line.difference == Decimal("0.00")
+
+
 def test_list_and_count_filters():
     svc = BankReconciliationService()
     db = MagicMock()
@@ -253,7 +358,8 @@ def test_add_match_amount_mismatch_requires_force():
         )
 
     assert excinfo.value.status_code == 400
-    assert "Amount mismatch requires review" in excinfo.value.detail
+    # Exact-tie rule: any difference is blocked unless force_match is set.
+    assert "does not tie" in excinfo.value.detail
 
 
 def test_add_match_amount_mismatch_with_force():
@@ -293,6 +399,33 @@ def test_add_match_amount_mismatch_with_force():
 
     assert isinstance(recon_line, BankReconciliationLine)
     assert stmt_line.is_matched is True
+
+
+def test_unmatch_reverses_confirmed_match():
+    svc = BankReconciliationService()
+    db = MagicMock()
+    recon = _make_reconciliation(status=ReconciliationStatus.draft)
+    recon.total_matched = Decimal("50.00")
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=True,
+        matched_at=date(2024, 1, 1),
+        matched_by=None,
+    )
+    recon_line = SimpleNamespace(statement_amount=Decimal("50.00"))
+    db.get.side_effect = [recon, stmt_line]
+    db.scalars.return_value.all.return_value = [recon_line]
+
+    svc.unmatch(
+        db,
+        recon.organization_id,
+        recon.reconciliation_id,
+        stmt_line.line_id,
+    )
+
+    assert stmt_line.is_matched is False
+    assert recon.total_matched == Decimal("0.00")
+    db.delete.assert_called_once_with(recon_line)
 
 
 def test_add_adjustment_and_outstanding_items():
@@ -338,7 +471,7 @@ def test_add_adjustment_and_outstanding_items():
     assert recon.outstanding_payments == Decimal("15.00")
 
 
-def test_auto_match_exact_and_fuzzy():
+def test_auto_match_suggests_without_confirming():
     svc = BankReconciliationService()
     db = MagicMock()
 
@@ -407,12 +540,74 @@ def test_auto_match_exact_and_fuzzy():
 
     db.get.side_effect = _get
 
-    result = svc.auto_match(
-        db, recon.organization_id, recon.reconciliation_id, tolerance=Decimal("0.02")
-    )
+    # Suggestion floor + tolerance are policy-driven; pin them so the fuzzy
+    # (score-50) candidate also surfaces and the test is deterministic.
+    with patch.object(
+        svc, "_resolve_suggestion_policy", return_value=(40.0, Decimal("0.02"))
+    ):
+        result = svc.auto_match(
+            db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            tolerance=Decimal("0.02"),
+        )
+    # Suggest-only: auto_match ranks candidates but confirms NOTHING. Both lines
+    # stay unmatched and no match is created; they are surfaced as suggestions.
     assert result.matches_found == 2
-    assert result.matches_created == 2
-    assert result.unmatched_statement_lines == 0
+    assert result.matches_created == 0
+    assert result.unmatched_statement_lines == 2
+    assert all(d.get("suggested") for d in result.match_details)
+
+
+def test_get_persisted_suggestions_maps_engine_rows():
+    """Persisted engine 'suggested' junction rows surface as MatchSuggestions,
+    highest score wins per statement line, and reasons are extracted."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation()
+    recon.period_start = date(2024, 1, 1)
+    recon.period_end = date(2024, 1, 31)
+    recon.bank_account_id = uuid4()
+    db.get.return_value = recon
+
+    stmt_a = uuid4()
+    stmt_b = uuid4()
+    gl_hi, gl_lo, gl_b = uuid4(), uuid4(), uuid4()
+
+    def _row(stmt_id, jl_id, score, reason):
+        match = SimpleNamespace(
+            statement_line_id=stmt_id,
+            journal_line_id=jl_id,
+            match_score=Decimal(str(score)),
+            match_type="exact_external_reference",
+            match_reason=reason,
+            source_type="customer_payment",
+            source_id=uuid4(),
+        )
+        gl = SimpleNamespace(journal_entry=SimpleNamespace(entry_id=uuid4()))
+        return (match, gl)
+
+    # Ordered desc by score (as the query does): higher stmt_a row first
+    rows = [
+        _row(stmt_a, gl_hi, 92, {"summary": "Exact reference INV-100"}),
+        _row(stmt_a, gl_lo, 60, {"reason": "amount + date"}),
+        _row(stmt_b, gl_b, 75, "settlement window match"),
+    ]
+    db.execute.return_value.all.return_value = rows
+
+    out = svc.get_persisted_suggestions(
+        db, recon.organization_id, recon.reconciliation_id
+    )
+
+    assert set(out) == {stmt_a, stmt_b}
+    # Highest score wins for stmt_a
+    assert out[stmt_a].journal_line_id == gl_hi
+    assert out[stmt_a].confidence == 92.0
+    assert out[stmt_a].match_reason == "Exact reference INV-100"
+    assert out[stmt_a].from_auto_engine is True
+    # String reason passes through; dict 'reason' key honoured
+    assert out[stmt_b].match_reason == "settlement window match"
 
 
 def test_calculate_match_score():
@@ -1041,7 +1236,7 @@ def test_add_multi_match_amount_mismatch() -> None:
         )
 
     assert excinfo.value.status_code == 400
-    assert "Amount mismatch" in excinfo.value.detail
+    assert "does not tie" in excinfo.value.detail
 
 
 def test_add_multi_match_invalid_status() -> None:
@@ -1064,8 +1259,8 @@ def test_add_multi_match_invalid_status() -> None:
     assert excinfo.value.status_code == 400
 
 
-def test_add_multi_match_within_tolerance() -> None:
-    """Multi-match succeeds when difference is within tolerance."""
+def test_add_multi_match_requires_exact_sum() -> None:
+    """Exact-tie: a split is rejected when sums differ at all (no tolerance)."""
     svc = BankReconciliationService()
     db = MagicMock()
 
@@ -1093,16 +1288,17 @@ def test_add_multi_match_within_tolerance() -> None:
     }
     db.get.side_effect = lambda _model, key: lookup.get(key)
 
-    lines = svc.add_multi_match(
-        db,
-        recon.organization_id,
-        recon.reconciliation_id,
-        statement_line_ids=[stmt.line_id],
-        journal_line_ids=[gl.line_id],
-        tolerance=Decimal("0.01"),
-    )
+    with pytest.raises(HTTPException) as excinfo:
+        svc.add_multi_match(
+            db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            statement_line_ids=[stmt.line_id],
+            journal_line_ids=[gl.line_id],
+        )
 
-    assert len(lines) == 1
+    assert excinfo.value.status_code == 400
+    assert "does not tie" in excinfo.value.detail
 
 
 def test_add_multi_match_statement_not_found() -> None:

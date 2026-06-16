@@ -44,9 +44,7 @@ INVENTORY_TABLES = [
 ]
 INVENTORY_TABLE_SCHEMAS = {table: table.schema for table in INVENTORY_TABLES}
 INVENTORY_TABLE_TYPES = {
-    column: column.type
-    for table in INVENTORY_TABLES
-    for column in table.columns
+    column: column.type for table in INVENTORY_TABLES for column in table.columns
 }
 
 
@@ -313,9 +311,7 @@ async def test_add_missing_serials_route_reads_form_when_csrf_state_is_template_
         },
         receive,
     )
-    request.state.csrf_form = (
-        '<input type="hidden" name="csrf_token" value="token">'
-    )
+    request.state.csrf_form = '<input type="hidden" name="csrf_token" value="token">'
 
     response = await inventory_web.add_missing_serials(
         request=request,
@@ -380,12 +376,8 @@ def test_missing_serials_template_uses_modal_instead_of_inline_table_form():
 def test_missing_serials_card_count_sums_missing_quantities(
     db_session, service, auth_context
 ):
-    router_a, _warehouse_a = _seed_serial_tracked_stock(
-        db_session, quantity_on_hand=5
-    )
-    router_b, _warehouse_b = _seed_serial_tracked_stock(
-        db_session, quantity_on_hand=3
-    )
+    router_a, _warehouse_a = _seed_serial_tracked_stock(db_session, quantity_on_hand=5)
+    router_b, _warehouse_b = _seed_serial_tracked_stock(db_session, quantity_on_hand=3)
 
     context = _missing_context(service, db_session, auth_context)
 
@@ -522,9 +514,7 @@ def test_adding_one_serial_to_item_missing_multiple_updates_missing_quantity(
     )
 
     assert response.status_code == 303
-    assert _query_params(response.headers["location"])["status"] == [
-        "missing_serials"
-    ]
+    assert _query_params(response.headers["location"])["status"] == ["missing_serials"]
     assert _serial_numbers_for(db_session, item, warehouse) == ["SN-001"]
 
     row = _missing_row_for(service, db_session, auth_context, item.item_id)
@@ -532,9 +522,10 @@ def test_adding_one_serial_to_item_missing_multiple_updates_missing_quantity(
     assert row["quantity_on_hand"] == Decimal("3.000000")
     assert row["serial_count"] == 1
     assert row["missing_count"] == Decimal("2.000000")
-    assert _missing_context(service, db_session, auth_context)[
-        "missing_serials_count"
-    ] == 2
+    assert (
+        _missing_context(service, db_session, auth_context)["missing_serials_count"]
+        == 2
+    )
 
 
 def test_adding_all_remaining_serials_removes_item_from_missing_serials(

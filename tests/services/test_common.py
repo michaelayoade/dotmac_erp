@@ -13,7 +13,14 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.services.common import apply_ordering, apply_pagination, coerce_uuid
+from app.services.common import (
+    PaginatedResult,
+    apply_ordering,
+    apply_pagination,
+    apply_search,
+    coerce_uuid,
+    pagination_context,
+)
 
 # ============ TestCoerceUuid ============
 
@@ -208,3 +215,59 @@ class TestApplyPagination:
         items = result.all()
 
         assert items == ["item1", "item2"]
+
+
+# ============ TestPaginationContext ============
+
+
+class TestPaginationContext:
+    """Tests for the pagination_context helper."""
+
+    def test_standard_keys_and_math(self):
+        """Maps a PaginatedResult to the conventional list-page keys."""
+        result = PaginatedResult(items=[1, 2, 3], total=23, offset=10, limit=5)
+        ctx = pagination_context(result)
+        assert ctx == {
+            "page": 3,
+            "limit": 5,
+            "offset": 10,
+            "total_count": 23,
+            "total_pages": 5,
+        }
+
+    def test_empty_result_is_one_page(self):
+        """Zero results clamps to a single page (matches the old max(1, ...))."""
+        result = PaginatedResult(items=[], total=0, offset=0, limit=50)
+        ctx = pagination_context(result)
+        assert ctx["total_pages"] == 1
+        assert ctx["page"] == 1
+        assert ctx["total_count"] == 0
+
+
+# ============ TestApplySearch ============
+
+
+class TestApplySearch:
+    """Tests for the apply_search helper."""
+
+    def test_empty_search_returns_stmt_unchanged(self):
+        """Falsy search must return the exact same statement object untouched."""
+        from sqlalchemy import column, select
+
+        stmt = select(column("id"))
+        for term in (None, ""):
+            assert apply_search(stmt, term, column("name")) is stmt
+
+    def test_applies_or_ilike_across_columns(self):
+        """A search term wraps every column in an OR of ilike comparisons."""
+        from sqlalchemy import column, select
+
+        stmt = select(column("id"))
+        result = apply_search(stmt, "acme", column("name"), column("ref"))
+
+        compiled = str(result.compile(compile_kwargs={"literal_binds": True})).lower()
+        # ilike compiles to "lower(col) like lower('%acme%')" on the default
+        # dialect — assert on dialect-stable markers instead of the word "ilike".
+        assert compiled.count("%acme%") == 2  # one per column
+        assert " or " in compiled
+        assert "name" in compiled and "ref" in compiled

@@ -140,9 +140,7 @@ class WarehouseService(ListResponseMixin):
         )
 
         db.add(warehouse)
-        db.commit()
-        db.refresh(warehouse)
-
+        db.flush()
         return warehouse
 
     @staticmethod
@@ -200,9 +198,7 @@ class WarehouseService(ListResponseMixin):
         )
 
         db.add(location)
-        db.commit()
-        db.refresh(location)
-
+        db.flush()
         return location
 
     @staticmethod
@@ -477,9 +473,7 @@ class WarehouseService(ListResponseMixin):
             if hasattr(warehouse, key):
                 setattr(warehouse, key, value)
 
-        db.commit()
-        db.refresh(warehouse)
-
+        db.flush()
         return warehouse
 
     @staticmethod
@@ -552,9 +546,7 @@ class WarehouseService(ListResponseMixin):
             )
 
         warehouse.is_active = False
-        db.commit()
-        db.refresh(warehouse)
-
+        db.flush()
         return warehouse
 
     @staticmethod
@@ -593,9 +585,7 @@ class WarehouseService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="Location is already inactive")
 
         location.is_active = False
-        db.commit()
-        db.refresh(location)
-
+        db.flush()
         return location
 
 

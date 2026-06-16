@@ -9,7 +9,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
@@ -20,10 +20,16 @@ from app.models.inventory.inventory_transaction import TransactionType
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.schemas.inventory import (
     AddLayerCreate,
+    BulkCountRecordRequest,
     ConsumptionResultRead,
+    CountLineRecordRequest,
     FIFOInventoryRead,
+    InventoryCountLineRead,
+    InventoryCountRead,
     InventoryItemCreate,
     InventoryItemRead,
+    MaterialRequestCreate,
+    MaterialRequestRead,
     ItemCategoryCreate,
     ItemCategoryRead,
     LotCreate,
@@ -844,3 +850,282 @@ def get_lot_traceability(
 
 
 # Note: /lots/expiring and /lots/expired routes moved to earlier in file for proper route matching
+
+
+# =============================================================================
+# Inventory Counts (mobile warehouse flows)
+# NOTE: any future static sibling (e.g. /counts/summary) must be declared
+# BEFORE /counts/{count_id} or it will be shadowed.
+# =============================================================================
+
+
+@router.get("/counts", response_model=ListResponse[InventoryCountRead])
+def list_inventory_counts(
+    status_filter: str | None = Query(None, alias="status"),
+    warehouse_id: UUID | None = Query(None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:read")),
+    db: Session = Depends(get_db_with_org),
+):
+    """List inventory counts (filter by status for the mobile count queue)."""
+    from app.models.inventory.inventory_count import CountStatus
+    from app.services.inventory import inventory_count_service
+
+    try:
+        status_value = parse_enum(CountStatus, status_filter)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid status") from exc
+    counts = inventory_count_service.list(
+        db=db,
+        organization_id=str(organization_id),
+        warehouse_id=str(warehouse_id) if warehouse_id else None,
+        status=status_value,
+        limit=limit,
+        offset=offset,
+    )
+    items = [InventoryCountRead.model_validate(c) for c in counts]
+    return ListResponse(items=items, count=len(items), limit=limit, offset=offset)
+
+
+@router.get("/counts/{count_id}", response_model=InventoryCountRead)
+def get_inventory_count(
+    count_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:read")),
+    db: Session = Depends(get_db_with_org),
+):
+    """Get one inventory count header (org-scoped in the service)."""
+    from app.services.inventory import inventory_count_service
+
+    count = inventory_count_service.get(db, str(count_id), organization_id)
+    return InventoryCountRead.model_validate(count)
+
+
+@router.get(
+    "/counts/{count_id}/lines",
+    response_model=ListResponse[InventoryCountLineRead],
+)
+def list_inventory_count_lines(
+    count_id: UUID,
+    is_counted: bool | None = Query(None),
+    has_variance: bool | None = Query(None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:read")),
+    db: Session = Depends(get_db_with_org),
+):
+    """List lines of a count (e.g. is_counted=false for the remaining queue)."""
+    from app.services.inventory import inventory_count_service
+
+    inventory_count_service.get(db, str(count_id), organization_id)
+    lines = inventory_count_service.list_lines(
+        db,
+        str(count_id),
+        is_counted=is_counted,
+        has_variance=has_variance,
+        limit=limit,
+        offset=offset,
+    )
+    items = [InventoryCountLineRead.model_validate(line) for line in lines]
+    return ListResponse(items=items, count=len(items), limit=limit, offset=offset)
+
+
+@router.post("/counts/{count_id}/lines/record", response_model=InventoryCountLineRead)
+def record_inventory_count_line(
+    count_id: UUID,
+    payload: CountLineRecordRequest,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:create")),
+    db: Session = Depends(get_db_with_org),
+):
+    """Record a counted quantity for an item (scan -> qty -> next)."""
+    from app.services.inventory import inventory_count_service
+    from app.services.inventory.count import CountLineInput
+
+    line = inventory_count_service.record_count(
+        db=db,
+        organization_id=organization_id,
+        count_id=count_id,
+        input=CountLineInput(
+            item_id=payload.item_id,
+            warehouse_id=payload.warehouse_id,
+            counted_quantity=payload.counted_quantity,
+            lot_id=payload.lot_id,
+            location_id=payload.location_id,
+            reason_code=payload.reason_code,
+            notes=payload.notes,
+        ),
+        counted_by_user_id=UUID(auth["person_id"]),
+    )
+    return InventoryCountLineRead.model_validate(line)
+
+
+@router.post(
+    "/counts/{count_id}/bulk-record",
+    response_model=ListResponse[InventoryCountLineRead],
+)
+def bulk_record_inventory_count(
+    count_id: UUID,
+    payload: BulkCountRecordRequest,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:create")),
+    db: Session = Depends(get_db_with_org),
+):
+    """Bulk-record counted quantities for existing count lines."""
+    from app.services.inventory import inventory_count_service
+    from app.services.inventory.count import BulkCountLineInput
+
+    lines = inventory_count_service.record_count_bulk(
+        db=db,
+        organization_id=organization_id,
+        count_id=count_id,
+        inputs=[
+            BulkCountLineInput(
+                line_id=line.line_id, counted_quantity=line.counted_quantity
+            )
+            for line in payload.lines
+        ],
+        counted_by_user_id=UUID(auth["person_id"]),
+    )
+    items = [InventoryCountLineRead.model_validate(line) for line in lines]
+    return ListResponse(items=items, count=len(items), limit=len(items) or 1, offset=0)
+
+
+# =============================================================================
+# Material Requests (mobile warehouse flows)
+# =============================================================================
+
+
+@router.get("/material-requests", response_model=ListResponse[MaterialRequestRead])
+def list_material_requests(
+    status_filter: str | None = Query(None, alias="status"),
+    mine: bool = Query(False, description="Only requests raised by the caller"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:material_requests:read")),
+    db: Session = Depends(get_db_with_org),
+):
+    """List material requests (optionally only the caller's own)."""
+    from app.models.inventory.material_request import MaterialRequestStatus
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    try:
+        status_value = parse_enum(MaterialRequestStatus, status_filter)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid status") from exc
+    requests = MaterialRequestWebService.list_requests(
+        db,
+        organization_id,
+        status=status_value,
+        requested_by_id=UUID(auth["person_id"]) if mine else None,
+        limit=limit,
+        offset=offset,
+    )
+    items = [MaterialRequestRead.model_validate(r) for r in requests]
+    return ListResponse(items=items, count=len(items), limit=limit, offset=offset)
+
+
+@router.get("/material-requests/{request_id}", response_model=MaterialRequestRead)
+def get_material_request(
+    request_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:material_requests:read")),
+    db: Session = Depends(get_db_with_org),
+):
+    """Get one material request (org-scoped in the service)."""
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    try:
+        request = MaterialRequestWebService.get_request(db, organization_id, request_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MaterialRequestRead.model_validate(request)
+
+
+@router.post(
+    "/material-requests",
+    response_model=MaterialRequestRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_material_request(
+    payload: MaterialRequestCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(
+        require_tenant_permission("inventory:material_requests:create")
+    ),
+    db: Session = Depends(get_db_with_org),
+):
+    """Create a draft material request (raise from the floor)."""
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    person_id = UUID(auth["person_id"])
+    try:
+        request = MaterialRequestWebService.create_from_form(
+            db,
+            organization_id,
+            person_id,
+            request_type=payload.request_type,
+            schedule_date=payload.schedule_date.isoformat()
+            if payload.schedule_date
+            else None,
+            default_warehouse_id=str(payload.default_warehouse_id)
+            if payload.default_warehouse_id
+            else None,
+            transfer_to_warehouse_id=str(payload.transfer_to_warehouse_id)
+            if payload.transfer_to_warehouse_id
+            else None,
+            requested_by_id=str(person_id),
+            remarks=payload.remarks,
+            items=[
+                {
+                    "inventory_item_id": str(item.inventory_item_id),
+                    "requested_qty": str(item.requested_qty),
+                    "warehouse_id": str(item.warehouse_id)
+                    if item.warehouse_id
+                    else None,
+                    "uom": item.uom,
+                }
+                for item in payload.items
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return MaterialRequestRead.model_validate(request)
+
+
+@router.post(
+    "/material-requests/{request_id}/submit",
+    response_model=MaterialRequestRead,
+)
+def submit_material_request(
+    request_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(
+        require_tenant_permission("inventory:material_requests:create")
+    ),
+    db: Session = Depends(get_db_with_org),
+):
+    """Submit a draft material request."""
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    try:
+        request = MaterialRequestWebService.submit_request(
+            db, organization_id, UUID(auth["person_id"]), str(request_id)
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        code = 404 if "not found" in detail.lower() else 400
+        raise HTTPException(status_code=code, detail=detail) from exc
+    return MaterialRequestRead.model_validate(request)

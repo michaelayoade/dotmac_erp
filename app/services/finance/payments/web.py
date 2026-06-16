@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.domain_settings import SettingDomain
-from app.services.common import coerce_uuid
+from app.services.common import (
+    PaginationParams,
+    apply_search,
+    coerce_uuid,
+    paginate,
+    pagination_context,
+)
 from app.services.common_filters import build_active_filters
 from app.services.settings_spec import resolve_value
 
@@ -155,6 +161,7 @@ class PaymentWebService:
         active_intent = db.scalar(
             select(PaymentIntent)
             .where(
+                PaymentIntent.organization_id == organization_id,
                 PaymentIntent.source_type == "EXPENSE_CLAIM",
                 PaymentIntent.source_id == expense_claim.claim_id,
                 PaymentIntent.status.in_(active_statuses),
@@ -166,6 +173,7 @@ class PaymentWebService:
         latest_intent = db.scalar(
             select(PaymentIntent)
             .where(
+                PaymentIntent.organization_id == organization_id,
                 PaymentIntent.source_type == "EXPENSE_CLAIM",
                 PaymentIntent.source_id == expense_claim.claim_id,
             )
@@ -256,8 +264,6 @@ class PaymentWebService:
             PaymentIntentStatus,
         )
 
-        offset = (page - 1) * per_page
-
         # Base filter: org + outbound direction
         base_filter = [
             PaymentIntent.organization_id == organization_id,
@@ -315,17 +321,14 @@ class PaymentWebService:
 
         # Filtered query for listing
         stmt = select(PaymentIntent).where(*base_filter)
-
-        if search:
-            search_pattern = f"%{search}%"
-            stmt = stmt.where(
-                or_(
-                    PaymentIntent.paystack_reference.ilike(search_pattern),
-                    PaymentIntent.recipient_account_name.ilike(search_pattern),
-                    PaymentIntent.recipient_account_number.ilike(search_pattern),
-                    PaymentIntent.transfer_code.ilike(search_pattern),
-                )
-            )
+        stmt = apply_search(
+            stmt,
+            search,
+            PaymentIntent.paystack_reference,
+            PaymentIntent.recipient_account_name,
+            PaymentIntent.recipient_account_number,
+            PaymentIntent.transfer_code,
+        )
 
         if status:
             try:
@@ -334,15 +337,11 @@ class PaymentWebService:
             except ValueError:
                 pass
 
-        filtered_total = (
-            db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        result = paginate(
+            db,
+            stmt.order_by(PaymentIntent.created_at.desc()),
+            PaginationParams.from_page(page, per_page),
         )
-        intents = db.scalars(
-            stmt.order_by(PaymentIntent.created_at.desc())
-            .limit(per_page)
-            .offset(offset)
-        ).all()
-        total_pages = max(1, (filtered_total + per_page - 1) // per_page)
 
         from app.services.formatters import format_currency
 
@@ -353,15 +352,12 @@ class PaymentWebService:
         )
 
         return {
-            "intents": intents,
+            "intents": result.items,
             "search": search or "",
-            "page": page,
-            "limit": per_page,
-            "total_pages": total_pages,
-            "total_count": filtered_total,
             "status_filter": status,
             "statuses": [s.value for s in PaymentIntentStatus],
             "active_filters": active_filters,
+            **pagination_context(result),
             # Stat card data
             "stat_total_count": total_count,
             "stat_total_amount": format_currency(
@@ -383,8 +379,6 @@ class PaymentWebService:
     ) -> dict:
         from app.models.finance.payments import PaymentIntent, PaymentIntentStatus
 
-        offset = (page - 1) * per_page
-
         stmt = select(PaymentIntent).where(
             PaymentIntent.organization_id == organization_id
         )
@@ -396,18 +390,19 @@ class PaymentWebService:
             except ValueError:
                 pass
 
-        total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-        intents = db.scalars(
-            stmt.order_by(PaymentIntent.created_at.desc())
-            .limit(per_page)
-            .offset(offset)
-        ).all()
+        # paginate() for the count/fetch mechanics; this view keeps its bespoke
+        # context keys (current_page/total) and unclamped total_pages.
+        result = paginate(
+            db,
+            stmt.order_by(PaymentIntent.created_at.desc()),
+            PaginationParams.from_page(page, per_page),
+        )
 
         return {
-            "intents": intents,
+            "intents": result.items,
             "current_page": page,
-            "total_pages": (total + per_page - 1) // per_page,
-            "total": total,
+            "total_pages": (result.total + per_page - 1) // per_page,
+            "total": result.total,
             "status_filter": status,
             "statuses": [s.value for s in PaymentIntentStatus],
         }

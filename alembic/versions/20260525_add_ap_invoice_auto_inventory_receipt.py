@@ -114,7 +114,9 @@ def downgrade() -> None:
         type_="foreignkey",
     )
     op.drop_column("supplier_invoice_line", "auto_receipt_transaction_id", schema="ap")
-    op.drop_column("supplier_invoice_line", "receipt_auto_generate_serials", schema="ap")
+    op.drop_column(
+        "supplier_invoice_line", "receipt_auto_generate_serials", schema="ap"
+    )
     op.drop_column("supplier_invoice_line", "receipt_serial_numbers", schema="ap")
     op.drop_column("supplier_invoice_line", "receipt_reference", schema="ap")
     op.drop_column("supplier_invoice_line", "receipt_warehouse_id", schema="ap")

@@ -185,9 +185,7 @@ class AssetRevaluationService(ListResponseMixin):
         )
 
         db.add(revaluation)
-        db.commit()
-        db.refresh(revaluation)
-
+        db.flush()
         return revaluation
 
     @staticmethod
@@ -243,9 +241,7 @@ class AssetRevaluationService(ListResponseMixin):
         asset.net_book_value = revaluation.carrying_amount_after
         asset.accumulated_depreciation = revaluation.accumulated_depreciation_after
 
-        db.commit()
-        db.refresh(revaluation)
-
+        db.flush()
         return revaluation
 
     @staticmethod
@@ -308,9 +304,7 @@ class AssetRevaluationService(ListResponseMixin):
 
         revaluation.journal_entry_id = result.journal_entry_id
 
-        db.commit()
-        db.refresh(revaluation)
-
+        db.flush()
         return revaluation
 
     @staticmethod

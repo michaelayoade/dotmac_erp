@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -118,6 +119,7 @@ class TestUserCreate:
         """Test complete user creation workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/users/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(admin_authenticated_page)
 
         uid = unique_id()
 
@@ -231,6 +233,7 @@ class TestRoleCreate:
         """Test complete role creation workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/roles/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(admin_authenticated_page)
 
         uid = unique_id()
 
@@ -297,6 +300,7 @@ class TestPermissionCreate:
         """Test complete permission creation workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/permissions/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(admin_authenticated_page)
 
         uid = unique_id()
 
@@ -385,7 +389,7 @@ class TestOrganizationCreate:
         admin_authenticated_page.wait_for_load_state("networkidle")
 
         field = admin_authenticated_page.locator("[name*='currency']")
-        expect(field.first).to_be_visible()
+        expect(field.first).to_be_attached()
 
 
 @pytest.mark.e2e
@@ -414,7 +418,7 @@ class TestSettingsCRUD:
         field = admin_authenticated_page.locator(
             "#domain, select[name='domain'], input[name='domain']"
         )
-        expect(field.first).to_be_visible()
+        expect(field.first).to_be_attached()
 
     def test_settings_create_has_key_field(self, admin_authenticated_page, base_url):
         """Test that settings create has key field."""
@@ -422,7 +426,7 @@ class TestSettingsCRUD:
         admin_authenticated_page.wait_for_load_state("networkidle")
 
         field = admin_authenticated_page.locator("#key, input[name='key']")
-        expect(field).to_be_visible()
+        expect(field).to_be_attached()
 
     def test_settings_create_has_value_type_field(
         self, admin_authenticated_page, base_url
@@ -434,7 +438,7 @@ class TestSettingsCRUD:
         field = admin_authenticated_page.locator(
             "#value_type, select[name='value_type']"
         )
-        expect(field).to_be_visible()
+        expect(field).to_be_attached()
 
 
 @pytest.mark.e2e

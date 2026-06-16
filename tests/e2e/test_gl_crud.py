@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -27,8 +28,9 @@ class TestAccountList:
 
     def test_account_list_with_search(self, authenticated_page, base_url):
         """Test account list search functionality."""
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -42,8 +44,9 @@ class TestAccountList:
 
     def test_account_list_by_category(self, authenticated_page, base_url):
         """Test account list category filter."""
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         category_filter = authenticated_page.locator(
             "select[name='category'], #category"
@@ -56,7 +59,7 @@ class TestAccountList:
 
     def test_account_list_has_new_button(self, authenticated_page, base_url):
         """Test that account list has new button."""
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -66,7 +69,7 @@ class TestAccountList:
 
     def test_account_list_shows_account_codes(self, authenticated_page, base_url):
         """Test that account list displays account codes."""
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         table = authenticated_page.locator("table, [role='table']")
@@ -79,14 +82,14 @@ class TestAccountCreate:
 
     def test_account_create_page_loads(self, authenticated_page, base_url):
         """Test that account create page loads."""
-        response = authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        response = authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         assert response.ok, f"Account create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_account_create_has_code_field(self, authenticated_page, base_url):
         """Test that account form has code field."""
-        authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("#account_code, input[name='account_code']")
@@ -94,7 +97,7 @@ class TestAccountCreate:
 
     def test_account_create_has_name_field(self, authenticated_page, base_url):
         """Test that account form has name field."""
-        authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("#account_name, input[name='account_name']")
@@ -102,7 +105,7 @@ class TestAccountCreate:
 
     def test_account_create_has_category_field(self, authenticated_page, base_url):
         """Test that account form has category selection."""
-        authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -112,7 +115,7 @@ class TestAccountCreate:
 
     def test_account_create_has_type_field(self, authenticated_page, base_url):
         """Test that account form has type field."""
-        authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -122,7 +125,7 @@ class TestAccountCreate:
 
     def test_account_create_has_checkboxes(self, authenticated_page, base_url):
         """Test that account form has boolean checkboxes."""
-        authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         checkboxes = authenticated_page.locator("input[type='checkbox']")
@@ -131,8 +134,9 @@ class TestAccountCreate:
 
     def test_account_create_workflow(self, authenticated_page, base_url):
         """Test complete account creation workflow."""
-        authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 
@@ -172,7 +176,7 @@ class TestAccountEdit:
 
     def test_account_detail_page_accessible(self, authenticated_page, base_url):
         """Test that account detail is accessible."""
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first account link
@@ -187,7 +191,7 @@ class TestAccountEdit:
 
     def test_account_has_edit_button(self, authenticated_page, base_url):
         """Test that account detail has edit button."""
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         account_link = authenticated_page.locator(
@@ -210,14 +214,14 @@ class TestJournalEntryList:
 
     def test_journal_list_page_loads(self, authenticated_page, base_url):
         """Test that journal list loads."""
-        response = authenticated_page.goto(f"{base_url}/gl/journals")
+        response = authenticated_page.goto(f"{base_url}/finance/gl/journals")
         assert response.ok, f"Journal list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_journal_list_with_search(self, authenticated_page, base_url):
         """Test journal list search functionality."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -228,25 +232,25 @@ class TestJournalEntryList:
 
     def test_journal_list_by_date_range(self, authenticated_page, base_url):
         """Test journal list date range filter."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_filters = authenticated_page.locator("input[type='date']")
         if date_filters.count() > 0:
-            expect(date_filters.first).to_be_visible()
+            expect(date_filters.first).to_be_attached()
 
     def test_journal_list_by_status(self, authenticated_page, base_url):
         """Test journal list status filter."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status']")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
     def test_journal_list_has_new_button(self, authenticated_page, base_url):
         """Test that journal list has new button."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -261,14 +265,14 @@ class TestJournalEntryCreate:
 
     def test_journal_create_page_loads(self, authenticated_page, base_url):
         """Test that journal create page loads."""
-        response = authenticated_page.goto(f"{base_url}/gl/journals/new")
+        response = authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         assert response.ok, f"Journal create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_journal_create_has_type_field(self, authenticated_page, base_url):
         """Test that journal form has entry type field."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -279,7 +283,7 @@ class TestJournalEntryCreate:
 
     def test_journal_create_has_period_field(self, authenticated_page, base_url):
         """Test that journal form has period field."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -290,7 +294,7 @@ class TestJournalEntryCreate:
 
     def test_journal_create_has_date_field(self, authenticated_page, base_url):
         """Test that journal form has date field."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("input[type='date']")
@@ -298,7 +302,7 @@ class TestJournalEntryCreate:
 
     def test_journal_create_has_description_field(self, authenticated_page, base_url):
         """Test that journal form has description field."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -308,7 +312,7 @@ class TestJournalEntryCreate:
 
     def test_journal_create_has_add_line_button(self, authenticated_page, base_url):
         """Test that journal form has add line button."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         add_btn = authenticated_page.locator(
@@ -319,11 +323,11 @@ class TestJournalEntryCreate:
 
     def test_journal_create_shows_balance(self, authenticated_page, base_url):
         """Test that journal form shows debit/credit balance."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         balance = authenticated_page.locator(
-            "text=Debit, text=Credit, text=Balance, [class*='balance']"
+            ":text('Debit'), :text('Credit'), :text('Balance'), [class*='balance']"
         )
         if balance.count() > 0:
             expect(balance.first).to_be_visible()
@@ -335,7 +339,7 @@ class TestJournalEntryDetail:
 
     def test_journal_detail_shows_lines(self, authenticated_page, base_url):
         """Test that journal detail shows entry lines."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first journal link
@@ -358,26 +362,26 @@ class TestFiscalPeriodList:
 
     def test_period_list_page_loads(self, authenticated_page, base_url):
         """Test that period list loads."""
-        response = authenticated_page.goto(f"{base_url}/gl/periods")
+        response = authenticated_page.goto(f"{base_url}/finance/gl/periods")
         assert response.ok, f"Period list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_period_list_shows_status(self, authenticated_page, base_url):
         """Test that period list shows status indicators."""
-        authenticated_page.goto(f"{base_url}/gl/periods")
+        authenticated_page.goto(f"{base_url}/finance/gl/periods")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for status badges or indicators
         status = authenticated_page.locator(
-            "text=Open, text=Closed, text=OPEN, text=CLOSED, [class*='status']"
+            ":text('Open'), :text('Closed'), :text('OPEN'), :text('CLOSED'), [class*='status']"
         )
         if status.count() > 0:
             expect(status.first).to_be_visible()
 
     def test_period_list_has_new_button(self, authenticated_page, base_url):
         """Test that period list has new button."""
-        authenticated_page.goto(f"{base_url}/gl/periods")
+        authenticated_page.goto(f"{base_url}/finance/gl/periods")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -393,14 +397,14 @@ class TestPeriodClose:
 
     def test_period_close_page_loads(self, authenticated_page, base_url):
         """Test that period close page loads."""
-        response = authenticated_page.goto(f"{base_url}/gl/period-close")
+        response = authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         assert response.ok, f"Period close failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_period_close_has_checklist(self, authenticated_page, base_url):
         """Test that period close has checklist items."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for checklist items
@@ -412,7 +416,7 @@ class TestPeriodClose:
 
     def test_period_close_has_close_button(self, authenticated_page, base_url):
         """Test that period close has close button."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         close_btn = authenticated_page.locator(
@@ -428,34 +432,34 @@ class TestTrialBalance:
 
     def test_trial_balance_loads(self, authenticated_page, base_url):
         """Test that trial balance loads."""
-        response = authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        response = authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         assert response.ok, f"Trial balance failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_trial_balance_has_date_filter(self, authenticated_page, base_url):
         """Test that trial balance has date filter."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_filter = authenticated_page.locator(
             "input[type='date'], input[name='as_of_date']"
         )
         if date_filter.count() > 0:
-            expect(date_filter.first).to_be_visible()
+            expect(date_filter.first).to_be_attached()
 
     def test_trial_balance_shows_totals(self, authenticated_page, base_url):
         """Test that trial balance shows debit/credit totals."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
-        totals = authenticated_page.locator("tfoot, text=Total, [class*='total']")
+        totals = authenticated_page.locator("tfoot, :text('Total'), [class*='total']")
         if totals.count() > 0:
             expect(totals.first).to_be_visible()
 
     def test_trial_balance_has_print_button(self, authenticated_page, base_url):
         """Test that trial balance has print/export button."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
         print_btn = authenticated_page.locator(

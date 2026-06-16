@@ -53,6 +53,43 @@ class MaterialRequestWebService:
     """View service for material request web routes."""
 
     @staticmethod
+    def list_requests(
+        db: Session,
+        organization_id: UUID,
+        *,
+        status: MaterialRequestStatus | None = None,
+        requested_by_id: UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[MaterialRequest]:
+        """Pure list for API consumers (no template context)."""
+        stmt = (
+            select(MaterialRequest)
+            .options(joinedload(MaterialRequest.items))
+            .where(MaterialRequest.organization_id == organization_id)
+        )
+        if status:
+            stmt = stmt.where(MaterialRequest.status == status)
+        if requested_by_id:
+            stmt = stmt.where(MaterialRequest.requested_by_id == requested_by_id)
+        stmt = (
+            stmt.order_by(MaterialRequest.created_at.desc()).limit(limit).offset(offset)
+        )
+        return list(db.scalars(stmt).unique().all())
+
+    @staticmethod
+    def get_request(
+        db: Session,
+        organization_id: UUID,
+        request_id: UUID,
+    ) -> MaterialRequest:
+        """Org-scoped fetch for API consumers."""
+        request = db.get(MaterialRequest, request_id)
+        if not request or request.organization_id != organization_id:
+            raise ValueError("Material request not found")
+        return request
+
+    @staticmethod
     def list_context(
         db: Session,
         organization_id: str,

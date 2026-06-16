@@ -24,6 +24,7 @@ from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.common import coerce_uuid
 from app.services.finance.ar.ar_inventory_integration import ARInventoryIntegration
+from app.services.finance.common.source_types import AR_INVOICE_SOURCE
 from app.services.finance.ar.posting.helpers import create_tax_transactions
 from app.services.finance.ar.posting.result import ARPostingResult
 from app.services.finance.gl.journal import (
@@ -155,7 +156,7 @@ def post_invoice(
     existing_journal = db.scalar(
         select(JournalEntry).where(
             JournalEntry.source_module == "AR",
-            JournalEntry.source_document_type == "INVOICE",
+            JournalEntry.source_document_type == AR_INVOICE_SOURCE,
             JournalEntry.source_document_id == inv_id,
             JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
             JournalEntry.journal_type != JournalType.REVERSAL,
@@ -567,7 +568,7 @@ def post_invoice(
         exchange_rate_type_id=invoice.exchange_rate_type_id,
         lines=journal_lines,
         source_module="AR",
-        source_document_type="INVOICE",
+        source_document_type=AR_INVOICE_SOURCE,
         source_document_id=inv_id,
         correlation_id=invoice.correlation_id,
     )

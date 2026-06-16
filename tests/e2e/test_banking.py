@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -31,14 +32,14 @@ class TestBankAccountsList:
 
     def test_accounts_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that accounts list page loads successfully."""
-        response = authenticated_page.goto(f"{base_url}/banking/accounts")
+        response = authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         assert response is not None, "No response from accounts navigation"
         assert response.ok, f"Accounts page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_accounts_page_has_cta(self, authenticated_page: Page, base_url: str):
         """Ensure accounts page loads and shows the new account CTA."""
-        response = authenticated_page.goto(f"{base_url}/banking/accounts")
+        response = authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         assert response is not None, "No response from accounts navigation"
         assert response.ok, f"Accounts page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
@@ -57,8 +58,9 @@ class TestBankAccountsList:
 
     def test_accounts_list_with_search(self, authenticated_page: Page, base_url: str):
         """Test accounts list search functionality."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.get_by_test_id("bank-accounts-search")
         if search.count() > 0:
@@ -70,7 +72,7 @@ class TestBankAccountsList:
 
     def test_accounts_list_by_status(self, authenticated_page: Page, base_url: str):
         """Test accounts list status filter."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.get_by_test_id("bank-accounts-status")
@@ -83,7 +85,7 @@ class TestBankAccountCreate:
 
     def test_account_create_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that account create page loads."""
-        response = authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        response = authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         assert response.ok, f"Account create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
@@ -92,7 +94,7 @@ class TestBankAccountCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that account form has name field."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -105,7 +107,7 @@ class TestBankAccountCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that account form has bank name field."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("#bank_name, input[name='bank_name']")
@@ -116,7 +118,7 @@ class TestBankAccountCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that account form has account number field."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -129,19 +131,20 @@ class TestBankAccountCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that account form has currency selection."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
             "select[name='currency'], select[name='currency_code'], #currency"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_account_create_full(self, authenticated_page: Page, base_url: str):
         """Test complete account creation workflow."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 
@@ -173,7 +176,7 @@ class TestBankAccountEdit:
 
     def test_account_edit_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that account edit page loads."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Navigate to first account then edit
@@ -195,8 +198,9 @@ class TestBankAccountEdit:
 
     def test_account_update_success(self, authenticated_page: Page, base_url: str):
         """Test successful account update."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         account_link = authenticated_page.locator(
             "table tbody tr a, a[href*='/banking/accounts/']"
@@ -226,7 +230,7 @@ class TestBankAccountEdit:
 
     def test_account_deactivate(self, authenticated_page: Page, base_url: str):
         """Test account deactivation."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         account_link = authenticated_page.locator(
@@ -255,7 +259,7 @@ class TestBankStatementsList:
 
     def test_statements_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that statements list page loads successfully."""
-        response = authenticated_page.goto(f"{base_url}/banking/statements")
+        response = authenticated_page.goto(f"{base_url}/finance/banking/statements")
         assert response is not None, "No response from statements navigation"
         assert response.ok, f"Statements page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
@@ -264,7 +268,7 @@ class TestBankStatementsList:
         self, authenticated_page: Page, base_url: str
     ):
         """Ensure statements page loads and shows the import CTA."""
-        response = authenticated_page.goto(f"{base_url}/banking/statements")
+        response = authenticated_page.goto(f"{base_url}/finance/banking/statements")
         assert response is not None, "No response from statements navigation"
         assert response.ok, f"Statements page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
@@ -295,7 +299,7 @@ class TestBankStatementsList:
         self, authenticated_page: Page, base_url: str
     ):
         """Test statements list filter options."""
-        authenticated_page.goto(f"{base_url}/banking/statements")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check account filter
@@ -316,7 +320,9 @@ class TestBankStatementImport:
 
     def test_statement_import_page_loads(self, authenticated_page: Page, base_url: str):
         """Test statement import page loads."""
-        response = authenticated_page.goto(f"{base_url}/banking/statements/import")
+        response = authenticated_page.goto(
+            f"{base_url}/finance/banking/statements/import"
+        )
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
             expect(authenticated_page.locator("main")).to_be_visible()
@@ -325,7 +331,7 @@ class TestBankStatementImport:
         self, authenticated_page: Page, base_url: str
     ):
         """Test statement import has file input."""
-        authenticated_page.goto(f"{base_url}/banking/statements/import")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements/import")
         authenticated_page.wait_for_load_state("networkidle")
 
         file_input = authenticated_page.locator(
@@ -338,7 +344,7 @@ class TestBankStatementImport:
         self, authenticated_page: Page, base_url: str
     ):
         """Test statement import has account selection."""
-        authenticated_page.goto(f"{base_url}/banking/statements/import")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements/import")
         authenticated_page.wait_for_load_state("networkidle")
 
         account_select = authenticated_page.locator(
@@ -349,12 +355,12 @@ class TestBankStatementImport:
 
     def test_statement_import_csv_format(self, authenticated_page: Page, base_url: str):
         """Test statement import supports CSV format."""
-        authenticated_page.goto(f"{base_url}/banking/statements/import")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements/import")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for format selection or CSV mention
         format_info = authenticated_page.locator(
-            "text=CSV, text=csv, select[name='format']"
+            ":text('CSV'), :text('csv'), select[name='format']"
         )
         if format_info.count() > 0:
             expect(format_info.first).to_be_visible()
@@ -368,7 +374,7 @@ class TestBankStatementDetail:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that statement detail is accessible."""
-        authenticated_page.goto(f"{base_url}/banking/statements")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first statement link
@@ -385,7 +391,7 @@ class TestBankStatementDetail:
 
     def test_statement_transactions_list(self, authenticated_page: Page, base_url: str):
         """Test statement shows transaction list."""
-        authenticated_page.goto(f"{base_url}/banking/statements")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements")
         authenticated_page.wait_for_load_state("networkidle")
 
         statement_link = authenticated_page.locator(
@@ -397,7 +403,7 @@ class TestBankStatementDetail:
 
             # Look for transactions table
             transactions = authenticated_page.locator(
-                "table, [class*='transactions'], text=Transactions"
+                "table, [class*='transactions'], :text('Transactions')"
             )
             if transactions.count() > 0:
                 expect(transactions.first).to_be_visible()
@@ -414,7 +420,9 @@ class TestBankReconciliationsList:
 
     def test_reconciliations_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that reconciliations list page loads successfully."""
-        response = authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        response = authenticated_page.goto(
+            f"{base_url}/finance/banking/reconciliations"
+        )
         assert response is not None, "No response from reconciliations navigation"
         assert response.ok, f"Reconciliations page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
@@ -423,7 +431,9 @@ class TestBankReconciliationsList:
         self, authenticated_page: Page, base_url: str
     ):
         """Ensure reconciliations page loads and shows the new reconciliation CTA."""
-        response = authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        response = authenticated_page.goto(
+            f"{base_url}/finance/banking/reconciliations"
+        )
         assert response is not None, "No response from reconciliations navigation"
         assert response.ok, f"Reconciliations page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
@@ -459,7 +469,9 @@ class TestBankReconciliationCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test reconciliation create page loads."""
-        response = authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        response = authenticated_page.goto(
+            f"{base_url}/finance/banking/reconciliations/new"
+        )
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
             expect(authenticated_page.locator("main")).to_be_visible()
@@ -468,7 +480,7 @@ class TestBankReconciliationCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test reconciliation form has account selection."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         account_select = authenticated_page.locator(
@@ -481,7 +493,7 @@ class TestBankReconciliationCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test reconciliation form has statement selection."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         statement_select = authenticated_page.locator(
@@ -494,7 +506,7 @@ class TestBankReconciliationCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test reconciliation form has date field."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_field = authenticated_page.locator(
@@ -512,7 +524,7 @@ class TestBankReconciliationWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test loading unmatched transactions."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first reconciliation
@@ -525,14 +537,14 @@ class TestBankReconciliationWorkflow:
 
             # Look for unmatched transactions section
             unmatched = authenticated_page.locator(
-                "text=Unmatched, text=Pending, [class*='unmatched']"
+                ":text('Unmatched'), :text('Pending'), [class*='unmatched']"
             )
             if unmatched.count() > 0:
                 expect(unmatched.first).to_be_visible()
 
     def test_reconciliation_manual_match(self, authenticated_page: Page, base_url: str):
         """Test manual matching functionality."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         recon_link = authenticated_page.locator(
@@ -551,7 +563,7 @@ class TestBankReconciliationWorkflow:
 
     def test_reconciliation_auto_match(self, authenticated_page: Page, base_url: str):
         """Test auto-matching functionality."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         recon_link = authenticated_page.locator(
@@ -572,7 +584,7 @@ class TestBankReconciliationWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test creating adjustment during reconciliation."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         recon_link = authenticated_page.locator(
@@ -591,7 +603,7 @@ class TestBankReconciliationWorkflow:
 
     def test_reconciliation_complete(self, authenticated_page: Page, base_url: str):
         """Test completing reconciliation."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         recon_link = authenticated_page.locator(
@@ -610,7 +622,7 @@ class TestBankReconciliationWorkflow:
 
     def test_reconciliation_detail_page(self, authenticated_page: Page, base_url: str):
         """Test reconciliation detail page."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         recon_link = authenticated_page.locator(

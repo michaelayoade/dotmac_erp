@@ -113,13 +113,18 @@ async def update_hr_settings(
         db, auth.organization_id, data
     )
     if success:
-        success, error = people_settings_web_service.update_employee_invite_email_template(
-            sync_db,
-            auth.organization_id,
-            data,
+        success, error = (
+            people_settings_web_service.update_employee_invite_email_template(
+                sync_db,
+                auth.organization_id,
+                data,
+            )
         )
     if success:
-        success, error = await people_settings_web_service.update_default_invite_attachment(
+        (
+            success,
+            error,
+        ) = await people_settings_web_service.update_default_invite_attachment(
             sync_db,
             auth.organization_id,
             file=form_data.get("default_invite_attachment"),

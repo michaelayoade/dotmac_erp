@@ -114,9 +114,7 @@ class TaxPeriodService(ListResponseMixin):
         )
 
         db.add(period)
-        db.commit()
-        db.refresh(period)
-
+        db.flush()
         return period
 
     @staticmethod
@@ -246,9 +244,7 @@ class TaxPeriodService(ListResponseMixin):
         period.is_extension_filed = True
         period.extended_due_date = extended_due_date
 
-        db.commit()
-        db.refresh(period)
-
+        db.flush()
         return period
 
     @staticmethod
@@ -288,9 +284,7 @@ class TaxPeriodService(ListResponseMixin):
 
         period.status = TaxPeriodStatus.FILED
 
-        db.commit()
-        db.refresh(period)
-
+        db.flush()
         return period
 
     @staticmethod
@@ -324,9 +318,7 @@ class TaxPeriodService(ListResponseMixin):
 
         period.status = TaxPeriodStatus.PAID
 
-        db.commit()
-        db.refresh(period)
-
+        db.flush()
         return period
 
     @staticmethod
@@ -360,9 +352,7 @@ class TaxPeriodService(ListResponseMixin):
 
         period.status = TaxPeriodStatus.CLOSED
 
-        db.commit()
-        db.refresh(period)
-
+        db.flush()
         return period
 
     @staticmethod

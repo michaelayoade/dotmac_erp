@@ -357,9 +357,7 @@ class LeasePostingAdapter:
 
         # Update liability balance
         liability.current_liability_balance += interest_amount
-        db.commit()
-        db.refresh(liability)
-
+        db.flush()
         return LeasePostingResult(
             success=True,
             journal_entry_id=journal.journal_entry_id,
@@ -507,9 +505,7 @@ class LeasePostingAdapter:
         liability.current_liability_balance -= payment_amount
         if liability.current_liability_balance < 0:
             liability.current_liability_balance = Decimal("0")
-        db.commit()
-        db.refresh(liability)
-
+        db.flush()
         return LeasePostingResult(
             success=True,
             journal_entry_id=journal.journal_entry_id,
@@ -657,9 +653,7 @@ class LeasePostingAdapter:
         )
         if asset.carrying_amount < 0:
             asset.carrying_amount = Decimal("0")
-        db.commit()
-        db.refresh(asset)
-
+        db.flush()
         return LeasePostingResult(
             success=True,
             journal_entry_id=journal.journal_entry_id,
@@ -852,7 +846,7 @@ class LeasePostingAdapter:
         # Zero out liability and asset balances
         liability.current_liability_balance = Decimal("0")
         asset.carrying_amount = Decimal("0")
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         return LeasePostingResult(
             success=True,

@@ -70,7 +70,7 @@
                     <label for="account_type" class="form-label">Account Type <span class="text-rose-500">*</span></label>
                     <select name="account_type" id="account_type" class="form-select form-input" required>
                         <option value="">Select type</option>
-                        {% set selected_type = form_data.account_type if form_data else (account.account_type.value if account else '') %}
+                        {% set selected_type = form_data.account_type if form_data else (account.account_type if account else '') %}
                         {% for value in account_types %}
                         <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ value }}</option>
                         {% endfor %}
@@ -80,7 +80,7 @@
                     <label for="normal_balance" class="form-label">Normal Balance <span class="text-rose-500">*</span></label>
                     <select name="normal_balance" id="normal_balance" class="form-select form-input" required>
                         <option value="">Select balance</option>
-                        {% set selected_balance = form_data.normal_balance if form_data else (account.normal_balance.value if account else '') %}
+                        {% set selected_balance = form_data.normal_balance if form_data else (account.normal_balance if account else '') %}
                         {% for value in normal_balances %}
                         <option value="{{ value }}" {% if selected_balance == value %}selected{% endif %}>{{ value }}</option>
                         {% endfor %}

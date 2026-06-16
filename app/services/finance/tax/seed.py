@@ -567,6 +567,9 @@ def seed_default_tax_data(
         corporate_tax_rate=config.corporate_tax_rate,
         tax_authority_name=config.tax_authority_name,
     )
+    # Flush so the jurisdiction's surrogate PK (Python-side default=uuid4) is
+    # materialized before it is read below and passed as the tax code FK.
+    db.flush()
     summary.default_jurisdiction_id = jurisdiction.jurisdiction_id
 
     # Create tax codes if requested and configured

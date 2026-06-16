@@ -487,6 +487,13 @@ class ReportInstanceService(ListResponseMixin):
                 "data_source_type": "GL",
                 "category": "operational",
             },
+            "GL_LEDGER": {
+                "report_code": "GL_LEDGER",
+                "report_name": "Ledger Transactions Export",
+                "report_type": ReportType.CUSTOM,
+                "data_source_type": "GL",
+                "category": "operational",
+            },
             "AR_INVOICES": {
                 "report_code": "AR_INVOICES",
                 "report_name": "AR Invoices Export",

@@ -1,0 +1,128 @@
+{% extends "finance/base_finance.html" %}
+
+{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
+{% block page_title %}Sales Day Book{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Sales Day Book</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/reports/sales-day-book/export?format=xlsx&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}&status={{ status }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export Excel
+</a>
+<a href="/finance/reports/sales-day-book/export?format=pdf&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}&status={{ status }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export PDF
+</a>
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            {{ period_shortcuts(mode="range") }}
+            <div class="min-w-[160px]">
+                <label class="form-label">From</label>
+                <input aria-label="From date" type="date" name="start_date" value="{{ start_date_iso }}" class="form-input">
+            </div>
+            <div class="min-w-[160px]">
+                <label class="form-label">To</label>
+                <input aria-label="To date" type="date" name="end_date" value="{{ end_date_iso }}" class="form-input">
+            </div>
+            <div class="min-w-[160px]">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select" aria-label="Status">
+                    <option value="">Active invoices (default)</option>
+                    {% for s in ["SUBMITTED", "APPROVED", "POSTED", "PARTIALLY_PAID", "PAID", "OVERDUE", "DISPUTED", "DRAFT", "VOID"] %}
+                    <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
+                Refresh
+            </button>
+        </form>
+    </div>
+
+    <!-- Report -->
+    <div class="card p-6 print:shadow-none print:border-0">
+        {% set doc_title = "Sales Day Book" %}
+        {% set doc_number = start_date ~ " — " ~ end_date %}
+        {% include "partials/_document_header.html" %}
+        <div class="text-center mb-4 print:mb-2">
+            <p class="text-slate-500 dark:text-slate-400">{{ start_date }} to {{ end_date }} · {{ row_count }} invoice(s)</p>
+        </div>
+
+        <!-- VAT cash-basis memo notice -->
+        <div class="mb-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 print:hidden">
+            <p class="text-sm text-amber-700 dark:text-amber-300">{{ vat_basis_note }}</p>
+        </div>
+
+        <!-- GL reconciliation basis notice -->
+        {% if gl_recon_note %}
+        <div class="mb-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 print:hidden">
+            <p class="text-sm text-slate-600 dark:text-slate-400">{{ gl_recon_note }}</p>
+        </div>
+        {% endif %}
+
+        <div class="table-container">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Invoice #</th>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
+                        <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reference</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Net</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">VAT</th>
+                        <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Gross</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr class="border-t border-slate-100 dark:border-slate-800">
+                        <td class="py-2 px-4 text-slate-500 whitespace-nowrap">{{ row.invoice_date }}</td>
+                        <td class="py-2 px-4 font-mono tabular-nums text-xs">{{ row.invoice_number }}</td>
+                        <td class="py-2 px-4">{{ row.customer_name }}</td>
+                        <td class="py-2 px-4 text-slate-500">{{ row.reference if row.reference else '—' }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums">{{ row.net }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums">{{ row.vat }}</td>
+                        <td class="py-2 px-4 text-right font-mono tabular-nums">{{ row.gross }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No sales in this period", "No invoices were raised in the selected date range.") }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if rows %}
+                <tfoot>
+                    <tr class="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 font-bold">
+                        <td class="py-3 px-4" colspan="4">TOTAL</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums">{{ total_net }}</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums">{{ total_vat }}</td>
+                        <td class="py-3 px-4 text-right font-mono tabular-nums">{{ total_gross }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

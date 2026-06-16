@@ -137,6 +137,11 @@ class CustomerPaymentInput:
     wht_code_id: UUID | None = None  # WHT tax code applied
     wht_amount: Decimal = field(default_factory=lambda: Decimal("0"))  # WHT deducted
     wht_certificate_number: str | None = None  # Certificate received from customer
+    # Consolidated (reseller) payment: when True, allocations may target invoices
+    # of the customer's sub-accounts (the whole account family). The family must
+    # share the parent's AR control account so the existing single-line AR-control
+    # credit posting stays GL-correct.
+    consolidated: bool = False
 
 
 class CustomerPaymentService(ListResponseMixin):
@@ -216,6 +221,27 @@ class CustomerPaymentService(ListResponseMixin):
         if not customer.is_active:
             raise ValidationError("Customer is not active")
 
+        # Consolidated (reseller) payment: resolve the account family and require
+        # a single shared AR control account, so the AR-control credit posting
+        # stays GL-correct when paying sub-account invoices.
+        family_ids: set[UUID] = {customer_id}
+        if input.consolidated:
+            from app.services.finance.ar.customer_family import CustomerFamilyResolver
+
+            family_ids = set(CustomerFamilyResolver(db).family_ids(org_id, customer_id))
+            distinct_controls = set(
+                db.scalars(
+                    select(Customer.ar_control_account_id)
+                    .where(Customer.customer_id.in_(family_ids))
+                    .distinct()
+                ).all()
+            )
+            if distinct_controls != {customer.ar_control_account_id}:
+                raise ValidationError(
+                    "Consolidated payment requires the whole account family to "
+                    "share one AR control account"
+                )
+
         # Validate allocations
         if input.allocations:
             allocation_total = sum(a.amount for a in input.allocations)
@@ -223,16 +249,19 @@ class CustomerPaymentService(ListResponseMixin):
                 raise ValidationError("Allocation total exceeds payment amount")
 
             for alloc in input.allocations:
-                # Lock the invoice row to prevent over-allocation race condition
+                # Lock the invoice row to prevent over-allocation race condition.
+                # Select only the PK so the FOR UPDATE does not pull in the
+                # lazy="joined" customer (Postgres rejects FOR UPDATE on the
+                # nullable side of that outer join).
                 db.execute(
-                    select(Invoice)
+                    select(Invoice.invoice_id)
                     .where(Invoice.invoice_id == coerce_uuid(alloc.invoice_id))
                     .with_for_update()
                 )
                 invoice = db.get(Invoice, coerce_uuid(alloc.invoice_id))
                 if not invoice or invoice.organization_id != org_id:
                     raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
-                if invoice.customer_id != customer_id:
+                if invoice.customer_id not in family_ids:
                     raise ValidationError(
                         f"Invoice {invoice.invoice_number} belongs to different customer"
                     )
@@ -974,6 +1003,27 @@ class CustomerPaymentService(ListResponseMixin):
         if not customer.is_active:
             raise ValidationError("Customer is not active")
 
+        # Consolidated (reseller) payment: resolve the account family and require
+        # a single shared AR control account, so the AR-control credit posting
+        # stays GL-correct when paying sub-account invoices.
+        family_ids: set[UUID] = {customer_id}
+        if input.consolidated:
+            from app.services.finance.ar.customer_family import CustomerFamilyResolver
+
+            family_ids = set(CustomerFamilyResolver(db).family_ids(org_id, customer_id))
+            distinct_controls = set(
+                db.scalars(
+                    select(Customer.ar_control_account_id)
+                    .where(Customer.customer_id.in_(family_ids))
+                    .distinct()
+                ).all()
+            )
+            if distinct_controls != {customer.ar_control_account_id}:
+                raise ValidationError(
+                    "Consolidated payment requires the whole account family to "
+                    "share one AR control account"
+                )
+
         # Validate allocations
         if input.allocations:
             allocation_total = sum(a.amount for a in input.allocations)
@@ -981,16 +1031,19 @@ class CustomerPaymentService(ListResponseMixin):
                 raise ValidationError("Allocation total exceeds payment amount")
 
             for alloc in input.allocations:
-                # Lock the invoice row to prevent over-allocation race condition
+                # Lock the invoice row to prevent over-allocation race condition.
+                # Select only the PK so the FOR UPDATE does not pull in the
+                # lazy="joined" customer (Postgres rejects FOR UPDATE on the
+                # nullable side of that outer join).
                 db.execute(
-                    select(Invoice)
+                    select(Invoice.invoice_id)
                     .where(Invoice.invoice_id == coerce_uuid(alloc.invoice_id))
                     .with_for_update()
                 )
                 invoice = db.get(Invoice, coerce_uuid(alloc.invoice_id))
                 if not invoice or invoice.organization_id != org_id:
                     raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
-                if invoice.customer_id != customer_id:
+                if invoice.customer_id not in family_ids:
                     raise ValidationError(
                         f"Invoice {invoice.invoice_number} belongs to different customer"
                     )

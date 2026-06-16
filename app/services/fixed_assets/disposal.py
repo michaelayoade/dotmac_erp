@@ -156,9 +156,7 @@ class AssetDisposalService(ListResponseMixin):
         )
 
         db.add(disposal)
-        db.commit()
-        db.refresh(disposal)
-
+        db.flush()
         fire_audit_event(
             db,
             org_id,
@@ -277,9 +275,7 @@ class AssetDisposalService(ListResponseMixin):
             reason="Asset disposal approved",
         )
 
-        db.commit()
-        db.refresh(disposal)
-
+        db.flush()
         return disposal
 
     @staticmethod
@@ -355,9 +351,7 @@ class AssetDisposalService(ListResponseMixin):
             reason="Asset disposal posted to GL",
         )
 
-        db.commit()
-        db.refresh(disposal)
-
+        db.flush()
         return disposal
 
     @staticmethod

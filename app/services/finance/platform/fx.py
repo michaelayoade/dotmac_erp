@@ -519,8 +519,7 @@ class FXService(ListResponseMixin):
         )
 
         db.add(rate)
-        db.commit()
-        db.refresh(rate)
+        db.flush()
         return rate
 
     @staticmethod

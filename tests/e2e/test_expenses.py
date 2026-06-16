@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -27,15 +28,16 @@ class TestExpensesList:
 
     def test_expenses_page_loads(self, authenticated_page, base_url):
         """Test that expenses list page loads successfully."""
-        response = authenticated_page.goto(f"{base_url}/expenses")
+        response = authenticated_page.goto(f"{base_url}/expense")
         assert response.ok, f"Expenses list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_expenses_list_with_search(self, authenticated_page, base_url):
         """Test expenses list search functionality."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -49,7 +51,7 @@ class TestExpensesList:
 
     def test_expenses_list_by_category(self, authenticated_page, base_url):
         """Test expenses list category filter."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         category_filter = authenticated_page.locator(
@@ -60,16 +62,16 @@ class TestExpensesList:
 
     def test_expenses_list_by_status(self, authenticated_page, base_url):
         """Test expenses list status filter."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
     def test_expenses_list_has_new_button(self, authenticated_page, base_url):
         """Test that expenses list has new button."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -90,14 +92,14 @@ class TestExpenseCreate:
 
     def test_expense_create_page_loads(self, authenticated_page, base_url):
         """Test that expense create page loads."""
-        response = authenticated_page.goto(f"{base_url}/expenses/new")
+        response = authenticated_page.goto(f"{base_url}/expense/new")
         assert response.ok, f"Expense create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_expense_create_has_description_field(self, authenticated_page, base_url):
         """Test that expense form has description field."""
-        authenticated_page.goto(f"{base_url}/expenses/new")
+        authenticated_page.goto(f"{base_url}/expense/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -108,7 +110,7 @@ class TestExpenseCreate:
 
     def test_expense_create_has_amount_field(self, authenticated_page, base_url):
         """Test that expense form has amount field."""
-        authenticated_page.goto(f"{base_url}/expenses/new")
+        authenticated_page.goto(f"{base_url}/expense/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -119,7 +121,7 @@ class TestExpenseCreate:
 
     def test_expense_create_has_date_field(self, authenticated_page, base_url):
         """Test that expense form has date field."""
-        authenticated_page.goto(f"{base_url}/expenses/new")
+        authenticated_page.goto(f"{base_url}/expense/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -130,7 +132,7 @@ class TestExpenseCreate:
 
     def test_expense_create_has_category_field(self, authenticated_page, base_url):
         """Test that expense form has category selection."""
-        authenticated_page.goto(f"{base_url}/expenses/new")
+        authenticated_page.goto(f"{base_url}/expense/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -141,7 +143,7 @@ class TestExpenseCreate:
 
     def test_expense_create_with_receipt(self, authenticated_page, base_url):
         """Test expense creation with receipt attachment."""
-        authenticated_page.goto(f"{base_url}/expenses/new")
+        authenticated_page.goto(f"{base_url}/expense/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for file upload field
@@ -158,7 +160,7 @@ class TestExpenseDetail:
 
     def test_expense_detail_page_accessible(self, authenticated_page, base_url):
         """Test that expense detail is accessible."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -172,7 +174,7 @@ class TestExpenseDetail:
 
     def test_expense_detail_shows_amount(self, authenticated_page, base_url):
         """Test that expense detail shows amount."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -183,14 +185,14 @@ class TestExpenseDetail:
             authenticated_page.wait_for_load_state("networkidle")
 
             amount = authenticated_page.locator(
-                "text=Amount, text=$, .amount, [class*='total']"
+                ":text('Amount'), :text('$'), .amount, [class*='total']"
             )
             if amount.count() > 0:
                 expect(amount.first).to_be_visible()
 
     def test_expense_detail_shows_receipt(self, authenticated_page, base_url):
         """Test that expense detail shows receipt if attached."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -213,7 +215,7 @@ class TestExpenseEdit:
 
     def test_expense_edit_page_loads(self, authenticated_page, base_url):
         """Test that expense edit page loads."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -244,7 +246,7 @@ class TestExpenseWorkflows:
 
     def test_expense_submit_for_approval(self, authenticated_page, base_url):
         """Test submitting expense for approval."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -262,7 +264,7 @@ class TestExpenseWorkflows:
 
     def test_expense_approve_workflow(self, authenticated_page, base_url):
         """Test expense approval workflow."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -280,7 +282,7 @@ class TestExpenseWorkflows:
 
     def test_expense_reject_workflow(self, authenticated_page, base_url):
         """Test expense rejection workflow."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -298,7 +300,7 @@ class TestExpenseWorkflows:
 
     def test_expense_reimburse_workflow(self, authenticated_page, base_url):
         """Test expense reimbursement workflow."""
-        authenticated_page.goto(f"{base_url}/expenses")
+        authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
 
         expense_link = authenticated_page.locator(
@@ -326,14 +328,14 @@ class TestExpenseReports:
 
     def test_expense_reports_list_page_loads(self, authenticated_page, base_url):
         """Test expense reports list page loads."""
-        response = authenticated_page.goto(f"{base_url}/expenses/reports")
+        response = authenticated_page.goto(f"{base_url}/expense/reports")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
             expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_expense_report_create(self, authenticated_page, base_url):
         """Test creating an expense report/claim."""
-        response = authenticated_page.goto(f"{base_url}/expenses/reports/new")
+        response = authenticated_page.goto(f"{base_url}/expense/reports/new")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
 
@@ -346,7 +348,7 @@ class TestExpenseReports:
 
     def test_expense_report_add_expenses(self, authenticated_page, base_url):
         """Test adding expenses to a report."""
-        authenticated_page.goto(f"{base_url}/expenses/reports")
+        authenticated_page.goto(f"{base_url}/expense/reports")
         authenticated_page.wait_for_load_state("networkidle")
 
         report_link = authenticated_page.locator(

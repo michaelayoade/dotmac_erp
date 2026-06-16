@@ -8,7 +8,7 @@ import logging
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -23,7 +23,13 @@ from app.models.people.payroll.salary_structure import (
     SalaryStructureDeduction,
     SalaryStructureEarning,
 )
-from app.services.common import coerce_uuid
+from app.services.common import (
+    PaginationParams,
+    apply_search,
+    coerce_uuid,
+    paginate,
+    pagination_context,
+)
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -64,40 +70,37 @@ class ComponentWebService:
         """Render salary components list page."""
         org_id = coerce_uuid(auth.organization_id)
         per_page = DEFAULT_PAGE_SIZE
-        offset = (page - 1) * per_page
 
         query = select(SalaryComponent).where(SalaryComponent.organization_id == org_id)
 
-        if search:
-            query = query.where(
-                SalaryComponent.component_name.ilike(f"%{search}%")
-                | SalaryComponent.component_code.ilike(f"%{search}%")
-            )
+        query = apply_search(
+            query,
+            search,
+            SalaryComponent.component_name,
+            SalaryComponent.component_code,
+        )
 
         type_enum = parse_component_type(component_type)
         if type_enum:
             query = query.where(SalaryComponent.component_type == type_enum)
 
-        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        components = db.scalars(
-            query.order_by(SalaryComponent.display_order).offset(offset).limit(per_page)
-        ).all()
-        total_pages = (total + per_page - 1) // per_page
+        result = paginate(
+            db,
+            query.order_by(SalaryComponent.display_order),
+            PaginationParams.from_page(page, per_page),
+        )
 
         context = base_context(request, auth, "Salary Components", "payroll", db=db)
         context["request"] = request
         context.update(
             {
-                "components": components,
+                "components": result.items,
                 "search": search or "",
                 "component_type": component_type,
-                "page": page,
-                "total_pages": total_pages,
-                "total_count": total,
-                "total": total,
-                "limit": per_page,
-                "has_prev": page > 1,
-                "has_next": page < total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+                **pagination_context(result),
             }
         )
         return templates.TemplateResponse(

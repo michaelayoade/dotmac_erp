@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.lease.lease_asset import LeaseAsset
@@ -20,7 +20,13 @@ from app.models.finance.lease.lease_contract import (
 )
 from app.models.finance.lease.lease_liability import LeaseLiability
 from app.models.finance.lease.lease_payment_schedule import LeasePaymentSchedule
-from app.services.common import coerce_uuid
+from app.services.common import (
+    PaginationParams,
+    apply_search,
+    coerce_uuid,
+    paginate,
+    pagination_context,
+)
 from app.services.common_filters import build_active_filters
 from app.services.finance.lease import (
     lease_contract_service,
@@ -240,7 +246,6 @@ class LeaseWebService:
         limit: int = 50,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
-        offset = (page - 1) * limit
 
         status_value = _parse_status(status)
         classification = _parse_classification(lease_type)
@@ -251,26 +256,20 @@ class LeaseWebService:
             query = query.where(LeaseContract.status == status_value)
         if classification:
             query = query.where(LeaseContract.classification == classification)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.where(
-                or_(
-                    LeaseContract.lease_number.ilike(search_pattern),
-                    LeaseContract.lease_name.ilike(search_pattern),
-                    LeaseContract.lessor_name.ilike(search_pattern),
-                )
-            )
-
-        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        contracts = list(
-            db.scalars(
-                query.order_by(LeaseContract.commencement_date.desc())
-                .limit(limit)
-                .offset(offset)
-            ).all()
+        query = apply_search(
+            query,
+            search,
+            LeaseContract.lease_number,
+            LeaseContract.lease_name,
+            LeaseContract.lessor_name,
         )
 
-        total_pages = max(1, (total_count + limit - 1) // limit)
+        result = paginate(
+            db,
+            query.order_by(LeaseContract.commencement_date.desc()),
+            PaginationParams.from_page(page, limit),
+        )
+
         active_filters = build_active_filters(
             params={
                 "status": status,
@@ -300,16 +299,12 @@ class LeaseWebService:
         )
 
         return {
-            "contracts": [_contract_list_view(contract) for contract in contracts],
+            "contracts": [_contract_list_view(contract) for contract in result.items],
             "search": search,
             "status": status,
             "lease_type": lease_type,
             "active_filters": active_filters,
-            "page": page,
-            "limit": limit,
-            "offset": offset,
-            "total_count": total_count,
-            "total_pages": total_pages,
+            **pagination_context(result),
         }
 
     @staticmethod

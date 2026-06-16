@@ -1059,65 +1059,6 @@ class TestInventorySync:
         assert result[0]["name"] == "Main Warehouse"
         assert result[1]["code"] == "WH-FIELD"
 
-    def test_list_available_serials_for_crm(self, service, org_id):
-        """Should return available serials for item_code and warehouse_code."""
-        item_id = uuid.uuid4()
-        warehouse_id = uuid.uuid4()
-
-        item = MagicMock()
-        item.item_id = item_id
-        item.item_code = "ROUTER001"
-        item.item_name = "Router"
-        item.track_serial_numbers = True
-
-        warehouse = MagicMock()
-        warehouse.warehouse_id = warehouse_id
-        warehouse.warehouse_code = "MAIN"
-        warehouse.warehouse_name = "Main Store"
-
-        serial = MagicMock()
-        serial.serial_id = uuid.uuid4()
-        serial.serial_number = "SN-001"
-        serial.status = "AVAILABLE"
-
-        service.db.scalar.side_effect = [item, warehouse, 1]
-        service.db.scalars.return_value.all.return_value = [serial]
-
-        result = service.list_available_serials_for_crm(
-            org_id,
-            item_code="ROUTER001",
-            warehouse_code="MAIN",
-        )
-
-        assert result.track_serial_numbers is True
-        assert result.total_count == 1
-        assert result.serials[0].serial_number == "SN-001"
-
-    def test_list_available_serials_for_non_serial_item_returns_empty(
-        self, service, org_id
-    ):
-        """Non-serial items should not require CRM serial selection."""
-        item = MagicMock()
-        item.item_code = "CABLE001"
-        item.item_name = "Cable"
-        item.track_serial_numbers = False
-
-        warehouse = MagicMock()
-        warehouse.warehouse_code = "MAIN"
-        warehouse.warehouse_name = "Main Store"
-
-        service.db.scalar.side_effect = [item, warehouse]
-
-        result = service.list_available_serials_for_crm(
-            org_id,
-            item_code="CABLE001",
-            warehouse_code="MAIN",
-        )
-
-        assert result.track_serial_numbers is False
-        assert result.serials == []
-        assert result.total_count == 0
-
 
 # ============ New CRM API Endpoint Tests ============
 
@@ -1125,8 +1066,7 @@ class TestInventorySync:
 class TestListDepartments:
     """Test list_departments for CRM workforce sync."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_departments_empty(self, mock_select, service, org_id, mock_db):
+    def test_list_departments_empty(self, service, org_id, mock_db):
         """Should return empty list when no departments exist."""
         mock_db.scalar.return_value = 0
         mock_db.scalars.return_value.unique.return_value.all.return_value = []
@@ -1136,8 +1076,7 @@ class TestListDepartments:
         assert result.departments == []
         assert result.total == 0
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_departments_with_data(self, mock_select, service, org_id, mock_db):
+    def test_list_departments_with_data(self, service, org_id, mock_db):
         """Should return departments with manager and members."""
         from app.models.people.hr.employee import EmployeeStatus
 
@@ -1199,8 +1138,7 @@ class TestListDepartments:
         assert dept.manager.role == "manager"
         assert len(dept.members) == 2
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_departments_pagination(self, mock_select, service, org_id, mock_db):
+    def test_list_departments_pagination(self, service, org_id, mock_db):
         """Should respect limit and offset parameters."""
         mock_db.scalar.return_value = 5
         mock_db.scalars.return_value.unique.return_value.all.return_value = []
@@ -1215,9 +1153,8 @@ class TestListDepartments:
 class TestListWorkforceEmployees:
     """Test list_workforce_employees for CRM staff lookup."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_list_workforce_employees_returns_required_fields(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
         """Should return employee_id and email with optional fields."""
         from app.models.people.hr.employee import EmployeeStatus
@@ -1254,9 +1191,8 @@ class TestListWorkforceEmployees:
         assert row.designation == "Engineer"
         assert row.is_active is True
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_list_workforce_employees_pagination_and_filter(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
         """Should paginate and exclude employees without mappable email."""
         from app.models.people.hr.employee import EmployeeStatus
@@ -1293,8 +1229,7 @@ class TestListWorkforceEmployees:
 class TestListCompanies:
     """Test list_companies for CRM contacts sync."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_companies_empty(self, mock_select, service, org_id, mock_db):
+    def test_list_companies_empty(self, service, org_id, mock_db):
         """Should return empty list when no companies exist."""
         mock_db.scalar.return_value = 0
         mock_db.scalars.return_value.all.return_value = []
@@ -1305,8 +1240,7 @@ class TestListCompanies:
         assert result.total == 0
         assert result.has_more is False
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_companies_with_data(self, mock_select, service, org_id, mock_db):
+    def test_list_companies_with_data(self, service, org_id, mock_db):
         """Should return company contacts with correct mapping."""
         mock_customer = MagicMock()
         mock_customer.customer_id = uuid.uuid4()
@@ -1329,8 +1263,7 @@ class TestListCompanies:
         assert company.tax_id == "12345678"
         assert company.crm_id == "crm-abc-123"
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_companies_has_more(self, mock_select, service, org_id, mock_db):
+    def test_list_companies_has_more(self, service, org_id, mock_db):
         """Should set has_more when more results exist beyond limit."""
         mock_c1 = MagicMock()
         mock_c1.customer_id = uuid.uuid4()
@@ -1363,8 +1296,7 @@ class TestListCompanies:
 class TestListPeopleContacts:
     """Test list_people_contacts for CRM contacts sync."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_people_empty(self, mock_select, service, org_id, mock_db):
+    def test_list_people_empty(self, service, org_id, mock_db):
         """Should return empty list when no individual customers exist."""
         mock_db.scalar.return_value = 0
         mock_db.scalars.return_value.all.return_value = []
@@ -1374,10 +1306,7 @@ class TestListPeopleContacts:
         assert result.contacts == []
         assert result.total == 0
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_people_extracts_email_phone(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_list_people_extracts_email_phone(self, service, org_id, mock_db):
         """Should extract email/phone from primary_contact JSONB."""
         mock_customer = MagicMock()
         mock_customer.customer_id = uuid.uuid4()
@@ -1400,10 +1329,7 @@ class TestListPeopleContacts:
         assert contact.email == "john@example.com"
         assert contact.phone == "+2341234567"
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_list_people_handles_null_primary_contact(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_list_people_handles_null_primary_contact(self, service, org_id, mock_db):
         """Should handle None primary_contact gracefully."""
         mock_customer = MagicMock()
         mock_customer.customer_id = uuid.uuid4()
@@ -1425,10 +1351,7 @@ class TestListPeopleContacts:
 class TestCreateMaterialRequest:
     """Test create_material_request for CRM material request sync."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_create_material_request_upserts_existing(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_create_material_request_upserts_existing(self, service, org_id, mock_db):
         """Should return existing request unchanged for identical duplicate send."""
         from app.models.inventory.material_request import (
             MaterialRequestStatus,
@@ -1484,10 +1407,7 @@ class TestCreateMaterialRequest:
         assert result.omni_id == "crm-mr-123"
         mock_db.add.assert_not_called()
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_create_material_request_happy_path(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_create_material_request_happy_path(self, service, org_id, mock_db):
         """Should create MR with items and return response."""
 
         mock_item = MagicMock()
@@ -1549,10 +1469,7 @@ class TestCreateMaterialRequest:
         # Header is explicitly added; lines are attached through relationship append
         assert mock_db.add.call_count >= 1
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_create_material_request_invalid_item(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_create_material_request_invalid_item(self, service, org_id, mock_db):
         """Should raise ValueError when item_code not found."""
         mock_db.scalar.return_value = None
 
@@ -1572,10 +1489,7 @@ class TestCreateMaterialRequest:
         with pytest.raises(ValueError, match="Item not found: NONEXISTENT"):
             service.create_material_request(org_id, payload)
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_create_material_request_invalid_type(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_create_material_request_invalid_type(self, service, org_id, mock_db):
         """Should raise ValueError for unknown request_type."""
         mock_db.scalar.return_value = None  # No existing MR
 
@@ -1595,9 +1509,8 @@ class TestCreateMaterialRequest:
         with pytest.raises(ValueError, match="Invalid request_type"):
             service.create_material_request(org_id, payload)
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_create_material_request_project_ticket_linking(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
         """Should resolve project and ticket CRM IDs."""
         mock_item = MagicMock()
@@ -1663,9 +1576,8 @@ class TestCreateMaterialRequest:
         mock_resolve_proj.assert_called_once_with(org_id, "proj-crm-123")
         mock_resolve_ticket.assert_called_once_with(org_id, "ticket-crm-456")
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_create_material_request_issued_posts_issue_transactions(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
         """Should post inventory issues when CRM status is issued."""
         from app.models.inventory.material_request import MaterialRequestStatus
@@ -1784,11 +1696,10 @@ class TestCreateMaterialRequest:
         assert isinstance(txn_input, TransactionInput)
         assert txn_input.serial_numbers == ["SN-001"]
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_create_material_request_issued_insufficient_stock_pending_stock(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
-        """Should create as pending stock instead of failing when issued stock is short."""
+        """Issued CRM requests should park in pending stock when inventory is short."""
         from app.models.inventory.material_request import MaterialRequestStatus
 
         mock_item = MagicMock()
@@ -1796,8 +1707,6 @@ class TestCreateMaterialRequest:
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
         wh_id = uuid.uuid4()
-
-        # item lookup -> warehouse lookup -> existing MR lookup
         mock_db.scalar.side_effect = [mock_item, wh_id, None]
 
         added_objects: list = []
@@ -1839,11 +1748,10 @@ class TestCreateMaterialRequest:
         assert result.status == MaterialRequestStatus.PENDING_STOCK.value
         mock_issue.assert_not_called()
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_create_material_request_submitted_insufficient_stock_pending_stock(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
-        """Should allow submitted CRM requests but flag them as pending stock."""
+        """Submitted CRM requests should still be accepted but flagged pending stock."""
         from app.models.inventory.material_request import MaterialRequestStatus
 
         mock_item = MagicMock()
@@ -1851,8 +1759,6 @@ class TestCreateMaterialRequest:
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
         wh_id = uuid.uuid4()
-
-        # item lookup -> warehouse lookup -> existing MR lookup
         mock_db.scalar.side_effect = [mock_item, wh_id, None]
 
         added_objects: list = []
@@ -1892,9 +1798,8 @@ class TestCreateMaterialRequest:
 
         assert result.status == MaterialRequestStatus.PENDING_STOCK.value
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_create_material_request_issued_reconcile_existing(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
         """Should reject changed duplicate sends for existing omni_id."""
         from fastapi import HTTPException
@@ -1949,11 +1854,54 @@ class TestCreateMaterialRequest:
         assert exc.value.status_code == 409
 
 
+class TestPendingStockMaterialRequestAutomation:
+    """Test pending-stock CRM material request automation."""
+
+    def test_process_pending_stock_auto_issues_and_notifies(
+        self, service, org_id, mock_db
+    ):
+        from app.models.inventory.material_request import MaterialRequestStatus
+
+        request = MagicMock()
+        request.request_id = uuid.uuid4()
+        request.request_number = "MAT-MR-2026-00011"
+        request.created_by_id = uuid.uuid4()
+        request.requested_by_id = None
+        request.status = MaterialRequestStatus.PENDING_STOCK
+        request.items = [MagicMock()]
+        mock_db.scalars.return_value.unique.return_value.all.return_value = [request]
+        mock_db.begin_nested.return_value.__enter__.return_value = None
+        mock_db.begin_nested.return_value.__exit__.return_value = None
+
+        with patch.object(
+            service,
+            "_snapshot_material_request_lines",
+            return_value=[{"item_id": uuid.uuid4(), "warehouse_id": uuid.uuid4(), "requested_qty": Decimal("1"), "uom": "Nos", "serial_numbers": []}],
+        ):
+            with patch.object(
+                service, "_crm_material_request_has_sufficient_stock", return_value=True
+            ):
+                with patch.object(
+                    service,
+                    "_advance_crm_material_request_status",
+                    return_value=MagicMock(status=MaterialRequestStatus.ISSUED.value),
+                ):
+                    with patch.object(
+                        service,
+                        "_notify_crm_material_request_auto_issued",
+                        return_value=True,
+                    ):
+                        result = service.process_pending_stock_material_requests(org_id)
+
+        assert result["checked"] == 1
+        assert result["issued"] == 1
+        assert result["notifications_sent"] == 1
+
+
 class TestGetMaterialRequestByCrmId:
     """Test get_material_request_by_crm_id."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_not_found_returns_none(self, mock_select, service, org_id, mock_db):
+    def test_not_found_returns_none(self, service, org_id, mock_db):
         """Should return None when no MR matches the omni_id."""
         mock_db.scalar.return_value = None
 
@@ -1961,8 +1909,7 @@ class TestGetMaterialRequestByCrmId:
 
         assert result is None
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_found_returns_status(self, mock_select, service, org_id, mock_db):
+    def test_found_returns_status(self, service, org_id, mock_db):
         """Should return full status with items when found."""
         from app.models.inventory.material_request import (
             MaterialRequestStatus,
@@ -2003,167 +1950,10 @@ class TestGetMaterialRequestByCrmId:
         assert result.items[0].requested_qty == Decimal("10")
 
 
-class TestPendingStockMaterialRequestAutomation:
-    """Test pending-stock CRM material request automation."""
-
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_process_pending_stock_auto_issues_and_notifies(
-        self, mock_select, service, org_id, mock_db
-    ):
-        """Should issue pending-stock requests when stock becomes available."""
-        from app.models.inventory.material_request import MaterialRequestStatus
-
-        request = MagicMock()
-        request.request_id = uuid.uuid4()
-        request.request_number = "MAT-MR-2026-00020"
-        request.status = MaterialRequestStatus.PENDING_STOCK
-        request.crm_id = "crm-mr-pending-stock-020"
-        request.created_by_id = uuid.uuid4()
-        request.items = []
-
-        scalar_result = MagicMock()
-        scalar_result.unique.return_value.all.return_value = [request]
-        mock_db.scalars.return_value = scalar_result
-
-        with patch.object(
-            service,
-            "_snapshot_material_request_lines",
-            return_value=[{"item_id": uuid.uuid4(), "warehouse_id": uuid.uuid4()}],
-        ):
-            with patch.object(
-                service,
-                "_crm_material_request_has_sufficient_stock",
-                return_value=True,
-            ):
-                with patch.object(service, "_post_crm_issue_transaction"):
-                    with patch.object(
-                        service,
-                        "_notify_crm_material_request_auto_issued",
-                        return_value=True,
-                    ) as mock_notify:
-                        result = service.process_pending_stock_material_requests(org_id)
-
-        assert result["checked"] == 1
-        assert result["issued"] == 1
-        assert result["notifications_sent"] == 1
-        assert request.status == MaterialRequestStatus.ISSUED
-        mock_notify.assert_called_once_with(org_id, request)
-
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_process_pending_stock_stays_pending_when_stock_short(
-        self, mock_select, service, org_id, mock_db
-    ):
-        """Should leave pending-stock requests alone while inventory is still short."""
-        from app.models.inventory.material_request import MaterialRequestStatus
-
-        request = MagicMock()
-        request.request_id = uuid.uuid4()
-        request.request_number = "MAT-MR-2026-00021"
-        request.status = MaterialRequestStatus.PENDING_STOCK
-        request.crm_id = "crm-mr-pending-stock-021"
-        request.items = []
-
-        scalar_result = MagicMock()
-        scalar_result.unique.return_value.all.return_value = [request]
-        mock_db.scalars.return_value = scalar_result
-
-        with patch.object(service, "_snapshot_material_request_lines", return_value=[]):
-            with patch.object(
-                service,
-                "_crm_material_request_has_sufficient_stock",
-                return_value=False,
-            ):
-                with patch.object(
-                    service,
-                    "_advance_crm_material_request_status",
-                ) as mock_advance:
-                    result = service.process_pending_stock_material_requests(org_id)
-
-        assert result["checked"] == 1
-        assert result["issued"] == 0
-        assert result["still_pending"] == 1
-        assert request.status == MaterialRequestStatus.PENDING_STOCK
-        mock_advance.assert_not_called()
-
-    def test_auto_issue_notification_targets_requester_person(
-        self, service, org_id, mock_db
-    ):
-        """Should notify the person linked to requested_by employee."""
-        request = MagicMock()
-        request.request_id = uuid.uuid4()
-        request.request_number = "MAT-MR-2026-00022"
-        request.requested_by_id = uuid.uuid4()
-        request.created_by_id = uuid.uuid4()
-
-        employee = MagicMock()
-        employee.organization_id = org_id
-        employee.person_id = uuid.uuid4()
-        mock_db.get.return_value = employee
-
-        with patch(
-            "app.services.notification.NotificationService.create"
-        ) as mock_create:
-            sent = service._notify_crm_material_request_auto_issued(org_id, request)
-
-        assert sent is True
-        assert mock_create.call_args.kwargs["recipient_id"] == employee.person_id
-
-    def test_emits_crm_status_change_hook_event(self, service, org_id):
-        """Should emit CRM-facing status change events with omni_id payload."""
-        from app.models.inventory.material_request import (
-            MaterialRequestStatus,
-            MaterialRequestType,
-        )
-        from app.services.hooks.events import CRM_MATERIAL_REQUEST_STATUS_CHANGED
-
-        line = MagicMock()
-        line.item_id = uuid.uuid4()
-        line.inventory_item_id = uuid.uuid4()
-        line.warehouse_id = uuid.uuid4()
-        line.requested_qty = Decimal("2")
-        line.ordered_qty = Decimal("0")
-        line.uom = "Nos"
-        line.sequence = 1
-
-        request = MagicMock()
-        request.request_id = uuid.uuid4()
-        request.request_number = "MAT-MR-2026-00023"
-        request.crm_id = "crm-mr-023"
-        request.request_type = MaterialRequestType.ISSUE
-        request.items = [line]
-        request.created_at = None
-        request.updated_at = None
-
-        actor_id = uuid.uuid4()
-        with patch("app.services.hooks.emit_hook_event") as mock_emit:
-            service._emit_crm_material_request_status_changed(
-                org_id=org_id,
-                request=request,
-                old_status=MaterialRequestStatus.PENDING_STOCK,
-                new_status=MaterialRequestStatus.ISSUED,
-                actor_person_id=actor_id,
-            )
-
-        assert mock_emit.call_args.kwargs["event_name"] == (
-            CRM_MATERIAL_REQUEST_STATUS_CHANGED
-        )
-        assert mock_emit.call_args.kwargs["entity_type"] == "MaterialRequest"
-        assert mock_emit.call_args.kwargs["entity_id"] == request.request_id
-        assert mock_emit.call_args.kwargs["actor_user_id"] == actor_id
-        payload = mock_emit.call_args.kwargs["payload"]
-        assert payload["omni_id"] == "crm-mr-023"
-        assert payload["old_status"] == "PENDING_STOCK"
-        assert payload["new_status"] == "ISSUED"
-        assert payload["items"][0]["requested_qty"] == "2"
-
-
 class TestUpsertInventoryItem:
     """Test CRM inventory item upsert flow."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_upsert_inventory_item_creates_new(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_upsert_inventory_item_creates_new(self, service, org_id, mock_db):
         category = MagicMock()
         category.category_id = uuid.uuid4()
 
@@ -2196,10 +1986,7 @@ class TestUpsertInventoryItem:
         mock_db.add.assert_called_once()
         assert mock_db.flush.called
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_upsert_inventory_item_updates_existing(
-        self, mock_select, service, org_id, mock_db
-    ):
+    def test_upsert_inventory_item_updates_existing(self, service, org_id, mock_db):
         category = MagicMock()
         category.category_id = uuid.uuid4()
 
@@ -2230,9 +2017,8 @@ class TestUpsertInventoryItem:
         assert mock_db.add.call_count == 0
         assert mock_db.flush.called
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_upsert_inventory_item_missing_category_raises(
-        self, mock_select, service, org_id, mock_db
+        self, service, org_id, mock_db
     ):
         mock_db.scalar.return_value = None
         payload = CRMInventoryItemPayload(

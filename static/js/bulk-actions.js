@@ -291,6 +291,10 @@ const BACKGROUND_EXPORTS = {
         label: 'GL Journals',
         statusBase: '/finance/gl/journals/exports'
     },
+    '/finance/gl/ledger/export': {
+        label: 'Ledger Transactions',
+        statusBase: '/finance/gl/ledger/exports'
+    },
     '/finance/ar/invoices/export': {
         label: 'AR Invoices',
         statusBase: '/finance/ar/invoices/exports'
@@ -353,12 +357,31 @@ function pollBackgroundExport(statusUrl, label, attempt) {
         });
 }
 
+function getCsrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
 function queueBackgroundExport(baseUrl, url) {
     var config = BACKGROUND_EXPORTS[baseUrl];
     exportToast(config.label + ' export is processing...', 'info');
 
-    fetch(url, { method: 'POST', credentials: 'same-origin' })
+    fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': getCsrfToken() },
+    })
         .then(function(response) {
+            var contentType = response.headers.get('content-type') || '';
+            // Small result set: the server decided to export inline and
+            // returned the CSV directly (200). Download it now — no polling.
+            if (response.ok && contentType.indexOf('text/csv') !== -1) {
+                return saveResponseAsDownload(response).then(function() {
+                    exportToast(config.label + ' export downloaded successfully', 'success');
+                    return null;
+                });
+            }
+            // Large result set: the server queued a background job (202 JSON).
             return response.json().then(function(data) {
                 if (!response.ok) {
                     throw new Error(data.detail || data.message || 'Export failed');
@@ -367,6 +390,9 @@ function queueBackgroundExport(baseUrl, url) {
             });
         })
         .then(function(data) {
+            if (!data) {
+                return; // inline download already handled
+            }
             exportToast(data.message || (config.label + ' export is processing. You will be notified when it is ready.'), 'info');
             var statusUrl = data.status_url || (config.statusBase + '/' + data.instance_id + '/status');
             pollBackgroundExport(statusUrl, config.label, 0);
@@ -378,32 +404,35 @@ function queueBackgroundExport(baseUrl, url) {
         });
 }
 
+// Trigger a browser download from a fetch Response carrying file bytes.
+// Reads the filename from Content-Disposition. Returns a promise.
+function saveResponseAsDownload(response) {
+    return response.blob().then(function(blob) {
+        var disposition = response.headers.get('content-disposition');
+        var filename = 'export.csv';
+        if (disposition) {
+            var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (match && match[1]) {
+                filename = match[1].replace(/['"]/g, '');
+            }
+        }
+        var a = document.createElement('a');
+        a.href = window.URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(a.href);
+        document.body.removeChild(a);
+    });
+}
+
 function downloadExportNow(url) {
     fetch(url, { method: 'GET', credentials: 'same-origin' })
         .then(function(response) {
             if (!response.ok) {
                 throw new Error('Export failed (HTTP ' + response.status + ')');
             }
-            return response.blob().then(function(blob) {
-                // Extract filename from Content-Disposition header
-                var disposition = response.headers.get('content-disposition');
-                var filename = 'export.csv';
-                if (disposition) {
-                    var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                    if (match && match[1]) {
-                        filename = match[1].replace(/['"]/g, '');
-                    }
-                }
-
-                // Trigger download via object URL
-                var a = document.createElement('a');
-                a.href = window.URL.createObjectURL(blob);
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(a.href);
-                document.body.removeChild(a);
-
+            return saveResponseAsDownload(response).then(function() {
                 exportToast('Export downloaded successfully', 'success');
             });
         })

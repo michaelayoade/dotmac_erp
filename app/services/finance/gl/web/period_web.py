@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
+from urllib.parse import quote_plus
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -511,7 +512,7 @@ class PeriodWebService:
                 opened_by_user_id=coerce_uuid(auth.user_id),
             )
         except HTTPException as exc:
-            msg = str(exc.detail).replace(" ", "+")
+            msg = quote_plus(str(exc.detail))
             if year_id:
                 return RedirectResponse(
                     url=f"/finance/gl/periods?year_id={year_id}&error={msg}",
@@ -551,7 +552,10 @@ class PeriodWebService:
                 closed_by_user_id=coerce_uuid(auth.user_id),
             )
         except HTTPException as exc:
-            msg = str(exc.detail).replace(" ", "+")
+            # quote_plus, not .replace(" ", "+"): handles parens, semicolons,
+            # non-ASCII, etc. that gate messages can contain. The raw replace
+            # produced URLs Starlette rejected, surfacing as a generic 400.
+            msg = quote_plus(str(exc.detail))
             if year_id:
                 return RedirectResponse(
                     url=f"/finance/gl/periods?year_id={year_id}&error={msg}",

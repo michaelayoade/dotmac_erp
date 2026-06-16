@@ -38,6 +38,47 @@ async def test_create_customer_response_commits_and_redirects(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_create_customer_response_uses_customer_id_before_commit(monkeypatch):
+    request = MagicMock()
+    request.form = AsyncMock(return_value={"customer_name": "Test Customer"})
+    auth = SimpleNamespace(organization_id=uuid4())
+    db = MagicMock()
+    customer_id = uuid4()
+    committed = False
+
+    class CustomerStub:
+        @property
+        def customer_id(self):
+            if committed:
+                raise AssertionError("customer_id was accessed after commit")
+            return customer_id
+
+    def commit():
+        nonlocal committed
+        committed = True
+
+    db.commit.side_effect = commit
+    monkeypatch.setattr(
+        CustomerWebService,
+        "build_customer_input",
+        staticmethod(lambda *_args, **_kwargs: object()),
+    )
+    monkeypatch.setattr(
+        "app.services.finance.ar.web.customer_web.customer_service.create_customer",
+        lambda **_kwargs: CustomerStub(),
+    )
+
+    response = await CustomerWebService().create_customer_response(request, auth, db)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        f"/finance/ar/customers/{customer_id}?success=Customer+created+successfully"
+    )
+    db.commit.assert_called_once_with()
+    db.rollback.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_create_customer_response_rolls_back_on_error(monkeypatch):
     request = MagicMock()
     request.form = AsyncMock(return_value={"customer_name": "Broken Customer"})

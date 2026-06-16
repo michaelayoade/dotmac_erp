@@ -17,10 +17,21 @@ Permission mapping (see scripts/seed_rbac.py for definitions):
 import logging
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from sqlalchemy.orm import Session
 
 from app.services.finance.ap.web import ap_web_service
+from app.services.finance.rpt.async_exports import (
+    get_completed_export_for_download,
+    get_export_status,
+    queue_background_export,
+)
 from app.templates import templates
 from app.web.deps import (
     get_db_for_org,
@@ -320,6 +331,49 @@ def new_invoice_form(
     )
 
 
+@router.get("/credit-notes", response_class=HTMLResponse)
+def list_supplier_credit_notes(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
+    search: str | None = None,
+    supplier_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=10, le=500),
+    sort: str | None = None,
+    sort_dir: str | None = None,
+    db: Session = Depends(get_db_for_org),
+):
+    """Supplier credit notes list page (AP credit notes / purchase returns)."""
+    return ap_web_service.list_credit_notes_response(
+        request=request,
+        auth=auth,
+        search=search,
+        supplier_id=supplier_id,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        limit=limit,
+        db=db,
+        sort=sort,
+        sort_dir=sort_dir,
+    )
+
+
+@router.get("/credit-notes/new", response_class=HTMLResponse)
+def new_supplier_credit_note_form(
+    request: Request,
+    supplier_id: str | None = None,
+    auth: WebAuthContext = Depends(require_web_permission("ap:invoices:create")),
+    db: Session = Depends(get_db_for_org),
+):
+    """New supplier credit note form (reuses the AP invoice form)."""
+    return ap_web_service.credit_note_new_form_response(request, auth, supplier_id, db)
+
+
 @router.post("/invoices/new")
 async def create_invoice(
     request: Request,
@@ -344,6 +398,86 @@ async def export_all_ap_invoices(
     """Export all AP invoices matching filters to CSV."""
     return await ap_web_service.export_all_invoices_response(
         auth, db, search, status, start_date, end_date, supplier_id
+    )
+
+
+@router.post("/invoices/export")
+def queue_ap_invoices_export(
+    search: str = "",
+    status: str = "",
+    supplier_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
+    db: Session = Depends(get_db_for_org),
+) -> JSONResponse:
+    """Queue all AP invoices matching filters for CSV export."""
+    instance = queue_background_export(
+        db,
+        auth.organization_id,
+        auth.user_id,
+        report_code="AP_INVOICES",
+        parameters={
+            "search": search,
+            "status": status,
+            "supplier_id": supplier_id,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+        output_format="CSV",
+    )
+    return JSONResponse(
+        {
+            "message": (
+                "AP Invoices export is processing. "
+                "You will be notified when it is ready."
+            ),
+            "instance_id": str(instance.instance_id),
+            "status_url": (
+                f"/finance/ap/invoices/exports/{instance.instance_id}/status"
+            ),
+        },
+        status_code=202,
+    )
+
+
+@router.get("/invoices/exports/{instance_id}/download")
+def download_ap_invoices_export(
+    instance_id: str,
+    auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Download a completed queued AP Invoices export."""
+    body, filename, media_type, content_length = get_completed_export_for_download(
+        db,
+        auth.organization_id,
+        auth.user_id,
+        instance_id,
+        report_code="AP_INVOICES",
+    )
+    if hasattr(body, "__fspath__"):
+        return FileResponse(body, filename=filename, media_type=media_type)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if content_length is not None:
+        headers["Content-Length"] = str(content_length)
+    return StreamingResponse(body, media_type=media_type, headers=headers)
+
+
+@router.get("/invoices/exports/{instance_id}/status")
+def status_ap_invoices_export(
+    instance_id: str,
+    auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
+    db: Session = Depends(get_db_for_org),
+) -> JSONResponse:
+    """Poll the status of a queued AP Invoices export."""
+    return JSONResponse(
+        get_export_status(
+            db,
+            auth.organization_id,
+            auth.user_id,
+            instance_id,
+            report_code="AP_INVOICES",
+        )
     )
 
 
@@ -579,6 +713,86 @@ async def export_all_ap_payments(
     """Export all AP payments matching filters to CSV."""
     return await ap_web_service.export_all_payments_response(
         auth, db, search, status, start_date, end_date, supplier_id
+    )
+
+
+@router.post("/payments/export")
+def queue_ap_payments_export(
+    search: str = "",
+    status: str = "",
+    supplier_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:read")),
+    db: Session = Depends(get_db_for_org),
+) -> JSONResponse:
+    """Queue all AP payments matching filters for CSV export."""
+    instance = queue_background_export(
+        db,
+        auth.organization_id,
+        auth.user_id,
+        report_code="AP_PAYMENTS",
+        parameters={
+            "search": search,
+            "status": status,
+            "supplier_id": supplier_id,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+        output_format="CSV",
+    )
+    return JSONResponse(
+        {
+            "message": (
+                "AP Payments export is processing. "
+                "You will be notified when it is ready."
+            ),
+            "instance_id": str(instance.instance_id),
+            "status_url": (
+                f"/finance/ap/payments/exports/{instance.instance_id}/status"
+            ),
+        },
+        status_code=202,
+    )
+
+
+@router.get("/payments/exports/{instance_id}/download")
+def download_ap_payments_export(
+    instance_id: str,
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:read")),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Download a completed queued AP Payments export."""
+    body, filename, media_type, content_length = get_completed_export_for_download(
+        db,
+        auth.organization_id,
+        auth.user_id,
+        instance_id,
+        report_code="AP_PAYMENTS",
+    )
+    if hasattr(body, "__fspath__"):
+        return FileResponse(body, filename=filename, media_type=media_type)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if content_length is not None:
+        headers["Content-Length"] = str(content_length)
+    return StreamingResponse(body, media_type=media_type, headers=headers)
+
+
+@router.get("/payments/exports/{instance_id}/status")
+def status_ap_payments_export(
+    instance_id: str,
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:read")),
+    db: Session = Depends(get_db_for_org),
+) -> JSONResponse:
+    """Poll the status of a queued AP Payments export."""
+    return JSONResponse(
+        get_export_status(
+            db,
+            auth.organization_id,
+            auth.user_id,
+            instance_id,
+            report_code="AP_PAYMENTS",
+        )
     )
 
 

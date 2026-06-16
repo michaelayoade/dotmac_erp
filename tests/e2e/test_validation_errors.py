@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -31,7 +32,7 @@ class TestRequiredFieldValidation:
 
     def test_supplier_required_fields_error(self, authenticated_page, base_url):
         """Test supplier form shows required field errors."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Submit empty form
@@ -42,14 +43,14 @@ class TestRequiredFieldValidation:
 
             # Look for validation errors
             authenticated_page.locator(
-                ".error, .invalid-feedback, [class*='error'], text=required, :invalid"
+                ".error, .invalid-feedback, [class*='error'], :text('required'), :invalid"
             )
             # Form should show validation or stay on page
             expect(authenticated_page).to_have_url(re.compile(r".*/suppliers/new.*"))
 
     def test_customer_required_fields_error(self, authenticated_page, base_url):
         """Test customer form shows required field errors."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Submit empty form
@@ -63,7 +64,7 @@ class TestRequiredFieldValidation:
 
     def test_journal_entry_required_fields_error(self, authenticated_page, base_url):
         """Test journal entry form shows required field errors."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Submit empty form
@@ -82,8 +83,9 @@ class TestEmailFormatValidation:
 
     def test_invalid_email_format_error(self, authenticated_page, base_url):
         """Test invalid email format shows error."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         email_field = authenticated_page.locator(
             "input[type='email'], input[name='email']"
@@ -107,8 +109,9 @@ class TestNumberFormatValidation:
 
     def test_invalid_number_format_error(self, authenticated_page, base_url):
         """Test invalid number format shows error."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         amount_field = authenticated_page.locator(
             "input[name='amount'], input[name='total'], input[type='number']"
@@ -121,8 +124,9 @@ class TestNumberFormatValidation:
 
     def test_negative_amount_validation(self, authenticated_page, base_url):
         """Test negative amount validation where not allowed."""
-        authenticated_page.goto(f"{base_url}/ap/payments/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         amount_field = authenticated_page.locator(
             "input[name='amount'], input[name='payment_amount']"
@@ -145,8 +149,9 @@ class TestDateFormatValidation:
 
     def test_invalid_date_range(self, authenticated_page, base_url):
         """Test invalid date range validation."""
-        authenticated_page.goto(f"{base_url}/gl/periods/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/periods/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         start_date = authenticated_page.locator(
             "input[name='start_date'], input[name='period_start']"
@@ -176,11 +181,12 @@ class TestUniqueConstraintValidation:
     def test_duplicate_account_code_error(self, authenticated_page, base_url):
         """Test duplicate account code shows error."""
         # First, get an existing account code
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Try to create account with same code
-        authenticated_page.goto(f"{base_url}/gl/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         code_field = authenticated_page.locator(
@@ -206,8 +212,9 @@ class TestUniqueConstraintValidation:
 
     def test_duplicate_supplier_code_error(self, authenticated_page, base_url):
         """Test duplicate supplier code shows error."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         code_field = authenticated_page.locator(
             "input[name='supplier_code'], input[name='code']"
@@ -241,8 +248,9 @@ class TestBusinessRuleValidation:
 
     def test_unbalanced_journal_error(self, authenticated_page, base_url):
         """Test unbalanced journal entry shows error."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Look for debit/credit fields that might be unbalanced
         debit_field = authenticated_page.locator(
@@ -265,7 +273,7 @@ class TestBusinessRuleValidation:
 
             # Should show balance error
             authenticated_page.locator(
-                "text=balance, text=unbalanced, text=must equal, .error"
+                ":text('balance'), :text('unbalanced'), :text('must equal'), .error"
             )
             # Just verify page is visible - error may or may not show
             expect(authenticated_page.locator("form")).to_be_visible()
@@ -273,8 +281,9 @@ class TestBusinessRuleValidation:
     def test_closed_period_entry_error(self, authenticated_page, base_url):
         """Test entry to closed period shows error."""
         # Navigate to journals and try to post to a closed period
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Select period (if closed periods are listed)
         period_select = authenticated_page.locator(
@@ -292,12 +301,13 @@ class TestBusinessRuleValidation:
 
     def test_credit_limit_exceeded_warning(self, authenticated_page, base_url):
         """Test credit limit exceeded shows warning."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Select customer and enter large amount
         customer_select = authenticated_page.locator(
-            "select[name='customer_id'], select[name='customer']"
+            "[name='customer_id'], [name='customer']"
         )
         if customer_select.count() > 0:
             customer_select.first.select_option(index=1)
@@ -309,14 +319,15 @@ class TestBusinessRuleValidation:
             amount_field.first.fill("9999999")
 
         # Check for warning
-        authenticated_page.locator(".warning, .alert-warning, text=credit limit")
+        authenticated_page.locator(".warning, .alert-warning, :text('credit limit')")
         # Just verify page is visible
         expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_overpayment_warning(self, authenticated_page, base_url):
         """Test overpayment shows warning."""
-        authenticated_page.goto(f"{base_url}/ap/payments/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         amount_field = authenticated_page.locator(
             "input[name='amount'], input[name='payment_amount']"
@@ -326,7 +337,7 @@ class TestBusinessRuleValidation:
             amount_field.first.fill("9999999")
 
         # Look for overpayment warning
-        authenticated_page.locator(".warning, text=overpayment, text=exceeds")
+        authenticated_page.locator(".warning, :text('overpayment'), :text('exceeds')")
         # Just verify page is visible
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -343,7 +354,7 @@ class TestNotFoundHandling:
     def test_404_page_for_invalid_supplier_id(self, authenticated_page, base_url):
         """Test 404 page for invalid supplier ID."""
         authenticated_page.goto(
-            f"{base_url}/ap/suppliers/00000000-0000-0000-0000-000000000000"
+            f"{base_url}/finance/ap/suppliers/00000000-0000-0000-0000-000000000000"
         )
 
         # Should either be 404 or redirect
@@ -351,7 +362,7 @@ class TestNotFoundHandling:
 
         # Check for 404 message or redirect to list
         not_found = authenticated_page.locator(
-            "text=not found, text=404, text=Not Found, text=does not exist"
+            ":text('not found'), :text('404'), :text('Not Found'), :text('does not exist')"
         )
         if not_found.count() > 0:
             expect(not_found.first).to_be_visible()
@@ -362,13 +373,13 @@ class TestNotFoundHandling:
     def test_404_page_for_invalid_invoice_id(self, authenticated_page, base_url):
         """Test 404 page for invalid invoice ID."""
         authenticated_page.goto(
-            f"{base_url}/ap/invoices/00000000-0000-0000-0000-000000000000"
+            f"{base_url}/finance/ap/invoices/00000000-0000-0000-0000-000000000000"
         )
 
         authenticated_page.wait_for_load_state("networkidle")
 
         not_found = authenticated_page.locator(
-            "text=not found, text=404, text=Not Found"
+            ":text('not found'), :text('404'), :text('Not Found')"
         )
         if not_found.count() > 0:
             expect(not_found.first).to_be_visible()
@@ -378,13 +389,13 @@ class TestNotFoundHandling:
     def test_404_page_for_invalid_account_id(self, authenticated_page, base_url):
         """Test 404 page for invalid account ID."""
         authenticated_page.goto(
-            f"{base_url}/gl/accounts/00000000-0000-0000-0000-000000000000"
+            f"{base_url}/finance/gl/accounts/00000000-0000-0000-0000-000000000000"
         )
 
         authenticated_page.wait_for_load_state("networkidle")
 
         not_found = authenticated_page.locator(
-            "text=not found, text=404, text=Not Found"
+            ":text('not found'), :text('404'), :text('Not Found')"
         )
         if not_found.count() > 0:
             expect(not_found.first).to_be_visible()
@@ -399,7 +410,7 @@ class TestNotFoundHandling:
 
         # Should show a user-friendly error, not a stack trace
         stack_trace = authenticated_page.locator(
-            "text=Traceback, text=Exception, pre:has-text('File')"
+            ":text('Traceback'), :text('Exception'), pre:has-text('File')"
         )
         # Stack traces should not be visible to users
         if stack_trace.count() > 0:
@@ -422,7 +433,7 @@ class TestPermissionErrors:
     def test_unauthorized_access_redirect(self, unauthenticated_page, base_url):
         """Test unauthorized access redirects to login."""
         # Try to access protected page without auth
-        unauthenticated_page.goto(f"{base_url}/dashboard")
+        unauthenticated_page.goto(f"{base_url}/finance/dashboard")
 
         unauthenticated_page.wait_for_load_state("networkidle")
 
@@ -439,7 +450,7 @@ class TestPermissionErrors:
         else:
             # May show unauthorized message
             unauthenticated_page.locator(
-                "text=unauthorized, text=login required, text=please sign in"
+                ":text('unauthorized'), :text('login required'), :text('please sign in')"
             )
             expect(unauthenticated_page.locator("main")).to_be_visible()
 
@@ -457,7 +468,7 @@ class TestPermissionErrors:
         if "/admin" in current_url:
             # Either we have access or should see forbidden
             authenticated_page.locator(
-                "text=forbidden, text=access denied, text=permission"
+                ":text('forbidden'), :text('access denied'), :text('permission')"
             )
             # Just verify page loaded
             expect(authenticated_page.locator("main")).to_be_visible()
@@ -473,7 +484,7 @@ class TestPermissionErrors:
 
         # Look for permission-related messages
         authenticated_page.locator(
-            "text=permission, text=access denied, text=not authorized, text=forbidden"
+            ":text('permission'), :text('access denied'), :text('not authorized'), :text('forbidden')"
         )
 
         # Just verify page loaded - message may or may not appear

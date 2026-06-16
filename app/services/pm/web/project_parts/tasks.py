@@ -232,7 +232,7 @@ def project_tasks(
         project_id=project.project_id,
         status=status_enum,
         priority=priority_enum,
-        params=PaginationParams(offset=(page - 1) * per_page, limit=per_page),
+        params=PaginationParams.from_page(page, per_page),
     )
 
     # Compute subtask counts for each parent task
@@ -257,9 +257,7 @@ def project_tasks(
         "total": result.total,
         "page": page,
         "per_page": per_page,
-        "total_pages": (result.total + per_page - 1) // per_page
-        if result.total > 0
-        else 1,
+        "total_pages": result.total_pages,
         "status_filter": status,
         "priority_filter": priority,
         "statuses": [s.value for s in TaskStatus],

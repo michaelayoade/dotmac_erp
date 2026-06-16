@@ -661,11 +661,14 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             ExpenseClaimStatus.SUBMITTED,
             ExpenseClaimStatus.PENDING_APPROVAL,
         }
-
-        paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
-        transfers_enabled = resolve_value(
-            db, SettingDomain.payments, "paystack_transfers_enabled"
+        can_reimburse_expense = auth.is_admin or auth.has_permission(
+            "expense:claims:reimburse"
         )
+        if not can_reimburse_expense and auth.person_id:
+            can_reimburse_expense = AuthorizationService.check_permission(
+                db, auth.person_id, "expense:claims:reimburse", org_id
+            )
+
         has_active_payment = False
         if claim.status == ExpenseClaimStatus.APPROVED:
             from app.models.finance.payments.payment_intent import (
@@ -688,14 +691,6 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 ).first()
                 is not None
             )
-
-        can_paystack = (
-            (auth.is_admin or can_approve)
-            and bool(paystack_enabled)
-            and bool(transfers_enabled)
-            and claim.status == ExpenseClaimStatus.APPROVED
-            and not has_active_payment
-        )
 
         categories = []
         if can_act and can_approve:
@@ -734,7 +729,8 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "can_approve": can_approve,
                 "can_reject": can_reject,
                 "can_delete": can_delete,
-                "can_paystack": can_paystack,
+                "can_reimburse_expense": can_reimburse_expense
+                and claim.status == ExpenseClaimStatus.APPROVED,
                 "has_active_payment": has_active_payment,
                 "action": request.query_params.get("action"),
                 "error": request.query_params.get("error_message")
