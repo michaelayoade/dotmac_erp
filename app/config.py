@@ -195,6 +195,9 @@ class Settings:
     # the integration_config table and take precedence (DotmacSubConfig.for_org).
     dotmac_sub_api_url: str = os.getenv("DOTMAC_SUB_API_URL", "")
     dotmac_sub_api_token: str = os.getenv("DOTMAC_SUB_API_TOKEN", "")
+    # Staff credentials for passwordless (session→JWT) auth when no static token.
+    dotmac_sub_username: str = os.getenv("DOTMAC_SUB_USERNAME", "")
+    dotmac_sub_password: str = os.getenv("DOTMAC_SUB_PASSWORD", "")
     dotmac_sub_webhook_secret: str | None = (
         os.getenv("DOTMAC_SUB_WEBHOOK_SECRET") or None
     )
