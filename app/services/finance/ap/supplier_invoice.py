@@ -364,6 +364,17 @@ class SupplierInvoiceService(ListResponseMixin):
         if not supplier.is_active:
             raise ValidationError("Supplier is not active")
 
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated bill may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
+
         if input.vehicle_id is not None:
             from app.models.fleet.enums import VehicleStatus
             from app.models.fleet.vehicle import Vehicle
@@ -472,6 +483,12 @@ class SupplierInvoiceService(ListResponseMixin):
                 subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
+
+        if input.invoice_type == SupplierInvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to record "
+                "a supplier credit."
+            )
 
         # Calculate WHT if applicable
         wht_amount = Decimal("0")
@@ -684,6 +701,17 @@ class SupplierInvoiceService(ListResponseMixin):
                 f"Cannot update invoice with status '{invoice.status.value}'"
             )
 
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated bill may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
+
         if input.vehicle_id is not None:
             from app.models.fleet.enums import VehicleStatus
             from app.models.fleet.vehicle import Vehicle
@@ -747,6 +775,12 @@ class SupplierInvoiceService(ListResponseMixin):
                 subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
+
+        if input.invoice_type == SupplierInvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to record "
+                "a supplier credit."
+            )
 
         if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
             total_amount = -abs(total_amount)

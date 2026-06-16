@@ -288,9 +288,20 @@ class DepreciationService(ListResponseMixin):
         else:
             depreciation = min(depreciation, max_depreciation)
 
+        remaining_closing = max(0, asset.remaining_life_months - periods)
+
+        # Final-period true-up for declining-balance methods. Declining balance
+        # approaches but never reaches the residual value, so on the last
+        # period (remaining life exhausted) write off the residual NBV in full
+        # so net book value lands exactly on the residual value.
+        if remaining_closing == 0 and method in {
+            DepreciationMethod.DECLINING_BALANCE.value,
+            DepreciationMethod.DOUBLE_DECLINING.value,
+        }:
+            depreciation = max(Decimal("0"), max_depreciation)
+
         closing_accum = asset.accumulated_depreciation + depreciation
         closing_nbv = asset.net_book_value - depreciation
-        remaining_closing = max(0, asset.remaining_life_months - periods)
 
         return DepreciationCalculation(
             asset_id=asset.asset_id,
@@ -614,6 +625,9 @@ class DepreciationService(ListResponseMixin):
 
         except Exception as e:
             run.status = DepreciationRunStatus.FAILED
+            # Intentional commit (not flush): the raise below bypasses the
+            # route's normal commit, so the FAILED status must be persisted
+            # here or it would be rolled back and the run left mid-flight.
             db.commit()
             raise HTTPException(
                 status_code=500,
@@ -683,6 +697,19 @@ class DepreciationService(ListResponseMixin):
                     detail="Cannot post depreciation run with missing asset schedule",
                 )
 
+            # A disposed/retired asset must not be depreciated further. If one
+            # was disposed after the run was calculated, the run is out of date
+            # and must be recalculated before posting.
+            if getattr(asset, "status", None) == AssetStatus.RETIRED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Asset "
+                        f"{asset.asset_number} has been disposed/retired; "
+                        "recalculate the run before posting"
+                    ),
+                )
+
             is_stale = (
                 schedule.accumulated_depreciation_opening
                 != asset.accumulated_depreciation
@@ -713,6 +740,8 @@ class DepreciationService(ListResponseMixin):
 
             if not result.success:
                 run.status = DepreciationRunStatus.FAILED
+                # Intentional commit (not flush): persist the FAILED status
+                # before the raise bypasses the route's commit.
                 db.commit()
                 raise HTTPException(status_code=400, detail=result.message)
 
@@ -763,6 +792,8 @@ class DepreciationService(ListResponseMixin):
             raise
         except Exception as e:
             run.status = DepreciationRunStatus.FAILED
+            # Intentional commit (not flush): persist the FAILED status before
+            # the raise bypasses the route's commit.
             db.commit()
             raise HTTPException(
                 status_code=500,

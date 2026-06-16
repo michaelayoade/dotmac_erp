@@ -39,6 +39,7 @@ class TaxCodeInput:
     effective_to: date | None = None
     is_compound: bool = False
     is_inclusive: bool = False
+    is_fixed_amount: bool = False
     is_recoverable: bool = True
     recovery_rate: Decimal = Decimal("1.0")
     applies_to_purchases: bool = True
@@ -166,6 +167,7 @@ class TaxCodeService(ListResponseMixin):
             effective_to=input.effective_to,
             is_compound=input.is_compound,
             is_inclusive=input.is_inclusive,
+            is_fixed_amount=input.is_fixed_amount,
             is_recoverable=input.is_recoverable,
             recovery_rate=input.recovery_rate,
             applies_to_purchases=input.applies_to_purchases,

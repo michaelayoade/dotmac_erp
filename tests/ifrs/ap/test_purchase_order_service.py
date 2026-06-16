@@ -56,6 +56,7 @@ class MockSupplier:
         self.legal_name = name
         self.trading_name = None
         self.primary_contact = primary_contact
+        self.is_active = True
 
 
 class MockPurchaseOrder:
@@ -252,6 +253,94 @@ class TestCreatePO:
 
         assert exc_info.value.status_code == 400
         assert "at least one line" in str(exc_info.value.detail).lower()
+
+    def test_create_po_inactive_supplier(self):
+        """F41: PO creation against an inactive supplier is rejected."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        user_id = uuid4()
+
+        mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
+        mock_supplier.is_active = False
+        db.scalars.return_value.first.return_value = mock_supplier
+
+        input_data = PurchaseOrderInput(
+            supplier_id=supplier_id,
+            po_date=date.today(),
+            currency_code="USD",
+            lines=[
+                POLineInput(
+                    description="Test",
+                    quantity_ordered=Decimal("1"),
+                    unit_price=Decimal("100.00"),
+                )
+            ],
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            PurchaseOrderService.create_po(db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "not active" in str(exc_info.value.detail).lower()
+
+    def test_create_po_non_positive_quantity(self):
+        """F39: PO line with quantity_ordered <= 0 is rejected."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        user_id = uuid4()
+
+        mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
+        db.scalars.return_value.first.return_value = mock_supplier
+
+        input_data = PurchaseOrderInput(
+            supplier_id=supplier_id,
+            po_date=date.today(),
+            currency_code="USD",
+            lines=[
+                POLineInput(
+                    description="Test",
+                    quantity_ordered=Decimal("0"),
+                    unit_price=Decimal("100.00"),
+                )
+            ],
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            PurchaseOrderService.create_po(db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "quantity ordered" in str(exc_info.value.detail).lower()
+
+    def test_create_po_negative_unit_price(self):
+        """F39: PO line with negative unit_price is rejected."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        user_id = uuid4()
+
+        mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
+        db.scalars.return_value.first.return_value = mock_supplier
+
+        input_data = PurchaseOrderInput(
+            supplier_id=supplier_id,
+            po_date=date.today(),
+            currency_code="USD",
+            lines=[
+                POLineInput(
+                    description="Test",
+                    quantity_ordered=Decimal("1"),
+                    unit_price=Decimal("-100.00"),
+                )
+            ],
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            PurchaseOrderService.create_po(db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "unit price" in str(exc_info.value.detail).lower()
 
 
 class TestUpdatePO:
@@ -1054,6 +1143,7 @@ class TestClosePO:
         mock_received = MagicMock()
         mock_status_class.CANCELLED = mock_cancelled
         mock_status_class.CLOSED = mock_closed
+        mock_status_class.RECEIVED = mock_received
 
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_received
@@ -1099,6 +1189,28 @@ class TestClosePO:
 
         assert exc_info.value.status_code == 400
         assert "cancelled" in str(exc_info.value.detail).lower()
+
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    def test_close_po_draft_rejected(self, mock_status_class):
+        """F43: a DRAFT PO cannot be closed (only APPROVED/received)."""
+        db = MagicMock()
+        org_id = uuid4()
+        po_id = uuid4()
+
+        mock_draft = MagicMock()
+        mock_draft.value = "DRAFT"
+        mock_status_class.DRAFT = mock_draft
+
+        mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
+        mock_po.status = mock_draft
+
+        db.scalars.return_value.first.return_value = mock_po
+
+        with pytest.raises(HTTPException) as exc_info:
+            PurchaseOrderService.close_po(db, org_id, po_id)
+
+        assert exc_info.value.status_code == 400
+        assert "draft" in str(exc_info.value.detail).lower()
 
 
 # ===================== UPDATE RECEIVED AMOUNT TESTS =====================

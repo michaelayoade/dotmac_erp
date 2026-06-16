@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, status_badge, empty_state, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import compact_filters, status_badge, empty_state, icon_svg, period_shortcuts, export_menu %}
 {% from "components/macros.html" import stats_card, empty_state, progress_bar, section_card %}
 
 {% block page_title %}Expense summary{% endblock %}
@@ -15,11 +15,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/reports/expense-summary/export?format=pdf&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export PDF
-</a>
-<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+{{ export_menu("/finance/reports/expense-summary", "start_date=" ~ start_date_iso ~ "&end_date=" ~ end_date_iso ~ "", ["pdf"]) }}<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
 </button>

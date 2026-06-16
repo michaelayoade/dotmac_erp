@@ -728,6 +728,17 @@ def delete_receipt(
     return ar_web_service.delete_receipt_response(request, auth, db, receipt_id)
 
 
+@router.post("/receipts/{receipt_id}/post")
+def post_receipt(
+    request: Request,
+    receipt_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Post a draft AR receipt to the GL and apply its allocations."""
+    return ar_web_service.post_receipt_response(request, auth, db, receipt_id)
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Bulk Actions - Receipts
 # ═══════════════════════════════════════════════════════════════════

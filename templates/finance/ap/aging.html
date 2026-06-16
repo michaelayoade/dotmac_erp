@@ -61,28 +61,28 @@
             <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums mt-2">{{ aging_summary.current }}</p>
         </div>
 
-        <!-- 1-30 Days -->
+        <!-- 31-60 Days -->
         <div class="card p-5 border-l-4 border-l-amber-500">
             <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">1-30 Days</p>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">31-60 Days</p>
                 <span class="text-xs tabular-nums text-amber-600 dark:text-amber-400">{{ aging_summary.days_30_pct }}%</span>
             </div>
             <p class="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums mt-2">{{ aging_summary.days_30 }}</p>
         </div>
 
-        <!-- 31-60 Days -->
+        <!-- 61-90 Days -->
         <div class="card p-5 border-l-4 border-l-orange-500">
             <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">31-60 Days</p>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">61-90 Days</p>
                 <span class="text-xs tabular-nums text-orange-600 dark:text-orange-400">{{ aging_summary.days_60_pct }}%</span>
             </div>
             <p class="text-xl font-bold text-orange-600 dark:text-orange-400 tabular-nums mt-2">{{ aging_summary.days_60 }}</p>
         </div>
 
-        <!-- 60+ Days -->
+        <!-- 90+ Days -->
         <div class="card p-5 border-l-4 border-l-rose-500">
             <div class="flex items-center justify-between">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">60+ Days</p>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">90+ Days</p>
                 <span class="text-xs tabular-nums text-rose-600 dark:text-rose-400">{{ aging_summary.days_90_pct }}%</span>
             </div>
             <p class="text-xl font-bold text-rose-600 dark:text-rose-400 tabular-nums mt-2">{{ aging_summary.days_90 }}</p>
@@ -105,15 +105,15 @@
                     </span>
                     <span class="flex items-center gap-1.5">
                         <span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span>
-                        <span class="text-slate-500 dark:text-slate-400">1-30</span>
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="w-2.5 h-2.5 rounded-sm bg-orange-500"></span>
                         <span class="text-slate-500 dark:text-slate-400">31-60</span>
                     </span>
                     <span class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-sm bg-orange-500"></span>
+                        <span class="text-slate-500 dark:text-slate-400">61-90</span>
+                    </span>
+                    <span class="flex items-center gap-1.5">
                         <span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>
-                        <span class="text-slate-500 dark:text-slate-400">60+</span>
+                        <span class="text-slate-500 dark:text-slate-400">90+</span>
                     </span>
                 </div>
             </div>
@@ -177,9 +177,9 @@
                     <tr>
                         <th scope="col" class="w-64">Supplier</th>
                         <th scope="col" class="text-right">Current</th>
-                        <th scope="col" class="text-right">1-30 Days</th>
                         <th scope="col" class="text-right">31-60 Days</th>
-                        <th scope="col" class="text-right">60+ Days</th>
+                        <th scope="col" class="text-right">61-90 Days</th>
+                        <th scope="col" class="text-right">90+ Days</th>
                         <th scope="col" class="text-right">Total</th>
                         <th scope="col" class="w-48">Distribution</th>
                     </tr>
@@ -324,19 +324,19 @@ function apAgingReport() {
                             borderRadius: 4,
                         },
                         {
-                            label: '1-30 Days',
+                            label: '31-60 Days',
                             data: [data.buckets.days_30],
                             backgroundColor: colors.days30,
                             borderRadius: 4,
                         },
                         {
-                            label: '31-60 Days',
+                            label: '61-90 Days',
                             data: [data.buckets.days_60],
                             backgroundColor: colors.days60,
                             borderRadius: 4,
                         },
                         {
-                            label: '60+ Days',
+                            label: '90+ Days',
                             data: [data.buckets.days_90],
                             backgroundColor: colors.days90,
                             borderRadius: 4,
@@ -393,7 +393,7 @@ function apAgingReport() {
             this.charts.donut = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Current', '1-30 Days', '31-60 Days', '60+ Days'],
+                    labels: ['Current', '31-60 Days', '61-90 Days', '90+ Days'],
                     datasets: [{
                         data: [
                             data.buckets.current,

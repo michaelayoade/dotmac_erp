@@ -20,6 +20,15 @@
 {% if receipt %}
 <div class="flex flex-wrap items-center gap-2">
     {% if receipt.status == 'DRAFT' %}
+    <form method="POST" action="/finance/ar/receipts/{{ receipt.receipt_id }}/post"
+          onsubmit="return confirm('Post this receipt to the ledger? This applies its allocations to the linked invoices.');">
+        {{ request.state.csrf_form | safe }}
+        <button type="submit" class="btn btn-success">
+            <span class="btn-spinner"></span>
+            {{ icon_svg("check-circle", "h-4 w-4 btn-hide-on-load") }}
+            <span class="btn-hide-on-load">Post Receipt</span>
+        </button>
+    </form>
     <a href="/finance/ar/receipts/{{ receipt.receipt_id }}/edit" class="btn btn-secondary">
         {{ icon_svg("edit", "h-4 w-4") }}
         Edit

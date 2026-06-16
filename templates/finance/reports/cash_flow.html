@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import compact_filters, empty_state, icon_svg, period_shortcuts, pivot_table %}
+{% from "components/macros.html" import compact_filters, empty_state, icon_svg, period_shortcuts, pivot_table, export_menu %}
 {% block page_title %}Cash flow statement{% endblock %}
 
 {% block breadcrumbs %}
@@ -14,11 +14,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/reports/cash-flow/export?format=pdf&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export PDF
-</a>
-<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+{{ export_menu("/finance/reports/cash-flow", "start_date=" ~ start_date_iso ~ "&end_date=" ~ end_date_iso ~ "", ["pdf"]) }}<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
 </button>

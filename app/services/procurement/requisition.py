@@ -237,6 +237,10 @@ class RequisitionService:
         ):
             raise ValidationError("Requisition is not in an approvable state")
 
+        # Segregation of duties: the creator must not approve their own request.
+        if req.created_by_user_id == approved_by_user_id:
+            raise ValidationError("Segregation of duties: creator cannot approve")
+
         req.status = RequisitionStatus.APPROVED
         req.approved_by_user_id = approved_by_user_id
         req.approved_at = datetime.now(UTC)
@@ -253,6 +257,11 @@ class RequisitionService:
         req = self.get_by_id(organization_id, requisition_id)
         if not req:
             raise NotFoundError("Requisition not found")
+        if req.status not in (
+            RequisitionStatus.SUBMITTED,
+            RequisitionStatus.BUDGET_VERIFIED,
+        ):
+            raise ValidationError("Requisition is not in a rejectable state")
 
         req.status = RequisitionStatus.REJECTED
         self.db.flush()

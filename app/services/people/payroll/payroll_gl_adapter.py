@@ -713,8 +713,26 @@ class PayrollGLAdapter:
                 if do_not_include and comp_code != EMPLOYER_PENSION_COMPONENT_CODE:
                     continue
 
-                if liability_acc:
-                    key = cast(UUID, liability_acc)
+                # Employer pension always needs a liability account to credit; a
+                # missing one is handled below (expense-only fallback is unsafe).
+                # For all other deductions, fall back to the salary payable account
+                # when no liability account is configured so the credit side still
+                # matches what was subtracted from net pay (mirrors
+                # create_slip_journal). Without this the deduction is dropped from
+                # the credit side while still reducing net_pay, unbalancing the run.
+                if comp_code == EMPLOYER_PENSION_COMPONENT_CODE:
+                    effective_acc = liability_acc
+                else:
+                    effective_acc = liability_acc or payable_account_id
+                    if not liability_acc:
+                        logger.info(
+                            "Deduction component %s has no liability account, "
+                            "using salary payable as fallback in run journal",
+                            comp_code,
+                        )
+
+                if effective_acc:
+                    key = cast(UUID, effective_acc)
                     if key in deductions_by_account:
                         name, amt, exp, code = deductions_by_account[key]
                         deductions_by_account[key] = (
