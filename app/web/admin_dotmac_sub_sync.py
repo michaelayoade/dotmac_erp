@@ -59,7 +59,8 @@ async def config_save(
         db,
         auth,
         base_url=form.get("base_url", "").strip(),
-        api_token=form.get("api_token", "").strip(),
+        username=form.get("username", "").strip(),
+        password=form.get("password", "").strip(),
         webhook_secret=form.get("webhook_secret", "").strip(),
     )
 
