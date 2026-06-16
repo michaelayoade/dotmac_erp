@@ -24,6 +24,10 @@
     </button>
 </form>
 {% endif %}
+<a href="/finance/banking/statements/suspicious-matches" class="btn btn-secondary">
+    {{ icon_svg("exclamation-triangle", "h-4 w-4 mr-1.5") }}
+    Suspicious Matches
+</a>
 <button onclick="exportAll('/finance/banking/statements/export')" class="btn btn-secondary">
     {{ icon_svg("document-download", "h-4 w-4 mr-1.5") }}
     Export
@@ -75,7 +79,8 @@
         start_date=start_date | default('', true),
         end_date=end_date | default('', true),
         auto_submit=false,
-        show_apply_button=true
+        show_apply_button=true,
+        htmx_apply=false
     ) %}
     {% call filter_custom_select_field("account_id", "Bank Account", filter_attrs ~ ' data-testid="bank-statements-account"') %}
         {% for acc in accounts %}
@@ -111,11 +116,33 @@
     ) }}
     {% endcall %}
 
+    <style>
+        .bank-statements-table-scroll {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .bank-statements-table-scroll::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+
     {# ── Statement Lines Table ── #}
     <div id="results-container">
-    <div class="card">
-        <div class="table-container">
-            <table class="table" data-testid="bank-transactions-table">
+    <div class="card"
+         x-data='{
+            syncWidths() {
+                this.$refs.topRail.style.width = this.$refs.txnTable.scrollWidth + "px";
+            },
+            syncTop() {
+                this.$refs.tableScroll.scrollLeft = this.$refs.topScroll.scrollLeft;
+            },
+            syncBottom() {
+                this.$refs.topScroll.scrollLeft = this.$refs.tableScroll.scrollLeft;
+            }
+         }'
+         x-init='$nextTick(() => { syncWidths(); window.addEventListener("resize", () => syncWidths()) })'>
+        <div x-ref="tableScroll" @scroll="syncBottom" class="table-container bank-statements-table-scroll">
+            <table x-ref="txnTable" class="table" data-testid="bank-transactions-table">
                 <thead>
                     <tr>
                         {{ sortable_th("Date", "transaction_date", sort, sort_dir) }}
@@ -270,6 +297,9 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+        <div x-ref="topScroll" @scroll="syncTop" class="sticky bottom-0 z-10 overflow-x-auto border-t border-slate-200 bg-white/95 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+            <div x-ref="topRail" class="h-3"></div>
         </div>
 
         {# Pagination #}

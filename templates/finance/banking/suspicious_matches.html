@@ -1,0 +1,81 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import compact_filters, filter_custom_select_field, filter_select_field, icon_svg %}
+
+{% block page_title %}Suspicious Bank Matches{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/statements" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Transactions</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Suspicious Matches</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/banking/statements" class="btn btn-secondary">
+    {{ icon_svg("arrow-left", "h-4 w-4 mr-1.5") }}
+    Back to Transactions
+</a>
+{% endblock %}
+
+{% block content %}
+{% set success_msg = request.query_params.get('success') %}
+{% if success_msg %}
+<div class="mb-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
+    {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0") }}
+    <span class="text-sm text-emerald-700 dark:text-emerald-300">{{ success_msg | replace('+', ' ') }}</span>
+</div>
+{% endif %}
+
+<div class="space-y-6 page-enter">
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/banking/statements/suspicious-matches",
+        active_filters=active_filters | default([]),
+        auto_submit=false,
+        show_apply_button=true
+    ) %}
+    {% call filter_custom_select_field("account_id", "Bank Account", filter_attrs ~ ' data-testid="bank-suspicious-account"') %}
+        {% for acc in accounts %}
+        <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+            {{ acc.bank_name }} - {{ acc.account_number }}
+        </option>
+        {% endfor %}
+    {% endcall %}
+    {{ filter_select_field(
+        "match_state",
+        "Match State",
+        match_state,
+        [
+            {"value": "suggested", "label": "Suggested"},
+            {"value": "confirmed", "label": "Confirmed"}
+        ],
+        filter_attrs,
+        "Match State"
+    ) }}
+    {% endcall %}
+
+    <div
+        id="suspicious-match-results"
+        hx-get="{{ content_url }}"
+        hx-trigger="load"
+        hx-swap="innerHTML"
+        class="space-y-6"
+    >
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {% for _ in range(4) %}
+            <div class="card h-28 animate-pulse bg-slate-100 dark:bg-slate-800"></div>
+            {% endfor %}
+        </div>
+        <div class="card p-6">
+            <div class="h-6 w-48 animate-pulse rounded bg-slate-100 dark:bg-slate-800"></div>
+            <div class="mt-4 space-y-3">
+                {% for _ in range(6) %}
+                <div class="h-12 animate-pulse rounded bg-slate-100 dark:bg-slate-800"></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

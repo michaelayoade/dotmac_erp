@@ -203,44 +203,48 @@ class UniqueDateAmountStrategy(MatchStrategy):
                 for line in line_index.get(key, [])
                 if line.line_id not in ctx.matched_line_ids
             ]
-            if not available_lines:
+            # Ambiguous buckets stay for human review. We only auto-suggest
+            # from this fallback when there is exactly one payment candidate
+            # and one statement line candidate for the bucket.
+            if len(indexed_payments) != 1 or len(available_lines) != 1:
                 continue
 
-            pairs = min(len(indexed_payments), len(available_lines))
-            for idx in range(pairs):
-                payment = indexed_payments[idx]
-                line = available_lines[idx]
-                if payment.payment_id in matched_payment_ids:
+            payment = indexed_payments[0]
+            line = available_lines[0]
+            if payment.payment_id in matched_payment_ids:
+                continue
+            try:
+                journal_line = service._find_journal_line(
+                    ctx.db,
+                    ctx.organization_id,
+                    payment.correlation_id,
+                    ctx.bank_account.gl_account_id,
+                    extra_gl_account_ids=ctx.extra_gl_account_ids,
+                )
+                if not journal_line:
                     continue
-                try:
-                    journal_line = service._find_journal_line(
-                        ctx.db,
-                        ctx.organization_id,
-                        payment.correlation_id,
-                        ctx.bank_account.gl_account_id,
-                        extra_gl_account_ids=ctx.extra_gl_account_ids,
-                    )
-                    if not journal_line:
-                        continue
 
-                    _perform_match(
-                        service,
-                        ctx,
-                        line,
-                        journal_line,
-                        source_type="CUSTOMER_PAYMENT",
-                        source_id=payment.payment_id,
-                        confidence=80,
-                        explanation=f"Splynx payment {payment.splynx_id} (date+amount fallback)",
-                    )
-                    matched_payment_ids.add(payment.payment_id)
-                except Exception as exc:
-                    service.logger.exception(
-                        "Error matching line %s via date+amount: %s",
-                        line.line_id,
-                        exc,
-                    )
-                    ctx.result.errors.append(f"Line {line.line_number}: {exc}")
+                _perform_match(
+                    service,
+                    ctx,
+                    line,
+                    journal_line,
+                    source_type="CUSTOMER_PAYMENT",
+                    source_id=payment.payment_id,
+                    confidence=80,
+                    explanation=(
+                        f"Splynx payment {payment.splynx_id} "
+                        "(unique exact date+amount fallback)"
+                    ),
+                )
+                matched_payment_ids.add(payment.payment_id)
+            except Exception as exc:
+                service.logger.exception(
+                    "Error matching line %s via date+amount: %s",
+                    line.line_id,
+                    exc,
+                )
+                ctx.result.errors.append(f"Line {line.line_number}: {exc}")
 
         # Pass 2: date-tolerant amount match.
         # Splynx operators often record payments 1-7 days after the bank
@@ -260,21 +264,25 @@ class UniqueDateAmountStrategy(MatchStrategy):
             candidates = amount_index.get(amt_key)
             if not candidates:
                 continue
+            competing_lines = [
+                candidate_line
+                for candidate_line in ctx.still_unmatched_lines()
+                if candidate_line.line_id not in ctx.matched_line_ids
+                and int(Decimal(candidate_line.amount) * 100) == amt_key
+                and abs(
+                    (candidate_line.transaction_date - line.transaction_date).days
+                )
+                <= buffer_days
+            ]
+            if len(competing_lines) != 1:
+                continue
             nearby = [
                 p
                 for p in candidates
                 if p.payment_id not in matched_payment_ids
                 and abs((p.payment_date - line.transaction_date).days) <= buffer_days
             ]
-            if not nearby:
-                continue
-            nearby.sort(
-                key=lambda p: abs((p.payment_date - line.transaction_date).days)
-            )
-            # Skip if the two closest are equidistant (ambiguous)
-            if len(nearby) > 1 and abs(
-                (nearby[0].payment_date - line.transaction_date).days
-            ) == abs((nearby[1].payment_date - line.transaction_date).days):
+            if len(nearby) != 1:
                 continue
             best = nearby[0]
             try:

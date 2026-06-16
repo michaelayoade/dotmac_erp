@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from app.models.finance.ap.supplier import Supplier  # noqa: F401
 
 from app.schemas.sync.dotmac_crm import (
+    CRMAvailableSerialListResponse,
+    CRMAvailableSerialRead,
     CRMInventoryItemPayload,
     CRMInventoryItemResponse,
     InventoryItemDetail,
@@ -459,3 +461,98 @@ class _InventoryMixin(_CRMSyncBase):
             {"warehouse_id": str(wh_id), "code": code, "name": name}
             for wh_id, code, name in results
         ]
+
+    def list_available_serials_for_crm(
+        self,
+        org_id: UUID,
+        *,
+        item_code: str,
+        warehouse_code: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> CRMAvailableSerialListResponse:
+        """List available serials for one item in one warehouse for CRM selection."""
+        from app.models.inventory.inventory_serial import InventorySerial
+        from app.models.inventory.item import Item
+        from app.models.inventory.warehouse import Warehouse
+
+        normalized_item_code = item_code.strip()
+        normalized_warehouse_code = warehouse_code.strip()
+        if not normalized_item_code:
+            raise ValueError("item_code is required")
+        if not normalized_warehouse_code:
+            raise ValueError("warehouse_code is required")
+
+        item = self.db.scalar(
+            select(Item).where(
+                Item.organization_id == org_id,
+                Item.item_code == normalized_item_code,
+                Item.is_active.is_(True),
+            )
+        )
+        if not item:
+            raise ValueError(f"Item not found: {normalized_item_code}")
+
+        warehouse = self.db.scalar(
+            select(Warehouse).where(
+                Warehouse.organization_id == org_id,
+                Warehouse.warehouse_code == normalized_warehouse_code,
+                Warehouse.is_active.is_(True),
+            )
+        )
+        if not warehouse:
+            raise ValueError(f"Warehouse not found: {normalized_warehouse_code}")
+
+        if not bool(item.track_serial_numbers):
+            return CRMAvailableSerialListResponse(
+                item_code=item.item_code,
+                item_name=item.item_name,
+                warehouse_code=warehouse.warehouse_code,
+                warehouse_name=warehouse.warehouse_name,
+                track_serial_numbers=False,
+                serials=[],
+                total_count=0,
+                has_more=False,
+            )
+
+        base_stmt = (
+            select(InventorySerial)
+            .where(
+                InventorySerial.organization_id == org_id,
+                InventorySerial.item_id == item.item_id,
+                InventorySerial.warehouse_id == warehouse.warehouse_id,
+                InventorySerial.status == "AVAILABLE",
+                InventorySerial.is_active.is_(True),
+            )
+            .order_by(InventorySerial.serial_number.asc())
+        )
+        total_count = self.db.scalar(
+            select(func.count()).select_from(base_stmt.order_by(None).subquery())
+        ) or 0
+        serial_rows = list(
+            self.db.scalars(base_stmt.offset(offset).limit(limit + 1)).all()
+        )
+        has_more = len(serial_rows) > limit
+        if has_more:
+            serial_rows = serial_rows[:limit]
+
+        serials = [
+            CRMAvailableSerialRead(
+                serial_id=row.serial_id,
+                serial_number=row.serial_number,
+                status=row.status,
+                item_code=item.item_code,
+                warehouse_code=warehouse.warehouse_code,
+            )
+            for row in serial_rows
+        ]
+        return CRMAvailableSerialListResponse(
+            item_code=item.item_code,
+            item_name=item.item_name,
+            warehouse_code=warehouse.warehouse_code,
+            warehouse_name=warehouse.warehouse_name,
+            track_serial_numbers=True,
+            serials=serials,
+            total_count=int(total_count),
+            has_more=has_more,
+        )

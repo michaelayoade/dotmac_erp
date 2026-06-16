@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from app.services.finance.banking.suspicious_matches import (
+    clear_suspicious_suggested_matches,
+    collect_suspicious_matches,
+    list_suspicious_matches,
+    summarize_suspicious_matches,
+)
 from app.services.finance.banking.web_parts.base import (
     Account,
     Any,
@@ -31,6 +37,7 @@ from app.services.finance.banking.web_parts.base import (
     _build_active_filters,
     _build_match_detail,
     _datetime,
+    _format_currency,
     _parse_date,
     _parse_decimal,
     _parse_statement_status,
@@ -702,6 +709,248 @@ class BankingStatementWebService:
         return templates.TemplateResponse(
             request, "finance/banking/statements.html", context
         )
+
+    @staticmethod
+    def suspicious_matches_context(
+        db: Session,
+        organization_id: str,
+        *,
+        account_id: str | None,
+        match_state: str | None,
+        page: int,
+        limit: int = 50,
+    ) -> dict:
+        org_id = coerce_uuid(organization_id)
+        account_uuid = coerce_uuid(account_id) if account_id else None
+        summary = summarize_suspicious_matches(
+            db, org_id, account_id=account_uuid, match_state=match_state
+        )
+        total_count = summary["total_count"]
+        total_pages = max(1, (total_count + limit - 1) // limit)
+        page = min(max(1, page), total_pages)
+        page_matches = list_suspicious_matches(
+            db,
+            org_id,
+            account_id=account_uuid,
+            match_state=match_state,
+            page=page,
+            limit=limit,
+        )
+
+        accounts = list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == org_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.bank_name, BankAccount.account_number)
+            ).all()
+        )
+        account_views = [_account_view(account) for account in accounts]
+        active_filters: list[dict[str, str]] = []
+        if account_id:
+            for acc in account_views:
+                acc_id = str(acc.get("bank_account_id", ""))
+                if acc_id == account_id:
+                    active_filters.append(
+                        {
+                            "name": "account_id",
+                            "value": account_id,
+                            "display_value": (
+                                f"{acc.get('bank_name', '')} - "
+                                f"{acc.get('account_number', '')}"
+                            ),
+                        }
+                    )
+                    break
+        if match_state:
+            active_filters.append(
+                {
+                    "name": "match_state",
+                    "value": match_state,
+                    "display_value": match_state.title(),
+                }
+            )
+
+        offset = (page - 1) * limit
+
+        suspicious_rows = [
+            {
+                "statement_line_id": str(match.statement_line_id),
+                "statement_id": str(match.statement_id),
+                "journal_line_id": str(match.journal_line_id),
+                "statement_number": match.statement_number or "",
+                "bank_name": match.bank_name or "",
+                "account_number": match.account_number or "",
+                "transaction_date": str(match.transaction_date or ""),
+                "amount": _format_currency(match.amount),
+                "description": match.description or "",
+                "reference": match.reference or "",
+                "match_state": match.match_state,
+                "confidence_score": match.confidence_score,
+                "explanation": match.explanation or "",
+                "matched_at": (
+                    match.matched_at.strftime("%Y-%m-%d %H:%M")
+                    if match.matched_at
+                    else ""
+                ),
+                "is_low_confidence": match.is_low_confidence,
+                "is_fallback_reason": match.is_fallback_reason,
+            }
+            for match in page_matches
+        ]
+
+        return {
+            "accounts": account_views,
+            "account_id": account_id,
+            "match_state": match_state,
+            "matches": suspicious_rows,
+            "page": page,
+            "limit": limit,
+            "offset": offset,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "suggested_count": summary["suggested_count"],
+            "confirmed_count": summary["confirmed_count"],
+            "low_confidence_count": summary["low_confidence_count"],
+            "fallback_count": summary["fallback_count"],
+            "active_filters": active_filters,
+        }
+
+    @staticmethod
+    def suspicious_matches_shell_context(
+        db: Session,
+        organization_id: str,
+        *,
+        account_id: str | None,
+        match_state: str | None,
+        page: int,
+        limit: int = 50,
+    ) -> dict:
+        org_id = coerce_uuid(organization_id)
+        accounts = list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == org_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.bank_name, BankAccount.account_number)
+            ).all()
+        )
+        account_views = [_account_view(account) for account in accounts]
+        active_filters: list[dict[str, str]] = []
+        if account_id:
+            for acc in account_views:
+                acc_id = str(acc.get("bank_account_id", ""))
+                if acc_id == account_id:
+                    active_filters.append(
+                        {
+                            "name": "account_id",
+                            "value": account_id,
+                            "display_value": (
+                                f"{acc.get('bank_name', '')} - "
+                                f"{acc.get('account_number', '')}"
+                            ),
+                        }
+                    )
+                    break
+        if match_state:
+            active_filters.append(
+                {
+                    "name": "match_state",
+                    "value": match_state,
+                    "display_value": match_state.title(),
+                }
+            )
+        query_bits = [f"page={page}", f"limit={limit}"]
+        if account_id:
+            query_bits.append(f"account_id={account_id}")
+        if match_state:
+            query_bits.append(f"match_state={match_state}")
+        return {
+            "accounts": account_views,
+            "account_id": account_id,
+            "match_state": match_state,
+            "page": page,
+            "limit": limit,
+            "active_filters": active_filters,
+            "content_url": (
+                "/finance/banking/statements/suspicious-matches/content?"
+                + "&".join(query_bits)
+            ),
+        }
+
+    def suspicious_matches_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str | None,
+        match_state: str | None,
+        page: int,
+        limit: int = 50,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Suspicious Bank Matches", "banking", db=db)
+        context.update(
+            self.suspicious_matches_shell_context(
+                db,
+                str(auth.organization_id),
+                account_id=account_id,
+                match_state=match_state,
+                page=page,
+                limit=limit,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/banking/suspicious_matches.html", context
+        )
+
+    def suspicious_matches_content_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str | None,
+        match_state: str | None,
+        page: int,
+        limit: int = 50,
+    ) -> HTMLResponse:
+        context = self.suspicious_matches_context(
+            db,
+            str(auth.organization_id),
+            account_id=account_id,
+            match_state=match_state,
+            page=page,
+            limit=limit,
+        )
+        context.update({"request": request})
+        return templates.TemplateResponse(
+            request, "finance/banking/_suspicious_matches_results.html", context
+        )
+
+    def clear_suspicious_matches_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str | None,
+    ) -> RedirectResponse:
+        cleared = clear_suspicious_suggested_matches(
+            db,
+            coerce_uuid(auth.organization_id),
+            account_id=coerce_uuid(account_id) if account_id else None,
+        )
+        db.commit()
+        redirect_url = "/finance/banking/statements/suspicious-matches"
+        if account_id:
+            redirect_url += f"?account_id={account_id}"
+        joiner = "&" if "?" in redirect_url else "?"
+        redirect_url += f"{joiner}success=Cleared+{cleared}+suspicious+suggested+match"
+        if cleared != 1:
+            redirect_url += "es"
+        return RedirectResponse(url=redirect_url, status_code=303)
 
     def export_statement_lines_response(
         self,

@@ -382,6 +382,66 @@ async def reject_suggestion_flat(
     )
 
 
+@router.get("/statements/suspicious-matches", response_class=HTMLResponse)
+def list_suspicious_statement_matches(
+    request: Request,
+    account_id: str | None = None,
+    match_state: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Review suspicious auto-match suggestions and risky confirmed matches."""
+    return banking_web_service.suspicious_matches_response(
+        request,
+        auth,
+        db,
+        account_id=account_id,
+        match_state=match_state,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/statements/suspicious-matches/content", response_class=HTMLResponse)
+def list_suspicious_statement_matches_content(
+    request: Request,
+    account_id: str | None = None,
+    match_state: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Return suspicious match results for async page loading."""
+    return banking_web_service.suspicious_matches_content_response(
+        request,
+        auth,
+        db,
+        account_id=account_id,
+        match_state=match_state,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.post("/statements/suspicious-matches/clear-suggested")
+async def clear_suspicious_statement_suggestions(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Bulk-clear suspicious suggested matches only."""
+    form = await request.form()
+    return banking_web_service.clear_suspicious_matches_response(
+        request,
+        auth,
+        db,
+        account_id=str(form.get("account_id", "") or "") or None,
+    )
+
+
 @router.get("/statements/{statement_id}", response_class=HTMLResponse)
 def view_statement(
     request: Request,

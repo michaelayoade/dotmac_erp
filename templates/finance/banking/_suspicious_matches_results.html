@@ -1,0 +1,116 @@
+{% from "components/macros.html" import empty_state, icon_svg, pagination, stats_card, status_badge %}
+
+<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {{ stats_card("Total", total_count | default(0), icon="exclamation-triangle", color="amber") }}
+    {{ stats_card("Suggested", suggested_count | default(0), icon="light-bulb", color="blue") }}
+    {{ stats_card("Confirmed", confirmed_count | default(0), icon="check-circle", color="emerald") }}
+    {{ stats_card("Low Confidence", low_confidence_count | default(0), icon="scale", color="rose") }}
+</div>
+
+<div class="flex flex-wrap items-center justify-between gap-3 text-sm px-1">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-1">
+        <span class="text-slate-500 dark:text-slate-400">
+            <span class="font-semibold text-slate-900 dark:text-white font-mono tabular-nums">{{ fallback_count | default(0) }}</span> fallback-rule matches
+        </span>
+        <span class="text-slate-500 dark:text-slate-400">
+            Suggested rows can be cleared in bulk. Confirmed rows still need manual review.
+        </span>
+    </div>
+    {% if suggested_count | default(0) > 0 %}
+    <form method="POST" action="/finance/banking/statements/suspicious-matches/clear-suggested" class="inline">
+        {{ request.state.csrf_form | safe }}
+        {% if account_id %}<input type="hidden" name="account_id" value="{{ account_id }}">{% endif %}
+        <button type="submit" class="btn btn-secondary btn-sm">
+            {{ icon_svg("trash", "h-4 w-4 mr-1.5") }}
+            Clear Suggested
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="table-container">
+        <table class="table" data-testid="bank-suspicious-matches-table">
+            <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Statement</th>
+                    <th scope="col">Description</th>
+                    <th scope="col" class="text-right">Amount</th>
+                    <th scope="col">Reason</th>
+                    <th scope="col" class="text-center">State</th>
+                    <th scope="col" class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for match in matches %}
+                <tr class="group">
+                    <td class="whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">{{ match.transaction_date }}</td>
+                    <td>
+                        <a href="/finance/banking/statements/{{ match.statement_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                            {{ match.statement_number if match.statement_number else "Statement" }}
+                        </a>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ match.bank_name }}{% if match.account_number %} · {{ match.account_number }}{% endif %}</p>
+                    </td>
+                    <td class="max-w-md">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ match.description }}</p>
+                        {% if match.reference %}
+                        <p class="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400 truncate">{{ match.reference }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="text-right font-mono tabular-nums text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap">{{ match.amount }}</td>
+                    <td class="max-w-sm">
+                        <div class="space-y-1">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                {% if match.confidence_score is not none %}
+                                <span class="inline-flex rounded-full px-1.5 py-0.5 text-xs font-mono tabular-nums {{ 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' if match.confidence_score < 90 else 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' }}">{{ match.confidence_score }}%</span>
+                                {% endif %}
+                                {% if match.is_low_confidence %}
+                                <span class="inline-flex rounded-full bg-rose-100 px-1.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">low confidence</span>
+                                {% endif %}
+                                {% if match.is_fallback_reason %}
+                                <span class="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">fallback</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ match.explanation if match.explanation else "No explanation stored" }}</p>
+                        </div>
+                    </td>
+                    <td class="text-center">{{ status_badge(match.match_state, 'sm') }}</td>
+                    <td>
+                        <div class="flex justify-end gap-2">
+                            <a href="/finance/banking/statements/{{ match.statement_id }}" class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-900/20 transition-colors">
+                                {{ icon_svg("eye", "h-3.5 w-3.5 mr-1") }}
+                                Review
+                            </a>
+                            {% if match.match_state == 'confirmed' %}
+                            <a href="/finance/banking/reconciliations?status=draft" class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
+                                {{ icon_svg("link", "h-3.5 w-3.5 mr-1") }}
+                                Unmatch
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="py-12">
+                        {{ empty_state(
+                            'No suspicious matches',
+                            'Weak fallback suggestions and risky confirmed matches will appear here.',
+                            'check-circle'
+                        ) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total_count | default(0),
+        limit=limit | default(50),
+        filters={"account_id": account_id, "match_state": match_state}
+    ) }}
+</div>

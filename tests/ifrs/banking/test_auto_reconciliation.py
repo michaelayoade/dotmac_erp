@@ -1496,7 +1496,7 @@ class TestDateAmountMatching:
         statement: MockBankStatement,
         bank_account: MockBankAccount,
     ) -> None:
-        """Matches 1 when 2 payments and 1 line share the same date+amount."""
+        """Leaves ambiguous duplicate-payment buckets for manual review."""
         from datetime import date
 
         pmt1 = MockCustomerPayment(
@@ -1544,7 +1544,9 @@ class TestDateAmountMatching:
                 mock_db, org_id, statement.statement_id
             )
 
-        assert result.matched == 1
+        assert result.matched == 0
+        assert result.skipped == 1
+        mock_recon.match_statement_line.assert_not_called()
 
     def test_greedy_pairing_one_payment_two_lines(
         self,
@@ -1555,7 +1557,7 @@ class TestDateAmountMatching:
         statement: MockBankStatement,
         bank_account: MockBankAccount,
     ) -> None:
-        """Matches 1 when 1 payment and 2 lines share the same date+amount."""
+        """Leaves ambiguous duplicate-line buckets for manual review."""
         from datetime import date
 
         pmt = MockCustomerPayment(
@@ -1600,8 +1602,71 @@ class TestDateAmountMatching:
                 mock_db, org_id, statement.statement_id
             )
 
-        assert result.matched == 1
-        assert result.skipped == 1  # line2 unmatched
+        assert result.matched == 0
+        assert result.skipped == 2
+        mock_recon.match_statement_line.assert_not_called()
+
+    def test_date_tolerant_amount_match_skips_multiple_nearby_candidates(
+        self,
+        service: AutoReconciliationService,
+        mock_db: MagicMock,
+        org_id: uuid.UUID,
+        gl_account_id: uuid.UUID,
+        statement: MockBankStatement,
+        bank_account: MockBankAccount,
+    ) -> None:
+        """Amount-only fallback should skip when more than one nearby payment exists."""
+        from datetime import date
+
+        line = MockBankStatementLine(
+            statement_id=statement.statement_id,
+            reference="699054e1c8b79",
+            amount=Decimal("18812.50"),
+            transaction_date=date(2026, 2, 14),
+        )
+        pmt1 = MockCustomerPayment(
+            organization_id=org_id,
+            splynx_id="80001",
+            reference=None,
+            description="Splynx payment via Paystack. Pay by Paystack",
+            amount=Decimal("18812.50"),
+            bank_account_id=bank_account.bank_account_id,
+            correlation_id="splynx-pmt-80001",
+            payment_date=date(2026, 2, 13),
+        )
+        pmt2 = MockCustomerPayment(
+            organization_id=org_id,
+            splynx_id="80002",
+            reference=None,
+            description="Splynx payment via Paystack. Pay by Paystack",
+            amount=Decimal("18812.50"),
+            bank_account_id=bank_account.bank_account_id,
+            correlation_id="splynx-pmt-80002",
+            payment_date=date(2026, 2, 15),
+        )
+        jl = MockJournalEntryLine(account_id=gl_account_id)
+        je = MockJournalEntry(
+            organization_id=org_id,
+            correlation_id=pmt1.correlation_id,
+            lines=[jl],
+        )
+
+        setup_db_get(mock_db, statement, bank_account)
+        setup_db_scalars(mock_db, [line], intents=[], splynx_payments=[pmt1, pmt2])
+        setup_db_execute_journal(mock_db, je)
+
+        with patch(
+            "app.services.finance.banking.bank_reconciliation.BankReconciliationService"
+        ) as mock_recon_cls:
+            mock_recon = mock_recon_cls.return_value
+
+            result = service.auto_match_statement(
+                mock_db, org_id, statement.statement_id
+            )
+
+        assert result.matched == 0
+        assert result.skipped == 1
+        mock_recon.match_statement_line.assert_not_called()
 
 
 # ── Tests: Shared helpers ─────────────────────────────────────────────
