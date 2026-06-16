@@ -295,41 +295,24 @@ class BaseSyncMixin:
         return customer_id
 
     def _resolve_account_owner(self, account_id: str) -> UUID | None:
-        subscriber_id: str | None = None
-        try:
-            for sub in self.client.get_subscriptions(account_id=account_id):
-                subscriber_id = (
-                    sub.get("subscriber_id")
-                    or sub.get("person_id")
-                    or (sub.get("subscriber") or {}).get("id")
-                )
-                if subscriber_id:
-                    break
-        except Exception:  # noqa: BLE001
-            logger.warning(
-                "Could not resolve subscriptions for account %s",
-                account_id,
-                exc_info=True,
-            )
+        """Resolve a billing ``account_id`` to its owning ERP customer.
 
-        if subscriber_id and subscriber_id in self._subscriber_cache:
-            return self._subscriber_cache[subscriber_id]
-        if subscriber_id:
-            cust = self._get_customer_by_dotmac_sub_id(subscriber_id)
-            if cust:
-                return cust.customer_id
+        Verified against the live dotmac_sub API (2026-06-16): billing accounts
+        are **reseller-scoped** (named after the reseller, e.g. "Main") and carry
+        only a ``reseller_id`` — neither billing accounts nor subscriptions expose
+        a subscriber link. So an account maps to the reseller's ERP *parent*
+        customer; invoices/payments on it are the reseller's consolidated
+        (wholesale) activity, which is what posts to the GL.
+        """
+        from app.services.dotmac_sub.client import DotmacSubError
 
         try:
-            account = next(
-                (a for a in self.client.get_billing_accounts() if a.id == account_id),
-                None,
-            )
-        except Exception:  # noqa: BLE001
+            account = self.client.get_billing_account(account_id)
+        except DotmacSubError:
+            logger.warning("Could not fetch billing account %s", account_id)
             account = None
         if account and account.reseller_id:
-            return self._reseller_cache.get(
-                account.reseller_id
-            ) or self._reseller_customer_id(account.reseller_id)
+            return self._reseller_customer_id(account.reseller_id)
         return None
 
     def _get_customer_by_dotmac_sub_id(self, dotmac_sub_id: str) -> Customer | None:

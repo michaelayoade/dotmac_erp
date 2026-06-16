@@ -529,6 +529,17 @@ class DotmacSubClient:
             self._request("GET", f"/subscribers/{subscriber_id}")
         )
 
+    def _parse_billing_account(self, item: dict[str, Any]) -> BillingAccountRecord:
+        return BillingAccountRecord(
+            id=str(item.get("id", "")),
+            reseller_id=str(item.get("reseller_id", "")),
+            name=item.get("name", ""),
+            currency=item.get("currency", settings.default_functional_currency_code),
+            status=item.get("status", ""),
+            balance=_dec(item.get("balance")),
+            is_active=bool(item.get("is_active", True)),
+        )
+
     def get_billing_accounts(
         self, reseller_id: str | None = None
     ) -> Generator[BillingAccountRecord, None, None]:
@@ -537,17 +548,13 @@ class DotmacSubClient:
             params["reseller_id"] = reseller_id
         logger.info("Fetching dotmac_sub billing accounts with params: %s", params)
         for item in self._paginate("/billing-accounts", params=params):
-            yield BillingAccountRecord(
-                id=str(item.get("id", "")),
-                reseller_id=str(item.get("reseller_id", "")),
-                name=item.get("name", ""),
-                currency=item.get(
-                    "currency", settings.default_functional_currency_code
-                ),
-                status=item.get("status", ""),
-                balance=_dec(item.get("balance")),
-                is_active=bool(item.get("is_active", True)),
-            )
+            yield self._parse_billing_account(item)
+
+    def get_billing_account(self, billing_account_id: str) -> BillingAccountRecord:
+        """Fetch a single billing account by id (used to resolve its reseller)."""
+        return self._parse_billing_account(
+            self._request("GET", f"/billing-accounts/{billing_account_id}")
+        )
 
     def get_subscriptions(
         self, account_id: str | None = None
