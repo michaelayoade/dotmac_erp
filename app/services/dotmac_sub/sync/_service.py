@@ -99,11 +99,10 @@ class DotmacSubSyncService(
             + len(credit_notes.errors)
         )
         logger.info(
-            "Full dotmac_sub sync done in %.2fs (%d errors, %d posted, %d suppressed)",
+            "Full dotmac_sub sync done in %.2fs (%d errors, %d payments posted)",
             duration,
             total_errors,
             post_stats["posted"],
-            post_stats["suppressed"],
         )
         return FullSyncResult(
             resellers=resellers,

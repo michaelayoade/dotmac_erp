@@ -304,8 +304,8 @@ class BaseSyncMixin:
         Verified against the live dotmac_sub API (2026-06-16): for invoices,
         payments and credit notes ``account_id`` is the **subscriber id** (it
         resolves via ``GET /subscribers/{id}``, not ``/billing-accounts``). So we
-        resolve subscriber-first to that subscriber's ERP customer — a *child* of
-        its reseller, correctly suppressed from GL by the wholesale rule.
+        resolve subscriber-first to that subscriber's ERP customer (the reseller
+        link is grouping only — invoices/payments post to GL normally).
 
         Fallback: the 34 reseller-named "billing accounts" are a separate
         consolidation concept; if an ``account_id`` is one of those instead, map

@@ -284,25 +284,18 @@ class PaymentSyncMixin:
     def post_unposted_payments(
         self, created_by_user_id: UUID | None = None
     ) -> dict[str, Any]:
-        """Post CLEARED dotmac_sub payments to the GL.
+        """Post CLEARED dotmac_sub payments to the GL — standard AR behaviour.
 
-        **Wholesale rule:** only payments whose customer is a parent (reseller)
-        or a direct house customer — i.e. ``parent_customer_id IS NULL`` — are
-        posted. Child-subscriber payments stay in the AR subledger unposted, so
-        the reseller's consolidated settlement is the only GL revenue event.
+        The reseller→subscriber link is a CRM/grouping dimension only (the main
+        company "dotmac" is itself a reseller), so the sync applies NO special
+        wholesale suppression: every CLEARED synced payment posts to the GL
+        exactly like the rest of the ERP's AR payments. ``parent_customer_id``
+        stays grouping-only, consistent with existing ERP convention — this sync
+        must not mutate regular GL behaviour.
         """
         from app.services.finance.ar.customer_payment import CustomerPaymentService
 
-        stats: dict[str, Any] = {"posted": 0, "suppressed": 0, "errors": []}
-
-        child_ids = set(
-            self.db.scalars(
-                select(Customer.customer_id).where(
-                    Customer.organization_id == self.organization_id,
-                    Customer.parent_customer_id.is_not(None),
-                )
-            ).all()
-        )
+        stats: dict[str, Any] = {"posted": 0, "errors": []}
 
         stmt = select(CustomerPayment).where(
             CustomerPayment.organization_id == self.organization_id,
@@ -311,9 +304,6 @@ class PaymentSyncMixin:
             CustomerPayment.dotmac_sub_id.is_not(None),
         )
         for payment in self.db.scalars(stmt).all():
-            if payment.customer_id in child_ids:
-                stats["suppressed"] += 1
-                continue
             try:
                 if CustomerPaymentService.ensure_gl_posted(
                     self.db, payment, posted_by_user_id=created_by_user_id
