@@ -197,6 +197,12 @@ class CustomerPayment(Base):
     splynx_receipt_number: Mapped[str | None] = mapped_column(
         String(100), nullable=True, index=True
     )
+    dotmac_sub_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    dotmac_sub_receipt_number: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

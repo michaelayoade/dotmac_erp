@@ -76,7 +76,7 @@ def test_collect_dependency_health_marks_required_dependencies(monkeypatch) -> N
     )
     monkeypatch.setattr(
         dependency_health_module,
-        "_check_splynx",
+        "_check_dotmac_sub",
         lambda: {
             "configured": True,
             "healthy": True,
@@ -102,7 +102,7 @@ def test_collect_dependency_health_marks_required_dependencies(monkeypatch) -> N
     assert checks["crm"]["required"] is True
     assert checks["paystack"]["required"] is True
     assert checks["nextcloud"]["required"] is False
-    assert checks["splynx"]["required"] is False
+    assert checks["dotmac_sub"]["required"] is False
 
 
 def test_readiness_failures_only_include_required_unhealthy_dependencies() -> None:
