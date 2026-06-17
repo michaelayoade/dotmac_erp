@@ -1,0 +1,52 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import status_badge, icon_svg %}
+
+{% block page_title %}dotmac_sub Sync History{% endblock %}
+{% block page_subtitle %}Recent sync runs and their outcomes{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <nav class="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="/admin/sync/dotmac-sub" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">dotmac_sub Sync</a>
+        {{ icon_svg("chevron-right", "h-4 w-4 text-slate-400") }}
+        <span class="text-slate-900 dark:text-white font-medium" aria-current="page">History</span>
+    </nav>
+
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Tier</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col" class="text-right">Total</th>
+                        <th scope="col" class="text-right">Synced</th>
+                        <th scope="col" class="text-right">Skipped</th>
+                        <th scope="col" class="text-right">Errors</th>
+                        <th scope="col" class="hidden sm:table-cell">Started</th>
+                        <th scope="col" class="hidden sm:table-cell">Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                    <tr class="group">
+                        <td class="font-medium text-slate-900 dark:text-white">{{ tier_labels.get(run.entity_types[0], run.entity_types[0] if run.entity_types else 'Sync') }}</td>
+                        <td class="text-slate-500 text-sm">{{ (run.sync_type.value if run.sync_type else '') | replace('_', ' ') | title }}</td>
+                        <td class="text-center">{{ status_badge(run.status.value if run.status else 'PENDING', 'sm') }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.total_records }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.synced_count }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.skipped_count }}</td>
+                        <td class="text-right font-mono tabular-nums {{ 'text-rose-600 dark:text-rose-400' if run.error_count else '' }}">{{ run.error_count }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ run.started_at.strftime('%d %b %Y, %H:%M') if run.started_at else '—' }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ run.completed_at.strftime('%d %b %Y, %H:%M') if run.completed_at else '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No sync runs recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

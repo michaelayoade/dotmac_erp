@@ -1,0 +1,71 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}dotmac_sub Configuration{% endblock %}
+{% block page_subtitle %}Configure the dotmac_sub API connection{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <nav class="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="/admin/sync/dotmac-sub" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">dotmac_sub Sync</a>
+        {{ icon_svg("chevron-right", "h-4 w-4 text-slate-400") }}
+        <span class="text-slate-900 dark:text-white font-medium" aria-current="page">Configuration</span>
+    </nav>
+
+    {% if request.query_params.get('success') %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+        <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') | urldecode }}</p>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-900/20">
+        <p class="text-sm font-medium text-rose-800 dark:text-rose-200">{{ request.query_params.get('error') | urldecode }}</p>
+    </div>
+    {% endif %}
+
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <form method="POST" action="/admin/sync/dotmac-sub/config" class="space-y-6">
+            {{ request.state.csrf_form | safe }}
+
+            <div>
+                <label class="form-label" for="base_url">API Base URL <span class="text-rose-500">*</span></label>
+                <input type="url" id="base_url" name="base_url" class="form-input" required
+                       placeholder="https://selfcare.dotmac.io"
+                       value="{{ config.base_url if config and config.base_url else 'https://selfcare.dotmac.io' }}">
+                <span class="form-hint">The dotmac_sub host (no trailing /api/v1).</span>
+            </div>
+
+            <div>
+                <label class="form-label" for="username">Staff Username {% if not has_token %}<span class="text-rose-500">*</span>{% endif %}</label>
+                <input type="text" id="username" name="username" class="form-input" autocomplete="off"
+                       placeholder="e.g. admin"
+                       value="{{ config.company if config and config.company else '' }}">
+                <span class="form-hint">dotmac_sub staff account used for the sync (session login).</span>
+            </div>
+
+            <div>
+                <label class="form-label" for="password">Staff Password {% if not has_token %}<span class="text-rose-500">*</span>{% endif %}</label>
+                <input type="password" id="password" name="password" class="form-input" autocomplete="new-password"
+                       placeholder="{{ '•••••••• (leave blank to keep current)' if has_token else 'Account password' }}">
+                <span class="form-hint">Entered once, stored encrypted. The sync logs in and refreshes a short-lived JWT automatically — no token to manage.</span>
+            </div>
+
+            <div>
+                <label class="form-label" for="webhook_secret">Webhook Secret</label>
+                <input type="password" id="webhook_secret" name="webhook_secret" class="form-input" autocomplete="new-password"
+                       placeholder="Shared HMAC-SHA256 secret (optional)">
+                <span class="form-hint">Used to verify inbound webhooks at <span class="font-mono">/dotmac-sub/webhook</span>.</span>
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <a href="/admin/sync/dotmac-sub" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save Configuration</button>
+            </div>
+        </form>
+    </div>
+
+    {% if config and config.last_verified_at %}
+    <p class="text-sm text-slate-500 dark:text-slate-400">Last verified: {{ config.last_verified_at.strftime('%d %b %Y, %H:%M') }}</p>
+    {% endif %}
+</div>
+{% endblock %}

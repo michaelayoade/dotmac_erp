@@ -278,24 +278,24 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(minute="*/5"),  # Every 5 minutes
             "kwargs": {"limit_per_org": 100},
         },
-        "splynx-incremental-sync": {
-            "task": "app.tasks.splynx.run_splynx_incremental_sync",
+        "dotmac-sub-incremental-sync": {
+            "task": "app.tasks.dotmac_sub.run_dotmac_sub_incremental_sync",
             "schedule": crontab(minute="*/30"),  # Every 30 minutes
         },
         "recurring-templates": {
             "task": "app.tasks.automation.process_recurring_templates",
             "schedule": crontab(hour="*/6", minute=5),  # Every 6 hours at :05
         },
-        "splynx-daily-reconciliation": {
-            "task": "app.tasks.splynx.run_splynx_daily_reconciliation",
+        "dotmac-sub-daily-reconciliation": {
+            "task": "app.tasks.dotmac_sub.run_dotmac_sub_daily_reconciliation",
             "schedule": crontab(hour=1, minute=0),  # 1 AM daily
         },
-        "splynx-full-reconciliation": {
-            "task": "app.tasks.splynx.run_splynx_full_reconciliation",
+        "dotmac-sub-full-reconciliation": {
+            "task": "app.tasks.dotmac_sub.run_dotmac_sub_full_reconciliation",
             "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM
         },
-        "splynx-stale-history-cleanup": {
-            "task": "app.tasks.splynx.cleanup_stale_splynx_sync_history",
+        "dotmac-sub-stale-history-cleanup": {
+            "task": "app.tasks.dotmac_sub.cleanup_stale_dotmac_sub_sync_history",
             "schedule": crontab(minute=17),  # Hourly at :17
             "kwargs": {"stale_after_minutes": 180, "limit": 500},
         },

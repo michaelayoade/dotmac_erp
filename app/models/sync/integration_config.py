@@ -23,6 +23,7 @@ class IntegrationType(str, enum.Enum):
     XERO = "XERO"
     SAGE = "SAGE"
     DOTMAC_CRM = "DOTMAC_CRM"
+    DOTMAC_SUB = "DOTMAC_SUB"
 
 
 class IntegrationConfig(Base):
