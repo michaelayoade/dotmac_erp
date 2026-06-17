@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20260616_dotmac_sub_integration"
-down_revision = "20260615_fix_tax_device_schema"
+down_revision = "20260613_merge_grn_push"
 branch_labels = None
 depends_on = None
 
