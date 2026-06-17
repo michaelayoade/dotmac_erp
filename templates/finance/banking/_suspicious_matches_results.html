@@ -13,7 +13,7 @@
             <span class="font-semibold text-slate-900 dark:text-white font-mono tabular-nums">{{ fallback_count | default(0) }}</span> fallback-rule matches
         </span>
         <span class="text-slate-500 dark:text-slate-400">
-            Suggested rows can be cleared in bulk. Confirmed rows still need manual review.
+            Suggested rows can be cleared in bulk. Confirmed rows still need review.
         </span>
     </div>
     {% if suggested_count | default(0) > 0 %}
@@ -95,8 +95,8 @@
                 <tr>
                     <td colspan="7" class="py-12">
                         {{ empty_state(
-                            'No suspicious matches',
-                            'Weak fallback suggestions and risky confirmed matches will appear here.',
+                            'No match suggestions need review',
+                            'Weak fallback suggestions and lower-confidence confirmed matches will appear here.',
                             'check-circle'
                         ) }}
                     </td>

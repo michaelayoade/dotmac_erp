@@ -392,7 +392,7 @@ def list_suspicious_statement_matches(
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Review suspicious auto-match suggestions and risky confirmed matches."""
+    """Review lower-confidence auto-match suggestions and confirmed matches."""
     return banking_web_service.suspicious_matches_response(
         request,
         auth,
@@ -414,7 +414,7 @@ def list_suspicious_statement_matches_content(
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Return suspicious match results for async page loading."""
+    """Return match suggestion review results for async page loading."""
     return banking_web_service.suspicious_matches_content_response(
         request,
         auth,
@@ -432,7 +432,7 @@ async def clear_suspicious_statement_suggestions(
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Bulk-clear suspicious suggested matches only."""
+    """Bulk-clear suggested matches that need review."""
     form = await request.form()
     return banking_web_service.clear_suspicious_matches_response(
         request,
