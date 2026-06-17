@@ -2006,7 +2006,15 @@ class TestPendingStockMaterialRequestAutomation:
         with patch.object(
             service,
             "_snapshot_material_request_lines",
-            return_value=[{"item_id": uuid.uuid4(), "warehouse_id": uuid.uuid4(), "requested_qty": Decimal("1"), "uom": "Nos", "serial_numbers": []}],
+            return_value=[
+                {
+                    "item_id": uuid.uuid4(),
+                    "warehouse_id": uuid.uuid4(),
+                    "requested_qty": Decimal("1"),
+                    "uom": "Nos",
+                    "serial_numbers": [],
+                }
+            ],
         ):
             with patch.object(
                 service, "_crm_material_request_has_sufficient_stock", return_value=True

@@ -269,9 +269,7 @@ class UniqueDateAmountStrategy(MatchStrategy):
                 for candidate_line in ctx.still_unmatched_lines()
                 if candidate_line.line_id not in ctx.matched_line_ids
                 and int(Decimal(candidate_line.amount) * 100) == amt_key
-                and abs(
-                    (candidate_line.transaction_date - line.transaction_date).days
-                )
+                and abs((candidate_line.transaction_date - line.transaction_date).days)
                 <= buffer_days
             ]
             if len(competing_lines) != 1:

@@ -596,9 +596,12 @@ class _InventoryMixin(_CRMSyncBase):
             )
             .order_by(InventorySerial.serial_number.asc())
         )
-        total_count = self.db.scalar(
-            select(func.count()).select_from(base_stmt.order_by(None).subquery())
-        ) or 0
+        total_count = (
+            self.db.scalar(
+                select(func.count()).select_from(base_stmt.order_by(None).subquery())
+            )
+            or 0
+        )
         serial_rows = list(
             self.db.scalars(base_stmt.offset(offset).limit(limit + 1)).all()
         )
