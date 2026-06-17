@@ -1155,7 +1155,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
     base_url, target_id="results-container", active_filters=[],
     show_search=false, search="", search_name="search", search_placeholder="Search...",
     date_range=false, start_date="", end_date="", debounce_ms=300,
-    auto_submit=true, show_apply_button=false, default_open=false
+    auto_submit=true, show_apply_button=false, default_open=false, htmx_apply=true
 ) %}
 {% set filter_count = active_filters | length %}
 {% set caller_attrs = (
@@ -1163,7 +1163,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
 ) if auto_submit else "" %}
 {% set form_attrs = (
     'hx-get="' ~ base_url ~ '" hx-target="#' ~ target_id ~ '" hx-select="#' ~ target_id ~ '" hx-push-url="true" hx-indicator="closest [data-live-search]"'
-) if (not auto_submit and show_apply_button) else "" %}
+) if (htmx_apply and not auto_submit and show_apply_button) else "" %}
 <div class="card" data-compact-filters data-live-search
      x-data='{ open: {{ "true" if (default_open or filter_count > 0) else "false" }} }'>
 
