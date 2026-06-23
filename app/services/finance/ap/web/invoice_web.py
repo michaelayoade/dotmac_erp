@@ -1077,6 +1077,7 @@ class InvoiceWebService:
         context["invoice"] = {
             "invoice_id": invoice.invoice_id,
             "invoice_number": invoice.invoice_number,
+            "invoice_type": invoice.invoice_type,
             "supplier_id": invoice.supplier_id,
             "invoice_date": invoice.invoice_date,
             "received_date": invoice.received_date,
