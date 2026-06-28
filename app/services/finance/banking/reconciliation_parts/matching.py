@@ -59,6 +59,7 @@ _CUSTOMER_PAYMENT_SOURCES = frozenset({"CUSTOMER_PAYMENT"})
 _CUSTOMER_INVOICE_SOURCES = frozenset({AR_INVOICE_SOURCE})
 _SUPPLIER_PAYMENT_SOURCES = frozenset({"SUPPLIER_PAYMENT"})
 _SUPPLIER_INVOICE_SOURCES = frozenset({AP_INVOICE_SOURCE})
+_BANK_TRANSFER_SOURCES = frozenset({"BANK_TRANSFER", "INTER_BANK"})
 
 
 class ReconciliationMatchingService:
@@ -89,6 +90,59 @@ class ReconciliationMatchingService:
         source_type = getattr(entry, "source_document_type", None)
         source_id = getattr(entry, "source_document_id", None)
         return source_type, source_id
+
+    @staticmethod
+    def _resolve_bank_transfer_counterparty_name(
+        db: Session,
+        organization_id: UUID,
+        gl_line: JournalEntryLine,
+    ) -> str | None:
+        """Return the other bank account name for a bank-transfer GL line."""
+        entry = getattr(gl_line, "journal_entry", None) or getattr(
+            gl_line, "entry", None
+        )
+        src_type = (getattr(entry, "source_document_type", None) or "").upper()
+        if src_type not in _BANK_TRANSFER_SOURCES:
+            return None
+
+        journal_entry_id = getattr(entry, "journal_entry_id", None)
+        if journal_entry_id is None:
+            journal_entry_id = getattr(gl_line, "journal_entry_id", None)
+        if journal_entry_id is None:
+            return None
+
+        other_account_ids = list(
+            db.scalars(
+                select(JournalEntryLine.account_id).where(
+                    JournalEntryLine.journal_entry_id == journal_entry_id,
+                    JournalEntryLine.line_id != gl_line.line_id,
+                )
+            ).all()
+        )
+        if not other_account_ids:
+            return None
+
+        bank_accounts = list(
+            db.scalars(
+                select(BankAccount).where(
+                    BankAccount.organization_id == organization_id,
+                    BankAccount.gl_account_id.in_(other_account_ids),
+                )
+            ).all()
+        )
+        if not bank_accounts:
+            return None
+
+        names = sorted(
+            {
+                account.account_name
+                or account.account_number
+                or account.bank_name
+                or "Bank account"
+                for account in bank_accounts
+            }
+        )
+        return ", ".join(names)
 
     def add_match(
         self,
@@ -624,12 +678,19 @@ class ReconciliationMatchingService:
             src_type = getattr(entry, "source_document_type", None) if entry else None
             entry_id = getattr(entry, "entry_id", None) if entry else None
             meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+            counterparty_name = (
+                meta.counterparty_name
+                if meta and meta.counterparty_name
+                else self._resolve_bank_transfer_counterparty_name(
+                    db, organization_id, best_gl
+                )
+            )
 
             suggestions[stmt_line.line_id] = MatchSuggestion(
                 statement_line_id=stmt_line.line_id,
                 journal_line_id=best_gl.line_id,
                 confidence=best_score,
-                counterparty_name=meta.counterparty_name if meta else None,
+                counterparty_name=counterparty_name,
                 payment_number=meta.payment_number if meta else None,
                 source_url=_build_source_url(src_type, source_doc_id, entry_id),
                 amount_matched=amt_matched,
@@ -699,11 +760,15 @@ class ReconciliationMatchingService:
                 if isinstance(reason, dict)
                 else (reason if isinstance(reason, str) else None)
             )
+            counterparty_name = self._resolve_bank_transfer_counterparty_name(
+                db, organization_id, gl_line
+            )
 
             suggestions[stmt_id] = MatchSuggestion(
                 statement_line_id=stmt_id,
                 journal_line_id=match.journal_line_id,
                 confidence=float(match.match_score or 0),
+                counterparty_name=counterparty_name,
                 source_url=_build_source_url(
                     match.source_type, match.source_id, entry_id
                 ),
@@ -1361,12 +1426,19 @@ class ReconciliationMatchingService:
             src_type = getattr(entry, "source_document_type", None) if entry else None
             entry_id = getattr(entry, "entry_id", None) if entry else None
             meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+            counterparty_name = (
+                meta.counterparty_name
+                if meta and meta.counterparty_name
+                else self._resolve_bank_transfer_counterparty_name(
+                    db, organization_id, best_gl
+                )
+            )
 
             suggestions[stmt_line.line_id] = MatchSuggestion(
                 statement_line_id=stmt_line.line_id,
                 journal_line_id=best_gl.line_id,
                 confidence=best_score,
-                counterparty_name=meta.counterparty_name if meta else None,
+                counterparty_name=counterparty_name,
                 payment_number=meta.payment_number if meta else None,
                 source_url=_build_source_url(src_type, source_doc_id, entry_id),
                 amount_matched=amt_matched,
@@ -1446,6 +1518,13 @@ class ReconciliationMatchingService:
 
             entry_id = getattr(entry, "entry_id", None) if entry else None
             source_url = _build_source_url(src_type, source_doc_id, entry_id)
+            counterparty_name = (
+                meta.counterparty_name
+                if meta and meta.counterparty_name
+                else self._resolve_bank_transfer_counterparty_name(
+                    db, organization_id, gl_line
+                )
+            )
 
             candidates.append(
                 {
@@ -1464,7 +1543,7 @@ class ReconciliationMatchingService:
                     "source_type_display": src_type.replace("_", " ").title()
                     if src_type
                     else "Journal",
-                    "counterparty_name": meta.counterparty_name if meta else "",
+                    "counterparty_name": counterparty_name or "",
                     "payment_number": meta.payment_number if meta else "",
                     "source_url": source_url,
                     "is_already_matched": gl_line.line_id in matched_gl_ids,
@@ -1622,7 +1701,14 @@ class ReconciliationMatchingService:
 
             description = getattr(entry, "description", "") or gl_line.description or ""
             reference = getattr(entry, "reference", "") or ""
-            counterparty_name = meta.counterparty_name if meta else ""
+            counterparty_name = (
+                meta.counterparty_name
+                if meta and meta.counterparty_name
+                else self._resolve_bank_transfer_counterparty_name(
+                    db, organization_id, gl_line
+                )
+                or ""
+            )
             payment_number = meta.payment_number if meta else ""
 
             # Text search filter (case-insensitive, matches description,

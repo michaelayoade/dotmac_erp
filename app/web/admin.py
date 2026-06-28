@@ -744,6 +744,45 @@ def admin_tasks(
     return admin_web_service.tasks_response(request, db, auth, page, search, status)
 
 
+@router.get("/system/health", response_class=HTMLResponse)
+def admin_system_health(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Admin System section infrastructure health page."""
+    return admin_web_service.system_health_response(request, db, auth)
+
+
+@router.get("/system/health/alerts", response_class=HTMLResponse)
+def admin_system_alerts(
+    request: Request,
+    category: str = Query(default=""),
+    severity: str = Query(default=""),
+    status: str = Query(default=""),
+    period: str = Query(default="7d"),
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Admin System section infrastructure alerts page."""
+    return admin_web_service.infrastructure_alerts_response(
+        request, db, auth, category, severity, status, period
+    )
+
+
+@router.get("/system/health/alerts/{alert_id}", response_class=HTMLResponse)
+def admin_system_alert_detail(
+    request: Request,
+    alert_id: str,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Admin System section infrastructure alert detail page."""
+    return admin_web_service.infrastructure_alert_detail_response(
+        request, db, auth, alert_id
+    )
+
+
 @router.get("/tasks/new", response_class=HTMLResponse)
 def admin_tasks_new(
     request: Request,

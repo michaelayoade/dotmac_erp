@@ -84,6 +84,7 @@ _test_engine = create_engine(
     poolclass=StaticPool,
     execution_options={
         "schema_translate_map": {
+            "public": None,
             "audit": None,
             "expense": None,
             "platform": None,
@@ -379,6 +380,11 @@ from app.models.feature_flag import FeatureFlagRegistry  # noqa: E402
 from app.models.finance.platform.idempotency_record import (  # noqa: E402
     IdempotencyRecord,
 )
+from app.models.infrastructure_health import (  # noqa: E402
+    InfrastructureAlert,
+    InfrastructureHealthStatus,
+)
+from app.models.notification import Notification  # noqa: E402
 
 # Import discipline models to resolve Employee relationship
 from app.models.people.discipline import DisciplinaryCase  # noqa: E402,F401
@@ -412,6 +418,9 @@ SQLITE_COMPATIBLE_TABLES = [
     ExpenseClaimApprovalStep.__table__,
     IdempotencyRecord.__table__,
     FeatureFlagRegistry.__table__,
+    InfrastructureHealthStatus.__table__,
+    InfrastructureAlert.__table__,
+    Notification.__table__,
 ]
 
 # Create only SQLite-compatible tables, tolerating per-table failures

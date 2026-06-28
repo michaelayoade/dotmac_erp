@@ -1,0 +1,98 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg, status_badge, empty_state %}
+
+{% block page_title %}Infrastructure Alerts{% endblock %}
+{% block page_subtitle %}Persistent operational alerts deduplicated by system fingerprint{% endblock %}
+
+{% block admin_breadcrumbs %}
+<ol class="flex flex-wrap items-center gap-2">
+    <li><a href="/admin" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Admin</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span>System</span></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <a href="/admin/system/health" class="hover:text-slate-700 dark:hover:text-slate-300">Health</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">Alerts</span></li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <form method="get" class="admin-card grid gap-3 p-4 md:grid-cols-5">
+        <label class="text-sm">
+            <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300">Category</span>
+            <select name="category" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                <option value="">All</option>
+                {% for category in categories %}
+                <option value="{{ category.value }}" {{ "selected" if filters.category == category.value else "" }}>{{ category.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300">Severity</span>
+            <select name="severity" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                <option value="">All</option>
+                {% for severity in severities %}
+                <option value="{{ severity }}" {{ "selected" if filters.severity == severity else "" }}>{{ severity | title }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300">Status</span>
+            <select name="status" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                <option value="">All</option>
+                {% for status in statuses %}
+                <option value="{{ status }}" {{ "selected" if filters.status == status else "" }}>{{ status | title }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300">Period</span>
+            <select name="period" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                {% for period in periods %}
+                <option value="{{ period.value }}" {{ "selected" if filters.period == period.value else "" }}>{{ period.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <div class="flex items-end">
+            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
+                {{ icon_svg("filter", "h-4 w-4") }}
+                Apply
+            </button>
+        </div>
+    </form>
+
+    <div class="admin-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+                <thead class="bg-slate-50 dark:bg-slate-900/60">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Alert</th>
+                        <th class="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Category</th>
+                        <th class="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Severity</th>
+                        <th class="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Status</th>
+                        <th class="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for alert in alerts %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-900/60">
+                        <td class="px-4 py-3">
+                            <a href="/admin/system/health/alerts/{{ alert.id }}" class="font-medium text-slate-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400">{{ alert.title }}</a>
+                            <p class="mt-1 max-w-xl text-xs text-slate-500 dark:text-slate-400">{{ alert.summary }}</p>
+                        </td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ alert.category.value | replace("_", " ") | title }}</td>
+                        <td class="px-4 py-3">{{ status_badge(alert.severity.value, 'sm') }}</td>
+                        <td class="px-4 py-3">{{ status_badge(alert.status.value, 'sm') }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ alert.last_seen_at }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8">
+                            {{ empty_state("No infrastructure alerts", "No alerts match the current filters.", "check-circle") }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

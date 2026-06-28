@@ -720,10 +720,11 @@ class SupplierWebService:
                 organization_id=org_id,
                 input=input_data,
             )
+            supplier_id = supplier.supplier_id
             db.commit()
 
             return RedirectResponse(
-                url=f"/finance/ap/suppliers/{supplier.supplier_id}?success=Supplier+created+successfully",
+                url=f"/finance/ap/suppliers/{supplier_id}?success=Supplier+created+successfully",
                 status_code=303,
             )
 

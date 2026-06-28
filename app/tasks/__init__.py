@@ -90,6 +90,7 @@ from app.tasks.outbox_relay import (
     cleanup_published_outbox_events,
     relay_outbox_events,
 )
+from app.tasks.infrastructure_health import run_infrastructure_health_checks_task
 from app.tasks.payroll import (
     process_payroll_entry_notifications,
     send_payslip_email,
@@ -212,4 +213,5 @@ __all__ = [
     # Outbox relay tasks
     "relay_outbox_events",
     "cleanup_published_outbox_events",
+    "run_infrastructure_health_checks_task",
 ]

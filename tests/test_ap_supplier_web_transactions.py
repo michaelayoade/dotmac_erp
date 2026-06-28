@@ -38,6 +38,48 @@ async def test_create_supplier_response_commits_on_success(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_create_supplier_response_does_not_read_supplier_after_commit(
+    monkeypatch,
+):
+    request = MagicMock()
+    request.form = AsyncMock(return_value={"legal_name": "Acme Supplies"})
+    auth = SimpleNamespace(organization_id=uuid4())
+    db = MagicMock()
+    supplier_id = uuid4()
+
+    class ExpiringSupplier:
+        expired = False
+
+        @property
+        def supplier_id(self):
+            if self.expired:
+                raise AssertionError("supplier_id was read after commit")
+            return supplier_id
+
+    supplier = ExpiringSupplier()
+    db.commit.side_effect = lambda: setattr(supplier, "expired", True)
+
+    monkeypatch.setattr(
+        SupplierWebService,
+        "build_supplier_input",
+        staticmethod(lambda _db, _form_data, _org_id: object()),
+    )
+    monkeypatch.setattr(
+        "app.services.finance.ap.web.supplier_web.supplier_service.create_supplier",
+        lambda **_kwargs: supplier,
+    )
+
+    response = await SupplierWebService().create_supplier_response(request, auth, db)
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith(
+        f"/finance/ap/suppliers/{supplier_id}"
+    )
+    db.commit.assert_called_once()
+    db.rollback.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_create_supplier_response_rolls_back_on_failure(monkeypatch):
     request = MagicMock()
     request.form = AsyncMock(return_value={"legal_name": "Acme Supplies"})

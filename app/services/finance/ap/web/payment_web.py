@@ -307,6 +307,8 @@ class PaymentWebService:
                 ),
                 "balance": format_currency(balance, invoice.currency_code),
                 "balance_raw": float(balance),  # For JS calculations
+                "subtotal_raw": float(invoice.subtotal),  # Pre-VAT WHT base
+                "tax_amount_raw": float(invoice.tax_amount),  # VAT component
                 "currency_code": invoice.currency_code,
             }
             open_invoices.append(view)

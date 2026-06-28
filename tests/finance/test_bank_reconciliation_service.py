@@ -1642,6 +1642,35 @@ def test_get_scored_candidates_returns_sorted_by_score() -> None:
     assert low["match_score"] < top["match_score"]
 
 
+def test_bank_transfer_counterparty_resolves_other_bank_account_name() -> None:
+    """Bank-transfer GL lines use the opposite bank line as counterparty."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    current_line_id = uuid4()
+    other_account_id = uuid4()
+
+    gl_line = SimpleNamespace(
+        line_id=current_line_id,
+        journal_entry=SimpleNamespace(
+            source_document_type="BANK_TRANSFER",
+            journal_entry_id=uuid4(),
+        ),
+    )
+
+    other_ids_result = MagicMock()
+    other_ids_result.all.return_value = [other_account_id]
+    bank_accounts_result = MagicMock()
+    bank_accounts_result.all.return_value = [
+        SimpleNamespace(account_name="Zenith USD", account_number="5070061296")
+    ]
+    db.scalars.side_effect = [other_ids_result, bank_accounts_result]
+
+    result = svc._resolve_bank_transfer_counterparty_name(db, org_id, gl_line)
+
+    assert result == "Zenith USD"
+
+
 # =============================================================================
 # Multi-match statement line (junction table)
 # =============================================================================
