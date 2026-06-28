@@ -33,6 +33,7 @@ from app.models.auth import Session as AuthSession
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.models.finance.audit.audit_log import AuditAction, AuditLog
 from app.models.finance.core_org.organization import Organization
+from app.models.infrastructure_health import InfraAlertStatus, InfrastructureAlert
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.models.scheduler import ScheduledTask, ScheduleType
@@ -40,6 +41,7 @@ from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
 from app.services.common import coerce_uuid
 from app.services.formatters import format_datetime as _format_datetime
+from app.services.infrastructure_health import infrastructure_health_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, resolve_brand_context
 
@@ -3239,6 +3241,22 @@ class AdminWebService:
 
         return auth
 
+    def _require_system_monitoring_auth(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+    ) -> WebAuthContext | RedirectResponse:
+        if not auth.is_authenticated:
+            return self._admin_login_redirect(self._request_path_with_query(request))
+        if not auth.has_any_permission(
+            ["system:health:read", "system:alerts:read", "system:alerts:manage"]
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="System monitoring permission required",
+            )
+        return auth
+
     def _render_admin_template(
         self,
         request: Request,
@@ -3287,6 +3305,7 @@ class AdminWebService:
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.dashboard_context(db)
+        context["infrastructure"] = infrastructure_health_service.dashboard_summary(db)
 
         # Coach insight cards for Admin dashboards
         try:
@@ -3311,6 +3330,95 @@ class AdminWebService:
             "Dashboard",
             "dashboard",
             context,
+        )
+
+    def system_health_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_system_monitoring_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = infrastructure_health_service.health_page_context(db)
+        return self._render_admin_template(
+            request,
+            db,
+            "admin/system/health.html",
+            auth_or_redirect,
+            "System Health",
+            "System Health",
+            "system_health",
+            context,
+        )
+
+    def infrastructure_alerts_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        category: str,
+        severity: str,
+        status: str,
+        period: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_system_monitoring_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = infrastructure_health_service.alerts_page_context(
+            db,
+            category=category,
+            severity=severity,
+            status=status,
+            period=period,
+        )
+        return self._render_admin_template(
+            request,
+            db,
+            "admin/system/alerts.html",
+            auth_or_redirect,
+            "Infrastructure Alerts",
+            "Infrastructure Alerts",
+            "system_health",
+            context,
+        )
+
+    def infrastructure_alert_detail_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        alert_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_system_monitoring_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        alert_uuid = coerce_uuid(alert_id)
+        alert = infrastructure_health_service.get_alert(db, alert_uuid)
+        if alert is None:
+            raise HTTPException(
+                status_code=404, detail="Infrastructure alert not found"
+            )
+        related_open = list(
+            db.scalars(
+                select(InfrastructureAlert)
+                .where(InfrastructureAlert.category == alert.category)
+                .where(InfrastructureAlert.status == InfraAlertStatus.OPEN)
+                .where(InfrastructureAlert.id != alert.id)
+                .order_by(InfrastructureAlert.last_seen_at.desc())
+                .limit(5)
+            )
+        )
+        return self._render_admin_template(
+            request,
+            db,
+            "admin/system/alert_detail.html",
+            auth_or_redirect,
+            alert.title,
+            "Infrastructure Alert",
+            "system_health",
+            {"alert": alert, "related_open": related_open},
         )
 
     def users_response(

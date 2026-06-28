@@ -348,6 +348,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(minute="*/15"),  # Every 15 minutes
             "kwargs": {"stuck_minutes": 30, "batch_size": 500},
         },
+        "infrastructure-health-check": {
+            "task": "app.tasks.infrastructure_health.run_infrastructure_health_checks",
+            "schedule": timedelta(minutes=5),
+        },
         "invoice-status-reconciliation": {
             "task": "app.tasks.data_health.reconcile_invoice_statuses",
             "schedule": crontab(hour=4, minute=30),  # 4:30 AM daily

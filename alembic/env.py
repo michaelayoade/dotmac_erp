@@ -14,6 +14,7 @@ MODEL_MODULES = (
     "app.models.domain_settings",
     "app.models.finance",
     "app.models.finance.ipsas",
+    "app.models.infrastructure_health",
     "app.models.person",
     "app.models.procurement",
     "app.models.rbac",

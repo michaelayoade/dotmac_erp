@@ -24,14 +24,51 @@
         {{ stats_card("Organizations", stats.total_organizations | default(0), icon="building", color="violet", subtitle="%s active" | format(stats.active_organizations | default(0))) }}
     </div>
 
-    <!-- System Health Banner -->
-    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-700/50 dark:bg-emerald-900/20">
-        <div class="flex items-center gap-3">
-            {{ icon_svg("check-circle", "h-5 w-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400") }}
-            <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">
-                System Health: <span class="font-semibold">{{ stats.system_health | default("Good") }}</span> &mdash; All services operational
-            </p>
+    <!-- Infrastructure Alerts -->
+    {% set infra = infrastructure | default({}) %}
+    {% set infra_status = infra.status_raw | default("unknown") %}
+    <div class="rounded-xl border p-4
+        {% if infra_status == 'unhealthy' %}border-red-200 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30
+        {% elif infra_status == 'degraded' or infra_status == 'unknown' %}border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/30
+        {% else %}border-emerald-200 bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-950/30{% endif %}">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div class="flex items-start gap-3">
+                {% if infra_status == 'unhealthy' %}
+                {{ icon_svg("x-circle", "mt-0.5 h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400") }}
+                {% elif infra_status == 'degraded' or infra_status == 'unknown' %}
+                {{ icon_svg("warning", "mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400") }}
+                {% else %}
+                {{ icon_svg("check-circle", "mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400") }}
+                {% endif %}
+                <div>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Infrastructure Health: {{ infra.status | default("Unknown") }}</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-300">{{ infra.open_count | default(0) }} open infrastructure alert{{ '' if infra.open_count == 1 else 's' }}</p>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="/admin/system/health" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+                    {{ icon_svg("check-circle", "h-4 w-4") }}
+                    System Health
+                </a>
+                <a href="/admin/system/health/alerts" class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
+                    {{ icon_svg("bell", "h-4 w-4") }}
+                    Alerts
+                </a>
+            </div>
         </div>
+        {% if infra.open_alerts %}
+        <div class="mt-4 grid gap-2 lg:grid-cols-2">
+            {% for alert in infra.open_alerts[:4] %}
+            <a href="/admin/system/health/alerts/{{ alert.id }}" class="block rounded-lg border border-white/70 bg-white/70 p-3 text-sm hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:hover:bg-slate-900">
+                <div class="flex items-center justify-between gap-3">
+                    <span class="font-medium text-slate-900 dark:text-white">{{ alert.title }}</span>
+                    {{ status_badge(alert.severity.value, 'sm') }}
+                </div>
+                <p class="mt-1 line-clamp-2 text-xs text-slate-600 dark:text-slate-400">{{ alert.summary }}</p>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 
     <!-- Actions & Activity -->
