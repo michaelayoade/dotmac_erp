@@ -33,6 +33,13 @@ def _env_int(name: str) -> int | None:
         return None
 
 
+def _env_bool(name: str, default: bool = True) -> bool:
+    raw = _env_value(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
     try:
         setting = db.scalars(
@@ -144,7 +151,7 @@ def get_celery_config() -> dict:
 
 def _builtin_beat_schedule() -> dict[str, dict]:
     """Built-in scheduled tasks that always run, independent of DB config."""
-    return {
+    schedule = {
         "analytics-cash-flow": {
             "task": "app.tasks.analytics.refresh_cash_flow_metrics",
             "schedule": crontab(hour=5, minute=0),  # 5:00 AM — before coach tasks
@@ -386,6 +393,9 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(hour=3, minute=0),  # 3:00 AM daily
         },
     }
+    if not _env_bool("BANKING_AUTO_MATCH_ENABLED", default=True):
+        schedule.pop("banking-auto-match-statements", None)
+    return schedule
 
 
 def build_beat_schedule() -> dict:

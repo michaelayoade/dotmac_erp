@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from app.services.finance.banking.auto_reconciliation_parts.base import (
     AMOUNT_TOLERANCE,
     AutoMatchDefaults,
@@ -28,6 +30,16 @@ from app.services.finance.banking.auto_reconciliation_parts.base import (
 
 class AutoReconciliationCoreService:
     """Auto-reconciliation methods for core."""
+
+    @staticmethod
+    def _auto_match_enabled() -> bool:
+        """Return whether banking auto-match is enabled for this deployment."""
+        return os.getenv("BANKING_AUTO_MATCH_ENABLED", "true").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
 
     @staticmethod
     def _post_with_period_fallback(
@@ -125,6 +137,11 @@ class AutoReconciliationCoreService:
             AutoMatchResult with match/skip/error counts.
         """
         result = AutoMatchResult()
+        if not self._auto_match_enabled():
+            logger.info(
+                "Banking auto-match disabled by BANKING_AUTO_MATCH_ENABLED=false"
+            )
+            return result
 
         # Runtime configuration is resolved from ``ReconciliationPolicyProfile``.
         # The transient ``AutoMatchDefaults`` supplies dataclass defaults (all

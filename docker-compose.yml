@@ -11,6 +11,7 @@ services:
     environment:
       APP_URL: https://erp.dotmac.io
       APP_VERSION: ${APP_VERSION:-1.10.0}
+      BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       DEFAULT_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000001
       TRUSTED_PROXY_IPS: 172.16.0.0/12,127.0.0.1
       DATABASE_URL: ${DATABASE_URL}
@@ -69,6 +70,7 @@ services:
     - .env
     environment:
       APP_URL: https://erp.dotmac.io
+      BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -101,6 +103,7 @@ services:
     - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
@@ -135,6 +138,7 @@ services:
     - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1

@@ -3,8 +3,9 @@
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import quote_plus
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -20,15 +21,30 @@ from app.services.people.hr import (
     EmploymentTypeCreateData,
     EmploymentTypeUpdateData,
     OrganizationService,
+    ValidationError,
 )
 from app.services.people.hr.web import hr_web_service
 from app.services.people.hr.web.employee_web import DROPDOWN_LIMIT
 from app.templates import templates
-from app.web.deps import get_db_for_org, WebAuthContext, base_context, require_hr_access
+from app.web.deps import (
+    get_db_for_org,
+    WebAuthContext,
+    base_context,
+    require_hr_access,
+)
 
 from ._common import _parse_bool
 
 router = APIRouter()
+
+DEPARTMENT_MANAGE_ROLES = frozenset({"admin", "hr_director", "hr_manager"})
+
+
+def _can_manage_departments(auth: WebAuthContext) -> bool:
+    """Return whether the current HR user can manage department records."""
+    if auth.has_permission("hr:departments:manage"):
+        return True
+    return bool({role.strip().lower() for role in auth.roles} & DEPARTMENT_MANAGE_ROLES)
 
 
 def _form_str(form: Any, key: str) -> str:
@@ -50,6 +66,7 @@ def list_departments(
     search: str | None = None,
     is_active: str | None = None,
     page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=200),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
 ):
@@ -71,6 +88,7 @@ def list_departments(
         search,
         page,
         filter_is_active,
+        limit,
     )
 
 
@@ -110,6 +128,37 @@ def view_department(
         db,
         department_id,
         page,
+    )
+
+
+@router.post("/departments/{department_id}/delete")
+def delete_department(
+    department_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Soft delete a department by marking it inactive."""
+    if not _can_manage_departments(auth):
+        raise HTTPException(
+            status_code=403, detail="Department management access required"
+        )
+
+    org_id = coerce_uuid(auth.organization_id)
+    svc = OrganizationService(db, org_id, auth.principal)
+
+    try:
+        svc.delete_department(coerce_uuid(department_id))
+    except ValidationError as exc:
+        return RedirectResponse(
+            url=(
+                f"/people/hr/departments/{department_id}?error={quote_plus(str(exc))}"
+            ),
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url="/people/hr/departments?success=Department+deleted+successfully",
+        status_code=303,
     )
 
 
