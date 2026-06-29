@@ -163,6 +163,7 @@ FINANCE_PERMISSIONS = [
     # -------------------------------------------------------------------------
     # Fixed Assets (FA)
     # -------------------------------------------------------------------------
+    ("fa:access", "Access fixed assets module"),
     ("fa:assets:read", "View fixed assets"),
     ("fa:assets:create", "Create fixed assets"),
     ("fa:assets:update", "Modify fixed assets"),
@@ -780,6 +781,9 @@ DEFAULT_ROLES = [
     ("ap_clerk", "Accounts payable specialist"),
     ("ar_clerk", "Accounts receivable specialist"),
     ("inventory_manager", "Inventory control specialist"),
+    ("asset_manager", "Asset management administrator"),
+    ("asset_custodian", "Asset management operations"),
+    ("asset_viewer", "Read-only asset management access"),
     ("tax_specialist", "Tax compliance and reporting"),
     # -------------------------------------------------------------------------
     # HR Roles
@@ -846,6 +850,7 @@ ROLE_PERMISSIONS = {
         "ap:invoices:read",
         "ap:payments:read",
         "ap:aging:read",
+        "fa:access",
         "fa:assets:read",
         "fa:depreciation:read",
         "fa:categories:read",
@@ -1008,6 +1013,7 @@ ROLE_PERMISSIONS = {
         "ap:payment_batches:export",
         "ap:aging:read",
         # FA, Banking, Inventory, Tax - full
+        "fa:access",
         "fa:assets:read",
         "fa:assets:create",
         "fa:assets:update",
@@ -1317,6 +1323,7 @@ ROLE_PERMISSIONS = {
         "ap:payment_batches:export",
         "ap:aging:read",
         # FA
+        "fa:access",
         "fa:assets:read",
         "fa:assets:create",
         "fa:assets:update",
@@ -1682,6 +1689,7 @@ ROLE_PERMISSIONS = {
         "ap:invoices:read",
         "ap:payments:read",
         "ap:aging:read",
+        "fa:access",
         "fa:assets:read",
         "fa:depreciation:read",
         "fa:categories:read",
@@ -1841,7 +1849,44 @@ ROLE_PERMISSIONS = {
         "inventory:categories:manage",
         "inventory:bom:read",
         "inventory:bom:manage",
+        # Fixed Assets - module access
+        "fa:access",
+        "fa:assets:read",
+        "fa:depreciation:read",
+        "fa:categories:read",
         "gl:accounts:read",
+    ],
+    "asset_manager": [
+        "fa:access",
+        "fa:assets:read",
+        "fa:assets:create",
+        "fa:assets:update",
+        "fa:assets:capitalize",
+        "fa:assets:dispose",
+        "fa:assets:transfer",
+        "fa:depreciation:read",
+        "fa:depreciation:run",
+        "fa:disposals:create",
+        "fa:revaluation:create",
+        "fa:impairment:create",
+        "fa:categories:read",
+        "fa:categories:manage",
+        "gl:accounts:read",
+    ],
+    "asset_custodian": [
+        "fa:access",
+        "fa:assets:read",
+        "fa:assets:create",
+        "fa:assets:update",
+        "fa:assets:transfer",
+        "fa:depreciation:read",
+        "fa:categories:read",
+    ],
+    "asset_viewer": [
+        "fa:access",
+        "fa:assets:read",
+        "fa:depreciation:read",
+        "fa:categories:read",
     ],
     "tax_specialist": [
         "finance:access",

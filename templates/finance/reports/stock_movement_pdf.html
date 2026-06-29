@@ -1,0 +1,98 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Stock Movement - {{ org_name }}{% endblock %}
+{% block report_title %}Stock Movement Report{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_meta %}
+<p class="meta-line">Scope: {{ scope_label }}</p>
+<p class="meta-line">Rows: {{ row_count }} of {{ total_count }}{% if total_count > row_count %} (page {{ page }}){% endif %}</p>
+{% endblock %}
+
+{% block extra_styles %}
+table.report-table th,
+table.report-table td {
+  font-size: 7px;
+  padding: 4px 5px;
+}
+.wide-text {
+  max-width: 150px;
+  overflow-wrap: anywhere;
+}
+.reference-text {
+  max-width: 115px;
+  overflow-wrap: anywhere;
+}
+{% endblock %}
+
+{% block report_body %}
+<table class="summary-grid">
+  <tr>
+    <td>
+      <div class="summary-label">Receipts</div>
+      <div class="summary-value num">{{ summary.counts["RECEIPT"] | default(0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Issues</div>
+      <div class="summary-value num">{{ summary.counts["ISSUE"] | default(0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Transfers</div>
+      <div class="summary-value num">{{ summary.counts["TRANSFER"] | default(0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Adjustments</div>
+      <div class="summary-value num">{{ summary.counts["ADJUSTMENT"] | default(0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Total Value</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_value or 0) }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if movement_rows %}
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Type</th>
+      <th>Item</th>
+      <th>Warehouse</th>
+      <th class="num">Quantity</th>
+      <th class="num">Unit Cost</th>
+      <th class="num">Total Cost</th>
+      <th>Reference</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in movement_rows %}
+    <tr>
+      <td class="nowrap">
+        {% if row.transaction.transaction_date %}
+          {{ row.transaction.transaction_date.strftime("%d %b %Y") }}
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>{{ row.transaction.transaction_type.value | replace("_", " ") | title }}</td>
+      <td class="wide-text">{{ row.item.item_code }}<br><span class="muted">{{ row.item.item_name }}</span></td>
+      <td class="wide-text">
+        {{ row.warehouse.warehouse_code }}<br><span class="muted">{{ row.warehouse.warehouse_name }}</span>
+        {% if row.to_warehouse_name %}
+        <br><span class="muted">To {{ row.to_warehouse_name }}</span>
+        {% endif %}
+      </td>
+      <td class="num">{{ "{:,.2f}".format(row.quantity or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.unit_cost or 0) }}</td>
+      <td class="num bold">{{ "{:,.2f}".format(row.total_cost or 0) }}</td>
+      <td class="reference-text">{{ row.transaction.reference or "-" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="notes">
+  <p>No stock movement rows were found for this export.</p>
+</div>
+{% endif %}
+{% endblock %}

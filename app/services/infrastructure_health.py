@@ -277,6 +277,21 @@ class InfrastructureHealthService:
         otel = get_otel_status()
         loki = monitoring.get("loki", {})
         sentry = monitoring.get("sentry", {})
+        loki_enabled = bool(loki.get("enabled"))
+        loki_consecutive_failures = int(loki.get("consecutive_failures") or 0)
+        loki_healthy = not loki_enabled or loki_consecutive_failures < 5
+        if not loki_enabled:
+            loki_summary = "Loki logging disabled"
+        elif loki_healthy:
+            loki_summary = (
+                "Loki logging healthy; "
+                f"{loki_consecutive_failures} consecutive failure(s)"
+            )
+        else:
+            loki_summary = (
+                "Loki logging degraded; "
+                f"{loki_consecutive_failures} consecutive failure(s)"
+            )
 
         checks = [
             HealthCheckResult(
@@ -294,10 +309,10 @@ class InfrastructureHealthService:
                 check_key="loki_logging",
                 display_name="Loki Logging",
                 status=InfraHealthStatus.HEALTHY
-                if bool(loki.get("configured")) and bool(loki.get("healthy"))
+                if loki_healthy
                 else InfraHealthStatus.DEGRADED,
                 severity=InfraAlertSeverity.WARNING,
-                summary=str(loki.get("message") or "Loki logging status unavailable"),
+                summary=loki_summary,
                 details=dict(loki),
             ),
             HealthCheckResult(

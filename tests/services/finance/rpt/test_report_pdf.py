@@ -43,6 +43,8 @@ REPORT_NAMES = [
     "changes_in_equity",
     "budget_vs_actual",
     "inventory_valuation_reconciliation",
+    "stock_movement",
+    "stock_on_hand",
 ]
 
 

@@ -78,6 +78,16 @@ from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
+DEPARTMENT_MANAGE_ROLES = frozenset({"admin", "hr_director", "hr_manager"})
+
+
+def _can_manage_departments(auth: WebAuthContext) -> bool:
+    """Return whether the current HR user can manage department records."""
+    if auth.has_permission("hr:departments:manage"):
+        return True
+    return bool({role.strip().lower() for role in auth.roles} & DEPARTMENT_MANAGE_ROLES)
+
+
 NIGERIA_STATES = [
     "Abia",
     "Adamawa",
@@ -2721,18 +2731,23 @@ class HRWebService:
         search: str | None = None,
         page: int = 1,
         is_active: bool | None = None,
+        limit: int = DEFAULT_PAGE_SIZE,
     ) -> HTMLResponse:
         """Render department list page."""
         org_id = coerce_uuid(auth.organization_id)
         svc = OrganizationService(db, org_id)
+        page_size = limit if limit in {10, 25, 50, 100, 200} else DEFAULT_PAGE_SIZE
 
         filters = DepartmentFilters(search=search, is_active=is_active)
-        pagination = PaginationParams.from_page(page, DEFAULT_PAGE_SIZE)
+        pagination = PaginationParams.from_page(page, page_size)
         result = svc.list_departments(filters, pagination)
 
         # Count employees per department in bulk
         dept_employee_counts = svc.get_department_headcounts_bulk(
             [dept.department_id for dept in result.items]
+        )
+        is_active_value = (
+            "true" if is_active is True else "false" if is_active is False else ""
         )
 
         context = {
@@ -2740,11 +2755,7 @@ class HRWebService:
             "departments": result.items,
             "employee_counts": dept_employee_counts,
             "search": search or "",
-            "is_active": "true"
-            if is_active is True
-            else "false"
-            if is_active is False
-            else "",
+            "is_active": is_active_value,
             "page": page,
             "total_pages": result.total_pages,
             "total_count": result.total,
@@ -2752,6 +2763,9 @@ class HRWebService:
             "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
+            "pagination_filters": {"is_active": is_active_value}
+            if is_active_value
+            else {},
         }
 
         return templates.TemplateResponse(
@@ -2833,6 +2847,9 @@ class HRWebService:
             "department": department,
             "headcount": headcount,
             "employees": result.items,
+            "success": request.query_params.get("success"),
+            "error": request.query_params.get("error"),
+            "can_manage_departments": _can_manage_departments(auth),
             "page": page,
             "total_pages": result.total_pages,
             "total": result.total,

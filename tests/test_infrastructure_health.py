@@ -111,6 +111,47 @@ def test_server_health_category_is_collected():
     assert service.category_label(InfraHealthCategory.SERVER) == "Server Health"
 
 
+@pytest.mark.parametrize(
+    ("loki_status", "expected_status", "expected_summary"),
+    [
+        (
+            {"enabled": False, "consecutive_failures": 0},
+            InfraHealthStatus.HEALTHY,
+            "Loki logging disabled",
+        ),
+        (
+            {"enabled": True, "consecutive_failures": 0},
+            InfraHealthStatus.HEALTHY,
+            "Loki logging healthy; 0 consecutive failure(s)",
+        ),
+        (
+            {"enabled": True, "consecutive_failures": 5},
+            InfraHealthStatus.DEGRADED,
+            "Loki logging degraded; 5 consecutive failure(s)",
+        ),
+    ],
+)
+def test_application_loki_health_uses_monitoring_status_fields(
+    monkeypatch, loki_status, expected_status, expected_summary
+):
+    service = InfrastructureHealthService()
+    monkeypatch.setattr(
+        "app.services.infrastructure_health.get_monitoring_status",
+        lambda: {"loki": loki_status, "sentry": {"enabled": False}},
+    )
+    monkeypatch.setattr(
+        "app.services.infrastructure_health.get_otel_status",
+        lambda: {"enabled": False},
+    )
+
+    checks = service._application_checks()
+    loki_check = next(check for check in checks if check.check_key == "loki_logging")
+
+    assert loki_check.status == expected_status
+    assert loki_check.summary == expected_summary
+    assert loki_check.details == loki_status
+
+
 def test_infrastructure_alert_reopen_and_escalate(db_session):
     service = InfrastructureHealthService()
 

@@ -8,6 +8,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from starlette.requests import Request
+from fastapi import HTTPException
 
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
@@ -15,7 +16,12 @@ from app.models.people.hr.employee import Employee
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.auth_flow import _issue_access_token
-from app.web.deps import optional_web_auth, require_web_auth
+from app.web.deps import (
+    WebAuthContext,
+    optional_web_auth,
+    require_fixed_assets_access,
+    require_web_auth,
+)
 
 
 def _ensure_employee_table(engine) -> None:
@@ -148,3 +154,35 @@ def test_optional_web_auth_loads_db_backed_permission_scopes(db_session):
     assert auth.is_authenticated is True
     assert "expense:claims:reimburse" in auth.scopes
     assert auth.has_permission("expense:claims:reimburse") is True
+
+
+def test_fixed_assets_access_does_not_require_finance_scope():
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=uuid.uuid4(),
+        roles=["asset_viewer"],
+        scopes=["fa:access", "fa:assets:read"],
+    )
+
+    result = require_fixed_assets_access(auth)
+
+    assert result is auth
+    assert auth.has_permission("finance:access") is False
+
+
+def test_finance_scope_does_not_grant_fixed_assets_access():
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=uuid.uuid4(),
+        roles=["finance_viewer"],
+        scopes=["finance:access"],
+    )
+
+    try:
+        require_fixed_assets_access(auth)
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("Expected fixed assets access to require fa scope")

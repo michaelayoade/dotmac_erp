@@ -1,0 +1,95 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Stock on Hand - {{ org_name }}{% endblock %}
+{% block report_title %}Stock on Hand Report{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_meta %}
+<p class="meta-line">Scope: {{ scope_label }}</p>
+<p class="meta-line">Rows: {{ row_count }}</p>
+{% endblock %}
+
+{% block extra_styles %}
+table.report-table th,
+table.report-table td {
+  font-size: 7px;
+  padding: 4px 5px;
+}
+.wide-text {
+  max-width: 150px;
+  overflow-wrap: anywhere;
+}
+{% endblock %}
+
+{% block report_body %}
+<table class="summary-grid">
+  <tr>
+    <td>
+      <div class="summary-label">Total Items</div>
+      <div class="summary-value num">{{ summary.total_items | default(0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Total Quantity</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_quantity or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Reserved</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_reserved or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Available</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_available or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Total Value</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_value or 0) }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if stock_data %}
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Item Code</th>
+      <th>Item Name</th>
+      <th>Category</th>
+      <th>Warehouse</th>
+      <th class="num">On Hand</th>
+      <th class="num">Reserved</th>
+      <th class="num">Available</th>
+      <th class="num">Unit Cost</th>
+      <th class="num">Total Value</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in stock_data %}
+    <tr>
+      <td>{{ row.item_code }}</td>
+      <td class="wide-text">{{ row.item_name }}</td>
+      <td class="wide-text">{{ row.category_name or "-" }}</td>
+      <td class="wide-text">{{ row.warehouse_name or "All" }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.on_hand or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.reserved or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.available or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.unit_cost or 0) }}</td>
+      <td class="num bold">{{ "{:,.2f}".format(row.total_value or 0) }}</td>
+      <td>
+        {% if row.is_low_stock %}
+        Low Stock
+        {% elif (row.on_hand or 0) <= 0 %}
+        Out of Stock
+        {% else %}
+        In Stock
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="notes">
+  <p>No stock on hand rows were found for this export.</p>
+</div>
+{% endif %}
+{% endblock %}

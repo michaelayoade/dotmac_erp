@@ -1155,7 +1155,8 @@ if (typeof window.searchAutosuggest === 'undefined') {
     base_url, target_id="results-container", active_filters=[],
     show_search=false, search="", search_name="search", search_placeholder="Search...",
     date_range=false, start_date="", end_date="", debounce_ms=300,
-    auto_submit=true, show_apply_button=false, default_open=false, htmx_apply=true
+    auto_submit=true, show_apply_button=false, default_open=false, htmx_apply=true,
+    export_url="", export_label="Export PDF"
 ) %}
 {% set filter_count = active_filters | length %}
 {% set caller_attrs = (
@@ -1242,22 +1243,33 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
       {# Optional search input #}
       {% if show_search %}
-      <div class="relative">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-        </svg>
-        <input type="text" name="{{ search_name }}" aria-label="{{ search_placeholder }}" value="{{ search if search else '' }}"
-               placeholder="{{ search_placeholder }}"
-               autocomplete="off"
-               class="form-input pl-10 w-full"
-               {% if auto_submit %}
-               hx-get="{{ base_url }}"
-               hx-trigger="input changed delay:{{ debounce_ms }}ms, search"
-               hx-target="#{{ target_id }}"
-               hx-select="#{{ target_id }}"
-               hx-push-url="true"
-               hx-include="closest form">
-               {% endif %}
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {% if export_url %}
+        <button type="submit"
+                formaction="{{ export_url }}"
+                formmethod="get"
+                class="btn btn-secondary shrink-0">
+          {{ icon_svg("file-text", "h-4 w-4 mr-2") }}
+          {{ export_label }}
+        </button>
+        {% endif %}
+        <div class="relative min-w-0 flex-1">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input type="text" name="{{ search_name }}" aria-label="{{ search_placeholder }}" value="{{ search if search else '' }}"
+                 placeholder="{{ search_placeholder }}"
+                 autocomplete="off"
+                 class="form-input pl-10 w-full"
+                 {% if auto_submit %}
+                 hx-get="{{ base_url }}"
+                 hx-trigger="input changed delay:{{ debounce_ms }}ms, search"
+                 hx-target="#{{ target_id }}"
+                 hx-select="#{{ target_id }}"
+                 hx-push-url="true"
+                 hx-include="closest form">
+                 {% endif %}
+        </div>
       </div>
       {% endif %}
 
