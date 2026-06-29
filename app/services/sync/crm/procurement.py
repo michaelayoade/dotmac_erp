@@ -434,9 +434,7 @@ class _ProcurementMixin(_CRMSyncBase):
             item_payload = {
                 "sequence": line.sequence,
                 "item_id": str(line.inventory_item_id),
-                "warehouse_id": str(line.warehouse_id)
-                if line.warehouse_id
-                else None,
+                "warehouse_id": str(line.warehouse_id) if line.warehouse_id else None,
                 "requested_qty": str(line.requested_qty),
                 "uom": line.uom or "",
             }
@@ -488,8 +486,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 return False
             bucket = (resolved["item_id"], resolved["warehouse_id"])
             required_by_bucket[bucket] = (
-                required_by_bucket.get(bucket, Decimal("0"))
-                + resolved["requested_qty"]
+                required_by_bucket.get(bucket, Decimal("0")) + resolved["requested_qty"]
             )
 
         for (item_id, warehouse_id), required_qty in required_by_bucket.items():

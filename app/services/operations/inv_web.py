@@ -158,7 +158,7 @@ class OperationsInventoryWebService:
         project_id: str | None = None,
         page: int = 1,
         limit: int = 50,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | Response:
         """Material request list page."""
         context = base_context(request, auth, "Material Requests", "material_requests")
         org_id_str = self._org_id_str(auth)
@@ -4189,6 +4189,217 @@ class OperationsInventoryWebService:
             context,
         )
 
+    def export_stock_movement_pdf_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        warehouse: str | None = None,
+        item: str | None = None,
+        transaction_type: str | None = None,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> Response:
+        """Export filtered stock movement rows as PDF."""
+        from app.services.finance.rpt.pdf import ReportPDFService
+
+        export_context, filename_stem = self._stock_movement_export_context(
+            auth,
+            db,
+            warehouse=warehouse,
+            item=item,
+            transaction_type=transaction_type,
+            search=search,
+            page=page,
+            limit=limit,
+        )
+        pdf_bytes = ReportPDFService(db).render(
+            "stock_movement",
+            str(auth.organization_id),
+            export_context,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_stem}.pdf"'
+            },
+        )
+
+    def _stock_movement_export_context(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        warehouse: str | None = None,
+        item: str | None = None,
+        transaction_type: str | None = None,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> tuple[dict[str, Any], str]:
+        """Build stock movement rows for PDF exports."""
+        from decimal import Decimal
+        from uuid import UUID as UUID_Type
+
+        from sqlalchemy.orm import aliased
+
+        from app.models.inventory.inventory_transaction import (
+            InventoryTransaction,
+            TransactionType,
+        )
+        from app.models.inventory.item import Item
+        from app.models.inventory.warehouse import Warehouse
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=400, detail="Organization is required")
+
+        to_warehouse = aliased(Warehouse)
+        movement_stmt = (
+            select(InventoryTransaction, Item, Warehouse, to_warehouse)
+            .join(Item, InventoryTransaction.item_id == Item.item_id)
+            .join(
+                Warehouse, InventoryTransaction.warehouse_id == Warehouse.warehouse_id
+            )
+            .outerjoin(
+                to_warehouse,
+                InventoryTransaction.to_warehouse_id == to_warehouse.warehouse_id,
+            )
+            .where(InventoryTransaction.organization_id == org_id)
+        )
+
+        selected_warehouse = None
+        if warehouse:
+            try:
+                warehouse_id = UUID_Type(warehouse)
+                movement_stmt = movement_stmt.where(
+                    InventoryTransaction.warehouse_id == warehouse_id
+                )
+                selected_warehouse = db.get(Warehouse, warehouse_id)
+                if selected_warehouse and selected_warehouse.organization_id != org_id:
+                    selected_warehouse = None
+            except ValueError:
+                pass
+
+        selected_item = None
+        if item:
+            try:
+                item_id = UUID_Type(item)
+                movement_stmt = movement_stmt.where(
+                    InventoryTransaction.item_id == item_id
+                )
+                selected_item = db.get(Item, item_id)
+                if selected_item and selected_item.organization_id != org_id:
+                    selected_item = None
+            except ValueError:
+                pass
+
+        selected_type = None
+        if transaction_type:
+            parsed_type = next(
+                (
+                    txn_type
+                    for txn_type in TransactionType
+                    if txn_type.value == transaction_type
+                ),
+                None,
+            )
+            if parsed_type is not None:
+                movement_stmt = movement_stmt.where(
+                    InventoryTransaction.transaction_type == parsed_type
+                )
+                selected_type = parsed_type.value
+
+        if search:
+            term = f"%{search}%"
+            movement_stmt = movement_stmt.where(
+                or_(
+                    InventoryTransaction.reference.ilike(term),
+                    Item.item_code.ilike(term),
+                    Item.item_name.ilike(term),
+                    Warehouse.warehouse_name.ilike(term),
+                    Warehouse.warehouse_code.ilike(term),
+                )
+            )
+
+        row_data = list(
+            db.execute(
+                movement_stmt.order_by(InventoryTransaction.transaction_date.desc())
+            ).all()
+        )
+
+        movement_rows = []
+        summary_counts = {
+            "RECEIPT": 0,
+            "ISSUE": 0,
+            "TRANSFER": 0,
+            "ADJUSTMENT": 0,
+        }
+        total_quantity = Decimal("0")
+        total_value = Decimal("0")
+
+        for txn, row_item, row_warehouse, to_warehouse_row in row_data:
+            movement_type = txn.transaction_type.value
+            quantity = txn.quantity or Decimal("0")
+            total_cost = txn.total_cost or Decimal("0")
+
+            if movement_type in summary_counts:
+                summary_counts[movement_type] += 1
+            total_quantity += quantity
+            total_value += total_cost
+
+            movement_rows.append(
+                {
+                    "transaction": txn,
+                    "item": row_item,
+                    "warehouse": row_warehouse,
+                    "to_warehouse": to_warehouse_row,
+                    "to_warehouse_name": to_warehouse_row.warehouse_name
+                    if to_warehouse_row is not None
+                    else None,
+                    "quantity": quantity,
+                    "unit_cost": txn.unit_cost or Decimal("0"),
+                    "total_cost": total_cost,
+                }
+            )
+
+        scope_parts = []
+        filename_parts = ["stock_movement"]
+        if selected_type:
+            scope_parts.append(selected_type.replace("_", " ").title())
+            filename_parts.append(selected_type.lower())
+        if selected_warehouse:
+            scope_parts.append(f"Warehouse {selected_warehouse.warehouse_name}")
+        if selected_item:
+            scope_parts.append(f"Item {selected_item.item_code}")
+        if search:
+            scope_parts.append(f'Search "{search}"')
+
+        total_count = len(movement_rows)
+        safe_limit = min(max(limit, 1), 500)
+        safe_page = max(page, 1)
+        start_idx = (safe_page - 1) * safe_limit
+        end_idx = start_idx + safe_limit
+        export_rows = movement_rows[start_idx:end_idx]
+
+        return (
+            {
+                "movement_rows": export_rows,
+                "summary": {
+                    "total_rows": total_count,
+                    "total_quantity": total_quantity,
+                    "total_value": total_value,
+                    "counts": summary_counts,
+                },
+                "row_count": len(export_rows),
+                "total_count": total_count,
+                "page": safe_page,
+                "limit": safe_limit,
+                "scope_label": ", ".join(scope_parts) if scope_parts else "All rows",
+            },
+            "_".join(filename_parts),
+        )
+
     def export_yearly_stock_movement_csv_response(
         self,
         auth: WebAuthContext,
@@ -5678,6 +5889,12 @@ class OperationsInventoryWebService:
 
         from app.models.inventory.item import Item
         from app.models.inventory.item_category import ItemCategory
+        from app.models.inventory.inventory_lot import InventoryLot
+        from app.models.inventory.inventory_lot_balance import InventoryLotBalance
+        from app.models.inventory.inventory_transaction import (
+            InventoryTransaction,
+            TransactionType,
+        )
         from app.models.inventory.warehouse import Warehouse
 
         context = base_context(request, auth, "Stock on Hand", "reports")
@@ -5721,6 +5938,18 @@ class OperationsInventoryWebService:
             except ValueError:
                 pass
 
+        selected_warehouse = None
+        selected_warehouse_id = None
+        if warehouse:
+            try:
+                selected_warehouse_id = UUID_Type(warehouse)
+                selected_warehouse = db.get(Warehouse, selected_warehouse_id)
+                if selected_warehouse and selected_warehouse.organization_id != org_id:
+                    selected_warehouse = None
+                    selected_warehouse_id = None
+            except ValueError:
+                selected_warehouse_id = None
+
         items = list(db.scalars(items_stmt.order_by(Item.item_code)).all())
 
         # Batch load categories for the items
@@ -5735,12 +5964,87 @@ class OperationsInventoryWebService:
             }
 
         # Batch load stock quantities
-        from app.services.inventory.web import _get_batch_stock_quantities
-
         item_ids = [item.item_id for item in items]
-        stock_quantities = (
-            _get_batch_stock_quantities(db, org_id, item_ids) if item_ids else {}
-        )
+        stock_quantities = {}
+        if item_ids:
+            on_hand_stmt = (
+                select(
+                    InventoryTransaction.item_id,
+                    func.sum(
+                        case(
+                            (
+                                InventoryTransaction.transaction_type.in_(
+                                    [
+                                        TransactionType.RECEIPT,
+                                        TransactionType.RETURN,
+                                        TransactionType.ASSEMBLY,
+                                    ]
+                                ),
+                                InventoryTransaction.quantity,
+                            ),
+                            (
+                                InventoryTransaction.transaction_type.in_(
+                                    [
+                                        TransactionType.ISSUE,
+                                        TransactionType.SALE,
+                                        TransactionType.SCRAP,
+                                        TransactionType.DISASSEMBLY,
+                                    ]
+                                ),
+                                -InventoryTransaction.quantity,
+                            ),
+                            else_=InventoryTransaction.quantity,
+                        )
+                    ).label("on_hand"),
+                )
+                .where(
+                    InventoryTransaction.organization_id == org_id,
+                    InventoryTransaction.item_id.in_(item_ids),
+                )
+                .group_by(InventoryTransaction.item_id)
+            )
+            if selected_warehouse_id:
+                on_hand_stmt = on_hand_stmt.where(
+                    InventoryTransaction.warehouse_id == selected_warehouse_id
+                )
+
+            reserved_stmt = (
+                select(
+                    InventoryLot.item_id,
+                    func.sum(InventoryLotBalance.quantity_allocated).label("reserved"),
+                )
+                .join(
+                    InventoryLotBalance,
+                    InventoryLotBalance.lot_id == InventoryLot.lot_id,
+                )
+                .where(
+                    InventoryLot.organization_id == org_id,
+                    InventoryLot.item_id.in_(item_ids),
+                )
+                .group_by(InventoryLot.item_id)
+            )
+            if selected_warehouse_id:
+                reserved_stmt = reserved_stmt.where(
+                    InventoryLotBalance.warehouse_id == selected_warehouse_id
+                )
+
+            on_hand_results = {
+                row.item_id: row.on_hand or Decimal("0")
+                for row in db.execute(on_hand_stmt).all()
+            }
+            reserved_results = {
+                row.item_id: row.reserved or Decimal("0")
+                for row in db.execute(reserved_stmt).all()
+            }
+            stock_quantities = {
+                item_id: {
+                    "on_hand": on_hand_results.get(item_id, Decimal("0")),
+                    "reserved": reserved_results.get(item_id, Decimal("0")),
+                    "available": on_hand_results.get(item_id, Decimal("0"))
+                    - reserved_results.get(item_id, Decimal("0")),
+                }
+                for item_id in item_ids
+            }
 
         # Build stock data rows
         all_stock_data = []
@@ -5771,7 +6075,9 @@ class OperationsInventoryWebService:
                     "item_code": item.item_code,
                     "item_name": item.item_name,
                     "category_name": cat.category_name if cat else "-",
-                    "warehouse_name": "All",
+                    "warehouse_name": selected_warehouse.warehouse_name
+                    if selected_warehouse
+                    else "All",
                     "on_hand": on_hand,
                     "reserved": reserved,
                     "available": available,
@@ -5803,6 +6109,95 @@ class OperationsInventoryWebService:
             "total_available": total_available,
             "below_reorder": below_reorder,
         }
+
+        if format == "pdf":
+            from app.services.finance.rpt.pdf import ReportPDFService
+
+            scope_parts = []
+            if selected_warehouse:
+                scope_parts.append(f"Warehouse {selected_warehouse.warehouse_name}")
+            selected_category = None
+            if category:
+                try:
+                    category_id = UUID_Type(category)
+                    selected_category = next(
+                        (
+                            option
+                            for option in categories
+                            if option.category_id == category_id
+                        ),
+                        None,
+                    )
+                except ValueError:
+                    selected_category = None
+            if selected_category:
+                scope_parts.append(f"Category {selected_category.category_name}")
+            if include_zero:
+                scope_parts.append("Including zero-stock items")
+
+            pdf_bytes = ReportPDFService(db).render(
+                "stock_on_hand",
+                str(org_id),
+                {
+                    "stock_data": all_stock_data,
+                    "summary": summary,
+                    "row_count": len(all_stock_data),
+                    "scope_label": ", ".join(scope_parts)
+                    if scope_parts
+                    else "All stock items",
+                },
+            )
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": 'attachment; filename="stock_on_hand.pdf"'
+                },
+            )
+
+        if format == "csv":
+            buffer = StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow(
+                [
+                    "Item Code",
+                    "Item Name",
+                    "Category",
+                    "Warehouse",
+                    "On Hand",
+                    "Reserved",
+                    "Available",
+                    "Unit Cost",
+                    "Total Value",
+                    "Status",
+                ]
+            )
+            for row in all_stock_data:
+                writer.writerow(
+                    [
+                        row["item_code"],
+                        row["item_name"],
+                        row["category_name"],
+                        row["warehouse_name"],
+                        row["on_hand"],
+                        row["reserved"],
+                        row["available"],
+                        row["unit_cost"],
+                        row["total_value"],
+                        "Low Stock"
+                        if row["is_low_stock"]
+                        else "Out of Stock"
+                        if row["on_hand"] <= 0
+                        else "In Stock",
+                    ]
+                )
+            return Response(
+                content=buffer.getvalue(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": 'attachment; filename="stock_on_hand.csv"'
+                },
+            )
 
         context.update(
             {

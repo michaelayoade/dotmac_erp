@@ -6,7 +6,16 @@ HTML template routes for Items and Inventory Transactions.
 
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -2020,6 +2029,33 @@ def stock_movement_report(
         transaction_type=transaction_type,
         search=search,
         page=page,
+    )
+
+
+@router.get("/reports/movement/export")
+def export_stock_movement_report(
+    format: str = Query(default="pdf", pattern="^pdf$"),
+    auth: WebAuthContext = Depends(require_inventory_access),
+    warehouse: str | None = None,
+    item: str | None = None,
+    transaction_type: str | None = None,
+    search: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=500),
+    db: Session = Depends(get_db_for_org),
+):
+    """Export stock movement report as PDF."""
+    if format != "pdf":
+        raise HTTPException(status_code=400, detail="Unsupported export format")
+    return operations_inv_web_service.export_stock_movement_pdf_response(
+        auth=auth,
+        db=db,
+        warehouse=warehouse,
+        item=item,
+        transaction_type=transaction_type,
+        search=search,
+        page=page,
+        limit=limit,
     )
 
 

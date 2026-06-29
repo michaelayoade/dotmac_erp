@@ -51,6 +51,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     return parser.parse_args(argv)
 
+
 def _render_json(matches: list[SuspiciousMatch], cleared: int) -> None:
     payload = {
         "total_suspicious": len(matches),

@@ -1,0 +1,96 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import status_badge, icon_svg, stats_card %}
+
+{% block page_title %}dotmac_sub Sync{% endblock %}
+{% block page_subtitle %}Sync subscribers, resellers, invoices, payments and credit notes from dotmac_sub{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if request.query_params.get('success') %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
+            <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-900/20">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("warning", "h-5 w-5 text-rose-600 dark:text-rose-400") }}
+            <p class="text-sm font-medium text-rose-800 dark:text-rose-200">{{ request.query_params.get('error') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Stat cards -->
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Integration", "Connected" if integration_configured else "Not Configured", icon="link", color="emerald" if integration_configured else "amber", subtitle="selfcare.dotmac.io") }}
+        {{ stats_card("Total Runs", stats.total_runs, icon="refresh", color="blue", href="/admin/sync/dotmac-sub/history") }}
+        {{ stats_card("Records Synced", stats.total_synced, icon="check-circle", color="emerald") }}
+        {{ stats_card("Failed Runs", stats.failed_runs, icon="warning", color="rose" if stats.failed_runs else "slate", href="/admin/sync/dotmac-sub/history") }}
+    </div>
+
+    <!-- Actions -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Actions</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Trigger a sync run or test the connection. Synced invoices and payments post to the GL like normal AR; resellers are a grouping dimension.</p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <form method="POST" action="/admin/sync/dotmac-sub/test">
+                    {{ request.state.csrf_form | safe }}
+                    <button type="submit" class="btn btn-secondary" {{ 'disabled' if not integration_configured else '' }}>Test Connection</button>
+                </form>
+                <form method="POST" action="/admin/sync/dotmac-sub/trigger">
+                    {{ request.state.csrf_form | safe }}
+                    <input type="hidden" name="tier" value="incremental">
+                    <button type="submit" class="btn btn-primary" {{ 'disabled' if not integration_configured else '' }}>Run Incremental Sync</button>
+                </form>
+                <form method="POST" action="/admin/sync/dotmac-sub/trigger">
+                    {{ request.state.csrf_form | safe }}
+                    <input type="hidden" name="tier" value="full">
+                    <button type="submit" class="btn btn-ghost" {{ 'disabled' if not integration_configured else '' }}>Full Reconciliation</button>
+                </form>
+                <a href="/admin/sync/dotmac-sub/config" class="btn btn-ghost">Configure</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent runs -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Sync Runs</h2>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Tier</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col" class="text-right">Synced</th>
+                        <th scope="col" class="text-right">Skipped</th>
+                        <th scope="col" class="text-right">Errors</th>
+                        <th scope="col" class="hidden sm:table-cell">Started</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in recent_runs %}
+                    <tr class="group">
+                        <td class="font-medium text-slate-900 dark:text-white">{{ tier_labels.get(run.entity_types[0], run.entity_types[0] if run.entity_types else 'Sync') }}</td>
+                        <td class="text-center">{{ status_badge(run.status.value if run.status else 'PENDING', 'sm') }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.synced_count }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.skipped_count }}</td>
+                        <td class="text-right font-mono tabular-nums {{ 'text-rose-600 dark:text-rose-400' if run.error_count else '' }}">{{ run.error_count }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ run.started_at.strftime('%d %b %Y, %H:%M') if run.started_at else '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No sync runs yet. Configure the integration and run an incremental sync.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -28,7 +28,9 @@ def _list_active_organization_ids() -> list[UUID]:
 
 
 @shared_task
-def auto_issue_pending_stock_material_requests(limit_per_org: int = 100) -> dict[str, Any]:
+def auto_issue_pending_stock_material_requests(
+    limit_per_org: int = 100,
+) -> dict[str, Any]:
     """Issue CRM material requests that were waiting for stock and notify requesters."""
     results: dict[str, Any] = {
         "organizations_checked": 0,
@@ -61,6 +63,8 @@ def auto_issue_pending_stock_material_requests(limit_per_org: int = 100) -> dict
                 "Failed to process pending-stock material requests for organization %s",
                 org_id,
             )
-            results["errors"].append({"organization_id": str(org_id), "error": str(exc)})
+            results["errors"].append(
+                {"organization_id": str(org_id), "error": str(exc)}
+            )
 
     return results

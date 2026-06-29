@@ -651,6 +651,71 @@ def test_stock_movement_report_response_uses_movement_template(monkeypatch) -> N
     assert len(context["movement_rows"]) == 1
 
 
+def test_export_stock_movement_pdf_response_returns_pdf(monkeypatch) -> None:
+    service = OperationsInventoryWebService()
+    org_id = uuid.uuid4()
+    auth = MagicMock(organization_id=org_id)
+    db = MagicMock()
+
+    from app.models.inventory.inventory_transaction import TransactionType
+
+    item = MagicMock()
+    item.item_id = uuid.uuid4()
+    item.item_code = "ITEM-PDF"
+    item.item_name = "PDF Movement Item"
+
+    warehouse = MagicMock()
+    warehouse.warehouse_id = uuid.uuid4()
+    warehouse.warehouse_code = "MAIN"
+    warehouse.warehouse_name = "Main Warehouse"
+
+    txn = MagicMock()
+    txn.transaction_date = date(2026, 3, 10)
+    txn.transaction_type = TransactionType.RECEIPT
+    txn.quantity = Decimal("10")
+    txn.unit_cost = Decimal("25")
+    txn.total_cost = Decimal("250")
+    txn.reference = "GRN-001"
+
+    class _FakeExecuteResult:
+        def all(self):
+            return [(txn, item, warehouse, None)]
+
+    db.execute.return_value = _FakeExecuteResult()
+    captured: dict[str, object] = {}
+
+    def fake_render(self, report_name, organization_id, context):
+        captured["report_name"] = report_name
+        captured["organization_id"] = organization_id
+        captured["context"] = context
+        return b"%PDF-1.4 stock movement"
+
+    monkeypatch.setattr(
+        "app.services.finance.rpt.pdf.ReportPDFService.render",
+        fake_render,
+    )
+
+    response = service.export_stock_movement_pdf_response(
+        auth=auth,
+        db=db,
+        transaction_type="RECEIPT",
+        search="GRN",
+    )
+
+    assert response.media_type == "application/pdf"
+    assert response.body == b"%PDF-1.4 stock movement"
+    assert (
+        response.headers["Content-Disposition"]
+        == 'attachment; filename="stock_movement_receipt.pdf"'
+    )
+    assert captured["report_name"] == "stock_movement"
+    assert captured["organization_id"] == str(org_id)
+    context = captured["context"]
+    assert context["row_count"] == 1
+    assert context["scope_label"] == 'Receipt, Search "GRN"'
+    assert context["summary"]["total_value"] == Decimal("250")
+
+
 def test_yearly_stock_movement_report_calculates_opening_and_closing(
     monkeypatch,
 ) -> None:

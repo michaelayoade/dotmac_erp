@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.services.finance.banking.suspicious_matches import (
     clear_suspicious_suggested_matches,
-    collect_suspicious_matches,
     list_suspicious_matches,
     summarize_suspicious_matches,
 )
@@ -892,7 +891,9 @@ class BankingStatementWebService:
         page: int,
         limit: int = 50,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Suspicious Bank Matches", "banking", db=db)
+        context = base_context(
+            request, auth, "Bank Match Suggestions", "banking", db=db
+        )
         context.update(
             self.suspicious_matches_shell_context(
                 db,
@@ -947,9 +948,9 @@ class BankingStatementWebService:
         if account_id:
             redirect_url += f"?account_id={account_id}"
         joiner = "&" if "?" in redirect_url else "?"
-        redirect_url += f"{joiner}success=Cleared+{cleared}+suspicious+suggested+match"
+        redirect_url += f"{joiner}success=Cleared+{cleared}+match+suggestion"
         if cleared != 1:
-            redirect_url += "es"
+            redirect_url += "s"
         return RedirectResponse(url=redirect_url, status_code=303)
 
     def export_statement_lines_response(

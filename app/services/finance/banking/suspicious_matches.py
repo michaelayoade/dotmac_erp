@@ -58,6 +58,7 @@ class SuspiciousMatch:
     def is_suspicious(self) -> bool:
         return self.is_low_confidence or self.is_fallback_reason
 
+
 def collect_suspicious_matches(
     db: Session,
     org_id: UUID,
@@ -205,23 +206,20 @@ def summarize_suspicious_matches(
         .subquery()
     )
     fallback_predicate = or_(
-        *[
-            base_sq.c.explanation.ilike(f"%{phrase}%")
-            for phrase in SUSPICIOUS_PHRASES
-        ]
+        *[base_sq.c.explanation.ilike(f"%{phrase}%") for phrase in SUSPICIOUS_PHRASES]
     )
     summary_row = db.execute(
         select(
             func.count().label("total_count"),
-            func.count(
-                case((base_sq.c.match_state == "suggested", 1))
-            ).label("suggested_count"),
-            func.count(
-                case((base_sq.c.match_state == "confirmed", 1))
-            ).label("confirmed_count"),
-            func.count(
-                case((base_sq.c.confidence_score < 90, 1))
-            ).label("low_confidence_count"),
+            func.count(case((base_sq.c.match_state == "suggested", 1))).label(
+                "suggested_count"
+            ),
+            func.count(case((base_sq.c.match_state == "confirmed", 1))).label(
+                "confirmed_count"
+            ),
+            func.count(case((base_sq.c.confidence_score < 90, 1))).label(
+                "low_confidence_count"
+            ),
             func.count(case((fallback_predicate, 1))).label("fallback_count"),
         ).select_from(base_sq)
     ).one()

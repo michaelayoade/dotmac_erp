@@ -14,10 +14,20 @@
 {% endblock %}
 
 {% block header_actions %}
-<button onclick="window.print()" class="btn btn-secondary">
-    {{ icon_svg("printer", "h-4 w-4 mr-2") }}
-    Print
-</button>
+<div class="inline-flex flex-wrap items-center gap-2">
+    <button
+        type="button"
+        class="btn btn-secondary"
+        onclick="const form = document.querySelector('[data-compact-filters] form'); const params = new URLSearchParams(form ? new FormData(form) : window.location.search); params.set('format', 'pdf'); window.location.href = '/inventory/reports/movement/export?' + params.toString();"
+    >
+        {{ icon_svg("file-text", "h-4 w-4 mr-2") }}
+        Export PDF
+    </button>
+    <button onclick="window.print()" class="btn btn-secondary">
+        {{ icon_svg("printer", "h-4 w-4 mr-2") }}
+        Print
+    </button>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -29,83 +39,85 @@
         </p>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Receipts</p>
-            <p class="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-display">{{ summary.counts["RECEIPT"] | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Issues</p>
-            <p class="mt-1 text-2xl font-bold text-rose-600 dark:text-rose-400 font-display">{{ summary.counts["ISSUE"] | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Transfers</p>
-            <p class="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400 font-display">{{ summary.counts["TRANSFER"] | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Adjustments</p>
-            <p class="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400 font-display">{{ summary.counts["ADJUSTMENT"] | default(0) }}</p>
-        </div>
-    </div>
-
-    {% call(filter_attrs) compact_filters(
-        base_url="/inventory/reports/movement",
-        active_filters=active_filters | default([]),
-        show_search=true,
-        search=search,
-        search_placeholder="Search reference, item, or warehouse..."
-    ) %}
-        {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
-            {% for wh in warehouses | default([]) %}
-            <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
-                {{ wh.warehouse_name }}
-            </option>
-            {% endfor %}
-        {% endcall %}
-        {% call filter_custom_select_field("item", "Item", filter_attrs) %}
-            {% for filter_item in items | default([]) %}
-            <option value="{{ filter_item.item_id }}" {{ 'selected' if item == filter_item.item_id|string else '' }}>
-                {{ filter_item.item_code }} - {{ filter_item.item_name }}
-            </option>
-            {% endfor %}
-        {% endcall %}
-        {% call filter_custom_select_field("transaction_type", "Type", filter_attrs) %}
-            {% for txn_type in transaction_types | default([]) %}
-            <option value="{{ txn_type }}" {{ 'selected' if transaction_type == txn_type else '' }}>
-                {{ txn_type | replace('_', ' ') | title }}
-            </option>
-            {% endfor %}
-        {% endcall %}
-    {% endcall %}
-
-    <div class="card p-4">
-        <div class="grid gap-4 sm:grid-cols-3">
-            <div>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Movement Rows</p>
-                <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.total_rows | default(0) }}</p>
+    <div id="movement-report-content" class="space-y-6">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Receipts</p>
+                <p class="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-display">{{ summary.counts["RECEIPT"] | default(0) }}</p>
             </div>
-            <div>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Total Quantity</p>
-                <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ '{:,.2f}'.format(summary.total_quantity or 0) }}</p>
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Issues</p>
+                <p class="mt-1 text-2xl font-bold text-rose-600 dark:text-rose-400 font-display">{{ summary.counts["ISSUE"] | default(0) }}</p>
             </div>
-            <div>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Total Value</p>
-                <p class="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ '{:,.2f}'.format(summary.total_value or 0) }}</p>
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Transfers</p>
+                <p class="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400 font-display">{{ summary.counts["TRANSFER"] | default(0) }}</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Adjustments</p>
+                <p class="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400 font-display">{{ summary.counts["ADJUSTMENT"] | default(0) }}</p>
             </div>
         </div>
-    </div>
 
-    <div id="results-container">
-        <div class="card w-full overflow-hidden">
-            <div class="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        {% call(filter_attrs) compact_filters(
+            base_url="/inventory/reports/movement",
+            target_id="movement-report-content",
+            active_filters=active_filters | default([]),
+            show_search=true,
+            search=search,
+            search_placeholder="Search reference, item, or warehouse..."
+        ) %}
+            {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
+                {% for wh in warehouses | default([]) %}
+                <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                    {{ wh.warehouse_name }}
+                </option>
+                {% endfor %}
+            {% endcall %}
+            {% call filter_custom_select_field("item", "Item", filter_attrs) %}
+                {% for filter_item in items | default([]) %}
+                <option value="{{ filter_item.item_id }}" {{ 'selected' if item == filter_item.item_id|string else '' }}>
+                    {{ filter_item.item_code }} - {{ filter_item.item_name }}
+                </option>
+                {% endfor %}
+            {% endcall %}
+            {% call filter_custom_select_field("transaction_type", "Type", filter_attrs) %}
+                {% for txn_type in transaction_types | default([]) %}
+                <option value="{{ txn_type }}" {{ 'selected' if transaction_type == txn_type else '' }}>
+                    {{ txn_type | replace('_', ' ') | title }}
+                </option>
+                {% endfor %}
+            {% endcall %}
+        {% endcall %}
+
+        <div class="card p-4">
+            <div class="grid gap-4 sm:grid-cols-3">
                 <div>
-                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Movement Lines</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Receipts, issues, transfers, and adjustments by item and warehouse.</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Movement Rows</p>
+                    <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.total_rows | default(0) }}</p>
                 </div>
-                <div class="text-sm text-slate-500 dark:text-slate-400">
-                    {{ total_count | default(0) }} rows
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Quantity</p>
+                    <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ '{:,.2f}'.format(summary.total_quantity or 0) }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Value</p>
+                    <p class="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ '{:,.2f}'.format(summary.total_value or 0) }}</p>
                 </div>
             </div>
+        </div>
+
+        <div id="results-container">
+            <div class="card w-full overflow-hidden">
+                <div class="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 class="text-base font-semibold text-slate-900 dark:text-white">Movement Lines</h3>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Receipts, issues, transfers, and adjustments by item and warehouse.</p>
+                    </div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400">
+                        {{ total_count | default(0) }} rows
+                    </div>
+                </div>
             {% if movement_rows | default([]) | length > 0 %}
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[1585px] table-fixed divide-y divide-slate-200 text-sm dark:divide-slate-700">
@@ -190,6 +202,7 @@
             filters={"warehouse": warehouse, "item": item, "transaction_type": transaction_type}
         ) }}
         {% endif %}
+    </div>
     </div>
 </div>
 {% endblock %}

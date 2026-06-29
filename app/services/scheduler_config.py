@@ -33,6 +33,13 @@ def _env_int(name: str) -> int | None:
         return None
 
 
+def _env_bool(name: str, default: bool = True) -> bool:
+    raw = _env_value(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
     try:
         setting = db.scalars(
@@ -144,7 +151,7 @@ def get_celery_config() -> dict:
 
 def _builtin_beat_schedule() -> dict[str, dict]:
     """Built-in scheduled tasks that always run, independent of DB config."""
-    return {
+    schedule = {
         "analytics-cash-flow": {
             "task": "app.tasks.analytics.refresh_cash_flow_metrics",
             "schedule": crontab(hour=5, minute=0),  # 5:00 AM — before coach tasks
@@ -278,24 +285,24 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(minute="*/5"),  # Every 5 minutes
             "kwargs": {"limit_per_org": 100},
         },
-        "splynx-incremental-sync": {
-            "task": "app.tasks.splynx.run_splynx_incremental_sync",
+        "dotmac-sub-incremental-sync": {
+            "task": "app.tasks.dotmac_sub.run_dotmac_sub_incremental_sync",
             "schedule": crontab(minute="*/30"),  # Every 30 minutes
         },
         "recurring-templates": {
             "task": "app.tasks.automation.process_recurring_templates",
             "schedule": crontab(hour="*/6", minute=5),  # Every 6 hours at :05
         },
-        "splynx-daily-reconciliation": {
-            "task": "app.tasks.splynx.run_splynx_daily_reconciliation",
+        "dotmac-sub-daily-reconciliation": {
+            "task": "app.tasks.dotmac_sub.run_dotmac_sub_daily_reconciliation",
             "schedule": crontab(hour=1, minute=0),  # 1 AM daily
         },
-        "splynx-full-reconciliation": {
-            "task": "app.tasks.splynx.run_splynx_full_reconciliation",
+        "dotmac-sub-full-reconciliation": {
+            "task": "app.tasks.dotmac_sub.run_dotmac_sub_full_reconciliation",
             "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM
         },
-        "splynx-stale-history-cleanup": {
-            "task": "app.tasks.splynx.cleanup_stale_splynx_sync_history",
+        "dotmac-sub-stale-history-cleanup": {
+            "task": "app.tasks.dotmac_sub.cleanup_stale_dotmac_sub_sync_history",
             "schedule": crontab(minute=17),  # Hourly at :17
             "kwargs": {"stale_after_minutes": 180, "limit": 500},
         },
@@ -348,6 +355,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(minute="*/15"),  # Every 15 minutes
             "kwargs": {"stuck_minutes": 30, "batch_size": 500},
         },
+        "infrastructure-health-check": {
+            "task": "app.tasks.infrastructure_health.run_infrastructure_health_checks",
+            "schedule": timedelta(minutes=5),
+        },
         "invoice-status-reconciliation": {
             "task": "app.tasks.data_health.reconcile_invoice_statuses",
             "schedule": crontab(hour=4, minute=30),  # 4:30 AM daily
@@ -382,6 +393,9 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(hour=3, minute=0),  # 3:00 AM daily
         },
     }
+    if not _env_bool("BANKING_AUTO_MATCH_ENABLED", default=True):
+        schedule.pop("banking-auto-match-statements", None)
+    return schedule
 
 
 def build_beat_schedule() -> dict:

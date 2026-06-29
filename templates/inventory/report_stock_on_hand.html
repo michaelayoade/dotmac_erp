@@ -30,14 +30,28 @@
 {% endblock %}
 
 {% block header_actions %}
-<button onclick="window.print()" class="btn btn-secondary">
-    {{ icon_svg("printer", "h-4 w-4 mr-2") }}
-    Print
-</button>
-<a href="/inventory/reports/stock-on-hand?format=csv" class="btn btn-secondary">
-    {{ icon_svg("document-download", "h-4 w-4 mr-2") }}
-    Export CSV
-</a>
+<div class="inline-flex flex-wrap items-center gap-2">
+    <button onclick="window.print()" class="btn btn-secondary">
+        {{ icon_svg("printer", "h-4 w-4 mr-2") }}
+        Print
+    </button>
+    <button
+        type="button"
+        class="btn btn-secondary"
+        onclick="const form = document.querySelector('[data-compact-filters] form'); const params = new URLSearchParams(form ? new FormData(form) : window.location.search); params.set('format', 'pdf'); window.location.href = '/inventory/reports/stock-on-hand?' + params.toString();"
+    >
+        {{ icon_svg("file-text", "h-4 w-4 mr-2") }}
+        Export PDF
+    </button>
+    <button
+        type="button"
+        class="btn btn-secondary"
+        onclick="const form = document.querySelector('[data-compact-filters] form'); const params = new URLSearchParams(form ? new FormData(form) : window.location.search); params.set('format', 'csv'); window.location.href = '/inventory/reports/stock-on-hand?' + params.toString();"
+    >
+        {{ icon_svg("document-download", "h-4 w-4 mr-2") }}
+        Export CSV
+    </button>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -47,56 +61,58 @@
         {% set doc_number = summary.as_of_date if summary and summary.as_of_date else "" %}
         {% include "partials/_document_header.html" %}
     </div>
-    <!-- Summary Cards -->
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Total Items</p>
-            <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.total_items | default(0) }}</p>
+    <div id="stock-on-hand-report-content" class="space-y-6">
+        <!-- Summary Cards -->
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total Items</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.total_items | default(0) }}</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total Quantity</p>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ '{:,.0f}'.format(summary.total_quantity or 0) }}</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total Value</p>
+                <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ '{:,.2f}'.format(summary.total_value or 0) }}</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Items Below Reorder</p>
+                <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 font-display">{{ summary.below_reorder | default(0) }}</p>
+            </div>
         </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Total Quantity</p>
-            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ '{:,.0f}'.format(summary.total_quantity or 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Total Value</p>
-            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ '{:,.2f}'.format(summary.total_value or 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Items Below Reorder</p>
-            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 font-display">{{ summary.below_reorder | default(0) }}</p>
-        </div>
-    </div>
 
-    <!-- Filters -->
-    {# Filters #}
-    {% call(filter_attrs) compact_filters(
-        base_url="/inventory/reports/stock-on-hand",
-        active_filters=active_filters | default([])
-    ) %}
-    <div>
-            <select aria-label="Filter by warehouse" name="warehouse" class="form-select w-full" {{ filter_attrs }}>
-                <option value="">All Warehouses</option>
-                {% for wh in warehouses | default([]) %}
-                <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
-                    {{ wh.warehouse_name }}
-                </option>
-                {% endfor %}
-            </select>
-    </div>
-    <div>
-            <select aria-label="Filter by category" name="category" class="form-select w-full" {{ filter_attrs }}>
-                <option value="">All Categories</option>
-                {% for cat in categories | default([]) %}
-                <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
-                    {{ cat.category_name }}
-                </option>
-                {% endfor %}
-            </select>
-    </div>
-    {% endcall %}
+        <!-- Filters -->
+        {# Filters #}
+        {% call(filter_attrs) compact_filters(
+            base_url="/inventory/reports/stock-on-hand",
+            target_id="stock-on-hand-report-content",
+            active_filters=active_filters | default([])
+        ) %}
+        <div>
+                <select aria-label="Filter by warehouse" name="warehouse" class="form-select w-full" {{ filter_attrs }}>
+                    <option value="">All Warehouses</option>
+                    {% for wh in warehouses | default([]) %}
+                    <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                        {{ wh.warehouse_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+        </div>
+        <div>
+                <select aria-label="Filter by category" name="category" class="form-select w-full" {{ filter_attrs }}>
+                    <option value="">All Categories</option>
+                    {% for cat in categories | default([]) %}
+                    <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
+                        {{ cat.category_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+        </div>
+        {% endcall %}
 
-    <!-- Report Table -->
-    <div id="results-container">
+        <!-- Report Table -->
+        <div id="results-container">
 
     <div class="card overflow-hidden">
         <div class="table-container">
@@ -183,5 +199,6 @@
         filters={"warehouse": warehouse, "category": category, "show_zero": "1" if show_zero else ""}
     ) }}
     {% endif %}
+    </div>
 </div>
 {% endblock %}

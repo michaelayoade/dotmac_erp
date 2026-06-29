@@ -1821,10 +1821,10 @@ def require_fixed_assets_access(
     Require access to the Fixed Assets module.
 
     """
-    if not auth.has_any_permission(["fa:*", "fixed_assets:*"]):
+    if not auth.has_any_permission(["fa:access", "fa:*", "fixed_assets:*"]):
         raise HTTPException(
             status_code=403,
-            detail="Permission 'fa:*' required",
+            detail="Fixed Assets module access required",
         )
     return auth
 

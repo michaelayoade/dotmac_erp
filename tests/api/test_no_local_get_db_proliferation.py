@@ -50,6 +50,7 @@ _CANONICAL = {
 _PRE_MIGRATION_BASELINE = {
     # ── Partial migrations (local get_db for the unauth webhook only) ──
     "app/api/crm.py",  # webhook_router stays on local get_db
+    "app/api/dotmac_sub.py",  # HMAC-verified webhook; org from default config, not auth
     # ── Public/slug-resolved (RLS handled inside service) ──
     "app/api/careers.py",
     "app/web/careers.py",

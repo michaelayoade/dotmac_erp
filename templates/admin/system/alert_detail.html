@@ -1,0 +1,83 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
+
+{% block page_title %}Infrastructure Alert{% endblock %}
+{% block page_subtitle %}{{ alert.title }}{% endblock %}
+{% block back_fallback %}/admin/system/health/alerts{% endblock %}
+
+{% block admin_breadcrumbs %}
+<ol class="flex flex-wrap items-center gap-2">
+    <li><a href="/admin" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Admin</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span>System</span></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <a href="/admin/system/health" class="hover:text-slate-700 dark:hover:text-slate-300">Health</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <a href="/admin/system/health/alerts" class="hover:text-slate-700 dark:hover:text-slate-300">Alerts</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">{{ alert.title }}</span></li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 lg:grid-cols-3">
+    <section class="admin-card p-6 lg:col-span-2">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ alert.title }}</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ alert.summary }}</p>
+            </div>
+            <div class="flex gap-2">
+                {{ status_badge(alert.severity.value, 'sm') }}
+                {{ status_badge(alert.status.value, 'sm') }}
+            </div>
+        </div>
+        <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+                <dt class="font-medium text-slate-700 dark:text-slate-300">Fingerprint</dt>
+                <dd class="mt-1 break-all text-slate-600 dark:text-slate-400">{{ alert.fingerprint }}</dd>
+            </div>
+            <div>
+                <dt class="font-medium text-slate-700 dark:text-slate-300">Category</dt>
+                <dd class="mt-1 text-slate-600 dark:text-slate-400">{{ alert.category.value | replace("_", " ") | title }}</dd>
+            </div>
+            <div>
+                <dt class="font-medium text-slate-700 dark:text-slate-300">First Seen</dt>
+                <dd class="mt-1 text-slate-600 dark:text-slate-400">{{ alert.first_seen_at }}</dd>
+            </div>
+            <div>
+                <dt class="font-medium text-slate-700 dark:text-slate-300">Last Seen</dt>
+                <dd class="mt-1 text-slate-600 dark:text-slate-400">{{ alert.last_seen_at }}</dd>
+            </div>
+            <div>
+                <dt class="font-medium text-slate-700 dark:text-slate-300">Occurrences</dt>
+                <dd class="mt-1 text-slate-600 dark:text-slate-400">{{ alert.occurrence_count }}</dd>
+            </div>
+            <div>
+                <dt class="font-medium text-slate-700 dark:text-slate-300">Resolved</dt>
+                <dd class="mt-1 text-slate-600 dark:text-slate-400">{{ alert.resolved_at or "Not resolved" }}</dd>
+            </div>
+        </dl>
+        <div class="mt-6">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Details</h3>
+            <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{{ alert.details | tojson }}</pre>
+        </div>
+    </section>
+
+    <aside class="space-y-4">
+        <a href="/admin/system/health" class="admin-card flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+            {{ icon_svg("check-circle", "h-5 w-5 text-slate-500") }}
+            <span class="text-sm font-medium text-slate-900 dark:text-white">Open System Health</span>
+        </a>
+        <section class="admin-card p-4">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Related Open Alerts</h3>
+            <div class="mt-3 space-y-3">
+                {% for item in related_open %}
+                <a href="/admin/system/health/alerts/{{ item.id }}" class="block rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                    <span class="font-medium text-slate-900 dark:text-white">{{ item.title }}</span>
+                    <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">{{ item.severity.value | title }}</span>
+                </a>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400">No related open alerts.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </aside>
+</div>
+{% endblock %}

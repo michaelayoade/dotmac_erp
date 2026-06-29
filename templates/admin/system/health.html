@@ -1,0 +1,120 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg, status_badge, empty_state %}
+
+{% block page_title %}System Health{% endblock %}
+{% block page_subtitle %}Infrastructure status across application services, workers, queues, data stores, replication, and integrations{% endblock %}
+
+{% block admin_breadcrumbs %}
+<ol class="flex flex-wrap items-center gap-2">
+    <li><a href="/admin" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Admin</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span>System</span></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">Health</span></li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="grid gap-4 md:grid-cols-4">
+        <div class="admin-card p-4">
+            <p class="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Current Status</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.status }}</p>
+        </div>
+        <div class="admin-card p-4">
+            <p class="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Open Alerts</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.open_count }}</p>
+        </div>
+        <div class="admin-card p-4">
+            <p class="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Critical</p>
+            <p class="mt-2 text-2xl font-semibold text-red-600 dark:text-red-400">{{ summary.critical_count }}</p>
+        </div>
+        <div class="admin-card p-4">
+            <p class="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Warning</p>
+            <p class="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-400">{{ summary.warning_count }}</p>
+        </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">System Categories</h2>
+        <a href="/admin/system/health/alerts" class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
+            {{ icon_svg("bell", "h-4 w-4") }}
+            View Alerts
+        </a>
+    </div>
+
+    {% for category in categories if category.key == "application_services" %}
+    <section class="space-y-3">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ category.label }}</h3>
+        <div class="grid gap-3 lg:grid-cols-2">
+            {% for check in category.checks %}
+            <article class="admin-card p-4">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                        <p class="font-medium text-slate-900 dark:text-white">{{ check.display_name }}</p>
+                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{{ check.summary }}</p>
+                    </div>
+                    {{ status_badge(check.status.value, 'sm') }}
+                </div>
+                <dl class="mt-4 grid gap-3 text-xs text-slate-500 dark:text-slate-400 sm:grid-cols-3">
+                    <div>
+                        <dt class="font-medium text-slate-700 dark:text-slate-300">Severity</dt>
+                        <dd class="mt-1">{{ check.severity.value | title }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-slate-700 dark:text-slate-300">Last Checked</dt>
+                        <dd class="mt-1">{{ check.last_checked_at }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-slate-700 dark:text-slate-300">Last Activity</dt>
+                        <dd class="mt-1">{{ check.last_activity_at or "No activity recorded" }}</dd>
+                    </div>
+                </dl>
+            </article>
+            {% else %}
+            <div class="admin-card p-4 lg:col-span-2">
+                {{ empty_state("No checks recorded", "The scheduled infrastructure health check has not recorded this category yet.", "clock") }}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+
+    <div class="grid gap-6 xl:grid-cols-2">
+        {% for category in categories if category.key not in ["application_services", "external_integrations"] %}
+        <section class="min-w-0 space-y-3">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ category.label }}</h3>
+            <div class="grid gap-3">
+                {% for check in category.checks %}
+                <article class="admin-card p-4">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                            <p class="font-medium text-slate-900 dark:text-white">{{ check.display_name }}</p>
+                            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{{ check.summary }}</p>
+                        </div>
+                        {{ status_badge(check.status.value, 'sm') }}
+                    </div>
+                    <dl class="mt-4 grid gap-3 text-xs text-slate-500 dark:text-slate-400 sm:grid-cols-3">
+                        <div>
+                            <dt class="font-medium text-slate-700 dark:text-slate-300">Severity</dt>
+                            <dd class="mt-1">{{ check.severity.value | title }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-slate-700 dark:text-slate-300">Last Checked</dt>
+                            <dd class="mt-1">{{ check.last_checked_at }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-slate-700 dark:text-slate-300">Last Activity</dt>
+                            <dd class="mt-1">{{ check.last_activity_at or "No activity recorded" }}</dd>
+                        </div>
+                    </dl>
+                </article>
+                {% else %}
+                <div class="admin-card p-4">
+                    {{ empty_state("No checks recorded", "The scheduled infrastructure health check has not recorded this category yet.", "clock") }}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
