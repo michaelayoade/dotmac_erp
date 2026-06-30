@@ -14,10 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
 from app.services.people.self_service_web import self_service_web_service
-from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
-    base_context,
     get_db_for_org,
     require_self_service_access,
     require_self_service_discipline_manager,
@@ -77,8 +75,7 @@ def self_service_index(
     db: Session = Depends(get_db_for_org),
 ):
     """Self-service landing page."""
-    context = base_context(request, auth, "Self Service", "self", db=db)
-    return templates.TemplateResponse(request, "people/self/index.html", context)
+    return self_service_web_service.index_response(request, auth, db)
 
 
 @router.get("/attendance", response_class=HTMLResponse)
