@@ -2149,8 +2149,15 @@ def require_self_service_leave_approver(
 
 def require_self_service_discipline_manager(
     auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db_for_org),
 ) -> WebAuthContext:
-    """Require self-service access plus discipline manager permission."""
+    """Require self-service access plus team discipline authority.
+
+    Full discipline permissions still grant access. Managers without People/HR
+    access are allowed through only when the HR position tree shows current
+    direct reports; the self-service discipline service then scopes every case
+    operation to those direct reports.
+    """
     if auth.is_admin:
         return auth
     if auth.has_any_permission(
@@ -2163,6 +2170,30 @@ def require_self_service_discipline_manager(
         ]
     ):
         return auth
+    if auth.organization_id is None or auth.person_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Team discipline permission required",
+        )
+
+    from app.models.people.hr.employee import Employee
+    from app.services.people.hr.org_resolver import OrgResolver
+
+    employee_id = auth.employee_id
+    if employee_id is None:
+        employee_id = db.scalar(
+            select(Employee.employee_id).where(
+                Employee.organization_id == auth.organization_id,
+                Employee.person_id == auth.person_id,
+            )
+        )
+
+    if employee_id is not None and OrgResolver(db).get_direct_reports(
+        employee_id,
+        auth.organization_id,
+    ):
+        return auth
+
     raise HTTPException(
         status_code=403,
         detail="Team discipline permission required",
