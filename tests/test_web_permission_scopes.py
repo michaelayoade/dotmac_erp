@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
 
 
 try:
@@ -7,8 +8,9 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from starlette.requests import Request
+import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
@@ -20,6 +22,7 @@ from app.web.deps import (
     WebAuthContext,
     optional_web_auth,
     require_fixed_assets_access,
+    require_self_service_discipline_manager,
     require_web_auth,
 )
 
@@ -186,3 +189,68 @@ def test_finance_scope_does_not_grant_fixed_assets_access():
         assert exc.status_code == 403
     else:
         raise AssertionError("Expected fixed assets access to require fa scope")
+
+
+def test_self_service_discipline_allows_existing_discipline_permission():
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=uuid.uuid4(),
+        roles=[],
+        scopes=["self:access", "discipline:cases:create"],
+    )
+    db = MagicMock()
+
+    result = require_self_service_discipline_manager(auth, db)
+
+    assert result is auth
+    db.scalar.assert_not_called()
+
+
+def test_self_service_discipline_allows_manager_with_direct_reports():
+    org_id = uuid.uuid4()
+    manager_employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=manager_employee_id,
+        roles=[],
+        scopes=["self:access"],
+    )
+    db = MagicMock()
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        resolver_cls.return_value.get_direct_reports.return_value = [object()]
+
+        result = require_self_service_discipline_manager(auth, db)
+
+    assert result is auth
+    db.scalar.assert_not_called()
+    resolver_cls.return_value.get_direct_reports.assert_called_once_with(
+        manager_employee_id,
+        org_id,
+    )
+
+
+def test_self_service_discipline_rejects_non_manager_without_permission():
+    org_id = uuid.uuid4()
+    employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=employee_id,
+        roles=[],
+        scopes=["self:access"],
+    )
+    db = MagicMock()
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        resolver_cls.return_value.get_direct_reports.return_value = []
+
+        with pytest.raises(HTTPException) as excinfo:
+            require_self_service_discipline_manager(auth, db)
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Team discipline permission required"
