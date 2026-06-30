@@ -75,6 +75,48 @@ logger = logging.getLogger(__name__)
 class SelfServiceWebService:
     """View service for employee self-service pages."""
 
+    def index_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        """Render self-service landing page with employee/team capabilities."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        context = base_context(request, auth, "Self Service", "self", db=db)
+
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException:
+            employee_id = None
+
+        has_direct_reports = False
+        if employee_id is not None:
+            has_direct_reports = bool(self._get_direct_reports(db, org_id, employee_id))
+
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_discipline"] = (
+            auth.is_admin
+            or auth.has_any_permission(
+                [
+                    "discipline:access",
+                    "discipline:cases:read",
+                    "discipline:cases:create",
+                    "discipline:cases:update",
+                    "discipline:workflow:manage",
+                ]
+            )
+            or has_direct_reports
+        )
+        return templates.TemplateResponse(request, "people/self/index.html", context)
+
     @staticmethod
     def _expense_approver_employee_statuses() -> tuple[EmployeeStatus, ...]:
         """Statuses that represent employed staff eligible for expense approval."""
