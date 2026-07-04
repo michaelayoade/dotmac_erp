@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -61,6 +62,8 @@ from app.schemas.sync.dotmac_crm import (
 from app.services.auth import hash_api_key
 from app.services.auth_dependencies import require_tenant_auth
 from app.services.common import coerce_uuid
+from app.services.finance.rpt.ncc_financials import ncc_financials_context
+from app.services.people.hr.ncc_staff_report import NccStaffReportService
 from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
 
 logger = logging.getLogger(__name__)
@@ -852,3 +855,67 @@ def create_purchase_order_variation(
             payload.omni_work_order_id,
         )
         raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+# ============ NCC Regulatory Endpoints (ERP → CRM) ============
+#
+# Service-authenticated variants of the NCC read endpoints in
+# app/api/finance/ncc.py and app/api/people/ncc.py. Those use JWT-based
+# require_tenant_auth (for the ERP UI); these mirror them behind the CRM's
+# X-API-Key service auth so the CRM regulatory-pack aggregator can pull the
+# year-end return's Section F (financials) and Section G (staff head-count).
+
+
+class NccFinancialsResponse(BaseModel):
+    period: dict
+    summary: dict
+    detail: dict
+    note: str
+
+
+class NccStaffHeadcountResponse(BaseModel):
+    """NCC Section G matrix: category -> nationality -> gender -> count."""
+
+    total_active: int
+    by_category: dict[str, dict[str, dict[str, int]]]
+
+
+@router.get("/ncc/financials", response_model=NccFinancialsResponse)
+def ncc_financials(
+    year: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    as_of_date: str | None = None,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> NccFinancialsResponse:
+    """NCC Section F financials for the CRM aggregator.
+
+    Composed from the income-statement / balance-sheet / expense-summary
+    services for the given year (or explicit date range / as-at date).
+    """
+    data = ncc_financials_context(
+        db,
+        auth["organization_id"],
+        year=year,
+        start_date=start_date,
+        end_date=end_date,
+        as_of_date=as_of_date,
+    )
+    return NccFinancialsResponse(**data)
+
+
+@router.get("/ncc/staff-headcount", response_model=NccStaffHeadcountResponse)
+def ncc_staff_headcount(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> NccStaffHeadcountResponse:
+    """NCC Section G active-staff head-count for the CRM aggregator.
+
+    Matrix of NCC category x Nigerian/Expatriate x Male/Female.
+    """
+    org_id = auth["organization_id"]
+    if not isinstance(org_id, UUID):
+        org_id = UUID(str(org_id))
+    report = NccStaffReportService(db).build(org_id)
+    return NccStaffHeadcountResponse(**report)
