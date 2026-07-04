@@ -5882,8 +5882,8 @@ class OperationsInventoryWebService:
         show_zero: str | None = None,
         format: str | None = None,
         page: int = 1,
-    ) -> HTMLResponse:
-        """Stock on hand report page."""
+    ) -> Response:
+        """Stock on hand report page (HTML page, or PDF/CSV download)."""
         from decimal import Decimal
         from uuid import UUID as UUID_Type
 
@@ -6187,7 +6187,7 @@ class OperationsInventoryWebService:
                         "Low Stock"
                         if row["is_low_stock"]
                         else "Out of Stock"
-                        if row["on_hand"] <= 0
+                        if Decimal(str(row["on_hand"])) <= 0
                         else "In Stock",
                     ]
                 )
