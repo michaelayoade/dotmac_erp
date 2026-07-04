@@ -13,7 +13,10 @@ def _ensure(engine, *tables) -> None:
     for table in tables:
         for col in table.columns:
             default = col.server_default
-            if default is not None and "gen_random_uuid" in str(getattr(default, "arg", default)).lower():
+            if (
+                default is not None
+                and "gen_random_uuid" in str(getattr(default, "arg", default)).lower()
+            ):
                 col.server_default = None
         table.create(engine, checkfirst=True)
 
@@ -31,9 +34,14 @@ def _designation(db, org_id, category) -> Designation:
     return d
 
 
-def _employee(db, org_id, *, designation, nationality, gender, status=EmployeeStatus.ACTIVE) -> Employee:
+def _employee(
+    db, org_id, *, designation, nationality, gender, status=EmployeeStatus.ACTIVE
+) -> Employee:
     person = Person(
-        id=uuid.uuid4(), organization_id=org_id, first_name="A", last_name="B",
+        id=uuid.uuid4(),
+        organization_id=org_id,
+        first_name="A",
+        last_name="B",
         email=f"{uuid.uuid4().hex}@example.com",
     )
     emp = Employee(
@@ -53,18 +61,35 @@ def _employee(db, org_id, *, designation, nationality, gender, status=EmployeeSt
 
 
 def test_staff_headcount_matrix(db_session):
-    _ensure(db_session.bind, Person.__table__, Employee.__table__, Designation.__table__)
+    _ensure(
+        db_session.bind, Person.__table__, Employee.__table__, Designation.__table__
+    )
     org = uuid.uuid4()
 
     mgr = _designation(db_session, org, NccStaffCategory.MANAGERIAL)
     snr = _designation(db_session, org, NccStaffCategory.SENIOR_TECHNICAL)
 
-    _employee(db_session, org, designation=mgr, nationality="Nigerian", gender=Gender.MALE)
-    _employee(db_session, org, designation=mgr, nationality="Nigerian", gender=Gender.FEMALE)
-    _employee(db_session, org, designation=snr, nationality="British", gender=Gender.MALE)  # expatriate
-    _employee(db_session, org, designation=None, nationality="", gender=Gender.FEMALE)  # OTHER / unknown nat
+    _employee(
+        db_session, org, designation=mgr, nationality="Nigerian", gender=Gender.MALE
+    )
+    _employee(
+        db_session, org, designation=mgr, nationality="Nigerian", gender=Gender.FEMALE
+    )
+    _employee(
+        db_session, org, designation=snr, nationality="British", gender=Gender.MALE
+    )  # expatriate
+    _employee(
+        db_session, org, designation=None, nationality="", gender=Gender.FEMALE
+    )  # OTHER / unknown nat
     # excluded — not active
-    _employee(db_session, org, designation=mgr, nationality="Nigerian", gender=Gender.MALE, status=EmployeeStatus.RESIGNED)
+    _employee(
+        db_session,
+        org,
+        designation=mgr,
+        nationality="Nigerian",
+        gender=Gender.MALE,
+        status=EmployeeStatus.RESIGNED,
+    )
 
     report = NccStaffReportService(db_session).build(org)
 
@@ -78,11 +103,17 @@ def test_staff_headcount_matrix(db_session):
 
 
 def test_staff_headcount_scoped_to_org(db_session):
-    _ensure(db_session.bind, Person.__table__, Employee.__table__, Designation.__table__)
+    _ensure(
+        db_session.bind, Person.__table__, Employee.__table__, Designation.__table__
+    )
     org_a, org_b = uuid.uuid4(), uuid.uuid4()
     da = _designation(db_session, org_a, NccStaffCategory.MANAGERIAL)
     db_ = _designation(db_session, org_b, NccStaffCategory.MANAGERIAL)
-    _employee(db_session, org_a, designation=da, nationality="Nigerian", gender=Gender.MALE)
-    _employee(db_session, org_b, designation=db_, nationality="Nigerian", gender=Gender.MALE)
+    _employee(
+        db_session, org_a, designation=da, nationality="Nigerian", gender=Gender.MALE
+    )
+    _employee(
+        db_session, org_b, designation=db_, nationality="Nigerian", gender=Gender.MALE
+    )
 
     assert NccStaffReportService(db_session).build(org_a)["total_active"] == 1

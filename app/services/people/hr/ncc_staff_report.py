@@ -57,7 +57,8 @@ class NccStaffReportService:
         employees = self.db.scalars(stmt).all()
 
         matrix: dict[str, dict[str, dict[str, int]]] = {
-            cat: {nat: {g: 0 for g in _GENDERS} for nat in _NATIONALITIES} for cat in _CATEGORIES
+            cat: {nat: {g: 0 for g in _GENDERS} for nat in _NATIONALITIES}
+            for cat in _CATEGORIES
         }
         total = 0
         for emp in employees:
