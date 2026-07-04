@@ -357,6 +357,12 @@ class DotmacSubClient:
 
     API_PREFIX = "/api/v1"
 
+    # Resilience tuning.
+    _RETRY_BACKOFF_BASE = 0.5  # seconds; exponential base for retry sleeps
+    _RETRY_BACKOFF_CAP = 10.0  # seconds; max backoff between retries
+    _RETRY_AFTER_CAP = 60.0  # seconds; max honoured Retry-After on a 429
+    _MAX_PAGES = 100_000  # pagination safety bound (guards an API ignoring offset)
+
     def __init__(self, config: DotmacSubConfig | None = None) -> None:
         self.config = config or DotmacSubConfig.from_settings()
         self._client: httpx.Client | None = None
@@ -454,6 +460,24 @@ class DotmacSubClient:
                 )
             return str(token)
 
+    def _backoff_seconds(self, attempt: int) -> float:
+        """Exponential backoff delay (seconds) for retry ``attempt`` (0-indexed)."""
+        delay = self._RETRY_BACKOFF_BASE * (2.0**attempt)
+        return float(min(delay, self._RETRY_BACKOFF_CAP))
+
+    def _retry_after_seconds(self, header_value: str | None, attempt: int) -> float:
+        """Seconds to wait after a 429, honouring ``Retry-After`` when present.
+
+        Only the integer-seconds form of ``Retry-After`` is parsed (the common
+        case); anything else falls back to exponential backoff.
+        """
+        if header_value:
+            try:
+                return min(float(int(header_value)), self._RETRY_AFTER_CAP)
+            except (ValueError, TypeError):
+                pass
+        return self._backoff_seconds(attempt)
+
     def _request(
         self,
         method: str,
@@ -500,6 +524,23 @@ class DotmacSubClient:
                     )
                 elif response.status_code == 429:
                     metric_status = "rate_limited"
+                    if attempt < self.config.max_retries - 1:
+                        delay = self._retry_after_seconds(
+                            response.headers.get("Retry-After"), attempt
+                        )
+                        logger.warning(
+                            "dotmac_sub rate limited (attempt %d/%d); "
+                            "retrying in %.1fs: %s",
+                            attempt + 1,
+                            self.config.max_retries,
+                            delay,
+                            endpoint,
+                        )
+                        last_error = DotmacSubRateLimitError(
+                            "Rate limit exceeded.", status_code=429
+                        )
+                        time.sleep(delay)
+                        continue
                     raise DotmacSubRateLimitError(
                         "Rate limit exceeded. Try again later.", status_code=429
                     )
@@ -523,6 +564,8 @@ class DotmacSubClient:
                     self.config.max_retries,
                     endpoint,
                 )
+                if attempt < self.config.max_retries - 1:
+                    time.sleep(self._backoff_seconds(attempt))
             except httpx.RequestError as e:
                 metric_status = "request_error"
                 last_error = e
@@ -533,6 +576,8 @@ class DotmacSubClient:
                     endpoint,
                     str(e),
                 )
+                if attempt < self.config.max_retries - 1:
+                    time.sleep(self._backoff_seconds(attempt))
             except DotmacSubRateLimitError:
                 raise
             except DotmacSubError as e:
@@ -549,6 +594,8 @@ class DotmacSubClient:
                         self.config.max_retries,
                         e.message,
                     )
+                    if attempt < self.config.max_retries - 1:
+                        time.sleep(self._backoff_seconds(attempt))
                 else:
                     raise
             finally:
@@ -580,7 +627,17 @@ class DotmacSubClient:
         params = dict(params or {})
         offset = 0
         is_first_page = True
+        page_count = 0
         while True:
+            page_count += 1
+            if page_count > self._MAX_PAGES:
+                logger.error(
+                    "dotmac_sub pagination exceeded %d pages for %s; aborting "
+                    "(the API may be ignoring offset)",
+                    self._MAX_PAGES,
+                    endpoint,
+                )
+                break
             if not is_first_page and page_delay > 0:
                 time.sleep(page_delay)
             is_first_page = False

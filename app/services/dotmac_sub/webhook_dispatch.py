@@ -63,10 +63,15 @@ def dispatch_webhook(
 
     ar_control = _resolve_ar_control_account(db, organization_id)
     revenue = _resolve_default_revenue_account(db, organization_id)
-    if not ar_control or not revenue:
+    # Only invoice/credit-note syncs need a revenue account (it codes the GL
+    # lines). Subscriber upserts and payment receipts never touch revenue, so a
+    # missing revenue account must not block them. AR control is required to
+    # construct the sync service for any entity.
+    if not ar_control or (domain == "invoice" and not revenue):
         logger.error(
-            "dotmac_sub webhook: AR/revenue account unresolved for org %s",
+            "dotmac_sub webhook: required GL accounts unresolved for org %s (event %s)",
             organization_id,
+            event_type,
         )
         return {"status": "error", "reason": "GL accounts unresolved"}
 

@@ -270,13 +270,17 @@ class InventoryPushService:
         stmt = stmt.order_by(Item.item_code)
         results = self.db.execute(stmt).all()
 
+        # Batch-load stock levels: 2 queries total instead of 2 per item.
+        stock_map = InventoryBalanceService.get_batch_stock_levels(
+            self.db,
+            organization_id,
+            [item.item_id for item, _category in results],
+        )
+
         items = []
         for item, category in results:
-            on_hand = InventoryBalanceService.get_on_hand(
-                self.db, organization_id, item.item_id
-            )
-            reserved = InventoryBalanceService.get_reserved(
-                self.db, organization_id, item.item_id
+            on_hand, reserved = stock_map.get(
+                item.item_id, (Decimal("0"), Decimal("0"))
             )
             available = on_hand - reserved
 

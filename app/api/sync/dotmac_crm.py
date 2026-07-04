@@ -147,23 +147,34 @@ def require_service_auth(
             detail="User has no organization access",
         )
 
-    # Set RLS context for data isolation
-    set_current_organization_sync(db, person.organization_id)
+    # Copy scalar identity values before commit. SQLAlchemy expires ORM objects
+    # on commit; reloading ``person`` after switching tenant/RLS context can raise
+    # ObjectDeletedError even though authentication succeeded.
+    person_org_id = person.organization_id
+    person_id = person.id
+    api_key_id = api_key.id
+    service_label = api_key.label
 
-    # Update last used
+    # Set RLS context for data isolation
+    set_current_organization_sync(db, person_org_id)
+
+    # Update last used. This dependency's session (``_get_db``) closes without
+    # committing, and the route handler runs on a *separate* session, so the
+    # write must be committed here or it is silently lost.
     api_key.last_used_at = now
+    db.commit()
 
     logger.info(
         "CRM service authenticated: org=%s, key=%s",
-        person.organization_id,
-        api_key.label or api_key.id,
+        person_org_id,
+        service_label or api_key_id,
     )
 
     return {
-        "organization_id": person.organization_id,
-        "person_id": person.id,
-        "api_key_id": api_key.id,
-        "service_label": api_key.label,
+        "organization_id": person_org_id,
+        "person_id": person_id,
+        "api_key_id": api_key_id,
+        "service_label": service_label,
     }
 
 
