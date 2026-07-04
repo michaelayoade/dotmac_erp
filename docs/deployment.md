@@ -19,7 +19,7 @@ docker compose up --build
 Apply migrations after containers are up:
 
 ```bash
-docker compose exec app poetry run alembic upgrade head
+docker compose exec app poetry run alembic upgrade heads
 ```
 
 ## Workers
