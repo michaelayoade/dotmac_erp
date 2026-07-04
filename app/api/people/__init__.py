@@ -30,6 +30,7 @@ def include_people_routes(target_router: APIRouter) -> APIRouter:
     from app.api.people.import_export import router as import_router
     from app.api.people.leave import router as leave_router
     from app.api.people.lifecycle import router as lifecycle_router
+    from app.api.people.ncc import router as ncc_router
     from app.api.people.payroll import router as payroll_router
     from app.api.people.perf import router as perf_router
     from app.api.people.recruit import router as recruit_router
@@ -49,6 +50,7 @@ def include_people_routes(target_router: APIRouter) -> APIRouter:
     target_router.include_router(lifecycle_router)
     target_router.include_router(assets_router)
     target_router.include_router(discipline_router)
+    target_router.include_router(ncc_router)
     return target_router
 
 
