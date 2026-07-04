@@ -158,6 +158,9 @@ class PaymentSyncMixin:
             or pay.currency
             or settings.default_functional_currency_code
         )
+        exch_rate, functional_amount = self._functional_amount(
+            pay.amount, currency_code, payment_date
+        )
         bank_account_id = self._get_bank_account_for_channel(
             pay.payment_channel_id, currency_code
         )
@@ -189,7 +192,8 @@ class PaymentSyncMixin:
                 gross_amount=pay.amount,
                 amount=pay.amount,
                 wht_amount=Decimal("0"),
-                functional_currency_amount=pay.amount,
+                exchange_rate=exch_rate,
+                functional_currency_amount=functional_amount,
                 bank_account_id=bank_account_id,
                 reference=pay.external_id,
                 description=(
@@ -212,7 +216,8 @@ class PaymentSyncMixin:
             payment.currency_code = currency_code
             payment.gross_amount = pay.amount
             payment.amount = pay.amount
-            payment.functional_currency_amount = pay.amount
+            payment.exchange_rate = exch_rate
+            payment.functional_currency_amount = functional_amount
             payment.bank_account_id = bank_account_id
             payment.reference = pay.external_id
             payment.dotmac_sub_id = pay.id
@@ -280,6 +285,36 @@ class PaymentSyncMixin:
         if "card" in name:
             return PaymentMethod.CARD
         return PaymentMethod.BANK_TRANSFER
+
+    def _functional_amount(
+        self, amount: Decimal, currency_code: str, on_date: date
+    ) -> tuple[Decimal, Decimal]:
+        """Resolve ``(exchange_rate, functional_amount)`` for a synced payment.
+
+        ``exchange_rate`` is the foreign→functional rate (functional = amount *
+        rate), matching ``CustomerPayment.exchange_rate`` semantics so GL posting
+        derives the correct functional amount. Falls back to ``1.0`` (no
+        conversion) when the payment is already in functional currency or no SPOT
+        rate is configured. Never raises — a missing rate degrades gracefully
+        rather than failing the whole payment sync.
+        """
+        from app.services.finance.platform.fx import FXService
+
+        info = FXService.lookup_spot_rate(
+            self.db, self.organization_id, currency_code, on_date
+        )
+        # In lookup_spot_rate, ``from`` is the org functional currency and ``to``
+        # is currency_code, so ``inverse_rate`` is currency_code → functional.
+        raw = info.get("inverse_rate")
+        if raw in (None, ""):
+            return Decimal("1"), amount
+        try:
+            rate = Decimal(str(raw))
+        except (ValueError, ArithmeticError):
+            return Decimal("1"), amount
+        if rate <= 0:
+            return Decimal("1"), amount
+        return rate, (amount * rate).quantize(Decimal("0.000001"))
 
     def post_unposted_payments(
         self, created_by_user_id: UUID | None = None

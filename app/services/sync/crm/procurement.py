@@ -1083,6 +1083,14 @@ class _ProcurementMixin(_CRMSyncBase):
                     omni_work_order_id=data.omni_work_order_id,
                 )
 
+            logger.warning(
+                "Stale PO sync mapping for omni_work_order_id=%s points to missing PO %s; recreating",
+                data.omni_work_order_id,
+                existing_mapping.local_entity_id,
+            )
+            self.db.delete(existing_mapping)
+            self.db.flush()
+
         # 2. Fallback idempotency: check by correlation_id (PO committed but mapping failed)
         fallback_stmt = select(PurchaseOrder).where(
             PurchaseOrder.organization_id == org_id,
@@ -1095,15 +1103,19 @@ class _ProcurementMixin(_CRMSyncBase):
                 "re-creating mapping",
                 data.omni_work_order_id,
             )
+            existing_po_id = existing_po.po_id
+            existing_po_number = existing_po.po_number
+            existing_po_status = existing_po.status.value.lower()
+
             # Re-create the missing mapping and persist it
             self._create_po_sync_mapping(
-                org_id, data, existing_po.po_id, existing_po.po_number
+                org_id, data, existing_po_id, existing_po_number
             )
             self.db.commit()
             return CRMPurchaseOrderResponse(
-                purchase_order_id=existing_po.po_number,
-                po_id=existing_po.po_id,
-                status=existing_po.status.value.lower(),
+                purchase_order_id=existing_po_number,
+                po_id=existing_po_id,
+                status=existing_po_status,
                 omni_work_order_id=data.omni_work_order_id,
             )
 
@@ -1154,21 +1166,26 @@ class _ProcurementMixin(_CRMSyncBase):
         # 7. Create PO (commits internally)
         po = PurchaseOrderService.create_po(self.db, org_id, po_input, creator_id)
 
+        po_id = po.po_id
+        po_number = po.po_number
+        po_status = po.status.value.lower()
+        supplier_code = supplier.supplier_code
+
         # 8. Create CRMSyncMapping (tracks the PO for idempotency)
-        self._create_po_sync_mapping(org_id, data, po.po_id, po.po_number)
+        self._create_po_sync_mapping(org_id, data, po_id, po_number)
         self.db.commit()
 
         logger.info(
             "Created PO %s for omni_work_order_id=%s, supplier=%s",
-            po.po_number,
+            po_number,
             data.omni_work_order_id,
-            supplier.supplier_code,
+            supplier_code,
         )
 
         return CRMPurchaseOrderResponse(
-            purchase_order_id=po.po_number,
-            po_id=po.po_id,
-            status=po.status.value.lower(),
+            purchase_order_id=po_number,
+            po_id=po_id,
+            status=po_status,
             omni_work_order_id=data.omni_work_order_id,
         )
 

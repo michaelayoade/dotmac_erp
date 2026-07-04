@@ -277,12 +277,15 @@ class BaseSyncMixin:
         from app.models.finance.ar.invoice import InvoiceStatus
 
         s = (status or "").lower()
+        # Check terminal/explicit statuses BEFORE the zero-balance shortcut: a
+        # voided invoice typically carries balance_due == 0, so the PAID branch
+        # would otherwise mislabel it as PAID.
+        if s == "void":
+            return InvoiceStatus.VOID
         if s == "paid" or balance_due == Decimal("0"):
             return InvoiceStatus.PAID
         if s == "partially_paid":
             return InvoiceStatus.PARTIALLY_PAID
-        if s == "void":
-            return InvoiceStatus.VOID
         return InvoiceStatus.POSTED
 
     def _get_customer_for_account(self, account_id: str) -> UUID | None:

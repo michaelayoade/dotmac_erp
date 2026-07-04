@@ -190,6 +190,9 @@ def test_map_invoice_status() -> None:
     assert m(fake, "issued", Decimal("10")) == InvoiceStatus.POSTED
     assert m(fake, "partially_paid", Decimal("5")) == InvoiceStatus.PARTIALLY_PAID
     assert m(fake, "void", Decimal("10")) == InvoiceStatus.VOID
+    # A voided invoice usually carries a zero balance: void must win over the
+    # zero-balance → PAID shortcut (regression guard).
+    assert m(fake, "void", Decimal("0")) == InvoiceStatus.VOID
     assert m(fake, "overdue", Decimal("10")) == InvoiceStatus.POSTED
 
 
@@ -230,3 +233,64 @@ def test_webhook_entity_id_extraction() -> None:
     assert _entity_id({"id": "xyz"}) == "xyz"
     assert _entity_id({"data": {"entity_id": "e1"}}) == "e1"
     assert _entity_id({"event_type": "x"}) is None
+
+
+# ---------------------------------------------------------------------------
+# Payment FX conversion (foreign currency → functional)
+# ---------------------------------------------------------------------------
+
+
+class _FakePaymentSvc:
+    """Minimal stand-in exposing the attributes _functional_amount reads."""
+
+    def __init__(self) -> None:
+        from uuid import uuid4
+
+        self.db = MagicMock()
+        self.organization_id = uuid4()
+
+
+def test_functional_amount_converts_using_inverse_rate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A USD payment must be converted to functional via currency→functional."""
+    from datetime import date
+
+    from app.services.dotmac_sub.sync._payments import PaymentSyncMixin
+    from app.services.finance.platform import fx as fx_module
+
+    # lookup_spot_rate returns inverse_rate = currency_code → functional.
+    # 1 USD = 1500 NGN, so functional(NGN) = amount(USD) * 1500.
+    monkeypatch.setattr(
+        fx_module.FXService,
+        "lookup_spot_rate",
+        staticmethod(lambda *a, **k: {"rate": "0.000667", "inverse_rate": "1500"}),
+    )
+
+    rate, functional = PaymentSyncMixin._functional_amount(
+        _FakePaymentSvc(), Decimal("74.87"), "USD", date(2026, 6, 1)
+    )
+    assert rate == Decimal("1500")
+    assert functional == Decimal("112305.000000")  # 74.87 * 1500
+
+
+def test_functional_amount_falls_back_to_one_when_no_rate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing rate must degrade to 1.0 (no conversion), never raise."""
+    from datetime import date
+
+    from app.services.dotmac_sub.sync._payments import PaymentSyncMixin
+    from app.services.finance.platform import fx as fx_module
+
+    monkeypatch.setattr(
+        fx_module.FXService,
+        "lookup_spot_rate",
+        staticmethod(lambda *a, **k: {"rate": None, "message": "no rate"}),
+    )
+
+    rate, functional = PaymentSyncMixin._functional_amount(
+        _FakePaymentSvc(), Decimal("100"), "USD", date(2026, 6, 1)
+    )
+    assert rate == Decimal("1")
+    assert functional == Decimal("100")
