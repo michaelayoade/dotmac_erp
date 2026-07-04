@@ -15,6 +15,7 @@ from app.api.finance.gl import router as gl_router
 from app.api.finance.import_export import router as import_export_router
 from app.api.finance.ipsas import router as ipsas_router
 from app.api.finance.lease import router as lease_router
+from app.api.finance.ncc import router as ncc_router
 from app.api.finance.opening_balance import router as opening_balance_router
 from app.api.finance.payments import router as payments_router
 from app.api.finance.payments import webhook_router as payments_webhook_router
@@ -40,4 +41,5 @@ __all__ = [
     "ipsas_router",
     "fx_router",
     "analysis_router",
+    "ncc_router",
 ]

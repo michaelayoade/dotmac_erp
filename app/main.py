@@ -41,6 +41,7 @@ from app.api.finance import (
     ipsas_router,
     lease_router,
     mono_webhook_router,
+    ncc_router as finance_ncc_router,
     opening_balance_router,
     payments_router,
     payments_webhook_router,
@@ -736,6 +737,7 @@ if is_module_enabled("finance"):
     _include_api_router(tax_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(finance_ncc_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(
         import_export_router, dependencies=[Depends(require_tenant_auth)]
