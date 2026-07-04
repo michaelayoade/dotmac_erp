@@ -21,7 +21,9 @@ def _ensure(engine, *tables) -> None:
 
 
 def test_employee_nationality_and_designation_ncc_category(db_session):
-    _ensure(db_session.bind, Person.__table__, Employee.__table__, Designation.__table__)
+    _ensure(
+        db_session.bind, Person.__table__, Employee.__table__, Designation.__table__
+    )
     org_id = uuid.uuid4()
 
     person = Person(
@@ -58,9 +60,17 @@ def test_employee_nationality_and_designation_ncc_category(db_session):
 
 
 def test_new_fields_default_to_null(db_session):
-    _ensure(db_session.bind, Person.__table__, Employee.__table__, Designation.__table__)
+    _ensure(
+        db_session.bind, Person.__table__, Employee.__table__, Designation.__table__
+    )
     org_id = uuid.uuid4()
-    person = Person(id=uuid.uuid4(), organization_id=org_id, first_name="B", last_name="C", email=f"{uuid.uuid4().hex}@example.com")
+    person = Person(
+        id=uuid.uuid4(),
+        organization_id=org_id,
+        first_name="B",
+        last_name="C",
+        email=f"{uuid.uuid4().hex}@example.com",
+    )
     employee = Employee(
         employee_id=uuid.uuid4(),
         organization_id=org_id,
