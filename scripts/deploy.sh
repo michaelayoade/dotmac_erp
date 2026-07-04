@@ -9,11 +9,17 @@
 #
 # Notes on erp's deploy model: the container runs app code from the mounted
 # ./app volume, but alembic/ is NOT mounted — migrations ship inside the image.
-# So a real deploy must `docker compose pull app` (refresh the baked alembic +
-# deps) before running migrations, not just `git pull`.
+# So a real deploy must pull the image (refresh the baked alembic + deps) before
+# running migrations, not just `git pull`.
 #
-# On a failed health gate the code is reset to the previous commit and the app
-# is recreated. Migrations are NOT auto-reverted — new revisions must be
+# Image pinning: app/worker/beat run ghcr.io/.../dotmac_erp:${ERP_IMAGE_TAG}.
+# This deploy pins ERP_IMAGE_TAG to the deployed commit's immutable `sha-<short>`
+# tag (published by CI) so the running artifact is reproducible and rollback is
+# exact — instead of the mutable `:latest`. --quick keeps the current tag.
+#
+# On a failed health gate the code is reset to the previous commit AND the image
+# tag is restored to the previously-running one, then the containers are
+# recreated. Migrations are NOT auto-reverted — new revisions must be
 # backward-compatible with the previous release, and the pre-migration backup is
 # the recovery path if they are not.
 
@@ -27,14 +33,21 @@ HEALTH_URL="${HEALTH_URL:-http://localhost:8003/health}"
 cd "$PROJECT_DIR"
 PREV_SHA="$(git rev-parse HEAD)"
 
+# Image tag the app container is currently running — restored on rollback so a
+# failed deploy reverts to the exact previously-running image, not just :latest.
+PREV_IMAGE_TAG="$(docker inspect --format '{{.Config.Image}}' dotmac_erp_app 2>/dev/null | sed 's/.*://')"
+PREV_IMAGE_TAG="${PREV_IMAGE_TAG:-latest}"
+export ERP_IMAGE_TAG="$PREV_IMAGE_TAG"
+
 echo "=== DotMac ERP Deploy ==="
-echo "Project: $PROJECT_DIR   (current: ${PREV_SHA:0:12})"
+echo "Project: $PROJECT_DIR   (current: ${PREV_SHA:0:12}, image: ${PREV_IMAGE_TAG})"
 echo ""
 
 rollback() {
-    echo "!! Rolling back code to ${PREV_SHA:0:12} and recreating app..."
+    echo "!! Rolling back code to ${PREV_SHA:0:12} and image to ${PREV_IMAGE_TAG}..."
     git reset --hard "$PREV_SHA" || true
-    docker compose up -d app || { docker stop dotmac_erp_app || true; docker start dotmac_erp_app || true; }
+    export ERP_IMAGE_TAG="$PREV_IMAGE_TAG"
+    docker compose up -d app worker beat || { docker stop dotmac_erp_app || true; docker start dotmac_erp_app || true; }
     echo "!! Rolled back. NOTE: DB migrations were NOT reverted — restore from the"
     echo "!! pre-migration backup if the new revisions are not backward-compatible."
 }
@@ -46,11 +59,15 @@ if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
     echo ""
 fi
 
-# Step 2: pull latest code (mounted ./app) + image (baked alembic + deps)
+# Step 2: pull latest code (mounted ./app) + image (baked alembic + deps), and
+# pin the image tag to the newly-deployed commit's immutable sha-<short> tag.
 if [[ "${1:-}" != "--quick" ]]; then
     echo "→ Pulling latest code + image..."
     git pull --rebase
-    docker compose pull app
+    NEW_IMAGE_TAG="sha-$(git rev-parse --short=7 HEAD)"
+    export ERP_IMAGE_TAG="$NEW_IMAGE_TAG"
+    echo "  Pinning image tag: ${ERP_IMAGE_TAG} (rollback target: ${PREV_IMAGE_TAG})"
+    docker compose pull app worker beat
     echo ""
 fi
 
@@ -91,8 +108,9 @@ trap - ERR
 # Step 6: sync static files + restart worker/beat (only on a healthy deploy)
 echo "→ Syncing static files to Nginx..."
 "$SCRIPT_DIR/sync-static.sh"
-echo "→ Restarting worker and beat..."
-docker restart dotmac_erp_worker dotmac_erp_beat
+# Recreate (not just restart) so worker/beat pick up the newly-pinned image.
+echo "→ Recreating worker and beat on the pinned image..."
+docker compose up -d worker beat
 
 echo ""
 echo "=== Deploy complete ==="

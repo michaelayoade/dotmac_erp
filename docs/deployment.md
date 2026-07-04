@@ -40,12 +40,20 @@ For production deployments, use the deploy script which handles everything:
 ```
 
 This script will:
-- Pull latest changes
-- Build CSS assets
-- Sync static files to nginx (`/var/www/dotmac/static/`)
-- Rebuild and restart Docker containers
-- Run database migrations
-- Reload nginx
+- Back up the database (pre-migration)
+- Pull latest changes and the container image
+- **Pin the image tag** to the deployed commit's immutable `sha-<short>` tag
+  (published by CI) so `app`/`worker`/`beat` all run one reproducible artifact
+  instead of the mutable `:latest`
+- Run database migrations (`alembic upgrade heads`) on the pulled image
+- Recreate the containers on the pinned image
+- Health-gate the app, and on failure **auto-roll back** — code reset to the
+  previous commit and the image tag restored to the previously-running one
+- Sync static files to nginx
+
+The pinned tag is controlled by `ERP_IMAGE_TAG` (see `.env.example`); the deploy
+script sets it automatically. To deploy a specific build manually, export it
+before running compose, e.g. `ERP_IMAGE_TAG=sha-abc1234 docker compose up -d app worker beat`.
 
 ## Static Assets
 
