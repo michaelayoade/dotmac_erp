@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.12.0")
+    app_version: str = os.getenv("APP_VERSION", "1.13.0")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
