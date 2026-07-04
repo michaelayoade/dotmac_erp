@@ -39,7 +39,38 @@
         </p>
     </div>
 
-    <div id="movement-report-content" class="space-y-6">
+    <!-- Filters (outside the swapped region so the bar keeps focus/state) -->
+    {% call(filter_attrs) compact_filters(
+        base_url="/inventory/reports/movement",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search reference, item, or warehouse..."
+    ) %}
+        {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
+            {% for wh in warehouses | default([]) %}
+            <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                {{ wh.warehouse_name }}
+            </option>
+            {% endfor %}
+        {% endcall %}
+        {% call filter_custom_select_field("item", "Item", filter_attrs) %}
+            {% for filter_item in items | default([]) %}
+            <option value="{{ filter_item.item_id }}" {{ 'selected' if item == filter_item.item_id|string else '' }}>
+                {{ filter_item.item_code }} - {{ filter_item.item_name }}
+            </option>
+            {% endfor %}
+        {% endcall %}
+        {% call filter_custom_select_field("transaction_type", "Type", filter_attrs) %}
+            {% for txn_type in transaction_types | default([]) %}
+            <option value="{{ txn_type }}" {{ 'selected' if transaction_type == txn_type else '' }}>
+                {{ txn_type | replace('_', ' ') | title }}
+            </option>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+    <!-- Swapped region: summary + table both refresh on filter; the bar above stays put -->
+    <div id="results-container" class="space-y-6">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="card p-4">
                 <p class="text-sm text-slate-500 dark:text-slate-400">Receipts</p>
@@ -59,37 +90,6 @@
             </div>
         </div>
 
-        {% call(filter_attrs) compact_filters(
-            base_url="/inventory/reports/movement",
-            target_id="movement-report-content",
-            active_filters=active_filters | default([]),
-            show_search=true,
-            search=search,
-            search_placeholder="Search reference, item, or warehouse..."
-        ) %}
-            {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
-                {% for wh in warehouses | default([]) %}
-                <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
-                    {{ wh.warehouse_name }}
-                </option>
-                {% endfor %}
-            {% endcall %}
-            {% call filter_custom_select_field("item", "Item", filter_attrs) %}
-                {% for filter_item in items | default([]) %}
-                <option value="{{ filter_item.item_id }}" {{ 'selected' if item == filter_item.item_id|string else '' }}>
-                    {{ filter_item.item_code }} - {{ filter_item.item_name }}
-                </option>
-                {% endfor %}
-            {% endcall %}
-            {% call filter_custom_select_field("transaction_type", "Type", filter_attrs) %}
-                {% for txn_type in transaction_types | default([]) %}
-                <option value="{{ txn_type }}" {{ 'selected' if transaction_type == txn_type else '' }}>
-                    {{ txn_type | replace('_', ' ') | title }}
-                </option>
-                {% endfor %}
-            {% endcall %}
-        {% endcall %}
-
         <div class="card p-4">
             <div class="grid gap-4 sm:grid-cols-3">
                 <div>
@@ -107,7 +107,7 @@
             </div>
         </div>
 
-        <div id="results-container">
+        <div>
             <div class="card w-full overflow-hidden">
                 <div class="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
                     <div>
