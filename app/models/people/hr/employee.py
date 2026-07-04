@@ -175,6 +175,11 @@ class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
         Enum(Gender, name="hr_gender"),
         nullable=True,
     )
+    nationality: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Employee nationality; NCC returns split staff Nigerian vs Expatriate",
+    )
     date_of_birth: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,

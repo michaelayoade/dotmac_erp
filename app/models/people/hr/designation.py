@@ -4,11 +4,12 @@ Designation Model - HR Schema.
 Job titles/positions within the organization.
 """
 
+import enum
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, func, text
+from sqlalchemy import Boolean, Enum, ForeignKey, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +19,15 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
     from app.models.people.hr.employee import Employee
+
+
+class NccStaffCategory(str, enum.Enum):
+    """NCC year-end return staff categories (Section G head-count matrix)."""
+
+    MANAGERIAL = "MANAGERIAL"
+    SENIOR_TECHNICAL = "SENIOR_TECHNICAL"
+    JUNIOR_TECHNICAL = "JUNIOR_TECHNICAL"
+    OTHER = "OTHER"
 
 
 class Designation(Base, AuditMixin, ERPNextSyncMixin):
@@ -57,6 +67,11 @@ class Designation(Base, AuditMixin, ERPNextSyncMixin):
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+    ncc_staff_category: Mapped[NccStaffCategory | None] = mapped_column(
+        Enum(NccStaffCategory, name="hr_ncc_staff_category"),
+        nullable=True,
+        comment="Maps this role to the NCC year-end staff head-count categories",
     )
 
     # Status
