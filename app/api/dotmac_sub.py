@@ -62,6 +62,7 @@ def verify_dotmac_sub_signature(payload: bytes, signature: str) -> bool:
 @webhook_router.post("/webhook", response_model=WebhookResponse)
 async def dotmac_sub_webhook(
     request: Request,
+    x_webhook_signature_256: str | None = Header(None, alias="X-Webhook-Signature-256"),
     x_dotmacsub_signature: str | None = Header(None, alias="X-DotmacSub-Signature"),
     db: Session = Depends(get_db),
 ) -> WebhookResponse:
@@ -73,10 +74,13 @@ async def dotmac_sub_webhook(
         )
 
     raw_body = await request.body()
-    if not x_dotmacsub_signature:
+    # dotmac_sub sends X-Webhook-Signature-256 ("sha256=<hex>"); keep the older
+    # X-DotmacSub-Signature alias as a fallback for any legacy sender.
+    signature = x_webhook_signature_256 or x_dotmacsub_signature
+    if not signature:
         logger.warning("dotmac_sub webhook received without signature")
         raise HTTPException(status_code=400, detail="Missing signature")
-    if not verify_dotmac_sub_signature(raw_body, x_dotmacsub_signature):
+    if not verify_dotmac_sub_signature(raw_body, signature):
         logger.warning("dotmac_sub webhook signature verification failed")
         raise HTTPException(status_code=401, detail="Invalid signature")
 
