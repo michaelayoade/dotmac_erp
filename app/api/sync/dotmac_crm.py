@@ -10,12 +10,29 @@ Handles:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 try:
     from datetime import UTC  # type: ignore
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
+
+# Only refresh ApiKey.last_used_at (a write + commit) at most this often per key.
+# Doing it on every call adds a row UPDATE + transaction to hot read paths (e.g.
+# per-project expense-totals) and contends on a single key.
+_LAST_USED_THROTTLE = timedelta(minutes=5)
+
+
+def _last_used_is_stale(last_used: datetime | None, now: datetime) -> bool:
+    """True when last_used_at is unset or older than the throttle window."""
+    if last_used is None:
+        return True
+    try:
+        return (now - last_used) >= _LAST_USED_THROTTLE
+    except TypeError:
+        # Defensive: a naive stored value — refresh it (and normalise going fwd).
+        return True
+
 
 from uuid import UUID
 
@@ -158,11 +175,13 @@ def require_service_auth(
     # Set RLS context for data isolation
     set_current_organization_sync(db, person_org_id)
 
-    # Update last used. This dependency's session (``_get_db``) closes without
-    # committing, and the route handler runs on a *separate* session, so the
-    # write must be committed here or it is silently lost.
-    api_key.last_used_at = now
-    db.commit()
+    # Update last used — throttled to once per window (see _LAST_USED_THROTTLE)
+    # so hot read paths don't each incur a row UPDATE + commit. This session
+    # (``_get_db``) closes without committing and the route handler runs on a
+    # separate session, so when we do write it we commit here or it is lost.
+    if _last_used_is_stale(api_key.last_used_at, now):
+        api_key.last_used_at = now
+        db.commit()
 
     logger.info(
         "CRM service authenticated: org=%s, key=%s",
