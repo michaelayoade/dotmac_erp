@@ -17,7 +17,11 @@ from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.services.dotmac_sub.client import CreditNoteRecord, DotmacSubError
 
-from ._constants import SYSTEM_USER_ID
+from ._constants import (
+    DOTMAC_SUB_SYNC_MIN_DATE,
+    SYSTEM_USER_ID,
+    _PRE_CUTOFF_SENTINEL,
+)
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -126,11 +130,18 @@ class CreditNoteSyncMixin:
         cn_total = -abs(cn.total)
         from datetime import date as _date
 
-        cn_date = _date.today()
+        # Use the credit note's real issue date (so it lands in the right fiscal
+        # period), and honour the same historical cutoff as invoices/payments so
+        # a pre-cutoff credit note isn't imported without its invoice.
+        cn_date = self._parse_date(cn.issued_at) or _date.today()
+        if cn_date < DOTMAC_SUB_SYNC_MIN_DATE:
+            self._record_sync(EntityType.CREDIT_NOTE, external_id, _PRE_CUTOFF_SENTINEL)
+            result.skipped += 1
+            return
 
         local_id = self._get_synced_entity(EntityType.CREDIT_NOTE, external_id)
         existing: Invoice | None = None
-        if local_id:
+        if local_id and local_id != _PRE_CUTOFF_SENTINEL:
             existing = self.db.get(Invoice, local_id)
         if not existing:
             existing = self.db.scalar(
