@@ -171,6 +171,7 @@ def require_service_auth(
     person_id = person.id
     api_key_id = api_key.id
     service_label = api_key.label
+    api_key_scopes = list(api_key.scopes) if api_key.scopes else []
 
     # Set RLS context for data isolation
     set_current_organization_sync(db, person_org_id)
@@ -194,7 +195,27 @@ def require_service_auth(
         "person_id": person_id,
         "api_key_id": api_key_id,
         "service_label": service_label,
+        "scopes": api_key_scopes,
     }
+
+
+def require_service_scope(scope: str):
+    """Dependency factory enforcing that the authenticated service key carries
+    ``scope``. An unscoped key (empty scopes) is grandfathered to full access,
+    so this is safe to add to endpoints without breaking existing keys — new,
+    scoped keys are restricted to exactly what they're granted.
+    """
+
+    def _dep(auth: dict = Depends(require_service_auth)) -> dict:
+        scopes = auth.get("scopes") or []
+        if scopes and scope not in scopes:
+            raise HTTPException(
+                status_code=403,
+                detail=f"API key missing required scope: {scope}",
+            )
+        return auth
+
+    return _dep
 
 
 def get_db_with_service_org(
@@ -633,7 +654,11 @@ def list_inventory(
 # ============ Workforce / Department Endpoints (ERP → CRM) ============
 
 
-@router.get("/workforce/employees", response_model=WorkforceEmployeeListResponse)
+@router.get(
+    "/workforce/employees",
+    response_model=WorkforceEmployeeListResponse,
+    dependencies=[Depends(require_service_scope("crm:workforce:read"))],
+)
 def list_workforce_employees(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
@@ -739,6 +764,7 @@ def list_people_contacts(
     "/material-requests",
     response_model=CRMMaterialRequestResponse,
     status_code=201,
+    dependencies=[Depends(require_service_scope("crm:material:write"))],
 )
 def create_material_request(
     payload: CRMMaterialRequestPayload,
@@ -819,6 +845,7 @@ def get_material_request_status(
     "/purchase-orders",
     response_model=CRMPurchaseOrderResponse,
     status_code=201,
+    dependencies=[Depends(require_service_scope("crm:po:write"))],
 )
 def create_purchase_order(
     payload: CRMPurchaseOrderPayload,
@@ -910,7 +937,11 @@ class NccStaffHeadcountResponse(BaseModel):
     by_category: dict[str, dict[str, dict[str, int]]]
 
 
-@router.get("/ncc/financials", response_model=NccFinancialsResponse)
+@router.get(
+    "/ncc/financials",
+    response_model=NccFinancialsResponse,
+    dependencies=[Depends(require_service_scope("crm:ncc:read"))],
+)
 def ncc_financials(
     year: int | None = None,
     start_date: str | None = None,
@@ -935,7 +966,11 @@ def ncc_financials(
     return NccFinancialsResponse(**data)
 
 
-@router.get("/ncc/staff-headcount", response_model=NccStaffHeadcountResponse)
+@router.get(
+    "/ncc/staff-headcount",
+    response_model=NccStaffHeadcountResponse,
+    dependencies=[Depends(require_service_scope("crm:ncc:read"))],
+)
 def ncc_staff_headcount(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),

@@ -374,3 +374,21 @@ def test_functional_amount_falls_back_to_one_when_no_rate(
     )
     assert rate == Decimal("1")
     assert functional == Decimal("100")
+
+
+def test_bearer_token_requires_service_token_no_staff_login() -> None:
+    """Staff-credential login is retired (audit S1): a client with no api_token
+    raises loudly instead of scraping the login page with a staff password."""
+    from app.services.dotmac_sub.client import (
+        DotmacSubAuthenticationError,
+        DotmacSubClient,
+        DotmacSubConfig,
+    )
+
+    client = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token=""))
+    with pytest.raises(DotmacSubAuthenticationError):
+        client._bearer_token()
+
+    # With a token it returns it directly (no login round-trip).
+    ok = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token="svc-tok"))
+    assert ok._bearer_token() == "svc-tok"
