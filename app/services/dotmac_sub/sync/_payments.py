@@ -210,6 +210,21 @@ class PaymentSyncMixin:
             self.db.flush()
             result.created += 1
         else:
+            # If this payment is already GL-posted and a GL-relevant amount is
+            # changing (e.g. succeeded -> partially_refunded), the old journal no
+            # longer matches. Reverse it and drop the posting link so the
+            # post_unposted_payments step re-posts at the new amount. Mutating
+            # the amount in place would leave the GL at the old figure while the
+            # subledger shows the new one. If the reversal can't be created,
+            # leave the payment (and its GL) untouched rather than diverge — the
+            # next sync retries.
+            if self._posted_amount_changed(payment, pay.amount, functional_amount):
+                if not self._reverse_posted_payment_gl(payment, created_by_user_id):
+                    result.errors.append(
+                        f"Payment {external_id}: GL reversal failed on amount "
+                        "change; left unchanged to avoid GL/subledger divergence"
+                    )
+                    return
             payment.customer_id = customer_id
             payment.payment_date = payment_date
             payment.payment_method = method
@@ -229,6 +244,71 @@ class PaymentSyncMixin:
         self._record_sync(
             EntityType.PAYMENT, external_id, payment.payment_id, data_hash
         )
+
+    @staticmethod
+    def _posted_amount_changed(
+        payment: CustomerPayment, new_amount: Decimal, new_functional: Decimal
+    ) -> bool:
+        """True when a GL-posted payment's cash amount is materially changing —
+        the case that needs a GL reversal, not an in-place mutation."""
+        return payment.journal_entry_id is not None and (
+            payment.amount != new_amount
+            or payment.functional_currency_amount != new_functional
+        )
+
+    def _reverse_posted_payment_gl(
+        self, payment: CustomerPayment, created_by_user_id: UUID | None
+    ) -> bool:
+        """Reverse a posted payment's GL journal and clear its posting link so
+        ``post_unposted_payments`` re-posts it at the new amount.
+
+        Returns True on success. On any failure the posting link is left intact
+        so the caller can decline to mutate the payment (no GL/subledger drift).
+        Reversal is idempotent on the original journal id.
+        """
+        from app.services.finance.gl.reversal import ReversalService
+
+        journal_id = payment.journal_entry_id
+        if journal_id is None:
+            return False
+        user_id = created_by_user_id or payment.created_by_user_id or SYSTEM_USER_ID
+        try:
+            result = ReversalService.create_reversal(
+                db=self.db,
+                organization_id=self.organization_id,
+                original_journal_id=journal_id,
+                reversal_date=date.today(),
+                created_by_user_id=user_id,
+                reason=(
+                    "dotmac_sub payment amount changed on resync "
+                    f"({payment.dotmac_sub_id})"
+                ),
+                auto_post=True,
+                idempotency_key=(
+                    f"{self.organization_id}:AR:PAY:{payment.payment_id}"
+                    f":resync-reversal:{journal_id}"
+                ),
+            )
+        except Exception:
+            logger.exception("GL reversal errored for payment %s", payment.payment_id)
+            return False
+
+        if not getattr(result, "success", False):
+            logger.error(
+                "GL reversal failed for payment %s: %s",
+                payment.payment_id,
+                getattr(result, "message", "unknown"),
+            )
+            return False
+
+        payment.journal_entry_id = None
+        payment.posting_batch_id = None
+        logger.info(
+            "Reversed GL journal %s for resynced payment %s; will re-post at new amount",
+            journal_id,
+            payment.payment_id,
+        )
+        return True
 
     def _apply_allocations(
         self, payment: CustomerPayment, pay: PaymentRecord, payment_date: date
