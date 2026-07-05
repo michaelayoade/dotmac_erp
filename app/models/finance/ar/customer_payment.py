@@ -75,6 +75,17 @@ class CustomerPayment(Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "payment_number", name="uq_payment_number"),
         Index("idx_payment_customer", "customer_id"),
+        # Idempotency backstop for the dotmac_sub payment sync: a given upstream
+        # payment (dotmac_sub_id) maps to at most one CustomerPayment per org, so
+        # a concurrent sync/webhook race can never double-post cash. Partial —
+        # manually-entered payments (NULL dotmac_sub_id) are unconstrained.
+        Index(
+            "uq_customer_payment_dotmac_sub_id",
+            "organization_id",
+            "dotmac_sub_id",
+            unique=True,
+            postgresql_where=text("dotmac_sub_id IS NOT NULL"),
+        ),
         {"schema": "ar"},
     )
 
