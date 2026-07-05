@@ -229,10 +229,90 @@ def test_verify_webhook_signature_unconfigured(monkeypatch: pytest.MonkeyPatch) 
 def test_webhook_entity_id_extraction() -> None:
     from app.services.dotmac_sub.webhook_dispatch import _entity_id
 
-    assert _entity_id({"data": {"id": "abc"}}) == "abc"
-    assert _entity_id({"id": "xyz"}) == "xyz"
-    assert _entity_id({"data": {"entity_id": "e1"}}) == "e1"
-    assert _entity_id({"event_type": "x"}) is None
+    # Real dotmac_sub envelope: the entity is in ``payload``, its ids echoed in
+    # ``context``. Payments carry the id in payload.payment_id (no context id);
+    # invoices/subscribers carry it in context.<domain>_id.
+    payment_evt = {
+        "event_type": "payment.received",
+        "payload": {"payment_id": "pay-9", "amount": "100"},
+        "context": {"account_id": "acc-1", "invoice_id": "inv-3"},
+    }
+    assert _entity_id(payment_evt, "payment") == "pay-9"
+
+    invoice_evt = {
+        "event_type": "invoice.paid",
+        "payload": {"total": "100"},
+        "context": {"invoice_id": "inv-3", "account_id": "acc-1"},
+    }
+    assert _entity_id(invoice_evt, "invoice") == "inv-3"
+
+    subscriber_evt = {
+        "event_type": "subscriber.updated",
+        "payload": {"id": "sub-7"},
+        "context": {"subscriber_id": "sub-7"},
+    }
+    assert _entity_id(subscriber_evt, "subscriber") == "sub-7"
+
+    # Legacy / flat-body fallback still resolves.
+    assert _entity_id({"data": {"id": "abc"}}, "invoice") == "abc"
+    assert _entity_id({"id": "xyz"}, "payment") == "xyz"
+    assert _entity_id({"event_type": "x"}, "payment") is None
+
+
+def test_dispatch_webhook_routes_real_payment_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end shape check: a real dotmac_sub payment envelope reaches
+    sync_payment_by_id with the id from payload.payment_id (regression for the
+    dead-webhook contract mismatch)."""
+    import uuid
+
+    from app.services.dotmac_sub import webhook_dispatch as wd
+    from app.services.dotmac_sub.sync._types import SyncResult
+
+    calls: list[tuple[str, str]] = []
+
+    class _FakeSyncService:
+        def __init__(self, **_kw):
+            pass
+
+        def sync_payment_by_id(self, entity_id, _user):
+            calls.append(("payment", entity_id))
+            return SyncResult(success=True, entity_type="payments", created=1)
+
+        def sync_invoice_by_id(self, entity_id, _user):
+            calls.append(("invoice", entity_id))
+            return SyncResult(success=True, entity_type="invoices")
+
+        def sync_subscriber_by_id(self, entity_id, _user):
+            calls.append(("subscriber", entity_id))
+            return SyncResult(success=True, entity_type="subscribers")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(wd, "DotmacSubSyncService", _FakeSyncService)
+    monkeypatch.setattr(
+        "app.tasks.dotmac_sub._resolve_ar_control_account",
+        lambda *_a, **_k: uuid.uuid4(),
+    )
+    monkeypatch.setattr(
+        "app.tasks.dotmac_sub._resolve_default_revenue_account",
+        lambda *_a, **_k: uuid.uuid4(),
+    )
+
+    envelope = {
+        "event_id": "evt-1",
+        "event_type": "payment.received",
+        "occurred_at": "2026-07-05T00:00:00+00:00",
+        "payload": {"payment_id": "pay-42", "amount": "250.00"},
+        "context": {"account_id": "acc-9", "invoice_id": "inv-7"},
+    }
+    result = wd.dispatch_webhook(None, uuid.uuid4(), "payment.received", envelope)
+
+    assert calls == [("payment", "pay-42")]
+    assert result["status"] == "ok"
+    assert result["entity_id"] == "pay-42"
 
 
 # ---------------------------------------------------------------------------
