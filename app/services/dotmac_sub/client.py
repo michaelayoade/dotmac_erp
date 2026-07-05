@@ -54,18 +54,13 @@ class DotmacSubRateLimitError(DotmacSubError):
 class DotmacSubConfig:
     """Configuration for the dotmac_sub API.
 
-    Two auth modes (api_token takes precedence):
-    - ``api_token`` — a static bearer token (e.g. a service JWT), if provided.
-    - ``username`` + ``password`` — staff credentials; the client performs a
-      session login + ``/api/v1/auth/refresh`` to obtain a short-lived JWT and
-      auto-refreshes on 401. This is the "passwordless" mode from the operator's
-      view: the password is entered once (encrypted at rest), never per-sync.
+    Auth is a **service bearer token** (``api_token``). Staff-credential login
+    has been retired for security (audit S1) — the client no longer logs in with
+    a username + password; ``api_token`` must be a dotmac_sub service token.
     """
 
     api_url: str
     api_token: str = ""
-    username: str = ""
-    password: str = ""
     timeout: float = 60.0
     max_retries: int = 3
 
@@ -75,8 +70,6 @@ class DotmacSubConfig:
         return cls(
             api_url=settings.dotmac_sub_api_url,
             api_token=settings.dotmac_sub_api_token,
-            username=getattr(settings, "dotmac_sub_username", "") or "",
-            password=getattr(settings, "dotmac_sub_password", "") or "",
             timeout=settings.dotmac_sub_request_timeout,
             max_retries=settings.dotmac_sub_max_retries,
         )
@@ -111,36 +104,18 @@ class DotmacSubConfig:
 
         # IntegrationConfig column mapping for dotmac_sub:
         #   base_url   -> api_url
-        #   company    -> staff username (not secret)
-        #   api_key    -> staff password OR a static bearer token (encrypted)
+        #   api_key    -> service bearer token (encrypted)
         #   api_secret -> webhook secret (used by the inbound webhook route)
-        # If ``company`` (username) is set we treat api_key as the password;
-        # otherwise api_key is a static bearer token.
-        username = creds.get("company") or env.username
-        secret = creds.get("api_key") or ""
-        if username:
-            return cls(
-                api_url=creds.get("base_url") or env.api_url,
-                api_token=env.api_token,
-                username=username,
-                password=secret or env.password,
-                timeout=env.timeout,
-                max_retries=env.max_retries,
-            )
         return cls(
             api_url=creds.get("base_url") or env.api_url,
-            api_token=secret or env.api_token,
-            username=env.username,
-            password=env.password,
+            api_token=creds.get("api_key") or env.api_token,
             timeout=env.timeout,
             max_retries=env.max_retries,
         )
 
     def is_configured(self) -> bool:
-        """Check if dotmac_sub credentials are configured (token or login)."""
-        if not self.api_url:
-            return False
-        return bool(self.api_token or (self.username and self.password))
+        """Configured when we have a base URL and a service bearer token."""
+        return bool(self.api_url and self.api_token)
 
     @property
     def auth_header(self) -> str:
@@ -318,17 +293,6 @@ class TaxRateRecord:
     rate: Decimal
 
 
-def _first_match(text: str, *patterns: str) -> str | None:
-    """Return the first regex group-1 match across ``patterns`` (or None)."""
-    import re
-
-    for pat in patterns:
-        m = re.search(pat, text)
-        if m:
-            return m.group(1)
-    return None
-
-
 def _dec(value: Any, default: str = "0") -> Decimal:
     if value is None or value == "":
         return Decimal(default)
@@ -367,7 +331,6 @@ class DotmacSubClient:
     def __init__(self, config: DotmacSubConfig | None = None) -> None:
         self.config = config or DotmacSubConfig.from_settings()
         self._client: httpx.Client | None = None
-        self._bearer: str | None = None
 
     def __enter__(self) -> DotmacSubClient:
         return self
@@ -401,65 +364,19 @@ class DotmacSubClient:
     # ---- Authentication ----
 
     def _bearer_token(self) -> str:
-        """Return a bearer token, logging in with credentials if necessary."""
-        if self.config.api_token:
-            return self.config.api_token
-        if self._bearer:
-            return self._bearer
-        self._bearer = self._login_for_jwt()
-        return self._bearer
+        """Return the configured dotmac_sub service bearer token.
 
-    def _login_for_jwt(self) -> str:
-        """Staff session login + /api/v1/auth/refresh → short-lived JWT.
-
-        dotmac_sub staff accounts authenticate by session (the bearer middleware
-        only accepts JWTs / subscriber API keys), so we log in at ``/auth/login``
-        (CSRF-protected form), then exchange the session for an access token.
+        Staff-credential login (username+password session scrape) was retired for
+        security (audit S1). If no service token is configured we fail loudly
+        rather than fall back to staff creds.
         """
-        base = self.config.api_url.rstrip("/")
-        with httpx.Client(timeout=httpx.Timeout(self.config.timeout)) as sess:
-            page = sess.get(f"{base}/auth/login")
-            html = page.text
-            form_csrf = _first_match(
-                html,
-                r'name="_csrf_token"[^>]*value="([^"]+)"',
-                r'value="([^"]+)"[^>]*name="_csrf_token"',
+        if not self.config.api_token:
+            raise DotmacSubAuthenticationError(
+                "dotmac_sub api_token is not configured. Staff-credential login "
+                "has been retired — set DOTMAC_SUB_API_TOKEN (or the integration's "
+                "api_key) to a dotmac_sub service token."
             )
-            meta_csrf = _first_match(
-                html,
-                r'name="csrf-token"[^>]*content="([^"]+)"',
-                r'content="([^"]+)"[^>]*name="csrf-token"',
-            )
-            login = sess.post(
-                f"{base}/auth/login",
-                data={
-                    "username": self.config.username,
-                    "password": self.config.password,
-                    "_csrf_token": form_csrf or "",
-                    "remember": "true",
-                },
-                follow_redirects=False,
-            )
-            if login.status_code not in (200, 302, 303):
-                raise DotmacSubAuthenticationError(
-                    f"dotmac_sub staff login failed (HTTP {login.status_code})",
-                    status_code=login.status_code,
-                )
-            headers = {"X-CSRF-Token": meta_csrf} if meta_csrf else {}
-            refresh = sess.post(
-                f"{base}{self.API_PREFIX}/auth/refresh", json={}, headers=headers
-            )
-            token = (
-                refresh.json().get("access_token")
-                if refresh.status_code == 200
-                else None
-            )
-            if not token:
-                raise DotmacSubAuthenticationError(
-                    "dotmac_sub token refresh returned no access_token",
-                    status_code=refresh.status_code,
-                )
-            return str(token)
+        return self.config.api_token
 
     def _backoff_seconds(self, attempt: int) -> float:
         """Exponential backoff delay (seconds) for retry ``attempt`` (0-indexed)."""
@@ -502,18 +419,6 @@ class DotmacSubClient:
                 )
                 if response.status_code in (401, 403):
                     metric_status = "auth_error"
-                    # In credential (login) mode a 401 may mean the JWT expired:
-                    # drop the cached token and retry once with a fresh login.
-                    if (
-                        not self.config.api_token
-                        and attempt < self.config.max_retries - 1
-                    ):
-                        self._bearer = None
-                        last_error = DotmacSubAuthenticationError(
-                            "JWT expired; re-authenticating",
-                            status_code=response.status_code,
-                        )
-                        continue
                     raise DotmacSubAuthenticationError(
                         "Authentication failed for dotmac_sub.",
                         status_code=response.status_code,

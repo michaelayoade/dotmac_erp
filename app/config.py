@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.17.0")
+    app_version: str = os.getenv("APP_VERSION", "1.18.0")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -194,10 +194,9 @@ class Settings:
     # bootstrap/fallback; per-org credentials managed from the admin UI live in
     # the integration_config table and take precedence (DotmacSubConfig.for_org).
     dotmac_sub_api_url: str = os.getenv("DOTMAC_SUB_API_URL", "")
+    # Service bearer token for dotmac_sub. Staff-credential (session->JWT) login
+    # has been retired (audit S1) — a service token is required.
     dotmac_sub_api_token: str = os.getenv("DOTMAC_SUB_API_TOKEN", "")
-    # Staff credentials for passwordless (session→JWT) auth when no static token.
-    dotmac_sub_username: str = os.getenv("DOTMAC_SUB_USERNAME", "")
-    dotmac_sub_password: str = os.getenv("DOTMAC_SUB_PASSWORD", "")
     dotmac_sub_webhook_secret: str | None = (
         os.getenv("DOTMAC_SUB_WEBHOOK_SECRET") or None
     )
