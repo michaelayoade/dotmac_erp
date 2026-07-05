@@ -305,6 +305,7 @@ class CreditNoteRecord:
     total: Decimal
     applied_total: Decimal = Decimal("0")
     memo: str | None = None
+    issued_at: str | None = None
     lines: list[CreditNoteLineRecord] = field(default_factory=list)
 
 
@@ -847,6 +848,7 @@ class DotmacSubClient:
             total=_dec(item.get("total")),
             applied_total=_dec(item.get("applied_total")),
             memo=item.get("memo"),
+            issued_at=item.get("issued_at") or item.get("created_at"),
             lines=lines,
         )
 
