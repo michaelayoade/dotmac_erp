@@ -21,7 +21,7 @@ from app.models.finance.ar.customer_payment import (
     PaymentStatus,
 )
 from app.models.finance.ar.external_sync import EntityType
-from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.invoice import Invoice
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.services.dotmac_sub.client import DotmacSubError, PaymentRecord
 
@@ -235,25 +235,13 @@ class PaymentSyncMixin:
     ) -> None:
         from sqlalchemy import delete
 
-        existing = list(
-            self.db.scalars(
-                select(PaymentAllocation).where(
-                    PaymentAllocation.payment_id == payment.payment_id
-                )
-            ).all()
-        )
-        for alloc in existing:
-            inv = self.db.get(Invoice, alloc.invoice_id)
-            if inv:
-                inv.amount_paid = max(
-                    Decimal("0"), inv.amount_paid - alloc.allocated_amount
-                )
-        if existing:
-            self.db.execute(
-                delete(PaymentAllocation).where(
-                    PaymentAllocation.payment_id == payment.payment_id
-                )
+        # Rebuild this payment's allocation records (payment -> invoice linkage,
+        # used for AR aging / GL). Deleting is a no-op when none exist.
+        self.db.execute(
+            delete(PaymentAllocation).where(
+                PaymentAllocation.payment_id == payment.payment_id
             )
+        )
 
         for a in pay.allocations:
             inv = self.db.scalar(
@@ -272,11 +260,12 @@ class PaymentSyncMixin:
                     allocation_date=payment_date,
                 )
             )
-            inv.amount_paid = min(inv.amount_paid + a.amount, inv.total_amount)
-            if inv.amount_paid >= inv.total_amount:
-                inv.status = InvoiceStatus.PAID
-            elif inv.amount_paid > Decimal("0"):
-                inv.status = InvoiceStatus.PARTIALLY_PAID
+            # NOTE: we deliberately do NOT touch inv.amount_paid / inv.status
+            # here. The invoice sync owns them and sets them from dotmac_sub's
+            # authoritative balance_due (_invoices.py: amount_paid = total -
+            # balance_due), which already reflects this payment. Incrementing
+            # amount_paid here double-counted the paid amount and flipped
+            # partially-paid invoices to PAID on first import.
 
     def _map_payment_method(self, channel_id: str | None) -> PaymentMethod:
         name = (self._channel_name(channel_id) or "").lower()
