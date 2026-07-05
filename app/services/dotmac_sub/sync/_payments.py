@@ -111,7 +111,11 @@ class PaymentSyncMixin:
         external_id = pay.id
 
         if (pay.status or "").lower() not in _SETTLED_STATUSES:
-            result.skipped += 1
+            # Not settled cash (e.g. refunded / voided). If a prior sync already
+            # GL-posted this payment, its receipt journal must be reversed —
+            # otherwise ERP keeps the cash on the books after a refund. Handled
+            # idempotently; a never-posted payment is simply skipped.
+            self._handle_unsettled_payment(pay, external_id, result, created_by_user_id)
             return
 
         data_hash = self._compute_hash(
@@ -167,19 +171,7 @@ class PaymentSyncMixin:
         method = self._map_payment_method(pay.payment_channel_id)
         channel_name = self._channel_name(pay.payment_channel_id) or "dotmac_sub"
 
-        local_id = self._get_synced_entity(EntityType.PAYMENT, external_id)
-        payment: CustomerPayment | None = None
-        if local_id and local_id != _PRE_CUTOFF_SENTINEL:
-            payment = self.db.get(CustomerPayment, local_id)
-        if payment is None:
-            payment = self.db.scalar(
-                select(CustomerPayment)
-                .where(
-                    CustomerPayment.organization_id == self.organization_id,
-                    CustomerPayment.dotmac_sub_id == external_id,
-                )
-                .order_by(CustomerPayment.created_at)
-            )
+        payment: CustomerPayment | None = self._find_local_payment(external_id)
 
         if payment is None:
             payment = CustomerPayment(
@@ -257,10 +249,19 @@ class PaymentSyncMixin:
         )
 
     def _reverse_posted_payment_gl(
-        self, payment: CustomerPayment, created_by_user_id: UUID | None
+        self,
+        payment: CustomerPayment,
+        created_by_user_id: UUID | None,
+        *,
+        reason: str | None = None,
+        idempotency_suffix: str = "resync-reversal",
     ) -> bool:
-        """Reverse a posted payment's GL journal and clear its posting link so
-        ``post_unposted_payments`` re-posts it at the new amount.
+        """Reverse a posted payment's GL journal and clear its posting link.
+
+        Used two ways: on an amount change (the caller then leaves status CLEARED
+        so ``post_unposted_payments`` re-posts at the new amount), and on a refund
+        (the caller then sets status REVERSED so it is NOT re-posted). ``reason``
+        and ``idempotency_suffix`` distinguish the two in the GL + idempotency key.
 
         Returns True on success. On any failure the posting link is left intact
         so the caller can decline to mutate the payment (no GL/subledger drift).
@@ -279,14 +280,15 @@ class PaymentSyncMixin:
                 original_journal_id=journal_id,
                 reversal_date=date.today(),
                 created_by_user_id=user_id,
-                reason=(
+                reason=reason
+                or (
                     "dotmac_sub payment amount changed on resync "
                     f"({payment.dotmac_sub_id})"
                 ),
                 auto_post=True,
                 idempotency_key=(
                     f"{self.organization_id}:AR:PAY:{payment.payment_id}"
-                    f":resync-reversal:{journal_id}"
+                    f":{idempotency_suffix}:{journal_id}"
                 ),
             )
         except Exception:
@@ -304,11 +306,85 @@ class PaymentSyncMixin:
         payment.journal_entry_id = None
         payment.posting_batch_id = None
         logger.info(
-            "Reversed GL journal %s for resynced payment %s; will re-post at new amount",
+            "Reversed GL journal %s for payment %s (%s)",
             journal_id,
             payment.payment_id,
+            idempotency_suffix,
         )
         return True
+
+    def _find_local_payment(self, external_id: str) -> CustomerPayment | None:
+        """Locate a previously-synced ERP payment for a dotmac_sub payment id —
+        by the sync-state link first, then by ``dotmac_sub_id``."""
+        local_id = self._get_synced_entity(EntityType.PAYMENT, external_id)
+        payment: CustomerPayment | None = None
+        if local_id and local_id != _PRE_CUTOFF_SENTINEL:
+            payment = self.db.get(CustomerPayment, local_id)
+        if payment is None:
+            payment = self.db.scalar(
+                select(CustomerPayment)
+                .where(
+                    CustomerPayment.organization_id == self.organization_id,
+                    CustomerPayment.dotmac_sub_id == external_id,
+                )
+                .order_by(CustomerPayment.created_at)
+            )
+        return payment
+
+    def _handle_unsettled_payment(
+        self,
+        pay: PaymentRecord,
+        external_id: str,
+        result: SyncResult,
+        created_by_user_id: UUID | None,
+    ) -> None:
+        """Handle a dotmac_sub payment that is no longer settled cash (refunded /
+        voided / failed).
+
+        If a prior sync GL-posted it, reverse that receipt journal and mark the
+        payment REVERSED so ``post_unposted_payments`` (which requires CLEARED)
+        won't re-post it — closing the gap where a full refund left ERP
+        overstating cash forever. Idempotent: an already-reversed payment is
+        recorded and skipped.
+        """
+        payment = self._find_local_payment(external_id)
+        status_hash = self._compute_hash(
+            {"status": (pay.status or "").lower(), "amount": str(pay.amount)}
+        )
+        if payment is None:
+            # Never synced/posted here — nothing on the GL to reverse.
+            result.skipped += 1
+            return
+        if (
+            payment.status == PaymentStatus.REVERSED
+            and payment.journal_entry_id is None
+        ):
+            self._record_sync(
+                EntityType.PAYMENT, external_id, payment.payment_id, status_hash
+            )
+            result.skipped += 1
+            return
+        if payment.journal_entry_id is not None:
+            if not self._reverse_posted_payment_gl(
+                payment,
+                created_by_user_id,
+                reason=(
+                    f"dotmac_sub payment {(pay.status or 'unsettled').lower()} "
+                    f"({payment.dotmac_sub_id})"
+                ),
+                idempotency_suffix="refund-reversal",
+            ):
+                result.errors.append(
+                    f"Payment {external_id}: GL reversal failed on "
+                    f"{pay.status}; left unchanged to avoid GL/subledger divergence"
+                )
+                return
+        payment.status = PaymentStatus.REVERSED
+        payment.last_synced_at = datetime.now(UTC)
+        self._record_sync(
+            EntityType.PAYMENT, external_id, payment.payment_id, status_hash
+        )
+        result.updated += 1
 
     def _apply_allocations(
         self, payment: CustomerPayment, pay: PaymentRecord, payment_date: date
