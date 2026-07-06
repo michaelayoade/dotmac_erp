@@ -288,6 +288,16 @@ class _ProjectSyncMixin(_CRMSyncBase):
                 CRMSyncMapping.crm_status
                 == CRM_SYNC_STATUS_MAP.get(status.lower(), CRMSyncStatus.ACTIVE)
             )
+        else:
+            # Hide cancelled/archived CRM entities so a canceled project isn't
+            # selectable for new expense claims. CRM sends the cancellation via
+            # the recently-updated delta (canceling keeps is_active=True), which
+            # marks the mapping CANCELLED — it just wasn't being filtered here.
+            stmt = stmt.where(
+                CRMSyncMapping.crm_status.notin_(
+                    [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+                )
+            )
 
         stmt = stmt.order_by(CRMSyncMapping.display_name).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
@@ -325,6 +335,12 @@ class _ProjectSyncMixin(_CRMSyncBase):
                 | (CRMSyncMapping.display_code.ilike(search_filter))
             )
 
+        # Hide cancelled/archived tickets from the expense-claim picker.
+        stmt = stmt.where(
+            CRMSyncMapping.crm_status.notin_(
+                [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+            )
+        )
         stmt = stmt.order_by(CRMSyncMapping.created_at.desc()).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
 
@@ -366,6 +382,12 @@ class _ProjectSyncMixin(_CRMSyncBase):
                 & (CRMSyncMapping.local_entity_type == "task"),
             ).where(Task.assigned_to_id == employee_id)
 
+        # Hide cancelled/archived work orders from the expense-claim picker.
+        stmt = stmt.where(
+            CRMSyncMapping.crm_status.notin_(
+                [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+            )
+        )
         stmt = stmt.order_by(CRMSyncMapping.created_at.desc()).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
 
