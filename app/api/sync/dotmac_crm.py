@@ -53,6 +53,10 @@ from app.schemas.sync.dotmac_crm import (
     BulkSyncResponse,
     CompanyListResponse,
     CRMAvailableSerialListResponse,
+    CRMExpenseCategoriesResponse,
+    CRMExpenseClaimPayload,
+    CRMExpenseClaimResponse,
+    CRMExpenseClaimStatusResponse,
     CRMInventoryItemPayload,
     CRMInventoryItemResponse,
     CRMMaterialRequestPayload,
@@ -836,6 +840,107 @@ def get_material_request_status(
             status_code=404, detail=f"Material request not found: {omni_id}"
         )
     return result
+
+
+# ============ Expense Claim Endpoints (CRM → ERP) ============
+
+
+@router.post(
+    "/expense-claims",
+    response_model=CRMExpenseClaimResponse,
+    status_code=201,
+    dependencies=[Depends(require_service_scope("crm:expense:write"))],
+)
+def create_expense_claim(
+    payload: CRMExpenseClaimPayload,
+    response: Response,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMExpenseClaimResponse:
+    """
+    Create an expense claim from a CRM field-technician expense request.
+
+    Immutable idempotent create-and-submit endpoint: an identical resend of
+    the same omni_id returns the existing claim (200); a changed resend is
+    rejected (409).
+    """
+    from app.models.expense.expense_claim import ExpenseClaim
+
+    org_id = auth["organization_id"]
+    person_id = auth["person_id"]
+    service = DotMacCRMSyncService(db)
+    existed_before = bool(
+        db.scalar(
+            select(ExpenseClaim.claim_id).where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.crm_id == payload.omni_id,
+            )
+        )
+    )
+
+    try:
+        result = service.create_expense_claim(org_id, payload, person_id)
+        if existed_before:
+            response.status_code = 200
+        else:
+            response.status_code = 201
+        db.commit()
+        return result
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to create expense claim omni_id=%s", payload.omni_id)
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+@router.get(
+    "/expense-claims/{omni_id}",
+    response_model=CRMExpenseClaimStatusResponse,
+)
+def get_expense_claim_status(
+    omni_id: str,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMExpenseClaimStatusResponse:
+    """
+    Get expense claim status by CRM omni_id.
+
+    Used by CRM to poll claim status (approval / rejection / payment)
+    after creation.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+
+    result = service.get_expense_claim_by_crm_id(org_id, omni_id)
+    if not result:
+        raise HTTPException(
+            status_code=404, detail=f"Expense claim not found: {omni_id}"
+        )
+    return result
+
+
+@router.get(
+    "/expense-categories",
+    response_model=CRMExpenseCategoriesResponse,
+)
+def list_expense_categories(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMExpenseCategoriesResponse:
+    """
+    List active expense categories for the CRM expense-request form.
+
+    CRM uses category_code when submitting expense claims; requires_receipt
+    and max_amount_per_claim let the CRM validate before sending.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    return service.list_expense_categories(org_id)
 
 
 # ============ Purchase Order Endpoints (CRM → ERP) ============

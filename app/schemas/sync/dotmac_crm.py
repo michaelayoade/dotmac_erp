@@ -4,7 +4,7 @@ DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
@@ -560,6 +560,79 @@ class CRMMaterialRequestStatusRead(BaseModel):
     request_type: str
     items: list[CRMMaterialRequestItemRead] = Field(default_factory=list)
     created_at: datetime
+
+
+# ============ Expense Claim Sync (CRM → ERP) ============
+
+
+class CRMExpenseClaimItemPayload(BaseModel):
+    """Single expense line in a CRM field-technician expense request."""
+
+    category_code: str = Field(..., min_length=1, max_length=30)
+    description: str = Field(..., min_length=1, max_length=500)
+    claimed_amount: Decimal = Field(..., gt=0)
+    expense_date: str | None = Field(
+        None, description="YYYY-MM-DD expense date; defaults to the claim_date"
+    )
+    vendor_name: str | None = Field(None, max_length=200)
+    receipt_url: str | None = Field(None, max_length=500)
+    notes: str | None = None
+
+
+class CRMExpenseClaimPayload(BaseModel):
+    """Expense claim from DotMac CRM (field-technician expense request)."""
+
+    omni_id: str = Field(
+        ..., max_length=36, description="CRM expense request UUID for idempotency"
+    )
+    purpose: str = Field(..., min_length=1, max_length=500)
+    claim_date: str = Field(..., description="YYYY-MM-DD claim date")
+    requested_by_email: str = Field(..., min_length=3, max_length=255)
+    ticket_crm_id: str | None = Field(None, max_length=36)
+    project_crm_id: str | None = Field(None, max_length=36)
+    currency_code: str | None = Field(None, min_length=3, max_length=3)
+    remarks: str | None = None
+    reference_number: str | None = Field(
+        None, max_length=50, description="CRM expense request number"
+    )
+    items: list[CRMExpenseClaimItemPayload] = Field(..., min_length=1)
+
+
+class CRMExpenseClaimResponse(BaseModel):
+    """Response after creating an expense claim from CRM."""
+
+    claim_id: UUID
+    claim_number: str
+    status: str
+    omni_id: str
+
+
+class CRMExpenseClaimStatusResponse(BaseModel):
+    """Expense claim status for CRM polling."""
+
+    claim_id: UUID
+    claim_number: str
+    status: str
+    rejection_reason: str | None = None
+    paid_on: date | None = None
+    total_claimed_amount: Decimal
+    total_approved_amount: Decimal | None = None
+    omni_id: str
+
+
+class CRMExpenseCategoryItem(BaseModel):
+    """Active expense category exposed to the CRM expense-request form."""
+
+    category_code: str
+    category_name: str
+    requires_receipt: bool = True
+    max_amount_per_claim: Decimal | None = None
+
+
+class CRMExpenseCategoriesResponse(BaseModel):
+    """Response with active expense categories for CRM."""
+
+    items: list[CRMExpenseCategoryItem] = Field(default_factory=list)
 
 
 # ============ Purchase Order Sync (CRM → ERP) ============

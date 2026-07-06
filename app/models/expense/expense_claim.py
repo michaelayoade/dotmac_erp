@@ -158,6 +158,11 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
             "claim_number",
             name="uq_expense_claim_org_number",
         ),
+        UniqueConstraint(
+            "organization_id",
+            "crm_id",
+            name="uq_expense_claim_org_crm_id",
+        ),
         Index("idx_expense_claim_employee", "employee_id"),
         Index("idx_expense_claim_status", "organization_id", "status"),
         Index("idx_expense_claim_date", "organization_id", "claim_date"),
@@ -358,6 +363,14 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     paid_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
+    )
+
+    # DotMac CRM sync tracking (last_synced_at comes from ERPNextSyncMixin)
+    crm_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+        index=True,
+        comment="DotMac CRM expense request ID (omni_id for idempotency)",
     )
 
     # Notes
