@@ -34,6 +34,7 @@ class SubscriberSyncMixin:
     _record_sync: Any
     _get_synced_entity: Any
     _get_customer_by_dotmac_sub_id: Any
+    _lock_dotmac_sub_customer: Any
     _reseller_customer_id: Any
     _reprime_tenant_context: Any
 
@@ -122,6 +123,10 @@ class SubscriberSyncMixin:
             "country_code": sub.country_code,
         }
         is_company = (sub.category or "").lower() in _COMPANY_CATEGORIES
+
+        # Serialize concurrent upserts for this subscriber (batch sync racing
+        # the on-demand resolve) before the find, so only one customer is made.
+        self._lock_dotmac_sub_customer(sub.id)
 
         existing = self._get_customer_by_dotmac_sub_id(sub.id)
         if not existing:
