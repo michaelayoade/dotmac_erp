@@ -52,6 +52,7 @@ class InvoiceSyncMixin:
     _extract_tax: Any
     _create_line_tax_record: Any
     _reprime_tenant_context: Any
+    _functional_amount: Any
 
     def sync_invoices(
         self,
@@ -159,6 +160,11 @@ class InvoiceSyncMixin:
         status = self._map_invoice_status(inv.status, inv.balance_due)
         subtotal = inv.subtotal
         tax_amount = inv.tax_total
+        # Convert the receivable to functional currency (was booked at face value,
+        # while payments convert — so multi-currency AR never netted to zero).
+        exch_rate, functional_amount = self._functional_amount(
+            inv.total, inv.currency, invoice_date
+        )
 
         if existing:
             existing.customer_id = customer_id
@@ -168,7 +174,8 @@ class InvoiceSyncMixin:
             existing.subtotal = subtotal
             existing.tax_amount = tax_amount
             existing.total_amount = inv.total
-            existing.functional_currency_amount = inv.total
+            existing.functional_currency_amount = functional_amount
+            existing.exchange_rate = exch_rate
             existing.amount_paid = amount_paid
             existing.status = status
             existing.notes = inv.memo
@@ -194,7 +201,8 @@ class InvoiceSyncMixin:
             tax_amount=tax_amount,
             total_amount=inv.total,
             amount_paid=amount_paid,
-            functional_currency_amount=inv.total,
+            functional_currency_amount=functional_amount,
+            exchange_rate=exch_rate,
             status=status,
             ar_control_account_id=self.ar_control_account_id,
             source_document_type="dotmac_sub_invoice",

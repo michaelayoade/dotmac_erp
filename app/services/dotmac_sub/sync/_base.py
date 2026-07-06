@@ -72,6 +72,36 @@ class BaseSyncMixin:
     def _reprime_tenant_context(self) -> None:
         prime_tenant_context(self.db, self.organization_id)
 
+    def _functional_amount(
+        self, amount: Decimal, currency_code: str, on_date: date
+    ) -> tuple[Decimal, Decimal]:
+        """Resolve ``(exchange_rate, functional_amount)`` for a synced document.
+
+        ``exchange_rate`` is the foreign→functional rate (functional = amount *
+        rate). Falls back to ``1.0`` (no conversion) when the document is already
+        in functional currency or no SPOT rate is configured. Never raises — a
+        missing rate degrades gracefully rather than failing the whole sync.
+        Shared by payments, invoices, and credit notes so all three record the
+        same functional amount and the AR subledger nets to zero.
+        """
+        from app.services.finance.platform.fx import FXService
+
+        info = FXService.lookup_spot_rate(
+            self.db, self.organization_id, currency_code, on_date
+        )
+        # In lookup_spot_rate, ``from`` is the org functional currency and ``to``
+        # is currency_code, so ``inverse_rate`` is currency_code → functional.
+        raw = info.get("inverse_rate")
+        if raw in (None, ""):
+            return Decimal("1"), amount
+        try:
+            rate = Decimal(str(raw))
+        except (ValueError, ArithmeticError):
+            return Decimal("1"), amount
+        if rate <= 0:
+            return Decimal("1"), amount
+        return rate, (amount * rate).quantize(Decimal("0.000001"))
+
     @property
     def client(self) -> DotmacSubClient:
         if self._client is None:

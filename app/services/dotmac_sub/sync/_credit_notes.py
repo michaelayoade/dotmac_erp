@@ -46,6 +46,7 @@ class CreditNoteSyncMixin:
     _create_lines: Any
     _replace_lines: Any
     _reprime_tenant_context: Any
+    _functional_amount: Any
 
     def sync_credit_notes(
         self,
@@ -139,6 +140,12 @@ class CreditNoteSyncMixin:
             result.skipped += 1
             return
 
+        # Convert to functional currency (was booked at face value while payments
+        # convert). cn_total is already negative, so functional stays negative.
+        exch_rate, functional_amount = self._functional_amount(
+            cn_total, cn.currency, cn_date
+        )
+
         local_id = self._get_synced_entity(EntityType.CREDIT_NOTE, external_id)
         existing: Invoice | None = None
         if local_id and local_id != _PRE_CUTOFF_SENTINEL:
@@ -157,7 +164,8 @@ class CreditNoteSyncMixin:
             existing.subtotal = cn_subtotal
             existing.tax_amount = cn_tax
             existing.total_amount = cn_total
-            existing.functional_currency_amount = cn_total
+            existing.functional_currency_amount = functional_amount
+            existing.exchange_rate = exch_rate
             existing.dotmac_sub_id = cn.id
             existing.dotmac_sub_number = cn.credit_number
             existing.last_synced_at = datetime.now(UTC)
@@ -180,7 +188,8 @@ class CreditNoteSyncMixin:
             tax_amount=cn_tax,
             total_amount=cn_total,
             amount_paid=cn_total if cn.status == "applied" else Decimal("0"),
-            functional_currency_amount=cn_total,
+            functional_currency_amount=functional_amount,
+            exchange_rate=exch_rate,
             status=InvoiceStatus.POSTED,
             ar_control_account_id=self.ar_control_account_id,
             source_document_type="dotmac_sub_credit_note",
