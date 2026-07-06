@@ -224,7 +224,17 @@ def test_infrastructure_alert_notifications_target_monitoring_users(
     db_session.commit()
     delivered = service.deliver_notifications(db_session, result["notification_events"])
 
-    notifications = list(db_session.scalars(select(Notification)))
+    # Scope to the two users this test created — an unfiltered count picks up
+    # notifications other tests commit into the shared DB (e.g. an expense
+    # STATUS_CHANGE), which is unrelated to what this test asserts. Restricting
+    # to these recipients still proves the non-monitoring user gets nothing.
+    notifications = list(
+        db_session.scalars(
+            select(Notification).where(
+                Notification.recipient_id.in_([person.id, non_monitoring.id])
+            )
+        )
+    )
     assert delivered == 1
     assert len(notifications) == 1
     assert notifications[0].recipient_id == person.id
