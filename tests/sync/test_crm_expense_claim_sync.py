@@ -219,6 +219,35 @@ class TestCreateExpenseClaim:
         )
         assert count == 1
 
+    def test_concurrent_create_race_returns_existing_not_500(
+        self, service, db_session, org_id, employee, fuel_category, numbering_patch
+    ):
+        """A concurrent first-send that loses the omni_id race must return the
+        winner's claim (via uq_expense_claim_org_crm_id), not a 500."""
+        payload = _payload(employee)
+        # The race winner creates and persists the claim.
+        first = service.create_expense_claim(org_id, payload, employee.person_id)
+
+        # Simulate the losing request: its pre-check misses the row the winner
+        # already wrote (the TOCTOU window), so it enters the create path where
+        # the unique constraint on (organization_id, crm_id) then fires.
+        with patch.object(type(service), "_find_claim_by_omni_id", return_value=None):
+            second = service.create_expense_claim(org_id, payload, employee.person_id)
+
+        # It recovered by returning the winner's claim — no exception, no dup.
+        assert second.claim_id == first.claim_id
+        assert second.claim_number == first.claim_number
+        assert second.omni_id == payload.omni_id
+        count = (
+            db_session.query(ExpenseClaim)
+            .filter(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.crm_id == payload.omni_id,
+            )
+            .count()
+        )
+        assert count == 1
+
     def test_changed_resend_is_rejected_409(
         self, service, db_session, org_id, employee, fuel_category, numbering_patch
     ):

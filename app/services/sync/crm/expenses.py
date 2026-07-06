@@ -21,6 +21,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 
@@ -226,6 +227,17 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
     # CRM → ERP expense-claim sync (field-technician expense requests)
     # ------------------------------------------------------------------
 
+    def _find_claim_by_omni_id(self, org_id: UUID, omni_id: str) -> ExpenseClaim | None:
+        """Load an existing claim (with items) for this CRM omni_id, if any."""
+        return self.db.scalar(
+            select(ExpenseClaim)
+            .options(joinedload(ExpenseClaim.items))
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.crm_id == omni_id,
+            )
+        )
+
     def create_expense_claim(
         self,
         org_id: UUID,
@@ -310,14 +322,7 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
             items=resolved_items,
         )
 
-        existing = self.db.scalar(
-            select(ExpenseClaim)
-            .options(joinedload(ExpenseClaim.items))
-            .where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.crm_id == data.omni_id,
-            )
-        )
+        existing = self._find_claim_by_omni_id(org_id, data.omni_id)
         if existing is not None:
             existing_fingerprint = self._build_expense_claim_fingerprint(
                 employee_id=existing.employee_id,
@@ -363,6 +368,14 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
             )
 
         service = ExpenseService(self.db)
+        # Create inside a savepoint so a concurrent first-send of the same
+        # omni_id — where both requests passed the existence check above —
+        # degrades gracefully: the loser hits uq_expense_claim_org_crm_id, rolls
+        # back its own partial insert, and returns the winner's claim instead of
+        # a 500. Both requests carry the same CRM expense request, so returning
+        # the existing claim matches the immutable-idempotent contract. Mirrors
+        # the race handling in _get_or_create_default_project.
+        savepoint = self.db.begin_nested()
         try:
             claim = service.create_claim(
                 org_id,
@@ -385,10 +398,35 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
                 notify_approvers=True,
                 actor_id=created_by_person_id,
             )
+            savepoint.commit()
         except (ExpenseServiceError, ValidationError) as exc:
             # Surface a readable validation error (missing receipts, category
             # limits, blocked limit rules, …) so the CRM records the reason.
+            savepoint.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except IntegrityError:
+            # Lost the create race for this omni_id — return the winner's claim.
+            savepoint.rollback()
+            raced = self.db.scalar(
+                select(ExpenseClaim).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.crm_id == data.omni_id,
+                )
+            )
+            if raced is None:
+                raise  # not the crm_id collision we anticipated — surface it
+            logger.info(
+                "CRM expense claim create raced; returning existing "
+                "(omni_id=%s, claim_number=%s)",
+                data.omni_id,
+                raced.claim_number,
+            )
+            return CRMExpenseClaimResponse(
+                claim_id=raced.claim_id,
+                claim_number=raced.claim_number,
+                status=raced.status.value.lower(),
+                omni_id=data.omni_id,
+            )
 
         logger.info(
             "CRM expense claim %s created (omni_id=%s, status=%s, items=%d)",
