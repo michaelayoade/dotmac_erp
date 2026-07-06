@@ -109,8 +109,15 @@ async def dotmac_sub_webhook(
     logger.info("Processing dotmac_sub webhook: %s", event_type)
     try:
         result = dispatch_webhook(db, organization_id, event_type, payload)
-    except Exception as e:  # noqa: BLE001 — never 500 a webhook sender into retries storms
+    except Exception as e:  # noqa: BLE001
+        # 503 so the sender retries this transient/unexpected failure instead of
+        # us silently swallowing it as 200 (recovery would otherwise wait for the
+        # next full-sync poll). Safe from retry storms: dotmac_sub's WebhookDelivery
+        # bounds retries with backoff and dead-letters on exhaustion, and this
+        # handler is idempotent (upsert + change-hash + journal-gated posting).
         logger.exception("dotmac_sub webhook processing failed")
-        return WebhookResponse(status="error", message=str(e))
+        raise HTTPException(
+            status_code=503, detail=f"Webhook processing failed: {e}"
+        ) from e
 
     return WebhookResponse(status=result.get("status", "ok"), message=str(result))
