@@ -241,6 +241,10 @@ class PaymentRecord:
     amount: Decimal
     currency: str
     status: str
+    # Total refunded so far (gross `amount` is unchanged). Net cash = amount -
+    # refunded_amount. Defaults to 0 when dotmac_sub hasn't deployed the field
+    # yet, so the two apps deploy in any order.
+    refunded_amount: Decimal = Decimal("0")
     paid_at: str | None = None
     external_id: str | None = None
     memo: str | None = None
@@ -704,6 +708,7 @@ class DotmacSubClient:
             account_id=item.get("account_id"),
             billing_account_id=item.get("billing_account_id"),
             amount=_dec(item.get("amount")),
+            refunded_amount=_dec(item.get("refunded_amount")),
             currency=item.get("currency", settings.default_functional_currency_code),
             status=item.get("status", ""),
             paid_at=item.get("paid_at"),
