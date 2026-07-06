@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID
 
@@ -27,6 +27,8 @@ from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SE
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
+
+_CENTS = Decimal("0.01")
 
 
 class InvoiceSyncMixin:
@@ -241,39 +243,75 @@ class InvoiceSyncMixin:
             doc, "invoice_number", ""
         )
 
+        sign = Decimal("-1") if is_credit_note else Decimal("1")
+
         if lines:
-            for seq, item in enumerate(lines, 1):
-                total = item.amount or (item.quantity * item.unit_price)
-                line_subtotal, line_tax = self._extract_tax(total)
-                if is_credit_note:
-                    line_subtotal = -abs(line_subtotal)
-                    line_tax = -abs(line_tax)
+            line_totals = [
+                (item.amount or (item.quantity * item.unit_price)) for item in lines
+            ]
+            splits = self._allocate_doc_amounts(doc, line_totals)
+            for seq, (item, (line_subtotal, line_tax)) in enumerate(
+                zip(lines, splits, strict=True), 1
+            ):
                 self._add_line(
                     invoice_id,
                     seq,
                     item.description or f"dotmac_sub {label} {number} - line {seq}",
                     item.quantity,
                     item.unit_price,
-                    line_subtotal,
-                    line_tax,
+                    sign * line_subtotal,
+                    sign * line_tax,
                     tc,
                 )
         else:
-            total = doc.total
-            line_subtotal, line_tax = self._extract_tax(total)
-            if is_credit_note:
-                line_subtotal = -abs(line_subtotal)
-                line_tax = -abs(line_tax)
             self._add_line(
                 invoice_id,
                 1,
                 f"dotmac_sub {label} {number}",
                 Decimal("1"),
-                line_subtotal,
-                line_subtotal,
-                line_tax,
+                sign * doc.subtotal,
+                sign * doc.subtotal,
+                sign * doc.tax_total,
                 tc,
             )
+
+    def _allocate_doc_amounts(
+        self, doc: InvoiceRecord | CreditNoteRecord, line_totals: list[Decimal]
+    ) -> list[tuple[Decimal, Decimal]]:
+        """Split the document's authoritative subtotal + tax_total across its
+        lines in proportion to each line total, the last line absorbing the
+        rounding remainder so the line amounts sum EXACTLY to sub's subtotal and
+        tax_total.
+
+        This carries sub's real tax through the mirror instead of re-deriving
+        each line from the org's single VAT code (``_extract_tax``). The old
+        re-derivation posted phantom output VAT on a zero-tax invoice (e.g. a
+        CRM installation invoice, where sub sets ``tax_total = 0``) whenever the
+        org code was tax-inclusive, and left the invoice header's tax disagreeing
+        with its own line/``InvoiceLineTax`` subledger. Returning positive
+        magnitudes; the caller applies the credit-note sign.
+        """
+        subtotal = doc.subtotal or Decimal("0")
+        tax_total = doc.tax_total or Decimal("0")
+        base = sum(line_totals, Decimal("0"))
+        splits: list[tuple[Decimal, Decimal]] = []
+        alloc_sub = Decimal("0")
+        alloc_tax = Decimal("0")
+        last = len(line_totals) - 1
+        for i, line_total in enumerate(line_totals):
+            if i < last and base:
+                weight = line_total / base
+                line_sub = (subtotal * weight).quantize(_CENTS, rounding=ROUND_HALF_UP)
+                line_tax = (tax_total * weight).quantize(_CENTS, rounding=ROUND_HALF_UP)
+            else:
+                # Last line (or a degenerate all-zero base) absorbs the remainder
+                # so the parts reconcile to the document totals to the cent.
+                line_sub = subtotal - alloc_sub
+                line_tax = tax_total - alloc_tax
+            alloc_sub += line_sub
+            alloc_tax += line_tax
+            splits.append((line_sub, line_tax))
+        return splits
 
     def _add_line(
         self,
