@@ -156,6 +156,18 @@ def test_parse_payment_effective_account_prefers_billing_account() -> None:
     assert pay.amount == Decimal("200.00")
 
 
+def test_parse_payment_reads_refunded_amount() -> None:
+    client = DotmacSubClient(DotmacSubConfig(api_url="x", api_token="t"))
+    base = {"id": "p1", "amount": "200.00", "currency": "NGN", "status": "succeeded"}
+
+    pay = client._parse_payment({**base, "refunded_amount": "75.00"})
+    assert pay.refunded_amount == Decimal("75.00")
+    assert pay.amount - pay.refunded_amount == Decimal("125.00")  # net cash
+
+    # Absent (dotmac_sub not yet deployed) → 0, so ERP posts the full gross.
+    assert client._parse_payment(base).refunded_amount == Decimal("0")
+
+
 def test_subscriber_full_name_prefers_display_then_company_then_parts() -> None:
     client = DotmacSubClient(DotmacSubConfig(api_url="x", api_token="t"))
     assert (

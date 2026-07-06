@@ -122,6 +122,7 @@ class PaymentSyncMixin:
         data_hash = self._compute_hash(
             {
                 "amount": str(pay.amount),
+                "refunded": str(pay.refunded_amount),
                 "status": pay.status,
                 "paid_at": pay.paid_at,
                 "account_id": pay.effective_account_id,
@@ -163,8 +164,14 @@ class PaymentSyncMixin:
             or pay.currency
             or settings.default_functional_currency_code
         )
+        # Net cash actually received = gross captured minus refunds. A partial
+        # refund (partially_refunded is "settled") reduces this, so the receipt
+        # GL and the C2 change-detection post the net — otherwise ERP overstates
+        # cash by the refunded amount. A full refund flips status out of settled
+        # and is reversed by _handle_unsettled_payment instead.
+        net_amount = pay.amount - pay.refunded_amount
         exch_rate, functional_amount = self._functional_amount(
-            pay.amount, currency_code, payment_date
+            net_amount, currency_code, payment_date
         )
         bank_account_id = self._get_bank_account_for_channel(
             pay.payment_channel_id, currency_code
@@ -183,7 +190,7 @@ class PaymentSyncMixin:
                 payment_method=method,
                 currency_code=currency_code,
                 gross_amount=pay.amount,
-                amount=pay.amount,
+                amount=net_amount,
                 wht_amount=Decimal("0"),
                 exchange_rate=exch_rate,
                 functional_currency_amount=functional_amount,
@@ -211,7 +218,7 @@ class PaymentSyncMixin:
             # subledger shows the new one. If the reversal can't be created,
             # leave the payment (and its GL) untouched rather than diverge — the
             # next sync retries.
-            if self._posted_amount_changed(payment, pay.amount, functional_amount):
+            if self._posted_amount_changed(payment, net_amount, functional_amount):
                 if not self._reverse_posted_payment_gl(payment, created_by_user_id):
                     result.errors.append(
                         f"Payment {external_id}: GL reversal failed on amount "
@@ -223,7 +230,7 @@ class PaymentSyncMixin:
             payment.payment_method = method
             payment.currency_code = currency_code
             payment.gross_amount = pay.amount
-            payment.amount = pay.amount
+            payment.amount = net_amount
             payment.exchange_rate = exch_rate
             payment.functional_currency_amount = functional_amount
             payment.bank_account_id = bank_account_id
