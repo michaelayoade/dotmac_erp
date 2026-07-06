@@ -336,7 +336,7 @@ def test_functional_amount_converts_using_inverse_rate(
     """A USD payment must be converted to functional via currency→functional."""
     from datetime import date
 
-    from app.services.dotmac_sub.sync._payments import PaymentSyncMixin
+    from app.services.dotmac_sub.sync._base import BaseSyncMixin
     from app.services.finance.platform import fx as fx_module
 
     # lookup_spot_rate returns inverse_rate = currency_code → functional.
@@ -347,7 +347,7 @@ def test_functional_amount_converts_using_inverse_rate(
         staticmethod(lambda *a, **k: {"rate": "0.000667", "inverse_rate": "1500"}),
     )
 
-    rate, functional = PaymentSyncMixin._functional_amount(
+    rate, functional = BaseSyncMixin._functional_amount(
         _FakePaymentSvc(), Decimal("74.87"), "USD", date(2026, 6, 1)
     )
     assert rate == Decimal("1500")
@@ -360,7 +360,7 @@ def test_functional_amount_falls_back_to_one_when_no_rate(
     """A missing rate must degrade to 1.0 (no conversion), never raise."""
     from datetime import date
 
-    from app.services.dotmac_sub.sync._payments import PaymentSyncMixin
+    from app.services.dotmac_sub.sync._base import BaseSyncMixin
     from app.services.finance.platform import fx as fx_module
 
     monkeypatch.setattr(
@@ -369,7 +369,7 @@ def test_functional_amount_falls_back_to_one_when_no_rate(
         staticmethod(lambda *a, **k: {"rate": None, "message": "no rate"}),
     )
 
-    rate, functional = PaymentSyncMixin._functional_amount(
+    rate, functional = BaseSyncMixin._functional_amount(
         _FakePaymentSvc(), Decimal("100"), "USD", date(2026, 6, 1)
     )
     assert rate == Decimal("1")
