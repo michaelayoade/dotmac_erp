@@ -13,7 +13,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc  # type: ignore[assignment]
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from app.db.session_context import prime_tenant_context
@@ -378,6 +378,25 @@ class BaseSyncMixin:
         if account and account.reseller_id:
             return self._reseller_customer_id(account.reseller_id)
         return None
+
+    def _lock_dotmac_sub_customer(self, dotmac_sub_id: str) -> None:
+        """Serialize concurrent customer upserts for one dotmac_sub subscriber.
+
+        ``Customer.dotmac_sub_id`` is non-unique, and the subscriber can be
+        created from two paths that race: the batch subscriber sync and the
+        on-demand ``_resolve_account_owner`` upsert (when an invoice/payment
+        arrives before its subscriber). Without a guard both find "not found"
+        and both insert a customer for one subscriber, fragmenting that
+        subscriber's AR across two accounts. A transaction-level advisory lock
+        keyed on (org, dotmac_sub_id) makes the second path block until the
+        first commits. No-op off PostgreSQL (the SQLite test harness).
+        """
+        if not dotmac_sub_id or self.db.get_bind().dialect.name != "postgresql":
+            return
+        self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+            {"key": f"erp_customer:{self.organization_id}:{dotmac_sub_id}"},
+        )
 
     def _get_customer_by_dotmac_sub_id(self, dotmac_sub_id: str) -> Customer | None:
         stmt = select(Customer).where(

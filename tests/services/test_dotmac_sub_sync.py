@@ -404,3 +404,44 @@ def test_bearer_token_requires_service_token_no_staff_login() -> None:
     # With a token it returns it directly (no login round-trip).
     ok = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token="svc-tok"))
     assert ok._bearer_token() == "svc-tok"
+
+
+def test_lock_dotmac_sub_customer_issues_advisory_lock_on_postgres() -> None:
+    """RC1/I-5: the customer upsert serializes on (org, dotmac_sub_id) so the
+    batch sync and the on-demand resolve can't both create a customer."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.dotmac_sub.sync._base import BaseSyncMixin
+
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "postgresql"
+    fake = SimpleNamespace(db=db, organization_id="org-1")
+
+    BaseSyncMixin._lock_dotmac_sub_customer(fake, "sub-9")
+
+    assert db.execute.call_count == 1
+    sql, params = db.execute.call_args.args
+    assert "pg_advisory_xact_lock" in str(sql)
+    assert params == {"key": "erp_customer:org-1:sub-9"}
+
+
+def test_lock_dotmac_sub_customer_noop_off_postgres_or_without_id() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.dotmac_sub.sync._base import BaseSyncMixin
+
+    sqlite_db = MagicMock()
+    sqlite_db.get_bind.return_value.dialect.name = "sqlite"
+    BaseSyncMixin._lock_dotmac_sub_customer(
+        SimpleNamespace(db=sqlite_db, organization_id="o"), "sub-9"
+    )
+    sqlite_db.execute.assert_not_called()
+
+    pg_db = MagicMock()
+    pg_db.get_bind.return_value.dialect.name = "postgresql"
+    BaseSyncMixin._lock_dotmac_sub_customer(
+        SimpleNamespace(db=pg_db, organization_id="o"), ""
+    )
+    pg_db.execute.assert_not_called()
