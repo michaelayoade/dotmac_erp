@@ -1884,6 +1884,7 @@ def require_private_performance_mode(
 
 
 def require_government_pms_mode(
+    request: Request | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ) -> WebAuthContext:
@@ -1900,6 +1901,19 @@ def require_government_pms_mode(
     if organization is None:
         raise HTTPException(status_code=403, detail="Organization not found")
     mode = resolve_performance_mode(organization)
+    # PIPs are also used by the private appraisal underperformance gate.
+    # Keep the rest of /people/perf/pms government-only, but allow private
+    # HR users to resolve linked PIPs so private appraisals can be completed.
+    if (
+        request
+        and request.url.path.startswith("/people/perf/pms/pips")
+        and mode
+        in {
+            PerformanceMode.PRIVATE,
+            PerformanceMode.HYBRID,
+        }
+    ):
+        return auth
     if mode not in {PerformanceMode.GOVERNMENT_PMS, PerformanceMode.HYBRID}:
         raise HTTPException(
             status_code=403,

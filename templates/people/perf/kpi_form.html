@@ -181,6 +181,10 @@
                     <label for="notes" class="form-label">Notes</label>
                     <textarea aria-label="Any additional notes or context for this KPI" name="notes" id="notes" rows="3" class="form-input w-full"
                         placeholder="Any additional notes or context for this KPI">{{ kpi.notes if kpi else form_data.notes | default('', true) }}</textarea>
+                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        For automatic support metrics, include one metric key:
+                        support.tickets_resolved, support.open_backlog, support.resolution_rate, or support.avg_resolution_days.
+                    </p>
                 </div>
             </div>
         </div>

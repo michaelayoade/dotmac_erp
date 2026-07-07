@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import PIPCauseCategory, PIPOutcome, PIPStatus
 from app.services.common import PaginatedResult, PaginationParams, paginate
-from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
+from app.services.people.perf.performance_mode_policy import enforce_pip_write_mode
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -86,7 +86,7 @@ class PIPService:
 
     def _ensure_pms_write_mode(self, org_id: UUID) -> None:
         try:
-            enforce_pms_write_mode(self.db, org_id)
+            enforce_pip_write_mode(self.db, org_id)
         except ValueError as exc:
             raise PIPValidationError(str(exc)) from exc
 

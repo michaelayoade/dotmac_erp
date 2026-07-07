@@ -16,6 +16,7 @@ from sqlalchemy import and_, delete, false, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.perf import (
+    DepartmentPerformanceTemplate,
     KPI,
     KRA,
     Appraisal,
@@ -32,8 +33,11 @@ from app.models.people.perf import (
     ScorecardItem,
 )
 from app.models.finance.core_org import Organization, PerformanceMode
+from app.models.people.hr import Department
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import PIPStatus
+from app.models.support.ticket import Ticket, TicketStatus
 from app.services.common import PaginatedResult, PaginationParams
 from app.services.people.perf.performance_mode_policy import (
     enforce_private_write_mode,
@@ -42,6 +46,407 @@ from app.services.people.perf.performance_mode_policy import (
 
 logger = logging.getLogger(__name__)
 UNDERPERFORMANCE_SCORE_THRESHOLD = Decimal("50.00")
+SUPPORT_TICKET_METRIC_KEYS = frozenset(
+    {
+        "support.tickets_resolved",
+        "support.open_backlog",
+        "support.resolution_rate",
+        "support.avg_resolution_days",
+    }
+)
+LOWER_IS_BETTER_SUPPORT_METRICS = frozenset(
+    {
+        "support.open_backlog",
+        "support.avg_resolution_days",
+    }
+)
+SCORECARD_PERSPECTIVES = frozenset({"FINANCIAL", "CUSTOMER", "PROCESS", "LEARNING"})
+DEPARTMENT_PERSPECTIVE_WEIGHTS: dict[str, dict[str, Decimal]] = {
+    "customer_experience": {
+        "FINANCIAL": Decimal("10.00"),
+        "CUSTOMER": Decimal("40.00"),
+        "PROCESS": Decimal("35.00"),
+        "LEARNING": Decimal("15.00"),
+    },
+    "sales": {
+        "FINANCIAL": Decimal("50.00"),
+        "CUSTOMER": Decimal("25.00"),
+        "PROCESS": Decimal("15.00"),
+        "LEARNING": Decimal("10.00"),
+    },
+    "projects": {
+        "FINANCIAL": Decimal("10.00"),
+        "CUSTOMER": Decimal("15.00"),
+        "PROCESS": Decimal("60.00"),
+        "LEARNING": Decimal("15.00"),
+    },
+    "procurement": {
+        "FINANCIAL": Decimal("25.00"),
+        "CUSTOMER": Decimal("15.00"),
+        "PROCESS": Decimal("50.00"),
+        "LEARNING": Decimal("10.00"),
+    },
+    "inventory": {
+        "FINANCIAL": Decimal("15.00"),
+        "CUSTOMER": Decimal("10.00"),
+        "PROCESS": Decimal("60.00"),
+        "LEARNING": Decimal("15.00"),
+    },
+    "finance": {
+        "FINANCIAL": Decimal("40.00"),
+        "CUSTOMER": Decimal("20.00"),
+        "PROCESS": Decimal("30.00"),
+        "LEARNING": Decimal("10.00"),
+    },
+    "hr": {
+        "FINANCIAL": Decimal("10.00"),
+        "CUSTOMER": Decimal("30.00"),
+        "PROCESS": Decimal("40.00"),
+        "LEARNING": Decimal("20.00"),
+    },
+    "generic": {
+        "FINANCIAL": Decimal("10.00"),
+        "CUSTOMER": Decimal("20.00"),
+        "PROCESS": Decimal("50.00"),
+        "LEARNING": Decimal("20.00"),
+    },
+}
+LEARNING_TEMPLATE_DEFAULT = {
+    "kra_name": "Learning and Growth",
+    "kpi_name": "Complete Role Development Plan",
+    "target_value": Decimal("100.00"),
+    "unit_of_measure": "%",
+    "weightage": Decimal("0.00"),
+    "metric_source_key": "learning.development_plan_completion",
+    "lower_is_better": False,
+}
+PERSPECTIVE_TEMPLATE_DEFAULTS: dict[str, dict[str, object]] = {
+    "FINANCIAL": {
+        "kra_name": "Financial Stewardship",
+        "kpi_name": "Improve Cost and Value Contribution",
+        "target_value": Decimal("100.00"),
+        "unit_of_measure": "%",
+        "weightage": Decimal("0.00"),
+        "metric_source_key": None,
+        "lower_is_better": False,
+    },
+    "CUSTOMER": {
+        "kra_name": "Customer and Stakeholder Service",
+        "kpi_name": "Maintain Stakeholder Service Quality",
+        "target_value": Decimal("90.00"),
+        "unit_of_measure": "%",
+        "weightage": Decimal("0.00"),
+        "metric_source_key": None,
+        "lower_is_better": False,
+    },
+    "PROCESS": {
+        "kra_name": "Internal Process Delivery",
+        "kpi_name": "Complete Assigned Work On Time",
+        "target_value": Decimal("95.00"),
+        "unit_of_measure": "%",
+        "weightage": Decimal("0.00"),
+        "metric_source_key": None,
+        "lower_is_better": False,
+    },
+    "LEARNING": LEARNING_TEMPLATE_DEFAULT,
+}
+DEPARTMENT_TEMPLATE_LIBRARY: dict[str, list[dict[str, object]]] = {
+    "customer_experience": [
+        {
+            "kra_name": "Customer Support Delivery",
+            "kpi_name": "Resolve Assigned Tickets",
+            "target_value": Decimal("20.00"),
+            "unit_of_measure": "tickets",
+            "weightage": Decimal("40.00"),
+            "metric_source_key": "support.tickets_resolved",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "SLA Compliance",
+            "kpi_name": "Meet Ticket SLA",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("30.00"),
+            "metric_source_key": "support.resolution_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Backlog Control",
+            "kpi_name": "Keep Open Backlog Low",
+            "target_value": Decimal("5.00"),
+            "unit_of_measure": "tickets",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": "support.open_backlog",
+            "lower_is_better": True,
+        },
+        {
+            "kra_name": "Resolution Speed",
+            "kpi_name": "Average Resolution Time",
+            "target_value": Decimal("2.00"),
+            "unit_of_measure": "days",
+            "weightage": Decimal("10.00"),
+            "metric_source_key": "support.avg_resolution_days",
+            "lower_is_better": True,
+        },
+    ],
+    "sales": [
+        {
+            "kra_name": "Revenue Growth",
+            "kpi_name": "Achieve Sales Revenue Target",
+            "target_value": Decimal("100.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("45.00"),
+            "metric_source_key": "sales.revenue_attainment",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Pipeline Development",
+            "kpi_name": "Create Qualified Opportunities",
+            "target_value": Decimal("10.00"),
+            "unit_of_measure": "opportunities",
+            "weightage": Decimal("25.00"),
+            "metric_source_key": "sales.qualified_opportunities",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Deal Conversion",
+            "kpi_name": "Improve Win Rate",
+            "target_value": Decimal("30.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": "sales.win_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Customer Relationship",
+            "kpi_name": "Complete Account Reviews",
+            "target_value": Decimal("5.00"),
+            "unit_of_measure": "reviews",
+            "weightage": Decimal("10.00"),
+            "metric_source_key": "sales.account_reviews",
+            "lower_is_better": False,
+        },
+    ],
+    "projects": [
+        {
+            "kra_name": "Project Delivery",
+            "kpi_name": "Complete Assigned Project Tasks",
+            "target_value": Decimal("90.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("40.00"),
+            "metric_source_key": "projects.task_completion_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Schedule Control",
+            "kpi_name": "Deliver Milestones On Time",
+            "target_value": Decimal("90.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("30.00"),
+            "metric_source_key": "projects.on_time_milestones",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Issue Resolution",
+            "kpi_name": "Resolve Project Issues",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": "projects.issue_resolution_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Quality Control",
+            "kpi_name": "Limit Rework",
+            "target_value": Decimal("5.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("10.00"),
+            "metric_source_key": "projects.rework_rate",
+            "lower_is_better": True,
+        },
+    ],
+    "procurement": [
+        {
+            "kra_name": "Purchase Order Processing",
+            "kpi_name": "Process Purchase Orders On Time",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("40.00"),
+            "metric_source_key": "procurement.po_on_time_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Supplier Performance",
+            "kpi_name": "Maintain Supplier Delivery Compliance",
+            "target_value": Decimal("90.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("30.00"),
+            "metric_source_key": "procurement.supplier_delivery_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Cost Management",
+            "kpi_name": "Achieve Procurement Savings",
+            "target_value": Decimal("5.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": "procurement.savings_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Request Fulfilment",
+            "kpi_name": "Close Material Requests",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("10.00"),
+            "metric_source_key": "procurement.material_request_close_rate",
+            "lower_is_better": False,
+        },
+    ],
+    "inventory": [
+        {
+            "kra_name": "Inventory Accuracy",
+            "kpi_name": "Maintain Stock Accuracy",
+            "target_value": Decimal("98.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("45.00"),
+            "metric_source_key": "inventory.stock_accuracy",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Fulfilment",
+            "kpi_name": "Fulfil Material Requests On Time",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("30.00"),
+            "metric_source_key": "inventory.material_fulfilment_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Stock Control",
+            "kpi_name": "Reduce Stock Variances",
+            "target_value": Decimal("2.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("15.00"),
+            "metric_source_key": "inventory.variance_rate",
+            "lower_is_better": True,
+        },
+        {
+            "kra_name": "Cycle Counts",
+            "kpi_name": "Complete Scheduled Cycle Counts",
+            "target_value": Decimal("100.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("10.00"),
+            "metric_source_key": "inventory.cycle_count_completion",
+            "lower_is_better": False,
+        },
+    ],
+    "finance": [
+        {
+            "kra_name": "Billing Accuracy",
+            "kpi_name": "Process Invoices Accurately",
+            "target_value": Decimal("98.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("35.00"),
+            "metric_source_key": "finance.invoice_accuracy",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Collections",
+            "kpi_name": "Achieve Collection Target",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("30.00"),
+            "metric_source_key": "finance.collection_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Expense Control",
+            "kpi_name": "Review Expense Claims On Time",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": "finance.expense_review_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Reporting",
+            "kpi_name": "Submit Reports On Time",
+            "target_value": Decimal("100.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("15.00"),
+            "metric_source_key": "finance.report_timeliness",
+            "lower_is_better": False,
+        },
+    ],
+    "hr": [
+        {
+            "kra_name": "Employee Operations",
+            "kpi_name": "Close HR Requests On Time",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("35.00"),
+            "metric_source_key": "hr.request_close_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Hiring Support",
+            "kpi_name": "Fill Approved Vacancies",
+            "target_value": Decimal("90.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("25.00"),
+            "metric_source_key": "hr.vacancy_fill_rate",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Attendance Governance",
+            "kpi_name": "Resolve Attendance Exceptions",
+            "target_value": Decimal("95.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": "hr.attendance_exception_resolution",
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Employee Experience",
+            "kpi_name": "Maintain Employee Satisfaction",
+            "target_value": Decimal("4.00"),
+            "unit_of_measure": "rating",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": "hr.employee_satisfaction",
+            "lower_is_better": False,
+        },
+    ],
+    "generic": [
+        {
+            "kra_name": "Operational Delivery",
+            "kpi_name": "Complete Assigned Work",
+            "target_value": Decimal("100.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("50.00"),
+            "metric_source_key": None,
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Quality",
+            "kpi_name": "Meet Quality Expectations",
+            "target_value": Decimal("90.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("30.00"),
+            "metric_source_key": None,
+            "lower_is_better": False,
+        },
+        {
+            "kra_name": "Collaboration",
+            "kpi_name": "Support Team Delivery",
+            "target_value": Decimal("90.00"),
+            "unit_of_measure": "%",
+            "weightage": Decimal("20.00"),
+            "metric_source_key": None,
+            "lower_is_better": False,
+        },
+    ],
+}
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -678,6 +1083,331 @@ class PerformanceService:
         self.db.delete(kra)
         self.db.flush()
 
+    @staticmethod
+    def _department_template_key(department_name: str) -> str:
+        normalized = department_name.lower()
+        if any(term in normalized for term in ("customer", "support", "experience")):
+            return "customer_experience"
+        if any(
+            term in normalized
+            for term in ("enterprise sales", "sales", "business development")
+        ):
+            return "sales"
+        if any(
+            term in normalized for term in ("project", "delivery", "implementation")
+        ):
+            return "projects"
+        if any(term in normalized for term in ("procurement", "purchase", "sourcing")):
+            return "procurement"
+        if any(term in normalized for term in ("inventory", "warehouse", "store")):
+            return "inventory"
+        if any(term in normalized for term in ("finance", "account", "billing")):
+            return "finance"
+        if any(term in normalized for term in ("human", "hr", "people")):
+            return "hr"
+        return "generic"
+
+    @staticmethod
+    def _code_part(value: str, *, max_length: int = 12) -> str:
+        cleaned = "".join(ch for ch in value.upper() if ch.isalnum())
+        return (cleaned or "GEN")[:max_length]
+
+    @staticmethod
+    def _infer_template_perspective(template: dict[str, object]) -> str:
+        metric_key = str(template.get("metric_source_key") or "").lower()
+        text = " ".join(
+            str(template.get(key) or "").lower()
+            for key in ("kra_name", "kpi_name", "unit_of_measure")
+        )
+        if metric_key.startswith("learning.") or any(
+            term in text for term in ("learning", "training", "certification", "skill")
+        ):
+            return "LEARNING"
+        if any(
+            term in metric_key or term in text
+            for term in (
+                "revenue",
+                "collection",
+                "cost",
+                "saving",
+                "expense",
+                "backlog",
+                "variance",
+                "financial",
+            )
+        ):
+            return "FINANCIAL"
+        if any(
+            term in metric_key or term in text
+            for term in (
+                "customer",
+                "sla",
+                "feedback",
+                "supplier",
+                "account",
+                "satisfaction",
+                "resolution_rate",
+            )
+        ):
+            return "CUSTOMER"
+        return "PROCESS"
+
+    @classmethod
+    def _balanced_department_templates(
+        cls,
+        department_key: str,
+    ) -> list[dict[str, object]]:
+        defaults = [dict(item) for item in DEPARTMENT_TEMPLATE_LIBRARY[department_key]]
+
+        for item in defaults:
+            item["scorecard_perspective"] = cls._infer_template_perspective(item)
+
+        represented = {cast(str, item["scorecard_perspective"]) for item in defaults}
+        for perspective in SCORECARD_PERSPECTIVES - represented:
+            item = dict(PERSPECTIVE_TEMPLATE_DEFAULTS[perspective])
+            item["scorecard_perspective"] = perspective
+            defaults.append(item)
+
+        items_by_perspective: dict[str, list[dict[str, object]]] = {}
+        for item in defaults:
+            perspective = cast(str, item["scorecard_perspective"])
+            items_by_perspective.setdefault(perspective, []).append(item)
+
+        target_weights = DEPARTMENT_PERSPECTIVE_WEIGHTS[department_key]
+        for perspective, items in items_by_perspective.items():
+            target_weight = target_weights[perspective]
+            item_weight = (target_weight / Decimal(len(items))).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+            for item in items[:-1]:
+                item["weightage"] = item_weight
+            items[-1]["weightage"] = (
+                target_weight - (item_weight * Decimal(len(items) - 1))
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return defaults
+
+    @staticmethod
+    def _scorecard_perspective_from_kpi(kpi: KPI) -> str | None:
+        for source in (kpi.notes, kpi.description):
+            if not source:
+                continue
+            for line in source.splitlines():
+                key, _, value = line.partition(":")
+                if key.strip().lower() != "scorecard perspective":
+                    continue
+                perspective = value.strip().upper().replace(" ", "_")
+                if perspective == "INTERNAL_PROCESS":
+                    perspective = "PROCESS"
+                if perspective in SCORECARD_PERSPECTIVES:
+                    return perspective
+        return None
+
+    def generate_department_performance_templates(
+        self,
+        org_id: UUID,
+    ) -> dict[str, int]:
+        """Generate default department performance templates for active departments."""
+        self._ensure_private_write_mode(org_id)
+        departments = list(
+            self.db.scalars(
+                select(Department)
+                .where(
+                    Department.organization_id == org_id,
+                    Department.is_active.is_(True),
+                )
+                .order_by(Department.department_name)
+            ).all()
+        )
+
+        created = 0
+        skipped = 0
+        for department in departments:
+            template_key = self._department_template_key(department.department_name)
+            defaults = self._balanced_department_templates(template_key)
+            existing_by_key = {
+                (template.kra_name, template.kpi_name): template
+                for template in self.db.scalars(
+                    select(DepartmentPerformanceTemplate).where(
+                        DepartmentPerformanceTemplate.organization_id == org_id,
+                        DepartmentPerformanceTemplate.department_id
+                        == department.department_id,
+                    )
+                ).all()
+            }
+
+            for default in defaults:
+                key = (str(default["kra_name"]), str(default["kpi_name"]))
+                existing = existing_by_key.get(key)
+                if existing:
+                    existing.scorecard_perspective = cast(
+                        str,
+                        default["scorecard_perspective"],
+                    )
+                    existing.weightage = cast(Decimal, default["weightage"])
+                    existing.metric_source_key = cast(
+                        str | None,
+                        default["metric_source_key"],
+                    )
+                    existing.lower_is_better = bool(default["lower_is_better"])
+                    skipped += 1
+                    continue
+
+                template = DepartmentPerformanceTemplate(
+                    organization_id=org_id,
+                    department_id=department.department_id,
+                    kra_name=str(default["kra_name"]),
+                    kpi_name=str(default["kpi_name"]),
+                    description=(
+                        f"Auto-generated default for {department.department_name}"
+                    ),
+                    target_value=cast(Decimal, default["target_value"]),
+                    unit_of_measure=cast(str | None, default["unit_of_measure"]),
+                    weightage=cast(Decimal, default["weightage"]),
+                    scorecard_perspective=cast(str, default["scorecard_perspective"]),
+                    metric_source_key=cast(str | None, default["metric_source_key"]),
+                    lower_is_better=bool(default["lower_is_better"]),
+                    is_active=True,
+                )
+                self.db.add(template)
+                created += 1
+
+        self.db.flush()
+        return {
+            "departments": len(departments),
+            "created": created,
+            "skipped": skipped,
+        }
+
+    def generate_employee_kpis_from_department_templates(
+        self,
+        org_id: UUID,
+        *,
+        period_start: date,
+        period_end: date,
+    ) -> dict[str, int]:
+        """Create employee KRAs/KPIs from active department templates."""
+        self._ensure_private_write_mode(org_id)
+        employees = list(
+            self.db.scalars(
+                select(Employee)
+                .where(
+                    Employee.organization_id == org_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.department_id.isnot(None),
+                )
+                .order_by(Employee.employee_code)
+            ).all()
+        )
+
+        department_ids = {employee.department_id for employee in employees}
+        templates_by_department: dict[UUID, list[DepartmentPerformanceTemplate]] = {}
+        if department_ids:
+            templates = list(
+                self.db.scalars(
+                    select(DepartmentPerformanceTemplate).where(
+                        DepartmentPerformanceTemplate.organization_id == org_id,
+                        DepartmentPerformanceTemplate.department_id.in_(department_ids),
+                        DepartmentPerformanceTemplate.is_active.is_(True),
+                    )
+                ).all()
+            )
+            for template in templates:
+                templates_by_department.setdefault(template.department_id, []).append(
+                    template
+                )
+
+        kras_by_key: dict[tuple[UUID, str], KRA] = {}
+        created_kras = 0
+        created_kpis = 0
+        skipped_kpis = 0
+
+        for employee in employees:
+            department_templates = templates_by_department.get(
+                cast(UUID, employee.department_id),
+                [],
+            )
+            for template in department_templates:
+                kra_key = (template.department_id, template.kra_name)
+                kra = kras_by_key.get(kra_key)
+                if kra is None:
+                    kra = self.db.scalar(
+                        select(KRA).where(
+                            KRA.organization_id == org_id,
+                            KRA.department_id == template.department_id,
+                            KRA.kra_name == template.kra_name,
+                        )
+                    )
+                if kra is None:
+                    kra_code = (
+                        "AUTO-"
+                        f"{self._code_part(str(employee.department_id), max_length=6)}-"
+                        f"{self._code_part(template.kra_name, max_length=10)}"
+                    )
+                    kra = KRA(
+                        organization_id=org_id,
+                        kra_code=kra_code[:30],
+                        kra_name=template.kra_name,
+                        department_id=template.department_id,
+                        default_weightage=template.weightage,
+                        category="PERFORMANCE",
+                        measurement_criteria=template.metric_source_key,
+                        is_active=True,
+                        description="Auto-generated from department performance template",
+                    )
+                    self.db.add(kra)
+                    self.db.flush()
+                    created_kras += 1
+                kras_by_key[kra_key] = kra
+
+                existing_kpi = self.db.scalar(
+                    select(KPI.kpi_id).where(
+                        KPI.organization_id == org_id,
+                        KPI.employee_id == employee.employee_id,
+                        KPI.kpi_name == template.kpi_name,
+                        KPI.period_start == period_start,
+                        KPI.period_end == period_end,
+                    )
+                )
+                if existing_kpi:
+                    skipped_kpis += 1
+                    continue
+
+                notes_parts = []
+                if template.metric_source_key:
+                    notes_parts.append(f"Metric key: {template.metric_source_key}")
+                notes_parts.append(
+                    f"Scorecard perspective: {template.scorecard_perspective}"
+                )
+                notes_parts.append(
+                    "Auto-generated from department performance template"
+                )
+                kpi = KPI(
+                    organization_id=org_id,
+                    employee_id=employee.employee_id,
+                    kra_id=kra.kra_id,
+                    kpi_name=template.kpi_name,
+                    description=template.description,
+                    period_start=period_start,
+                    period_end=period_end,
+                    target_value=template.target_value,
+                    unit_of_measure=template.unit_of_measure,
+                    weightage=template.weightage,
+                    notes="\n".join(notes_parts),
+                    status=KPIStatus.ACTIVE,
+                )
+                self._sync_kpi_actual_from_system_metric(org_id, kpi)
+                self.db.add(kpi)
+                created_kpis += 1
+
+        self.db.flush()
+        return {
+            "employees": len(employees),
+            "created_kras": created_kras,
+            "created_kpis": created_kpis,
+            "skipped_kpis": skipped_kpis,
+        }
+
     # =========================================================================
     # Appraisal Templates
     # =========================================================================
@@ -1043,6 +1773,218 @@ class PerformanceService:
 
         self.db.flush()
         return kpi
+
+    @staticmethod
+    def _support_ticket_metric_key(kpi: KPI) -> str | None:
+        text = " ".join(
+            part.lower() for part in (kpi.kpi_name, kpi.description, kpi.notes) if part
+        )
+        for metric_key in SUPPORT_TICKET_METRIC_KEYS:
+            if metric_key in text:
+                return metric_key
+        return None
+
+    @staticmethod
+    def _apply_kpi_actual_value(
+        kpi: KPI,
+        actual_value: Decimal,
+        *,
+        lower_is_better: bool = False,
+        evidence: str | None = None,
+        notes: str | None = None,
+    ) -> None:
+        kpi.actual_value = actual_value.quantize(Decimal("0.01"))
+        if evidence:
+            kpi.evidence = evidence
+        if notes:
+            kpi.notes = notes
+
+        if kpi.target_value and kpi.target_value > 0:
+            if lower_is_better:
+                if actual_value <= 0:
+                    achievement = Decimal("100")
+                else:
+                    achievement = kpi.target_value / actual_value * Decimal("100")
+            else:
+                achievement = actual_value / kpi.target_value * Decimal("100")
+            kpi.achievement_percentage = achievement.quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+
+        if kpi.achievement_percentage is not None:
+            if kpi.achievement_percentage >= 100:
+                kpi.status = KPIStatus.ACHIEVED
+            elif kpi.achievement_percentage >= 80:
+                kpi.status = KPIStatus.ON_TRACK
+            else:
+                kpi.status = KPIStatus.AT_RISK
+
+    def _calculate_support_ticket_metric(
+        self,
+        org_id: UUID,
+        *,
+        employee_id: UUID,
+        metric_key: str,
+        period_start: date,
+        period_end: date,
+    ) -> Decimal:
+        resolved_statuses = [TicketStatus.RESOLVED, TicketStatus.CLOSED]
+        open_statuses = [TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]
+
+        if metric_key == "support.tickets_resolved":
+            value = self.db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.assigned_to_id == employee_id,
+                    Ticket.status.in_(resolved_statuses),
+                    Ticket.resolution_date >= period_start,
+                    Ticket.resolution_date <= period_end,
+                )
+            )
+            return Decimal(value or 0)
+
+        if metric_key == "support.open_backlog":
+            value = self.db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.assigned_to_id == employee_id,
+                    Ticket.status.in_(open_statuses),
+                    Ticket.opening_date <= period_end,
+                )
+            )
+            return Decimal(value or 0)
+
+        if metric_key == "support.resolution_rate":
+            total = self.db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.assigned_to_id == employee_id,
+                    Ticket.opening_date >= period_start,
+                    Ticket.opening_date <= period_end,
+                )
+            )
+            if not total:
+                return Decimal("0")
+            resolved = self.db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.assigned_to_id == employee_id,
+                    Ticket.opening_date >= period_start,
+                    Ticket.opening_date <= period_end,
+                    Ticket.status.in_(resolved_statuses),
+                )
+            )
+            return (Decimal(resolved or 0) / Decimal(total) * Decimal("100")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+
+        if metric_key == "support.avg_resolution_days":
+            tickets = self.db.scalars(
+                select(Ticket).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.assigned_to_id == employee_id,
+                    Ticket.status.in_(resolved_statuses),
+                    Ticket.opening_date.isnot(None),
+                    Ticket.resolution_date.isnot(None),
+                    Ticket.resolution_date >= period_start,
+                    Ticket.resolution_date <= period_end,
+                )
+            ).all()
+            durations = [
+                (ticket.resolution_date - ticket.opening_date).days
+                for ticket in tickets
+                if ticket.resolution_date and ticket.opening_date
+            ]
+            if not durations:
+                return Decimal("0")
+            return (Decimal(sum(durations)) / Decimal(len(durations))).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+
+        raise PerformanceServiceError(f"Unsupported support metric: {metric_key}")
+
+    def _sync_kpi_actual_from_system_metric(self, org_id: UUID, kpi: KPI) -> str | None:
+        """Populate KPI actual value when its metric is backed by system data."""
+        metric_key = self._support_ticket_metric_key(kpi)
+        if metric_key is None:
+            return None
+
+        actual_value = self._calculate_support_ticket_metric(
+            org_id,
+            employee_id=kpi.employee_id,
+            metric_key=metric_key,
+            period_start=kpi.period_start,
+            period_end=kpi.period_end,
+        )
+        self._apply_kpi_actual_value(
+            kpi,
+            actual_value,
+            lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+            evidence=f"Auto-calculated from support.ticket metric {metric_key}",
+            notes=f"Metric key: {metric_key}",
+        )
+        return metric_key
+
+    @staticmethod
+    def _apply_scorecard_item_score(
+        item: ScorecardItem,
+        *,
+        lower_is_better: bool = False,
+    ) -> None:
+        """Calculate scorecard item score from target, actual, and weight."""
+        if item.actual_value is None or not item.target_value or item.target_value <= 0:
+            return
+
+        if lower_is_better:
+            if item.actual_value <= 0:
+                item.score = Decimal("100.00")
+            else:
+                item.score = (
+                    item.target_value / item.actual_value * Decimal("100")
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            item.score = (
+                item.actual_value / item.target_value * Decimal("100")
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        if item.score > 100:
+            item.score = Decimal("100.00")
+        if item.weightage:
+            item.weighted_score = (
+                item.score * item.weightage / Decimal("100")
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    def sync_support_ticket_kpi_progress(
+        self,
+        org_id: UUID,
+        *,
+        employee_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Update tagged KPI actual values from support.ticket metrics."""
+        query = select(KPI).where(KPI.organization_id == org_id)
+        if employee_id:
+            query = query.where(KPI.employee_id == employee_id)
+        query = query.where(
+            KPI.status.notin_([KPIStatus.CANCELLED, KPIStatus.DEFERRED])
+        )
+
+        updated = 0
+        skipped = 0
+        metric_counts: dict[str, int] = {}
+        for kpi in self.db.scalars(query).all():
+            metric_key = self._sync_kpi_actual_from_system_metric(org_id, kpi)
+            if metric_key is None:
+                skipped += 1
+                continue
+            updated += 1
+            metric_counts[metric_key] = metric_counts.get(metric_key, 0) + 1
+
+        self.db.flush()
+        return {
+            "updated": updated,
+            "skipped": skipped,
+            "metric_counts": metric_counts,
+        }
 
     def delete_kpi(self, org_id: UUID, kpi_id: UUID) -> None:
         """Delete a KPI."""
@@ -1659,6 +2601,186 @@ class PerformanceService:
 
         self.db.flush()
         return scorecard
+
+    def generate_active_employee_scorecards(
+        self,
+        org_id: UUID,
+        *,
+        period_start: date,
+        period_end: date,
+        period_label: str | None = None,
+    ) -> dict[str, int]:
+        """Create missing scorecards for every active employee in the period."""
+        self._ensure_private_write_mode(org_id)
+
+        employees = list(
+            self.db.scalars(
+                select(Employee)
+                .where(
+                    Employee.organization_id == org_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                )
+                .order_by(Employee.employee_code)
+            ).all()
+        )
+        employee_ids = [employee.employee_id for employee in employees]
+        if not employee_ids:
+            return {"created": 0, "skipped": 0, "employees": 0, "items": 0}
+
+        existing_employee_ids = set(
+            self.db.scalars(
+                select(Scorecard.employee_id).where(
+                    Scorecard.organization_id == org_id,
+                    Scorecard.employee_id.in_(employee_ids),
+                    Scorecard.period_start == period_start,
+                    Scorecard.period_end == period_end,
+                )
+            ).all()
+        )
+
+        kpis_by_employee: dict[UUID, list[KPI]] = {
+            employee_id: [] for employee_id in employee_ids
+        }
+        kpis = list(
+            self.db.scalars(
+                select(KPI).where(
+                    KPI.organization_id == org_id,
+                    KPI.employee_id.in_(employee_ids),
+                    KPI.period_start <= period_end,
+                    KPI.period_end >= period_start,
+                    KPI.status.notin_([KPIStatus.CANCELLED, KPIStatus.DEFERRED]),
+                )
+            ).all()
+        )
+        for kpi in kpis:
+            kpis_by_employee.setdefault(kpi.employee_id, []).append(kpi)
+
+        created = 0
+        skipped = 0
+        item_count = 0
+        for employee in employees:
+            if employee.employee_id in existing_employee_ids:
+                skipped += 1
+                continue
+
+            scorecard = Scorecard(
+                organization_id=org_id,
+                employee_id=employee.employee_id,
+                period_start=period_start,
+                period_end=period_end,
+                period_label=period_label,
+                is_finalized=False,
+            )
+            self.db.add(scorecard)
+            self.db.flush()
+
+            for idx, kpi in enumerate(kpis_by_employee.get(employee.employee_id, [])):
+                metric_key = self._sync_kpi_actual_from_system_metric(org_id, kpi)
+                perspective = self._scorecard_perspective_from_kpi(kpi) or (
+                    "CUSTOMER" if metric_key else "PROCESS"
+                )
+                item = ScorecardItem(
+                    organization_id=org_id,
+                    scorecard_id=scorecard.scorecard_id,
+                    perspective=perspective,
+                    metric_name=kpi.kpi_name,
+                    description=kpi.description or kpi.notes,
+                    target_value=kpi.target_value,
+                    actual_value=kpi.actual_value,
+                    unit_of_measure=kpi.unit_of_measure,
+                    weightage=kpi.weightage or Decimal("0"),
+                    status=kpi.status.value if kpi.status else None,
+                    sequence=idx,
+                )
+                self._apply_scorecard_item_score(
+                    item,
+                    lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+                )
+                self.db.add(item)
+                item_count += 1
+
+            created += 1
+
+        self.db.flush()
+        return {
+            "created": created,
+            "skipped": skipped,
+            "employees": len(employees),
+            "items": item_count,
+        }
+
+    def populate_scorecard_from_kpis(
+        self,
+        org_id: UUID,
+        scorecard_id: UUID,
+    ) -> dict[str, int]:
+        """Add missing KPI metrics to an existing scorecard."""
+        self._ensure_private_write_mode(org_id)
+        scorecard = self.get_scorecard(org_id, scorecard_id)
+        if scorecard.is_finalized:
+            raise PerformanceServiceError("Cannot update finalized scorecard")
+
+        existing_items_by_name = {
+            (item.metric_name or "").strip().lower(): item for item in scorecard.items
+        }
+        kpis = list(
+            self.db.scalars(
+                select(KPI).where(
+                    KPI.organization_id == org_id,
+                    KPI.employee_id == scorecard.employee_id,
+                    KPI.period_start <= scorecard.period_end,
+                    KPI.period_end >= scorecard.period_start,
+                    KPI.status.notin_([KPIStatus.CANCELLED, KPIStatus.DEFERRED]),
+                )
+            ).all()
+        )
+
+        added = 0
+        updated = 0
+        for kpi in kpis:
+            metric_name_key = kpi.kpi_name.strip().lower()
+            metric_key = self._sync_kpi_actual_from_system_metric(org_id, kpi)
+            perspective = self._scorecard_perspective_from_kpi(kpi) or (
+                "CUSTOMER" if metric_key else "PROCESS"
+            )
+            existing_item = existing_items_by_name.get(metric_name_key)
+            if existing_item is not None:
+                existing_item.perspective = perspective
+                existing_item.target_value = kpi.target_value
+                existing_item.actual_value = kpi.actual_value
+                existing_item.unit_of_measure = kpi.unit_of_measure
+                existing_item.weightage = kpi.weightage or Decimal("0")
+                existing_item.status = kpi.status.value if kpi.status else None
+                self._apply_scorecard_item_score(
+                    existing_item,
+                    lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+                )
+                updated += 1
+                continue
+
+            item = ScorecardItem(
+                organization_id=org_id,
+                scorecard_id=scorecard.scorecard_id,
+                perspective=perspective,
+                metric_name=kpi.kpi_name,
+                description=kpi.description or kpi.notes,
+                target_value=kpi.target_value,
+                actual_value=kpi.actual_value,
+                unit_of_measure=kpi.unit_of_measure,
+                weightage=kpi.weightage or Decimal("0"),
+                status=kpi.status.value if kpi.status else None,
+                sequence=len(scorecard.items) + added,
+            )
+            self._apply_scorecard_item_score(
+                item,
+                lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+            )
+            self.db.add(item)
+            existing_items_by_name[metric_name_key] = item
+            added += 1
+
+        self.db.flush()
+        return {"added": added, "updated": updated, "available": len(kpis)}
 
     def update_scorecard_item(
         self,

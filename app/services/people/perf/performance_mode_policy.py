@@ -80,6 +80,24 @@ def enforce_pms_write_mode(db: Session, org_id: UUID) -> None:
     )
 
 
+def enforce_pip_write_mode(db: Session, org_id: UUID) -> None:
+    """Allow PIP writes in any mode that can produce appraisal PIPs."""
+    organization = _load_org_for_mode(db, org_id)
+    if organization is None:
+        return
+    mode = resolve_performance_mode(organization)
+    if mode in {
+        PerformanceMode.PRIVATE,
+        PerformanceMode.GOVERNMENT_PMS,
+        PerformanceMode.HYBRID,
+    }:
+        return
+    raise ValueError(
+        "MODE_POLICY_BLOCKED:pip_write_requires_performance_mode "
+        f"(current_mode={mode.value})"
+    )
+
+
 def enforce_private_write_mode(db: Session, org_id: UUID) -> None:
     """Block private-performance writes when org mode does not allow them."""
     organization = _load_org_for_mode(db, org_id)

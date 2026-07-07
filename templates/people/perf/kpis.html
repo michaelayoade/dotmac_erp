@@ -18,10 +18,33 @@
 
 {% block header_actions %}
 {% if performance_private_enabled %}
-<a href="{{ goals_base }}/new" class="btn btn-primary">
-    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-    New KPI
-</a>
+<div class="flex items-center gap-2">
+    <form method="post" action="{{ goals_base }}/generate-department-templates">
+        {{ request.state.csrf_form | safe }}
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("sparkles", "h-4 w-4 mr-1.5") }}
+            Generate Dept Templates
+        </button>
+    </form>
+    <form method="post" action="{{ goals_base }}/generate-from-department-templates">
+        {{ request.state.csrf_form | safe }}
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("users", "h-4 w-4 mr-1.5") }}
+            Generate Employee KPIs
+        </button>
+    </form>
+    <form method="post" action="{{ goals_base }}/sync-support-metrics{% if employee_id %}?employee_id={{ employee_id }}{% endif %}">
+        {{ request.state.csrf_form | safe }}
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
+            Sync Support Metrics
+        </button>
+    </form>
+    <a href="{{ goals_base }}/new" class="btn btn-primary">
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+        New KPI
+    </a>
+</div>
 {% else %}
 <div class="text-xs text-slate-500">KPI tracking is available in Private/Hybrid mode.</div>
 {% endif %}
@@ -29,6 +52,17 @@
 
 {% block content %}
 <div class="space-y-6">
+    {% if success %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        {{ success }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
     {% call(filter_attrs) compact_filters(
         base_url=goals_base,
         active_filters=active_filters | default([]),

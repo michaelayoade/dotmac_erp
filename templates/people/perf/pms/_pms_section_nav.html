@@ -55,10 +55,12 @@
       </p>
     </div>
     <div class="flex flex-wrap gap-2">
-      <a href="/people/perf/pms/dashboard"
-         class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition-colors whitespace-nowrap hover:border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800">
-        Dashboard
-      </a>
+      {% if performance_government_enabled %}
+        <a href="/people/perf/pms/dashboard"
+           class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition-colors whitespace-nowrap hover:border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800">
+          Dashboard
+        </a>
+      {% endif %}
       {% if selected_area == "planning" %}
         {{ nav_link("/people/perf/pms/institutional", "Department Goals", "planning", ["pms-institutional"], "/people/perf/pms/institutional") }}
         {{ nav_link("/people/perf/pms/objectives", "Strategic Objectives", "planning", ["pms-objectives"], "/people/perf/pms/objectives") }}
@@ -76,10 +78,12 @@
         {{ nav_link("/people/perf/pms/appraisals/committee", "Committee Queue", "reviews", [], "/people/perf/pms/appraisals/committee") }}
       {% elif selected_area == "issues" %}
         {{ nav_link("/people/perf/pms/pips", "PIPs", "issues", ["pms-pips"], "/people/perf/pms/pips") }}
-        {{ nav_link("/people/perf/pms/appeals", "Appeals", "issues", ["pms-appeals"], "/people/perf/pms/appeals") }}
-        {{ nav_link("/people/perf/pms/grievances", "Grievances", "issues", ["pms-grievances"], "/people/perf/pms/grievances") }}
-        {{ nav_link("/people/perf/pms/stakeholder-feedback", "Stakeholder Feedback", "issues", ["pms-stakeholder-feedback"], "/people/perf/pms/stakeholder-feedback") }}
-        {{ nav_link("/people/perf/pms/governance", "Governance", "issues", ["pms-governance"], "/people/perf/pms/governance") }}
+        {% if performance_government_enabled %}
+          {{ nav_link("/people/perf/pms/appeals", "Appeals", "issues", ["pms-appeals"], "/people/perf/pms/appeals") }}
+          {{ nav_link("/people/perf/pms/grievances", "Grievances", "issues", ["pms-grievances"], "/people/perf/pms/grievances") }}
+          {{ nav_link("/people/perf/pms/stakeholder-feedback", "Stakeholder Feedback", "issues", ["pms-stakeholder-feedback"], "/people/perf/pms/stakeholder-feedback") }}
+          {{ nav_link("/people/perf/pms/governance", "Governance", "issues", ["pms-governance"], "/people/perf/pms/governance") }}
+        {% endif %}
       {% else %}
         {{ nav_link("/people/perf/pms/reports", "Reports", "reports", ["pms-reports"], "/people/perf/pms/reports") }}
         {{ nav_link("/people/perf/pms/rewards", "Rewards", "reports", ["pms-rewards"], "/people/perf/pms/rewards") }}
