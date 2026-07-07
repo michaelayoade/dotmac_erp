@@ -17,8 +17,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ar.customer_payment import CustomerPayment
+from app.models.finance.ar.customer_payment import CustomerPayment, PaymentStatus
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.ar.quote import Quote  # noqa: F811
 from app.models.finance.ar.sales_order import SalesOrder  # noqa: F811
 from app.models.finance.common.attachment import AttachmentCategory
@@ -745,10 +746,54 @@ class CustomerWebService:
                 .where(
                     CustomerPayment.organization_id == org_id,
                     CustomerPayment.customer_id.in_(family_ids),
+                    CustomerPayment.status.in_(PaymentStatus.effective()),
                 )
                 .order_by(CustomerPayment.payment_date)
             ).all()
         )
+
+        ccy = customer.currency_code
+        invoice_number_by_id = {inv.invoice_id: inv.invoice_number for inv in invoices}
+        payment_ids = [p.payment_id for p in payments]
+        allocations_by_payment: dict[UUID, list[dict[str, str]]] = {}
+        if payment_ids:
+            allocation_rows = db.execute(
+                select(
+                    PaymentAllocation.payment_id,
+                    PaymentAllocation.invoice_id,
+                    PaymentAllocation.allocated_amount,
+                )
+                .join(Invoice, Invoice.invoice_id == PaymentAllocation.invoice_id)
+                .where(
+                    Invoice.organization_id == org_id,
+                    Invoice.customer_id.in_(family_ids),
+                    PaymentAllocation.payment_id.in_(payment_ids),
+                )
+                .order_by(PaymentAllocation.allocation_date, Invoice.invoice_number)
+            ).all()
+            for payment_id, invoice_id, allocated_amount in allocation_rows:
+                invoice_number = invoice_number_by_id.get(invoice_id, "Invoice")
+                allocations_by_payment.setdefault(payment_id, []).append(
+                    {
+                        "invoice_number": invoice_number,
+                        "amount": format_currency(allocated_amount, ccy),
+                    }
+                )
+
+        def _payment_method_label(payment: CustomerPayment) -> str:
+            method = getattr(payment, "payment_method", None)
+            raw = getattr(method, "value", method) or ""
+            return str(raw).replace("_", " ").title()
+
+        def _payment_allocation_label(payment: CustomerPayment) -> str:
+            allocations = allocations_by_payment.get(payment.payment_id, [])
+            if not allocations:
+                return "Unallocated receipt"
+            labels = [
+                f"{allocation['invoice_number']} ({allocation['amount']})"
+                for allocation in allocations
+            ]
+            return ", ".join(labels)
 
         # Interleave charges and credits chronologically (invoices before
         # payments on the same day) and accumulate a running balance.
@@ -759,7 +804,6 @@ class CustomerWebService:
             events.append((pmt.payment_date, 1, "payment", pmt))
         events.sort(key=lambda e: (e[0], e[1]))
 
-        ccy = customer.currency_code
         running = Decimal("0")
         total_charges = Decimal("0")
         total_credits = Decimal("0")
@@ -774,6 +818,12 @@ class CustomerWebService:
                         "date": format_date(obj.invoice_date),
                         "type": "Invoice",
                         "reference": obj.invoice_number,
+                        "description": (
+                            obj.purpose or obj.notes or f"Invoice {obj.invoice_number}"
+                        ),
+                        "due_date": format_date(obj.due_date),
+                        "payment_method": "",
+                        "applied_to": "",
                         "sub_account": _sub(obj.customer_id),
                         "charge": format_currency(charge, ccy),
                         "credit": "",
@@ -784,11 +834,21 @@ class CustomerWebService:
                 credit = obj.amount or Decimal("0")
                 running -= credit
                 total_credits += credit
+                payment_method = _payment_method_label(obj)
+                applied_to = _payment_allocation_label(obj)
+                description = obj.description or f"Payment received by {payment_method}"
+                if obj.reference:
+                    description = f"{description} - Ref {obj.reference}"
                 transactions.append(
                     {
                         "date": format_date(obj.payment_date),
                         "type": "Payment",
                         "reference": obj.payment_number,
+                        "description": description,
+                        "due_date": "",
+                        "payment_method": payment_method,
+                        "applied_to": applied_to,
+                        "external_reference": obj.reference or "",
                         "sub_account": _sub(obj.customer_id),
                         "charge": "",
                         "credit": format_currency(credit, ccy),

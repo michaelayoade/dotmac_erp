@@ -26,6 +26,9 @@
       <th style="width: 12%;">Date</th>
       <th style="width: 12%;">Type</th>
       <th>Reference</th>
+      <th>Description</th>
+      <th style="width: 12%;">Due / Method</th>
+      <th>Applied To</th>
       {% if is_consolidated %}<th style="width: 14%;">Sub-account</th>{% endif %}
       <th class="num" style="width: 16%;">Charges</th>
       <th class="num" style="width: 16%;">Credits</th>
@@ -38,18 +41,21 @@
       <td class="nowrap">{{ txn.date }}</td>
       <td>{{ txn.type }}</td>
       <td>{{ txn.reference }}</td>
+      <td>{{ txn.description }}</td>
+      <td>{% if txn.due_date %}Due {{ txn.due_date }}{% else %}{{ txn.payment_method }}{% endif %}</td>
+      <td>{{ txn.applied_to }}</td>
       {% if is_consolidated %}<td>{{ txn.sub_account }}</td>{% endif %}
       <td class="num">{{ txn.charge }}</td>
       <td class="num">{{ txn.credit }}</td>
       <td class="num">{{ txn.balance }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="{{ 7 if is_consolidated else 6 }}">No transactions for this account.</td></tr>
+    <tr><td colspan="{{ 10 if is_consolidated else 9 }}">No transactions for this account.</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>
     <tr>
-      <td colspan="{{ 4 if is_consolidated else 3 }}" class="num"><strong>Totals</strong></td>
+      <td colspan="{{ 7 if is_consolidated else 6 }}" class="num"><strong>Totals</strong></td>
       <td class="num"><strong>{{ total_charges }}</strong></td>
       <td class="num"><strong>{{ total_credits }}</strong></td>
       <td class="num"><strong>{{ closing_balance }}</strong></td>
