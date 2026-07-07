@@ -84,9 +84,12 @@
                     </div>
                     <div>
                         <label for="technician_name" class="form-label">Technician / Garage</label>
-                        <input aria-label="Name of technician or garage" type="text" id="technician_name" name="technician_name"
-                               placeholder="Name of technician or garage"
-                               class="form-input">
+                        <select id="technician_name" name="technician_name" class="form-select">
+                            <option value="">Select technician / garage...</option>
+                            {% for provider in maintenance_provider_options %}
+                            <option value="{{ provider }}">{{ provider }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
             </div>

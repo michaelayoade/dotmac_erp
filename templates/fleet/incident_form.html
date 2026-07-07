@@ -16,7 +16,7 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-    <form method="POST" action="/fleet/incidents/new" class="space-y-6">
+    <form method="POST" action="/fleet/incidents/new" enctype="multipart/form-data" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <!-- Vehicle & Classification -->
         <div class="card">
@@ -78,7 +78,7 @@
                     <label for="description" class="form-label">Description <span class="text-rose-500">*</span></label>
                     <textarea aria-label="Describe what happened..." id="description" name="description" required rows="4"
                               placeholder="Describe what happened..."
-                              class="form-textarea"></textarea>
+                              class="form-input min-h-28 w-full resize-y"></textarea>
                 </div>
             </div>
         </div>
@@ -100,7 +100,7 @@
                     <label for="third_party_details" class="form-label">Third Party Details</label>
                     <textarea aria-label="Name, vehicle, contact details of third party..." id="third_party_details" name="third_party_details" rows="2"
                               placeholder="Name, vehicle, contact details of third party..."
-                              class="form-textarea"></textarea>
+                              class="form-input min-h-20 w-full resize-y"></textarea>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -142,6 +142,35 @@
                         Optional. Select an existing expense claim to link this incident.
                     </p>
                 </div>
+
+                <div x-data='{ count: 0 }'>
+                    <label for="incident_files" class="form-label">Incident Images</label>
+                    <label
+                        for="incident_files"
+                        class="flex cursor-pointer items-center gap-4 rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-5 transition-colors hover:border-amber-400 hover:bg-amber-50/40 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/10"
+                    >
+                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            {{ icon_svg("cloud-upload", "h-5 w-5") }}
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block text-sm font-medium text-slate-800 dark:text-slate-100" x-text="count ? count + ' file' + (count === 1 ? '' : 's') + ' selected' : 'Click to upload incident files'"></span>
+                            <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Images or PDFs only. Maximum size: {{ incident_attachment_max_size if incident_attachment_max_size else '20 MB' }} per file.</span>
+                        </span>
+                    </label>
+                    <input
+                        aria-label="Upload incident images or PDFs"
+                        type="file"
+                        id="incident_files"
+                        name="incident_files"
+                        multiple
+                        accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf"
+                        class="sr-only"
+                        @change="count = $event.target.files.length"
+                    >
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Optional. Add photos of damage, documents, or related evidence.
+                    </p>
+                </div>
             </div>
         </div>
 
@@ -153,7 +182,7 @@
             <div class="p-4">
                 <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
                           placeholder="Additional notes..."
-                          class="form-textarea"></textarea>
+                          class="form-input min-h-24 w-full resize-y"></textarea>
             </div>
         </div>
 
