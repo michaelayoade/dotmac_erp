@@ -16,7 +16,7 @@
     </div>
     <div class="mt-4">
         <label for="{{ prefix }}_notes" class="form-label">Notes</label>
-        <textarea aria-label="Additional notes..." id="{{ prefix }}_notes" name="notes" rows="3" placeholder="Additional notes..." class="form-textarea" :disabled="activeDoc !== '{{ doc_type }}'"></textarea>
+        <textarea aria-label="Additional notes..." id="{{ prefix }}_notes" name="notes" rows="3" placeholder="Additional notes..." class="form-input min-h-24 w-full resize-y" :disabled="activeDoc !== '{{ doc_type }}'"></textarea>
     </div>
 </div>
 {% endmacro %}
