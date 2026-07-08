@@ -1222,28 +1222,53 @@ class FleetWebService:
         organization_id: UUID,
         *,
         vehicle_id: UUID | None = None,
+        fuel_log_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Build context for fuel log create form."""
+        """Build context for fuel log create/edit form."""
         if not self._fleet_tables_ready():
             return {
                 "vehicles": [],
                 "fuel_types": [f.value for f in FuelType],
                 "selected_vehicle_id": vehicle_id,
                 "fuel_receipt_max_size": self._fuel_receipt_max_size_label(),
+                "fuel_log": None,
+                "fuel_receipts": [],
+                "form_action": "/fleet/fuel/new",
+                "is_edit": False,
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
+        fuel_log = None
+        fuel_receipts: list[dict[str, Any]] = []
+        if fuel_log_id is not None:
+            fuel_log = FuelService(self.db, org_id).get_or_raise(fuel_log_id)
+            vehicle_id = fuel_log.vehicle_id
+            fuel_receipts = self._attachment_views(
+                org_id,
+                [fuel_log],
+                id_attr="fuel_log_id",
+                entity_type=self.FUEL_LOG_ATTACHMENT_ENTITY_TYPE,
+            ).get(str(fuel_log.fuel_log_id), [])
 
         vehicles_result = vehicle_service.list_vehicles(
             status=VehicleStatus.ACTIVE,
             params=PaginationParams(limit=200),
         )
+        vehicles = list(vehicles_result.items)
+        if fuel_log and all(v.vehicle_id != fuel_log.vehicle_id for v in vehicles):
+            vehicles.append(fuel_log.vehicle)
 
         return {
-            "vehicles": vehicles_result.items,
+            "vehicles": vehicles,
             "fuel_types": [f.value for f in FuelType],
             "selected_vehicle_id": vehicle_id,
             "fuel_receipt_max_size": self._fuel_receipt_max_size_label(),
+            "fuel_log": fuel_log,
+            "fuel_receipts": fuel_receipts,
+            "form_action": f"/fleet/fuel/{fuel_log_id}/edit"
+            if fuel_log_id
+            else "/fleet/fuel/new",
+            "is_edit": fuel_log_id is not None,
         }
 
     @staticmethod
@@ -1340,8 +1365,9 @@ class FleetWebService:
         organization_id: UUID,
         *,
         vehicle_id: UUID | None = None,
+        incident_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Build context for incident report form."""
+        """Build context for incident create/edit form."""
         if not self._fleet_tables_ready():
             return {
                 "vehicles": [],
@@ -1349,21 +1375,45 @@ class FleetWebService:
                 "severities": [s.value for s in IncidentSeverity],
                 "selected_vehicle_id": vehicle_id,
                 "incident_attachment_max_size": self._incident_attachment_max_size_label(),
+                "incident": None,
+                "incident_attachments": [],
+                "form_action": "/fleet/incidents/new",
+                "is_edit": False,
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
+        incident = None
+        incident_attachments: list[dict[str, Any]] = []
+        if incident_id is not None:
+            incident = IncidentService(self.db, org_id).get_or_raise(incident_id)
+            vehicle_id = incident.vehicle_id
+            incident_attachments = self._attachment_views(
+                org_id,
+                [incident],
+                id_attr="incident_id",
+                entity_type=self.INCIDENT_ATTACHMENT_ENTITY_TYPE,
+            ).get(str(incident.incident_id), [])
 
         vehicles_result = vehicle_service.list_vehicles(
             include_disposed=False,
             params=PaginationParams(limit=200),
         )
+        vehicles = list(vehicles_result.items)
+        if incident and all(v.vehicle_id != incident.vehicle_id for v in vehicles):
+            vehicles.append(incident.vehicle)
 
         return {
-            "vehicles": vehicles_result.items,
+            "vehicles": vehicles,
             "incident_types": [t.value for t in IncidentType],
             "severities": [s.value for s in IncidentSeverity],
             "selected_vehicle_id": vehicle_id,
             "incident_attachment_max_size": self._incident_attachment_max_size_label(),
+            "incident": incident,
+            "incident_attachments": incident_attachments,
+            "form_action": f"/fleet/incidents/{incident_id}/edit"
+            if incident_id
+            else "/fleet/incidents/new",
+            "is_edit": incident_id is not None,
         }
 
     @staticmethod
@@ -1785,36 +1835,19 @@ class FleetWebService:
                 status_code=303,
             )
 
-    async def create_entity_response(
-        self,
-        request: "Request",
-        auth: Any,
-        db: Session,
-        entity_type: str,
-    ) -> Any:
-        """Generic handler for fleet entity form creation.
-
-        Parses form data, calls the appropriate service, and redirects.
-        """
+    @staticmethod
+    def _coerce_fleet_form_data(form: Any) -> dict[str, Any]:
+        """Convert fleet form values into schema-friendly Python values."""
         from datetime import date, datetime
         from decimal import Decimal, InvalidOperation
 
-        from fastapi import HTTPException
-        from fastapi.responses import RedirectResponse
         from starlette.datastructures import UploadFile as StarletteUploadFile
 
-        form = await request.form()
-        form_data = dict(form)
-        org_id = auth.organization_id
-        if org_id is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
-
-        # Build a cleaned data dict, coercing types
         data: dict[str, Any] = {}
-        for key, val in form_data.items():
+        for key, val in dict(form).items():
             if key.startswith("csrf") or key == "_method":
+                continue
+            if key in ("expense_claim_name",):
                 continue
             if isinstance(val, StarletteUploadFile):
                 continue
@@ -1822,13 +1855,11 @@ class FleetWebService:
             if not str_val:
                 data[key] = None
                 continue
-            # UUID fields
             if key.endswith("_id"):
                 try:
                     data[key] = UUID(str_val)
                 except ValueError:
                     data[key] = str_val
-            # Date fields
             elif key.endswith("_date") or key in (
                 "scheduled_date",
                 "issue_date",
@@ -1840,13 +1871,11 @@ class FleetWebService:
                     data[key] = date.fromisoformat(str_val)
                 except ValueError:
                     data[key] = str_val
-            # Datetime fields
             elif key.endswith("_datetime"):
                 try:
                     data[key] = datetime.fromisoformat(str_val)
                 except ValueError:
                     data[key] = str_val
-            # Numeric fields
             elif key in (
                 "estimated_repair_cost",
                 "estimated_cost",
@@ -1864,11 +1893,34 @@ class FleetWebService:
                     data[key] = Decimal(str_val)
                 except (ValueError, InvalidOperation):
                     data[key] = str_val
-            # Boolean fields
             elif key in ("third_party_involved", "is_full_tank"):
                 data[key] = str_val.lower() in ("true", "1", "on", "yes")
             else:
                 data[key] = str_val
+        return data
+
+    async def create_entity_response(
+        self,
+        request: "Request",
+        auth: Any,
+        db: Session,
+        entity_type: str,
+    ) -> Any:
+        """Generic handler for fleet entity form creation.
+
+        Parses form data, calls the appropriate service, and redirects.
+        """
+        from fastapi import HTTPException
+        from fastapi.responses import RedirectResponse
+        from starlette.datastructures import UploadFile as StarletteUploadFile
+
+        form = await request.form()
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+        data = self._coerce_fleet_form_data(form)
 
         # Map entity type to service + schema + list URL
         from app.schemas.fleet.document import DocumentCreate
@@ -1965,6 +2017,87 @@ class FleetWebService:
             url=cfg["list_url"],
             status_code=303,
         )
+
+    async def update_entity_response(
+        self,
+        request: "Request",
+        auth: Any,
+        db: Session,
+        entity_type: str,
+        entity_id: UUID,
+    ) -> Any:
+        """Handle fleet entity edit form submissions."""
+        from fastapi import HTTPException
+        from fastapi.responses import RedirectResponse
+        from starlette.datastructures import UploadFile as StarletteUploadFile
+
+        form = await request.form()
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+        data = self._coerce_fleet_form_data(form)
+
+        from app.schemas.fleet.fuel import FuelLogUpdate
+        from app.schemas.fleet.incident import IncidentUpdate
+
+        entity_map: dict[str, dict[str, Any]] = {
+            "fuel": {
+                "service_cls": FuelService,
+                "schema_cls": FuelLogUpdate,
+                "edit_url": f"/fleet/fuel/{entity_id}/edit",
+                "redirect_url": "/fleet/fuel",
+                "upload_field": "receipt_files",
+                "save_attachment": self._save_fuel_receipt_attachment,
+                "attachment_id_kw": "fuel_log_id",
+            },
+            "incident": {
+                "service_cls": IncidentService,
+                "schema_cls": IncidentUpdate,
+                "edit_url": f"/fleet/incidents/{entity_id}/edit",
+                "redirect_url": f"/fleet/incidents/{entity_id}",
+                "upload_field": "incident_files",
+                "save_attachment": self._save_incident_attachment,
+                "attachment_id_kw": "incident_id",
+            },
+        }
+        cfg = entity_map.get(entity_type)
+        if not cfg:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown entity type: {entity_type}"
+            )
+
+        try:
+            schema = cfg["schema_cls"](**data)
+            service = cfg["service_cls"](db, org_id)
+            service.update(entity_id, schema)
+            uploads = [
+                upload
+                for upload in form.getlist(cfg["upload_field"])
+                if isinstance(upload, StarletteUploadFile) and upload.filename
+            ]
+            for upload in uploads:
+                await cfg["save_attachment"](
+                    db=db,
+                    organization_id=org_id,
+                    **{cfg["attachment_id_kw"]: entity_id},
+                    upload=upload,
+                    uploaded_by=user_id,
+                )
+            db.commit()
+            logger.info(
+                "Updated fleet %s %s for org %s", entity_type, entity_id, org_id
+            )
+        except Exception as exc:
+            logger.warning("Fleet %s update failed: %s", entity_type, exc)
+            db.rollback()
+            return RedirectResponse(
+                url=f"{cfg['edit_url']}?error={str(exc)[:200]}",
+                status_code=303,
+            )
+
+        return RedirectResponse(url=cfg["redirect_url"], status_code=303)
 
     async def _save_fuel_receipt_attachment(
         self,

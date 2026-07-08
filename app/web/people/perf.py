@@ -959,6 +959,16 @@ async def generate_active_employee_scorecards(
     )
 
 
+@router.post("/scorecards/sync-metrics")
+def sync_all_scorecard_metrics(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Sync KPI metrics into all in-progress scorecards."""
+    return perf_web_service.sync_all_scorecard_metrics_response(request, auth, db)
+
+
 @router.get("/scorecards/{scorecard_id}", response_class=HTMLResponse)
 def scorecard_detail(
     request: Request,

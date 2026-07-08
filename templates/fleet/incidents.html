@@ -160,7 +160,7 @@
                             {% endif %}
                         </td>
                         <td class="text-right">
-                            {{ action_buttons(view_href="/fleet/incidents/" ~ incident.incident_id) }}
+                            {{ action_buttons(view_href="/fleet/incidents/" ~ incident.incident_id, edit_href="/fleet/incidents/" ~ incident.incident_id ~ "/edit") }}
                         </td>
                     </tr>
                     {% else %}

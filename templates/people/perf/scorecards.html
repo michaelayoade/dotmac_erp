@@ -24,6 +24,13 @@
             Generate Current Year
         </button>
     </form>
+    <form method="post" action="/people/perf/scorecards/sync-metrics">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
+            Sync Scorecard Metrics
+        </button>
+    </form>
     <a href="/people/perf/scorecards/new" class="btn btn-primary">
         {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
         New Scorecard

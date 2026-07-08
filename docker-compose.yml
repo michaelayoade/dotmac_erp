@@ -36,6 +36,7 @@ services:
     - dotmac_logs:/var/log/dotmac
     - ./static:/app/static:ro
     - ./templates:/app/templates:ro
+    - ./alembic:/app/alembic:ro
     - ./app:/app/app:ro
     - ./license:/app/license:ro
     - ./gunicorn.conf.py:/app/gunicorn.conf.py:ro
@@ -118,6 +119,7 @@ services:
       redis:
         condition: service_started
     volumes:
+    - ./alembic:/app/alembic:ro
     - ./app:/app/app:ro
     - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
     entrypoint:
@@ -153,6 +155,7 @@ services:
       redis:
         condition: service_started
     volumes:
+    - ./alembic:/app/alembic:ro
     - ./app:/app/app:ro
     - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
     entrypoint:

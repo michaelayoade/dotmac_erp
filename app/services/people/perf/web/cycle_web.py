@@ -1397,6 +1397,35 @@ class CycleWebService:
                 status_code=303,
             )
 
+    def sync_all_scorecard_metrics_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Sync KPI metrics into all in-progress scorecards."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = PerformanceService(db)
+
+        try:
+            result = svc.sync_all_scorecard_metrics(org_id)
+            db.commit()
+            message = (
+                f"Synced {result['scorecards']} scorecards, "
+                f"added {result['added']} metrics, "
+                f"updated {result['updated']} metrics"
+            )
+            return RedirectResponse(
+                url=f"/people/perf/scorecards?success={message.replace(' ', '+')}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/perf/scorecards?error={str(exc).replace(' ', '+')}",
+                status_code=303,
+            )
+
     def scorecard_new_form_response(
         self,
         request: Request,

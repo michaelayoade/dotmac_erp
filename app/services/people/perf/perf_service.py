@@ -2782,6 +2782,37 @@ class PerformanceService:
         self.db.flush()
         return {"added": added, "updated": updated, "available": len(kpis)}
 
+    def sync_all_scorecard_metrics(self, org_id: UUID) -> dict[str, int]:
+        """Populate/update KPI metrics for every in-progress scorecard."""
+        self._ensure_private_write_mode(org_id)
+        scorecard_ids = list(
+            self.db.scalars(
+                select(Scorecard.scorecard_id).where(
+                    Scorecard.organization_id == org_id,
+                    Scorecard.is_finalized.is_(False),
+                )
+            ).all()
+        )
+
+        synced = 0
+        added = 0
+        updated = 0
+        available = 0
+        for scorecard_id in scorecard_ids:
+            result = self.populate_scorecard_from_kpis(org_id, scorecard_id)
+            synced += 1
+            added += result["added"]
+            updated += result["updated"]
+            available += result["available"]
+
+        self.db.flush()
+        return {
+            "scorecards": synced,
+            "added": added,
+            "updated": updated,
+            "available": available,
+        }
+
     def update_scorecard_item(
         self,
         org_id: UUID,

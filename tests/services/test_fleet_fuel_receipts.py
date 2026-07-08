@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
-from starlette.datastructures import UploadFile
+from starlette.datastructures import FormData, UploadFile
 
 from app.models.finance.common.attachment import AttachmentCategory
 from app.services.fleet.web.fleet_web import FleetWebService
@@ -19,12 +19,20 @@ class _FakeDb:
     def __init__(self):
         self.added = []
         self.flushed = False
+        self.committed = False
+        self.rolled_back = False
 
     def add(self, value):
         self.added.append(value)
 
     def flush(self):
         self.flushed = True
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
 
 
 class _FakeFuelReceiptUpload:
@@ -47,6 +55,14 @@ class _FakeIncidentAttachmentUpload:
             file_size=len(file_data),
             checksum="def456",
         )
+
+
+class _FakeRequest:
+    def __init__(self, form_data):
+        self._form_data = form_data
+
+    async def form(self):
+        return self._form_data
 
 
 @pytest.mark.asyncio
@@ -117,3 +133,111 @@ async def test_save_incident_attachment_creates_common_attachment(monkeypatch):
     assert attachment.content_type == "image/jpeg"
     assert attachment.category == AttachmentCategory.OTHER
     assert attachment.uploaded_by == TEST_USER_ID
+
+
+@pytest.mark.asyncio
+async def test_update_entity_response_updates_fuel_log(monkeypatch):
+    db = _FakeDb()
+    fuel_log_id = uuid4()
+    vehicle_id = uuid4()
+    captured = {}
+
+    class _FuelService:
+        def __init__(self, db_arg, org_id):
+            captured["db"] = db_arg
+            captured["org_id"] = org_id
+
+        def update(self, record_id, schema):
+            captured["record_id"] = record_id
+            captured["schema"] = schema
+
+    monkeypatch.setattr("app.services.fleet.web.fleet_web.FuelService", _FuelService)
+
+    response = await FleetWebService(db).update_entity_response(
+        _FakeRequest(
+            FormData(
+                [
+                    ("vehicle_id", str(vehicle_id)),
+                    ("log_date", "2026-07-07"),
+                    ("fuel_type", "DIESEL"),
+                    ("quantity_liters", "40.5"),
+                    ("price_per_liter", "900"),
+                    ("total_cost", "36450"),
+                    ("odometer_reading", "12345"),
+                    ("is_full_tank", "false"),
+                    ("is_full_tank", "true"),
+                    ("station_name", "Updated Station"),
+                    ("expense_claim_name", "ignored display text"),
+                    ("expense_claim_id", ""),
+                    ("notes", "Corrected entry"),
+                ]
+            )
+        ),
+        SimpleNamespace(organization_id=TEST_ORG_ID, user_id=TEST_USER_ID),
+        db,
+        "fuel",
+        fuel_log_id,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/fleet/fuel"
+    assert db.committed is True
+    assert captured["record_id"] == fuel_log_id
+    assert captured["schema"].vehicle_id == vehicle_id
+    assert captured["schema"].is_full_tank is True
+    assert captured["schema"].station_name == "Updated Station"
+    assert captured["schema"].notes == "Corrected entry"
+
+
+@pytest.mark.asyncio
+async def test_update_entity_response_updates_incident(monkeypatch):
+    db = _FakeDb()
+    incident_id = uuid4()
+    vehicle_id = uuid4()
+    expense_claim_id = uuid4()
+    captured = {}
+
+    class _IncidentService:
+        def __init__(self, db_arg, org_id):
+            captured["db"] = db_arg
+            captured["org_id"] = org_id
+
+        def update(self, record_id, schema):
+            captured["record_id"] = record_id
+            captured["schema"] = schema
+
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.IncidentService", _IncidentService
+    )
+
+    response = await FleetWebService(db).update_entity_response(
+        _FakeRequest(
+            FormData(
+                [
+                    ("vehicle_id", str(vehicle_id)),
+                    ("incident_type", "ACCIDENT"),
+                    ("severity", "MODERATE"),
+                    ("incident_date", "2026-07-07"),
+                    ("description", "Corrected description"),
+                    ("third_party_involved", "false"),
+                    ("estimated_repair_cost", "250000"),
+                    ("expense_claim_name", "ignored display text"),
+                    ("expense_claim_id", str(expense_claim_id)),
+                    ("notes", "Updated notes"),
+                ]
+            )
+        ),
+        SimpleNamespace(organization_id=TEST_ORG_ID, user_id=TEST_USER_ID),
+        db,
+        "incident",
+        incident_id,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/fleet/incidents/{incident_id}"
+    assert db.committed is True
+    assert captured["record_id"] == incident_id
+    assert captured["schema"].vehicle_id == vehicle_id
+    assert captured["schema"].third_party_involved is False
+    assert captured["schema"].expense_claim_id == expense_claim_id
+    assert captured["schema"].description == "Corrected description"

@@ -1884,7 +1884,7 @@ def require_private_performance_mode(
 
 
 def require_government_pms_mode(
-    request: Request | None = None,
+    request: Request = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ) -> WebAuthContext:
