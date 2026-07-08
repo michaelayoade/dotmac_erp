@@ -416,8 +416,8 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label for="employment_type_id" class="form-label">Contract Type</label>
-                        <select name="employment_type_id" id="employment_type_id" class="form-input w-full">
+                        <label for="employment_type_id" class="form-label">Contract Type{% if not employee %} <span class="text-red-500">*</span>{% endif %}</label>
+                        <select name="employment_type_id" id="employment_type_id" class="form-input w-full {% if errors.employment_type_id %}border-red-500{% endif %}" {% if not employee %}required{% endif %}>
                             <option value="">Select employment type</option>
                             {% for emp_type in employment_types %}
                             <option value="{{ emp_type.employment_type_id }}"
@@ -426,6 +426,9 @@
                             </option>
                             {% endfor %}
                         </select>
+                        {% if errors.employment_type_id %}
+                        <p class="mt-1 text-sm text-red-500">{{ errors.employment_type_id }}</p>
+                        {% endif %}
                     </div>
                     <div>
                         <label for="grade_id" class="form-label">Grade</label>
@@ -451,8 +454,8 @@
                         <p class="mt-1 text-xs text-slate-500">Used as CTC/gross for payroll setup.</p>
                     </div>
                     <div>
-                        <label for="salary_mode" class="form-label">Salary Mode</label>
-                        <select name="salary_mode" id="salary_mode" class="form-input w-full">
+                        <label for="salary_mode" class="form-label">Salary Mode{% if not employee %} <span class="text-red-500">*</span>{% endif %}</label>
+                        <select name="salary_mode" id="salary_mode" class="form-input w-full {% if errors.salary_mode %}border-red-500{% endif %}" {% if not employee %}required{% endif %}>
                             <option value="">Select salary mode</option>
                             {% for mode in salary_modes %}
                             <option value="{{ mode }}"
@@ -461,6 +464,9 @@
                             </option>
                             {% endfor %}
                         </select>
+                        {% if errors.salary_mode %}
+                        <p class="mt-1 text-sm text-red-500">{{ errors.salary_mode }}</p>
+                        {% endif %}
                     </div>
                 </div>
 

@@ -363,6 +363,8 @@ async def test_create_employee_response_passes_selected_position_id(
             "linked_person_id": str(person.id),
             "date_of_joining": "2026-01-01",
             "position_id": str(position_id),
+            "employment_type_id": str(uuid4()),
+            "salary_mode": "BANK",
             "salary_structure_id": str(structure_id),
         }
     )
@@ -424,6 +426,8 @@ async def test_create_employee_response_creates_initial_salary_assignment(
         {
             "linked_person_id": str(person.id),
             "date_of_joining": "2026-01-01",
+            "employment_type_id": str(uuid4()),
+            "salary_mode": "BANK",
             "salary_structure_id": str(structure_id),
             "ctc": "1200000",
         }
@@ -441,6 +445,48 @@ async def test_create_employee_response_creates_initial_salary_assignment(
     assert captured["employee_id"] == employee_id
     assert captured["salary_structure"] is salary_structure
     assert str(captured["base"]) == "1200000"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_response_requires_contract_and_salary_mode(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    _stub_new_employee_form_dependencies(monkeypatch, db_session)
+
+    def _fail_create(self, person_id, data):
+        raise AssertionError("employee should not be created")
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.create_employee",
+        _fail_create,
+    )
+
+    request = _make_new_employee_request(
+        {
+            "linked_person_id": str(person.id),
+            "date_of_joining": "2026-01-01",
+            "salary_structure_id": str(uuid4()),
+        }
+    )
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = await service.create_employee_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.context["error"]
+        == "Contract type and salary mode must be selected for employee creation."
+    )
+    assert response.context["errors"] == {
+        "employment_type_id": "Required",
+        "salary_mode": "Required",
+    }
+    assert response.context["form_data"]["current_tab"] == "employment"
 
 
 @pytest.mark.asyncio
@@ -462,6 +508,8 @@ async def test_create_employee_response_requires_salary_structure_before_create(
         {
             "linked_person_id": str(person.id),
             "date_of_joining": "2026-01-01",
+            "employment_type_id": str(uuid4()),
+            "salary_mode": "BANK",
         }
     )
     auth = _make_auth(person.id, person.organization_id, ["people:write"])
@@ -500,6 +548,8 @@ async def test_create_employee_response_rejects_invalid_salary_structure_before_
         {
             "linked_person_id": str(person.id),
             "date_of_joining": "2026-01-01",
+            "employment_type_id": str(uuid4()),
+            "salary_mode": "BANK",
             "salary_structure_id": "not-a-uuid",
         }
     )
@@ -546,6 +596,8 @@ async def test_create_employee_response_rejects_country_name_before_create(
             "email": f"country-name-{uuid4().hex[:8]}@example.com",
             "country_code": "Nicaragua",
             "date_of_joining": "2026-01-01",
+            "employment_type_id": str(uuid4()),
+            "salary_mode": "BANK",
             "salary_structure_id": str(structure_id),
         }
     )
@@ -610,6 +662,8 @@ async def test_create_employee_response_does_not_fail_when_invite_fails(
         {
             "linked_person_id": str(person.id),
             "date_of_joining": "2026-01-01",
+            "employment_type_id": str(uuid4()),
+            "salary_mode": "BANK",
             "salary_structure_id": str(structure_id),
         }
     )
