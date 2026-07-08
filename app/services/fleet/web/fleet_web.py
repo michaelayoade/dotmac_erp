@@ -55,6 +55,20 @@ from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 
 logger = logging.getLogger(__name__)
 
+DOCUMENT_DESCRIPTION_OPTIONS = [
+    "Vehicle registration certificate",
+    "Insurance policy document",
+    "Roadworthiness certificate",
+    "Vehicle inspection report",
+    "Operating permit",
+    "Driver or operator license",
+    "Proof of vehicle ownership",
+    "Customs or import duty papers",
+    "Emissions certificate",
+    "Lease or finance agreement",
+    "Other supporting document",
+]
+
 
 class FleetWebService:
     """Web service methods for fleet management pages."""
@@ -1608,6 +1622,7 @@ class FleetWebService:
             return {
                 "vehicles": [],
                 "document_types": [t.value for t in DocumentType],
+                "document_description_options": DOCUMENT_DESCRIPTION_OPTIONS,
                 "selected_vehicle_id": vehicle_id,
             }
         org_id = coerce_uuid(organization_id)
@@ -1621,6 +1636,7 @@ class FleetWebService:
         return {
             "vehicles": vehicles_result.items,
             "document_types": [t.value for t in DocumentType],
+            "document_description_options": DOCUMENT_DESCRIPTION_OPTIONS,
             "selected_vehicle_id": vehicle_id,
         }
 
