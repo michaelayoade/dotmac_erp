@@ -56,12 +56,9 @@
                     </div>
                     <div>
                         <label for="description" class="form-label">Description <span class="text-rose-500">*</span></label>
-                        <select id="description" name="description" required class="form-select">
-                            <option value="">Select description...</option>
-                            {% for option in document_description_options %}
-                            <option value="{{ option }}">{{ option }}</option>
-                            {% endfor %}
-                        </select>
+                        <input aria-label="Brief description" type="text" id="description" name="description" required
+                               placeholder="Brief description"
+                               class="form-input">
                     </div>
                 </div>
             </div>
