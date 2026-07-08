@@ -1,6 +1,26 @@
 {% extends "modules/base_modules.html" %}
 {% from "components/macros.html" import icon_svg %}
 
+{% macro reminder_notes_upload(doc_type, prefix) %}
+<div class="border-t border-slate-100 pt-4 dark:border-slate-800">
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div>
+            <label for="{{ prefix }}_reminder_days_before" class="form-label">Reminder Days Before Expiry</label>
+            <input type="number" id="{{ prefix }}_reminder_days_before" name="reminder_days_before" value="30" min="0" max="365" class="form-input w-32" :disabled="activeDoc !== '{{ doc_type }}'">
+        </div>
+        <div class="lg:col-span-2">
+            <label for="{{ prefix }}_document_file" class="form-label">Attachment</label>
+            <input id="{{ prefix }}_document_file" name="document_file" type="file" class="form-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.txt,.csv" :disabled="activeDoc !== '{{ doc_type }}'">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Upload the document file or scanned copy.</p>
+        </div>
+    </div>
+    <div class="mt-4">
+        <label for="{{ prefix }}_notes" class="form-label">Notes</label>
+        <textarea aria-label="Additional notes..." id="{{ prefix }}_notes" name="notes" rows="3" placeholder="Additional notes..." class="form-textarea" :disabled="activeDoc !== '{{ doc_type }}'"></textarea>
+    </div>
+</div>
+{% endmacro %}
+
 {% block page_title %}Add Document{% endblock %}
 
 {% block breadcrumbs %}
@@ -15,7 +35,7 @@
 
 {% block content %}
 <div class="w-full max-w-none">
-    <form method="POST" action="/fleet/documents/new" class="space-y-6" x-data="{ activeDoc: 'REGISTRATION' }">
+    <form method="POST" action="/fleet/documents/new" enctype="multipart/form-data" class="space-y-6" x-data="{ activeDoc: 'REGISTRATION' }">
         {{ request.state.csrf_form | safe }}
         <input type="hidden" name="document_type" x-model="activeDoc">
 
@@ -92,6 +112,7 @@
                         <input id="registration_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'REGISTRATION'">
                     </div>
                 </div>
+                {{ reminder_notes_upload("REGISTRATION", "registration") }}
             </div>
         </div>
 
@@ -131,6 +152,7 @@
                         <input id="insurance_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                 </div>
+                {{ reminder_notes_upload("INSURANCE", "insurance") }}
             </div>
         </div>
 
@@ -158,6 +180,7 @@
                         <input id="inspection_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'INSPECTION'">
                     </div>
                 </div>
+                {{ reminder_notes_upload("INSPECTION", "inspection") }}
             </div>
         </div>
 
@@ -185,6 +208,7 @@
                         <input id="roadworthy_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
                     </div>
                 </div>
+                {{ reminder_notes_upload("ROAD_WORTHINESS", "roadworthy") }}
             </div>
         </div>
 
@@ -212,6 +236,7 @@
                         <input id="permit_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'PERMIT'">
                     </div>
                 </div>
+                {{ reminder_notes_upload("PERMIT", "permit") }}
             </div>
         </div>
 
@@ -239,6 +264,7 @@
                         <input id="license_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'LICENSE'">
                     </div>
                 </div>
+                {{ reminder_notes_upload("LICENSE", "license") }}
             </div>
         </div>
 
@@ -269,22 +295,7 @@
                         <input id="other_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'OTHER'">
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header px-6 pt-6">
-                <h3 class="font-medium text-slate-900 dark:text-white">Reminder & Notes</h3>
-            </div>
-            <div class="card-body space-y-4 px-6 pb-6">
-                <div>
-                    <label for="reminder_days_before" class="form-label">Reminder Days Before Expiry</label>
-                    <input type="number" id="reminder_days_before" name="reminder_days_before" value="30" min="0" max="365" class="form-input w-32">
-                </div>
-                <div>
-                    <label for="notes" class="form-label">Notes</label>
-                    <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3" placeholder="Additional notes..." class="form-textarea"></textarea>
-                </div>
+                {{ reminder_notes_upload("OTHER", "other") }}
             </div>
         </div>
 
