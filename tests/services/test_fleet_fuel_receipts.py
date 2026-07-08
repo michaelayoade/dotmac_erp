@@ -49,6 +49,17 @@ class _FakeIncidentAttachmentUpload:
         )
 
 
+class _FakeDocumentUpload:
+    config = SimpleNamespace(max_size_bytes=10 * 1024 * 1024)
+
+    def save(self, file_data, content_type=None, subdirs=None, original_filename=None):
+        return SimpleNamespace(
+            relative_path="/".join([*(subdirs or []), "document_123.pdf"]),
+            file_size=len(file_data),
+            checksum="ghi789",
+        )
+
+
 @pytest.mark.asyncio
 async def test_save_fuel_receipt_attachment_creates_common_attachment(monkeypatch):
     db = _FakeDb()
@@ -117,3 +128,28 @@ async def test_save_incident_attachment_creates_common_attachment(monkeypatch):
     assert attachment.content_type == "image/jpeg"
     assert attachment.category == AttachmentCategory.OTHER
     assert attachment.uploaded_by == TEST_USER_ID
+
+
+@pytest.mark.asyncio
+async def test_save_document_file_updates_vehicle_document(monkeypatch):
+    db = _FakeDb()
+    document = SimpleNamespace(file_name=None, file_path=None)
+    upload = UploadFile(
+        BytesIO(b"%PDF fleet document"),
+        filename="registration.pdf",
+        headers={"content-type": "application/pdf"},
+    )
+    monkeypatch.setattr(
+        "app.services.file_upload.get_finance_attachment_upload",
+        lambda: _FakeDocumentUpload(),
+    )
+
+    await FleetWebService(db)._save_document_file(
+        organization_id=TEST_ORG_ID,
+        document=document,
+        upload=upload,
+    )
+
+    assert db.flushed is True
+    assert document.file_name == "registration.pdf"
+    assert document.file_path == (f"{TEST_ORG_ID}/fleet_documents/document_123.pdf")

@@ -1951,6 +1951,14 @@ class FleetWebService:
                         upload=upload,
                         uploaded_by=user_id,
                     )
+            elif entity_type == "document":
+                upload = form.get("document_file")
+                if isinstance(upload, StarletteUploadFile) and upload.filename:
+                    await self._save_document_file(
+                        organization_id=org_id,
+                        document=record,
+                        upload=upload,
+                    )
             db.commit()
             logger.info("Created fleet %s for org %s", entity_type, org_id)
         except Exception as e:
@@ -2025,6 +2033,44 @@ class FleetWebService:
         )
         db.add(attachment)
         db.flush()
+
+    async def _save_document_file(
+        self,
+        *,
+        organization_id: UUID,
+        document: Any,
+        upload: Any,
+    ) -> None:
+        """Validate and save a fleet document file onto the document record."""
+        from app.services.file_upload import (
+            FileUploadError,
+            get_finance_attachment_upload,
+        )
+        from app.services.upload_utils import read_upload_bytes
+
+        upload_service = get_finance_attachment_upload()
+        max_bytes = upload_service.config.max_size_bytes
+        file_bytes = await read_upload_bytes(
+            upload,
+            max_bytes,
+            error_detail=f"Document file is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
+        )
+        try:
+            upload_result = upload_service.save(
+                file_bytes,
+                content_type=upload.content_type,
+                subdirs=[
+                    str(coerce_uuid(organization_id)),
+                    "fleet_documents",
+                ],
+                original_filename=upload.filename,
+            )
+        except FileUploadError as exc:
+            raise ValueError(str(exc)) from exc
+
+        document.file_name = upload.filename
+        document.file_path = upload_result.relative_path
+        self.db.flush()
 
     async def _save_incident_attachment(
         self,
