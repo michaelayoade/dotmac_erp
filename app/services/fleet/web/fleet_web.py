@@ -1602,26 +1602,42 @@ class FleetWebService:
         organization_id: UUID,
         *,
         vehicle_id: UUID | None = None,
+        document_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Build context for document create form."""
+        """Build context for document create/edit form."""
         if not self._fleet_tables_ready():
             return {
                 "vehicles": [],
                 "document_types": [t.value for t in DocumentType],
+                "document": None,
                 "selected_vehicle_id": vehicle_id,
+                "form_action": "/fleet/documents/new",
+                "is_edit": False,
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
+        document = None
+        if document_id is not None:
+            document = DocumentService(self.db, org_id).get_or_raise(document_id)
+            vehicle_id = document.vehicle_id
 
         vehicles_result = vehicle_service.list_vehicles(
             include_disposed=False,
             params=PaginationParams(limit=200),
         )
+        vehicles = list(vehicles_result.items)
+        if document and all(v.vehicle_id != document.vehicle_id for v in vehicles):
+            vehicles.append(document.vehicle)
 
         return {
-            "vehicles": vehicles_result.items,
+            "vehicles": vehicles,
             "document_types": [t.value for t in DocumentType],
+            "document": document,
             "selected_vehicle_id": vehicle_id,
+            "form_action": f"/fleet/documents/{document_id}/edit"
+            if document_id
+            else "/fleet/documents/new",
+            "is_edit": document_id is not None,
         }
 
     def document_detail_context(
@@ -1973,6 +1989,87 @@ class FleetWebService:
             url=cfg["list_url"],
             status_code=303,
         )
+
+    async def update_document_response(
+        self,
+        request: "Request",
+        auth: Any,
+        db: Session,
+        document_id: UUID,
+    ) -> Any:
+        """Handle fleet document edit form submissions."""
+        from datetime import date
+        from decimal import Decimal, InvalidOperation
+
+        from fastapi import HTTPException
+        from fastapi.responses import RedirectResponse
+        from starlette.datastructures import UploadFile as StarletteUploadFile
+
+        from app.schemas.fleet.document import DocumentUpdate
+
+        form = await request.form()
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        data: dict[str, Any] = {}
+        for key in (
+            "document_type",
+            "document_number",
+            "description",
+            "issue_date",
+            "expiry_date",
+            "provider_name",
+            "policy_number",
+            "coverage_amount",
+            "premium_amount",
+            "reminder_days_before",
+            "notes",
+        ):
+            raw_value = form.get(key)
+            str_value = str(raw_value).strip() if raw_value is not None else ""
+            if not str_value:
+                data[key] = None
+                continue
+            if key in ("issue_date", "expiry_date"):
+                try:
+                    data[key] = date.fromisoformat(str_value)
+                except ValueError:
+                    data[key] = str_value
+            elif key in ("coverage_amount", "premium_amount"):
+                try:
+                    data[key] = Decimal(str_value)
+                except (ValueError, InvalidOperation):
+                    data[key] = str_value
+            elif key == "reminder_days_before":
+                try:
+                    data[key] = int(str_value)
+                except ValueError:
+                    data[key] = str_value
+            else:
+                data[key] = str_value
+
+        try:
+            service = DocumentService(db, coerce_uuid(org_id))
+            document = service.update(document_id, DocumentUpdate(**data))
+            upload = form.get("document_file")
+            if isinstance(upload, StarletteUploadFile) and upload.filename:
+                await self._save_document_file(
+                    organization_id=coerce_uuid(org_id),
+                    document=document,
+                    upload=upload,
+                )
+            db.commit()
+            logger.info("Updated fleet document %s for org %s", document_id, org_id)
+        except Exception as exc:
+            logger.warning("Fleet document update failed: %s", exc)
+            db.rollback()
+            return RedirectResponse(
+                url=f"/fleet/documents/{document_id}/edit?error={str(exc)[:200]}",
+                status_code=303,
+            )
+
+        return RedirectResponse(url=f"/fleet/documents/{document_id}", status_code=303)
 
     async def _save_fuel_receipt_attachment(
         self,

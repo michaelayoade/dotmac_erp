@@ -888,6 +888,40 @@ async def document_create(
     return await web_service.create_entity_response(request, auth, db, "document")
 
 
+@router.get("/documents/{document_id}/edit", response_class=HTMLResponse)
+def document_edit(
+    request: Request,
+    document_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Edit document form."""
+    context = base_context(request, auth, "Edit Document", "fleet", db=db)
+    web_service = FleetWebService(db)
+    try:
+        context.update(
+            web_service.document_form_context(
+                auth.organization_id,
+                document_id=document_id,
+            )
+        )
+        return templates.TemplateResponse(request, "fleet/document_form.html", context)
+    except NotFoundError:
+        return RedirectResponse(url="/fleet/documents?error=not_found", status_code=303)
+
+
+@router.post("/documents/{document_id}/edit")
+async def document_update(
+    request: Request,
+    document_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Update document from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.update_document_response(request, auth, db, document_id)
+
+
 @router.get("/documents/{document_id}", response_class=HTMLResponse)
 def document_detail(
     request: Request,
