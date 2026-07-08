@@ -1,41 +1,62 @@
 {% extends "modules/base_modules.html" %}
 {% from "components/macros.html" import icon_svg %}
 
+{% set document = document if document is defined else none %}
+{% set selected_doc_type = document.document_type.value if document else "REGISTRATION" %}
+{% set is_edit = is_edit if is_edit is defined else false %}
+{% set form_action = form_action if form_action is defined else "/fleet/documents/new" %}
+{% set document_number_value = document.document_number if document and document.document_number else "" %}
+{% set provider_name_value = document.provider_name if document and document.provider_name else "" %}
+{% set policy_number_value = document.policy_number if document and document.policy_number else "" %}
+{% set coverage_amount_value = document.coverage_amount if document and document.coverage_amount is not none else "" %}
+{% set premium_amount_value = document.premium_amount if document and document.premium_amount is not none else "" %}
+{% set issue_date_value = document.issue_date.isoformat() if document and document.issue_date else "" %}
+{% set expiry_date_value = document.expiry_date.isoformat() if document and document.expiry_date else "" %}
+{% set reminder_days_value = document.reminder_days_before if document else 30 %}
+{% set notes_value = document.notes if document and document.notes else "" %}
+
 {% macro reminder_notes_upload(doc_type, prefix) %}
 <div class="border-t border-slate-100 pt-4 dark:border-slate-800">
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div>
             <label for="{{ prefix }}_reminder_days_before" class="form-label">Reminder Days Before Expiry</label>
-            <input type="number" id="{{ prefix }}_reminder_days_before" name="reminder_days_before" value="30" min="0" max="365" class="form-input w-32" :disabled="activeDoc !== '{{ doc_type }}'">
+            <input type="number" id="{{ prefix }}_reminder_days_before" name="reminder_days_before" value="{{ reminder_days_value }}" min="0" max="365" class="form-input w-32" :disabled="activeDoc !== '{{ doc_type }}'">
         </div>
         <div class="lg:col-span-2">
             <label for="{{ prefix }}_document_file" class="form-label">Attachment</label>
             <input id="{{ prefix }}_document_file" name="document_file" type="file" class="form-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.txt,.csv" :disabled="activeDoc !== '{{ doc_type }}'">
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Upload the document file or scanned copy.</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {% if document and document.file_name %}Current file: {{ document.file_name }}. Upload a new file to replace it.{% else %}Upload the document file or scanned copy.{% endif %}
+            </p>
         </div>
     </div>
     <div class="mt-4">
         <label for="{{ prefix }}_notes" class="form-label">Notes</label>
-        <textarea aria-label="Additional notes..." id="{{ prefix }}_notes" name="notes" rows="3" placeholder="Additional notes..." class="form-input min-h-24 w-full resize-y" :disabled="activeDoc !== '{{ doc_type }}'"></textarea>
+        <textarea aria-label="Additional notes..." id="{{ prefix }}_notes" name="notes" rows="3" placeholder="Additional notes..." class="form-input min-h-24 w-full resize-y" :disabled="activeDoc !== '{{ doc_type }}'">{{ notes_value }}</textarea>
     </div>
 </div>
 {% endmacro %}
 
-{% block page_title %}Add Document{% endblock %}
+{% block page_title %}{% if is_edit %}Edit Document{% else %}Add Document{% endif %}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
         <li><a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet/documents" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Documents</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Add</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{% if is_edit %}Edit{% else %}Add{% endif %}</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="w-full max-w-none">
-    <form method="POST" action="/fleet/documents/new" enctype="multipart/form-data" class="space-y-6" x-data="{ activeDoc: 'REGISTRATION' }">
+    {% if request.query_params.get("error") %}
+    <div class="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ request.query_params.get("error") }}
+    </div>
+    {% endif %}
+    <form method="POST" action="{{ form_action }}" enctype="multipart/form-data" class="space-y-6" x-data="{ activeDoc: '{{ selected_doc_type }}' }">
         {{ request.state.csrf_form | safe }}
         <input type="hidden" name="document_type" x-model="activeDoc">
 
@@ -43,7 +64,7 @@
             <div class="card-body space-y-4 px-6 py-6">
                 <div>
                     <label for="vehicle_id" class="form-label">Vehicle <span class="text-rose-500">*</span></label>
-                    <select id="vehicle_id" name="vehicle_id" required class="form-select max-w-xl">
+                    <select id="vehicle_id" name="vehicle_id" required class="form-select max-w-xl" {% if is_edit %}disabled{% endif %}>
                         <option value="">Select vehicle...</option>
                         {% for v in vehicles %}
                         <option value="{{ v.vehicle_id }}" {{ 'selected' if selected_vehicle_id and selected_vehicle_id|string == v.vehicle_id|string else '' }}>
@@ -51,6 +72,9 @@
                         </option>
                         {% endfor %}
                     </select>
+                    {% if is_edit %}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Vehicle cannot be changed after the document is created.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -97,19 +121,19 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label for="registration_number" class="form-label">Registration Certificate Number</label>
-                        <input id="registration_number" name="document_number" type="text" class="form-input font-mono" placeholder="Certificate number" :disabled="activeDoc !== 'REGISTRATION'">
+                        <input id="registration_number" name="document_number" type="text" value="{{ document_number_value }}" class="form-input font-mono" placeholder="Certificate number" :disabled="activeDoc !== 'REGISTRATION'">
                     </div>
                     <div>
                         <label for="registration_authority" class="form-label">Issuing Authority</label>
-                        <input id="registration_authority" name="provider_name" type="text" class="form-input" placeholder="Licensing authority" :disabled="activeDoc !== 'REGISTRATION'">
+                        <input id="registration_authority" name="provider_name" type="text" value="{{ provider_name_value }}" class="form-input" placeholder="Licensing authority" :disabled="activeDoc !== 'REGISTRATION'">
                     </div>
                     <div>
                         <label for="registration_issue_date" class="form-label">Issue Date</label>
-                        <input id="registration_issue_date" name="issue_date" type="date" class="form-input" :disabled="activeDoc !== 'REGISTRATION'">
+                        <input id="registration_issue_date" name="issue_date" type="date" value="{{ issue_date_value }}" class="form-input" :disabled="activeDoc !== 'REGISTRATION'">
                     </div>
                     <div>
                         <label for="registration_expiry_date" class="form-label">Expiry Date</label>
-                        <input id="registration_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'REGISTRATION'">
+                        <input id="registration_expiry_date" name="expiry_date" type="date" value="{{ expiry_date_value }}" class="form-input" :disabled="activeDoc !== 'REGISTRATION'">
                     </div>
                 </div>
                 {{ reminder_notes_upload("REGISTRATION", "registration") }}
@@ -125,31 +149,31 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label for="insurance_provider" class="form-label">Insurance Company</label>
-                        <input id="insurance_provider" name="provider_name" type="text" class="form-input" placeholder="Insurance company" :disabled="activeDoc !== 'INSURANCE'">
+                        <input id="insurance_provider" name="provider_name" type="text" value="{{ provider_name_value }}" class="form-input" placeholder="Insurance company" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                     <div>
                         <label for="insurance_policy" class="form-label">Policy Number</label>
-                        <input id="insurance_policy" name="policy_number" type="text" class="form-input font-mono" placeholder="Policy number" :disabled="activeDoc !== 'INSURANCE'">
+                        <input id="insurance_policy" name="policy_number" type="text" value="{{ policy_number_value }}" class="form-input font-mono" placeholder="Policy number" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                     <div>
                         <label for="insurance_certificate" class="form-label">Certificate Number</label>
-                        <input id="insurance_certificate" name="document_number" type="text" class="form-input font-mono" placeholder="Certificate number" :disabled="activeDoc !== 'INSURANCE'">
+                        <input id="insurance_certificate" name="document_number" type="text" value="{{ document_number_value }}" class="form-input font-mono" placeholder="Certificate number" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                     <div>
                         <label for="insurance_coverage" class="form-label">Coverage Amount</label>
-                        <input id="insurance_coverage" name="coverage_amount" type="number" min="0" step="0.01" class="form-input" placeholder="0.00" :disabled="activeDoc !== 'INSURANCE'">
+                        <input id="insurance_coverage" name="coverage_amount" type="number" min="0" step="0.01" value="{{ coverage_amount_value }}" class="form-input" placeholder="0.00" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                     <div>
                         <label for="insurance_premium" class="form-label">Premium Amount</label>
-                        <input id="insurance_premium" name="premium_amount" type="number" min="0" step="0.01" class="form-input" placeholder="0.00" :disabled="activeDoc !== 'INSURANCE'">
+                        <input id="insurance_premium" name="premium_amount" type="number" min="0" step="0.01" value="{{ premium_amount_value }}" class="form-input" placeholder="0.00" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                     <div>
                         <label for="insurance_issue_date" class="form-label">Issue Date</label>
-                        <input id="insurance_issue_date" name="issue_date" type="date" class="form-input" :disabled="activeDoc !== 'INSURANCE'">
+                        <input id="insurance_issue_date" name="issue_date" type="date" value="{{ issue_date_value }}" class="form-input" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                     <div>
                         <label for="insurance_expiry_date" class="form-label">Expiry Date</label>
-                        <input id="insurance_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'INSURANCE'">
+                        <input id="insurance_expiry_date" name="expiry_date" type="date" value="{{ expiry_date_value }}" class="form-input" :disabled="activeDoc !== 'INSURANCE'">
                     </div>
                 </div>
                 {{ reminder_notes_upload("INSURANCE", "insurance") }}
@@ -165,19 +189,19 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label for="inspection_report" class="form-label">Inspection Report Number</label>
-                        <input id="inspection_report" name="document_number" type="text" class="form-input font-mono" placeholder="Report number" :disabled="activeDoc !== 'INSPECTION'">
+                        <input id="inspection_report" name="document_number" type="text" value="{{ document_number_value }}" class="form-input font-mono" placeholder="Report number" :disabled="activeDoc !== 'INSPECTION'">
                     </div>
                     <div>
                         <label for="inspection_authority" class="form-label">Inspection Authority</label>
-                        <input id="inspection_authority" name="provider_name" type="text" class="form-input" placeholder="Inspection center or authority" :disabled="activeDoc !== 'INSPECTION'">
+                        <input id="inspection_authority" name="provider_name" type="text" value="{{ provider_name_value }}" class="form-input" placeholder="Inspection center or authority" :disabled="activeDoc !== 'INSPECTION'">
                     </div>
                     <div>
                         <label for="inspection_issue_date" class="form-label">Inspection Date</label>
-                        <input id="inspection_issue_date" name="issue_date" type="date" class="form-input" :disabled="activeDoc !== 'INSPECTION'">
+                        <input id="inspection_issue_date" name="issue_date" type="date" value="{{ issue_date_value }}" class="form-input" :disabled="activeDoc !== 'INSPECTION'">
                     </div>
                     <div>
                         <label for="inspection_expiry_date" class="form-label">Next Due Date</label>
-                        <input id="inspection_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'INSPECTION'">
+                        <input id="inspection_expiry_date" name="expiry_date" type="date" value="{{ expiry_date_value }}" class="form-input" :disabled="activeDoc !== 'INSPECTION'">
                     </div>
                 </div>
                 {{ reminder_notes_upload("INSPECTION", "inspection") }}
@@ -193,19 +217,19 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label for="roadworthy_number" class="form-label">Certificate Number</label>
-                        <input id="roadworthy_number" name="document_number" type="text" class="form-input font-mono" placeholder="Certificate number" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
+                        <input id="roadworthy_number" name="document_number" type="text" value="{{ document_number_value }}" class="form-input font-mono" placeholder="Certificate number" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
                     </div>
                     <div>
                         <label for="roadworthy_authority" class="form-label">Issuing Authority</label>
-                        <input id="roadworthy_authority" name="provider_name" type="text" class="form-input" placeholder="Authority name" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
+                        <input id="roadworthy_authority" name="provider_name" type="text" value="{{ provider_name_value }}" class="form-input" placeholder="Authority name" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
                     </div>
                     <div>
                         <label for="roadworthy_issue_date" class="form-label">Issue Date</label>
-                        <input id="roadworthy_issue_date" name="issue_date" type="date" class="form-input" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
+                        <input id="roadworthy_issue_date" name="issue_date" type="date" value="{{ issue_date_value }}" class="form-input" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
                     </div>
                     <div>
                         <label for="roadworthy_expiry_date" class="form-label">Expiry Date</label>
-                        <input id="roadworthy_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
+                        <input id="roadworthy_expiry_date" name="expiry_date" type="date" value="{{ expiry_date_value }}" class="form-input" :disabled="activeDoc !== 'ROAD_WORTHINESS'">
                     </div>
                 </div>
                 {{ reminder_notes_upload("ROAD_WORTHINESS", "roadworthy") }}
@@ -221,19 +245,19 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label for="permit_number" class="form-label">Permit Number</label>
-                        <input id="permit_number" name="document_number" type="text" class="form-input font-mono" placeholder="Permit number" :disabled="activeDoc !== 'PERMIT'">
+                        <input id="permit_number" name="document_number" type="text" value="{{ document_number_value }}" class="form-input font-mono" placeholder="Permit number" :disabled="activeDoc !== 'PERMIT'">
                     </div>
                     <div>
                         <label for="permit_authority" class="form-label">Permit Authority</label>
-                        <input id="permit_authority" name="provider_name" type="text" class="form-input" placeholder="Authority name" :disabled="activeDoc !== 'PERMIT'">
+                        <input id="permit_authority" name="provider_name" type="text" value="{{ provider_name_value }}" class="form-input" placeholder="Authority name" :disabled="activeDoc !== 'PERMIT'">
                     </div>
                     <div>
                         <label for="permit_issue_date" class="form-label">Issue Date</label>
-                        <input id="permit_issue_date" name="issue_date" type="date" class="form-input" :disabled="activeDoc !== 'PERMIT'">
+                        <input id="permit_issue_date" name="issue_date" type="date" value="{{ issue_date_value }}" class="form-input" :disabled="activeDoc !== 'PERMIT'">
                     </div>
                     <div>
                         <label for="permit_expiry_date" class="form-label">Expiry Date</label>
-                        <input id="permit_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'PERMIT'">
+                        <input id="permit_expiry_date" name="expiry_date" type="date" value="{{ expiry_date_value }}" class="form-input" :disabled="activeDoc !== 'PERMIT'">
                     </div>
                 </div>
                 {{ reminder_notes_upload("PERMIT", "permit") }}
@@ -249,19 +273,19 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label for="license_number" class="form-label">License Number</label>
-                        <input id="license_number" name="document_number" type="text" class="form-input font-mono" placeholder="License number" :disabled="activeDoc !== 'LICENSE'">
+                        <input id="license_number" name="document_number" type="text" value="{{ document_number_value }}" class="form-input font-mono" placeholder="License number" :disabled="activeDoc !== 'LICENSE'">
                     </div>
                     <div>
                         <label for="license_authority" class="form-label">Issuing Authority</label>
-                        <input id="license_authority" name="provider_name" type="text" class="form-input" placeholder="Authority name" :disabled="activeDoc !== 'LICENSE'">
+                        <input id="license_authority" name="provider_name" type="text" value="{{ provider_name_value }}" class="form-input" placeholder="Authority name" :disabled="activeDoc !== 'LICENSE'">
                     </div>
                     <div>
                         <label for="license_issue_date" class="form-label">Issue Date</label>
-                        <input id="license_issue_date" name="issue_date" type="date" class="form-input" :disabled="activeDoc !== 'LICENSE'">
+                        <input id="license_issue_date" name="issue_date" type="date" value="{{ issue_date_value }}" class="form-input" :disabled="activeDoc !== 'LICENSE'">
                     </div>
                     <div>
                         <label for="license_expiry_date" class="form-label">Expiry Date</label>
-                        <input id="license_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'LICENSE'">
+                        <input id="license_expiry_date" name="expiry_date" type="date" value="{{ expiry_date_value }}" class="form-input" :disabled="activeDoc !== 'LICENSE'">
                     </div>
                 </div>
                 {{ reminder_notes_upload("LICENSE", "license") }}
@@ -276,23 +300,23 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <label for="other_description" class="form-label">Document Description <span class="text-rose-500">*</span></label>
-                        <input id="other_description" name="description" type="text" required class="form-input" placeholder="What document is this?" :disabled="activeDoc !== 'OTHER'">
+                        <input id="other_description" name="description" type="text" value="{{ document.description if document and selected_doc_type == 'OTHER' else '' }}" required class="form-input" placeholder="What document is this?" :disabled="activeDoc !== 'OTHER'">
                     </div>
                     <div>
                         <label for="other_number" class="form-label">Reference Number</label>
-                        <input id="other_number" name="document_number" type="text" class="form-input font-mono" placeholder="Reference number" :disabled="activeDoc !== 'OTHER'">
+                        <input id="other_number" name="document_number" type="text" value="{{ document_number_value }}" class="form-input font-mono" placeholder="Reference number" :disabled="activeDoc !== 'OTHER'">
                     </div>
                     <div>
                         <label for="other_provider" class="form-label">Provider / Issuing Authority</label>
-                        <input id="other_provider" name="provider_name" type="text" class="form-input" placeholder="Provider or authority" :disabled="activeDoc !== 'OTHER'">
+                        <input id="other_provider" name="provider_name" type="text" value="{{ provider_name_value }}" class="form-input" placeholder="Provider or authority" :disabled="activeDoc !== 'OTHER'">
                     </div>
                     <div>
                         <label for="other_issue_date" class="form-label">Issue Date</label>
-                        <input id="other_issue_date" name="issue_date" type="date" class="form-input" :disabled="activeDoc !== 'OTHER'">
+                        <input id="other_issue_date" name="issue_date" type="date" value="{{ issue_date_value }}" class="form-input" :disabled="activeDoc !== 'OTHER'">
                     </div>
                     <div>
                         <label for="other_expiry_date" class="form-label">Expiry Date</label>
-                        <input id="other_expiry_date" name="expiry_date" type="date" class="form-input" :disabled="activeDoc !== 'OTHER'">
+                        <input id="other_expiry_date" name="expiry_date" type="date" value="{{ expiry_date_value }}" class="form-input" :disabled="activeDoc !== 'OTHER'">
                     </div>
                 </div>
                 {{ reminder_notes_upload("OTHER", "other") }}
@@ -303,7 +327,7 @@
             <a href="/fleet/documents" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("check", "h-4 w-4 mr-2") }}
-                Add Document
+                {% if is_edit %}Save Changes{% else %}Add Document{% endif %}
             </button>
         </div>
     </form>
