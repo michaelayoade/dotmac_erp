@@ -37,6 +37,7 @@ class SubscriberSyncMixin:
     _lock_dotmac_sub_customer: Any
     _reseller_customer_id: Any
     _reprime_tenant_context: Any
+    _customer_code: Any
 
     def sync_subscribers(
         self,

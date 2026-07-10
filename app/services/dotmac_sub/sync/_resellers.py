@@ -31,6 +31,7 @@ class ResellerSyncMixin:
     _record_sync: Any
     _get_synced_entity: Any
     _reprime_tenant_context: Any
+    _customer_code: Any
 
     def sync_resellers(
         self,
