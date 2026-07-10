@@ -14,7 +14,16 @@ from typing import TypedDict
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
@@ -38,6 +47,8 @@ from app.schemas.procurement.requisition import RequisitionCreate, RequisitionLi
 from app.schemas.procurement.rfq import RFQCreate
 from app.schemas.procurement.vendor import PrequalificationCreate
 from app.services.common import NotFoundError, ValidationError
+from app.models.finance.ap.supplier import Supplier
+from app.services.finance.ap.supplier import SupplierService
 from app.services.finance.platform.org_context import org_context_service
 from app.services.procurement.contract import ContractService
 from app.services.procurement.procurement_plan import ProcurementPlanService
@@ -201,6 +212,13 @@ def _is_empty(value: object) -> bool:
     return bool(isinstance(value, str) and not value.strip())
 
 
+def _strip_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 def _parse_decimal(value: object) -> Decimal:
     if _is_empty(value):
         raise InvalidOperation("Missing decimal value")
@@ -259,6 +277,58 @@ def _parse_bool(value: object) -> bool:
     if text in {"false", "0", "no", "n", "off"}:
         return False
     raise InvalidOperation("Invalid boolean value")
+
+
+def _create_vendor_supplier(
+    db: Session,
+    organization_id: UUID,
+    *,
+    supplier_code: str | None,
+    supplier_name: str | None,
+    trading_name: str | None,
+    email: str | None,
+    phone: str | None,
+    currency_code: str | None,
+    payment_terms_days: int,
+):
+    supplier_payload = {
+        "supplier_code": _strip_optional(supplier_code),
+        "supplier_type": "VENDOR",
+        "supplier_name": _strip_optional(supplier_name),
+        "trading_name": _strip_optional(trading_name) or _strip_optional(supplier_name),
+        "email": _strip_optional(email),
+        "phone": _strip_optional(phone),
+        "currency_code": _strip_optional(currency_code),
+        "payment_terms_days": payment_terms_days,
+    }
+    supplier_input = SupplierService.build_input_from_payload(
+        db=db,
+        organization_id=organization_id,
+        payload=supplier_payload,
+    )
+    return SupplierService.create_supplier(
+        db=db,
+        organization_id=organization_id,
+        input=supplier_input,
+    )
+
+
+def _generate_vendor_code(db: Session, organization_id: UUID) -> str:
+    """Generate the next procurement-created vendor code."""
+    existing_codes = db.scalars(
+        select(Supplier.supplier_code).where(
+            Supplier.organization_id == organization_id,
+            Supplier.supplier_code.like("VEN-%"),
+        )
+    ).all()
+    max_number = 0
+    for code in existing_codes:
+        if not code:
+            continue
+        suffix = code.removeprefix("VEN-")
+        if suffix.isdigit():
+            max_number = max(max_number, int(suffix))
+    return f"VEN-{max_number + 1:05d}"
 
 
 def _load_import_rows(
@@ -2451,6 +2521,97 @@ def prequalification_shortcut():
     )
 
 
+@router.get("/vendors/new", response_class=HTMLResponse)
+def vendor_new(
+    request: Request,
+    error: str | None = None,
+    auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """New vendor form."""
+    context = base_context(request, auth, "Add Vendor", "proc_vendors", db=db)
+    web_service = ProcurementWebService(db)
+    context.update(web_service.vendor_form_context(auth.organization_id))
+    context["error"] = error
+    context["form_data"] = {}
+    return templates.TemplateResponse(request, "procurement/vendors/form.html", context)
+
+
+@router.post("/vendors/new")
+def vendor_create(
+    request: Request,
+    supplier_name: str = Form(...),
+    trading_name: str | None = Form(None),
+    email: str | None = Form(None),
+    phone: str | None = Form(None),
+    currency_code: str | None = Form(None),
+    payment_terms_days: int = Form(30),
+    auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Create a vendor supplier record from procurement."""
+    supplier_code = _generate_vendor_code(db, auth.organization_id)
+    form_data = {
+        "supplier_code": supplier_code,
+        "supplier_name": supplier_name,
+        "trading_name": trading_name,
+        "email": email,
+        "phone": phone,
+        "currency_code": currency_code,
+        "payment_terms_days": payment_terms_days,
+    }
+    errors: list[str] = []
+    if not _strip_optional(supplier_name):
+        errors.append("Vendor name is required")
+    if payment_terms_days < 0 or payment_terms_days > 365:
+        errors.append("Payment terms must be between 0 and 365 days")
+
+    if errors:
+        context = base_context(request, auth, "Add Vendor", "proc_vendors", db=db)
+        web_service = ProcurementWebService(db)
+        context.update(web_service.vendor_form_context(auth.organization_id))
+        context["error"] = "; ".join(errors)
+        context["form_data"] = form_data
+        return templates.TemplateResponse(
+            request,
+            "procurement/vendors/form.html",
+            context,
+            status_code=400,
+        )
+
+    try:
+        _create_vendor_supplier(
+            db,
+            auth.organization_id,
+            supplier_code=supplier_code,
+            supplier_name=supplier_name,
+            trading_name=trading_name,
+            email=email,
+            phone=phone,
+            currency_code=currency_code,
+            payment_terms_days=payment_terms_days,
+        )
+    except (HTTPException, ValueError) as exc:
+        detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+        db.rollback()
+        context = base_context(request, auth, "Add Vendor", "proc_vendors", db=db)
+        web_service = ProcurementWebService(db)
+        context.update(web_service.vendor_form_context(auth.organization_id))
+        context["error"] = str(detail)
+        context["form_data"] = form_data
+        return templates.TemplateResponse(
+            request,
+            "procurement/vendors/form.html",
+            context,
+            status_code=400,
+        )
+
+    return RedirectResponse(
+        url="/procurement/vendors?success=Vendor+created",
+        status_code=303,
+    )
+
+
 @router.get("/vendors/prequalification", response_class=HTMLResponse)
 def prequalification_list(
     request: Request,
@@ -2469,7 +2630,7 @@ def prequalification_list(
     )
     web_service = ProcurementWebService(db)
     context.update(
-        web_service.vendor_list_context(
+        web_service.prequalification_list_context(
             auth.organization_id,
             status=status,
             q=q,
@@ -2586,14 +2747,14 @@ def prequalification_create(
             status_code=303,
         )
 
-    if supplier_uuid is None:
-        return RedirectResponse(
-            url="/procurement/vendors/prequalification/new?error=Missing+supplier",
-            status_code=303,
-        )
-
     service = VendorPrequalificationService(db)
     try:
+        if supplier_uuid is None:
+            return RedirectResponse(
+                url="/procurement/vendors/prequalification/new?error=Missing+supplier",
+                status_code=303,
+            )
+
         data = PrequalificationCreate(
             supplier_id=supplier_uuid,
             application_date=app_date,
@@ -2606,7 +2767,16 @@ def prequalification_create(
         )
         service.create(auth.organization_id, data)
     except ValidationError as exc:
-        msg = quote(str(exc))
+        db.rollback()
+        msg = quote(str(exc.detail))
+        return RedirectResponse(
+            url=f"/procurement/vendors/prequalification/new?error={msg}",
+            status_code=303,
+        )
+    except (HTTPException, ValueError) as exc:
+        detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+        db.rollback()
+        msg = quote(str(detail))
         return RedirectResponse(
             url=f"/procurement/vendors/prequalification/new?error={msg}",
             status_code=303,

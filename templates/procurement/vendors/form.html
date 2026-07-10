@@ -1,0 +1,110 @@
+{% extends "procurement/base_procurement.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Add Vendor{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/procurement/vendors" class="hover:text-amber-600 transition-colors">Vendors</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+    {% if error %}
+    <div class="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+        <div class="flex items-start gap-2 text-red-700 dark:text-red-400">
+            {{ icon_svg("exclamation-circle", "w-5 h-5 flex-shrink-0") }}
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/procurement/vendors/new" class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="space-y-5">
+            <div class="card">
+                <div class="card-header border-b border-slate-100 px-6 py-5 dark:border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <div class="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                            {{ icon_svg("building", "h-5 w-5") }}
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-slate-900 dark:text-white">Vendor Profile</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body space-y-6 px-6 py-6">
+                    <div>
+                        <h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Identity</h4>
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div>
+                                <label for="supplier_name" class="form-label required">Vendor Name</label>
+                                <input type="text" id="supplier_name" name="supplier_name" value="{{ form_data.supplier_name if form_data else '' }}" maxlength="255" placeholder="Acme Supplies Ltd" class="form-input w-full" required>
+                            </div>
+                            <div>
+                                <label for="trading_name" class="form-label">Trading Name</label>
+                                <input type="text" id="trading_name" name="trading_name" value="{{ form_data.trading_name if form_data else '' }}" maxlength="255" class="form-input w-full">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-5 dark:border-slate-700">
+                        <h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Contact & Terms</h4>
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div>
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" id="email" name="email" value="{{ form_data.email if form_data else '' }}" maxlength="255" class="form-input w-full">
+                            </div>
+                            <div>
+                                <label for="phone" class="form-label">Phone</label>
+                                <input type="text" id="phone" name="phone" value="{{ form_data.phone if form_data else '' }}" maxlength="50" class="form-input w-full">
+                            </div>
+                            <div>
+                                <label for="currency_code" class="form-label">Currency</label>
+                                <select id="currency_code" name="currency_code" class="form-select w-full">
+                                    {% set selected_currency = form_data.currency_code if form_data and form_data.currency_code else default_currency_code %}
+                                    {% for currency in currencies %}
+                                    <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>{{ currency.code }} - {{ currency.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="payment_terms_days" class="form-label">Payment Terms</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="payment_terms_days" name="payment_terms_days" value="{{ form_data.payment_terms_days if form_data else 30 }}" min="0" max="365" class="form-input w-28">
+                                    <span class="text-sm text-slate-500 dark:text-slate-400">days</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-700">
+                <a href="/procurement/vendors" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Vendor</button>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="card">
+                <div class="card-body space-y-3 px-5 py-5 text-sm">
+                    <div class="flex items-center gap-2 text-slate-900 dark:text-white">
+                        {{ icon_svg("info", "h-4 w-4 text-blue-600 dark:text-blue-300") }}
+                        <span class="font-medium">AP supplier master</span>
+                    </div>
+                    <p class="text-slate-600 dark:text-slate-300">New vendors created here are available for procurement, AP invoices, payments, and contracts.</p>
+                    <p class="text-slate-600 dark:text-slate-300">Vendor codes are generated automatically using the next available <span class="font-medium">VEN-00001</span> sequence.</p>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

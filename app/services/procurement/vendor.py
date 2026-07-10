@@ -23,7 +23,8 @@ from app.schemas.procurement.vendor import (
     PrequalificationCreate,
     PrequalificationUpdate,
 )
-from app.services.common import NotFoundError
+from app.models.finance.ap.supplier import Supplier
+from app.services.common import NotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,15 @@ class VendorPrequalificationService:
         data: PrequalificationCreate,
     ) -> VendorPrequalification:
         """Create a new prequalification record."""
+        supplier = self.db.scalar(
+            select(Supplier).where(
+                Supplier.organization_id == organization_id,
+                Supplier.supplier_id == data.supplier_id,
+            )
+        )
+        if not supplier:
+            raise ValidationError("Supplier not found for this organization")
+
         preq = VendorPrequalification(
             organization_id=organization_id,
             supplier_id=data.supplier_id,

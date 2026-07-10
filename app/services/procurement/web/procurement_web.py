@@ -8,7 +8,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.procurement.enums import (
@@ -601,6 +601,64 @@ class ProcurementWebService:
         """Build context for vendor registry page."""
         from app.models.finance.ap.supplier import Supplier
 
+        filters = [
+            Supplier.organization_id == organization_id,
+            Supplier.is_active.is_(True),
+        ]
+        if q:
+            q_like = f"%{q.strip().lower()}%"
+            filters.append(
+                or_(
+                    func.lower(Supplier.legal_name).like(q_like),
+                    func.lower(Supplier.trading_name).like(q_like),
+                    func.lower(Supplier.supplier_code).like(q_like),
+                )
+            )
+
+        total = self.db.scalar(
+            select(func.count()).select_from(Supplier).where(*filters)
+        )
+        suppliers = self.db.scalars(
+            select(Supplier)
+            .where(*filters)
+            .order_by(Supplier.legal_name.asc())
+            .offset(offset)
+            .limit(limit)
+        ).all()
+
+        active_filters = build_active_filters(
+            params={"q": q},
+            labels={"q": "Search"},
+        )
+        page = (offset // limit) + 1 if limit else 1
+        total_count = total or 0
+        total_pages = max(1, (total_count + limit - 1) // limit) if limit else 1
+        return {
+            "vendors": suppliers,
+            "total": total_count,
+            "total_count": total_count,
+            "offset": offset,
+            "limit": limit,
+            "page": page,
+            "total_pages": total_pages,
+            "filter_status": status,
+            "filter_q": q,
+            "search": q or "",
+            "active_filters": active_filters,
+            "is_prequalification_list": False,
+        }
+
+    def prequalification_list_context(
+        self,
+        organization_id: UUID,
+        status: str | None = None,
+        q: str | None = None,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> dict[str, Any]:
+        """Build context for the hidden prequalification list page."""
+        from app.models.finance.ap.supplier import Supplier
+
         service = VendorPrequalificationService(self.db)
         prequalifications, total = service.list_prequalifications(
             organization_id,
@@ -651,6 +709,7 @@ class ProcurementWebService:
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
             "vendor_statuses": list(PrequalificationStatus),
             "active_filters": active_filters,
+            "is_prequalification_list": True,
         }
 
     def prequalification_detail_context(
@@ -659,8 +718,6 @@ class ProcurementWebService:
         prequalification_id: UUID,
     ) -> dict[str, Any]:
         """Build context for prequalification detail page."""
-        from app.models.finance.ap.supplier import Supplier
-
         service = VendorPrequalificationService(self.db)
         preq = service.get_by_id(organization_id, prequalification_id)
         if not preq:
@@ -669,7 +726,14 @@ class ProcurementWebService:
             raise NotFoundError("Prequalification not found")
 
         # Enrich with supplier data
-        supplier = self.db.get(Supplier, preq.supplier_id)
+        from app.models.finance.ap.supplier import Supplier
+
+        supplier = self.db.scalar(
+            select(Supplier).where(
+                Supplier.organization_id == organization_id,
+                Supplier.supplier_id == preq.supplier_id,
+            )
+        )
         preq.supplier_name = (  # type: ignore[attr-defined]
             (supplier.trading_name or supplier.legal_name) if supplier else "Unknown"
         )
@@ -742,11 +806,18 @@ class ProcurementWebService:
     def prequalification_form_context(self, organization_id: UUID) -> dict[str, Any]:
         """Build context for prequalification create form."""
         from app.models.finance.ap.supplier import Supplier
+        from app.services.finance.platform.currency_context import get_currency_context
 
         suppliers = self.db.scalars(
-            select(Supplier).order_by(Supplier.legal_name.asc()).limit(200)
+            select(Supplier)
+            .where(
+                Supplier.organization_id == organization_id,
+                Supplier.is_active.is_(True),
+            )
+            .order_by(Supplier.legal_name.asc())
+            .limit(200)
         ).all()
-        return {
+        context = {
             "suppliers": suppliers,
             "prequalification_categories": [
                 "Goods",
@@ -760,3 +831,11 @@ class ProcurementWebService:
                 "Professional Services",
             ],
         }
+        context.update(get_currency_context(self.db, str(organization_id)))
+        return context
+
+    def vendor_form_context(self, organization_id: UUID) -> dict[str, Any]:
+        """Build context for plain vendor creation."""
+        from app.services.finance.platform.currency_context import get_currency_context
+
+        return get_currency_context(self.db, str(organization_id))

@@ -14,14 +14,26 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/procurement/vendors/prequalification/new" class="btn btn-primary">
-    {{ icon_svg("check-circle", "h-4 w-4 mr-2") }}
-    Prequalify Vendor
+<a href="/procurement/vendors/new" class="btn btn-primary">
+    {{ icon_svg("plus", "h-4 w-4 mr-2") }}
+    Add Vendor
 </a>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-4 stagger-in">
+    {% if not is_prequalification_list %}
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-100">
+        <div class="flex items-start gap-3">
+            {{ icon_svg("info", "h-5 w-5 mt-0.5 flex-shrink-0") }}
+            <div>
+                <p class="font-medium">Vendors are stored in the AP supplier master.</p>
+                <p class="mt-1 text-blue-800 dark:text-blue-200">This page shows active supplier records that procurement can use for RFQs, contracts, and purchasing.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if success %}
     <div class="card border border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100 p-4 text-sm">
         {{ success }}
@@ -36,14 +48,15 @@
     <!-- Filters -->
     {# Filters #}
     {% call(filter_attrs) compact_filters(
-        base_url="/procurement/vendors/list",
+        base_url="/procurement/vendors",
         active_filters=active_filters | default([]),
         show_search=true,
         search=filter_q | default('', true),
         search_name="q",
-        search_placeholder="Supplier name, registration number..."
+        search_placeholder="Vendor name or code..."
     ) %}
     <div>
+        {% if is_prequalification_list %}
             <div>
                 <label class="form-label text-xs">Status</label>
                 <select aria-label="Status" name="status" class="form-select w-full text-sm" {{ filter_attrs }}>
@@ -53,6 +66,7 @@
                     {% endfor %}
                 </select>
             </div>
+        {% endif %}
     </div>
     {% endcall %}
 
@@ -63,12 +77,19 @@
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Supplier</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Vendor</th>
+                        {% if is_prequalification_list %}
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Valid From</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Valid To</th>
                         <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Score</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                        {% else %}
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Code</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Currency</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Terms</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Contact</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -76,10 +97,14 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="px-4 py-3">
                             <div>
-                                <p class="font-medium text-slate-900 dark:text-white">{{ vendor.supplier_name }}</p>
-                                {% if vendor.registration_number %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ vendor.registration_number }}</p>{% endif %}
+                                <p class="font-medium text-slate-900 dark:text-white">{{ vendor.supplier_name if is_prequalification_list else (vendor.trading_name or vendor.legal_name) }}</p>
+                                {% if is_prequalification_list and vendor.registration_number %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ vendor.registration_number }}</p>{% endif %}
+                                {% if not is_prequalification_list and vendor.trading_name and vendor.legal_name and vendor.trading_name != vendor.legal_name %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ vendor.legal_name }}</p>
+                                {% endif %}
                             </div>
                         </td>
+                        {% if is_prequalification_list %}
                         <td class="px-4 py-3">
                             {{ status_badge(vendor.status, 'sm') }}
                         </td>
@@ -97,6 +122,20 @@
                             <a href="/procurement/vendors/{{ vendor.prequalification_id }}/prequalification" class="text-blue-600 hover:underline dark:text-blue-400 text-xs">View Details</a>
                             {% endif %}
                         </td>
+                        {% else %}
+                        <td class="px-4 py-3">
+                            <span class="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ vendor.supplier_code }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ vendor.currency_code }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ vendor.payment_terms_days }} days</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+                            {% if vendor.primary_contact %}
+                            {{ vendor.primary_contact.get('email') or vendor.primary_contact.get('phone') or '-' }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        {% endif %}
                     </tr>
                     {% else %}
                     <tr>
@@ -108,13 +147,13 @@
                                     {% if filter_status or filter_q %}
                                     Try adjusting your search or filter criteria
                                     {% else %}
-                                    Get started by prequalifying your first vendor
+                                    Get started by adding your first vendor
                                     {% endif %}
                                 </p>
                                 {% if not (filter_status or filter_q) %}
-                                <a href="/procurement/vendors/prequalification/new" class="mt-4 inline-flex items-center btn btn-primary text-sm">
-                                    {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
-                                    Prequalify Vendor
+                                <a href="/procurement/vendors/new" class="mt-4 inline-flex items-center btn btn-primary text-sm">
+                                    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+                                    Add Vendor
                                 </a>
                                 {% endif %}
                             </div>
