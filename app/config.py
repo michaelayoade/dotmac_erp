@@ -204,6 +204,14 @@ class Settings:
         os.getenv("DOTMAC_SUB_REQUEST_TIMEOUT", "60.0")
     )
     dotmac_sub_max_retries: int = int(os.getenv("DOTMAC_SUB_MAX_RETRIES", "3"))
+    # Staff sync (ERP -> dotmac_sub staff accounts). Disabled unless enabled
+    # explicitly; the API key must carry rbac:assign + rbac:roles:read.
+    dotmac_sub_staff_sync_enabled: bool = (
+        os.getenv("DOTMAC_SUB_STAFF_SYNC_ENABLED", "false").lower() == "true"
+    )
+    dotmac_sub_staff_default_role: str = os.getenv(
+        "DOTMAC_SUB_STAFF_DEFAULT_ROLE", "staff"
+    )
 
     # ==========================================================================
     # Analytics (pre-computed metric snapshots)

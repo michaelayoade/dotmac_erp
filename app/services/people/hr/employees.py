@@ -1317,6 +1317,32 @@ class EmployeeService:
     # Status Management
     # =========================================================================
 
+    def _enqueue_staff_sync(self, employee: Employee) -> None:
+        """Queue the dotmac_sub staff-account push for a lifecycle change.
+
+        Enqueued with a short countdown so the caller's transaction commits
+        before the worker reads the row; the nightly reconcile sweep is the
+        safety net for anything missed. Never lets queueing failures break
+        the HR write path.
+        """
+        from app.config import settings as app_settings
+
+        if not getattr(app_settings, "dotmac_sub_staff_sync_enabled", False):
+            return
+        try:
+            from app.tasks.staff_sync import sync_employee_staff_account
+
+            sync_employee_staff_account.apply_async(
+                args=[str(employee.employee_id), str(employee.organization_id)],
+                countdown=10,
+            )
+        except Exception:  # noqa: BLE001 — broker down must not block HR writes
+            logger.warning(
+                "Could not enqueue staff sync for employee %s",
+                employee.employee_id,
+                exc_info=True,
+            )
+
     def activate_employee(self, employee_id: uuid.UUID) -> Employee:
         """Activate an employee.
 
@@ -1333,6 +1359,7 @@ class EmployeeService:
         employee.status = EmployeeStatus.ACTIVE
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
+        self._enqueue_staff_sync(employee)
         return employee
 
     def suspend_employee(
@@ -1355,6 +1382,7 @@ class EmployeeService:
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
         # Note: reason could be stored in notes field or separate audit log
+        self._enqueue_staff_sync(employee)
         return employee
 
     def terminate_employee(
@@ -1407,6 +1435,7 @@ class EmployeeService:
             reason=data.reason if hasattr(data, "reason") else None,
         )
 
+        self._enqueue_staff_sync(employee)
         return employee
 
     def resign_employee(
@@ -1441,6 +1470,7 @@ class EmployeeService:
         employee.final_payroll_processed_at = None
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
+        self._enqueue_staff_sync(employee)
         return employee
 
     def rehire_employee(
