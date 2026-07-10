@@ -1968,12 +1968,15 @@ class FleetWebService:
                         uploaded_by=user_id,
                     )
             elif entity_type == "document":
-                upload = form.get("document_file")
-                if isinstance(upload, StarletteUploadFile) and upload.filename:
+                document_upload = form.get("document_file")
+                if (
+                    isinstance(document_upload, StarletteUploadFile)
+                    and document_upload.filename
+                ):
                     await self._save_document_file(
                         organization_id=org_id,
                         document=record,
-                        upload=upload,
+                        upload=document_upload,
                     )
             db.commit()
             logger.info("Created fleet %s for org %s", entity_type, org_id)
