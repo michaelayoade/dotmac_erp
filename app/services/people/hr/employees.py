@@ -1327,7 +1327,7 @@ class EmployeeService:
         """
         from app.config import settings as app_settings
 
-        if not app_settings.dotmac_sub_staff_sync_enabled:
+        if not getattr(app_settings, "dotmac_sub_staff_sync_enabled", False):
             return
         try:
             from app.tasks.staff_sync import sync_employee_staff_account
