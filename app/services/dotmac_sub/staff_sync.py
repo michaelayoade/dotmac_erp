@@ -17,9 +17,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db.session_context import prime_tenant_context
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
 
@@ -133,29 +135,37 @@ def reconcile_staff_accounts(db: Session, organization_id: UUID) -> dict[str, An
     if not config.is_configured():
         return {"success": True, "skipped": "dotmac_sub not configured"}
 
+    syncable = list(_ENABLED_STATUSES | _DISABLED_STATUSES)
+    # Snapshot (id, code) up front. We commit per employee for error
+    # isolation, but the tenant RLS context is a transaction-scoped
+    # ``SET LOCAL`` that every commit resets — so carrying ORM instances
+    # across commits makes their next attribute access reload under no org
+    # context, RLS filters the row out, and SQLAlchemy raises
+    # ObjectDeletedError. Re-prime and re-fetch each iteration instead; the
+    # code is kept as a plain string so the error branch never touches an
+    # expired instance either.
+    rows = db.execute(
+        select(Employee.employee_id, Employee.employee_code).where(
+            Employee.organization_id == organization_id,
+            Employee.status.in_(syncable),
+        )
+    ).all()
+
     counts: dict[str, int] = {}
     errors: list[str] = []
     with DotmacSubClient(config) as client:
-        employees = (
-            db.query(Employee)
-            .filter(
-                Employee.organization_id == organization_id,
-                Employee.status.in_(
-                    [s for s in (_ENABLED_STATUSES | _DISABLED_STATUSES)]
-                ),
-            )
-            .all()
-        )
-        for employee in employees:
+        for emp_id, emp_code in rows:
             try:
+                prime_tenant_context(db, organization_id)
+                employee = db.get(Employee, emp_id)
+                if employee is None:
+                    continue
                 result = sync_employee(db, employee, client=client)
                 counts[result["action"]] = counts.get(result["action"], 0) + 1
                 db.commit()
             except Exception as e:  # noqa: BLE001 — isolate per-employee failures
                 db.rollback()
-                errors.append(f"{employee.employee_code}: {e}")
-                logger.exception(
-                    "Staff sync failed for employee %s", employee.employee_id
-                )
+                errors.append(f"{emp_code}: {e}")
+                logger.exception("Staff sync failed for employee %s", emp_id)
 
     return {"success": not errors, "counts": counts, "errors": errors[:20]}
