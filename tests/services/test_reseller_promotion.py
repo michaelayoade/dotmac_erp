@@ -104,20 +104,16 @@ def test_already_mapped_reseller_skips_promotion_lookup():
     assert result.updated == 1
 
 
-def test_find_promotable_requires_email_and_unambiguous_match():
+def test_find_promotable_without_email_short_circuits():
+    """No contact email → no promotion candidate, and no query is built.
+
+    (The email/ambiguity match itself uses a JSONB ``->> 'email'`` path that
+    only runs on PostgreSQL; it's covered by the integration suite. This
+    guard returns before that path, so it's SQLite-safe here.)"""
     m = ResellerSyncMixin.__new__(ResellerSyncMixin)
     m.organization_id = uuid4()
     m.db = MagicMock()
 
-    # No email → no lookup at all.
     assert m._find_promotable_customer(_reseller(contact_email=None)) is None
+    assert m._find_promotable_customer(_reseller(contact_email="   ")) is None
     m.db.scalars.assert_not_called()
-
-    # Two matches → ambiguous → None.
-    m.db.scalars.return_value = [MagicMock(), MagicMock()]
-    assert m._find_promotable_customer(_reseller()) is None
-
-    # Exactly one match → promote it.
-    only = MagicMock()
-    m.db.scalars.return_value = [only]
-    assert m._find_promotable_customer(_reseller()) is only

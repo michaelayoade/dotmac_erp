@@ -176,7 +176,7 @@ class ResellerSyncMixin:
                 Customer.parent_customer_id.is_(None),
                 Customer.dotmac_sub_reseller_id.is_(None),
                 Customer.dotmac_sub_id.isnot(None),
-                func.lower(Customer.primary_contact["email"].as_string()) == email,
+                func.lower(Customer.primary_contact["email"].astext) == email,
             )
             .limit(2)
         )
