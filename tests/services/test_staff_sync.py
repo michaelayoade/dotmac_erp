@@ -48,8 +48,10 @@ def _employee(status, *, email="tech@dotmac.io", account_id=None):
 
 @pytest.fixture(autouse=True)
 def _enable_staff_sync(monkeypatch):
-    monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", True)
-    monkeypatch.setattr(settings, "dotmac_sub_staff_default_role", "staff")
+    monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", True, raising=False)
+    monkeypatch.setattr(
+        settings, "dotmac_sub_staff_default_role", "staff", raising=False
+    )
 
 
 def test_active_employee_without_account_is_created_and_invited():
@@ -114,7 +116,7 @@ def test_draft_and_missing_email_are_skipped():
 
 
 def test_disabled_flag_skips_everything(monkeypatch):
-    monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", False)
+    monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", False, raising=False)
     client = FakeClient()
     result = staff_sync.sync_employee(
         None, _employee(EmployeeStatus.ACTIVE), client=client

@@ -590,7 +590,7 @@ class DotmacSubClient:
         Requires the API key to carry ``rbac:assign``. Returns the endpoint's
         ``{id, email, is_active, created, invited}`` payload.
         """
-        return self._request(
+        result = self._request(
             "POST",
             "/staff-accounts",
             json={
@@ -601,20 +601,23 @@ class DotmacSubClient:
                 "send_invite": send_invite,
             },
         )
+        return dict(result) if isinstance(result, dict) else {}
 
     def get_staff_account(self, email: str) -> dict[str, Any] | None:
         """Look up a staff account by email; None when absent."""
         try:
-            return self._request("GET", "/staff-accounts", params={"email": email})
+            result = self._request("GET", "/staff-accounts", params={"email": email})
         except DotmacSubNotFoundError:
             return None
+        return dict(result) if isinstance(result, dict) else None
 
     def set_staff_account_active(
         self, account_id: str, *, is_active: bool
     ) -> dict[str, Any]:
         """Activate/deactivate a staff account (deactivation revokes sessions)."""
         action = "activate" if is_active else "deactivate"
-        return self._request("POST", f"/staff-accounts/{account_id}/{action}")
+        result = self._request("POST", f"/staff-accounts/{account_id}/{action}")
+        return dict(result) if isinstance(result, dict) else {}
 
     def get_resellers(self) -> Generator[ResellerRecord, None, None]:
         logger.info("Fetching dotmac_sub resellers")
