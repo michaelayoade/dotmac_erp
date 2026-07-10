@@ -9,14 +9,17 @@ from calendar import month_name
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 from uuid import UUID
 
 if TYPE_CHECKING:
     from fastapi import Request
     from fastapi.responses import RedirectResponse
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import inspect, or_
 from sqlalchemy import select as sa_select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
@@ -37,7 +40,12 @@ from app.models.fleet.enums import (
     VehicleType,
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.services.common import NotFoundError, PaginationParams, coerce_uuid
+from app.services.common import (
+    NotFoundError,
+    PaginationParams,
+    ServiceError,
+    coerce_uuid,
+)
 from app.services.common_filters import build_active_filters
 from app.services.fleet.assignment_service import AssignmentService
 from app.services.fleet.document_service import DocumentService
@@ -1729,10 +1737,20 @@ class FleetWebService:
                 url=f"/fleet/vehicles/{vehicle.vehicle_id}",
                 status_code=303,
             )
-        except (ValueError, RuntimeError) as exc:
+        except (ServiceError, ValueError, PydanticValidationError) as exc:
+            db.rollback()
             logger.warning("Vehicle creation failed: %s", exc)
+            message = getattr(exc, "detail", str(exc))
             return RedirectResponse(
-                url=f"/fleet/vehicles/new?error={exc}",
+                url=f"/fleet/vehicles/new?error={quote(str(message))}",
+                status_code=303,
+            )
+        except SQLAlchemyError:
+            db.rollback()
+            logger.exception("Vehicle creation failed due to database error")
+            return RedirectResponse(
+                url="/fleet/vehicles/new?error=Unable%20to%20save%20vehicle."
+                "%20Please%20check%20the%20details%20and%20try%20again.",
                 status_code=303,
             )
 
@@ -1754,39 +1772,47 @@ class FleetWebService:
             vtype_raw = str(form.get("vehicle_type", "")) or None
             ftype_raw = str(form.get("fuel_type", "")) or None
             otype_raw = str(form.get("ownership_type", "")) or None
-            data = VehicleUpdate(
-                registration_number=str(form.get("registration_number", "")) or None,
-                vehicle_type=VehicleType(vtype_raw) if vtype_raw else None,
-                fuel_type=FuelType(ftype_raw) if ftype_raw else None,
-                color=str(form.get("color", "")) or None,
-                vin=str(form.get("vin_number", "")) or None,
-                engine_number=str(form.get("engine_number", "")) or None,
-                seating_capacity=int(str(form.get("seating_capacity", "") or "0"))
+            update_payload: dict[str, Any] = {
+                "registration_number": str(form.get("registration_number", "")) or None,
+                "vehicle_type": VehicleType(vtype_raw) if vtype_raw else None,
+                "fuel_type": FuelType(ftype_raw) if ftype_raw else None,
+                "color": str(form.get("color", "")) or None,
+                "vin": str(form.get("vin_number", "")) or None,
+                "engine_number": str(form.get("engine_number", "")) or None,
+                "seating_capacity": int(str(form.get("seating_capacity", "") or "0"))
                 or None,
-                ownership_type=OwnershipType(otype_raw) if otype_raw else None,
-                purchase_date=date.fromisoformat(str(form["acquisition_date"]))
+                "ownership_type": OwnershipType(otype_raw) if otype_raw else None,
+                "purchase_date": date.fromisoformat(str(form["acquisition_date"]))
                 if form.get("acquisition_date")
                 else None,
-                purchase_price=Decimal(str(form["purchase_price"]))
-                if form.get("purchase_price")
-                else None,
-                license_expiry_date=date.fromisoformat(str(form["license_expiry_date"]))
+                "license_expiry_date": date.fromisoformat(
+                    str(form["license_expiry_date"])
+                )
                 if form.get("license_expiry_date")
                 else None,
-                location_id=UUID(str(form["location_id"]))
+                "location_id": UUID(str(form["location_id"]))
                 if form.get("location_id")
                 else None,
-                vendor_id=UUID(str(form["supplier_id"]))
-                if form.get("supplier_id")
-                else None,
-                assigned_employee_id=UUID(str(form["assigned_employee_id"]))
+                "assigned_employee_id": UUID(str(form["assigned_employee_id"]))
                 if form.get("assigned_employee_id")
                 else None,
-                assignment_type=AssignmentType.POOL
+                "assignment_type": AssignmentType.POOL
                 if "is_pool_vehicle" in form
                 else AssignmentType.PERSONAL,
-                notes=str(form.get("notes", "")) or None,
-            )
+                "notes": str(form.get("notes", "")) or None,
+            }
+            if "purchase_price" in form:
+                update_payload["purchase_price"] = (
+                    Decimal(str(form["purchase_price"]))
+                    if form.get("purchase_price")
+                    else None
+                )
+            if "supplier_id" in form:
+                update_payload["vendor_id"] = (
+                    UUID(str(form["supplier_id"])) if form.get("supplier_id") else None
+                )
+
+            data = VehicleUpdate(**update_payload)
             svc = VehicleService(db, org_id)
             svc.update(vid, data)
             db.commit()
