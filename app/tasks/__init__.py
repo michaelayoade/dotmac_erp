@@ -114,6 +114,10 @@ from app.tasks.performance import (
     process_cycle_phase_transitions,
     sync_all_cycle_progress,
 )
+from app.tasks.staff_sync import (
+    run_staff_sync_reconcile,
+    sync_employee_staff_account,
+)
 from app.tasks.project_sla import (
     process_project_sla_breaches,
 )
@@ -152,6 +156,8 @@ __all__ = [
     "log_audit_event",
     "verify_audit_hash_chain",
     # dotmac_sub sync tasks
+    "sync_employee_staff_account",
+    "run_staff_sync_reconcile",
     "run_dotmac_sub_incremental_sync",
     "run_dotmac_sub_daily_reconciliation",
     "run_dotmac_sub_full_reconciliation",

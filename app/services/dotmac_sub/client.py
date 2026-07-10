@@ -574,6 +574,48 @@ class DotmacSubClient:
                 break
             offset += page_size
 
+    # ---- Staff accounts (ERP staff sync) ----
+
+    def create_staff_account(
+        self,
+        *,
+        email: str,
+        first_name: str,
+        last_name: str,
+        role: str = "staff",
+        send_invite: bool = True,
+    ) -> dict[str, Any]:
+        """Create (idempotently) + invite a dotmac_sub staff account.
+
+        Requires the API key to carry ``rbac:assign``. Returns the endpoint's
+        ``{id, email, is_active, created, invited}`` payload.
+        """
+        return self._request(
+            "POST",
+            "/staff-accounts",
+            json={
+                "email": email,
+                "first_name": first_name,
+                "last_name": last_name,
+                "role": role,
+                "send_invite": send_invite,
+            },
+        )
+
+    def get_staff_account(self, email: str) -> dict[str, Any] | None:
+        """Look up a staff account by email; None when absent."""
+        try:
+            return self._request("GET", "/staff-accounts", params={"email": email})
+        except DotmacSubNotFoundError:
+            return None
+
+    def set_staff_account_active(
+        self, account_id: str, *, is_active: bool
+    ) -> dict[str, Any]:
+        """Activate/deactivate a staff account (deactivation revokes sessions)."""
+        action = "activate" if is_active else "deactivate"
+        return self._request("POST", f"/staff-accounts/{account_id}/{action}")
+
     def get_resellers(self) -> Generator[ResellerRecord, None, None]:
         logger.info("Fetching dotmac_sub resellers")
         for item in self._paginate("/resellers"):
