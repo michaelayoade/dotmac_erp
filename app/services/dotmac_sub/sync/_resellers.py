@@ -116,7 +116,7 @@ class ResellerSyncMixin:
 
         customer = Customer(
             organization_id=self.organization_id,
-            customer_code=f"{self.SOURCE_PREFIX}-R-{reseller.id}",
+            customer_code=self._customer_code("R", reseller.id),
             customer_type=CustomerType.COMPANY,
             legal_name=reseller.name,
             trading_name=reseller.code,

@@ -153,7 +153,7 @@ class SubscriberSyncMixin:
 
         customer = Customer(
             organization_id=self.organization_id,
-            customer_code=f"{self.SOURCE_PREFIX}-{sub.account_number or sub.id}",
+            customer_code=self._customer_code("", sub.account_number or sub.id),
             customer_type=(
                 CustomerType.COMPANY if is_company else CustomerType.INDIVIDUAL
             ),

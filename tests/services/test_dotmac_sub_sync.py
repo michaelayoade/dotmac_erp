@@ -474,3 +474,28 @@ def test_lock_dotmac_sub_customer_noop_off_postgres_or_without_id() -> None:
         SimpleNamespace(db=pg_db, organization_id="o"), ""
     )
     pg_db.execute.assert_not_called()
+
+
+def test_customer_code_fits_column_limit() -> None:
+    """ar.customer.customer_code is VARCHAR(30): an untruncated
+    "DSUB-R-<uuid>" (43 chars) failed every reseller INSERT on the first
+    prod sync. UUID refs compact to dash-less hex before truncating;
+    short account numbers pass through untouched."""
+    from app.services.dotmac_sub.sync._base import BaseSyncMixin
+
+    mixin = BaseSyncMixin.__new__(BaseSyncMixin)
+    uuid_ref = "f81e6646-3a7a-41b3-b600-0934abf17330"
+
+    reseller_code = mixin._customer_code("R", uuid_ref)
+    assert reseller_code == "DSUB-R-f81e66463a7a41b3b600093"
+    assert len(reseller_code) <= 30
+
+    # Distinct UUIDs stay distinct after compaction+truncation.
+    other = mixin._customer_code("R", "f840450e-7e2a-4eb4-af21-e1cb3353f5e8")
+    assert other != reseller_code
+
+    # Short human account numbers are preserved verbatim.
+    assert mixin._customer_code("", "ACC-10042") == "DSUB-ACC-10042"
+
+    # Subscriber UUID fallback also fits.
+    assert len(mixin._customer_code("", uuid_ref)) <= 30
