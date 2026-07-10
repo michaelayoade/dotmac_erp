@@ -38,6 +38,24 @@ class BaseSyncMixin:
 
     SOURCE_PREFIX = "DSUB"
 
+    # ar.customer.customer_code is VARCHAR(30); an untruncated
+    # "DSUB-R-<uuid>" (43 chars) fails the INSERT outright.
+    CUSTOMER_CODE_MAX = 30
+
+    def _customer_code(self, marker: str, ref: str) -> str:
+        """Deterministic ``customer_code`` within the column's 30-char limit.
+
+        Short human refs (account numbers) pass through untouched; UUID-style
+        refs are compacted to dash-less hex before truncating so the kept
+        portion is maximally distinctive.
+        """
+        prefix = (
+            f"{self.SOURCE_PREFIX}-{marker}-" if marker else f"{self.SOURCE_PREFIX}-"
+        )
+        if len(prefix) + len(ref) > self.CUSTOMER_CODE_MAX:
+            ref = ref.replace("-", "")
+        return (prefix + ref)[: self.CUSTOMER_CODE_MAX]
+
     # Provided by sibling mixins at runtime (combined in DotmacSubSyncService).
     _cache_reseller: Any
     _sync_single_subscriber: Any

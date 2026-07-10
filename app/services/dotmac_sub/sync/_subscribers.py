@@ -37,6 +37,7 @@ class SubscriberSyncMixin:
     _lock_dotmac_sub_customer: Any
     _reseller_customer_id: Any
     _reprime_tenant_context: Any
+    _customer_code: Any
 
     def sync_subscribers(
         self,
@@ -153,7 +154,7 @@ class SubscriberSyncMixin:
 
         customer = Customer(
             organization_id=self.organization_id,
-            customer_code=f"{self.SOURCE_PREFIX}-{sub.account_number or sub.id}",
+            customer_code=self._customer_code("", sub.account_number or sub.id),
             customer_type=(
                 CustomerType.COMPANY if is_company else CustomerType.INDIVIDUAL
             ),

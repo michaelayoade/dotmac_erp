@@ -31,6 +31,7 @@ class ResellerSyncMixin:
     _record_sync: Any
     _get_synced_entity: Any
     _reprime_tenant_context: Any
+    _customer_code: Any
 
     def sync_resellers(
         self,
@@ -116,7 +117,7 @@ class ResellerSyncMixin:
 
         customer = Customer(
             organization_id=self.organization_id,
-            customer_code=f"{self.SOURCE_PREFIX}-R-{reseller.id}",
+            customer_code=self._customer_code("R", reseller.id),
             customer_type=CustomerType.COMPANY,
             legal_name=reseller.name,
             trading_name=reseller.code,
