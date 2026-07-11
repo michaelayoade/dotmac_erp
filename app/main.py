@@ -25,6 +25,7 @@ from app.api.coach import router as coach_router
 from app.api.crm import router as crm_router
 from app.api.crm import webhook_router as crm_webhook_router
 from app.api.deps import require_role, require_tenant_auth
+from app.api.dotmac_academy import webhook_router as dotmac_academy_webhook_router
 from app.api.dotmac_sub import webhook_router as dotmac_sub_webhook_router
 from app.api.expense import router as expense_router
 from app.api.expense_limits import router as expense_limits_router
@@ -753,6 +754,7 @@ if is_module_enabled("finance"):
     _include_api_router(payments_webhook_router)
     _include_api_router(mono_webhook_router)
     _include_api_router(dotmac_sub_webhook_router)
+    _include_api_router(dotmac_academy_webhook_router)
 
 # ---------------------------------------------------------------------------
 # Expense module
