@@ -71,6 +71,10 @@ from app.services.people.hr.employee_filter_engine import (
     parse_employee_filter_payload_json,
 )
 from app.services.people.hr.org_resolver import OrgResolver
+from app.services.people.hr.offboarding import (
+    queue_employee_mailcow_offboarding,
+    should_offboard_status,
+)
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.services.recent_activity import get_recent_activity_for_record
 from app.templates import templates
@@ -1728,6 +1732,7 @@ class HRWebService:
 
         self._update_linked_person(auth=auth, db=db, employee=employee, form=form)
 
+        prior_status = employee.status
         updated_employee = svc.update_employee(coerce_uuid(employee_id), data)
         self._update_tax_profile(auth=auth, db=db, employee=employee, form=form)
         assigned_location_log = (
@@ -1736,6 +1741,15 @@ class HRWebService:
             else None
         )
         db.commit()
+        if (
+            updated_employee.status != prior_status
+            and should_offboard_status(updated_employee.status)
+        ):
+            queue_employee_mailcow_offboarding(
+                updated_employee.employee_id,
+                updated_employee.organization_id,
+                updated_employee.status,
+            )
 
         logger.info(
             "Employee edit persisted",
@@ -1886,6 +1900,11 @@ class HRWebService:
                 final_payroll_cutoff_date=final_payroll_cutoff_date,
             )
             db.commit()
+            queue_employee_mailcow_offboarding(
+                employee_id,
+                org_id,
+                EmployeeStatus.RESIGNED,
+            )
             return RedirectResponse(
                 url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
             )
@@ -1985,6 +2004,11 @@ class HRWebService:
                 ),
             )
             db.commit()
+            queue_employee_mailcow_offboarding(
+                employee_id,
+                org_id,
+                EmployeeStatus.TERMINATED,
+            )
             return RedirectResponse(
                 url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
             )
