@@ -17,6 +17,7 @@ from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.services.dotmac_sub.client import CreditNoteRecord, DotmacSubError
 
+from ._base import next_watermark
 from ._constants import (
     DOTMAC_SUB_SYNC_MIN_DATE,
     SYSTEM_USER_ID,
@@ -41,6 +42,9 @@ class CreditNoteSyncMixin:
     _get_synced_entity: Any
     _get_customer_for_account: Any
     _parse_date: Any
+    _parse_datetime: Any
+    _get_sync_watermark: Any
+    _advance_sync_watermark: Any
     _generate_credit_note_number: Any
     _extract_tax: Any
     _create_lines: Any
@@ -58,13 +62,21 @@ class CreditNoteSyncMixin:
     ) -> SyncResult:
         result = SyncResult(success=True, entity_type="credit_notes")
         processed = 0
+        use_watermark = account_id is None and status is None
+        watermark = (
+            self._get_sync_watermark(EntityType.CREDIT_NOTE) if use_watermark else None
+        )
+        updated_since = watermark.isoformat() if watermark else None
+        max_ok: datetime | None = None
+        min_error: datetime | None = None
         try:
             for cn in self.client.get_credit_notes(
-                account_id=account_id, status=status
+                account_id=account_id, status=status, updated_since=updated_since
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
+                row_updated_at = self._parse_datetime(cn.updated_at)
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_credit_note(
@@ -72,6 +84,12 @@ class CreditNoteSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
+                    if row_updated_at is not None:
+                        max_ok = (
+                            row_updated_at
+                            if max_ok is None
+                            else max(max_ok, row_updated_at)
+                        )
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -83,6 +101,17 @@ class CreditNoteSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Credit note {cn.credit_number}: {e!s}")
                     logger.exception("Error syncing credit note %s", cn.id)
+                    if row_updated_at is not None:
+                        min_error = (
+                            row_updated_at
+                            if min_error is None
+                            else min(min_error, row_updated_at)
+                        )
+            if use_watermark:
+                self._advance_sync_watermark(
+                    EntityType.CREDIT_NOTE,
+                    next_watermark(watermark, max_ok, min_error),
+                )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "
