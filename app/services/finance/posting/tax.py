@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from unittest.mock import Mock
 from uuid import UUID
 
@@ -52,7 +53,7 @@ def resolve_tax_posting_account_id(
         account = db.get(Account, account_id)
         if account and account.deferral_pair_account_id:
             return account.deferral_pair_account_id
-    return account_id
+    return cast(UUID, account_id)
 
 
 def _resolve_fiscal_period(
@@ -74,7 +75,9 @@ def _resolve_fiscal_period(
     # real FiscalPeriod-like object.
     if fiscal_period is None or isinstance(fiscal_period, Mock):
         scalar_result = db.scalars(fiscal_period_stmt)
-        fiscal_period = scalar_result.first() if hasattr(scalar_result, "first") else None
+        fiscal_period = (
+            scalar_result.first() if hasattr(scalar_result, "first") else None
+        )
     if isinstance(fiscal_period, Mock) or (
         fiscal_period is not None and not hasattr(fiscal_period, "fiscal_period_id")
     ):
@@ -165,7 +168,7 @@ def create_payment_tax_recognitions(
     organization_id: UUID,
     *,
     payment: Any,
-    tax_payloads: list[dict[str, Any]],
+    tax_payloads: Sequence[Mapping[str, Any]],
     source_document_type: str,
     is_purchase: bool,
     exchange_rate: Decimal,

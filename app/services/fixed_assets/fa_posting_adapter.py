@@ -152,7 +152,9 @@ class FAPostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="fixed asset acquisition posting"
+        )
 
         return FAPostingResult(
             success=True,
@@ -302,7 +304,9 @@ class FAPostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="fixed asset depreciation posting"
+        )
 
         return FAPostingResult(
             success=True,
@@ -463,7 +467,9 @@ class FAPostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="fixed asset disposal posting"
+        )
 
         return FAPostingResult(
             success=True,
@@ -655,7 +661,9 @@ class FAPostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="fixed asset revaluation posting"
+        )
 
         return FAPostingResult(
             success=True,

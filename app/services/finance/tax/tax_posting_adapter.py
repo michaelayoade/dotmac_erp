@@ -194,7 +194,9 @@ class TAXPostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="tax liability posting"
+        )
 
         # Update transaction with journal reference
         transaction.journal_entry_id = journal.journal_entry_id
@@ -339,7 +341,9 @@ class TAXPostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="tax payment posting"
+        )
 
         return TAXPostingResult(
             success=True,
@@ -556,7 +560,9 @@ class TAXPostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="tax adjustment posting"
+        )
 
         # Update movement with journal reference
         movement.journal_entry_id = journal.journal_entry_id

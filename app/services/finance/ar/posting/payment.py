@@ -112,19 +112,21 @@ def post_vat_reclass_for_payment(
         source_document_id=pay_id,
         correlation_id=payment.correlation_id,
     )
-    reclass_journal, reclass_result = BasePostingAdapter.create_approve_and_post_journal(
-        db,
-        org_id,
-        reclass_input,
-        user_id,
-        posting_date=posting_date,
-        idempotency_key=BasePostingAdapter.make_idempotency_key(
-            org_id, "AR:PAY:VAT", pay_id, action="post"
-        ),
-        source_module="AR",
-        correlation_id=payment.correlation_id,
-        success_message="VAT reclass posted successfully",
-        creation_error_prefix="VAT reclass journal creation failed",
+    reclass_journal, reclass_result = (
+        BasePostingAdapter.create_approve_and_post_journal(
+            db,
+            org_id,
+            reclass_input,
+            user_id,
+            posting_date=posting_date,
+            idempotency_key=BasePostingAdapter.make_idempotency_key(
+                org_id, "AR:PAY:VAT", pay_id, action="post"
+            ),
+            source_module="AR",
+            correlation_id=payment.correlation_id,
+            success_message="VAT reclass posted successfully",
+            creation_error_prefix="VAT reclass journal creation failed",
+        )
     )
     if not reclass_result.success:
         return ARPostingResult(
@@ -291,7 +293,7 @@ def post_payment(
             journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
-    assert journal is not None
+    journal = BasePostingAdapter.require_journal(journal, context="AR payment posting")
 
     vat_reclass_result = post_vat_reclass_for_payment(
         db,

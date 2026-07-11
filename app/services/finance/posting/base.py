@@ -40,6 +40,17 @@ class BasePostingAdapter:
     """Shared helpers for journal creation and ledger posting."""
 
     @staticmethod
+    def require_journal(
+        journal: JournalEntry | None,
+        *,
+        context: str = "posting operation",
+    ) -> JournalEntry:
+        """Return a concrete journal when a successful posting expects one."""
+        if journal is None:
+            raise RuntimeError(f"{context} completed without creating a journal")
+        return journal
+
+    @staticmethod
     def make_idempotency_key(
         organization_id: UUID,
         source_module: str,
@@ -145,8 +156,8 @@ class BasePostingAdapter:
             return PostingResult(
                 success=False,
                 journal_entry_id=journal_entry_id,
-            message=f"{error_prefix}: {str(exc)}",
-        )
+                message=f"{error_prefix}: {str(exc)}",
+            )
 
     @staticmethod
     def create_approve_and_post_journal(

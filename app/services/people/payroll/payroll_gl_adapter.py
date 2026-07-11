@@ -340,7 +340,9 @@ class PayrollGLAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll journal posting"
+        )
 
         # Update salary slip with journal reference
         slip.journal_entry_id = journal.journal_entry_id
@@ -614,7 +616,9 @@ class PayrollGLAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll reversal posting"
+        )
 
         return PayrollPostingResult(
             success=True,
@@ -847,7 +851,9 @@ class PayrollGLAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll accrual posting"
+        )
 
         return PayrollPostingResult(
             success=True,
@@ -1087,7 +1093,9 @@ class PayrollGLAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll batch posting"
+        )
 
         # 8. Update all slips to POSTED
         now = datetime.now(UTC)

@@ -178,7 +178,9 @@ def post_adjustment(
             journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
-    assert journal is not None
+    journal = BasePostingAdapter.require_journal(
+        journal, context="inventory adjustment posting"
+    )
 
     # Update transaction with journal reference
     transaction.journal_entry_id = journal.journal_entry_id

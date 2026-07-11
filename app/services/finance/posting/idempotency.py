@@ -45,11 +45,7 @@ class PostingIdempotencyService:
             conditions.append(JournalEntry.journal_type != JournalType.REVERSAL)
 
         return (
-            db.scalar(
-                select(JournalEntry.journal_entry_id)
-                .where(*conditions)
-                .limit(1)
-            )
+            db.scalar(select(JournalEntry.journal_entry_id).where(*conditions).limit(1))
             is not None
         )
 
@@ -85,7 +81,9 @@ class PostingIdempotencyService:
                 JournalEntry.source_module == source_module,
                 JournalEntry.source_document_type == source_document_type,
                 JournalEntry.source_document_id == document_id,
-                JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
+                JournalEntry.status.notin_(
+                    [JournalStatus.VOID, JournalStatus.REVERSED]
+                ),
                 JournalEntry.journal_type != JournalType.REVERSAL,
             )
         )

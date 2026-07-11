@@ -195,22 +195,26 @@ class PayrollGLAdapter:
                 lines=lines,
             )
 
-            journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
-                db,
-                org_id,
-                journal_input,
-                user_id,
-                posting_date=posting_date,
-                idempotency_key=f"{org_id}:PAYROLL:SLIP:{slip_id}:post:v1",
-                source_module="PAYROLL",
-                correlation_id=None,
-                success_message="Salary slip posted successfully",
+            journal, posting_result = (
+                BasePostingAdapter.create_approve_and_post_journal(
+                    db,
+                    org_id,
+                    journal_input,
+                    user_id,
+                    posting_date=posting_date,
+                    idempotency_key=f"{org_id}:PAYROLL:SLIP:{slip_id}:post:v1",
+                    source_module="PAYROLL",
+                    correlation_id=None,
+                    success_message="Salary slip posted successfully",
+                )
             )
             if not posting_result.success:
                 return GLPostingResult(
                     success=False, error_message=posting_result.message
                 )
-            assert journal is not None
+            journal = BasePostingAdapter.require_journal(
+                journal, context="payroll slip integration posting"
+            )
 
             # Link journal to slip
             slip.journal_entry_id = journal.journal_entry_id
@@ -604,22 +608,26 @@ class PayrollGLAdapter:
                 lines=lines,
             )
 
-            journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
-                db,
-                org_id,
-                journal_input,
-                user_id,
-                posting_date=posting_date,
-                idempotency_key=f"{org_id}:PAYROLL:RUN:{payroll.entry_id}:post:v1",
-                source_module="PAYROLL",
-                correlation_id=None,
-                success_message="Payroll run posted successfully",
+            journal, posting_result = (
+                BasePostingAdapter.create_approve_and_post_journal(
+                    db,
+                    org_id,
+                    journal_input,
+                    user_id,
+                    posting_date=posting_date,
+                    idempotency_key=f"{org_id}:PAYROLL:RUN:{payroll.entry_id}:post:v1",
+                    source_module="PAYROLL",
+                    correlation_id=None,
+                    success_message="Payroll run posted successfully",
+                )
             )
             if not posting_result.success:
                 return GLPostingResult(
                     success=False, error_message=posting_result.message
                 )
-            assert journal is not None
+            journal = BasePostingAdapter.require_journal(
+                journal, context="payroll entry integration posting"
+            )
 
             # Link journal to payroll entry
             payroll.journal_entry_id = journal.journal_entry_id

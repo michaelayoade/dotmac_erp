@@ -38,7 +38,4 @@ def normalize_form(form: Any) -> dict[str, str]:
     """Return a string-only form mapping, dropping file inputs."""
     if form is None:
         return {}
-    return {
-        key: value if isinstance(value, str) else ""
-        for key, value in form.items()
-    }
+    return {key: value if isinstance(value, str) else "" for key, value in form.items()}

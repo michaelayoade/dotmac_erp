@@ -359,16 +359,18 @@ class ExpensePostingAdapter:
                     c_id, ExpenseClaimActionType.POST_GL
                 )
 
-            journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
-                db,
-                org_id,
-                journal_input,
-                user_id,
-                posting_date=posting_date,
-                idempotency_key=idempotency_key,
-                source_module="EXPENSE",
-                correlation_id=correlation_id,
-                success_message="Expense claim posted successfully",
+            journal, posting_result = (
+                BasePostingAdapter.create_approve_and_post_journal(
+                    db,
+                    org_id,
+                    journal_input,
+                    user_id,
+                    posting_date=posting_date,
+                    idempotency_key=idempotency_key,
+                    source_module="EXPENSE",
+                    correlation_id=correlation_id,
+                    success_message="Expense claim posted successfully",
+                )
             )
             if journal is not None:
                 claim.journal_entry_id = journal.journal_entry_id
@@ -406,6 +408,9 @@ class ExpensePostingAdapter:
                 return ExpensePostingResult(success=False, message=error.message)
             claim.journal_entry_id = journal.journal_entry_id
 
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense claim posting"
+        )
         db.flush()
 
         ExpensePostingAdapter._set_action_status(
@@ -714,16 +719,18 @@ class ExpensePostingAdapter:
             if not idempotency_key:
                 idempotency_key = f"{org_id}:ADVANCE:{adv_id}:post:v1"
 
-            journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
-                db,
-                org_id,
-                journal_input,
-                user_id,
-                posting_date=posting_date,
-                idempotency_key=idempotency_key,
-                source_module="EXPENSE",
-                correlation_id=correlation_id,
-                success_message="Cash advance posted successfully",
+            journal, posting_result = (
+                BasePostingAdapter.create_approve_and_post_journal(
+                    db,
+                    org_id,
+                    journal_input,
+                    user_id,
+                    posting_date=posting_date,
+                    idempotency_key=idempotency_key,
+                    source_module="EXPENSE",
+                    correlation_id=correlation_id,
+                    success_message="Cash advance posted successfully",
+                )
             )
             if journal is not None:
                 advance.journal_entry_id = journal.journal_entry_id
@@ -746,6 +753,9 @@ class ExpensePostingAdapter:
                 return ExpensePostingResult(success=False, message=error.message)
             advance.journal_entry_id = journal.journal_entry_id
 
+        journal = BasePostingAdapter.require_journal(
+            journal, context="cash advance posting"
+        )
         db.flush()
 
         return ExpensePostingResult(
@@ -1290,7 +1300,9 @@ class ExpensePostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense reimbursement posting"
+        )
 
         # Update claim with reimbursement journal reference
         claim.reimbursement_journal_id = journal.journal_entry_id
@@ -1422,7 +1434,9 @@ class ExpensePostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense settlement posting"
+        )
 
         return ExpensePostingResult(
             success=True,
@@ -1583,7 +1597,9 @@ class ExpensePostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense reversal posting"
+        )
 
         return ExpensePostingResult(
             success=True,
@@ -1719,7 +1735,9 @@ class ExpensePostingAdapter:
                 journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
-        assert journal is not None
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense accrual posting"
+        )
 
         return ExpensePostingResult(
             success=True,

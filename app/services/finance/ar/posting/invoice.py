@@ -570,7 +570,7 @@ def post_invoice(
             journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
-    assert journal is not None
+    journal = BasePostingAdapter.require_journal(journal, context="AR invoice posting")
 
     # Create tax transactions for taxable invoice lines
     create_tax_transactions(
