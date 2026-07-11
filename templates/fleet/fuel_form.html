@@ -16,7 +16,7 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-    <form method="POST" action="/fleet/fuel/new" class="space-y-6">
+    <form method="POST" action="/fleet/fuel/new" enctype="multipart/form-data" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <!-- Vehicle & Date -->
         <div class="card">
@@ -90,8 +90,8 @@
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="fuel_station" class="form-label">Fuel Station</label>
-                        <input aria-label="Station name" type="text" id="fuel_station" name="fuel_station"
+                        <label for="station_name" class="form-label">Fuel Station</label>
+                        <input aria-label="Station name" type="text" id="station_name" name="station_name"
                                placeholder="Station name"
                                class="form-input">
                     </div>
@@ -129,6 +129,22 @@
                 </div>
 
                 <div>
+                    <label for="receipt_files" class="form-label">Receipt Images</label>
+                    <input
+                        aria-label="Upload receipt images or PDFs"
+                        type="file"
+                        id="receipt_files"
+                        name="receipt_files"
+                        multiple
+                        accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf"
+                        class="form-input"
+                    >
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Optional. Images or PDFs only. Maximum size: {{ fuel_receipt_max_size if fuel_receipt_max_size else '20 MB' }} per file.
+                    </p>
+                </div>
+
+                <div>
                     <label class="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" name="is_full_tank" value="true" class="form-checkbox">
                         <span class="text-sm text-slate-700 dark:text-slate-300">Full tank fill-up</span>
@@ -145,7 +161,7 @@
             <div class="p-4">
                 <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
                           placeholder="Additional notes..."
-                          class="form-textarea"></textarea>
+                          class="form-input min-h-24 w-full resize-y"></textarea>
             </div>
         </div>
 

@@ -9,14 +9,17 @@ from calendar import month_name
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 from uuid import UUID
 
 if TYPE_CHECKING:
     from fastapi import Request
     from fastapi.responses import RedirectResponse
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import inspect, or_
 from sqlalchemy import select as sa_select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
@@ -37,7 +40,12 @@ from app.models.fleet.enums import (
     VehicleType,
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.services.common import NotFoundError, PaginationParams, coerce_uuid
+from app.services.common import (
+    NotFoundError,
+    PaginationParams,
+    ServiceError,
+    coerce_uuid,
+)
 from app.services.common_filters import build_active_filters
 from app.services.fleet.assignment_service import AssignmentService
 from app.services.fleet.document_service import DocumentService
@@ -62,6 +70,13 @@ class FleetWebService:
     REPORT_EXPENSE_CATEGORY_NAMES = (
         "Vehicle Fuel Expense",
         "Car Repairs and Maintenance",
+    )
+    FUEL_LOG_ATTACHMENT_ENTITY_TYPE = "FLEET_FUEL_LOG"
+    INCIDENT_ATTACHMENT_ENTITY_TYPE = "FLEET_INCIDENT"
+    MAINTENANCE_PROVIDER_OPTIONS = (
+        "Mr IDOWU (Idowu Orile Enterprise)",
+        "Mr JOSEPH (Joe Joe Automobile)",
+        "Mr ODE (OD Test Motors)",
     )
 
     def __init__(self, db: Session):
@@ -1066,6 +1081,7 @@ class FleetWebService:
                 "vehicles": [],
                 "maintenance_types": [t.value for t in MaintenanceType],
                 "selected_vehicle_id": vehicle_id,
+                "maintenance_provider_options": self.MAINTENANCE_PROVIDER_OPTIONS,
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
@@ -1080,6 +1096,7 @@ class FleetWebService:
             "vehicles": vehicles_result.items,
             "maintenance_types": [t.value for t in MaintenanceType],
             "selected_vehicle_id": vehicle_id,
+            "maintenance_provider_options": self.MAINTENANCE_PROVIDER_OPTIONS,
         }
 
         return context
@@ -1125,6 +1142,8 @@ class FleetWebService:
             context.update(
                 {
                     "fuel_logs": [],
+                    "logs": [],
+                    "fuel_receipts": {},
                     "monthly_summary": [],
                     "fuel_types": [f.value for f in FuelType],
                     "current_vehicle_id": vehicle_id,
@@ -1139,6 +1158,12 @@ class FleetWebService:
             vehicle_id=vehicle_id,
             params=params,
         )
+        fuel_receipts = self._attachment_views(
+            org_id,
+            result.items,
+            id_attr="fuel_log_id",
+            entity_type=self.FUEL_LOG_ATTACHMENT_ENTITY_TYPE,
+        )
 
         # Get monthly summary
         monthly_summary = service.get_monthly_summary(vehicle_id=vehicle_id)
@@ -1148,6 +1173,8 @@ class FleetWebService:
         )
         return {
             "fuel_logs": result.items,
+            "logs": result.items,
+            "fuel_receipts": fuel_receipts,
             "total": result.total,
             "page": result.page,
             "total_pages": result.total_pages,
@@ -1158,6 +1185,45 @@ class FleetWebService:
             "current_vehicle_id": vehicle_id,
             "active_filters": active_filters,
         }
+
+    def _attachment_views(
+        self,
+        organization_id: UUID,
+        records: list[Any],
+        *,
+        id_attr: str,
+        entity_type: str,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Return attachment view data keyed by record ID."""
+        record_ids = [getattr(record, id_attr, None) for record in records]
+        record_ids = [record_id for record_id in record_ids if record_id]
+        if not record_ids:
+            return {}
+
+        from app.models.finance.common.attachment import Attachment
+
+        attachments = self.db.scalars(
+            sa_select(Attachment).where(
+                Attachment.organization_id == organization_id,
+                Attachment.entity_type == entity_type,
+                Attachment.entity_id.in_(record_ids),
+            )
+        ).all()
+
+        grouped: dict[str, list[dict[str, Any]]] = {
+            str(record_id): [] for record_id in record_ids
+        }
+        for attachment in attachments:
+            grouped.setdefault(str(attachment.entity_id), []).append(
+                {
+                    "attachment_id": attachment.attachment_id,
+                    "file_name": attachment.file_name,
+                    "file_size": attachment.file_size,
+                    "content_type": attachment.content_type,
+                    "download_url": f"/files/attachments/{attachment.attachment_id}",
+                }
+            )
+        return grouped
 
     def fuel_form_context(
         self,
@@ -1171,6 +1237,7 @@ class FleetWebService:
                 "vehicles": [],
                 "fuel_types": [f.value for f in FuelType],
                 "selected_vehicle_id": vehicle_id,
+                "fuel_receipt_max_size": self._fuel_receipt_max_size_label(),
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
@@ -1184,7 +1251,18 @@ class FleetWebService:
             "vehicles": vehicles_result.items,
             "fuel_types": [f.value for f in FuelType],
             "selected_vehicle_id": vehicle_id,
+            "fuel_receipt_max_size": self._fuel_receipt_max_size_label(),
         }
+
+    @staticmethod
+    def _fuel_receipt_max_size_label() -> str:
+        """Return the configured Fleet fuel receipt upload size as display text."""
+        from app.services.file_upload import (
+            format_file_size,
+            get_fleet_fuel_receipt_upload,
+        )
+
+        return format_file_size(get_fleet_fuel_receipt_upload().config.max_size_bytes)
 
     # ─────────────────────────────────────────────────────────────
     # Incidents
@@ -1213,6 +1291,7 @@ class FleetWebService:
                     "current_status": status,
                     "current_severity": severity,
                     "current_vehicle_id": vehicle_id,
+                    "incident_attachments": {},
                 }
             )
             return context
@@ -1228,6 +1307,12 @@ class FleetWebService:
             status=status_filter,
             severity=severity_filter,
             params=params,
+        )
+        incident_attachments = self._attachment_views(
+            org_id,
+            result.items,
+            id_attr="incident_id",
+            entity_type=self.INCIDENT_ATTACHMENT_ENTITY_TYPE,
         )
 
         # Get cost summary
@@ -1255,6 +1340,7 @@ class FleetWebService:
             "current_severity": severity,
             "current_vehicle_id": vehicle_id,
             "active_filters": active_filters,
+            "incident_attachments": incident_attachments,
         }
 
     def incident_form_context(
@@ -1270,6 +1356,7 @@ class FleetWebService:
                 "incident_types": [t.value for t in IncidentType],
                 "severities": [s.value for s in IncidentSeverity],
                 "selected_vehicle_id": vehicle_id,
+                "incident_attachment_max_size": self._incident_attachment_max_size_label(),
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
@@ -1284,7 +1371,20 @@ class FleetWebService:
             "incident_types": [t.value for t in IncidentType],
             "severities": [s.value for s in IncidentSeverity],
             "selected_vehicle_id": vehicle_id,
+            "incident_attachment_max_size": self._incident_attachment_max_size_label(),
         }
+
+    @staticmethod
+    def _incident_attachment_max_size_label() -> str:
+        """Return the configured Fleet incident attachment upload size as display text."""
+        from app.services.file_upload import (
+            format_file_size,
+            get_fleet_incident_attachment_upload,
+        )
+
+        return format_file_size(
+            get_fleet_incident_attachment_upload().config.max_size_bytes
+        )
 
     def incident_detail_context(
         self,
@@ -1297,9 +1397,16 @@ class FleetWebService:
         org_id = coerce_uuid(organization_id)
         service = IncidentService(self.db, org_id)
         incident = service.get_or_raise(incident_id)
+        incident_attachments = self._attachment_views(
+            org_id,
+            [incident],
+            id_attr="incident_id",
+            entity_type=self.INCIDENT_ATTACHMENT_ENTITY_TYPE,
+        ).get(str(incident.incident_id), [])
 
         return {
             "incident": incident,
+            "incident_attachments": incident_attachments,
             "recent_activity": get_recent_activity_for_record(
                 self.db,
                 org_id,
@@ -1503,26 +1610,42 @@ class FleetWebService:
         organization_id: UUID,
         *,
         vehicle_id: UUID | None = None,
+        document_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Build context for document create form."""
+        """Build context for document create/edit form."""
         if not self._fleet_tables_ready():
             return {
                 "vehicles": [],
                 "document_types": [t.value for t in DocumentType],
+                "document": None,
                 "selected_vehicle_id": vehicle_id,
+                "form_action": "/fleet/documents/new",
+                "is_edit": False,
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
+        document = None
+        if document_id is not None:
+            document = DocumentService(self.db, org_id).get_or_raise(document_id)
+            vehicle_id = document.vehicle_id
 
         vehicles_result = vehicle_service.list_vehicles(
             include_disposed=False,
             params=PaginationParams(limit=200),
         )
+        vehicles = list(vehicles_result.items)
+        if document and all(v.vehicle_id != document.vehicle_id for v in vehicles):
+            vehicles.append(document.vehicle)
 
         return {
-            "vehicles": vehicles_result.items,
+            "vehicles": vehicles,
             "document_types": [t.value for t in DocumentType],
+            "document": document,
             "selected_vehicle_id": vehicle_id,
+            "form_action": f"/fleet/documents/{document_id}/edit"
+            if document_id
+            else "/fleet/documents/new",
+            "is_edit": document_id is not None,
         }
 
     def document_detail_context(
@@ -1614,10 +1737,20 @@ class FleetWebService:
                 url=f"/fleet/vehicles/{vehicle.vehicle_id}",
                 status_code=303,
             )
-        except (ValueError, RuntimeError) as exc:
+        except (ServiceError, ValueError, PydanticValidationError) as exc:
+            db.rollback()
             logger.warning("Vehicle creation failed: %s", exc)
+            message = getattr(exc, "detail", str(exc))
             return RedirectResponse(
-                url=f"/fleet/vehicles/new?error={exc}",
+                url=f"/fleet/vehicles/new?error={quote(str(message))}",
+                status_code=303,
+            )
+        except SQLAlchemyError:
+            db.rollback()
+            logger.exception("Vehicle creation failed due to database error")
+            return RedirectResponse(
+                url="/fleet/vehicles/new?error=Unable%20to%20save%20vehicle."
+                "%20Please%20check%20the%20details%20and%20try%20again.",
                 status_code=303,
             )
 
@@ -1639,39 +1772,47 @@ class FleetWebService:
             vtype_raw = str(form.get("vehicle_type", "")) or None
             ftype_raw = str(form.get("fuel_type", "")) or None
             otype_raw = str(form.get("ownership_type", "")) or None
-            data = VehicleUpdate(
-                registration_number=str(form.get("registration_number", "")) or None,
-                vehicle_type=VehicleType(vtype_raw) if vtype_raw else None,
-                fuel_type=FuelType(ftype_raw) if ftype_raw else None,
-                color=str(form.get("color", "")) or None,
-                vin=str(form.get("vin_number", "")) or None,
-                engine_number=str(form.get("engine_number", "")) or None,
-                seating_capacity=int(str(form.get("seating_capacity", "") or "0"))
+            update_payload: dict[str, Any] = {
+                "registration_number": str(form.get("registration_number", "")) or None,
+                "vehicle_type": VehicleType(vtype_raw) if vtype_raw else None,
+                "fuel_type": FuelType(ftype_raw) if ftype_raw else None,
+                "color": str(form.get("color", "")) or None,
+                "vin": str(form.get("vin_number", "")) or None,
+                "engine_number": str(form.get("engine_number", "")) or None,
+                "seating_capacity": int(str(form.get("seating_capacity", "") or "0"))
                 or None,
-                ownership_type=OwnershipType(otype_raw) if otype_raw else None,
-                purchase_date=date.fromisoformat(str(form["acquisition_date"]))
+                "ownership_type": OwnershipType(otype_raw) if otype_raw else None,
+                "purchase_date": date.fromisoformat(str(form["acquisition_date"]))
                 if form.get("acquisition_date")
                 else None,
-                purchase_price=Decimal(str(form["purchase_price"]))
-                if form.get("purchase_price")
-                else None,
-                license_expiry_date=date.fromisoformat(str(form["license_expiry_date"]))
+                "license_expiry_date": date.fromisoformat(
+                    str(form["license_expiry_date"])
+                )
                 if form.get("license_expiry_date")
                 else None,
-                location_id=UUID(str(form["location_id"]))
+                "location_id": UUID(str(form["location_id"]))
                 if form.get("location_id")
                 else None,
-                vendor_id=UUID(str(form["supplier_id"]))
-                if form.get("supplier_id")
-                else None,
-                assigned_employee_id=UUID(str(form["assigned_employee_id"]))
+                "assigned_employee_id": UUID(str(form["assigned_employee_id"]))
                 if form.get("assigned_employee_id")
                 else None,
-                assignment_type=AssignmentType.POOL
+                "assignment_type": AssignmentType.POOL
                 if "is_pool_vehicle" in form
                 else AssignmentType.PERSONAL,
-                notes=str(form.get("notes", "")) or None,
-            )
+                "notes": str(form.get("notes", "")) or None,
+            }
+            if "purchase_price" in form:
+                update_payload["purchase_price"] = (
+                    Decimal(str(form["purchase_price"]))
+                    if form.get("purchase_price")
+                    else None
+                )
+            if "supplier_id" in form:
+                update_payload["vendor_id"] = (
+                    UUID(str(form["supplier_id"])) if form.get("supplier_id") else None
+                )
+
+            data = VehicleUpdate(**update_payload)
             svc = VehicleService(db, org_id)
             svc.update(vid, data)
             db.commit()
@@ -1702,6 +1843,7 @@ class FleetWebService:
 
         from fastapi import HTTPException
         from fastapi.responses import RedirectResponse
+        from starlette.datastructures import UploadFile as StarletteUploadFile
 
         form = await request.form()
         form_data = dict(form)
@@ -1715,6 +1857,8 @@ class FleetWebService:
         data: dict[str, Any] = {}
         for key, val in form_data.items():
             if key.startswith("csrf") or key == "_method":
+                continue
+            if isinstance(val, StarletteUploadFile):
                 continue
             str_val = str(val).strip() if val else ""
             if not str_val:
@@ -1820,7 +1964,46 @@ class FleetWebService:
         try:
             schema = cfg["schema_cls"](**data)
             service = cfg["service_cls"](db, org_id)
-            service.create(schema)
+            record = service.create(schema)
+            if entity_type == "fuel":
+                uploads = [
+                    upload
+                    for upload in form.getlist("receipt_files")
+                    if isinstance(upload, StarletteUploadFile) and upload.filename
+                ]
+                for upload in uploads:
+                    await self._save_fuel_receipt_attachment(
+                        db=db,
+                        organization_id=org_id,
+                        fuel_log_id=record.fuel_log_id,
+                        upload=upload,
+                        uploaded_by=user_id,
+                    )
+            elif entity_type == "incident":
+                uploads = [
+                    upload
+                    for upload in form.getlist("incident_files")
+                    if isinstance(upload, StarletteUploadFile) and upload.filename
+                ]
+                for upload in uploads:
+                    await self._save_incident_attachment(
+                        db=db,
+                        organization_id=org_id,
+                        incident_id=record.incident_id,
+                        upload=upload,
+                        uploaded_by=user_id,
+                    )
+            elif entity_type == "document":
+                document_upload = form.get("document_file")
+                if (
+                    isinstance(document_upload, StarletteUploadFile)
+                    and document_upload.filename
+                ):
+                    await self._save_document_file(
+                        organization_id=org_id,
+                        document=record,
+                        upload=document_upload,
+                    )
             db.commit()
             logger.info("Created fleet %s for org %s", entity_type, org_id)
         except Exception as e:
@@ -1835,6 +2018,245 @@ class FleetWebService:
             url=cfg["list_url"],
             status_code=303,
         )
+
+    async def update_document_response(
+        self,
+        request: "Request",
+        auth: Any,
+        db: Session,
+        document_id: UUID,
+    ) -> Any:
+        """Handle fleet document edit form submissions."""
+        from datetime import date
+        from decimal import Decimal, InvalidOperation
+
+        from fastapi import HTTPException
+        from fastapi.responses import RedirectResponse
+        from starlette.datastructures import UploadFile as StarletteUploadFile
+
+        from app.schemas.fleet.document import DocumentUpdate
+
+        form = await request.form()
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        data: dict[str, Any] = {}
+        for key in (
+            "document_type",
+            "document_number",
+            "description",
+            "issue_date",
+            "expiry_date",
+            "provider_name",
+            "policy_number",
+            "coverage_amount",
+            "premium_amount",
+            "reminder_days_before",
+            "notes",
+        ):
+            raw_value = form.get(key)
+            str_value = str(raw_value).strip() if raw_value is not None else ""
+            if not str_value:
+                data[key] = None
+                continue
+            if key in ("issue_date", "expiry_date"):
+                try:
+                    data[key] = date.fromisoformat(str_value)
+                except ValueError:
+                    data[key] = str_value
+            elif key in ("coverage_amount", "premium_amount"):
+                try:
+                    data[key] = Decimal(str_value)
+                except (ValueError, InvalidOperation):
+                    data[key] = str_value
+            elif key == "reminder_days_before":
+                try:
+                    data[key] = int(str_value)
+                except ValueError:
+                    data[key] = str_value
+            else:
+                data[key] = str_value
+
+        try:
+            service = DocumentService(db, coerce_uuid(org_id))
+            document = service.update(document_id, DocumentUpdate(**data))
+            upload = form.get("document_file")
+            if isinstance(upload, StarletteUploadFile) and upload.filename:
+                await self._save_document_file(
+                    organization_id=coerce_uuid(org_id),
+                    document=document,
+                    upload=upload,
+                )
+            db.commit()
+            logger.info("Updated fleet document %s for org %s", document_id, org_id)
+        except Exception as exc:
+            logger.warning("Fleet document update failed: %s", exc)
+            db.rollback()
+            return RedirectResponse(
+                url=f"/fleet/documents/{document_id}/edit?error={str(exc)[:200]}",
+                status_code=303,
+            )
+
+        return RedirectResponse(url=f"/fleet/documents/{document_id}", status_code=303)
+
+    async def _save_fuel_receipt_attachment(
+        self,
+        *,
+        db: Session,
+        organization_id: UUID,
+        fuel_log_id: UUID,
+        upload: Any,
+        uploaded_by: Any,
+    ) -> None:
+        """Validate and save a fuel receipt attachment."""
+        from datetime import datetime
+
+        from app.models.finance.common.attachment import Attachment, AttachmentCategory
+        from app.services.file_upload import (
+            FileUploadError,
+            get_fleet_fuel_receipt_upload,
+        )
+        from app.services.upload_utils import read_upload_bytes
+
+        if uploaded_by is None:
+            raise ValueError("Authenticated user is required to upload receipts")
+
+        upload_service = get_fleet_fuel_receipt_upload()
+        max_bytes = upload_service.config.max_size_bytes
+        file_bytes = await read_upload_bytes(
+            upload,
+            max_bytes,
+            error_detail=f"Receipt image is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
+        )
+        try:
+            upload_result = upload_service.save(
+                file_bytes,
+                content_type=upload.content_type,
+                subdirs=[
+                    str(coerce_uuid(organization_id)),
+                    self.FUEL_LOG_ATTACHMENT_ENTITY_TYPE.lower(),
+                ],
+                original_filename=upload.filename,
+            )
+        except FileUploadError as exc:
+            raise ValueError(str(exc)) from exc
+
+        attachment = Attachment(
+            organization_id=coerce_uuid(organization_id),
+            entity_type=self.FUEL_LOG_ATTACHMENT_ENTITY_TYPE,
+            entity_id=coerce_uuid(fuel_log_id),
+            file_name=upload.filename,
+            file_path=upload_result.relative_path,
+            file_size=upload_result.file_size,
+            content_type=upload.content_type or "application/octet-stream",
+            category=AttachmentCategory.RECEIPT,
+            description="Fuel purchase receipt",
+            storage_provider="S3",
+            checksum=upload_result.checksum,
+            uploaded_by=coerce_uuid(uploaded_by),
+            uploaded_at=datetime.utcnow(),
+        )
+        db.add(attachment)
+        db.flush()
+
+    async def _save_document_file(
+        self,
+        *,
+        organization_id: UUID,
+        document: Any,
+        upload: Any,
+    ) -> None:
+        """Validate and save a fleet document file onto the document record."""
+        from app.services.file_upload import (
+            FileUploadError,
+            get_finance_attachment_upload,
+        )
+        from app.services.upload_utils import read_upload_bytes
+
+        upload_service = get_finance_attachment_upload()
+        max_bytes = upload_service.config.max_size_bytes
+        file_bytes = await read_upload_bytes(
+            upload,
+            max_bytes,
+            error_detail=f"Document file is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
+        )
+        try:
+            upload_result = upload_service.save(
+                file_bytes,
+                content_type=upload.content_type,
+                subdirs=[
+                    str(coerce_uuid(organization_id)),
+                    "fleet_documents",
+                ],
+                original_filename=upload.filename,
+            )
+        except FileUploadError as exc:
+            raise ValueError(str(exc)) from exc
+
+        document.file_name = upload.filename
+        document.file_path = upload_result.relative_path
+        self.db.flush()
+
+    async def _save_incident_attachment(
+        self,
+        *,
+        db: Session,
+        organization_id: UUID,
+        incident_id: UUID,
+        upload: Any,
+        uploaded_by: Any,
+    ) -> None:
+        """Validate and save an incident attachment."""
+        from datetime import datetime
+
+        from app.models.finance.common.attachment import Attachment, AttachmentCategory
+        from app.services.file_upload import (
+            FileUploadError,
+            get_fleet_incident_attachment_upload,
+        )
+        from app.services.upload_utils import read_upload_bytes
+
+        if uploaded_by is None:
+            raise ValueError("Authenticated user is required to upload attachments")
+
+        upload_service = get_fleet_incident_attachment_upload()
+        max_bytes = upload_service.config.max_size_bytes
+        file_bytes = await read_upload_bytes(
+            upload,
+            max_bytes,
+            error_detail=f"Incident attachment is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
+        )
+        try:
+            upload_result = upload_service.save(
+                file_bytes,
+                content_type=upload.content_type,
+                subdirs=[
+                    str(coerce_uuid(organization_id)),
+                    self.INCIDENT_ATTACHMENT_ENTITY_TYPE.lower(),
+                ],
+                original_filename=upload.filename,
+            )
+        except FileUploadError as exc:
+            raise ValueError(str(exc)) from exc
+
+        attachment = Attachment(
+            organization_id=coerce_uuid(organization_id),
+            entity_type=self.INCIDENT_ATTACHMENT_ENTITY_TYPE,
+            entity_id=coerce_uuid(incident_id),
+            file_name=upload.filename,
+            file_path=upload_result.relative_path,
+            file_size=upload_result.file_size,
+            content_type=upload.content_type or "application/octet-stream",
+            category=AttachmentCategory.OTHER,
+            description="Fleet incident attachment",
+            storage_provider="S3",
+            checksum=upload_result.checksum,
+            uploaded_by=coerce_uuid(uploaded_by),
+            uploaded_at=datetime.utcnow(),
+        )
+        db.add(attachment)
+        db.flush()
 
     async def cancel_reservation_response(
         self,

@@ -57,14 +57,15 @@
                         <th scope="col" class="text-right">Total Cost</th>
                         <th scope="col" class="text-right">Odometer</th>
                         <th scope="col">Station</th>
+                        <th scope="col">Receipt</th>
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for log in logs %}
+                    {% for log in fuel_logs %}
                     <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td class="text-sm text-slate-600 dark:text-slate-300">
-                            {{ log.fuel_date | format_date }}
+                            {{ log.log_date | format_date }}
                         </td>
                         <td>
                             <a href="/fleet/vehicles/{{ log.vehicle_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
@@ -81,10 +82,21 @@
                             {{ "{:,.2f}".format(log.total_cost) }}
                         </td>
                         <td class="text-right font-mono text-sm text-slate-600 dark:text-slate-300">
-                            {{ "{:,.0f}".format(log.odometer_km) }} km
+                            {{ "{:,.0f}".format(log.odometer_reading) }} km
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">
-                            {{ log.fuel_station or '-' }}
+                            {{ log.station_name or '-' }}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-300">
+                            {% set receipts = fuel_receipts.get(log.fuel_log_id|string, []) %}
+                            {% if receipts %}
+                            <a href="{{ receipts[0].download_url }}" class="inline-flex items-center gap-1 font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ icon_svg("paperclip", "h-4 w-4") }}
+                                {{ receipts|length }} file{{ 's' if receipts|length != 1 else '' }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
                         </td>
                         <td class="text-right">
                             {{ action_buttons(edit_href="/fleet/fuel/" ~ log.fuel_log_id ~ "/edit") }}
@@ -92,7 +104,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="py-16">
+                        <td colspan="9" class="py-16">
                             <div class="text-center">
                                 <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
                                     {{ icon_svg("fire", "h-8 w-8 text-slate-400", stroke_width="1.5") }}

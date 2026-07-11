@@ -3,7 +3,7 @@
 Covers the pure-logic surface that does not require a database session:
 - decimal/record parsing from API payloads,
 - ListResponse pagination envelope handling,
-- DotmacSubConfig (is_configured / auth_header / env fallback),
+- DotmacSubConfig (is_configured / auth_headers / env fallback),
 - inbound webhook HMAC-SHA256 verification,
 - webhook payload entity-id extraction,
 - invoice status mapping (dotmac_sub → ERP).
@@ -58,8 +58,12 @@ def test_config_is_configured() -> None:
     assert DotmacSubConfig(api_url="https://x", api_token="tok").is_configured()
 
 
-def test_config_auth_header() -> None:
-    assert DotmacSubConfig(api_url="x", api_token="abc").auth_header == "Bearer abc"
+def test_config_auth_headers() -> None:
+    # dotmac_sub service auth is a scoped API key via X-Api-Key; its Bearer
+    # path only accepts session-bound login JWTs (contract fix, audit A3).
+    assert DotmacSubConfig(api_url="x", api_token="abc").auth_headers == {
+        "X-Api-Key": "abc"
+    }
 
 
 def test_config_for_org_falls_back_to_env_when_lookup_fails(
@@ -388,7 +392,7 @@ def test_functional_amount_falls_back_to_one_when_no_rate(
     assert functional == Decimal("100")
 
 
-def test_bearer_token_requires_service_token_no_staff_login() -> None:
+def test_api_key_required_no_staff_login() -> None:
     """Staff-credential login is retired (audit S1): a client with no api_token
     raises loudly instead of scraping the login page with a staff password."""
     from app.services.dotmac_sub.client import (
@@ -399,11 +403,36 @@ def test_bearer_token_requires_service_token_no_staff_login() -> None:
 
     client = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token=""))
     with pytest.raises(DotmacSubAuthenticationError):
-        client._bearer_token()
+        client._api_key()
 
-    # With a token it returns it directly (no login round-trip).
-    ok = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token="svc-tok"))
-    assert ok._bearer_token() == "svc-tok"
+    # With a key it returns it directly (no login round-trip).
+    ok = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token="svc-key"))
+    assert ok._api_key() == "svc-key"
+
+
+def test_request_sends_api_key_header_not_bearer() -> None:
+    """The wire contract: X-Api-Key carries the key; no Authorization header.
+    dotmac_sub's Bearer path only accepts session-bound login JWTs, so sending
+    the key as Bearer authenticates nothing (401)."""
+    import httpx as _httpx
+
+    from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
+
+    seen: dict[str, str] = {}
+
+    def handler(request: _httpx.Request) -> _httpx.Response:
+        seen["x-api-key"] = request.headers.get("X-Api-Key", "")
+        seen["authorization"] = request.headers.get("Authorization", "")
+        return _httpx.Response(200, json={"items": [], "count": 0})
+
+    client = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token="svc-key"))
+    client._client = _httpx.Client(
+        base_url="https://x/api/v1", transport=_httpx.MockTransport(handler)
+    )
+    client._request("GET", "/subscribers")
+
+    assert seen["x-api-key"] == "svc-key"
+    assert seen["authorization"] == ""
 
 
 def test_lock_dotmac_sub_customer_issues_advisory_lock_on_postgres() -> None:
@@ -445,3 +474,28 @@ def test_lock_dotmac_sub_customer_noop_off_postgres_or_without_id() -> None:
         SimpleNamespace(db=pg_db, organization_id="o"), ""
     )
     pg_db.execute.assert_not_called()
+
+
+def test_customer_code_fits_column_limit() -> None:
+    """ar.customer.customer_code is VARCHAR(30): an untruncated
+    "DSUB-R-<uuid>" (43 chars) failed every reseller INSERT on the first
+    prod sync. UUID refs compact to dash-less hex before truncating;
+    short account numbers pass through untouched."""
+    from app.services.dotmac_sub.sync._base import BaseSyncMixin
+
+    mixin = BaseSyncMixin.__new__(BaseSyncMixin)
+    uuid_ref = "f81e6646-3a7a-41b3-b600-0934abf17330"
+
+    reseller_code = mixin._customer_code("R", uuid_ref)
+    assert reseller_code == "DSUB-R-f81e66463a7a41b3b600093"
+    assert len(reseller_code) <= 30
+
+    # Distinct UUIDs stay distinct after compaction+truncation.
+    other = mixin._customer_code("R", "f840450e-7e2a-4eb4-af21-e1cb3353f5e8")
+    assert other != reseller_code
+
+    # Short human account numbers are preserved verbatim.
+    assert mixin._customer_code("", "ACC-10042") == "DSUB-ACC-10042"
+
+    # Subscriber UUID fallback also fits.
+    assert len(mixin._customer_code("", uuid_ref)) <= 30

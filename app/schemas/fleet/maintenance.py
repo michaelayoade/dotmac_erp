@@ -22,6 +22,7 @@ class MaintenanceBase(BaseModel):
     scheduled_date: date
     estimated_cost: Decimal | None = Field(default=None, ge=0)
     supplier_id: UUID | None = None
+    technician_name: str | None = Field(default=None, max_length=100)
     notes: str | None = None
 
 
@@ -39,6 +40,7 @@ class MaintenanceUpdate(BaseModel):
     scheduled_date: date | None = None
     estimated_cost: Decimal | None = Field(default=None, ge=0)
     supplier_id: UUID | None = None
+    technician_name: str | None = Field(default=None, max_length=100)
     notes: str | None = None
 
 

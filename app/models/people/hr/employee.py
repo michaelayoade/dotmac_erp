@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     JSON,
     Date,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -193,6 +194,16 @@ class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
         String(255),
         nullable=True,
         comment="Personal email (separate from work email on Person)",
+    )
+    dotmac_sub_account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+        comment="dotmac_sub SystemUser id provisioned by staff sync",
+    )
+    dotmac_sub_staff_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last successful staff-sync push to dotmac_sub",
     )
     personal_phone: Mapped[str | None] = mapped_column(
         String(50),

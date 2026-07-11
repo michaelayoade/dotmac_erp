@@ -4,7 +4,9 @@ dotmac_sub API Client.
 HTTP client for the dotmac_sub subscriber-management system at
 ``selfcare.dotmac.io``. Replaces the legacy Splynx ISP-billing feed.
 
-- **Auth**: static bearer token (``Authorization: Bearer <token>``).
+- **Auth**: scoped dotmac_sub API key sent as ``X-Api-Key``. dotmac_sub's
+  ``Authorization: Bearer`` path only accepts session-bound login JWTs, so a
+  long-lived service key MUST go in the ``X-Api-Key`` header.
 - **API**: REST under ``/api/v1`` with ``?limit=&offset=`` pagination wrapped as
   ``{"items": [...], "count", "limit", "offset"}``.
 - **Domain**: ``Reseller -> Subscriber -> BillingAccount`` with
@@ -54,9 +56,11 @@ class DotmacSubRateLimitError(DotmacSubError):
 class DotmacSubConfig:
     """Configuration for the dotmac_sub API.
 
-    Auth is a **service bearer token** (``api_token``). Staff-credential login
-    has been retired for security (audit S1) — the client no longer logs in with
-    a username + password; ``api_token`` must be a dotmac_sub service token.
+    Auth is a **scoped dotmac_sub API key** (``api_token``), sent as
+    ``X-Api-Key``. Staff-credential login has been retired for security
+    (audit S1) — the client no longer logs in with a username + password;
+    ``api_token`` must be a dotmac_sub API key with read scopes for the
+    synced domains.
     """
 
     api_url: str
@@ -104,7 +108,7 @@ class DotmacSubConfig:
 
         # IntegrationConfig column mapping for dotmac_sub:
         #   base_url   -> api_url
-        #   api_key    -> service bearer token (encrypted)
+        #   api_key    -> dotmac_sub API key (encrypted)
         #   api_secret -> webhook secret (used by the inbound webhook route)
         return cls(
             api_url=creds.get("base_url") or env.api_url,
@@ -114,13 +118,13 @@ class DotmacSubConfig:
         )
 
     def is_configured(self) -> bool:
-        """Configured when we have a base URL and a service bearer token."""
+        """Configured when we have a base URL and an API key."""
         return bool(self.api_url and self.api_token)
 
     @property
-    def auth_header(self) -> str:
-        """Generate the Bearer auth header value."""
-        return f"Bearer {self.api_token}"
+    def auth_headers(self) -> dict[str, str]:
+        """Auth headers for a dotmac_sub request (scoped API key)."""
+        return {"X-Api-Key": self.api_token}
 
 
 @dataclass
@@ -367,18 +371,18 @@ class DotmacSubClient:
 
     # ---- Authentication ----
 
-    def _bearer_token(self) -> str:
-        """Return the configured dotmac_sub service bearer token.
+    def _api_key(self) -> str:
+        """Return the configured dotmac_sub API key.
 
         Staff-credential login (username+password session scrape) was retired for
-        security (audit S1). If no service token is configured we fail loudly
-        rather than fall back to staff creds.
+        security (audit S1). If no API key is configured we fail loudly rather
+        than fall back to staff creds.
         """
         if not self.config.api_token:
             raise DotmacSubAuthenticationError(
                 "dotmac_sub api_token is not configured. Staff-credential login "
                 "has been retired — set DOTMAC_SUB_API_TOKEN (or the integration's "
-                "api_key) to a dotmac_sub service token."
+                "api_key) to a scoped dotmac_sub API key."
             )
         return self.config.api_token
 
@@ -413,7 +417,10 @@ class DotmacSubClient:
 
         for attempt in range(self.config.max_retries):
             try:
-                headers = {"Authorization": f"Bearer {self._bearer_token()}"}
+                # dotmac_sub service auth: scoped API key via X-Api-Key. Its
+                # Bearer path only accepts session-bound login JWTs — a
+                # long-lived key sent as Bearer is rejected with 401.
+                headers = {"X-Api-Key": self._api_key()}
                 response = self.client.request(
                     method=method,
                     url=endpoint,
@@ -566,6 +573,51 @@ class DotmacSubClient:
             if len(items) < page_size:
                 break
             offset += page_size
+
+    # ---- Staff accounts (ERP staff sync) ----
+
+    def create_staff_account(
+        self,
+        *,
+        email: str,
+        first_name: str,
+        last_name: str,
+        role: str = "staff",
+        send_invite: bool = True,
+    ) -> dict[str, Any]:
+        """Create (idempotently) + invite a dotmac_sub staff account.
+
+        Requires the API key to carry ``rbac:assign``. Returns the endpoint's
+        ``{id, email, is_active, created, invited}`` payload.
+        """
+        result = self._request(
+            "POST",
+            "/staff-accounts",
+            json={
+                "email": email,
+                "first_name": first_name,
+                "last_name": last_name,
+                "role": role,
+                "send_invite": send_invite,
+            },
+        )
+        return dict(result) if isinstance(result, dict) else {}
+
+    def get_staff_account(self, email: str) -> dict[str, Any] | None:
+        """Look up a staff account by email; None when absent."""
+        try:
+            result = self._request("GET", "/staff-accounts", params={"email": email})
+        except DotmacSubNotFoundError:
+            return None
+        return dict(result) if isinstance(result, dict) else None
+
+    def set_staff_account_active(
+        self, account_id: str, *, is_active: bool
+    ) -> dict[str, Any]:
+        """Activate/deactivate a staff account (deactivation revokes sessions)."""
+        action = "activate" if is_active else "deactivate"
+        result = self._request("POST", f"/staff-accounts/{account_id}/{action}")
+        return dict(result) if isinstance(result, dict) else {}
 
     def get_resellers(self) -> Generator[ResellerRecord, None, None]:
         logger.info("Fetching dotmac_sub resellers")

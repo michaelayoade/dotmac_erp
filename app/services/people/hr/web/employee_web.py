@@ -805,6 +805,14 @@ class HRWebService:
         pension_rate_raw = self._form_str(form, "pension_rate")
         nhf_number = self._form_str(form, "nhf_number")
 
+        required_employment_errors = {}
+        if not employment_type_id:
+            required_employment_errors["employment_type_id"] = "Required"
+        if not salary_mode_raw:
+            required_employment_errors["salary_mode"] = "Required"
+        elif not salary_mode:
+            required_employment_errors["salary_mode"] = "Select a valid salary mode."
+
         if (
             not linked_person_id and (not first_name or not last_name or not email)
         ) or not date_of_joining:
@@ -873,6 +881,75 @@ class HRWebService:
                     "nhf_number": nhf_number,
                 },
                 errors=errors,
+            )
+
+        if required_employment_errors:
+            self._log_employee_create_validation(
+                request,
+                reason="missing_required_contract_type_or_salary_mode",
+                current_tab=current_tab,
+                has_salary_structure=bool(salary_structure_id),
+            )
+            return self.employee_new_form_response(
+                request,
+                auth,
+                db,
+                error=(
+                    "Contract type and salary mode must be selected for "
+                    "employee creation."
+                ),
+                form_data={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "phone": phone,
+                    "date_of_birth": date_of_birth,
+                    "gender": gender,
+                    "address_line1": address_line1,
+                    "address_line2": address_line2,
+                    "city": city,
+                    "region": region,
+                    "postal_code": postal_code,
+                    "country_code": country_code,
+                    "employee_code": employee_code,
+                    "department_id": department_id,
+                    "designation_id": designation_id,
+                    "employment_type_id": employment_type_id,
+                    "grade_id": grade_id,
+                    "position_id": position_id,
+                    "reports_to_id": reports_to_id,
+                    "expense_approver_id": expense_approver_id,
+                    "assigned_location_id": assigned_location_id,
+                    "default_shift_type_id": default_shift_type_id,
+                    "linked_person_id": linked_person_id,
+                    "cost_center_id": cost_center_id,
+                    "current_tab": "employment",
+                    "date_of_joining": date_of_joining,
+                    "probation_end_date": probation_end_date,
+                    "confirmation_date": confirmation_date,
+                    "nysc_start_date": nysc_start_date,
+                    "nysc_end_date": nysc_end_date,
+                    "status": status,
+                    "personal_email": personal_email,
+                    "personal_phone": personal_phone,
+                    "emergency_contact_name": emergency_contact_name,
+                    "emergency_contact_phone": emergency_contact_phone,
+                    "bank_name": bank_name,
+                    "bank_account_name": bank_account_name,
+                    "bank_account_number": bank_account_number,
+                    "bank_branch_code": bank_branch_code,
+                    "ctc": ctc_raw,
+                    "salary_mode": salary_mode_raw,
+                    "salary_structure_id": salary_structure_id,
+                    "notes": notes,
+                    "tin": tin,
+                    "tax_state": tax_state,
+                    "rsa_pin": rsa_pin,
+                    "pfa_code": pfa_code,
+                    "pension_rate": pension_rate_raw,
+                    "nhf_number": nhf_number,
+                },
+                errors=required_employment_errors,
             )
 
         org_id = coerce_uuid(auth.organization_id)

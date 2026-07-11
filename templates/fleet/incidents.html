@@ -117,6 +117,7 @@
                         <th scope="col">Severity</th>
                         <th scope="col">Description</th>
                         <th scope="col">Status</th>
+                        <th scope="col">Files</th>
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
@@ -147,13 +148,24 @@
                             {{ incident.description }}
                         </td>
                         <td>{{ status_badge(incident.status, 'sm') }}</td>
+                        <td class="text-sm text-slate-600 dark:text-slate-300">
+                            {% set files = incident_attachments.get(incident.incident_id|string, []) %}
+                            {% if files %}
+                            <a href="{{ files[0].download_url }}" class="inline-flex items-center gap-1 font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ icon_svg("paperclip", "h-4 w-4") }}
+                                {{ files|length }} file{{ 's' if files|length != 1 else '' }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
                         <td class="text-right">
                             {{ action_buttons(view_href="/fleet/incidents/" ~ incident.incident_id) }}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="py-16">
+                        <td colspan="8" class="py-16">
                             <div class="text-center">
                                 <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
                                     {{ icon_svg("check-circle", "h-8 w-8 text-slate-400", stroke_width="1.5") }}
