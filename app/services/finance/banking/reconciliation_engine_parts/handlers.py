@@ -356,36 +356,24 @@ class ReconciliationEngineHandlers:
                     ],
                 )
 
-                journal, error = BasePostingAdapter.create_and_approve_journal(
-                    self.db,  # type: ignore[attr-defined]
-                    ctx.organization_id,
-                    journal_input,
-                    _SYSTEM_USER_ID,
-                    error_prefix="Fee journal creation failed",
-                )
-                if error:
-                    ctx.result.errors.append(
-                        f"Line {line.line_number}: {error.message}"
-                    )
-                    continue
-
                 idempotency_key = BasePostingAdapter.make_idempotency_key(
                     ctx.organization_id,
                     "BANKING",
                     line.line_id,
                     action="bank-fee",
                 )
-                posting = BasePostingAdapter.post_to_ledger(
+                journal, posting = BasePostingAdapter.create_approve_and_post_journal(
                     self.db,  # type: ignore[attr-defined]
-                    organization_id=ctx.organization_id,
-                    journal_entry_id=journal.journal_entry_id,
+                    ctx.organization_id,
+                    journal_input,
+                    _SYSTEM_USER_ID,
                     posting_date=line.transaction_date,
                     idempotency_key=idempotency_key,
                     source_module="BANKING",
                     correlation_id=correlation_id,
-                    posted_by_user_id=_SYSTEM_USER_ID,
                     success_message="Bank fee posted",
-                    error_prefix="Fee journal posting failed",
+                    creation_error_prefix="Fee journal creation failed",
+                    ledger_error_prefix="Fee journal posting failed",
                 )
                 if not posting.success:
                     ctx.result.errors.append(
@@ -556,36 +544,26 @@ class ReconciliationEngineHandlers:
                         ],
                     )
 
-                    journal, error = BasePostingAdapter.create_and_approve_journal(
-                        self.db,  # type: ignore[attr-defined]
-                        ctx.organization_id,
-                        journal_input,
-                        _SYSTEM_USER_ID,
-                        error_prefix=("Inter-bank journal creation failed"),
-                    )
-                    if error:
-                        ctx.result.errors.append(
-                            f"Line {line.line_number}: {error.message}"
-                        )
-                        continue
-
                     idempotency_key = BasePostingAdapter.make_idempotency_key(
                         ctx.organization_id,
                         "BANKING",
                         line.line_id,
                         action="interbank",
                     )
-                    posting = BasePostingAdapter.post_to_ledger(
-                        self.db,  # type: ignore[attr-defined]
-                        organization_id=ctx.organization_id,
-                        journal_entry_id=journal.journal_entry_id,
-                        posting_date=line.transaction_date,
-                        idempotency_key=idempotency_key,
-                        source_module="BANKING",
-                        correlation_id=correlation_id,
-                        posted_by_user_id=_SYSTEM_USER_ID,
-                        success_message="Inter-bank transfer posted",
-                        error_prefix="Inter-bank posting failed",
+                    journal, posting = (
+                        BasePostingAdapter.create_approve_and_post_journal(
+                            self.db,  # type: ignore[attr-defined]
+                            ctx.organization_id,
+                            journal_input,
+                            _SYSTEM_USER_ID,
+                            posting_date=line.transaction_date,
+                            idempotency_key=idempotency_key,
+                            source_module="BANKING",
+                            correlation_id=correlation_id,
+                            success_message="Inter-bank transfer posted",
+                            creation_error_prefix="Inter-bank journal creation failed",
+                            ledger_error_prefix="Inter-bank posting failed",
+                        )
                     )
                     if not posting.success:
                         ctx.result.errors.append(

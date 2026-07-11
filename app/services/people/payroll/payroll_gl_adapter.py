@@ -320,37 +320,29 @@ class PayrollGLAdapter:
             source_document_id=s_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        if not idempotency_key:
+            idempotency_key = f"{org_id}:PAYROLL:{s_id}:post:v1"
+
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return PayrollPostingResult(success=False, message=error.message)
-
-        # Post to ledger
-        if not idempotency_key:
-            idempotency_key = f"{org_id}:PAYROLL:{s_id}:post:v1"
-
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="PAYROLL",
             correlation_id=str(s_id),
-            posted_by_user_id=user_id,
             success_message="Salary slip posted successfully",
         )
         if not posting_result.success:
             return PayrollPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll journal posting"
+        )
 
         # Update salary slip with journal reference
         slip.journal_entry_id = journal.journal_entry_id
@@ -607,33 +599,26 @@ class PayrollGLAdapter:
             source_document_id=_safe_coerce_uuid(getattr(slip, "slip_id", None)),
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return PayrollPostingResult(success=False, message=error.message)
-
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=f"{org_id}:PAYROLL:{slip.slip_id}:post:v1",
             source_module="PAYROLL",
             correlation_id=str(slip.slip_id),
-            posted_by_user_id=user_id,
             success_message="Slip journal created and posted",
         )
         if not posting_result.success:
             return PayrollPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll reversal posting"
+        )
 
         return PayrollPostingResult(
             success=True,
@@ -849,33 +834,26 @@ class PayrollGLAdapter:
             source_document_id=_safe_coerce_uuid(getattr(entry, "entry_id", None)),
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return PayrollPostingResult(success=False, message=error.message)
-
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=f"{org_id}:PAYROLL:RUN:{entry.entry_id}:post:v1",
             source_module="PAYROLL",
             correlation_id=str(entry.entry_id),
-            posted_by_user_id=user_id,
             success_message="Run journal created and posted",
         )
         if not posting_result.success:
             return PayrollPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll accrual posting"
+        )
 
         return PayrollPostingResult(
             success=True,
@@ -1096,36 +1074,28 @@ class PayrollGLAdapter:
             source_document_id=e_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        idempotency_key = f"{org_id}:PAYROLL_ENTRY:{e_id}:consolidated:v1"
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return PayrollPostingResult(success=False, message=error.message)
-
-        # 7. Post to ledger
-        idempotency_key = f"{org_id}:PAYROLL_ENTRY:{e_id}:consolidated:v1"
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="PAYROLL",
             correlation_id=str(e_id),
-            posted_by_user_id=user_id,
             success_message="Payroll entry posted successfully",
         )
 
         if not posting_result.success:
             return PayrollPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="payroll batch posting"
+        )
 
         # 8. Update all slips to POSTED
         now = datetime.now(UTC)

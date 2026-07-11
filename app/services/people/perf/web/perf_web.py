@@ -15,7 +15,6 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
-from starlette.datastructures import UploadFile
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
 from app.models.people.perf.appraisal import Appraisal
@@ -31,6 +30,7 @@ from app.services.people.perf import PerformanceService
 from app.services.people.perf.ohcsf_appraisal_service import OHCSFAppraisalService
 from app.services.people.perf.pip_service import PIPService
 from app.services.people.perf.performance_mode_policy import enforce_private_write_mode
+from app.services.web_forms import get_form_str as _get_form_str
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -45,13 +45,6 @@ from .base import (
     parse_kpi_status,
     parse_uuid,
 )
-
-
-def _get_form_str(form: Any, key: str, default: str = "") -> str:
-    value = form.get(key, default) if form is not None else default
-    if isinstance(value, UploadFile) or value is None:
-        return default
-    return str(value).strip()
 
 
 def _extract_absence_evidence(form_data: Any) -> dict[str, str] | None:

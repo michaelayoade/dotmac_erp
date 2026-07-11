@@ -181,39 +181,31 @@ def post_receipt(
         source_document_id=txn_id,
     )
 
-    journal, error = BasePostingAdapter.create_and_approve_journal(
-        db,
-        org_id,
-        journal_input,
-        user_id,
-        error_prefix="Journal creation failed",
-    )
-    if error:
-        return INVPostingResult(success=False, message=error.message)
-
-    # Post to ledger
     if not idempotency_key:
         idempotency_key = BasePostingAdapter.make_idempotency_key(
             org_id, "INV:RCV", txn_id, action="post"
         )
 
-    posting_result = BasePostingAdapter.post_to_ledger(
+    journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
         db,
-        organization_id=org_id,
-        journal_entry_id=journal.journal_entry_id,
+        org_id,
+        journal_input,
+        user_id,
         posting_date=posting_date,
         idempotency_key=idempotency_key,
         source_module="INV",
         correlation_id=None,
-        posted_by_user_id=user_id,
         success_message="Receipt posted successfully",
     )
     if not posting_result.success:
         return INVPostingResult(
             success=False,
-            journal_entry_id=journal.journal_entry_id,
+            journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
+    journal = BasePostingAdapter.require_journal(
+        journal, context="inventory receipt posting"
+    )
 
     # Update transaction with journal reference
     transaction.journal_entry_id = journal.journal_entry_id

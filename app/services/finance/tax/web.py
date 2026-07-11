@@ -16,7 +16,6 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from starlette.datastructures import UploadFile
 
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
@@ -49,21 +48,11 @@ from app.services.finance.tax.tax_return import (
 from app.services.finance.tax.tax_transaction import tax_transaction_service
 from app.services.formatters import format_currency as _format_currency
 from app.services.formatters import format_date as _format_date
+from app.services.web_forms import safe_form_text as _safe_form_text
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_form_text(value: object) -> str:
-    """Normalize form values to text for safe parsing."""
-    if value is None:
-        return ""
-    if isinstance(value, UploadFile):
-        return ""
-    if isinstance(value, str):
-        return value
-    return str(value)
 
 
 def _get_accounts(

@@ -13,26 +13,17 @@ from datetime import date
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from starlette.datastructures import FormData, UploadFile
 
 from app.models.people.perf.pms_enums import MonthlyReviewStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import EmployeeFilters, OrganizationService
+from app.services.web_forms import get_form_str as _get_form_str
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 from .base import parse_date, parse_uuid
 
 logger = logging.getLogger(__name__)
-
-
-def _get_form_str(form: FormData | None, key: str, default: str = "") -> str:
-    if form is None:
-        return default
-    value = form.get(key, default)
-    if isinstance(value, UploadFile) or value is None:
-        return default
-    return str(value).strip()
 
 
 class MonthlyReviewWebService:

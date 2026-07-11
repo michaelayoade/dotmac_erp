@@ -18,7 +18,11 @@ from app.models.domain_settings import (
 )
 from app.schemas.settings import DomainSettingCreate, DomainSettingUpdate
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
+from app.services.response import (
+    ListResponseMixin,
+    apply_ordering as _apply_ordering,
+    apply_pagination as _apply_pagination,
+)
 from app.services.settings_cache import invalidate_setting_cache
 
 logger = logging.getLogger(__name__)
@@ -161,24 +165,6 @@ def _record_setting_history(
     )
     db.add(history)
     return history
-
-
-def _apply_ordering(
-    stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Any:
-    if order_by not in allowed_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
-        )
-    column = allowed_columns[order_by]
-    if order_dir == "desc":
-        return stmt.order_by(column.desc())
-    return stmt.order_by(column.asc())
-
-
-def _apply_pagination(stmt: Any, limit: int, offset: int) -> Any:
-    return stmt.limit(limit).offset(offset)
 
 
 def _normalize_setting_values(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from datetime import date, datetime, timezone
+from functools import partial
 
 try:
     from datetime import UTC  # type: ignore
@@ -37,16 +38,14 @@ from app.models.expense.limit_rule import (
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.expense import ExpenseLimitService
+from app.services.web_forms import safe_form_text
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
 
-def _safe_form_text(value: object | None, default: str = "") -> str:
-    if isinstance(value, str):
-        return value.strip()
-    return default
+_safe_form_text = partial(safe_form_text, strip=True)
 
 
 class ExpenseLimitWebService:

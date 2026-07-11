@@ -13,7 +13,7 @@ import logging
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from starlette.datastructures import FormData, UploadFile
+from starlette.datastructures import FormData
 
 from app.models.people.perf.pms_enums import ContractStatus, ContractType
 from app.services.common import PaginationParams, coerce_uuid
@@ -23,21 +23,13 @@ from app.services.people.hr import (
     OrganizationService,
 )
 from app.services.people.perf import PerformanceService
+from app.services.web_forms import get_form_str as _get_form_str
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 from .base import parse_uuid
 
 logger = logging.getLogger(__name__)
-
-
-def _get_form_str(form: FormData | None, key: str, default: str = "") -> str:
-    if form is None:
-        return default
-    value = form.get(key, default)
-    if isinstance(value, UploadFile) or value is None:
-        return default
-    return str(value).strip()
 
 
 def _parse_competency_rows(form: FormData | None) -> list[dict]:
