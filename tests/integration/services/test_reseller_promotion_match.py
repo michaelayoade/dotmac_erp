@@ -73,7 +73,8 @@ def test_ambiguous_match_does_not_promote(db, org_id):
 def test_ineligible_rows_are_excluded(db, org_id):
     # Already a reseller, a child, or never sub-synced → not promotable.
     _customer(db, org_id, email="x@x.ng", reseller_id=str(uuid.uuid4()))
-    _customer(db, org_id, email="x@x.ng", parent_id=uuid.uuid4())
+    parent = _customer(db, org_id, email="parent@x.ng")
+    _customer(db, org_id, email="x@x.ng", parent_id=parent.customer_id)
     _customer(db, org_id, email="x@x.ng", sub_id=None)
     m = _mixin(db, org_id)
     assert m._find_promotable_customer(_reseller("x@x.ng")) is None
