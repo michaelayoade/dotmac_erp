@@ -86,4 +86,3 @@ class MailcowClient:
             ]
             if failures:
                 raise MailcowClientError(f"Mailbox update failed: {failures}")
-

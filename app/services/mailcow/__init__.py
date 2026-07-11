@@ -1,2 +1,1 @@
 """Mailcow integration services."""
-

@@ -104,11 +104,9 @@ class SogoProfileService:
 
     def _connect(self):
         try:
-            import pymysql
+            import pymysql  # type: ignore[import-untyped]
         except ImportError as exc:  # pragma: no cover - environment guard
-            raise RuntimeError(
-                "PyMySQL is required for SOGo profile updates"
-            ) from exc
+            raise RuntimeError("PyMySQL is required for SOGo profile updates") from exc
         return pymysql.connect(
             host=self.host,
             port=self.port,

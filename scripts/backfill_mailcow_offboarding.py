@@ -33,9 +33,7 @@ def _list_org_ids(limit_org_id: str | None) -> list:
 
         return [UUID(limit_org_id)]
     with cross_org_session() as db:
-        return list(
-            db.scalars(select(Employee.organization_id).distinct()).all()
-        )
+        return list(db.scalars(select(Employee.organization_id).distinct()).all())
 
 
 def main() -> int:

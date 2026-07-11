@@ -238,4 +238,3 @@ class _ManageSieveConnection:
                 raise ManageSieveError("ManageSieve connection closed")
             data.extend(chunk)
         return bytes(data)
-

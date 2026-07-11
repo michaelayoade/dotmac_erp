@@ -1732,7 +1732,7 @@ class HRWebService:
 
         self._update_linked_person(auth=auth, db=db, employee=employee, form=form)
 
-        prior_status = employee.status
+        prior_status = getattr(employee, "status", None)
         updated_employee = svc.update_employee(coerce_uuid(employee_id), data)
         self._update_tax_profile(auth=auth, db=db, employee=employee, form=form)
         assigned_location_log = (
@@ -1741,9 +1741,10 @@ class HRWebService:
             else None
         )
         db.commit()
-        if (
-            updated_employee.status != prior_status
-            and should_offboard_status(updated_employee.status)
+        if getattr(
+            updated_employee, "status", None
+        ) != prior_status and should_offboard_status(
+            getattr(updated_employee, "status", None)
         ):
             queue_employee_mailcow_offboarding(
                 updated_employee.employee_id,

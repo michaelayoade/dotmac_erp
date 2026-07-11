@@ -27,7 +27,9 @@ def test_autoresponder_template_is_rendered_before_sieve_write() -> None:
         email="s.ojo@dotmac.ng",
     )
 
-    assert message == "Samuel Ojo (s.ojo@dotmac.ng) is no longer with Dotmac Technologies."
+    assert (
+        message == "Samuel Ojo (s.ojo@dotmac.ng) is no longer with Dotmac Technologies."
+    )
     assert "{{" not in message
     assert "{full_name}" not in message
 

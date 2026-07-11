@@ -83,7 +83,9 @@ class EmployeeOffboardingService:
         self._sieve_client = sieve_client
         self._sogo_service = sogo_service
 
-    def offboard_employee(self, organization_id: UUID, employee_id: UUID) -> EmployeeOffboardingResult:
+    def offboard_employee(
+        self, organization_id: UUID, employee_id: UUID
+    ) -> EmployeeOffboardingResult:
         employee = self.db.scalar(
             select(Employee)
             .options(joinedload(Employee.person))
@@ -115,7 +117,9 @@ class EmployeeOffboardingService:
             return result
 
         result.erp_credentials_disabled = self._disable_erp_credentials(person.id)
-        result.erp_sessions_revoked = revoke_sessions_for_person(self.db, str(person.id))
+        result.erp_sessions_revoked = revoke_sessions_for_person(
+            self.db, str(person.id)
+        )
         result.person_deactivated = self._deactivate_person(person)
 
         if not self.config.enabled:
@@ -142,7 +146,9 @@ class EmployeeOffboardingService:
         return len(credentials)
 
     def _deactivate_person(self, person: Person) -> bool:
-        changed = person.is_active is not False or person.status != PersonStatus.inactive
+        changed = (
+            person.is_active is not False or person.status != PersonStatus.inactive
+        )
         person.is_active = False
         person.status = PersonStatus.inactive
         person.updated_at = datetime.now(UTC)
@@ -186,7 +192,9 @@ class EmployeeOffboardingService:
             )
             result.sieve_offboarding_script_updated = True
         except Exception as exc:
-            logger.exception("ManageSieve offboarding script update failed for %s", email)
+            logger.exception(
+                "ManageSieve offboarding script update failed for %s", email
+            )
             result.errors.append(f"sieve offboarding update failed: {exc}")
 
         try:

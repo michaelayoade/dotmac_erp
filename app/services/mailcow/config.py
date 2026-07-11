@@ -35,18 +35,12 @@ class MailcowOffboardingConfig:
     @property
     def sieve_configured(self) -> bool:
         return bool(
-            self.sieve_host
-            and self.sieve_master_user
-            and self.sieve_master_password
+            self.sieve_host and self.sieve_master_user and self.sieve_master_password
         )
 
     @property
     def sogo_db_configured(self) -> bool:
-        return bool(
-            self.sogo_db_host
-            and self.sogo_db_user
-            and self.sogo_db_password
-        )
+        return bool(self.sogo_db_host and self.sogo_db_user and self.sogo_db_password)
 
 
 def get_mailcow_offboarding_config() -> MailcowOffboardingConfig:
@@ -70,4 +64,3 @@ def get_mailcow_offboarding_config() -> MailcowOffboardingConfig:
         sogo_db_user=settings.mailcow_sogo_db_user,
         sogo_db_password=settings.mailcow_sogo_db_password,
     )
-
