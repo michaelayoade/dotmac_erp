@@ -23,6 +23,7 @@ from app.services.dotmac_sub.client import (
     InvoiceRecord,
 )
 
+from ._base import next_watermark
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
 from ._types import SyncResult
 
@@ -48,6 +49,9 @@ class InvoiceSyncMixin:
     _get_existing_invoice: Any
     _get_customer_for_account: Any
     _parse_date: Any
+    _parse_datetime: Any
+    _get_sync_watermark: Any
+    _advance_sync_watermark: Any
     _generate_invoice_number: Any
     _generate_credit_note_number: Any
     _map_invoice_status: Any
@@ -66,11 +70,23 @@ class InvoiceSyncMixin:
     ) -> SyncResult:
         result = SyncResult(success=True, entity_type="invoices")
         processed = 0
+        # Incremental pull: only when this is the unfiltered full sync (a
+        # targeted account_id/status pull must not touch the global cursor).
+        use_watermark = account_id is None and status is None
+        watermark = (
+            self._get_sync_watermark(EntityType.INVOICE) if use_watermark else None
+        )
+        updated_since = watermark.isoformat() if watermark else None
+        max_ok: datetime | None = None
+        min_error: datetime | None = None
         try:
-            for inv in self.client.get_invoices(account_id=account_id, status=status):
+            for inv in self.client.get_invoices(
+                account_id=account_id, status=status, updated_since=updated_since
+            ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
+                row_updated_at = self._parse_datetime(inv.updated_at)
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_invoice(
@@ -78,6 +94,12 @@ class InvoiceSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
+                    if row_updated_at is not None:
+                        max_ok = (
+                            row_updated_at
+                            if max_ok is None
+                            else max(max_ok, row_updated_at)
+                        )
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -90,6 +112,19 @@ class InvoiceSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
                     logger.exception("Error syncing invoice %s", inv.id)
+                    if row_updated_at is not None:
+                        min_error = (
+                            row_updated_at
+                            if min_error is None
+                            else min(min_error, row_updated_at)
+                        )
+            # Advance the cursor only after the pull completed without an API
+            # error (inclusive >= means a re-pull of the boundary row is safe).
+            if use_watermark:
+                self._advance_sync_watermark(
+                    EntityType.INVOICE,
+                    next_watermark(watermark, max_ok, min_error),
+                )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "

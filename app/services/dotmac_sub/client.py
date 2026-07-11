@@ -231,6 +231,9 @@ class InvoiceRecord:
     paid_at: str | None = None
     memo: str | None = None
     is_proforma: bool = False
+    # Server-tracked last-modified instant (ISO8601). Drives the incremental
+    # sync watermark so we only pull the delta each cycle.
+    updated_at: str | None = None
     lines: list[InvoiceLineRecord] = field(default_factory=list)
     allocations: list[AllocationRecord] = field(default_factory=list)
 
@@ -254,6 +257,8 @@ class PaymentRecord:
     memo: str | None = None
     payment_method_id: str | None = None
     payment_channel_id: str | None = None
+    # Server-tracked last-modified instant (ISO8601); see InvoiceRecord.
+    updated_at: str | None = None
     allocations: list[AllocationRecord] = field(default_factory=list)
 
     @property
@@ -289,6 +294,8 @@ class CreditNoteRecord:
     applied_total: Decimal = Decimal("0")
     memo: str | None = None
     issued_at: str | None = None
+    # Server-tracked last-modified instant (ISO8601); see InvoiceRecord.
+    updated_at: str | None = None
     lines: list[CreditNoteLineRecord] = field(default_factory=list)
 
 
@@ -309,6 +316,30 @@ def _dec(value: Any, default: str = "0") -> Decimal:
     except (ValueError, ArithmeticError):
         logger.warning("Could not parse decimal: %r", value)
         return Decimal(default)
+
+
+def _watermark_params(
+    account_id: str | None,
+    status: str | None,
+    updated_since: str | None,
+) -> dict[str, Any]:
+    """Build the list-endpoint query params for a watermarked pull.
+
+    When ``updated_since`` is set we request an ascending, keyset-friendly order
+    (``updated_at asc``, with the API applying an id tiebreaker) so the pager
+    walks the delta forward deterministically. Omitting it preserves the API's
+    default ordering (a full pull, e.g. the first sync before any watermark).
+    """
+    params: dict[str, Any] = {}
+    if account_id:
+        params["account_id"] = account_id
+    if status:
+        params["status"] = status
+    if updated_since:
+        params["updated_since"] = updated_since
+        params["order_by"] = "updated_at"
+        params["order_dir"] = "asc"
+    return params
 
 
 def _allocations(items: list[dict[str, Any]] | None) -> list[AllocationRecord]:
@@ -735,18 +766,19 @@ class DotmacSubClient:
             paid_at=item.get("paid_at"),
             memo=item.get("memo"),
             is_proforma=bool(item.get("is_proforma", False)),
+            updated_at=item.get("updated_at"),
             lines=lines,
             allocations=_allocations(item.get("payment_allocations")),
         )
 
     def get_invoices(
-        self, account_id: str | None = None, status: str | None = None
+        self,
+        account_id: str | None = None,
+        status: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[InvoiceRecord, None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        if status:
-            params["status"] = status
+        params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub invoices with params: %s", params)
         for item in self._paginate("/invoices", params=params):
             yield self._parse_invoice(item)
@@ -768,17 +800,18 @@ class DotmacSubClient:
             memo=item.get("memo"),
             payment_method_id=item.get("payment_method_id"),
             payment_channel_id=item.get("payment_channel_id"),
+            updated_at=item.get("updated_at"),
             allocations=_allocations(item.get("allocations")),
         )
 
     def get_payments(
-        self, account_id: str | None = None, status: str | None = None
+        self,
+        account_id: str | None = None,
+        status: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[PaymentRecord, None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        if status:
-            params["status"] = status
+        params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub payments with params: %s", params)
         for item in self._paginate("/payments", params=params):
             yield self._parse_payment(item)
@@ -811,17 +844,18 @@ class DotmacSubClient:
             applied_total=_dec(item.get("applied_total")),
             memo=item.get("memo"),
             issued_at=item.get("issued_at") or item.get("created_at"),
+            updated_at=item.get("updated_at"),
             lines=lines,
         )
 
     def get_credit_notes(
-        self, account_id: str | None = None, status: str | None = None
+        self,
+        account_id: str | None = None,
+        status: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[CreditNoteRecord, None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        if status:
-            params["status"] = status
+        params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub credit notes with params: %s", params)
         for item in self._paginate("/credit-notes", params=params):
             yield self._parse_credit_note(item)
