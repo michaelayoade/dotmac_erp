@@ -33,6 +33,7 @@ from app.services.common_filters import build_active_filters
 from app.services.pm.web.import_web import project_import_web_service
 from app.services.recent_activity import get_recent_activity_for_record
 from app.services.storage import get_storage
+from app.services.web_forms import safe_form_text as _safe_form_text
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -89,17 +90,6 @@ def _format_project_error(exc: Exception) -> str:
     if isinstance(exc, DataError):
         return "Some fields have invalid values or are too long. Please review and try again."
     return "Project could not be saved. Please check your input and try again."
-
-
-def _safe_form_text(value: object) -> str:
-    """Normalize form values to text for safe parsing."""
-    if value is None:
-        return ""
-    if isinstance(value, UploadFile):
-        return ""
-    if isinstance(value, str):
-        return value
-    return str(value)
 
 
 def _normalize_uploads(files: list[UploadFile] | None) -> list[UploadFile]:

@@ -17,10 +17,6 @@ from sqlalchemy.orm import Session
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
-from app.models.finance.banking.bank_account import BankAccount
-from app.models.finance.gl.fiscal_period import FiscalPeriod
-from app.models.finance.gl.account import Account
-from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
 from app.services.finance.ap.posting.helpers import (
@@ -32,31 +28,13 @@ from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
 )
+from app.services.finance.posting.accounts import (
+    resolve_bank_gl_account_id as _resolve_bank_gl_account_id,
+)
 from app.services.finance.posting.base import BasePostingAdapter
+from app.services.finance.posting.idempotency import PostingIdempotencyService
+from app.services.finance.posting.tax import create_payment_tax_recognitions
 from app.services.finance.tax.tax_transaction import tax_transaction_service
-
-
-def _resolve_bank_gl_account_id(
-    db: Session,
-    organization_id: UUID,
-    bank_account_id: UUID,
-) -> UUID | None:
-    """Resolve payment bank account to a GL account ID."""
-    gl_account = db.get(Account, bank_account_id)
-    if gl_account and gl_account.organization_id == organization_id:
-        return bank_account_id
-
-    bank_account = db.get(BankAccount, bank_account_id)
-    if (
-        bank_account
-        and bank_account.organization_id == organization_id
-        and bank_account.gl_account_id
-    ):
-        mapped_gl = db.get(Account, bank_account.gl_account_id)
-        if mapped_gl and mapped_gl.organization_id == organization_id:
-            return bank_account.gl_account_id
-
-    return None
 
 
 def post_vat_reclass_for_payment(
@@ -90,15 +68,12 @@ def post_vat_reclass_for_payment(
     if not reclass_entries:
         return None
 
-    existing_reclass_journal = db.scalar(
-        select(JournalEntry).where(
-            JournalEntry.source_module == "AP",
-            JournalEntry.source_document_type == "SUPPLIER_PAYMENT_VAT_RECLASS",
-            JournalEntry.source_document_id == pay_id,
-            JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
-        )
-    )
-    if existing_reclass_journal:
+    if PostingIdempotencyService.source_journal_exists(
+        db,
+        source_module="AP",
+        source_document_type="SUPPLIER_PAYMENT_VAT_RECLASS",
+        source_document_id=pay_id,
+    ):
         return None
 
     grouped: dict[tuple[UUID, UUID], Decimal] = {}
@@ -147,63 +122,41 @@ def post_vat_reclass_for_payment(
         source_document_id=pay_id,
         correlation_id=payment.correlation_id,
     )
-    reclass_journal, reclass_error = BasePostingAdapter.create_and_approve_journal(
+    reclass_journal, reclass_result = BasePostingAdapter.create_approve_and_post_journal(
         db,
         org_id,
         reclass_input,
         user_id,
-        error_prefix="VAT reclass journal creation failed",
-    )
-    if reclass_error:
-        return APPostingResult(success=False, message=reclass_error.message)
-
-    reclass_result = BasePostingAdapter.post_to_ledger(
-        db,
-        organization_id=org_id,
-        journal_entry_id=reclass_journal.journal_entry_id,
         posting_date=posting_date,
         idempotency_key=BasePostingAdapter.make_idempotency_key(
             org_id, "AP:PAY:VAT", pay_id, action="post"
         ),
         source_module="AP",
         correlation_id=payment.correlation_id,
-        posted_by_user_id=user_id,
         success_message="VAT reclass posted successfully",
+        creation_error_prefix="VAT reclass journal creation failed",
     )
     if not reclass_result.success:
         return APPostingResult(
             success=False,
-            journal_entry_id=reclass_journal.journal_entry_id,
+            journal_entry_id=reclass_journal.journal_entry_id
+            if reclass_journal
+            else None,
             message=reclass_result.message,
         )
 
-    fiscal_period = db.scalar(
-        select(FiscalPeriod).where(
-            FiscalPeriod.organization_id == org_id,
-            FiscalPeriod.start_date <= payment.payment_date,
-            FiscalPeriod.end_date >= payment.payment_date,
-        )
+    create_payment_tax_recognitions(
+        db,
+        org_id,
+        payment=payment,
+        tax_payloads=tax_payloads,
+        source_document_type="SUPPLIER_PAYMENT",
+        is_purchase=True,
+        exchange_rate=exchange_rate,
+        counterparty_name=supplier.legal_name,
+        counterparty_tax_id=supplier.tax_identification_number,
+        tax_service=tax_transaction_service,
     )
-    if fiscal_period:
-        for payload in tax_payloads:
-            tax_transaction_service.create_payment_recognition(
-                db=db,
-                organization_id=org_id,
-                fiscal_period_id=fiscal_period.fiscal_period_id,
-                tax_code_id=payload["tax_code_id"],
-                transaction_date=payment.payment_date,
-                source_document_type="SUPPLIER_PAYMENT",
-                source_document_id=pay_id,
-                source_document_line_id=payload["source_document_line_id"],
-                source_document_reference=payload["source_document_reference"],
-                is_purchase=True,
-                base_amount=payload["base_amount"],
-                tax_amount=payload["tax_amount"],
-                currency_code=payment.currency_code,
-                exchange_rate=exchange_rate,
-                counterparty_name=supplier.legal_name,
-                counterparty_tax_id=supplier.tax_identification_number,
-            )
 
     return None
 
@@ -423,39 +376,29 @@ def post_payment(
         correlation_id=payment.correlation_id,
     )
 
-    journal, error = BasePostingAdapter.create_and_approve_journal(
-        db,
-        org_id,
-        journal_input,
-        user_id,
-        error_prefix="Journal creation failed",
-    )
-    if error:
-        return APPostingResult(success=False, message=error.message)
-
-    # Post to ledger
     if not idempotency_key:
         idempotency_key = BasePostingAdapter.make_idempotency_key(
             org_id, "AP:PAY", pay_id, action="post"
         )
 
-    posting_result = BasePostingAdapter.post_to_ledger(
+    journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
         db,
-        organization_id=org_id,
-        journal_entry_id=journal.journal_entry_id,
+        org_id,
+        journal_input,
+        user_id,
         posting_date=posting_date,
         idempotency_key=idempotency_key,
         source_module="AP",
         correlation_id=payment.correlation_id,
-        posted_by_user_id=user_id,
         success_message="Payment posted successfully",
     )
     if not posting_result.success:
         return APPostingResult(
             success=False,
-            journal_entry_id=journal.journal_entry_id,
+            journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
+    assert journal is not None
 
     vat_reclass_result = post_vat_reclass_for_payment(
         db,

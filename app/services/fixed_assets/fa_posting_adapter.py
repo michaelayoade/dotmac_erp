@@ -130,38 +130,29 @@ class FAPostingAdapter:
             source_document_id=ast_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return FAPostingResult(success=False, message=error.message)
-
         if not idempotency_key:
             idempotency_key = BasePostingAdapter.make_idempotency_key(
                 org_id, "FA:ACQ", ast_id, action="post"
             )
 
-        posting_result = BasePostingAdapter.post_to_ledger(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
+            org_id,
+            journal_input,
+            user_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
             correlation_id=None,
-            posted_by_user_id=user_id,
             success_message="Asset acquisition posted successfully",
         )
         if not posting_result.success:
             return FAPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        assert journal is not None
 
         return FAPostingResult(
             success=True,
@@ -289,39 +280,29 @@ class FAPostingAdapter:
             source_document_id=r_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return FAPostingResult(success=False, message=error.message)
-
-        # Post to ledger
         if not idempotency_key:
             idempotency_key = BasePostingAdapter.make_idempotency_key(
                 org_id, "FA:DEP", r_id, action="post"
             )
 
-        posting_result = BasePostingAdapter.post_to_ledger(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
+            org_id,
+            journal_input,
+            user_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
             correlation_id=None,
-            posted_by_user_id=user_id,
             success_message="Depreciation posted successfully",
         )
         if not posting_result.success:
             return FAPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        assert journal is not None
 
         return FAPostingResult(
             success=True,
@@ -460,39 +441,29 @@ class FAPostingAdapter:
             source_document_id=disp_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return FAPostingResult(success=False, message=error.message)
-
-        # Post to ledger
         if not idempotency_key:
             idempotency_key = BasePostingAdapter.make_idempotency_key(
                 org_id, "FA:DISP", disp_id, action="post"
             )
 
-        posting_result = BasePostingAdapter.post_to_ledger(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
+            org_id,
+            journal_input,
+            user_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
             correlation_id=None,
-            posted_by_user_id=user_id,
             success_message="Disposal posted successfully",
         )
         if not posting_result.success:
             return FAPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        assert journal is not None
 
         return FAPostingResult(
             success=True,
@@ -662,39 +633,29 @@ class FAPostingAdapter:
             source_document_id=reval_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return FAPostingResult(success=False, message=error.message)
-
-        # Post to ledger
         if not idempotency_key:
             idempotency_key = BasePostingAdapter.make_idempotency_key(
                 org_id, "FA:REVAL", reval_id, action="post"
             )
 
-        posting_result = BasePostingAdapter.post_to_ledger(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
+            org_id,
+            journal_input,
+            user_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
             correlation_id=None,
-            posted_by_user_id=user_id,
             success_message="Revaluation posted successfully",
         )
         if not posting_result.success:
             return FAPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        assert journal is not None
 
         return FAPostingResult(
             success=True,

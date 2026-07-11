@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
-from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalType
 from app.models.finance.gl.account import Account
 from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
@@ -27,11 +26,13 @@ from app.services.finance.ar.ar_inventory_integration import ARInventoryIntegrat
 from app.services.finance.common.source_types import AR_INVOICE_SOURCE
 from app.services.finance.ar.posting.helpers import create_tax_transactions
 from app.services.finance.ar.posting.result import ARPostingResult
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
 )
 from app.services.finance.posting.base import BasePostingAdapter
+from app.services.finance.posting.idempotency import PostingIdempotencyService
 
 logger = logging.getLogger(__name__)
 
@@ -140,41 +141,21 @@ def post_invoice(
     if not invoice or invoice.organization_id != org_id:
         return ARPostingResult(success=False, message="Invoice not found")
 
-    # Idempotency: if this invoice already has a GL journal, skip.
-    if invoice.journal_entry_id is not None:
-        return ARPostingResult(
-            success=True,
-            journal_entry_id=invoice.journal_entry_id,
-            message="Invoice already posted to GL (idempotent)",
-        )
-
-    # Secondary idempotency guard: check if a journal already exists for
-    # this source document (protects against journal_entry_id not being
-    # written back due to RLS or session issues).
-    from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
-
-    existing_journal = db.scalar(
-        select(JournalEntry).where(
-            JournalEntry.source_module == "AR",
-            JournalEntry.source_document_type == AR_INVOICE_SOURCE,
-            JournalEntry.source_document_id == inv_id,
-            JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
-            JournalEntry.journal_type != JournalType.REVERSAL,
-        )
+    existing_posting = PostingIdempotencyService.resolve_existing_journal(
+        db,
+        document=invoice,
+        document_id=inv_id,
+        source_module="AR",
+        source_document_type=AR_INVOICE_SOURCE,
+        direct_message="Invoice already posted to GL (idempotent)",
+        backfill_message="Invoice already posted to GL (backfilled reference)",
+        log_label="Invoice",
     )
-    if existing_journal:
-        # Backfill the missing reference
-        invoice.journal_entry_id = existing_journal.journal_entry_id
-        db.flush()
-        logger.info(
-            "Invoice %s already has journal %s — backfilled reference",
-            inv_id,
-            existing_journal.journal_number,
-        )
+    if existing_posting:
         return ARPostingResult(
             success=True,
-            journal_entry_id=existing_journal.journal_entry_id,
-            message="Invoice already posted to GL (backfilled reference)",
+            journal_entry_id=existing_posting.journal_entry_id,
+            message=existing_posting.message,
         )
 
     # Allow posting for APPROVED (normal workflow) and for invoices that are
@@ -217,15 +198,11 @@ def post_invoice(
         return ARPostingResult(success=False, message="Invoice has no lines")
 
     # Get fiscal period for inventory transactions
-    fiscal_period = db.scalars(
-        select(FiscalPeriod).where(
-            and_(
-                FiscalPeriod.organization_id == org_id,
-                FiscalPeriod.start_date <= invoice.invoice_date,
-                FiscalPeriod.end_date >= invoice.invoice_date,
-            )
-        )
-    ).first()
+    fiscal_period = PeriodGuardService.get_period_for_date(
+        db,
+        org_id,
+        invoice.invoice_date,
+    )
 
     # Check if there are inventory lines
     inventory_lines = [line for line in lines if line.item_id]
@@ -573,37 +550,27 @@ def post_invoice(
         correlation_id=invoice.correlation_id,
     )
 
-    journal, error = BasePostingAdapter.create_and_approve_journal(
+    if not idempotency_key:
+        idempotency_key = BasePostingAdapter.make_idempotency_key(org_id, "AR", inv_id)
+
+    journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
         db,
         org_id,
         journal_input,
         user_id,
-        error_prefix="Journal creation failed",
-    )
-    if error:
-        return ARPostingResult(success=False, message=error.message)
-
-    # Post to ledger
-    if not idempotency_key:
-        idempotency_key = BasePostingAdapter.make_idempotency_key(org_id, "AR", inv_id)
-
-    posting_result = BasePostingAdapter.post_to_ledger(
-        db,
-        organization_id=org_id,
-        journal_entry_id=journal.journal_entry_id,
         posting_date=posting_date,
         idempotency_key=idempotency_key,
         source_module="AR",
         correlation_id=invoice.correlation_id,
-        posted_by_user_id=user_id,
         success_message="Invoice posted successfully",
     )
     if not posting_result.success:
         return ARPostingResult(
             success=False,
-            journal_entry_id=journal.journal_entry_id,
+            journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
+    assert journal is not None
 
     # Create tax transactions for taxable invoice lines
     create_tax_transactions(

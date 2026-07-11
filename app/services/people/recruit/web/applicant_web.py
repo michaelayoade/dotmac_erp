@@ -6,18 +6,17 @@ Provides view-focused data and operations for applicant web routes.
 
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from starlette.datastructures import UploadFile
 
 from app.models.people.recruit import ApplicantStatus, JobOpeningStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.forms import FormEngineService
 from app.services.people.recruit import RecruitmentService
+from app.services.web_forms import get_form_str as _get_form_str
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -28,13 +27,6 @@ from .base import (
     parse_status,
     parse_uuid,
 )
-
-
-def _get_form_str(form: Any, key: str, default: str = "") -> str:
-    value = form.get(key, default) if form is not None else default
-    if value is None or isinstance(value, UploadFile):
-        return default
-    return str(value).strip()
 
 
 class ApplicantWebService:

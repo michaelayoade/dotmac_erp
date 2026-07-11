@@ -145,8 +145,48 @@ class BasePostingAdapter:
             return PostingResult(
                 success=False,
                 journal_entry_id=journal_entry_id,
-                message=f"{error_prefix}: {str(exc)}",
-            )
+            message=f"{error_prefix}: {str(exc)}",
+        )
+
+    @staticmethod
+    def create_approve_and_post_journal(
+        db: Session,
+        organization_id: UUID,
+        journal_input: JournalInput,
+        posted_by_user_id: UUID,
+        *,
+        posting_date,
+        idempotency_key: str,
+        source_module: str,
+        correlation_id: str | None,
+        success_message: str,
+        creation_error_prefix: str = "Journal creation failed",
+        ledger_error_prefix: str = "Ledger posting failed",
+    ) -> tuple[JournalEntry | None, PostingResult]:
+        """Create, approve, and post a journal for a source document."""
+        journal, creation_error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            organization_id,
+            journal_input,
+            posted_by_user_id,
+            error_prefix=creation_error_prefix,
+        )
+        if creation_error:
+            return None, creation_error
+
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
+            organization_id=organization_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module=source_module,
+            correlation_id=correlation_id,
+            posted_by_user_id=posted_by_user_id,
+            success_message=success_message,
+            error_prefix=ledger_error_prefix,
+        )
+        return journal, posting_result
 
     @staticmethod
     def _revert_unposted_journal(

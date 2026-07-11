@@ -39,6 +39,7 @@ from app.services.finance.gl.journal import (
     JournalLineInput,
 )
 from app.services.finance.posting.base import BasePostingAdapter
+from app.services.finance.posting.idempotency import PostingIdempotencyService
 
 logger = logging.getLogger(__name__)
 
@@ -105,41 +106,21 @@ def post_invoice(
     if not invoice or invoice.organization_id != org_id:
         return APPostingResult(success=False, message="Invoice not found")
 
-    # Idempotency: if this invoice already has a GL journal, skip.
-    if invoice.journal_entry_id is not None:
-        return APPostingResult(
-            success=True,
-            journal_entry_id=invoice.journal_entry_id,
-            message="Supplier invoice already posted to GL (idempotent)",
-        )
-
-    # Secondary idempotency guard: check if a journal already exists for
-    # this source document (protects against journal_entry_id not being
-    # written back due to RLS or session issues).
-    from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
-    from app.models.finance.gl.journal_entry import JournalType as JEJournalType
-
-    existing_journal = db.scalar(
-        select(JournalEntry).where(
-            JournalEntry.source_module == "AP",
-            JournalEntry.source_document_type == AP_INVOICE_SOURCE,
-            JournalEntry.source_document_id == inv_id,
-            JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
-            JournalEntry.journal_type != JEJournalType.REVERSAL,
-        )
+    existing_posting = PostingIdempotencyService.resolve_existing_journal(
+        db,
+        document=invoice,
+        document_id=inv_id,
+        source_module="AP",
+        source_document_type=AP_INVOICE_SOURCE,
+        direct_message="Supplier invoice already posted to GL (idempotent)",
+        backfill_message="Supplier invoice already posted to GL (backfilled reference)",
+        log_label="Supplier invoice",
     )
-    if existing_journal:
-        invoice.journal_entry_id = existing_journal.journal_entry_id
-        db.flush()
-        logger.info(
-            "Supplier invoice %s already has journal %s — backfilled reference",
-            inv_id,
-            existing_journal.journal_number,
-        )
+    if existing_posting:
         return APPostingResult(
             success=True,
-            journal_entry_id=existing_journal.journal_entry_id,
-            message="Supplier invoice already posted to GL (backfilled reference)",
+            journal_entry_id=existing_posting.journal_entry_id,
+            message=existing_posting.message,
         )
 
     # Allow posting for APPROVED (normal workflow) and for invoices that are
@@ -425,37 +406,27 @@ def post_invoice(
         correlation_id=invoice.correlation_id,
     )
 
-    journal, error = BasePostingAdapter.create_and_approve_journal(
+    if not idempotency_key:
+        idempotency_key = BasePostingAdapter.make_idempotency_key(org_id, "AP", inv_id)
+
+    journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
         db,
         org_id,
         journal_input,
         user_id,
-        error_prefix="Journal creation failed",
-    )
-    if error:
-        return APPostingResult(success=False, message=error.message)
-
-    # Post to ledger
-    if not idempotency_key:
-        idempotency_key = BasePostingAdapter.make_idempotency_key(org_id, "AP", inv_id)
-
-    posting_result = BasePostingAdapter.post_to_ledger(
-        db,
-        organization_id=org_id,
-        journal_entry_id=journal.journal_entry_id,
         posting_date=posting_date,
         idempotency_key=idempotency_key,
         source_module="AP",
         correlation_id=invoice.correlation_id,
-        posted_by_user_id=user_id,
         success_message="Invoice posted successfully",
     )
     if not posting_result.success:
         return APPostingResult(
             success=False,
-            journal_entry_id=journal.journal_entry_id,
+            journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
+    assert journal is not None
 
     # Create tax transactions for taxable invoice lines
     create_tax_transactions(
