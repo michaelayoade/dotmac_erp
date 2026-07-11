@@ -41,6 +41,7 @@ xlrd = "^2.0.1"
 minio = "^7.2.0"
 click = "^8.1.0"
 google-auth = "^2.53.0"
+pymysql = "^1.1.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.2.2"

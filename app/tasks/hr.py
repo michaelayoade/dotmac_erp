@@ -68,6 +68,57 @@ def _get_hr_manager_recipients(db, org_id: uuid.UUID) -> list[Person]:
     )
 
 
+@shared_task(
+    bind=True,
+    max_retries=3,
+    autoretry_for=(ConnectionError, TimeoutError),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
+def run_employee_mailcow_offboarding(
+    self,
+    employee_id: str,
+    organization_id: str,
+    status: str,
+) -> dict[str, Any]:
+    """Run ERP/Mailcow offboarding for an exited employee."""
+    from app.services.people.hr.offboarding import EmployeeOffboardingService
+
+    org_uuid = uuid.UUID(organization_id)
+    employee_uuid = uuid.UUID(employee_id)
+    logger.info(
+        "Running Mailcow offboarding for employee %s status=%s",
+        employee_id,
+        status,
+    )
+    with session_for_org(org_uuid) as db:
+        result = EmployeeOffboardingService(db).offboard_employee(
+            org_uuid,
+            employee_uuid,
+        )
+        db.commit()
+        return {
+            "employee_id": result.employee_id,
+            "email": result.email,
+            "status": result.status,
+            "erp_credentials_disabled": result.erp_credentials_disabled,
+            "erp_sessions_revoked": result.erp_sessions_revoked,
+            "person_deactivated": result.person_deactivated,
+            "mailcow_enabled": result.mailcow_enabled,
+            "mailcow_mailbox_found": result.mailcow_mailbox_found,
+            "mailcow_password_reset": result.mailcow_password_reset,
+            "sieve_offboarding_script_updated": (
+                result.sieve_offboarding_script_updated
+            ),
+            "sogo_inactive_forward_updated": result.sogo_inactive_forward_updated,
+            "shared_profiles_cleaned": result.shared_profiles_cleaned,
+            "shared_sieve_scripts_cleaned": result.shared_sieve_scripts_cleaned,
+            "skipped": result.skipped,
+            "errors": result.errors,
+        }
+
+
 @shared_task
 def process_probation_ending_notifications() -> dict:
     """

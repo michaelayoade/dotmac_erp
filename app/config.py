@@ -218,6 +218,54 @@ class Settings:
     )
 
     # ==========================================================================
+    # Mailcow Employee Offboarding
+    # ==========================================================================
+    mailcow_offboarding_enabled: bool = (
+        os.getenv("MAILCOW_OFFBOARDING_ENABLED", "false").lower() == "true"
+    )
+    mailcow_base_url: str = os.getenv("MAILCOW_BASE_URL", "").rstrip("/")
+    mailcow_api_key: str | None = os.getenv("MAILCOW_API_KEY") or None
+    mailcow_request_timeout: float = float(os.getenv("MAILCOW_REQUEST_TIMEOUT", "20.0"))
+    mailcow_inactive_forward_to: str = os.getenv(
+        "MAILCOW_INACTIVE_FORWARD_TO", "inactives@dotmac.ng"
+    )
+    mailcow_autoresponder_subject: str = os.getenv(
+        "MAILCOW_AUTORESPONDER_SUBJECT", "Mailbox no longer monitored"
+    )
+    mailcow_autoresponder_template: str = os.getenv(
+        "MAILCOW_AUTORESPONDER_TEMPLATE",
+        (
+            "Thank you for your email.\n\n"
+            "Please note that {full_name} ({email}) is no longer with "
+            "Dotmac Technologies, and this mailbox is no longer being monitored.\n\n"
+            "If your enquiry is related to technical support or an existing service, "
+            "please contact support@dotmac.ng.\n\n"
+            "For sales, new services, or commercial enquiries, please contact "
+            "sales@dotmac.ng.\n\n"
+            "Your message will not be forwarded automatically, so please resend "
+            "your enquiry to the appropriate email address above.\n\n"
+            "Thank you for your understanding."
+        ),
+    )
+    mailcow_sieve_host: str = os.getenv("MAILCOW_SIEVE_HOST", "")
+    mailcow_sieve_port: int = int(os.getenv("MAILCOW_SIEVE_PORT", "4190"))
+    mailcow_sieve_master_user: str | None = (
+        os.getenv("MAILCOW_SIEVE_MASTER_USER") or None
+    )
+    mailcow_sieve_master_password: str | None = (
+        os.getenv("MAILCOW_SIEVE_MASTER_PASSWORD") or None
+    )
+    mailcow_sieve_script_name: str = os.getenv("MAILCOW_SIEVE_SCRIPT_NAME", "sogo")
+    mailcow_sieve_use_starttls: bool = (
+        os.getenv("MAILCOW_SIEVE_USE_STARTTLS", "true").lower() == "true"
+    )
+    mailcow_sogo_db_host: str = os.getenv("MAILCOW_SOGO_DB_HOST", "")
+    mailcow_sogo_db_port: int = int(os.getenv("MAILCOW_SOGO_DB_PORT", "3306"))
+    mailcow_sogo_db_name: str = os.getenv("MAILCOW_SOGO_DB_NAME", "mailcow")
+    mailcow_sogo_db_user: str | None = os.getenv("MAILCOW_SOGO_DB_USER") or None
+    mailcow_sogo_db_password: str | None = os.getenv("MAILCOW_SOGO_DB_PASSWORD") or None
+
+    # ==========================================================================
     # Analytics (pre-computed metric snapshots)
     # ==========================================================================
     analytics_enabled: bool = os.getenv("ANALYTICS_ENABLED", "false").lower() == "true"
