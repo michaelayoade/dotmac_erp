@@ -19,6 +19,7 @@ def test_inbound_webhook_receivers_are_mounted():
     paths = _route_paths()
     for expected in (
         "/dotmac-sub/webhook",
+        "/dotmac-academy/webhook",
         "/crm/webhook",
     ):
         assert any(p == expected or p.endswith(expected) for p in paths), (
