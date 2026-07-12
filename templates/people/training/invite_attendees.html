@@ -43,6 +43,64 @@
         </div>
     </div>
 
+    <div class="card mb-6">
+        <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Invite a group</h3></div>
+        <div class="card-body grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <form method="post" action="/people/training/events/{{ event.event_id }}/invite" class="flex items-end gap-2">
+                {{ request.state.csrf_form | safe }}
+                <div class="flex-1">
+                    <label class="form-label">Department</label>
+                    <select name="department_id" class="form-input w-full">
+                        <option value="">Select department</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}">{{ dept.department_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary">Invite</button>
+            </form>
+            <form method="post" action="/people/training/events/{{ event.event_id }}/invite" class="flex items-end gap-2">
+                {{ request.state.csrf_form | safe }}
+                <div class="flex-1">
+                    <label class="form-label">Designation</label>
+                    <select name="designation_id" class="form-input w-full">
+                        <option value="">Select designation</option>
+                        {% for designation in designations %}
+                        <option value="{{ designation.designation_id }}">{{ designation.designation_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary">Invite</button>
+            </form>
+            <form method="post" action="/people/training/events/{{ event.event_id }}/invite" class="flex items-end gap-2">
+                {{ request.state.csrf_form | safe }}
+                <div class="flex-1">
+                    <label class="form-label">Role</label>
+                    <select name="role_id" class="form-input w-full">
+                        <option value="">Select role</option>
+                        {% for role in roles %}
+                        <option value="{{ role.id }}">{{ role.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary">Invite</button>
+            </form>
+            <form method="post" action="/people/training/events/{{ event.event_id }}/invite" class="flex items-end gap-2">
+                {{ request.state.csrf_form | safe }}
+                <div class="flex-1">
+                    <label class="form-label">Team</label>
+                    <select name="team_id" class="form-input w-full">
+                        <option value="">Select team</option>
+                        {% for team in teams %}
+                        <option value="{{ team.team_id }}">{{ team.team_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary">Invite</button>
+            </form>
+        </div>
+    </div>
+
     <form method="post" action="/people/training/events/{{ event.event_id }}/invite" class="space-y-6">
         {{ request.state.csrf_form | safe }}
 

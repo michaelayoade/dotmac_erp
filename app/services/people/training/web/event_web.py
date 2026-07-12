@@ -8,11 +8,16 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.training import TrainingEventStatus, TrainingProgramStatus
 from app.services.common import PaginationParams, coerce_uuid
-from app.services.people.hr import EmployeeFilters, EmployeeService
+from app.services.people.hr import (
+    EmployeeFilters,
+    EmployeeService,
+    OrganizationService,
+)
 from app.services.people.training import TrainingService
 from app.services.people.training.training_service import TrainingEventNotFoundError
 from app.templates import templates
@@ -161,10 +166,11 @@ class EventWebService:
         svc = TrainingService(db)
         emp_svc = EmployeeService(db, organization_id)
 
+        groups = EventWebService._invite_groups(db, organization_id)
         try:
             event = svc.get_event(organization_id, coerce_uuid(event_id))
         except (TrainingEventNotFoundError, ValueError):
-            return {"event": None, "employees": [], "search": search or ""}
+            return {"event": None, "employees": [], "search": search or "", **groups}
 
         employees = emp_svc.list_employees(
             filters=EmployeeFilters(status="ACTIVE", search=search),
@@ -183,6 +189,38 @@ class EventWebService:
             "search": search or "",
             "already_invited_count": len(invited_ids),
             "error": None,
+            **groups,
+        }
+
+    @staticmethod
+    def _invite_groups(db: Session, organization_id: UUID) -> dict:
+        """Department / designation / role / team option lists for group invites."""
+        from app.models.rbac import Role
+        from app.models.support.team import SupportTeam
+
+        org_svc = OrganizationService(db, organization_id)
+        return {
+            "departments": org_svc.list_departments(
+                pagination=PaginationParams(limit=200)
+            ).items,
+            "designations": org_svc.list_designations(
+                pagination=PaginationParams(limit=200)
+            ).items,
+            "roles": list(
+                db.scalars(
+                    select(Role).where(Role.is_active.is_(True)).order_by(Role.name)
+                ).all()
+            ),
+            "teams": list(
+                db.scalars(
+                    select(SupportTeam)
+                    .where(
+                        SupportTeam.organization_id == organization_id,
+                        SupportTeam.is_active.is_(True),
+                    )
+                    .order_by(SupportTeam.team_name)
+                ).all()
+            ),
         }
 
     @staticmethod
@@ -478,17 +516,40 @@ class EventWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = TrainingService(db)
 
-        if not employee_ids:
+        # A group selection (team/designation/role/department) invites everyone in
+        # that group; otherwise fall back to the explicitly-checked employees.
+        group_invites = (
+            ("team_id", svc.invite_team),
+            ("designation_id", svc.invite_designation),
+            ("role_id", svc.invite_role),
+            ("department_id", svc.invite_department),
+        )
+        group_call = next(
+            (
+                (fn, gid)
+                for field, fn in group_invites
+                if (raw := form_data.get(field))
+                and isinstance(raw, str)
+                and (gid := parse_uuid(raw)) is not None
+            ),
+            None,
+        )
+
+        if group_call is None and not employee_ids:
             context = base_context(request, auth, "Invite Attendees", "training", db=db)
             context["request"] = request
             context.update(self.invite_attendees_context(db, org_id, event_id))
-            context["error"] = "Select at least one employee to invite."
+            context["error"] = "Select at least one employee or a group to invite."
             return templates.TemplateResponse(
                 request, "people/training/invite_attendees.html", context
             )
 
         try:
-            attendees = svc.bulk_invite(org_id, coerce_uuid(event_id), employee_ids)
+            if group_call is not None:
+                fn, group_id = group_call
+                attendees = fn(org_id, coerce_uuid(event_id), group_id)
+            else:
+                attendees = svc.bulk_invite(org_id, coerce_uuid(event_id), employee_ids)
             db.commit()
             return RedirectResponse(
                 url=(
