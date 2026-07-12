@@ -19,7 +19,11 @@ from app.config import settings
 class CRMProjectPayload(BaseModel):
     """Project data from DotMac CRM."""
 
-    crm_id: str = Field(..., description="UUID from CRM")
+    crm_id: str = Field(
+        ...,
+        description="Opaque source UUID",
+        validation_alias=AliasChoices("source_id", "crm_id"),
+    )
     name: str = Field(..., max_length=160)
     code: str | None = Field(None, max_length=80)
     project_type: str | None = Field(None, max_length=80)
@@ -39,7 +43,11 @@ class CRMProjectPayload(BaseModel):
 class CRMTicketPayload(BaseModel):
     """Support ticket data from DotMac CRM."""
 
-    crm_id: str = Field(..., description="UUID from CRM")
+    crm_id: str = Field(
+        ...,
+        description="Opaque source UUID",
+        validation_alias=AliasChoices("source_id", "crm_id"),
+    )
     subject: str = Field(..., max_length=255)
     ticket_number: str | None = Field(None, max_length=40)
     ticket_type: str | None = Field(None, max_length=80)
@@ -126,7 +134,11 @@ class CRMTicketActivityEntry(BaseModel):
 class CRMWorkOrderPayload(BaseModel):
     """Work order data from DotMac CRM."""
 
-    crm_id: str = Field(..., description="UUID from CRM")
+    crm_id: str = Field(
+        ...,
+        description="Opaque source UUID",
+        validation_alias=AliasChoices("source_id", "crm_id"),
+    )
     title: str = Field(..., max_length=200)
     work_type: str | None = Field(None, max_length=80)
     status: str = Field("active", description="active, completed, cancelled")

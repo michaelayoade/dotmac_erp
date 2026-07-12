@@ -9,12 +9,15 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.api.sync.dotmac_crm import (
+    bulk_sync,
     create_purchase_invoice,
     get_db_with_service_org,
     require_service_auth,
     upload_purchase_invoice_attachment,
 )
 from app.schemas.sync.dotmac_crm import (
+    BulkSyncRequest,
+    BulkSyncResponse,
     CRMPurchaseInvoiceAttachmentPayload,
     CRMPurchaseInvoiceAttachmentResponse,
     CRMPurchaseInvoicePayload,
@@ -33,6 +36,31 @@ def require_sub_ap_scope(auth: dict = Depends(require_service_auth)) -> dict:
             status_code=403, detail="API key missing required scope: sub:ap:write"
         )
     return auth
+
+
+def require_sub_domain_scope(auth: dict = Depends(require_service_auth)) -> dict:
+    scopes = auth.get("scopes") or []
+    if scopes and not {"sub:domain:write", "crm:sync:write"}.intersection(scopes):
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=403,
+            detail="API key missing required scope: sub:domain:write",
+        )
+    return auth
+
+
+@router.post(
+    "/bulk",
+    response_model=BulkSyncResponse,
+    dependencies=[Depends(require_sub_domain_scope)],
+)
+def sync_sub_operational_domains(
+    payload: BulkSyncRequest,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> BulkSyncResponse:
+    return bulk_sync(payload, auth, db)
 
 
 @router.post(
