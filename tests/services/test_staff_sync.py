@@ -169,9 +169,7 @@ def test_existing_account_roles_are_synchronized():
     result = staff_sync.sync_employee(None, emp, client=client)
 
     assert result["action"] == "noop"
-    assert client.role_calls == [
-        ("acc-9", ["field_technician", "support_agent"])
-    ]
+    assert client.role_calls == [("acc-9", ["field_technician", "support_agent"])]
 
 
 def test_draft_and_missing_email_are_skipped():
