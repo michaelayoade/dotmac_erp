@@ -22,9 +22,12 @@ from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import (
     DotmacSubClient,
     DotmacSubConfig,
+    InvoiceLineRecord,
+    InvoiceRecord,
     _watermark_params,
 )
 from app.services.dotmac_sub.sync._base import BaseSyncMixin, next_watermark
+from app.services.dotmac_sub.sync._invoices import _invoice_hash_payload
 
 _T0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -112,6 +115,14 @@ def test_get_invoices_forwards_updated_since() -> None:
     assert captured[0]["updated_since"] == "2026-05-01T00:00:00+00:00"
     assert captured[0]["order_by"] == "updated_at"
     assert captured[0]["order_dir"] == "asc"
+    assert captured[0]["limit"] == 500
+
+
+def test_get_invoices_uses_lightweight_sync_feed() -> None:
+    client, _ = _client_capturing_params()
+    list(client.get_invoices())
+    client._request.assert_called_once()
+    assert client._request.call_args.args[:2] == ("GET", "/invoices/sync")
 
 
 def test_get_invoices_without_watermark_sends_no_updated_since() -> None:
@@ -133,6 +144,39 @@ def test_parse_invoice_reads_updated_at() -> None:
         {"id": "1", "account_id": "a", "updated_at": "2026-06-01T10:00:00+00:00"}
     )
     assert rec.updated_at == "2026-06-01T10:00:00+00:00"
+
+
+def test_invoice_hash_payload_tracks_line_and_header_changes() -> None:
+    line = InvoiceLineRecord(
+        id="line-1",
+        description="Internet service",
+        quantity=1,
+        unit_price=100,
+        amount=100,
+    )
+    invoice = InvoiceRecord(
+        id="inv-1",
+        account_id="acct-1",
+        invoice_number="INV-1",
+        status="issued",
+        currency="NGN",
+        subtotal=100,
+        tax_total=0,
+        total=100,
+        balance_due=100,
+        due_at="2026-06-30",
+        memo="Original",
+        lines=[line],
+    )
+    original = _invoice_hash_payload(invoice)
+
+    line.description = "Corrected service"
+    invoice.memo = "Corrected"
+    changed = _invoice_hash_payload(invoice)
+
+    assert changed != original
+    assert changed["lines"][0]["description"] == "Corrected service"
+    assert changed["memo"] == "Corrected"
 
 
 # ---------------------------------------------------------------------------
