@@ -2,6 +2,7 @@ import builtins
 import logging
 from contextlib import nullcontext
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import case, func, or_, select
@@ -646,6 +647,7 @@ def list_setting_history(
     setting_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    organization_id: UUID | str | None = None,
 ) -> tuple[list[DomainSettingHistory], int]:
     """
     List history entries for settings.
@@ -657,11 +659,24 @@ def list_setting_history(
         setting_id: Filter by setting ID
         limit: Max entries to return
         offset: Offset for pagination
+        organization_id: Restrict to one tenant's history. Callers that run on
+            an RLS-bypass session MUST pass this — history rows carry an
+            organization_id and are not otherwise scoped.
 
     Returns:
         Tuple of (history_entries, total_count)
     """
     stmt = select(DomainSettingHistory)
+
+    if organization_id is not None:
+        # Global settings carry a NULL organization_id and stay visible; a row
+        # owned by *another* tenant does not.
+        stmt = stmt.where(
+            or_(
+                DomainSettingHistory.organization_id == coerce_uuid(organization_id),
+                DomainSettingHistory.organization_id.is_(None),
+            )
+        )
 
     if setting_id:
         stmt = stmt.where(DomainSettingHistory.setting_id == coerce_uuid(setting_id))

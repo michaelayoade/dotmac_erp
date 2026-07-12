@@ -617,7 +617,15 @@ class AdminSettingsWebService:
     def get_mono_context(
         self, db: Session, organization_id: uuid.UUID
     ) -> dict[str, Any]:
-        """Get Mono Connect settings for the form."""
+        """Get Mono Connect settings for the form.
+
+        Secret keys are reported as ``has_value`` only — never their value. The
+        template already renders them as write-only password fields, but the
+        plaintext was still being placed in the render context, one
+        ``{{ settings | tojson }}`` or debug dump away from disclosure. Don't
+        carry it there at all.
+        """
+        secret_keys = {"mono_secret_key", "mono_webhook_secret"}
         mono_keys = [
             "mono_enabled",
             "mono_public_key",
@@ -629,7 +637,7 @@ class AdminSettingsWebService:
             value = resolve_value(db, SettingDomain.banking, key)
             has_value = value is not None and str(value).strip() != ""
             settings_map[key] = {
-                "value": value,
+                "value": None if key in secret_keys else value,
                 "has_value": has_value,
             }
         return {"settings": settings_map}
