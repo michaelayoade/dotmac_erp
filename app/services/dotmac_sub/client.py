@@ -614,6 +614,7 @@ class DotmacSubClient:
         first_name: str,
         last_name: str,
         role: str = "staff",
+        roles: list[str] | None = None,
         send_invite: bool = True,
     ) -> dict[str, Any]:
         """Create (idempotently) + invite a dotmac_sub staff account.
@@ -629,6 +630,7 @@ class DotmacSubClient:
                 "first_name": first_name,
                 "last_name": last_name,
                 "role": role,
+                "roles": roles,
                 "send_invite": send_invite,
             },
         )
@@ -648,6 +650,17 @@ class DotmacSubClient:
         """Activate/deactivate a staff account (deactivation revokes sessions)."""
         action = "activate" if is_active else "deactivate"
         result = self._request("POST", f"/staff-accounts/{account_id}/{action}")
+        return dict(result) if isinstance(result, dict) else {}
+
+    def set_staff_account_roles(
+        self, account_id: str, *, roles: list[str]
+    ) -> dict[str, Any]:
+        """Replace only the role grants managed by ERP HR."""
+        result = self._request(
+            "PUT",
+            f"/staff-accounts/{account_id}/roles",
+            json={"roles": roles},
+        )
         return dict(result) if isinstance(result, dict) else {}
 
     def get_resellers(self) -> Generator[ResellerRecord, None, None]:

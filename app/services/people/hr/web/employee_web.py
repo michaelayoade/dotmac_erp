@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
+from app.config import settings
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus, UserCredential
 from app.models.finance.core_org.cost_center import CostCenter
@@ -772,6 +773,10 @@ class HRWebService:
         nysc_end_date = self._form_str(form, "nysc_end_date")
         notes = self._form_str(form, "notes")
         status = self._form_str(form, "status") or "DRAFT"
+        dotmac_sub_access_enabled = "dotmac_sub_access_enabled" in form
+        dotmac_sub_roles = self._parse_role_names(
+            self._form_str(form, "dotmac_sub_roles")
+        )
         # Personal contact & emergency
         personal_email = self._clean_optional_text(
             self._form_str(form, "personal_email")
@@ -876,6 +881,8 @@ class HRWebService:
                     "ctc": ctc_raw,
                     "salary_mode": salary_mode_raw,
                     "salary_structure_id": salary_structure_id,
+                    "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                    "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                     "notes": notes,
                     "tin": tin,
                     "tax_state": tax_state,
@@ -945,6 +952,8 @@ class HRWebService:
                     "ctc": ctc_raw,
                     "salary_mode": salary_mode_raw,
                     "salary_structure_id": salary_structure_id,
+                    "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                    "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                     "notes": notes,
                     "tin": tin,
                     "tax_state": tax_state,
@@ -1016,6 +1025,8 @@ class HRWebService:
                     "ctc": ctc_raw,
                     "salary_mode": salary_mode_raw,
                     "salary_structure_id": salary_structure_id,
+                    "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                    "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                     "notes": notes,
                     "tin": tin,
                     "tax_state": tax_state,
@@ -1092,6 +1103,8 @@ class HRWebService:
                     "ctc": ctc_raw,
                     "salary_mode": salary_mode_raw,
                     "salary_structure_id": salary_structure_id,
+                    "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                    "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                     "notes": notes,
                     "tin": tin,
                     "tax_state": tax_state,
@@ -1159,6 +1172,8 @@ class HRWebService:
                     "ctc": ctc_raw,
                     "salary_mode": salary_mode_raw,
                     "salary_structure_id": salary_structure_id,
+                    "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                    "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                     "notes": notes,
                     "tin": tin,
                     "tax_state": tax_state,
@@ -1239,6 +1254,8 @@ class HRWebService:
                         "ctc": ctc_raw,
                         "salary_mode": salary_mode_raw,
                         "salary_structure_id": salary_structure_id,
+                        "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                        "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                         "notes": notes,
                         "tin": tin,
                         "tax_state": tax_state,
@@ -1310,6 +1327,8 @@ class HRWebService:
                         "ctc": ctc_raw,
                         "salary_mode": salary_mode_raw,
                         "salary_structure_id": salary_structure_id,
+                        "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                        "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                         "tin": tin,
                         "tax_state": tax_state,
                         "rsa_pin": rsa_pin,
@@ -1372,6 +1391,8 @@ class HRWebService:
                             "ctc": ctc_raw,
                             "salary_mode": salary_mode_raw,
                             "salary_structure_id": salary_structure_id,
+                            "dotmac_sub_access_enabled": dotmac_sub_access_enabled,
+                            "dotmac_sub_roles": ", ".join(dotmac_sub_roles),
                             "notes": notes,
                             "tin": tin,
                             "tax_state": tax_state,
@@ -1440,6 +1461,8 @@ class HRWebService:
             ctc=ctc,
             salary_mode=salary_mode,
             notes=notes or None,
+            dotmac_sub_access_enabled=dotmac_sub_access_enabled,
+            dotmac_sub_roles=dotmac_sub_roles,
         )
 
         if person is None:
@@ -1528,6 +1551,15 @@ class HRWebService:
         nysc_end_date = self._form_str(form, "nysc_end_date")
         notes = self._form_str(form, "notes")
         status = self._form_str(form, "status")
+        dotmac_sub_access_submitted = "dotmac_sub_access_present" in form
+        dotmac_sub_access_enabled = (
+            "dotmac_sub_access_enabled" in form if dotmac_sub_access_submitted else None
+        )
+        dotmac_sub_roles = (
+            self._parse_role_names(self._form_str(form, "dotmac_sub_roles"))
+            if dotmac_sub_access_submitted
+            else None
+        )
         # Personal contact & emergency
         personal_email = self._clean_optional_text(
             self._form_str(form, "personal_email")
@@ -1608,6 +1640,16 @@ class HRWebService:
                 "bank_branch_code": bank_branch_code,
                 "ctc": ctc_raw,
                 "salary_mode": salary_mode_raw,
+                "dotmac_sub_access_enabled": (
+                    dotmac_sub_access_enabled
+                    if dotmac_sub_access_enabled is not None
+                    else bool(getattr(employee, "dotmac_sub_access_enabled", False))
+                ),
+                "dotmac_sub_roles": ", ".join(
+                    dotmac_sub_roles
+                    or getattr(employee, "dotmac_sub_roles", None)
+                    or [getattr(settings, "dotmac_sub_staff_default_role", "staff")]
+                ),
             }
 
             # Preserve linked Person + statutory inputs when present in the submitted form.
@@ -1681,6 +1723,8 @@ class HRWebService:
             "salary_mode",
             "notes",
         }
+        if dotmac_sub_access_submitted:
+            provided_fields.update({"dotmac_sub_access_enabled", "dotmac_sub_roles"})
         if "reports_to_id" in form:
             provided_fields.add("reports_to_id")
 
@@ -1720,6 +1764,8 @@ class HRWebService:
             ctc=ctc,
             salary_mode=salary_mode,
             notes=notes or None,
+            dotmac_sub_access_enabled=dotmac_sub_access_enabled,
+            dotmac_sub_roles=dotmac_sub_roles,
             provided_fields=provided_fields,
         )
 
@@ -2646,6 +2692,13 @@ class HRWebService:
             return SalaryMode(value.upper())
         except ValueError:
             return None
+
+    @staticmethod
+    def _parse_role_names(value: str) -> list[str]:
+        roles = list(
+            dict.fromkeys(part.strip() for part in value.split(",") if part.strip())
+        )
+        return roles or [getattr(settings, "dotmac_sub_staff_default_role", "staff")]
 
     @staticmethod
     def _gender_options() -> list[str]:

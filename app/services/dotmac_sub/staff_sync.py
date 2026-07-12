@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -41,6 +41,14 @@ def _staff_email(employee: Employee) -> str | None:
     return employee.work_email or employee.personal_email
 
 
+def _staff_roles(employee: Employee) -> list[str]:
+    configured = getattr(employee, "dotmac_sub_roles", None) or []
+    normalized = list(
+        dict.fromkeys(str(role).strip() for role in configured if str(role).strip())
+    )
+    return normalized or [settings.dotmac_sub_staff_default_role]
+
+
 def sync_employee(
     db: Session,
     employee: Employee,
@@ -58,11 +66,13 @@ def sync_employee(
         return {"action": "skipped", "reason": "staff sync disabled"}
 
     status = employee.status
-    if status not in _ENABLED_STATUSES | _DISABLED_STATUSES:
+    access_enabled = bool(getattr(employee, "dotmac_sub_access_enabled", False))
+    if access_enabled and status not in _ENABLED_STATUSES | _DISABLED_STATUSES:
         return {"action": "skipped", "reason": f"status {status.value} not synced"}
 
     email = _staff_email(employee)
-    if not email:
+    account_id = employee.dotmac_sub_account_id
+    if not email and not account_id:
         return {"action": "skipped", "reason": "employee has no email"}
 
     owns_client = client is None
@@ -73,20 +83,23 @@ def sync_employee(
         client = DotmacSubClient(config)
 
     try:
-        account_id = employee.dotmac_sub_account_id
         account: dict[str, Any] | None = None
-        if not account_id:
+        if not account_id and email:
             account = client.get_staff_account(email)
             if account:
                 account_id = str(account.get("id"))
 
-        if status in _ENABLED_STATUSES:
+        if status in _ENABLED_STATUSES and access_enabled:
+            roles = _staff_roles(employee)
             if not account_id:
+                if not email:
+                    return {"action": "skipped", "reason": "employee has no email"}
                 created = client.create_staff_account(
                     email=email,
                     first_name=employee.first_name or "",
                     last_name=employee.last_name or "",
                     role=settings.dotmac_sub_staff_default_role,
+                    roles=roles,
                     send_invite=True,
                 )
                 employee.dotmac_sub_account_id = str(created.get("id"))
@@ -95,9 +108,10 @@ def sync_employee(
                     "action": "created",
                     "account_id": employee.dotmac_sub_account_id,
                 }
-            if account is None:
+            if account is None and email:
                 account = client.get_staff_account(email)
             employee.dotmac_sub_account_id = account_id
+            client.set_staff_account_roles(account_id, roles=roles)
             if account and not account.get("is_active", True):
                 client.set_staff_account_active(account_id, is_active=True)
                 _mark_synced(employee)
@@ -105,11 +119,16 @@ def sync_employee(
             _mark_synced(employee)
             return {"action": "noop", "account_id": account_id}
 
-        # Disabled statuses.
+        # Disabled lifecycle statuses or an explicit HR access revocation.
         if not account_id:
-            return {"action": "skipped", "reason": "no dotmac_sub account"}
+            reason = (
+                "dotmac_sub access not granted"
+                if status in _ENABLED_STATUSES
+                else "no dotmac_sub account"
+            )
+            return {"action": "skipped", "reason": reason}
         employee.dotmac_sub_account_id = account_id
-        if account is None:
+        if account is None and email:
             account = client.get_staff_account(email)
         if account and not account.get("is_active", True):
             _mark_synced(employee)
@@ -147,7 +166,11 @@ def reconcile_staff_accounts(db: Session, organization_id: UUID) -> dict[str, An
     rows = db.execute(
         select(Employee.employee_id, Employee.employee_code).where(
             Employee.organization_id == organization_id,
-            Employee.status.in_(syncable),
+            or_(
+                Employee.status.in_(syncable),
+                Employee.dotmac_sub_account_id.is_not(None),
+                Employee.dotmac_sub_access_enabled.is_(True),
+            ),
         )
     ).all()
 

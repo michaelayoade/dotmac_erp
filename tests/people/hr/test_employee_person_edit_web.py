@@ -318,6 +318,58 @@ async def test_update_employee_response_does_not_clear_manager_when_field_omitte
 
 
 @pytest.mark.asyncio
+async def test_update_employee_response_passes_sub_application_access(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    employee_id = uuid4()
+    employee = SimpleNamespace(employee_id=employee_id, person_id=person.id)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.get_employee",
+        lambda self, _employee_id: employee,
+    )
+
+    def _capture_update(self, _employee_id, data):
+        captured["enabled"] = data.dotmac_sub_access_enabled
+        captured["roles"] = data.dotmac_sub_roles
+        captured["provided_fields"] = data.provided_fields
+        return employee
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.update_employee",
+        _capture_update,
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_update_tax_profile",
+        lambda self, *, auth, db, employee, form: None,
+    )
+
+    request = _make_request(
+        {
+            "dotmac_sub_access_present": "true",
+            "dotmac_sub_access_enabled": "true",
+            "dotmac_sub_roles": "staff, field_technician, staff",
+        }
+    )
+    auth = _make_auth(person.id, person.organization_id, [])
+
+    response = await service.update_employee_response(
+        request=request,
+        employee_id=employee_id,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 303
+    assert captured["enabled"] is True
+    assert captured["roles"] == ["staff", "field_technician"]
+    assert "dotmac_sub_access_enabled" in captured["provided_fields"]
+
+
+@pytest.mark.asyncio
 async def test_create_employee_response_passes_selected_position_id(
     db_session, person, monkeypatch
 ):

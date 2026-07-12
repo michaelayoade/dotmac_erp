@@ -15,6 +15,7 @@ class FakeClient:
         self.existing = existing
         self.created = []
         self.active_calls = []
+        self.role_calls = []
 
     def get_staff_account(self, email):
         return self.existing
@@ -27,11 +28,22 @@ class FakeClient:
         self.active_calls.append((account_id, is_active))
         return {"id": account_id, "is_active": is_active}
 
+    def set_staff_account_roles(self, account_id, *, roles):
+        self.role_calls.append((account_id, roles))
+        return {"id": account_id, "roles": roles}
+
     def close(self):
         pass
 
 
-def _employee(status, *, email="tech@dotmac.io", account_id=None):
+def _employee(
+    status,
+    *,
+    email="tech@dotmac.io",
+    account_id=None,
+    access_enabled=True,
+    roles=None,
+):
     return SimpleNamespace(
         employee_id=uuid4(),
         organization_id=uuid4(),
@@ -43,6 +55,8 @@ def _employee(status, *, email="tech@dotmac.io", account_id=None):
         last_name="Tech",
         dotmac_sub_account_id=account_id,
         dotmac_sub_staff_synced_at=None,
+        dotmac_sub_access_enabled=access_enabled,
+        dotmac_sub_roles=roles or ["staff"],
     )
 
 
@@ -66,6 +80,7 @@ def test_active_employee_without_account_is_created_and_invited():
     assert client.created[0]["email"] == "tech@dotmac.io"
     assert client.created[0]["send_invite"] is True
     assert client.created[0]["role"] == "staff"
+    assert client.created[0]["roles"] == ["staff"]
 
 
 def test_active_employee_with_inactive_account_is_reenabled():
@@ -76,6 +91,7 @@ def test_active_employee_with_inactive_account_is_reenabled():
 
     assert result["action"] == "enabled"
     assert client.active_calls == [("acc-9", True)]
+    assert client.role_calls == [("acc-9", ["staff"])]
     assert not client.created
 
 
@@ -97,6 +113,63 @@ def test_terminated_employee_without_account_is_skipped():
 
     assert result["action"] == "skipped"
     assert not client.active_calls
+
+
+def test_active_employee_without_sub_access_is_disabled():
+    client = FakeClient(existing={"id": "acc-9", "is_active": True})
+    emp = _employee(
+        EmployeeStatus.ACTIVE,
+        account_id="acc-9",
+        access_enabled=False,
+    )
+
+    result = staff_sync.sync_employee(None, emp, client=client)
+
+    assert result["action"] == "disabled"
+    assert client.active_calls == [("acc-9", False)]
+    assert not client.role_calls
+
+
+def test_active_employee_without_account_or_access_is_not_created():
+    client = FakeClient(existing=None)
+    emp = _employee(EmployeeStatus.ACTIVE, access_enabled=False)
+
+    result = staff_sync.sync_employee(None, emp, client=client)
+
+    assert result == {
+        "action": "skipped",
+        "reason": "dotmac_sub access not granted",
+    }
+    assert not client.created
+
+
+def test_draft_employee_with_revoked_access_and_linked_account_is_disabled():
+    client = FakeClient(existing=None)
+    emp = _employee(
+        EmployeeStatus.DRAFT,
+        email=None,
+        account_id="acc-9",
+        access_enabled=False,
+    )
+
+    result = staff_sync.sync_employee(None, emp, client=client)
+
+    assert result["action"] == "disabled"
+    assert client.active_calls == [("acc-9", False)]
+
+
+def test_existing_account_roles_are_synchronized():
+    client = FakeClient(existing={"id": "acc-9", "is_active": True})
+    emp = _employee(
+        EmployeeStatus.ACTIVE,
+        account_id="acc-9",
+        roles=["field_technician", "support_agent"],
+    )
+
+    result = staff_sync.sync_employee(None, emp, client=client)
+
+    assert result["action"] == "noop"
+    assert client.role_calls == [("acc-9", ["field_technician", "support_agent"])]
 
 
 def test_draft_and_missing_email_are_skipped():

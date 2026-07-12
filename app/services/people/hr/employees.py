@@ -763,6 +763,8 @@ class EmployeeService:
             ctc=data.ctc,
             salary_mode=data.salary_mode,
             notes=data.notes,
+            dotmac_sub_access_enabled=data.dotmac_sub_access_enabled,
+            dotmac_sub_roles=data.dotmac_sub_roles,
             created_by_id=self.principal.id if self.principal else None,
         )
 
@@ -797,6 +799,9 @@ class EmployeeService:
                 "person_id": str(employee.person_id),
             },
         )
+
+        if employee.dotmac_sub_access_enabled:
+            self._enqueue_staff_sync(employee)
 
         return employee
 
@@ -1006,6 +1011,11 @@ class EmployeeService:
             InvalidManagerError: If manager assignment creates cycle.
         """
         employee = self.get_employee(employee_id)
+        prior_staff_access = (
+            employee.status,
+            employee.dotmac_sub_access_enabled,
+            tuple(employee.dotmac_sub_roles or []),
+        )
 
         provided_fields: set[str] = set(getattr(data, "provided_fields", set()))
         use_provided_fields = bool(provided_fields)
@@ -1196,6 +1206,11 @@ class EmployeeService:
         elif use_provided_fields and "notes" in provided_fields:
             employee.notes = None
 
+        if data.dotmac_sub_access_enabled is not None:
+            employee.dotmac_sub_access_enabled = data.dotmac_sub_access_enabled
+        if data.dotmac_sub_roles is not None:
+            employee.dotmac_sub_roles = list(dict.fromkeys(data.dotmac_sub_roles))
+
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
         employee.version += 1
@@ -1209,6 +1224,14 @@ class EmployeeService:
             action=AuditAction.UPDATE,
             new_values={"updated_fields": "employee_data"},
         )
+
+        current_staff_access = (
+            employee.status,
+            employee.dotmac_sub_access_enabled,
+            tuple(employee.dotmac_sub_roles or []),
+        )
+        if current_staff_access != prior_staff_access:
+            self._enqueue_staff_sync(employee)
 
         return employee
 
