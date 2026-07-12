@@ -22,10 +22,21 @@ from app.web.deps import (
     WebAuthContext,
     get_db,
     optional_web_auth,
+    require_admin_access,
     resolve_brand_context,
 )
 
-router = APIRouter(prefix="/admin", tags=["admin-web"])
+# Authorization is enforced once, at the router, so it cannot be forgotten on a
+# new route. Every handler below still takes ``optional_web_auth`` for its
+# template context; that dependency does not gate anything, and until this
+# router-level guard was added nothing else did either — any authenticated user
+# of any role could read and POST the admin settings pages, credential forms
+# included.
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin-web"],
+    dependencies=[Depends(require_admin_access)],
+)
 
 
 def _normalize_form(form: Any) -> dict[str, str]:
