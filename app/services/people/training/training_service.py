@@ -715,6 +715,103 @@ class TrainingService:
         self.db.flush()
         return attendees
 
+    def invite_department(
+        self,
+        org_id: UUID,
+        event_id: UUID,
+        department_id: UUID,
+    ) -> list[TrainingAttendee]:
+        """Invite every employee in a department to a training event."""
+        employee_ids = list(
+            self.db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.department_id == department_id,
+                )
+            ).all()
+        )
+        return self.bulk_invite(org_id, event_id, employee_ids)
+
+    def invite_designation(
+        self,
+        org_id: UUID,
+        event_id: UUID,
+        designation_id: UUID,
+    ) -> list[TrainingAttendee]:
+        """Invite every employee holding a job designation (title)."""
+        from app.models.people.hr.designation import Designation
+
+        designation = self.db.scalar(
+            select(Designation).where(
+                Designation.designation_id == designation_id,
+                Designation.organization_id == org_id,
+                Designation.is_active.is_(True),
+            )
+        )
+        if not designation:
+            raise TrainingServiceError("Designation not found")
+        employee_ids = list(
+            self.db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.designation_id == designation_id,
+                )
+            ).all()
+        )
+        return self.bulk_invite(org_id, event_id, employee_ids)
+
+    def invite_role(
+        self,
+        org_id: UUID,
+        event_id: UUID,
+        role_id: UUID,
+    ) -> list[TrainingAttendee]:
+        """Invite every employee with an RBAC role."""
+        from app.models.rbac import PersonRole, Role
+
+        role = self.db.scalar(
+            select(Role).where(Role.id == role_id, Role.is_active.is_(True))
+        )
+        if not role:
+            raise TrainingServiceError("Role not found")
+        employee_ids = list(
+            self.db.scalars(
+                select(Employee.employee_id)
+                .join(PersonRole, PersonRole.person_id == Employee.person_id)
+                .where(
+                    Employee.organization_id == org_id,
+                    PersonRole.role_id == role_id,
+                )
+            ).all()
+        )
+        return self.bulk_invite(org_id, event_id, employee_ids)
+
+    def invite_team(
+        self,
+        org_id: UUID,
+        event_id: UUID,
+        team_id: UUID,
+    ) -> list[TrainingAttendee]:
+        """Invite every member of a support team."""
+        from app.models.support.team import SupportTeam, SupportTeamMember
+
+        team = self.db.scalar(
+            select(SupportTeam).where(
+                SupportTeam.team_id == team_id,
+                SupportTeam.organization_id == org_id,
+            )
+        )
+        if not team:
+            raise TrainingServiceError("Team not found")
+        employee_ids = list(
+            self.db.scalars(
+                select(SupportTeamMember.employee_id).where(
+                    SupportTeamMember.team_id == team_id,
+                )
+            ).all()
+        )
+        return self.bulk_invite(org_id, event_id, employee_ids)
+
     def confirm_attendance(
         self,
         org_id: UUID,
