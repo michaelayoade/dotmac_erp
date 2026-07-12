@@ -780,7 +780,11 @@ class DotmacSubClient:
     ) -> Generator[InvoiceRecord, None, None]:
         params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub invoices with params: %s", params)
-        for item in self._paginate("/invoices", params=params):
+        # Bulk AR pulls use Sub's sync-specific projection: it includes invoice
+        # lines but omits payment allocations and UI/detail fields. A larger page
+        # keeps the initial backfill efficient without making Sub hydrate the
+        # expensive full InvoiceRead graph for every row.
+        for item in self._paginate("/invoices/sync", params=params, page_size=500):
             yield self._parse_invoice(item)
 
     def get_invoice(self, invoice_id: str) -> InvoiceRecord:

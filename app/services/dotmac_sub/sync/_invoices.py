@@ -32,6 +32,35 @@ logger = logging.getLogger(__name__)
 _CENTS = Decimal("0.01")
 
 
+def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
+    """Return every source field that can change the mirrored AR invoice."""
+    return {
+        "account_id": inv.account_id,
+        "number": inv.invoice_number,
+        "status": inv.status,
+        "currency": inv.currency,
+        "subtotal": str(inv.subtotal),
+        "tax_total": str(inv.tax_total),
+        "total": str(inv.total),
+        "balance_due": str(inv.balance_due),
+        "issued_at": inv.issued_at,
+        "due_at": inv.due_at,
+        "memo": inv.memo,
+        "is_proforma": inv.is_proforma,
+        "lines": [
+            {
+                "id": line.id,
+                "description": line.description,
+                "quantity": str(line.quantity),
+                "unit_price": str(line.unit_price),
+                "amount": str(line.amount),
+                "tax_rate_id": line.tax_rate_id,
+            }
+            for line in sorted(inv.lines, key=lambda item: item.id)
+        ],
+    }
+
+
 class InvoiceSyncMixin:
     """Sync dotmac_sub invoices → ERP AR subledger (not GL-posted)."""
 
@@ -83,7 +112,11 @@ class InvoiceSyncMixin:
             for inv in self.client.get_invoices(
                 account_id=account_id, status=status, updated_since=updated_since
             ):
-                if batch_size and processed >= batch_size:
+                # The global delta must drain completely. A timestamp-only
+                # watermark plus a row cap can loop forever when more than the
+                # cap share one updated_at value. Filtered reconciliation runs
+                # do not advance that watermark and may retain their cap.
+                if not use_watermark and batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
                 row_updated_at = self._parse_datetime(inv.updated_at)
@@ -145,15 +178,7 @@ class InvoiceSyncMixin:
         skip_unchanged: bool,
     ) -> None:
         external_id = inv.id
-        data_hash = self._compute_hash(
-            {
-                "number": inv.invoice_number,
-                "total": str(inv.total),
-                "balance_due": str(inv.balance_due),
-                "status": inv.status,
-                "issued_at": inv.issued_at,
-            }
-        )
+        data_hash = self._compute_hash(_invoice_hash_payload(inv))
         if skip_unchanged and not self._has_changed(
             EntityType.INVOICE, external_id, data_hash
         ):
