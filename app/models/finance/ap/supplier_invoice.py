@@ -94,6 +94,13 @@ class SupplierInvoice(Base, VersionedMixin):
         UniqueConstraint(
             "organization_id", "invoice_number", name="uq_supplier_invoice"
         ),
+        Index(
+            "uq_supplier_invoice_source_correlation",
+            "organization_id",
+            "correlation_id",
+            unique=True,
+            postgresql_where=text("correlation_id LIKE 'sub-invoice:%'"),
+        ),
         Index("idx_supplier_invoice_supplier", "supplier_id"),
         Index("idx_supplier_invoice_status", "organization_id", "status"),
         Index(

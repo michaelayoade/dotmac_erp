@@ -65,6 +65,7 @@ from app.api.service_hooks import router as service_hooks_router
 from app.api.settings import router as settings_router
 from app.api.support import router as support_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
+from app.api.sync.dotmac_sub import router as sub_sync_router
 from app.api.workflow_tasks import router as workflow_tasks_router
 from app.config import settings
 from app.db import SessionLocal
@@ -841,6 +842,7 @@ if is_module_enabled("crm"):
     _include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(crm_webhook_router)
     _include_api_router(crm_sync_router)
+    _include_api_router(sub_sync_router)
     app.include_router(admin_crm_sync_router)
 
 # ---------------------------------------------------------------------------

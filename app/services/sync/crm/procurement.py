@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 try:
     from datetime import UTC  # type: ignore
@@ -43,6 +43,8 @@ from app.schemas.sync.dotmac_crm import (
     CRMPurchaseOrderPayload,
     CRMPurchaseOrderResponse,
     CRMPurchaseOrderVariationPayload,
+    CRMPurchaseInvoicePayload,
+    CRMPurchaseInvoiceResponse,
 )
 
 # CRM → ERP translation policy lives in crm_mappings (pure, side-effect-free).
@@ -1187,6 +1189,165 @@ class _ProcurementMixin(_CRMSyncBase):
             po_id=po_id,
             status=po_status,
             omni_work_order_id=data.omni_work_order_id,
+        )
+
+    def create_purchase_invoice(
+        self,
+        org_id: UUID,
+        data: CRMPurchaseInvoicePayload,
+        created_by_person_id: UUID,
+    ) -> CRMPurchaseInvoiceResponse:
+        """Create one DRAFT AP invoice matched to an existing ERP purchase order."""
+        from app.models.finance.ap.purchase_order import PurchaseOrder
+        from app.models.finance.ap.supplier_invoice import (
+            SupplierInvoice,
+            SupplierInvoiceStatus,
+            SupplierInvoiceType,
+        )
+        from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+        from app.services.finance.ap.supplier_invoice import (
+            InvoiceLineInput,
+            SupplierInvoiceInput,
+            SupplierInvoiceService,
+        )
+
+        correlation_id = f"sub-invoice:{data.crm_invoice_id}"
+        existing = self.db.scalar(
+            select(SupplierInvoice).where(
+                SupplierInvoice.organization_id == org_id,
+                SupplierInvoice.correlation_id == correlation_id,
+            )
+        )
+        if existing:
+            return self._purchase_invoice_response(existing, data.crm_invoice_id)
+
+        po_query = select(PurchaseOrder).where(PurchaseOrder.organization_id == org_id)
+        try:
+            po_uuid = UUID(data.erp_purchase_order_id)
+        except ValueError:
+            po_uuid = None
+        if po_uuid:
+            po_query = po_query.where(PurchaseOrder.po_id == po_uuid)
+        else:
+            po_query = po_query.where(
+                PurchaseOrder.po_number == data.erp_purchase_order_id
+            )
+        po = self.db.scalar(po_query)
+        if po is None:
+            raise ValueError(f"Purchase order not found: {data.erp_purchase_order_id}")
+
+        supplier = self._resolve_supplier(
+            org_id, data.vendor_erp_id, data.vendor_code or data.vendor_name
+        )
+        if supplier.supplier_id != po.supplier_id:
+            raise ValueError(
+                "Invoice vendor does not match the purchase order supplier"
+            )
+        if data.currency.upper() != po.currency_code.upper():
+            raise ValueError("Invoice currency does not match the purchase order")
+
+        po_lines = sorted(po.lines, key=lambda row: row.line_number)
+        if len(data.items) > len(po_lines):
+            raise ValueError("Invoice has more lines than its purchase order")
+
+        project_id = self._resolve_project_id(org_id, data.crm_project_id)
+        invoice_lines: list[InvoiceLineInput] = []
+        for index, item in enumerate(data.items):
+            po_line = po_lines[index]
+            if item.quantity > po_line.quantity_ordered:
+                raise ValueError(
+                    f"Invoice line {index + 1} quantity exceeds the purchase order"
+                )
+            existing_amount = self.db.scalar(
+                select(func.coalesce(func.sum(SupplierInvoiceLine.line_amount), 0))
+                .join(
+                    SupplierInvoice,
+                    SupplierInvoice.invoice_id == SupplierInvoiceLine.invoice_id,
+                )
+                .where(
+                    SupplierInvoice.organization_id == org_id,
+                    SupplierInvoice.status != SupplierInvoiceStatus.VOID,
+                    SupplierInvoiceLine.po_line_id == po_line.line_id,
+                )
+            )
+            remaining = Decimal(po_line.line_amount) - Decimal(existing_amount or 0)
+            if item.amount > remaining + Decimal("0.02"):
+                raise ValueError(
+                    f"Invoice line {index + 1} exceeds the uninvoiced PO amount"
+                )
+            invoice_lines.append(
+                InvoiceLineInput(
+                    description=item.description,
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    expense_account_id=(
+                        po_line.expense_account_id
+                        or supplier.default_expense_account_id
+                    ),
+                    asset_account_id=po_line.asset_account_id,
+                    po_line_id=po_line.line_id,
+                    item_id=po_line.item_id,
+                    tax_code_id=(po_line.tax_code_id or supplier.default_tax_code_id),
+                    cost_center_id=po_line.cost_center_id,
+                    project_id=po_line.project_id or project_id,
+                    segment_id=po_line.segment_id,
+                )
+            )
+
+        approved_date = (data.approved_at or datetime.now(UTC)).date()
+        invoice_input = SupplierInvoiceInput(
+            supplier_id=supplier.supplier_id,
+            invoice_type=SupplierInvoiceType.STANDARD,
+            invoice_date=approved_date,
+            received_date=date.today(),
+            due_date=approved_date + timedelta(days=supplier.payment_terms_days or 0),
+            currency_code=data.currency.upper(),
+            lines=invoice_lines,
+            purpose=(
+                f"{data.project_name or data.project_code or 'Vendor project'}; "
+                f"PO {po.po_number}"
+            ),
+            supplier_invoice_number=data.crm_invoice_number,
+            correlation_id=correlation_id,
+        )
+
+        savepoint = self.db.begin_nested()
+        try:
+            invoice = SupplierInvoiceService.create_invoice(
+                self.db, org_id, invoice_input, created_by_person_id
+            )
+            if abs(Decimal(invoice.total_amount) - data.total) > Decimal("0.02"):
+                raise ValueError(
+                    "Invoice total does not match ERP tax/accounting calculation"
+                )
+            savepoint.commit()
+        except IntegrityError:
+            savepoint.rollback()
+            existing = self.db.scalar(
+                select(SupplierInvoice).where(
+                    SupplierInvoice.organization_id == org_id,
+                    SupplierInvoice.correlation_id == correlation_id,
+                )
+            )
+            if existing:
+                return self._purchase_invoice_response(existing, data.crm_invoice_id)
+            raise
+        except Exception:
+            savepoint.rollback()
+            raise
+
+        return self._purchase_invoice_response(invoice, data.crm_invoice_id)
+
+    @staticmethod
+    def _purchase_invoice_response(
+        invoice, crm_invoice_id: str
+    ) -> CRMPurchaseInvoiceResponse:
+        return CRMPurchaseInvoiceResponse(
+            purchase_invoice_id=str(invoice.invoice_id),
+            invoice_id=invoice.invoice_id,
+            invoice_number=invoice.invoice_number,
+            status=invoice.status.value.lower(),
+            crm_invoice_id=crm_invoice_id,
         )
 
     def _resolve_supplier(
