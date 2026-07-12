@@ -240,10 +240,14 @@ class TestOrmRoundTrip:
         )
         db_session.commit()
 
+        # Scope to the row this test wrote — the table is shared across the
+        # session and other tests leave history behind.
         row = db_session.execute(
             text(
-                "SELECT old_value_text, new_value_text, key FROM domain_setting_history"
-            )
+                "SELECT old_value_text, new_value_text, key "
+                "FROM domain_setting_history WHERE setting_id = :sid"
+            ),
+            {"sid": str(setting.id)},
         ).one()
 
         assert row.key == "mono_secret_key"  # the trail still names the setting
