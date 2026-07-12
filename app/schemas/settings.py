@@ -44,6 +44,21 @@ class DomainSettingRead(DomainSettingBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def _mask_secret_value(self) -> DomainSettingRead:
+        """Never hand a secret's value back out of the settings API.
+
+        Encrypting secrets at rest is defeated if the read endpoints return the
+        plaintext anyway — the ORM decrypts on load, so ``value_text`` here is
+        the live key. Callers that need to know whether a secret is *set* can
+        read ``is_secret`` plus the presence of the setting; callers that need
+        the value itself read it server-side through ``resolve_value``, not over
+        the API.
+        """
+        if self.is_secret and self.value_text is not None:
+            self.value_text = MASKED_VALUE
+        return self
+
 
 # =============================================================================
 # Settings Export/Import Schemas

@@ -17,7 +17,11 @@ from app.models.domain_settings import (
     SettingScope,
     SettingValueType,
 )
-from app.schemas.settings import DomainSettingCreate, DomainSettingUpdate
+from app.schemas.settings import (
+    MASKED_VALUE,
+    DomainSettingCreate,
+    DomainSettingUpdate,
+)
 from app.services.common import coerce_uuid
 from app.services.response import (
     ListResponseMixin,
@@ -141,6 +145,12 @@ def _record_setting_history(
     Returns:
         The created history record
     """
+    # Never persist a secret's value into the audit trail. The trail exists to
+    # record *that* a value changed and *who* changed it — it does not need the
+    # value, and storing it put a second plaintext copy of every payment key and
+    # jwt_secret in the database, outliving even a rotation of the live setting.
+    # (Responses are masked too, at the SettingHistoryRead boundary; this stops
+    # the value ever reaching the table.)
     history = DomainSettingHistory(
         setting_id=setting.id,
         domain=setting.domain.value,
@@ -148,13 +158,19 @@ def _record_setting_history(
         action=action,
         # Old values
         old_value_type=old_value_type,
-        old_value_text=old_value_text,
+        old_value_text=(
+            MASKED_VALUE if old_is_secret and old_value_text else old_value_text
+        ),
         old_value_json=old_value_json,
         old_is_secret=old_is_secret,
         old_is_active=old_is_active,
         # New values (from current setting state)
         new_value_type=setting.value_type.value if setting.value_type else None,
-        new_value_text=setting.value_text,
+        new_value_text=(
+            MASKED_VALUE
+            if setting.is_secret and setting.value_text
+            else setting.value_text
+        ),
         new_value_json=setting.value_json,
         new_is_secret=setting.is_secret,
         new_is_active=setting.is_active,

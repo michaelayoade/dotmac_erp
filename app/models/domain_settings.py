@@ -19,8 +19,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import Base
 
@@ -197,3 +199,48 @@ class DomainSettingHistory(Base):
     setting: Mapped["DomainSetting | None"] = relationship(
         "DomainSetting", back_populates="history"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# At-rest encryption for secret settings
+#
+# Registered here, on the model, so the listeners are active whenever the model
+# is — every entrypoint (web, Celery, scripts, tests) imports it. Encrypting at
+# the ORM boundary means the ~170 places that read ``value_text`` need no change
+# and none of them can be missed; a secret is ciphertext in the database and
+# plaintext in memory, and callers never know the difference.
+#
+# The crypto module is imported lazily inside the listeners: it is a service and
+# importing it at module scope would invert the model→service layering.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _encrypt_secret_before_write(_mapper, _connection, target: "DomainSetting") -> None:
+    from app.services.settings_crypto import encrypt_value, should_encrypt
+
+    if not should_encrypt(target) or not target.value_text:
+        return
+
+    session = object_session(target)
+    target.value_text = encrypt_value(target.value_text, session)
+
+
+def _decrypt_secret_on_load(target: "DomainSetting", context) -> None:
+    from app.services.settings_crypto import decrypt_value, should_encrypt
+
+    if not should_encrypt(target) or not target.value_text:
+        return
+
+    session = getattr(context, "session", None)
+    plaintext = decrypt_value(target.value_text, session)
+
+    # set_committed_value, not a plain assignment: the latter would mark the
+    # instance dirty on every load, so a later unrelated flush would write the
+    # decrypted plaintext straight back over the ciphertext.
+    set_committed_value(target, "value_text", plaintext)
+
+
+event.listen(DomainSetting, "before_insert", _encrypt_secret_before_write)
+event.listen(DomainSetting, "before_update", _encrypt_secret_before_write)
+event.listen(DomainSetting, "load", _decrypt_secret_on_load)
+event.listen(DomainSetting, "refresh", lambda t, c, _a: _decrypt_secret_on_load(t, c))
