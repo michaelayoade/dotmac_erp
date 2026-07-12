@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    Boolean,
     JSON,
     Date,
     DateTime,
@@ -204,6 +205,19 @@ class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
         DateTime(timezone=True),
         nullable=True,
         comment="Last successful staff-sync push to dotmac_sub",
+    )
+    dotmac_sub_access_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Whether HR authorizes this employee to use dotmac_sub",
+    )
+    dotmac_sub_roles: Mapped[list[str]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=lambda: ["staff"],
+        comment="dotmac_sub role names managed by ERP HR",
     )
     personal_phone: Mapped[str | None] = mapped_column(
         String(50),

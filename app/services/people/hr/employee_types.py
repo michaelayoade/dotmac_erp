@@ -206,6 +206,8 @@ class EmployeeCreateData:
     bank_account_name: str | None = None
     # Notes
     notes: str | None = None
+    dotmac_sub_access_enabled: bool = False
+    dotmac_sub_roles: list[str] = field(default_factory=lambda: ["staff"])
 
 
 @dataclass
@@ -248,6 +250,8 @@ class EmployeeUpdateData:
     bank_sort_code: str | None = None
     bank_account_name: str | None = None
     notes: str | None = None
+    dotmac_sub_access_enabled: bool | None = None
+    dotmac_sub_roles: list[str] | None = None
     eligible_for_final_payroll: bool | None = None
     # Tracks which fields were explicitly provided (for null handling)
     provided_fields: set[str] = field(default_factory=set, repr=False)

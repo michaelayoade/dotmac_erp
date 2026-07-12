@@ -147,6 +147,8 @@
         {% set bank_account_name_value = fd["bank_account_name"] if "bank_account_name" in fd else (employee.bank_account_name if employee and employee.bank_account_name and employee.bank_account_name | string | lower not in ["none", "null"] else "") %}
         {% set bank_account_number_value = fd["bank_account_number"] if "bank_account_number" in fd else (employee.bank_account_number if employee and employee.bank_account_number and employee.bank_account_number | string | lower not in ["none", "null"] else "") %}
         {% set bank_branch_code_value = fd["bank_branch_code"] if "bank_branch_code" in fd else (employee.bank_branch_code if employee and employee.bank_branch_code and employee.bank_branch_code | string | lower not in ["none", "null"] else "") %}
+        {% set sub_access_enabled = fd["dotmac_sub_access_enabled"] if "dotmac_sub_access_enabled" in fd else (employee.dotmac_sub_access_enabled if employee else false) %}
+        {% set sub_roles_value = fd["dotmac_sub_roles"] if "dotmac_sub_roles" in fd else ((employee.dotmac_sub_roles | join(", ")) if employee and employee.dotmac_sub_roles else "staff") %}
 
         <div class="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div class="grid grid-cols-1 gap-2 md:grid-cols-3">
@@ -664,6 +666,39 @@
                         <div><label for="bank_account_number" class="form-label">Account Number</label><input type="text" name="bank_account_number" id="bank_account_number" value="{{ bank_account_number_value }}" class="form-input w-full font-mono"></div>
                         <div><label for="bank_branch_code" class="form-label">Bank Code / Sort Code</label><input type="text" name="bank_branch_code" id="bank_branch_code" value="{{ bank_branch_code_value }}" class="form-input w-full font-mono"></div>
                     </div>
+                </div>
+            </div>
+            <div class="card h-fit">
+                <div class="card-header px-6 pt-6">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Application Access</h3>
+                </div>
+                <div class="card-body space-y-4 px-6 pb-6">
+                    <input type="hidden" name="dotmac_sub_access_present" value="true">
+                    <label class="flex min-h-12 items-center gap-3">
+                        <input type="checkbox" name="dotmac_sub_access_enabled" value="true"
+                            class="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                            {{ "checked" if sub_access_enabled }}>
+                        <span>
+                            <span class="block text-sm font-medium text-slate-900 dark:text-white">DotMac Sub</span>
+                            <span class="block text-xs text-slate-500 dark:text-slate-400">Provision or revoke this employee's ISP operations account.</span>
+                        </span>
+                    </label>
+                    <div>
+                        <label for="dotmac_sub_roles" class="form-label">Sub roles</label>
+                        <input type="text" name="dotmac_sub_roles" id="dotmac_sub_roles"
+                            value="{{ sub_roles_value }}"
+                            class="form-input w-full"
+                            placeholder="staff, field_technician">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Comma-separated active role names from Sub. ERP manages only these grants.</p>
+                    </div>
+                    {% if employee and employee.dotmac_sub_account_id %}
+                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                        Linked account: <span class="font-mono">{{ employee.dotmac_sub_account_id }}</span>
+                        {% if employee.dotmac_sub_staff_synced_at %}
+                        <span class="block mt-1">Last synchronized {{ employee.dotmac_sub_staff_synced_at }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
