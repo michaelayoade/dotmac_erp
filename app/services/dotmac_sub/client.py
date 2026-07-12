@@ -784,9 +784,7 @@ class DotmacSubClient:
         # lines but omits payment allocations and UI/detail fields. A larger page
         # keeps the initial backfill efficient without making Sub hydrate the
         # expensive full InvoiceRead graph for every row.
-        for item in self._paginate(
-            "/invoices/sync", params=params, page_size=500
-        ):
+        for item in self._paginate("/invoices/sync", params=params, page_size=500):
             yield self._parse_invoice(item)
 
     def get_invoice(self, invoice_id: str) -> InvoiceRecord:
