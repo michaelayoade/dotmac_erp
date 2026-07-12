@@ -206,6 +206,29 @@ class LearningAssessmentWebService:
         )
 
     @staticmethod
+    def _designations(db: Session, org_id: UUID) -> list:
+        return (
+            OrganizationService(db, org_id)
+            .list_designations(pagination=PaginationParams(limit=200))
+            .items
+        )
+
+    @staticmethod
+    def _teams(db: Session, org_id: UUID) -> list:
+        from app.models.support.team import SupportTeam
+
+        return list(
+            db.scalars(
+                select(SupportTeam)
+                .where(
+                    SupportTeam.organization_id == org_id,
+                    SupportTeam.is_active.is_(True),
+                )
+                .order_by(SupportTeam.team_name)
+            ).all()
+        )
+
+    @staticmethod
     def _course_counts(
         db: Session, org_id: UUID
     ) -> tuple[dict[UUID, int], dict[UUID, int]]:
@@ -834,9 +857,17 @@ class LearningAssessmentWebService:
                 "employees": self._employees(db, org_id),
                 "departments": self._departments(db, org_id),
                 "roles": self._roles(db),
+                "designations": self._designations(db, org_id),
+                "teams": self._teams(db, org_id),
                 "course_id": course_id,
                 "assignment_source": assignment_source,
-                "assignment_sources": ["employee", "department", "role"],
+                "assignment_sources": [
+                    "employee",
+                    "department",
+                    "role",
+                    "designation",
+                    "team",
+                ],
                 "active_filters": [
                     name
                     for name, value in [
@@ -933,6 +964,56 @@ class LearningAssessmentWebService:
         except Exception as exc:
             db.rollback()
             logger.exception("assign_role_response: failed")
+            return _redirect(_error_url("/people/training/assignments", exc))
+
+    async def assign_designation_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        _require_any(auth, ASSIGNMENT_MANAGE_PERMISSIONS)
+        form_data = dict(await request.form())
+        try:
+            AssignmentService(db).assign_designation(
+                coerce_uuid(auth.organization_id),
+                coerce_uuid(form_data["course_id"]),
+                coerce_uuid(form_data["designation_id"]),
+                assigned_by=_actor_id(auth),
+                due_date=parse_date(str(form_data.get("due_date") or "")),
+                is_mandatory=_bool(form_data, "is_mandatory"),
+            )
+            db.commit()
+            return _redirect(
+                "/people/training/assignments?success=Designation+assigned"
+            )
+        except Exception as exc:
+            db.rollback()
+            logger.exception("assign_designation_response: failed")
+            return _redirect(_error_url("/people/training/assignments", exc))
+
+    async def assign_team_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        _require_any(auth, ASSIGNMENT_MANAGE_PERMISSIONS)
+        form_data = dict(await request.form())
+        try:
+            AssignmentService(db).assign_team(
+                coerce_uuid(auth.organization_id),
+                coerce_uuid(form_data["course_id"]),
+                coerce_uuid(form_data["team_id"]),
+                assigned_by=_actor_id(auth),
+                due_date=parse_date(str(form_data.get("due_date") or "")),
+                is_mandatory=_bool(form_data, "is_mandatory"),
+            )
+            db.commit()
+            return _redirect("/people/training/assignments?success=Team+assigned")
+        except Exception as exc:
+            db.rollback()
+            logger.exception("assign_team_response: failed")
             return _redirect(_error_url("/people/training/assignments", exc))
 
     def course_form_response(
