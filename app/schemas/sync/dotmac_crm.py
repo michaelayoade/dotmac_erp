@@ -723,3 +723,82 @@ class CRMPurchaseOrderResponse(BaseModel):
     variation_id: str | None = None
     amendment_version: int = 1
     superseded_po_id: UUID | None = None
+
+
+class CRMPurchaseInvoiceItemPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_type: str | None = Field(None, max_length=80)
+    description: str = Field(..., min_length=1, max_length=2000)
+    quantity: Decimal = Field(..., gt=0)
+    unit_price: Decimal = Field(..., ge=0)
+    amount: Decimal = Field(..., ge=0)
+    notes: str | None = Field(None, max_length=2000)
+
+
+class CRMPurchaseInvoicePayload(BaseModel):
+    """Approved vendor invoice originated by CRM/Sub and matched to an ERP PO."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    crm_invoice_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=36,
+        validation_alias=AliasChoices("source_invoice_id", "crm_invoice_id"),
+    )
+    crm_invoice_number: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        validation_alias=AliasChoices("source_invoice_number", "crm_invoice_number"),
+    )
+    crm_project_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=36,
+        validation_alias=AliasChoices("source_project_id", "crm_project_id"),
+    )
+    installation_project_id: str = Field(..., min_length=1, max_length=36)
+    crm_quote_id: str | None = Field(
+        None,
+        max_length=36,
+        validation_alias=AliasChoices("source_quote_id", "crm_quote_id"),
+    )
+    erp_purchase_order_id: str = Field(..., min_length=1, max_length=100)
+    vendor_erp_id: str | None = Field(None, max_length=255)
+    vendor_name: str = Field(..., min_length=1, max_length=255)
+    vendor_code: str | None = Field(None, max_length=160)
+    project_code: str | None = Field(None, max_length=80)
+    project_name: str | None = Field(None, max_length=200)
+    currency: str = Field(..., min_length=3, max_length=3)
+    tax_rate_percent: Decimal = Field(Decimal("0"), ge=0, le=100)
+    subtotal: Decimal = Field(..., ge=0)
+    tax_total: Decimal = Field(Decimal("0"), ge=0)
+    total: Decimal = Field(..., gt=0)
+    approved_at: datetime | None = None
+    approved_by_email: str | None = Field(None, max_length=255)
+    items: list[CRMPurchaseInvoiceItemPayload] = Field(..., min_length=1)
+
+
+class CRMPurchaseInvoiceResponse(BaseModel):
+    purchase_invoice_id: str
+    invoice_id: UUID
+    invoice_number: str
+    status: str
+    crm_invoice_id: str
+
+
+class CRMPurchaseInvoiceAttachmentPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_name: str = Field(..., min_length=1, max_length=255)
+    mime_type: str = Field(..., min_length=1, max_length=100)
+    content_base64: str = Field(..., min_length=1)
+
+
+class CRMPurchaseInvoiceAttachmentResponse(BaseModel):
+    attachment_id: UUID
+    purchase_invoice_id: UUID
+    file_name: str
+    created: bool

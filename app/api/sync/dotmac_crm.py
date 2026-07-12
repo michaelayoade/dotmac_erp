@@ -9,6 +9,10 @@ Handles:
 - Inventory data for CRM field service
 """
 
+import base64
+import binascii
+import hashlib
+import io
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -67,6 +71,10 @@ from app.schemas.sync.dotmac_crm import (
     CRMPurchaseOrderPayload,
     CRMPurchaseOrderResponse,
     CRMPurchaseOrderVariationPayload,
+    CRMPurchaseInvoiceAttachmentPayload,
+    CRMPurchaseInvoiceAttachmentResponse,
+    CRMPurchaseInvoicePayload,
+    CRMPurchaseInvoiceResponse,
     CRMTicketPayload,
     CRMTicketRead,
     CRMWorkOrderPayload,
@@ -980,6 +988,103 @@ def create_purchase_order(
             payload.omni_work_order_id,
         )
         raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+@router.post(
+    "/purchase-invoices",
+    response_model=CRMPurchaseInvoiceResponse,
+    status_code=201,
+    dependencies=[Depends(require_service_scope("crm:ap:write"))],
+)
+def create_purchase_invoice(
+    payload: CRMPurchaseInvoicePayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMPurchaseInvoiceResponse:
+    """Create an idempotent DRAFT AP invoice matched to an existing PO."""
+    service = DotMacCRMSyncService(db)
+    try:
+        return service.create_purchase_invoice(
+            auth["organization_id"], payload, auth["person_id"]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "Failed to create purchase invoice source_id=%s", payload.crm_invoice_id
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(exc)) from exc
+
+
+@router.post(
+    "/purchase-invoices/{purchase_invoice_id}/attachments",
+    response_model=CRMPurchaseInvoiceAttachmentResponse,
+    status_code=201,
+    dependencies=[Depends(require_service_scope("crm:ap:write"))],
+)
+def upload_purchase_invoice_attachment(
+    purchase_invoice_id: UUID,
+    payload: CRMPurchaseInvoiceAttachmentPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMPurchaseInvoiceAttachmentResponse:
+    """Attach one source document; content checksum makes retries idempotent."""
+    from app.models.finance.ap.supplier_invoice import SupplierInvoice
+    from app.models.finance.common.attachment import Attachment, AttachmentCategory
+    from app.services.finance.common.attachment import AttachmentInput, attachment_service
+
+    org_id = UUID(str(auth["organization_id"]))
+    invoice = db.get(SupplierInvoice, purchase_invoice_id)
+    if invoice is None or invoice.organization_id != org_id:
+        raise HTTPException(status_code=404, detail="Purchase invoice not found")
+    try:
+        content = base64.b64decode(payload.content_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid base64 attachment") from exc
+    if not content:
+        raise HTTPException(status_code=422, detail="Attachment is empty")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Attachment exceeds 10 MB")
+
+    checksum = hashlib.sha256(content).hexdigest()
+    existing = db.scalar(
+        select(Attachment).where(
+            Attachment.organization_id == org_id,
+            Attachment.entity_type == "SUPPLIER_INVOICE",
+            Attachment.entity_id == invoice.invoice_id,
+            Attachment.checksum == checksum,
+        )
+    )
+    if existing:
+        return CRMPurchaseInvoiceAttachmentResponse(
+            attachment_id=existing.attachment_id,
+            purchase_invoice_id=invoice.invoice_id,
+            file_name=existing.file_name,
+            created=False,
+        )
+
+    attachment = attachment_service.save_file(
+        db,
+        org_id,
+        AttachmentInput(
+            entity_type="SUPPLIER_INVOICE",
+            entity_id=str(invoice.invoice_id),
+            file_name=payload.file_name,
+            content_type=payload.mime_type,
+            category=AttachmentCategory.INVOICE,
+            description="Uploaded by Sub vendor purchase-invoice sync",
+        ),
+        io.BytesIO(content),
+        UUID(str(auth["person_id"])),
+    )
+    return CRMPurchaseInvoiceAttachmentResponse(
+        attachment_id=attachment.attachment_id,
+        purchase_invoice_id=invoice.invoice_id,
+        file_name=attachment.file_name,
+        created=True,
+    )
 
 
 @router.post(
