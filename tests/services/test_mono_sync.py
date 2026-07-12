@@ -42,6 +42,8 @@ def _account(**overrides):
         "last_statement_date": None,
         "last_statement_balance": None,
         "mono_last_synced_at": None,
+        "mono_last_ingest_at": None,
+        "mono_link_failed": False,
         "mono_last_sync_error": None,
         "currency_code": "NGN",
         "bank_name": "Test Bank",
@@ -69,15 +71,8 @@ def _mono_account_info(**overrides):
     return MonoAccountInfo(**values)
 
 
-def test_incremental_sync_uses_newest_statement_line_as_cursor() -> None:
-    """Window floor is max(BankStatementLine.transaction_date) across every
-    source — manual or Mono. A manual statement import through 2026-04-10
-    means the next Mono sync pulls [2026-04-10, today], which is how both
-    paths share one cursor without a separate cutover field.
-    """
-    db = MagicMock()
-    svc = MonoSyncService(db)
-    account = _account()
+def _capture_window(svc, **cursors):
+    """Run sync_account_incremental and capture the window it asked for."""
     captured: dict[str, date] = {}
 
     def _sync_window(_account, from_date, to_date, *, user_id=None):
@@ -85,35 +80,112 @@ def test_incremental_sync_uses_newest_statement_line_as_cursor() -> None:
         captured["to_date"] = to_date
         return MonoSyncResult(success=True)
 
+    return captured, _sync_window
+
+
+def test_incremental_sync_rewinds_by_buffer_days() -> None:
+    """The window floor is rewound by ``mono_sync_buffer_days``.
+
+    Banks post back-dated transactions routinely (NGN card settlement,
+    cheque clearing, weekend batches land with a past value date). Without
+    a rewind, anything Mono backfills *behind* the cursor falls into no
+    future window and is lost permanently. Re-fetching the overlap is free:
+    dedupe is keyed on Mono's transaction id and backed by a unique index.
+    """
+    svc = MonoSyncService(MagicMock())
+    account = _account(mono_sync_buffer_days=7)
+    captured, _sync_window = _capture_window(svc)
+
     with (
         patch.object(
-            svc,
-            "_get_newest_line_date",
-            return_value=date(2026, 4, 10),
+            svc, "_get_mono_transaction_cursor", return_value=date(2026, 4, 10)
         ),
         patch.object(svc, "_sync_window", side_effect=_sync_window),
     ):
         result = svc.sync_account_incremental(account)
 
     assert result.success is True
-    assert captured["from_date"] == date(2026, 4, 10)
+    assert captured["from_date"] == date(2026, 4, 10) - timedelta(days=7)
     assert captured["to_date"] == date.today()
 
 
-def test_incremental_sync_falls_back_to_90_days_when_no_lines_exist() -> None:
-    """A brand-new account with no statement history yet: first-ever sync
-    pulls the last 90 days so Mono's own backfill has something to catch.
-    """
-    db = MagicMock()
-    svc = MonoSyncService(db)
-    account = _account()
-    captured: dict[str, date] = {}
+def test_incremental_sync_ignores_manual_lines_when_mono_cursor_exists() -> None:
+    """A manual import must NOT advance the Mono cursor.
 
-    def _sync_window(_account, from_date, to_date, *, user_id=None):
-        captured["from_date"] = from_date
-        return MonoSyncResult(success=True)
+    Regression: the cursor used to be max() over *all* statement lines. If
+    Mono broke on 1 Jul and ops hand-uploaded a single line dated 20 Jul to
+    keep working, the next Mono window started at 20 Jul and the un-ingested
+    2–19 Jul Mono transactions were never requested again — lost, silently,
+    because id-based dedupe means nothing backfills them.
+    """
+    svc = MonoSyncService(MagicMock())
+    account = _account(mono_sync_buffer_days=0)
+    captured, _sync_window = _capture_window(svc)
 
     with (
+        # Mono itself only ever got as far as 1 Jul...
+        patch.object(
+            svc, "_get_mono_transaction_cursor", return_value=date(2026, 7, 1)
+        ),
+        # ...even though a manual import pushed the newest line to 20 Jul.
+        patch.object(svc, "_get_newest_line_date", return_value=date(2026, 7, 20)),
+        patch.object(svc, "_sync_window", side_effect=_sync_window),
+    ):
+        svc.sync_account_incremental(account)
+
+    assert captured["from_date"] == date(2026, 7, 1)
+
+
+def test_incremental_sync_clamps_future_dated_cursor_to_today() -> None:
+    """A future-dated line must not collapse the window to [today, today].
+
+    A mis-parsed CSV or a post-dated cheque can put a line beyond today.
+    Left unclamped, the window floor overshoots, ``start > end`` trips the
+    guard, and every prior day is skipped forever.
+    """
+    svc = MonoSyncService(MagicMock())
+    account = _account(mono_sync_buffer_days=7)
+    captured, _sync_window = _capture_window(svc)
+    future = date.today() + timedelta(days=30)
+
+    with (
+        patch.object(svc, "_get_mono_transaction_cursor", return_value=future),
+        patch.object(svc, "_sync_window", side_effect=_sync_window),
+    ):
+        svc.sync_account_incremental(account)
+
+    assert captured["from_date"] == date.today() - timedelta(days=7)
+    assert captured["to_date"] == date.today()
+
+
+def test_incremental_sync_seeds_first_pull_from_configured_start_date() -> None:
+    """First-ever Mono pull honours the operator-set ``mono_sync_from_date``."""
+    svc = MonoSyncService(MagicMock())
+    account = _account(mono_sync_from_date=date(2026, 3, 1))
+    captured, _sync_window = _capture_window(svc)
+
+    with (
+        patch.object(svc, "_get_mono_transaction_cursor", return_value=None),
+        patch.object(svc, "_get_newest_line_date", return_value=None),
+        patch.object(svc, "_sync_window", side_effect=_sync_window),
+    ):
+        result = svc.sync_account_incremental(account)
+
+    assert result.success is True
+    assert captured["from_date"] == date(2026, 3, 1)
+
+
+def test_incremental_sync_falls_back_to_90_days_when_no_lines_exist() -> None:
+    """A brand-new account with no statement history and no configured start:
+    first-ever sync pulls the last 90 days so Mono's own backfill has
+    something to catch.
+    """
+    svc = MonoSyncService(MagicMock())
+    account = _account(mono_sync_from_date=None)
+    captured, _sync_window = _capture_window(svc)
+
+    with (
+        patch.object(svc, "_get_mono_transaction_cursor", return_value=None),
         patch.object(svc, "_get_newest_line_date", return_value=None),
         patch.object(svc, "_sync_window", side_effect=_sync_window),
     ):
@@ -687,15 +759,23 @@ def test_webhook_sync_status_failed_with_data_status_available_records_error() -
     db.flush.assert_called()
 
 
-def test_webhook_failure_suppressed_when_recent_sync_succeeded() -> None:
-    """Successful pull wins. If a sync succeeded within the last 5 minutes,
-    a follow-up ``sync_status=FAILED`` webhook is treated as a stale signal
-    about the same refresh attempt that already drove a successful pull.
+def test_webhook_failure_suppressed_when_recent_ingest_succeeded() -> None:
+    """Successful *ingest* wins. If we actually landed transactions within the
+    last 5 minutes, a follow-up ``sync_status=FAILED`` webhook is treated as a
+    stale signal about the same refresh attempt that already drove that ingest.
 
     Regression for the 2026-05-16 UBA report where the integration health
     banner stayed red ("Mono data refresh failed... data_request_id=…")
     for hours after a manual reauth + sync had already landed the new
     transactions.
+
+    Note this keys on ``mono_last_ingest_at``, not ``mono_last_synced_at``.
+    The latter advances on any successful API call — including the
+    refresh-first path, which ingests nothing and exists precisely to provoke
+    this webhook ~30s later. Keying on it meant a *genuine* failure always
+    arrived inside a 5-minute window we had just opened ourselves, and was
+    silently discarded; see
+    ``test_webhook_failure_not_suppressed_by_a_zero_ingest_refresh``.
     """
     db = MagicMock()
     linked_account = _account(
@@ -703,8 +783,9 @@ def test_webhook_failure_suppressed_when_recent_sync_succeeded() -> None:
         # The just-recorded webhook failure that ``_record_webhook_failure``
         # would otherwise overwrite again.
         mono_last_sync_error=None,
-        # 30 seconds ago — well inside the 5-minute "recent" window.
-        mono_last_synced_at=datetime.now(UTC) - timedelta(seconds=30),
+        # Transactions actually landed 30 seconds ago — well inside the
+        # 5-minute "recent" window.
+        mono_last_ingest_at=datetime.now(UTC) - timedelta(seconds=30),
     )
     db.scalar.return_value = linked_account
     payload = {
@@ -735,9 +816,117 @@ def test_webhook_failure_suppressed_when_recent_sync_succeeded() -> None:
             json.dumps(payload).encode(),
         )
 
-    # Suppressed — error stays cleared because the recent successful sync
+    # Suppressed — error stays cleared because the recent successful ingest
     # has authoritative news the webhook can't override.
     assert linked_account.mono_last_sync_error is None
+
+
+def test_webhook_failure_not_suppressed_by_a_zero_ingest_refresh() -> None:
+    """A refresh that ingested NOTHING must not suppress the failure it caused.
+
+    The silent-failure path this guards against:
+
+    1. "Sync Now" fires ``trigger_data_refresh``; Mono replies ``processing``.
+       The refresh path stamps ``mono_last_synced_at = now`` and ingests zero
+       transactions — that is its whole design, it defers to the webhook.
+    2. ~30s later Mono's scrape fails and it sends
+       ``sync_status=FAILED, retrieved_data=["balance"]`` — no transactions.
+    3. The old suppression keyed on ``mono_last_synced_at``, which step 1 had
+       just bumped, so this webhook landed inside a 5-minute window we opened
+       ourselves and was discarded as "stale". No error was recorded, and no
+       ingest was queued (there were no transactions to pull).
+
+    Net effect: the account rendered "Healthy — synced 30 seconds ago" while
+    ingesting nothing, forever. Suppression now requires evidence of a real
+    ingest (``mono_last_ingest_at``), which a refresh never produces.
+    """
+    db = MagicMock()
+    linked_account = _account(
+        mono_account_id="mono-uba-refresh",
+        mono_last_sync_error=None,
+        # The refresh pinged Mono 30s ago...
+        mono_last_synced_at=datetime.now(UTC) - timedelta(seconds=30),
+        # ...but it landed no transactions. This is the distinction that matters.
+        mono_last_ingest_at=None,
+    )
+    db.scalar.return_value = linked_account
+    payload = {
+        "event": "mono.events.account_updated",
+        "data": {
+            "account": {"_id": "mono-uba-refresh"},
+            "meta": {
+                "data_status": "FAILED",
+                "sync_status": "FAILED",
+                "job_id": "job-refresh-1",
+                "retrieved_data": ["balance"],
+                "data_request_id": "REQ-REFRESH-1",
+            },
+        },
+    }
+
+    with (
+        patch(
+            "app.services.finance.banking.mono_sync.resolve_value",
+            return_value="webhook-secret",
+        ),
+        patch("app.services.finance.banking.mono_sync.MonoClient") as mono_client,
+        patch("app.tasks.finance.sync_mono_account.delay"),
+    ):
+        mono_client.return_value.verify_webhook.return_value = True
+        MonoSyncService(db).process_webhook(
+            "webhook-secret",
+            json.dumps(payload).encode(),
+        )
+
+    # The failure IS surfaced, and the link is marked dead so a later
+    # cache read cannot quietly clear it.
+    assert linked_account.mono_last_sync_error is not None
+    assert "transactions" in linked_account.mono_last_sync_error
+    assert linked_account.mono_link_failed is True
+
+
+def test_cache_read_does_not_clear_a_dead_link_error() -> None:
+    """A zero-transaction cache read must not turn a dead link green.
+
+    ``/v2/accounts/{id}/transactions`` serves Mono's indexed cache, so a
+    de-authorised account still answers 200 with zero rows. The old code
+    cleared ``mono_last_sync_error`` on any successful call, so the morning
+    sweep wiped the reauth banner the webhook had recorded overnight: the
+    account rendered "Healthy — Synced today" and never synced again.
+    """
+    db = MagicMock()
+    svc = MonoSyncService(db)
+    account = _account(
+        mono_last_sync_error="Bank connection expired. Reauthorise this account…",
+        mono_link_failed=True,
+    )
+
+    client = MagicMock()
+    client.get_account_info.return_value = _mono_account_info(balance=20000)
+    client.get_all_transactions.return_value = []  # stale cache: nothing new
+    client_cm = MagicMock()
+    client_cm.__enter__.return_value = client
+
+    with (
+        patch.object(
+            svc,
+            "_get_mono_config",
+            return_value=MonoConfig(secret_key="secret", public_key="public"),
+        ),
+        patch(
+            "app.services.finance.banking.mono_sync.MonoClient",
+            return_value=client_cm,
+        ),
+    ):
+        result = svc._sync_window(account, date(2026, 4, 1), date(2026, 4, 15))
+
+    # The call succeeded — Mono answered — but nothing was ingested, so the
+    # dead-link banner must survive.
+    assert result.success is True
+    assert result.transactions_synced == 0
+    assert account.mono_link_failed is True
+    assert account.mono_last_sync_error is not None
+    assert "Reauthorise" in account.mono_last_sync_error
 
 
 def test_webhook_reauthorisation_required_is_never_suppressed() -> None:
@@ -2103,6 +2292,119 @@ def test_get_all_transactions_caps_pagination() -> None:
         client.get_all_transactions("mono-account-1", max_pages=2)
 
     assert request.call_count == 2
+
+
+def test_line_collision_on_another_bank_account_fails_loudly() -> None:
+    """A Mono txn already imported on a DIFFERENT bank row must not be
+    swallowed as a "duplicate".
+
+    The unique index on ``transaction_id`` is global, but the pre-insert dedupe
+    check is scoped to the bank account. So after unlink/re-link onto a
+    different bank row — the recovery from the Zenith/UBA mislabeling incident —
+    every historical line collided, each was counted as a duplicate, and the
+    sync returned success having imported nothing. The correct account stayed
+    empty, the lines stayed on the wrong one, and nothing said so.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    db = MagicMock()
+    # MagicMock.__exit__ is truthy by default, which would swallow the error.
+    db.begin_nested.return_value.__exit__.return_value = False
+    db.flush.side_effect = IntegrityError("dup", {}, Exception("dup"))
+
+    other_account = uuid4()
+    this_account = uuid4()
+    # 1st scalar: which bank account already owns this transaction_id.
+    # 2nd scalar: which bank account we are writing into.
+    db.scalar.side_effect = [other_account, this_account]
+
+    svc = MonoSyncService(db)
+    line = MagicMock()
+    line.transaction_id = "mono_txn-1"
+    line.statement_id = uuid4()
+
+    with pytest.raises(MonoError, match="already imported against bank account"):
+        svc._add_statement_line_once(line)
+
+
+def _txn(**overrides) -> dict:
+    """A well-formed Mono transaction payload."""
+    payload = {
+        "id": "txn-1",
+        "narration": "Transfer",
+        "amount": 500000,
+        "type": "credit",
+        "balance": 900000,
+        "date": "2026-04-15T09:00:00Z",
+    }
+    payload.update(overrides)
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("override", "match"),
+    [
+        pytest.param({"amount": None}, "missing an amount", id="amount-null"),
+        pytest.param({"amount": "abc"}, "non-integer amount", id="amount-garbage"),
+        pytest.param({"amount": -100}, "negative amount", id="amount-negative"),
+        pytest.param({"type": None}, "unrecognised type", id="type-null"),
+        pytest.param({"type": "reversal"}, "unrecognised type", id="type-unknown"),
+        pytest.param({"id": ""}, "missing an id", id="id-blank"),
+    ],
+)
+def test_transaction_payload_rejects_bad_money_fields(override, match) -> None:
+    """``amount`` and ``type`` must never fail open.
+
+    They used to default to ``0`` and ``"debit"``. A payload missing ``amount``
+    became a permanent ₦0.00 ledger row; one missing ``type`` booked a
+    money-IN as a money-OUT and offered it to the supplier-payment matchers.
+    Neither is ever repaired, because the line is keyed on the Mono
+    transaction id — a later sync sees it as an already-imported duplicate.
+    Fail the sync loudly instead, exactly as a missing id or date already does.
+    """
+    client = MonoClient(MonoConfig(secret_key="secret", public_key="public"))
+    response = {"data": [_txn(**override)], "meta": {}}
+
+    with (
+        patch.object(client, "_request", return_value=response),
+        pytest.raises(MonoError, match=match),
+    ):
+        client.get_all_transactions("mono-account-1")
+
+
+def test_transaction_payload_preserves_direction_and_amount() -> None:
+    """The happy path still maps kobo → naira and credit → credit."""
+    client = MonoClient(MonoConfig(secret_key="secret", public_key="public"))
+    response = {
+        "data": [_txn(amount=500000, type="credit", balance=900000)],
+        "meta": {},
+    }
+
+    with patch.object(client, "_request", return_value=response):
+        txns = client.get_all_transactions("mono-account-1")
+
+    assert len(txns) == 1
+    assert txns[0].type == "credit"
+    assert txns[0].amount_major == Decimal("5000.00")
+    assert txns[0].balance_major == Decimal("9000.00")
+
+
+def test_get_all_transactions_refuses_off_host_next_url() -> None:
+    """`meta.next` is followed with `mono-sec-key` attached, and httpx lets an
+    absolute URL override `base_url` — so an off-host next-URL would ship the
+    secret key to that host. Relative paths and on-origin URLs are fine.
+    """
+    client = MonoClient(MonoConfig(secret_key="secret", public_key="public"))
+    response = {
+        "data": [_txn()],
+        "meta": {"next": "https://evil.example.com/v2/accounts/x/transactions"},
+    }
+
+    with (
+        patch.object(client, "_request", return_value=response),
+        pytest.raises(MonoError, match="off-host"),
+    ):
+        client.get_all_transactions("mono-account-1")
 
 
 def test_request_wraps_non_json_error_response() -> None:

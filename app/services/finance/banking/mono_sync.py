@@ -95,6 +95,32 @@ def _month_bounds(value: date) -> tuple[date, date]:
     return date(value.year, value.month, 1), date(value.year, value.month, last_day)
 
 
+# Mono's indexer reports the outcome of its last upstream-bank pull in
+# ``data.meta`` on ``GET /v2/accounts/{id}``. These are the only fields that
+# distinguish "the link is alive and we have nothing new" from "the link is
+# dead and we are reading a stale cache" — the transactions endpoint answers
+# 200 either way.
+_DATA_STATUS_FAILED = {"FAILED", "PROCESSING_FAILED"}
+
+
+def _link_health(account_info: MonoAccountInfo | None) -> bool | None:
+    """Evidence about whether the Mono link is actually live.
+
+    ``True``  — Mono confirms a healthy pull that included transactions.
+    ``False`` — Mono reports its own pull failed.
+    ``None``  — Mono said nothing conclusive (older payloads omit ``meta``).
+    """
+    if account_info is None:
+        return None
+    status = (account_info.data_status or "").upper()
+    if status in _DATA_STATUS_FAILED:
+        return False
+    retrieved = account_info.retrieved_data
+    if status == "AVAILABLE" and (retrieved is None or "transactions" in retrieved):
+        return True
+    return None
+
+
 @dataclass
 class MonoSyncResult:
     """Result of a Mono sync operation for one account.
@@ -208,6 +234,8 @@ class MonoSyncService:
 
         account.mono_account_id = result.account_id
         account.mono_last_synced_at = None
+        account.mono_last_ingest_at = None
+        account.mono_link_failed = False
         account.mono_last_sync_error = None
         self.db.flush()
         return {
@@ -556,23 +584,29 @@ class MonoSyncService:
         retrieved_data = list(meta.get("retrieved_data") or [])
         data_request_id = meta.get("data_request_id")
 
-        # Successful pull wins. If our most recent sync succeeded very
+        # Successful *ingest* wins. If we actually landed transactions very
         # recently, the webhook is almost certainly reporting on the
-        # bank-side refresh attempt that drove that sync — Mono got us the
+        # bank-side refresh attempt that drove that ingest — Mono got us the
         # data even though it flagged the upstream scrape FAILED. Surfacing
-        # this as an error contradicts the freshly-cleared
-        # ``mono_last_sync_error`` and leaves the UI stuck on a stale red
-        # banner for hours. REAUTHORISATION_REQUIRED is exempt: it's a
-        # structural state the user must address regardless of whether
-        # cached data is currently flowing.
+        # this as an error leaves the UI stuck on a stale red banner for
+        # hours. REAUTHORISATION_REQUIRED is exempt: it's a structural state
+        # the user must address regardless of whether cached data flows.
+        #
+        # This keys on ``mono_last_ingest_at``, NOT ``mono_last_synced_at``.
+        # The latter advances on any successful API call — including the
+        # refresh-first path, which ingests nothing and whose whole purpose
+        # is to *provoke* this very webhook ~30s later. Keying on it meant a
+        # genuine failure ("retrieved balance but not transactions") always
+        # landed inside the 5-minute window we had just opened ourselves,
+        # and was discarded as stale: no error, no ingest, account green.
         if sync_status != "REAUTHORISATION_REQUIRED":
-            last_synced_at = bank_account.mono_last_synced_at
-            if last_synced_at is not None:
-                age = datetime.now(UTC) - last_synced_at
+            last_ingest_at = bank_account.mono_last_ingest_at
+            if last_ingest_at is not None:
+                age = datetime.now(UTC) - last_ingest_at
                 if age < timedelta(minutes=5):
                     logger.info(
                         "Mono webhook reports sync_status=%s for mono_id=%s "
-                        "but last sync succeeded %.0fs ago — treating "
+                        "but transactions were ingested %.0fs ago — treating "
                         "webhook as stale; not overwriting cleared error.",
                         sync_status,
                         mono_account_id,
@@ -633,6 +667,11 @@ class MonoSyncService:
                 f"(sync_status={sync_status}, job_id={job_id}, "
                 f"data_request_id={data_request_id_display})"
             )
+        # Mark the link itself as failed, not just the last attempt. Mono keeps
+        # answering 200 from its cache on a dead link, so without this the next
+        # scheduled cache read would clear the banner and the account would go
+        # green while ingesting nothing.
+        bank_account.mono_link_failed = True
         bank_account.mono_last_sync_error = error_message
         self.db.flush()
         logger.warning(
@@ -701,16 +740,28 @@ class MonoSyncService:
         *,
         user_id: UUID | None = None,
     ) -> MonoSyncResult:
-        """Stateful incremental sync using the newest statement line as the cursor.
+        """Stateful incremental sync, rewound by ``mono_sync_buffer_days``.
 
-        The window is ``[max(statement_line.transaction_date), today]`` across
-        all lines on this bank account — Mono *and* manually imported. Picking
-        the newest known line means both sources advance the same cursor, so
-        a Mono outage self-heals on the next successful run and a manual
-        import naturally advances the resume point for subsequent Mono syncs.
+        The cursor is the newest transaction date **already imported from
+        Mono** — not ``max()`` over all statement lines. A manual CSV import
+        is not a superset of what Mono would have returned, so letting it
+        advance the Mono cursor silently strands every un-ingested Mono day
+        behind it: upload one line dated today while the Mono link is broken,
+        and the intervening weeks are never requested again. Manual lines
+        still seed the *first* Mono window (nothing Mono-sourced exists yet
+        to resume from), which preserves the "don't re-scan imported history"
+        intent without the data-loss edge.
 
-        Falls back to a 90-day window only when the account has no statement
-        lines at all (first-ever sync of a brand-new account).
+        The window is then rewound by ``mono_sync_buffer_days`` (default 7).
+        Banks post back-dated transactions routinely — NGN card settlement,
+        cheque clearing, weekend batches land with a value date one or more
+        days in the past. Without a rewind, anything Mono backfills *behind*
+        the cursor falls into no future window and is lost permanently. The
+        rewind is free: dedupe is keyed on Mono's transaction id and backed
+        by a unique index, so re-fetching an overlap writes nothing.
+
+        Falls back to ``mono_sync_from_date`` (or 90 days) when the account
+        has no statement lines at all.
 
         Always updates ``mono_last_synced_at`` on a successful call, even
         when zero transactions came back — that's how integration health is
@@ -724,12 +775,25 @@ class MonoSyncService:
                 message="Bank account not linked to Mono",
             )
 
-        newest_line_date = self._get_newest_line_date(bank_account.bank_account_id)
-        if newest_line_date is not None:
-            start_date = newest_line_date
-        else:
-            start_date = date.today() - timedelta(days=90)
         end_date = date.today()
+
+        # Prefer the Mono-sourced cursor; fall back to any statement line
+        # only to seed the very first Mono pull on this account.
+        cursor = self._get_mono_transaction_cursor(bank_account.bank_account_id)
+        if cursor is None:
+            cursor = self._get_newest_line_date(bank_account.bank_account_id)
+
+        if cursor is not None:
+            # A future-dated line (mis-parsed CSV, post-dated cheque) must not
+            # push the cursor past today and collapse the window to [today,
+            # today], which would skip every prior day forever.
+            cursor = min(_as_date(cursor) or end_date, end_date)
+            buffer_days = max(int(bank_account.mono_sync_buffer_days or 0), 0)
+            start_date = cursor - timedelta(days=buffer_days)
+        else:
+            configured_start = _as_date(bank_account.mono_sync_from_date)
+            start_date = configured_start or (end_date - timedelta(days=90))
+
         if start_date > end_date:
             start_date = end_date
 
@@ -848,6 +912,57 @@ class MonoSyncService:
             ingestion_state=ingestion_state,
         )
 
+    def _settle_sync_health(
+        self,
+        bank_account: BankAccount,
+        account_info: MonoAccountInfo | None,
+        *,
+        ingested: int,
+    ) -> None:
+        """Set sync health from evidence that data flowed — not from liveness.
+
+        ``/v2/accounts/{id}/transactions`` serves Mono's *indexed cache*, so
+        a de-authorised account still answers 200 with zero rows. Clearing
+        ``mono_last_sync_error`` on any successful call therefore turned a
+        dead bank link green: the ``REAUTHORISATION_REQUIRED`` banner that
+        the webhook had just recorded was wiped by the next scheduled cache
+        read, the account rendered "Healthy — Synced today", and nothing
+        ever synced again.
+
+        Two kinds of error are tracked differently:
+
+        * A **transient API error** (Mono 5xx, timeout) is cleared as soon as
+          Mono answers again — re-contact is proof it is over.
+        * A **link failure** (``mono_link_failed`` — reauth required, or
+          Mono's indexer reporting its pull failed) is NOT cleared by mere
+          re-contact, because a dead link keeps answering 200 from cache. It
+          clears only on positive evidence: lines ingested, or Mono itself
+          confirming a healthy pull.
+        """
+        health = _link_health(account_info)
+
+        if ingested > 0 or health is True:
+            bank_account.mono_last_ingest_at = datetime.now(UTC)
+            bank_account.mono_link_failed = False
+            bank_account.mono_last_sync_error = None
+            return
+
+        if health is False and account_info is not None:
+            bank_account.mono_link_failed = True
+            bank_account.mono_last_sync_error = (
+                "Mono reports its last bank pull failed "
+                f"(data_status={account_info.data_status}). Only cached "
+                "transactions are being served — the account most likely "
+                "needs reauthorisation via the Mono Connect widget."
+            )
+            return
+
+        # Mono told us nothing conclusive. Clear a transient error, but leave
+        # a known link failure standing — reading its stale cache is not
+        # recovery.
+        if not bank_account.mono_link_failed:
+            bank_account.mono_last_sync_error = None
+
     def _apply_account_info_watermarks(
         self,
         bank_account: BankAccount,
@@ -859,6 +974,11 @@ class MonoSyncService:
         :meth:`_sync_window` for zero-transaction responses so the
         refresh-first path and the direct-pull path can never disagree
         about where the watermark sits.
+
+        This path ingests nothing by design — it hands off to the
+        ``account_updated`` webhook — so it advances ``mono_last_synced_at``
+        (we did reach Mono) but never ``mono_last_ingest_at``. Health is
+        settled from evidence; see :meth:`_settle_sync_health`.
         """
         bank_account.last_statement_balance = account_info.balance_major
         as_of_date = date.today()
@@ -866,7 +986,7 @@ class MonoSyncService:
         if existing is None or as_of_date > existing:
             bank_account.last_statement_date = as_of_date
         bank_account.mono_last_synced_at = datetime.now(UTC)
-        bank_account.mono_last_sync_error = None
+        self._settle_sync_health(bank_account, account_info, ingested=0)
 
     def _sync_window(
         self,
@@ -969,6 +1089,57 @@ class MonoSyncService:
                 errors=[exc.message],
             )
 
+        try:
+            count, duplicates, total_credits, total_debits, statement_id = (
+                self._write_transactions(
+                    bank_account,
+                    new_transactions,
+                    duplicates=duplicates,
+                    user_id=user_id,
+                )
+            )
+        except MonoError as exc:
+            logger.error(
+                "Mono sync could not write lines for account %s: %s",
+                bank_account.bank_account_id,
+                exc.message,
+            )
+            bank_account.mono_last_sync_error = exc.message
+            self.db.flush()
+            return MonoSyncResult(
+                success=False,
+                bank_account_id=bank_account.bank_account_id,
+                message=f"Mono import error: {exc.message}",
+                errors=[exc.message],
+            )
+
+        return self._finalise_window(
+            bank_account,
+            account_info,
+            from_date=from_date,
+            to_date=to_date,
+            count=count,
+            duplicates=duplicates,
+            total_credits=total_credits,
+            total_debits=total_debits,
+            statement_id=statement_id,
+            parsed_transaction_dates=parsed_transaction_dates,
+        )
+
+    def _write_transactions(
+        self,
+        bank_account: BankAccount,
+        new_transactions: list[tuple[MonoTransaction, str, date]],
+        *,
+        duplicates: int,
+        user_id: UUID | None,
+    ) -> tuple[int, int, Decimal, Decimal, UUID | None]:
+        """Write new Mono lines, bucketed into one statement per calendar month."""
+        count = 0
+        total_credits = Decimal("0")
+        total_debits = Decimal("0")
+        statement_id: UUID | None = None
+
         if new_transactions:
             transactions_by_month: dict[
                 tuple[int, int], list[tuple[MonoTransaction, str, date]]
@@ -1058,6 +1229,23 @@ class MonoSyncService:
                 # unset to avoid presenting stale arithmetic balances.
                 statement.closing_balance = None
 
+        return count, duplicates, total_credits, total_debits, statement_id
+
+    def _finalise_window(
+        self,
+        bank_account: BankAccount,
+        account_info: MonoAccountInfo | None,
+        *,
+        from_date: date,
+        to_date: date,
+        count: int,
+        duplicates: int,
+        total_credits: Decimal,
+        total_debits: Decimal,
+        statement_id: UUID | None,
+        parsed_transaction_dates: list[date],
+    ) -> MonoSyncResult:
+        """Advance watermarks, settle sync health, and build the result."""
         # Forward-only watermark advance. Use the newest *transaction* date
         # from the Mono response, not `to_date`, so a stale or empty
         # response can never move the watermark past where data really
@@ -1091,13 +1279,11 @@ class MonoSyncService:
         ):
             bank_account.last_statement_date = as_of_date
 
-        # Freshness: every successful API call advances this, even with
-        # zero new transactions. Clears any previously recorded error —
-        # ``_record_webhook_failure`` is responsible for not re-recording
-        # right back after this clear (it self-suppresses on recent
-        # ``mono_last_synced_at``).
+        # Freshness: every successful API call advances this, even with zero
+        # new transactions. It means "Mono answered", nothing more — health
+        # is settled separately, from evidence that data actually flowed.
         bank_account.mono_last_synced_at = datetime.now(UTC)
-        bank_account.mono_last_sync_error = None
+        self._settle_sync_health(bank_account, account_info, ingested=count)
 
         self.db.flush()
 
@@ -1386,22 +1572,61 @@ class MonoSyncService:
                     self.db.flush()
                 return True
             except IntegrityError:
-                if line.transaction_id and self.db.scalar(
-                    select(BankStatementLine.line_id).where(
-                        BankStatementLine.transaction_id == line.transaction_id
-                    )
-                ):
-                    logger.info(
-                        "Skipped duplicate Mono statement line transaction_id=%s",
-                        line.transaction_id,
-                    )
-                    return False
+                if line.transaction_id:
+                    owner = self._transaction_id_owner(line.transaction_id)
+                    if owner is not None:
+                        target = self.db.scalar(
+                            select(BankStatement.bank_account_id).where(
+                                BankStatement.statement_id == line.statement_id
+                            )
+                        )
+                        if owner == target:
+                            logger.info(
+                                "Skipped duplicate Mono statement line "
+                                "transaction_id=%s",
+                                line.transaction_id,
+                            )
+                            return False
+
+                        # The unique index on `transaction_id` is GLOBAL, but the
+                        # pre-insert dedupe check is scoped to this bank account.
+                        # So a Mono transaction already imported against a
+                        # *different* bank row collides here and used to be
+                        # swallowed as a "duplicate" — the sync then reported
+                        # success having imported nothing.
+                        #
+                        # That is exactly what happens after unlink/re-link onto
+                        # the correct bank row (the recovery from the Zenith/UBA
+                        # mislabeling): every historical line collides, all are
+                        # counted as duplicates, and the correct account silently
+                        # ends up empty. Fail loudly — the old lines must be moved
+                        # or removed first.
+                        raise MonoError(
+                            f"Mono transaction {line.transaction_id} is already "
+                            f"imported against bank account {owner} — refusing to "
+                            f"import it against {target}. The same Mono account "
+                            "was most likely re-linked to a different bank row; "
+                            "move or delete the statement lines on the old row "
+                            "before syncing."
+                        )
+
                 if attempt >= max_line_number_retries:
                     raise
 
                 line.line_number = self._get_max_line_number(line.statement_id) + 1
 
         return True
+
+    def _transaction_id_owner(self, transaction_id: str) -> UUID | None:
+        """Bank account that already holds this provider transaction id, if any."""
+        return self.db.scalar(
+            select(BankStatement.bank_account_id)
+            .join(
+                BankStatementLine,
+                BankStatementLine.statement_id == BankStatement.statement_id,
+            )
+            .where(BankStatementLine.transaction_id == transaction_id)
+        )
 
     @staticmethod
     def _parse_date(date_str: str) -> date:
