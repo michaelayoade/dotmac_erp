@@ -1033,7 +1033,10 @@ def upload_purchase_invoice_attachment(
     """Attach one source document; content checksum makes retries idempotent."""
     from app.models.finance.ap.supplier_invoice import SupplierInvoice
     from app.models.finance.common.attachment import Attachment, AttachmentCategory
-    from app.services.finance.common.attachment import AttachmentInput, attachment_service
+    from app.services.finance.common.attachment import (
+        AttachmentInput,
+        attachment_service,
+    )
 
     org_id = UUID(str(auth["organization_id"]))
     invoice = db.get(SupplierInvoice, purchase_invoice_id)
@@ -1042,7 +1045,9 @@ def upload_purchase_invoice_attachment(
     try:
         content = base64.b64decode(payload.content_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="Invalid base64 attachment") from exc
+        raise HTTPException(
+            status_code=422, detail="Invalid base64 attachment"
+        ) from exc
     if not content:
         raise HTTPException(status_code=422, detail="Attachment is empty")
     if len(content) > 10 * 1024 * 1024:

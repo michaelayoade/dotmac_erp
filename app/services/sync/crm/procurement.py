@@ -1221,9 +1221,7 @@ class _ProcurementMixin(_CRMSyncBase):
         if existing:
             return self._purchase_invoice_response(existing, data.crm_invoice_id)
 
-        po_query = select(PurchaseOrder).where(
-            PurchaseOrder.organization_id == org_id
-        )
+        po_query = select(PurchaseOrder).where(PurchaseOrder.organization_id == org_id)
         try:
             po_uuid = UUID(data.erp_purchase_order_id)
         except ValueError:
@@ -1236,15 +1234,15 @@ class _ProcurementMixin(_CRMSyncBase):
             )
         po = self.db.scalar(po_query)
         if po is None:
-            raise ValueError(
-                f"Purchase order not found: {data.erp_purchase_order_id}"
-            )
+            raise ValueError(f"Purchase order not found: {data.erp_purchase_order_id}")
 
         supplier = self._resolve_supplier(
             org_id, data.vendor_erp_id, data.vendor_code or data.vendor_name
         )
         if supplier.supplier_id != po.supplier_id:
-            raise ValueError("Invoice vendor does not match the purchase order supplier")
+            raise ValueError(
+                "Invoice vendor does not match the purchase order supplier"
+            )
         if data.currency.upper() != po.currency_code.upper():
             raise ValueError("Invoice currency does not match the purchase order")
 
@@ -1289,9 +1287,7 @@ class _ProcurementMixin(_CRMSyncBase):
                     asset_account_id=po_line.asset_account_id,
                     po_line_id=po_line.line_id,
                     item_id=po_line.item_id,
-                    tax_code_id=(
-                        po_line.tax_code_id or supplier.default_tax_code_id
-                    ),
+                    tax_code_id=(po_line.tax_code_id or supplier.default_tax_code_id),
                     cost_center_id=po_line.cost_center_id,
                     project_id=po_line.project_id or project_id,
                     segment_id=po_line.segment_id,
@@ -1334,9 +1330,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 )
             )
             if existing:
-                return self._purchase_invoice_response(
-                    existing, data.crm_invoice_id
-                )
+                return self._purchase_invoice_response(existing, data.crm_invoice_id)
             raise
         except Exception:
             savepoint.rollback()
