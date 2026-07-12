@@ -48,10 +48,14 @@
     ) %}
         {{ filter_select_field("status", "Status", status, [
             {"value": "DRAFT", "label": "Draft"},
+            {"value": "SUBMITTED", "label": "Submitted"},
+            {"value": "PENDING", "label": "Pending Approval"},
+            {"value": "APPROVED", "label": "Approved"},
             {"value": "POSTED", "label": "Posted"},
             {"value": "PARTIALLY_PAID", "label": "Partially Paid"},
             {"value": "PAID", "label": "Paid"},
-            {"value": "OVERDUE", "label": "Overdue"}
+            {"value": "REJECTED", "label": "Rejected"},
+            {"value": "VOID", "label": "Void"}
         ], filter_attrs) }}
         <div>
             <label class="form-label text-xs" for="filter-supplier-search">Supplier</label>
