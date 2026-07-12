@@ -515,6 +515,41 @@ class TestDiscoverBankBalances:
         assert posting_rate is None  # bank balances have no single posting rate
         assert balance == Decimal("12345.67")
 
+    def test_falls_back_to_journal_sum_when_statement_is_after_period_end(self):
+        """A balance stamped AFTER period end is not the period-end balance.
+
+        Mono restamps ``last_statement_balance`` with its *current* balance and
+        ``last_statement_date`` with *today* on every sync. Under the old
+        ``stmt_date >= period_end_date`` test that made the check trivially
+        true for every Mono-linked account, so revaluing a closed period
+        translated today's balance instead of the balance at period end — and
+        posted a real FX gain/loss journal on it.
+
+        Revaluing Jan on a Mono account synced in July must ignore July's
+        balance and compute Jan's from the journals.
+        """
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        acct = self._make_account(
+            last_statement_balance=Decimal("60000.00"),  # today's balance
+            last_statement_date=date(2026, 7, 12),  # ...as of today
+        )
+        db.scalars.return_value.all.return_value = [acct]
+
+        with patch.object(
+            svc, "_compute_balance_from_journals", return_value=Decimal("10000.00")
+        ):
+            result = svc._discover_bank_balances(
+                organization_id=uuid4(),
+                period_end_date=date(2026, 1, 31),
+            )
+
+        # The Jan-31 balance, not July's.
+        assert result[0][4] == Decimal("10000.00")
+
     def test_falls_back_to_journal_sum_when_statement_stale(self):
         """If last_statement_date < period_end_date, compute from GL postings."""
         from app.services.finance.gl.fx_revaluation import FXRevaluationService

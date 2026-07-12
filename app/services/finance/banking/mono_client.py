@@ -131,6 +131,61 @@ class MonoTransactionPage:
     next_url: str | None = None
 
 
+def _build_transaction(txn: dict[str, Any]) -> MonoTransaction:
+    """Build a MonoTransaction, rejecting payloads that omit money fields.
+
+    ``amount`` and ``type`` carry the money and its direction. Defaulting
+    them (to ``0`` and ``"debit"``) writes a permanently wrong ledger row:
+    the statement line is keyed on the Mono transaction id, so once it is
+    stored no later sync will ever re-fetch and repair it. Fail the sync
+    loudly instead — consistent with how ``id`` and ``date`` are already
+    treated in ``MonoSyncService._sync_window``.
+    """
+    txn_id = txn.get("id")
+    if not txn_id:
+        raise MonoError("Mono transaction is missing an id")
+
+    if txn.get("amount") is None:
+        raise MonoError(f"Mono transaction {txn_id} is missing an amount")
+    try:
+        amount = int(txn["amount"])
+    except (TypeError, ValueError) as exc:
+        raise MonoError(
+            f"Mono transaction {txn_id} has a non-integer amount: {txn['amount']!r}"
+        ) from exc
+    if amount < 0:
+        raise MonoError(
+            f"Mono transaction {txn_id} has a negative amount: {amount!r}. "
+            "Direction belongs in `type`, not the sign of `amount`."
+        )
+
+    txn_type = txn.get("type")
+    if txn_type not in ("debit", "credit"):
+        raise MonoError(
+            f"Mono transaction {txn_id} has an unrecognised type: "
+            f"{txn_type!r} (expected 'debit' or 'credit')"
+        )
+
+    balance = txn.get("balance")
+    if balance is not None:
+        try:
+            balance = int(balance)
+        except (TypeError, ValueError) as exc:
+            raise MonoError(
+                f"Mono transaction {txn_id} has a non-integer balance: {balance!r}"
+            ) from exc
+
+    return MonoTransaction(
+        id=str(txn_id),
+        narration=txn.get("narration", ""),
+        amount=amount,
+        type=txn_type,
+        balance=balance,
+        date=txn.get("date", ""),
+        category=txn.get("category"),
+    )
+
+
 class MonoClient:
     """
     HTTP client for Mono Connect API.
@@ -304,18 +359,7 @@ class MonoClient:
         data = response.get("data") or []
         meta = response.get("meta") or {}
 
-        transactions = [
-            MonoTransaction(
-                id=txn["id"],
-                narration=txn.get("narration", ""),
-                amount=txn.get("amount", 0),
-                type=txn.get("type", "debit"),
-                balance=txn.get("balance"),
-                date=txn.get("date", ""),
-                category=txn.get("category"),
-            )
-            for txn in data
-        ]
+        transactions = [_build_transaction(txn) for txn in data]
 
         return MonoTransactionPage(
             transactions=transactions,
@@ -375,25 +419,27 @@ class MonoClient:
             meta = response.get("meta") or {}
 
             for txn in data:
-                all_transactions.append(
-                    MonoTransaction(
-                        id=txn["id"],
-                        narration=txn.get("narration", ""),
-                        amount=txn.get("amount", 0),
-                        type=txn.get("type", "debit"),
-                        balance=txn.get("balance"),
-                        date=txn.get("date", ""),
-                        category=txn.get("category"),
-                    )
-                )
+                all_transactions.append(_build_transaction(txn))
 
             next_url = meta.get("next")
             if not next_url or not data:
                 break
 
-            # For subsequent pages, use the next URL directly
-            # Clear params since the next URL contains them
-            path = next_url.replace(MONO_BASE_URL, "")
+            # For subsequent pages, follow the next URL directly; it already
+            # carries the query params, so clear ours.
+            #
+            # Never follow it off-host. The client sends `mono-sec-key` as a
+            # default header and httpx treats an absolute URL as
+            # authoritative over `base_url`, so an absolute next-URL pointing
+            # elsewhere would leak the secret key to that host. Mono returns
+            # either a relative path or an absolute URL on its own origin;
+            # anything else is rejected.
+            if next_url.startswith("/"):
+                path = next_url
+            elif next_url.startswith(f"{MONO_BASE_URL}/"):
+                path = next_url[len(MONO_BASE_URL) :]
+            else:
+                raise MonoError(f"Mono pagination next-URL is off-host: {next_url!r}")
             params = {}
 
         return all_transactions

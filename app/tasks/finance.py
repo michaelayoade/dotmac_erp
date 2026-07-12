@@ -1419,11 +1419,31 @@ def sync_mono_transactions(**_legacy_kwargs: Any) -> dict[str, Any]:
             "message": "No Mono-linked bank accounts found",
         }
 
-    account_results = [
-        sync_mono_account(str(mono_account_id))
-        for mono_account_id in mono_account_ids
-        if mono_account_id
-    ]
+    # Per-account isolation. These run in-process (not via .delay), so an
+    # exception escaping one account — IntegrityError from a raced line,
+    # OperationalError on a DB blip — used to kill the whole sweep and every
+    # account after it. Accounts iterate in a stable order, so that starved
+    # the same suffix of the fleet every single day, for a full 24h until the
+    # next run. Isolate each one and keep going.
+    account_results: list[dict[str, Any]] = []
+    for mono_account_id in mono_account_ids:
+        if not mono_account_id:
+            continue
+        try:
+            account_results.append(
+                sync_mono_account(str(mono_account_id), refresh_first=True)
+            )
+        except Exception as exc:  # noqa: BLE001 — one bad account must not
+            # abort the sweep; the error is recorded and the next runs.
+            logger.exception("Mono sweep failed for mono_id=%s", mono_account_id)
+            account_results.append(
+                {
+                    "success": False,
+                    "mono_account_id": str(mono_account_id),
+                    "message": str(exc) or exc.__class__.__name__,
+                }
+            )
+
     total_errors = sum(0 if result.get("success") else 1 for result in account_results)
     results = {
         "success": total_errors == 0,
@@ -1459,13 +1479,30 @@ def sync_mono_transactions(**_legacy_kwargs: Any) -> dict[str, Any]:
     retry_jitter=True,
     max_retries=3,
 )
-def sync_mono_account(mono_account_id: str, **_legacy_kwargs: Any) -> dict[str, Any]:
+def sync_mono_account(
+    mono_account_id: str,
+    *,
+    refresh_first: bool = False,
+    **_legacy_kwargs: Any,
+) -> dict[str, Any]:
     """Incremental sync for a single Mono-linked account.
 
     Enqueued by the Mono webhook handler when an account transitions to
     ``data_status=AVAILABLE``, so freshly linked accounts get their first
     transaction pull without waiting for the next beat cycle.
     ``**_legacy_kwargs`` swallows any pre-refactor ``days_back`` kwarg.
+
+    ``refresh_first`` is used by the scheduled sweep. ``/transactions`` reads
+    Mono's *indexed cache*, which does not advance on its own — without a
+    ``trigger_data_refresh`` the sweep re-reads the same stale cache every
+    day and reports "nothing new" even when the bank has new lines. The
+    scheduled path lost that trigger when it was refactored to fan out to
+    this task (the only caller that still refreshed, ``sync_all_linked_accounts``,
+    was left with no production callers), so the daily sweep quietly became a
+    no-op. Refresh first to advance the cache, then pull: the refresh's own
+    ``account_updated`` webhook drives ingest of anything newly scraped, and
+    the pull drains whatever is already sitting in the cache — so ingest does
+    not depend on the webhook arriving.
 
     Mono only fires ``account_updated`` once per scrape, so transient DB
     blips during webhook handling would otherwise lose the signal until the
@@ -1494,14 +1531,33 @@ def sync_mono_account(mono_account_id: str, **_legacy_kwargs: Any) -> dict[str, 
             )
             return {"success": True, "skipped": True, "reason": "unlinked"}
         owning_org_id = bank_account.organization_id
+        bank_account_id = bank_account.bank_account_id
 
     with session_for_org(owning_org_id) as db:
+        from app.services.finance.banking.mono_client import MonoError
         from app.services.finance.banking.mono_sync import MonoSyncService
 
         sync_svc = MonoSyncService(db)
         if not sync_svc.is_configured():
             logger.info("Mono Connect not configured, skipping webhook sync")
             return {"success": True, "skipped": True}
+
+        if refresh_first:
+            account = db.get(BankAccount, bank_account_id)
+            if account is not None:
+                try:
+                    sync_svc.sync_account_via_refresh(account)
+                except (MonoError, ValueError, RuntimeError) as exc:
+                    # A refresh failure must not block the cache pull below —
+                    # there may be lines already indexed that we can still
+                    # ingest. The error is recorded on the account by the
+                    # service; carry on and try to drain the cache.
+                    logger.warning(
+                        "Mono refresh failed for mono_id=%s (%s); "
+                        "continuing to cache pull",
+                        mono_account_id,
+                        exc,
+                    )
 
         result = sync_svc.sync_by_mono_account_id(mono_account_id)
         db.commit()
