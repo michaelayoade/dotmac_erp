@@ -7,6 +7,7 @@ appraisals, feedback, goals/KPIs, cycles, KRAs, templates, scorecards, and repor
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Any, TypedDict
 from urllib.parse import quote_plus
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
 from app.models.people.perf.appraisal import Appraisal
+from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import CommitteeDecision
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -45,6 +47,40 @@ from .base import (
     parse_kpi_status,
     parse_uuid,
 )
+
+
+CALIBRATION_RATING_LABELS = [
+    {"value": 5, "label": "Exceptional"},
+    {"value": 4, "label": "Exceeds Expectations"},
+    {"value": 3, "label": "Meets Expectations"},
+    {"value": 2, "label": "Needs Improvement"},
+    {"value": 1, "label": "Unsatisfactory"},
+]
+
+_PIP_GATE_ERROR_PREFIXES = (
+    "Cannot complete appraisal: underperformance detected",
+    "Cannot complete appraisal: linked PIP is not resolved",
+)
+
+
+def _is_pip_gate_error(exc: Exception) -> bool:
+    message = str(exc)
+    return any(message.startswith(prefix) for prefix in _PIP_GATE_ERROR_PREFIXES)
+
+
+def _linked_pip_for_appraisal(
+    db: Session,
+    org_id: Any,
+    appraisal_id: Any,
+) -> PerformanceImprovementPlan | None:
+    return db.scalar(
+        select(PerformanceImprovementPlan)
+        .where(
+            PerformanceImprovementPlan.organization_id == org_id,
+            PerformanceImprovementPlan.appraisal_id == appraisal_id,
+        )
+        .order_by(PerformanceImprovementPlan.created_at.desc())
+    )
 
 
 def _extract_absence_evidence(form_data: Any) -> dict[str, str] | None:
@@ -1436,6 +1472,7 @@ class PerfWebService:
             {
                 "appraisal": appraisal,
                 "form_data": {},
+                "rating_labels": CALIBRATION_RATING_LABELS,
                 "error": None,
             }
         )
@@ -1456,7 +1493,11 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
-            final_rating = parse_int(_get_form_str(form_data, "final_rating") or None)
+            final_rating = parse_int(
+                _get_form_str(form_data, "calibrated_rating")
+                or _get_form_str(form_data, "final_rating")
+                or None
+            )
             if final_rating is None:
                 raise ValueError("Final rating is required")
             svc.submit_calibration(
@@ -1472,14 +1513,29 @@ class PerfWebService:
                 status_code=303,
             )
         except Exception as e:
-            db.rollback()
-            appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
+            pip_url = None
+            pip_code = None
+            appraisal_uuid = coerce_uuid(appraisal_id)
+            if _is_pip_gate_error(e):
+                pip = _linked_pip_for_appraisal(db, org_id, appraisal_uuid)
+                if pip is not None:
+                    pip_url = f"/people/perf/pms/pips/{pip.pip_id}"
+                    pip_code = pip.pip_code
+                    db.commit()
+                else:
+                    db.rollback()
+            else:
+                db.rollback()
+            appraisal = svc.get_appraisal(org_id, appraisal_uuid)
             context = base_context(request, auth, "Calibration", "perf", db=db)
             context["request"] = request
             context.update(
                 {
                     "appraisal": appraisal,
                     "form_data": dict(form_data),
+                    "rating_labels": CALIBRATION_RATING_LABELS,
+                    "pip_url": pip_url,
+                    "pip_code": pip_code,
                     "error": str(e),
                 }
             )
@@ -2228,6 +2284,113 @@ class PerfWebService:
         return RedirectResponse(
             url=f"{self._goals_base_url(request)}/{kpi_id}?saved=1", status_code=303
         )
+
+    def sync_support_goal_metrics_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        employee_id: str | None = None,
+    ) -> RedirectResponse:
+        """Sync support ticket metrics into tagged KPI actual values."""
+        org_id = coerce_uuid(auth.organization_id)
+        try:
+            enforce_private_write_mode(db, org_id)
+            result = PerformanceService(db).sync_support_ticket_kpi_progress(
+                org_id,
+                employee_id=parse_uuid(employee_id),
+            )
+            db.commit()
+            message = (
+                f"Support metrics synced: {result['updated']} KPI"
+                f"{'' if result['updated'] == 1 else 's'} updated"
+            )
+            return RedirectResponse(
+                url=f"{self._goals_base_url(request)}?success={quote_plus(message)}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=f"{self._goals_base_url(request)}?error={quote_plus(str(exc))}",
+                status_code=303,
+            )
+
+    def generate_department_goal_templates_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Generate department performance templates from built-in defaults."""
+        org_id = coerce_uuid(auth.organization_id)
+        try:
+            enforce_private_write_mode(db, org_id)
+            result = PerformanceService(db).generate_department_performance_templates(
+                org_id
+            )
+            db.commit()
+            message = (
+                f"Department templates generated: {result['created']} created, "
+                f"{result['skipped']} existing skipped across "
+                f"{result['departments']} departments"
+            )
+            return RedirectResponse(
+                url=f"{self._goals_base_url(request)}?success={quote_plus(message)}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=f"{self._goals_base_url(request)}?error={quote_plus(str(exc))}",
+                status_code=303,
+            )
+
+    async def generate_employee_goals_from_templates_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Generate employee KPIs from active department performance templates."""
+        form_data = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+        try:
+            enforce_private_write_mode(db, org_id)
+            today = date.today()
+            period_start = parse_date(_get_form_str(form_data, "period_start")) or date(
+                today.year, 1, 1
+            )
+            period_end = parse_date(_get_form_str(form_data, "period_end")) or date(
+                today.year, 12, 31
+            )
+            if period_end < period_start:
+                raise ValueError("Period end must be after period start")
+
+            result = PerformanceService(
+                db
+            ).generate_employee_kpis_from_department_templates(
+                org_id,
+                period_start=period_start,
+                period_end=period_end,
+            )
+            db.commit()
+            message = (
+                f"Employee KPIs generated: {result['created_kpis']} created, "
+                f"{result['skipped_kpis']} existing skipped, "
+                f"{result['created_kras']} KRAs created for "
+                f"{result['employees']} active employees"
+            )
+            return RedirectResponse(
+                url=f"{self._goals_base_url(request)}?success={quote_plus(message)}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=f"{self._goals_base_url(request)}?error={quote_plus(str(exc))}",
+                status_code=303,
+            )
 
     def delete_goal_response(
         self,

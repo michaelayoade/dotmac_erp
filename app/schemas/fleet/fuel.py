@@ -40,6 +40,7 @@ class FuelLogCreate(FuelLogBase):
 class FuelLogUpdate(BaseModel):
     """Update fuel log request."""
 
+    vehicle_id: UUID | None = None
     log_date: date | None = None
     fuel_type: FuelType | None = None
     quantity_liters: Decimal | None = Field(default=None, gt=0)

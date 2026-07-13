@@ -111,6 +111,12 @@ echo "→ Syncing static files to Nginx..."
 # Recreate (not just restart) so worker/beat pick up the newly-pinned image.
 echo "→ Recreating worker and beat on the pinned image..."
 docker compose up -d worker beat
+echo "→ Enforcing Docker image retention (keep last ${DOCKER_IMAGE_KEEP_LAST:-5})..."
+if ! KEEP_LAST="${DOCKER_IMAGE_KEEP_LAST:-5}" \
+  IMAGE_REPOSITORY="${DOCKER_IMAGE_REPOSITORY:-ghcr.io/michaelayoade/dotmac_erp}" \
+  "$SCRIPT_DIR/prune_docker_images.sh" --execute; then
+    echo "  WARNING: Docker image retention failed; deploy remains healthy."
+fi
 
 echo ""
 echo "=== Deploy complete ==="

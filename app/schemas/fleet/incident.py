@@ -39,6 +39,7 @@ class IncidentCreate(IncidentBase):
 class IncidentUpdate(BaseModel):
     """Update incident request."""
 
+    vehicle_id: UUID | None = None
     incident_type: IncidentType | None = None
     severity: IncidentSeverity | None = None
     incident_date: date | None = None
@@ -54,6 +55,7 @@ class IncidentUpdate(BaseModel):
     insurance_claim_date: date | None = None
     insurance_claim_status: str | None = Field(default=None, max_length=30)
     estimated_repair_cost: Decimal | None = Field(default=None, ge=0)
+    expense_claim_id: UUID | None = None
     notes: str | None = None
 
 

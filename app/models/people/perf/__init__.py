@@ -20,6 +20,7 @@ from app.models.people.perf.appraisal_template import (
 )
 from app.models.people.perf.competency_assessment import CompetencyAssessment
 from app.models.people.perf.contract_amendment import ContractAmendmentWorkflow
+from app.models.people.perf.department_template import DepartmentPerformanceTemplate
 from app.models.people.perf.institutional_performance import (
     InstitutionalCriteriaTemplate,
     InstitutionalPerformance,
@@ -74,6 +75,7 @@ __all__ = [
     "AppraisalOutcomeAction",
     "CompetencyAssessment",
     "ContractAmendmentWorkflow",
+    "DepartmentPerformanceTemplate",
     "InstitutionalCriteriaTemplate",
     "InstitutionalPerformance",
     "MonthlyReview",

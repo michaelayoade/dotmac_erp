@@ -639,6 +639,42 @@ async def fuel_create(
     return await web_service.create_entity_response(request, auth, db, "fuel")
 
 
+@router.get("/fuel/{fuel_log_id}/edit", response_class=HTMLResponse)
+def fuel_edit(
+    request: Request,
+    fuel_log_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Edit fuel log entry form."""
+    context = base_context(request, auth, "Edit Fuel Purchase", "fleet", db=db)
+    web_service = FleetWebService(db)
+    try:
+        context.update(
+            web_service.fuel_form_context(
+                auth.organization_id,
+                fuel_log_id=fuel_log_id,
+            )
+        )
+        return templates.TemplateResponse(request, "fleet/fuel_form.html", context)
+    except NotFoundError:
+        return RedirectResponse(url="/fleet/fuel?error=not_found", status_code=303)
+
+
+@router.post("/fuel/{fuel_log_id}/edit")
+async def fuel_update(
+    request: Request,
+    fuel_log_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Update fuel log from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.update_entity_response(
+        request, auth, db, "fuel", fuel_log_id
+    )
+
+
 @router.get("/expense-claims/search")
 def fleet_expense_claim_search(
     q: str = Query(..., min_length=1),
@@ -713,6 +749,42 @@ async def incident_create(
     """Create incident from form submission."""
     web_service = FleetWebService(db)
     return await web_service.create_entity_response(request, auth, db, "incident")
+
+
+@router.get("/incidents/{incident_id}/edit", response_class=HTMLResponse)
+def incident_edit(
+    request: Request,
+    incident_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Edit incident report form."""
+    context = base_context(request, auth, "Edit Incident", "fleet", db=db)
+    web_service = FleetWebService(db)
+    try:
+        context.update(
+            web_service.incident_form_context(
+                auth.organization_id,
+                incident_id=incident_id,
+            )
+        )
+        return templates.TemplateResponse(request, "fleet/incident_form.html", context)
+    except NotFoundError:
+        return RedirectResponse(url="/fleet/incidents?error=not_found", status_code=303)
+
+
+@router.post("/incidents/{incident_id}/edit")
+async def incident_update(
+    request: Request,
+    incident_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Update incident from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.update_entity_response(
+        request, auth, db, "incident", incident_id
+    )
 
 
 @router.get("/incidents/{incident_id}", response_class=HTMLResponse)

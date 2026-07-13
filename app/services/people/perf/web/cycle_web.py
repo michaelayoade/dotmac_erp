@@ -1327,6 +1327,7 @@ class CycleWebService:
         context = base_context(request, auth, "Scorecards", "perf", db=db)
         context["request"] = request
         success = request.query_params.get("success")
+        error = request.query_params.get("error")
         context.update(
             {
                 "scorecards": result.items,
@@ -1335,6 +1336,7 @@ class CycleWebService:
                 "is_finalized": is_finalized,
                 "cycles": cycles,
                 "success": success,
+                "error": error,
                 "page": result.page,
                 "total_pages": result.total_pages,
                 "total": result.total,
@@ -1345,6 +1347,84 @@ class CycleWebService:
         return templates.TemplateResponse(
             request, "people/perf/scorecards.html", context
         )
+
+    async def generate_active_employee_scorecards_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Create scorecards for active employees for the requested period."""
+        form_data = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+        svc = PerformanceService(db)
+
+        try:
+            today = date.today()
+            period_start = parse_date(
+                self._form_text(form_data.get("period_start"))
+            ) or date(today.year, 1, 1)
+            period_end = parse_date(
+                self._form_text(form_data.get("period_end"))
+            ) or date(today.year, 12, 31)
+            if period_end < period_start:
+                raise ValueError("Period end must be after period start")
+
+            period_label = (
+                self._form_text(form_data.get("period_label"))
+                or f"FY {period_start.year}"
+            )
+            result = svc.generate_active_employee_scorecards(
+                org_id,
+                period_start=period_start,
+                period_end=period_end,
+                period_label=period_label,
+            )
+            db.commit()
+            message = (
+                f"Generated {result['created']} scorecards, "
+                f"skipped {result['skipped']} existing, "
+                f"added {result['items']} KPI metrics"
+            )
+            return RedirectResponse(
+                url=f"/people/perf/scorecards?success={message.replace(' ', '+')}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/perf/scorecards?error={str(exc).replace(' ', '+')}",
+                status_code=303,
+            )
+
+    def sync_all_scorecard_metrics_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Sync KPI metrics into all in-progress scorecards."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = PerformanceService(db)
+
+        try:
+            result = svc.sync_all_scorecard_metrics(org_id)
+            db.commit()
+            message = (
+                f"Synced {result['scorecards']} scorecards, "
+                f"added {result['added']} metrics, "
+                f"updated {result['updated']} metrics"
+            )
+            return RedirectResponse(
+                url=f"/people/perf/scorecards?success={message.replace(' ', '+')}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/perf/scorecards?error={str(exc).replace(' ', '+')}",
+                status_code=303,
+            )
 
     def scorecard_new_form_response(
         self,
@@ -1474,12 +1554,51 @@ class CycleWebService:
                 "scorecard": scorecard,
                 "perspectives": perspectives,
                 "success": success,
-                "error": None,
+                "error": request.query_params.get("error"),
             }
         )
         return templates.TemplateResponse(
             request, "people/perf/scorecard_detail.html", context
         )
+
+    def sync_scorecard_kpis_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        scorecard_id: str,
+    ) -> RedirectResponse:
+        """Populate an existing scorecard from overlapping employee KPIs."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = PerformanceService(db)
+
+        try:
+            result = svc.populate_scorecard_from_kpis(
+                org_id,
+                coerce_uuid(scorecard_id),
+            )
+            db.commit()
+            message = (
+                f"Added {result['added']} KPI metrics "
+                f"and updated {result['updated']} existing metrics "
+                f"from {result['available']} available KPIs"
+            )
+            return RedirectResponse(
+                url=(
+                    f"/people/perf/scorecards/{scorecard_id}"
+                    f"?success={message.replace(' ', '+')}"
+                ),
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=(
+                    f"/people/perf/scorecards/{scorecard_id}"
+                    f"?error={str(exc).replace(' ', '+')}"
+                ),
+                status_code=303,
+            )
 
     def scorecard_update_item_form_response(
         self,

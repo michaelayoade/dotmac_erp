@@ -23,6 +23,14 @@
             {{ icon_svg("exclamation-circle", "w-5 h-5 flex-shrink-0") }}
             <span>{{ error }}</span>
         </div>
+        {% if pip_url %}
+        <div class="mt-3 pl-7">
+            <a href="{{ pip_url }}" class="btn btn-primary btn-sm">
+                {{ icon_svg("external-link", "w-4 h-4 mr-1.5") }}
+                Open linked PIP{% if pip_code %} {{ pip_code }}{% endif %}
+            </a>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 

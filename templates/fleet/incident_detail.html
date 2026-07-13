@@ -200,6 +200,10 @@
             {{ icon_svg("arrow-left", "h-4 w-4 mr-2") }}
             Back to Incidents
         </a>
+        <a href="/fleet/incidents/{{ incident.incident_id }}/edit" class="btn btn-primary">
+            {{ icon_svg("pencil", "h-4 w-4 mr-2") }}
+            Edit Incident
+        </a>
     </div>
 
     {% include "partials/_recent_activity.html" %}
