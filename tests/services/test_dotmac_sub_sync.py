@@ -26,6 +26,7 @@ from app.services.dotmac_sub.client import (
     DotmacSubConfig,
     _dec,
 )
+from app.services.dotmac_sub.sync._bank_mapping import BankMappingMixin
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +106,40 @@ def test_paginate_handles_bare_list_and_empty() -> None:
         ]
     )
     assert list(client._paginate("/things")) == []
+
+
+def test_sync_paginate_paces_full_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _client_with_responses(
+        [
+            {"items": [{"id": str(index)} for index in range(500)]},
+            {"items": []},
+        ]
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "app.services.dotmac_sub.client.time.sleep", lambda delay: sleeps.append(delay)
+    )
+
+    items = list(client._sync_paginate("/things/sync"))
+
+    assert len(items) == 500
+    assert sleeps == [client._SYNC_PAGE_DELAY_SECONDS]
+
+
+class _BankMappingHarness(BankMappingMixin):
+    pass
+
+
+def test_payment_channel_mapping_uses_bounded_sync_feed() -> None:
+    client = _client_with_responses([{"items": []}])
+    harness = _BankMappingHarness()
+    harness.client = client
+    harness._payment_channel_names = {}
+
+    harness._load_payment_channels()
+
+    assert client._request.call_args.args[:2] == ("GET", "/payment-channels/sync")
+    assert client._request.call_args.kwargs["params"]["limit"] == 500
 
 
 def test_parse_invoice_maps_fields_and_inline_allocations() -> None:
