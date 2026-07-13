@@ -271,9 +271,7 @@ def delete_appraisal(
     db: Session = Depends(get_db_for_org),
 ):
     """Delete an appraisal."""
-    return perf_web_service.delete_appraisal_response(
-        request, auth, db, appraisal_id
-    )
+    return perf_web_service.delete_appraisal_response(request, auth, db, appraisal_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

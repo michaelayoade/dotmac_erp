@@ -46,8 +46,12 @@ def _draft_kpi() -> KPI:
     return kpi
 
 
-def _request(path: str, query_params: dict[str, str] | None = None) -> SimpleNamespace:
-    return SimpleNamespace(url=SimpleNamespace(path=path), query_params=query_params or {})
+def _request(
+    path: str, query_params: dict[str, str] | None = None
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        url=SimpleNamespace(path=path), query_params=query_params or {}
+    )
 
 
 def _auth(org_id: uuid.UUID) -> SimpleNamespace:
@@ -120,9 +124,7 @@ def test_delete_kpi_blocks_progressed_record() -> None:
     kpi.actual_value = Decimal("40.00")
     db.scalar.return_value = kpi
 
-    with pytest.raises(
-        PerformanceServiceError, match="progress has been recorded"
-    ):
+    with pytest.raises(PerformanceServiceError, match="progress has been recorded"):
         svc.delete_kpi(kpi.organization_id, kpi.kpi_id)
 
     db.delete.assert_not_called()
@@ -149,14 +151,16 @@ def test_list_appraisals_response_marks_only_deletable_rows() -> None:
     )
     auth = _auth(org_id)
 
-    with patch(
-        "app.services.people.perf.web.perf_web.PerformanceService",
-        return_value=svc_instance,
-    ), patch(
-        "app.services.people.perf.web.perf_web.base_context", return_value={}
-    ), patch(
-        "app.services.people.perf.web.perf_web.templates.TemplateResponse",
-        side_effect=lambda _request, _template, context: context,
+    with (
+        patch(
+            "app.services.people.perf.web.perf_web.PerformanceService",
+            return_value=svc_instance,
+        ),
+        patch("app.services.people.perf.web.perf_web.base_context", return_value={}),
+        patch(
+            "app.services.people.perf.web.perf_web.templates.TemplateResponse",
+            side_effect=lambda _request, _template, context: context,
+        ),
     ):
         context = PerfWebService().list_appraisals_response(
             request, auth, MagicMock(), page=1
@@ -189,14 +193,16 @@ def test_list_goals_response_marks_only_deletable_rows() -> None:
     )
     auth = _auth(org_id)
 
-    with patch(
-        "app.services.people.perf.web.perf_web.PerformanceService",
-        return_value=svc_instance,
-    ), patch(
-        "app.services.people.perf.web.perf_web.base_context", return_value={}
-    ), patch(
-        "app.services.people.perf.web.perf_web.templates.TemplateResponse",
-        side_effect=lambda _request, _template, context: context,
+    with (
+        patch(
+            "app.services.people.perf.web.perf_web.PerformanceService",
+            return_value=svc_instance,
+        ),
+        patch("app.services.people.perf.web.perf_web.base_context", return_value={}),
+        patch(
+            "app.services.people.perf.web.perf_web.templates.TemplateResponse",
+            side_effect=lambda _request, _template, context: context,
+        ),
     ):
         context = PerfWebService().list_goals_response(
             request, auth, MagicMock(), page=1

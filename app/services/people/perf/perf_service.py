@@ -1358,14 +1358,17 @@ class PerformanceService:
             )
             raise PerformanceServiceError(block_reason)
 
-        feedback_count = self.db.scalar(
-            select(func.count())
-            .select_from(AppraisalFeedback)
-            .where(
-                AppraisalFeedback.organization_id == org_id,
-                AppraisalFeedback.appraisal_id == appraisal_id,
+        feedback_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(AppraisalFeedback)
+                .where(
+                    AppraisalFeedback.organization_id == org_id,
+                    AppraisalFeedback.appraisal_id == appraisal_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         if feedback_count:
             block_reason = "Delete is blocked because feedback has been recorded."
             logger.warning(
@@ -1377,16 +1380,21 @@ class PerformanceService:
             )
             raise PerformanceServiceError(block_reason)
 
-        appeal_count = self.db.scalar(
-            select(func.count())
-            .select_from(AppraisalAppeal)
-            .where(
-                AppraisalAppeal.organization_id == org_id,
-                AppraisalAppeal.appraisal_id == appraisal_id,
+        appeal_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(AppraisalAppeal)
+                .where(
+                    AppraisalAppeal.organization_id == org_id,
+                    AppraisalAppeal.appraisal_id == appraisal_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         if appeal_count:
-            block_reason = "Delete is blocked because an appeal exists for this appraisal."
+            block_reason = (
+                "Delete is blocked because an appeal exists for this appraisal."
+            )
             logger.warning(
                 "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
                 org_id,
@@ -1396,14 +1404,17 @@ class PerformanceService:
             )
             raise PerformanceServiceError(block_reason)
 
-        outcome_action_count = self.db.scalar(
-            select(func.count())
-            .select_from(AppraisalOutcomeAction)
-            .where(
-                AppraisalOutcomeAction.organization_id == org_id,
-                AppraisalOutcomeAction.appraisal_id == appraisal_id,
+        outcome_action_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(AppraisalOutcomeAction)
+                .where(
+                    AppraisalOutcomeAction.organization_id == org_id,
+                    AppraisalOutcomeAction.appraisal_id == appraisal_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         if outcome_action_count:
             block_reason = (
                 "Delete is blocked because outcome actions have been created for this appraisal."
@@ -1417,16 +1428,21 @@ class PerformanceService:
             )
             raise PerformanceServiceError(block_reason)
 
-        pip_count = self.db.scalar(
-            select(func.count())
-            .select_from(PerformanceImprovementPlan)
-            .where(
-                PerformanceImprovementPlan.organization_id == org_id,
-                PerformanceImprovementPlan.appraisal_id == appraisal_id,
+        pip_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(PerformanceImprovementPlan)
+                .where(
+                    PerformanceImprovementPlan.organization_id == org_id,
+                    PerformanceImprovementPlan.appraisal_id == appraisal_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         if pip_count:
-            block_reason = "Delete is blocked because a PIP is linked to this appraisal."
+            block_reason = (
+                "Delete is blocked because a PIP is linked to this appraisal."
+            )
             logger.warning(
                 "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
                 org_id,
@@ -1436,14 +1452,17 @@ class PerformanceService:
             )
             raise PerformanceServiceError(block_reason)
 
-        grievance_count = self.db.scalar(
-            select(func.count())
-            .select_from(PMSGovernanceGrievance)
-            .where(
-                PMSGovernanceGrievance.organization_id == org_id,
-                PMSGovernanceGrievance.appraisal_id == appraisal_id,
+        grievance_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(PMSGovernanceGrievance)
+                .where(
+                    PMSGovernanceGrievance.organization_id == org_id,
+                    PMSGovernanceGrievance.appraisal_id == appraisal_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         if grievance_count:
             block_reason = (
                 "Delete is blocked because governance or grievance history exists."
