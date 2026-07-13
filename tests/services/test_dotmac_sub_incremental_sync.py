@@ -24,10 +24,14 @@ from app.services.dotmac_sub.client import (
     DotmacSubConfig,
     InvoiceLineRecord,
     InvoiceRecord,
+    ResellerRecord,
+    SubscriberRecord,
     _watermark_params,
 )
 from app.services.dotmac_sub.sync._base import BaseSyncMixin, next_watermark
 from app.services.dotmac_sub.sync._invoices import _invoice_hash_payload
+from app.services.dotmac_sub.sync._resellers import ResellerSyncMixin
+from app.services.dotmac_sub.sync._subscribers import SubscriberSyncMixin
 
 _T0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -80,12 +84,10 @@ def test_next_watermark_is_advance_only() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_watermark_params_requests_ascending_order_when_watermarked() -> None:
+def test_watermark_params_only_sends_feed_filters() -> None:
     params = _watermark_params(None, None, "2026-01-01T12:00:00+00:00")
     assert params == {
         "updated_since": "2026-01-01T12:00:00+00:00",
-        "order_by": "updated_at",
-        "order_dir": "asc",
     }
 
 
@@ -113,8 +115,6 @@ def test_get_invoices_forwards_updated_since() -> None:
     client, captured = _client_capturing_params()
     list(client.get_invoices(updated_since="2026-05-01T00:00:00+00:00"))
     assert captured[0]["updated_since"] == "2026-05-01T00:00:00+00:00"
-    assert captured[0]["order_by"] == "updated_at"
-    assert captured[0]["order_dir"] == "asc"
     assert captured[0]["limit"] == 500
 
 
@@ -136,6 +136,97 @@ def test_get_payments_and_credit_notes_forward_updated_since() -> None:
     list(client.get_payments(updated_since="2026-05-01T00:00:00+00:00"))
     list(client.get_credit_notes(updated_since="2026-05-01T00:00:00+00:00"))
     assert all(c.get("updated_since") == "2026-05-01T00:00:00+00:00" for c in captured)
+
+
+def test_all_bulk_collections_use_bounded_sync_feeds() -> None:
+    client, _ = _client_capturing_params()
+    pulls = (
+        (client.get_resellers, "/resellers/sync"),
+        (client.get_subscribers, "/subscribers/sync"),
+        (client.get_billing_accounts, "/billing-accounts/sync"),
+        (client.get_invoices, "/invoices/sync"),
+        (client.get_payments, "/payments/sync"),
+        (client.get_credit_notes, "/credit-notes/sync"),
+        (client.get_tax_rates, "/tax-rates/sync"),
+        (client.get_payment_channels, "/payment-channels/sync"),
+    )
+
+    for pull, endpoint in pulls:
+        client._request.reset_mock()
+        list(pull())
+        assert client._request.call_args.args[:2] == ("GET", endpoint)
+        assert client._request.call_args.kwargs["params"]["limit"] == 500
+
+
+def test_customer_feeds_forward_their_watermarks() -> None:
+    client, captured = _client_capturing_params()
+    watermark = "2026-05-01T00:00:00+00:00"
+
+    list(client.get_resellers(updated_since=watermark))
+    list(client.get_subscribers(updated_since=watermark))
+
+    assert [params["updated_since"] for params in captured] == [
+        watermark,
+        watermark,
+    ]
+
+
+class _SubscriberSyncHarness(SubscriberSyncMixin):
+    pass
+
+
+class _ResellerSyncHarness(ResellerSyncMixin):
+    pass
+
+
+def test_subscriber_sync_advances_customer_watermark() -> None:
+    harness = _SubscriberSyncHarness()
+    harness.db = MagicMock()
+    harness.client = MagicMock()
+    harness.client.get_subscribers.return_value = [
+        SubscriberRecord(id="sub-1", updated_at="2026-01-02T12:00:00+00:00")
+    ]
+    harness._get_sync_watermark = MagicMock(return_value=_T0)
+    harness._advance_sync_watermark = MagicMock()
+    harness._parse_datetime = BaseSyncMixin._parse_datetime.__get__(harness)
+    harness._sync_single_subscriber = MagicMock()
+    harness._reprime_tenant_context = MagicMock()
+
+    result = harness.sync_subscribers()
+
+    assert result.success
+    harness.client.get_subscribers.assert_called_once_with(
+        updated_since=_T0.isoformat()
+    )
+    harness._advance_sync_watermark.assert_called_once_with(
+        EntityType.CUSTOMER,
+        datetime(2026, 1, 2, 12, tzinfo=UTC),
+    )
+
+
+def test_reseller_sync_advances_reseller_watermark() -> None:
+    harness = _ResellerSyncHarness()
+    harness.db = MagicMock()
+    harness.client = MagicMock()
+    harness.client.get_resellers.return_value = [
+        ResellerRecord(
+            id="reseller-1", name="Wholesale", updated_at="2026-01-03T12:00:00+00:00"
+        )
+    ]
+    harness._get_sync_watermark = MagicMock(return_value=_T0)
+    harness._advance_sync_watermark = MagicMock()
+    harness._parse_datetime = BaseSyncMixin._parse_datetime.__get__(harness)
+    harness._sync_single_reseller = MagicMock()
+    harness._reprime_tenant_context = MagicMock()
+
+    result = harness.sync_resellers()
+
+    assert result.success
+    harness.client.get_resellers.assert_called_once_with(updated_since=_T0.isoformat())
+    harness._advance_sync_watermark.assert_called_once_with(
+        EntityType.RESELLER,
+        datetime(2026, 1, 3, 12, tzinfo=UTC),
+    )
 
 
 def test_parse_invoice_reads_updated_at() -> None:

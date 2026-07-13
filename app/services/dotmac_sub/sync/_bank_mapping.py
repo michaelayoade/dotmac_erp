@@ -33,7 +33,7 @@ class BankMappingMixin:
         if self._payment_channel_names:
             return
         try:
-            for ch in self.client._paginate("/payment-channels"):
+            for ch in self.client.get_payment_channels():
                 cid = str(ch.get("id", ""))
                 name = ch.get("name") or ch.get("code") or ""
                 if cid:

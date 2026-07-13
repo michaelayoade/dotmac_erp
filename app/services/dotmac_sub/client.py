@@ -137,6 +137,7 @@ class ResellerRecord:
     contact_email: str | None = None
     contact_phone: str | None = None
     is_active: bool = True
+    updated_at: str | None = None
 
 
 @dataclass
@@ -189,6 +190,7 @@ class BillingAccountRecord:
     balance: Decimal = Decimal("0")
     is_active: bool = True
     subscriber_id: str | None = None
+    updated_at: str | None = None
 
 
 @dataclass
@@ -323,12 +325,10 @@ def _watermark_params(
     status: str | None,
     updated_since: str | None,
 ) -> dict[str, Any]:
-    """Build the list-endpoint query params for a watermarked pull.
+    """Build filters for a deterministic sync feed.
 
-    When ``updated_since`` is set we request an ascending, keyset-friendly order
-    (``updated_at asc``, with the API applying an id tiebreaker) so the pager
-    walks the delta forward deterministically. Omitting it preserves the API's
-    default ordering (a full pull, e.g. the first sync before any watermark).
+    Sync endpoints always order by ``updated_at, id``; clients cannot override
+    that ordering because doing so would make paging nondeterministic.
     """
     params: dict[str, Any] = {}
     if account_id:
@@ -337,8 +337,6 @@ def _watermark_params(
         params["status"] = status
     if updated_since:
         params["updated_since"] = updated_since
-        params["order_by"] = "updated_at"
-        params["order_dir"] = "asc"
     return params
 
 
@@ -366,6 +364,8 @@ class DotmacSubClient:
     _RETRY_BACKOFF_CAP = 10.0  # seconds; max backoff between retries
     _RETRY_AFTER_CAP = 60.0  # seconds; max honoured Retry-After on a 429
     _MAX_PAGES = 100_000  # pagination safety bound (guards an API ignoring offset)
+    _SYNC_PAGE_SIZE = 500
+    _SYNC_PAGE_DELAY_SECONDS = 1.0
 
     def __init__(self, config: DotmacSubConfig | None = None) -> None:
         self.config = config or DotmacSubConfig.from_settings()
@@ -605,6 +605,19 @@ class DotmacSubClient:
                 break
             offset += page_size
 
+    def _sync_paginate(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+    ) -> Generator[dict[str, Any], None, None]:
+        """Read one bounded integration feed without bursting the source API."""
+        yield from self._paginate(
+            endpoint,
+            params=params,
+            page_size=self._SYNC_PAGE_SIZE,
+            page_delay=self._SYNC_PAGE_DELAY_SECONDS,
+        )
+
     # ---- Staff accounts (ERP staff sync) ----
 
     def create_staff_account(
@@ -663,9 +676,12 @@ class DotmacSubClient:
         )
         return dict(result) if isinstance(result, dict) else {}
 
-    def get_resellers(self) -> Generator[ResellerRecord, None, None]:
+    def get_resellers(
+        self, *, updated_since: str | None = None
+    ) -> Generator[ResellerRecord, None, None]:
         logger.info("Fetching dotmac_sub resellers")
-        for item in self._paginate("/resellers"):
+        params = {"updated_since": updated_since} if updated_since else None
+        for item in self._sync_paginate("/resellers/sync", params=params):
             yield ResellerRecord(
                 id=str(item.get("id", "")),
                 name=item.get("name", ""),
@@ -673,6 +689,7 @@ class DotmacSubClient:
                 contact_email=item.get("contact_email"),
                 contact_phone=item.get("contact_phone"),
                 is_active=bool(item.get("is_active", True)),
+                updated_at=item.get("updated_at"),
             )
 
     def _parse_subscriber(self, item: dict[str, Any]) -> SubscriberRecord:
@@ -703,13 +720,18 @@ class DotmacSubClient:
         )
 
     def get_subscribers(
-        self, subscriber_type: str | None = None
+        self,
+        subscriber_type: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[SubscriberRecord, None, None]:
         params: dict[str, Any] = {}
         if subscriber_type:
             params["subscriber_type"] = subscriber_type
+        if updated_since:
+            params["updated_since"] = updated_since
         logger.info("Fetching dotmac_sub subscribers with params: %s", params)
-        for item in self._paginate("/subscribers", params=params):
+        for item in self._sync_paginate("/subscribers/sync", params=params):
             yield self._parse_subscriber(item)
 
     def get_subscriber(self, subscriber_id: str) -> SubscriberRecord:
@@ -726,6 +748,7 @@ class DotmacSubClient:
             status=item.get("status", ""),
             balance=_dec(item.get("balance")),
             is_active=bool(item.get("is_active", True)),
+            updated_at=item.get("updated_at"),
         )
 
     def get_billing_accounts(
@@ -735,7 +758,7 @@ class DotmacSubClient:
         if reseller_id:
             params["reseller_id"] = reseller_id
         logger.info("Fetching dotmac_sub billing accounts with params: %s", params)
-        for item in self._paginate("/billing-accounts", params=params):
+        for item in self._sync_paginate("/billing-accounts/sync", params=params):
             yield self._parse_billing_account(item)
 
     def get_billing_account(self, billing_account_id: str) -> BillingAccountRecord:
@@ -743,14 +766,6 @@ class DotmacSubClient:
         return self._parse_billing_account(
             self._request("GET", f"/billing-accounts/{billing_account_id}")
         )
-
-    def get_subscriptions(
-        self, account_id: str | None = None
-    ) -> Generator[dict[str, Any], None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        yield from self._paginate("/subscriptions", params=params)
 
     def _parse_invoice(self, item: dict[str, Any]) -> InvoiceRecord:
         lines = [
@@ -797,7 +812,7 @@ class DotmacSubClient:
         # lines but omits payment allocations and UI/detail fields. A larger page
         # keeps the initial backfill efficient without making Sub hydrate the
         # expensive full InvoiceRead graph for every row.
-        for item in self._paginate("/invoices/sync", params=params, page_size=500):
+        for item in self._sync_paginate("/invoices/sync", params=params):
             yield self._parse_invoice(item)
 
     def get_invoice(self, invoice_id: str) -> InvoiceRecord:
@@ -830,7 +845,7 @@ class DotmacSubClient:
     ) -> Generator[PaymentRecord, None, None]:
         params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub payments with params: %s", params)
-        for item in self._paginate("/payments", params=params):
+        for item in self._sync_paginate("/payments/sync", params=params):
             yield self._parse_payment(item)
 
     def get_payment(self, payment_id: str) -> PaymentRecord:
@@ -874,12 +889,12 @@ class DotmacSubClient:
     ) -> Generator[CreditNoteRecord, None, None]:
         params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub credit notes with params: %s", params)
-        for item in self._paginate("/credit-notes", params=params):
+        for item in self._sync_paginate("/credit-notes/sync", params=params):
             yield self._parse_credit_note(item)
 
     def get_tax_rates(self) -> list[TaxRateRecord]:
         rates: list[TaxRateRecord] = []
-        for item in self._paginate("/tax-rates"):
+        for item in self._sync_paginate("/tax-rates/sync"):
             rates.append(
                 TaxRateRecord(
                     id=str(item.get("id", "")),
@@ -889,9 +904,12 @@ class DotmacSubClient:
             )
         return rates
 
+    def get_payment_channels(self) -> Generator[dict[str, Any], None, None]:
+        yield from self._sync_paginate("/payment-channels/sync")
+
     def test_connection(self) -> bool:
         try:
-            self._request("GET", "/subscribers", params={"limit": 1})
+            self._request("GET", "/subscribers/sync", params={"limit": 1})
             return True
         except DotmacSubError as e:
             logger.error("dotmac_sub connection test failed: %s", e.message)
