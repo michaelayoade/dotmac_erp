@@ -46,9 +46,7 @@ def _draft_kpi() -> KPI:
     return kpi
 
 
-def _request(
-    path: str, query_params: dict[str, str] | None = None
-) -> SimpleNamespace:
+def _request(path: str, query_params: dict[str, str] | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         url=SimpleNamespace(path=path), query_params=query_params or {}
     )

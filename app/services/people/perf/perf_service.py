@@ -1416,9 +1416,7 @@ class PerformanceService:
             or 0
         )
         if outcome_action_count:
-            block_reason = (
-                "Delete is blocked because outcome actions have been created for this appraisal."
-            )
+            block_reason = "Delete is blocked because outcome actions have been created for this appraisal."
             logger.warning(
                 "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
                 org_id,
