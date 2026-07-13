@@ -27,6 +27,8 @@ class MailcowOffboardingConfig:
     sogo_db_name: str
     sogo_db_user: str | None
     sogo_db_password: str | None
+    sogo_cleanup_url: str
+    sogo_cleanup_token: str | None
 
     @property
     def mailcow_api_configured(self) -> bool:
@@ -41,6 +43,10 @@ class MailcowOffboardingConfig:
     @property
     def sogo_db_configured(self) -> bool:
         return bool(self.sogo_db_host and self.sogo_db_user and self.sogo_db_password)
+
+    @property
+    def sogo_cleanup_receiver_configured(self) -> bool:
+        return bool(self.sogo_cleanup_url and self.sogo_cleanup_token)
 
 
 def get_mailcow_offboarding_config() -> MailcowOffboardingConfig:
@@ -63,4 +69,6 @@ def get_mailcow_offboarding_config() -> MailcowOffboardingConfig:
         sogo_db_name=settings.mailcow_sogo_db_name,
         sogo_db_user=settings.mailcow_sogo_db_user,
         sogo_db_password=settings.mailcow_sogo_db_password,
+        sogo_cleanup_url=settings.mailcow_sogo_cleanup_url,
+        sogo_cleanup_token=settings.mailcow_sogo_cleanup_token,
     )
