@@ -28,7 +28,7 @@ from app.schemas.settings import (
 )
 from app.services import settings_api as settings_service
 from app.api.deps import get_db_admin_bypass
-from app.services.auth_dependencies import require_permission
+from app.services.auth_dependencies import require_permission, require_tenant_permission
 from app.services.domain_settings import (
     get_history_entry,
     list_setting_history,
@@ -494,6 +494,19 @@ def import_settings(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _owns_history_entry(entry: object, auth: dict) -> bool:
+    """Does this history entry belong to the caller's organization?
+
+    The settings routes run on ``get_db_admin_bypass`` (RLS off), so nothing
+    below this scopes a history row to a tenant. Global settings rows carry a
+    NULL ``organization_id`` and are readable by anyone with the permission.
+    """
+    entry_org = getattr(entry, "organization_id", None)
+    if entry_org is None:
+        return True
+    return str(entry_org) == str(auth.get("organization_id"))
+
+
 @router.get(
     "/history",
     response_model=SettingHistoryListResponse,
@@ -508,7 +521,7 @@ def list_history(
     setting_id: UUID | None = Query(default=None, description="Filter by setting ID"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_tenant_permission("settings:manage")),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """
@@ -518,6 +531,11 @@ def list_history(
     - `domain`: Show history for all settings in a domain
     - `domain` + `key`: Show history for a specific setting
     - `setting_id`: Show history for a specific setting by ID
+
+    Scoped to the caller's organization. This route runs on an RLS-bypass
+    session, and history rows are not otherwise tenant-filtered, so the
+    ``organization_id`` below is the only thing keeping one tenant's settings
+    history out of another's response.
     """
     items, total = list_setting_history(
         db,
@@ -526,6 +544,7 @@ def list_history(
         setting_id=str(setting_id) if setting_id else None,
         limit=limit,
         offset=offset,
+        organization_id=auth["organization_id"],
     )
 
     return SettingHistoryListResponse(
@@ -544,12 +563,13 @@ def list_history(
 )
 def get_history(
     history_id: UUID,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_tenant_permission("settings:manage")),
     db: Session = Depends(get_db_admin_bypass),
 ):
-    """Get details of a specific history entry."""
+    """Get details of a specific history entry (caller's organization only)."""
     entry = get_history_entry(db, str(history_id))
-    if not entry:
+    if not entry or not _owns_history_entry(entry, auth):
+        # 404 rather than 403 — a cross-tenant id should not be confirmable.
         raise HTTPException(status_code=404, detail="History entry not found")
     return SettingHistoryRead.model_validate(entry)
 
@@ -562,7 +582,7 @@ def get_history(
 )
 def restore_setting(
     payload: RestoreSettingRequest,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_tenant_permission("settings:manage")),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """
@@ -573,7 +593,15 @@ def restore_setting(
     - DELETE: Recreate the setting with its value before deletion
 
     Note: Cannot restore from CREATE actions (use delete instead).
+
+    Restricted to the caller's organization. This is a *write* on an RLS-bypass
+    session, so without the ownership check below a history id from another
+    tenant would rewrite that tenant's live setting.
     """
+    entry = get_history_entry(db, str(payload.history_id))
+    if not entry or not _owns_history_entry(entry, auth):
+        raise HTTPException(status_code=404, detail="History entry not found")
+
     user_id = auth.get("user_id") if auth else None
     return restore_from_history(
         db,

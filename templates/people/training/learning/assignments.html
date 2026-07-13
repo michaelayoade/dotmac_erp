@@ -111,6 +111,66 @@
                 <button type="submit" class="btn btn-primary">{{ icon_svg("send", "h-4 w-4 mr-1.5") }} Assign</button>
             </div>
         </form>
+
+        <form method="post" action="/people/training/assignments/designation" class="card">
+            {{ request.state.csrf_form | safe }}
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Assign Designation</h3></div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label class="form-label required">Course</label>
+                    <select name="course_id" required class="form-input w-full">
+                        <option value="">Select course</option>
+                        {% for course in courses %}
+                        <option value="{{ course.id }}">{{ course.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label required">Designation</label>
+                    <select name="designation_id" required class="form-input w-full">
+                        <option value="">Select designation</option>
+                        {% for designation in designations %}
+                        <option value="{{ designation.designation_id }}">{{ designation.designation_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="form-label">Due Date</label><input type="date" name="due_date" class="form-input w-full"></div>
+                    <label class="inline-flex items-end gap-2 pb-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_mandatory" class="form-checkbox"> Mandatory</label>
+                </div>
+                <button type="submit" class="btn btn-primary">{{ icon_svg("send", "h-4 w-4 mr-1.5") }} Assign</button>
+            </div>
+        </form>
+
+        <form method="post" action="/people/training/assignments/team" class="card">
+            {{ request.state.csrf_form | safe }}
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Assign Team</h3></div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label class="form-label required">Course</label>
+                    <select name="course_id" required class="form-input w-full">
+                        <option value="">Select course</option>
+                        {% for course in courses %}
+                        <option value="{{ course.id }}">{{ course.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label required">Team</label>
+                    <select name="team_id" required class="form-input w-full">
+                        <option value="">Select team</option>
+                        {% for team in teams %}
+                        <option value="{{ team.team_id }}">{{ team.team_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="form-label">Due Date</label><input type="date" name="due_date" class="form-input w-full"></div>
+                    <label class="inline-flex items-end gap-2 pb-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_mandatory" class="form-checkbox"> Mandatory</label>
+                </div>
+                <button type="submit" class="btn btn-primary">{{ icon_svg("send", "h-4 w-4 mr-1.5") }} Assign</button>
+            </div>
+        </form>
     </div>
 
     {% call(filter_attrs) compact_filters(

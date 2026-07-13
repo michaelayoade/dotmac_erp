@@ -37,6 +37,7 @@ from app.services.finance.ap.input_utils import (
     parse_json_list,
     require_uuid,
 )
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.sequence import SequenceService
 from app.services.inventory.transaction import (
     InventoryTransactionService,
@@ -533,18 +534,14 @@ class GoodsReceiptService(ListResponseMixin):
         Returns:
             List of created inventory transaction IDs
         """
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
-
         transaction_ids: list[UUID] = []
 
         # Get fiscal period for the receipt date
-        fiscal_period = db.scalars(
-            select(FiscalPeriod).where(
-                FiscalPeriod.organization_id == organization_id,
-                FiscalPeriod.start_date <= receipt.receipt_date,
-                FiscalPeriod.end_date >= receipt.receipt_date,
-            )
-        ).first()
+        fiscal_period = PeriodGuardService.get_period_for_date(
+            db,
+            organization_id,
+            receipt.receipt_date,
+        )
 
         if not fiscal_period:
             # No fiscal period - skip inventory transactions

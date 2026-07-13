@@ -31,6 +31,7 @@ from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
 from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.services.inventory.return_web import InventoryReturnWebService
+from app.services.web_forms import safe_form_text as _safe_form_text
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -44,17 +45,6 @@ _RETURN_IMAGE_CONTENT_TYPES = frozenset(
         "image/webp",
     }
 )
-
-
-def _safe_form_text(value: object) -> str:
-    """Normalize form values to text for safe parsing."""
-    if value is None:
-        return ""
-    if isinstance(value, UploadFile):
-        return ""
-    if isinstance(value, str):
-        return value
-    return str(value)
 
 
 def _form_value(form_data: object, key: str) -> object:

@@ -22,13 +22,13 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from starlette.datastructures import UploadFile
 
 from app.models.people.attendance import AttendanceStatus
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.people.attendance import AttendanceService
+from app.services.web_forms import get_form_str
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -91,10 +91,7 @@ class AttendanceWebService:
 
     @staticmethod
     def _get_form_str(form: Any, key: str, default: str = "") -> str:
-        value = form.get(key, default) if form is not None else default
-        if isinstance(value, UploadFile) or value is None:
-            return default
-        return str(value).strip()
+        return get_form_str(form, key, default)
 
     @staticmethod
     def _shift_form_context(shift_type: dict[str, Any] | None = None) -> dict[str, Any]:

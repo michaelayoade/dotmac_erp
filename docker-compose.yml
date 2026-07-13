@@ -10,7 +10,7 @@ services:
     - .env
     environment:
       APP_URL: https://erp.dotmac.io
-      APP_VERSION: ${APP_VERSION:-1.19.0}
+      APP_VERSION: ${APP_VERSION:-1.19.2}
       BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       DEFAULT_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000001
       TRUSTED_PROXY_IPS: 172.16.0.0/12,127.0.0.1
@@ -36,8 +36,6 @@ services:
     - dotmac_logs:/var/log/dotmac
     - ./static:/app/static:ro
     - ./templates:/app/templates:ro
-    - ./alembic:/app/alembic:ro
-    - ./app:/app/app:ro
     - ./license:/app/license:ro
     - ./gunicorn.conf.py:/app/gunicorn.conf.py:ro
     - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
@@ -119,8 +117,6 @@ services:
       redis:
         condition: service_started
     volumes:
-    - ./alembic:/app/alembic:ro
-    - ./app:/app/app:ro
     - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
     entrypoint:
     - /app/entrypoint-monitoring.sh
@@ -155,8 +151,6 @@ services:
       redis:
         condition: service_started
     volumes:
-    - ./alembic:/app/alembic:ro
-    - ./app:/app/app:ro
     - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
     entrypoint:
     - /app/entrypoint-monitoring.sh

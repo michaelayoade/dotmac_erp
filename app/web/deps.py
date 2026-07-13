@@ -1798,6 +1798,29 @@ def require_finance_access(
     return auth
 
 
+def require_admin_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """
+    Require administrator access to the /admin web surface.
+
+    Applied as a router-level dependency on the admin web router. Every route
+    under ``/admin`` previously depended only on ``optional_web_auth``, which —
+    as the name says — does not require anything: the sole check was
+    ``if auth and auth.organization_id``. Any authenticated user of any role
+    could therefore open the admin settings pages and POST to them, including
+    the payment-provider credential forms.
+
+    Use this dependency for every route under ``/admin``.
+    """
+    if not auth.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Administrator access required",
+        )
+    return auth
+
+
 def require_finance_admin(
     auth: WebAuthContext = Depends(require_finance_access),
 ) -> WebAuthContext:

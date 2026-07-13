@@ -25,6 +25,8 @@ from app.api.coach import router as coach_router
 from app.api.crm import router as crm_router
 from app.api.crm import webhook_router as crm_webhook_router
 from app.api.deps import require_role, require_tenant_auth
+from app.api.dotmac_academy import webhook_router as dotmac_academy_webhook_router
+from app.api.dotmac_sub import webhook_router as dotmac_sub_webhook_router
 from app.api.expense import router as expense_router
 from app.api.expense_limits import router as expense_limits_router
 from app.api.files import legacy_router as files_legacy_router
@@ -63,6 +65,7 @@ from app.api.service_hooks import router as service_hooks_router
 from app.api.settings import router as settings_router
 from app.api.support import router as support_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
+from app.api.sync.dotmac_sub import router as sub_sync_router
 from app.api.workflow_tasks import router as workflow_tasks_router
 from app.config import settings
 from app.db import SessionLocal
@@ -751,6 +754,8 @@ if is_module_enabled("finance"):
     _include_api_router(analysis_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(payments_webhook_router)
     _include_api_router(mono_webhook_router)
+    _include_api_router(dotmac_sub_webhook_router)
+    _include_api_router(dotmac_academy_webhook_router)
 
 # ---------------------------------------------------------------------------
 # Expense module
@@ -837,6 +842,7 @@ if is_module_enabled("crm"):
     _include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(crm_webhook_router)
     _include_api_router(crm_sync_router)
+    _include_api_router(sub_sync_router)
     app.include_router(admin_crm_sync_router)
 
 # ---------------------------------------------------------------------------

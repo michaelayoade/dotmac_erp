@@ -36,6 +36,7 @@ from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.common.numbering import SyncNumberingService
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
 from app.services.formatters import format_currency as _format_currency
@@ -2069,7 +2070,6 @@ class InventoryTransactionWebService:
         """Create a manual inventory transaction."""
         from datetime import datetime
 
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
             InventoryTransactionService,
@@ -2119,13 +2119,11 @@ class InventoryTransactionWebService:
                 )
 
             # Get fiscal period
-            fiscal_period = db.scalars(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= txn_date.date(),
-                    FiscalPeriod.end_date >= txn_date.date(),
-                )
-            ).first()
+            fiscal_period = PeriodGuardService.get_period_for_date(
+                db,
+                org_id,
+                txn_date.date(),
+            )
 
             if not fiscal_period:
                 return RedirectResponse(
@@ -2209,7 +2207,6 @@ class InventoryTransactionWebService:
         """Create an inventory transfer."""
         from datetime import datetime
 
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.services.inventory.transaction import InventoryTransactionService
 
         org_id = auth.organization_id
@@ -2224,13 +2221,11 @@ class InventoryTransactionWebService:
             txn_date = datetime.strptime(transaction_date, "%Y-%m-%d")
 
             # Get fiscal period
-            fiscal_period = db.scalars(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= txn_date.date(),
-                    FiscalPeriod.end_date >= txn_date.date(),
-                )
-            ).first()
+            fiscal_period = PeriodGuardService.get_period_for_date(
+                db,
+                org_id,
+                txn_date.date(),
+            )
 
             if not fiscal_period:
                 return RedirectResponse(
@@ -2304,7 +2299,6 @@ class InventoryTransactionWebService:
         """Create an inventory adjustment."""
         from datetime import datetime
 
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
             InventoryTransactionService,
@@ -2324,13 +2318,11 @@ class InventoryTransactionWebService:
             txn_date = datetime.strptime(transaction_date, "%Y-%m-%d")
 
             # Get fiscal period
-            fiscal_period = db.scalars(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= txn_date.date(),
-                    FiscalPeriod.end_date >= txn_date.date(),
-                )
-            ).first()
+            fiscal_period = PeriodGuardService.get_period_for_date(
+                db,
+                org_id,
+                txn_date.date(),
+            )
 
             if not fiscal_period:
                 return RedirectResponse(

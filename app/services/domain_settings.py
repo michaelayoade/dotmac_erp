@@ -2,6 +2,7 @@ import builtins
 import logging
 from contextlib import nullcontext
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import case, func, or_, select
@@ -16,9 +17,17 @@ from app.models.domain_settings import (
     SettingScope,
     SettingValueType,
 )
-from app.schemas.settings import DomainSettingCreate, DomainSettingUpdate
+from app.schemas.settings import (
+    MASKED_VALUE,
+    DomainSettingCreate,
+    DomainSettingUpdate,
+)
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
+from app.services.response import (
+    ListResponseMixin,
+    apply_ordering as _apply_ordering,
+    apply_pagination as _apply_pagination,
+)
 from app.services.settings_cache import invalidate_setting_cache
 
 logger = logging.getLogger(__name__)
@@ -136,6 +145,12 @@ def _record_setting_history(
     Returns:
         The created history record
     """
+    # Never persist a secret's value into the audit trail. The trail exists to
+    # record *that* a value changed and *who* changed it — it does not need the
+    # value, and storing it put a second plaintext copy of every payment key and
+    # jwt_secret in the database, outliving even a rotation of the live setting.
+    # (Responses are masked too, at the SettingHistoryRead boundary; this stops
+    # the value ever reaching the table.)
     history = DomainSettingHistory(
         setting_id=setting.id,
         domain=setting.domain.value,
@@ -143,13 +158,19 @@ def _record_setting_history(
         action=action,
         # Old values
         old_value_type=old_value_type,
-        old_value_text=old_value_text,
+        old_value_text=(
+            MASKED_VALUE if old_is_secret and old_value_text else old_value_text
+        ),
         old_value_json=old_value_json,
         old_is_secret=old_is_secret,
         old_is_active=old_is_active,
         # New values (from current setting state)
         new_value_type=setting.value_type.value if setting.value_type else None,
-        new_value_text=setting.value_text,
+        new_value_text=(
+            MASKED_VALUE
+            if setting.is_secret and setting.value_text
+            else setting.value_text
+        ),
         new_value_json=setting.value_json,
         new_is_secret=setting.is_secret,
         new_is_active=setting.is_active,
@@ -161,24 +182,6 @@ def _record_setting_history(
     )
     db.add(history)
     return history
-
-
-def _apply_ordering(
-    stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Any:
-    if order_by not in allowed_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
-        )
-    column = allowed_columns[order_by]
-    if order_dir == "desc":
-        return stmt.order_by(column.desc())
-    return stmt.order_by(column.asc())
-
-
-def _apply_pagination(stmt: Any, limit: int, offset: int) -> Any:
-    return stmt.limit(limit).offset(offset)
 
 
 def _normalize_setting_values(
@@ -660,6 +663,7 @@ def list_setting_history(
     setting_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    organization_id: UUID | str | None = None,
 ) -> tuple[list[DomainSettingHistory], int]:
     """
     List history entries for settings.
@@ -671,11 +675,24 @@ def list_setting_history(
         setting_id: Filter by setting ID
         limit: Max entries to return
         offset: Offset for pagination
+        organization_id: Restrict to one tenant's history. Callers that run on
+            an RLS-bypass session MUST pass this — history rows carry an
+            organization_id and are not otherwise scoped.
 
     Returns:
         Tuple of (history_entries, total_count)
     """
     stmt = select(DomainSettingHistory)
+
+    if organization_id is not None:
+        # Global settings carry a NULL organization_id and stay visible; a row
+        # owned by *another* tenant does not.
+        stmt = stmt.where(
+            or_(
+                DomainSettingHistory.organization_id == coerce_uuid(organization_id),
+                DomainSettingHistory.organization_id.is_(None),
+            )
+        )
 
     if setting_id:
         stmt = stmt.where(DomainSettingHistory.setting_id == coerce_uuid(setting_id))

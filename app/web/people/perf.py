@@ -263,6 +263,17 @@ def cancel_appraisal(
     return perf_web_service.cancel_appraisal_response(auth, db, appraisal_id)
 
 
+@router.post("/appraisals/{appraisal_id}/delete")
+def delete_appraisal(
+    request: Request,
+    appraisal_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Delete an appraisal."""
+    return perf_web_service.delete_appraisal_response(request, auth, db, appraisal_id)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Appraisal Workflow
 # ─────────────────────────────────────────────────────────────────────────────
@@ -535,11 +546,15 @@ async def generate_employee_goals_from_department_templates(
 def kpi_detail(
     request: Request,
     kpi_id: str,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
 ):
     """KPI detail page."""
-    return perf_web_service.goal_detail_response(request, auth, db, kpi_id)
+    return perf_web_service.goal_detail_response(
+        request, auth, db, kpi_id, success, error
+    )
 
 
 @router.get("/goals/{kpi_id}/edit", response_class=HTMLResponse)

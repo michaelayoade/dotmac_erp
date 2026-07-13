@@ -4,7 +4,9 @@ dotmac_sub API Client.
 HTTP client for the dotmac_sub subscriber-management system at
 ``selfcare.dotmac.io``. Replaces the legacy Splynx ISP-billing feed.
 
-- **Auth**: static bearer token (``Authorization: Bearer <token>``).
+- **Auth**: scoped dotmac_sub API key sent as ``X-Api-Key``. dotmac_sub's
+  ``Authorization: Bearer`` path only accepts session-bound login JWTs, so a
+  long-lived service key MUST go in the ``X-Api-Key`` header.
 - **API**: REST under ``/api/v1`` with ``?limit=&offset=`` pagination wrapped as
   ``{"items": [...], "count", "limit", "offset"}``.
 - **Domain**: ``Reseller -> Subscriber -> BillingAccount`` with
@@ -54,9 +56,11 @@ class DotmacSubRateLimitError(DotmacSubError):
 class DotmacSubConfig:
     """Configuration for the dotmac_sub API.
 
-    Auth is a **service bearer token** (``api_token``). Staff-credential login
-    has been retired for security (audit S1) — the client no longer logs in with
-    a username + password; ``api_token`` must be a dotmac_sub service token.
+    Auth is a **scoped dotmac_sub API key** (``api_token``), sent as
+    ``X-Api-Key``. Staff-credential login has been retired for security
+    (audit S1) — the client no longer logs in with a username + password;
+    ``api_token`` must be a dotmac_sub API key with read scopes for the
+    synced domains.
     """
 
     api_url: str
@@ -104,7 +108,7 @@ class DotmacSubConfig:
 
         # IntegrationConfig column mapping for dotmac_sub:
         #   base_url   -> api_url
-        #   api_key    -> service bearer token (encrypted)
+        #   api_key    -> dotmac_sub API key (encrypted)
         #   api_secret -> webhook secret (used by the inbound webhook route)
         return cls(
             api_url=creds.get("base_url") or env.api_url,
@@ -114,13 +118,13 @@ class DotmacSubConfig:
         )
 
     def is_configured(self) -> bool:
-        """Configured when we have a base URL and a service bearer token."""
+        """Configured when we have a base URL and an API key."""
         return bool(self.api_url and self.api_token)
 
     @property
-    def auth_header(self) -> str:
-        """Generate the Bearer auth header value."""
-        return f"Bearer {self.api_token}"
+    def auth_headers(self) -> dict[str, str]:
+        """Auth headers for a dotmac_sub request (scoped API key)."""
+        return {"X-Api-Key": self.api_token}
 
 
 @dataclass
@@ -133,6 +137,7 @@ class ResellerRecord:
     contact_email: str | None = None
     contact_phone: str | None = None
     is_active: bool = True
+    updated_at: str | None = None
 
 
 @dataclass
@@ -185,6 +190,7 @@ class BillingAccountRecord:
     balance: Decimal = Decimal("0")
     is_active: bool = True
     subscriber_id: str | None = None
+    updated_at: str | None = None
 
 
 @dataclass
@@ -227,6 +233,9 @@ class InvoiceRecord:
     paid_at: str | None = None
     memo: str | None = None
     is_proforma: bool = False
+    # Server-tracked last-modified instant (ISO8601). Drives the incremental
+    # sync watermark so we only pull the delta each cycle.
+    updated_at: str | None = None
     lines: list[InvoiceLineRecord] = field(default_factory=list)
     allocations: list[AllocationRecord] = field(default_factory=list)
 
@@ -250,6 +259,8 @@ class PaymentRecord:
     memo: str | None = None
     payment_method_id: str | None = None
     payment_channel_id: str | None = None
+    # Server-tracked last-modified instant (ISO8601); see InvoiceRecord.
+    updated_at: str | None = None
     allocations: list[AllocationRecord] = field(default_factory=list)
 
     @property
@@ -285,6 +296,8 @@ class CreditNoteRecord:
     applied_total: Decimal = Decimal("0")
     memo: str | None = None
     issued_at: str | None = None
+    # Server-tracked last-modified instant (ISO8601); see InvoiceRecord.
+    updated_at: str | None = None
     lines: list[CreditNoteLineRecord] = field(default_factory=list)
 
 
@@ -305,6 +318,26 @@ def _dec(value: Any, default: str = "0") -> Decimal:
     except (ValueError, ArithmeticError):
         logger.warning("Could not parse decimal: %r", value)
         return Decimal(default)
+
+
+def _watermark_params(
+    account_id: str | None,
+    status: str | None,
+    updated_since: str | None,
+) -> dict[str, Any]:
+    """Build filters for a deterministic sync feed.
+
+    Sync endpoints always order by ``updated_at, id``; clients cannot override
+    that ordering because doing so would make paging nondeterministic.
+    """
+    params: dict[str, Any] = {}
+    if account_id:
+        params["account_id"] = account_id
+    if status:
+        params["status"] = status
+    if updated_since:
+        params["updated_since"] = updated_since
+    return params
 
 
 def _allocations(items: list[dict[str, Any]] | None) -> list[AllocationRecord]:
@@ -331,6 +364,8 @@ class DotmacSubClient:
     _RETRY_BACKOFF_CAP = 10.0  # seconds; max backoff between retries
     _RETRY_AFTER_CAP = 60.0  # seconds; max honoured Retry-After on a 429
     _MAX_PAGES = 100_000  # pagination safety bound (guards an API ignoring offset)
+    _SYNC_PAGE_SIZE = 500
+    _SYNC_PAGE_DELAY_SECONDS = 1.0
 
     def __init__(self, config: DotmacSubConfig | None = None) -> None:
         self.config = config or DotmacSubConfig.from_settings()
@@ -367,18 +402,18 @@ class DotmacSubClient:
 
     # ---- Authentication ----
 
-    def _bearer_token(self) -> str:
-        """Return the configured dotmac_sub service bearer token.
+    def _api_key(self) -> str:
+        """Return the configured dotmac_sub API key.
 
         Staff-credential login (username+password session scrape) was retired for
-        security (audit S1). If no service token is configured we fail loudly
-        rather than fall back to staff creds.
+        security (audit S1). If no API key is configured we fail loudly rather
+        than fall back to staff creds.
         """
         if not self.config.api_token:
             raise DotmacSubAuthenticationError(
                 "dotmac_sub api_token is not configured. Staff-credential login "
                 "has been retired — set DOTMAC_SUB_API_TOKEN (or the integration's "
-                "api_key) to a dotmac_sub service token."
+                "api_key) to a scoped dotmac_sub API key."
             )
         return self.config.api_token
 
@@ -413,7 +448,10 @@ class DotmacSubClient:
 
         for attempt in range(self.config.max_retries):
             try:
-                headers = {"Authorization": f"Bearer {self._bearer_token()}"}
+                # dotmac_sub service auth: scoped API key via X-Api-Key. Its
+                # Bearer path only accepts session-bound login JWTs — a
+                # long-lived key sent as Bearer is rejected with 401.
+                headers = {"X-Api-Key": self._api_key()}
                 response = self.client.request(
                     method=method,
                     url=endpoint,
@@ -567,9 +605,83 @@ class DotmacSubClient:
                 break
             offset += page_size
 
-    def get_resellers(self) -> Generator[ResellerRecord, None, None]:
+    def _sync_paginate(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+    ) -> Generator[dict[str, Any], None, None]:
+        """Read one bounded integration feed without bursting the source API."""
+        yield from self._paginate(
+            endpoint,
+            params=params,
+            page_size=self._SYNC_PAGE_SIZE,
+            page_delay=self._SYNC_PAGE_DELAY_SECONDS,
+        )
+
+    # ---- Staff accounts (ERP staff sync) ----
+
+    def create_staff_account(
+        self,
+        *,
+        email: str,
+        first_name: str,
+        last_name: str,
+        role: str = "staff",
+        roles: list[str] | None = None,
+        send_invite: bool = True,
+    ) -> dict[str, Any]:
+        """Create (idempotently) + invite a dotmac_sub staff account.
+
+        Requires the API key to carry ``rbac:assign``. Returns the endpoint's
+        ``{id, email, is_active, created, invited}`` payload.
+        """
+        result = self._request(
+            "POST",
+            "/staff-accounts",
+            json={
+                "email": email,
+                "first_name": first_name,
+                "last_name": last_name,
+                "role": role,
+                "roles": roles,
+                "send_invite": send_invite,
+            },
+        )
+        return dict(result) if isinstance(result, dict) else {}
+
+    def get_staff_account(self, email: str) -> dict[str, Any] | None:
+        """Look up a staff account by email; None when absent."""
+        try:
+            result = self._request("GET", "/staff-accounts", params={"email": email})
+        except DotmacSubNotFoundError:
+            return None
+        return dict(result) if isinstance(result, dict) else None
+
+    def set_staff_account_active(
+        self, account_id: str, *, is_active: bool
+    ) -> dict[str, Any]:
+        """Activate/deactivate a staff account (deactivation revokes sessions)."""
+        action = "activate" if is_active else "deactivate"
+        result = self._request("POST", f"/staff-accounts/{account_id}/{action}")
+        return dict(result) if isinstance(result, dict) else {}
+
+    def set_staff_account_roles(
+        self, account_id: str, *, roles: list[str]
+    ) -> dict[str, Any]:
+        """Replace only the role grants managed by ERP HR."""
+        result = self._request(
+            "PUT",
+            f"/staff-accounts/{account_id}/roles",
+            json={"roles": roles},
+        )
+        return dict(result) if isinstance(result, dict) else {}
+
+    def get_resellers(
+        self, *, updated_since: str | None = None
+    ) -> Generator[ResellerRecord, None, None]:
         logger.info("Fetching dotmac_sub resellers")
-        for item in self._paginate("/resellers"):
+        params = {"updated_since": updated_since} if updated_since else None
+        for item in self._sync_paginate("/resellers/sync", params=params):
             yield ResellerRecord(
                 id=str(item.get("id", "")),
                 name=item.get("name", ""),
@@ -577,6 +689,7 @@ class DotmacSubClient:
                 contact_email=item.get("contact_email"),
                 contact_phone=item.get("contact_phone"),
                 is_active=bool(item.get("is_active", True)),
+                updated_at=item.get("updated_at"),
             )
 
     def _parse_subscriber(self, item: dict[str, Any]) -> SubscriberRecord:
@@ -607,13 +720,18 @@ class DotmacSubClient:
         )
 
     def get_subscribers(
-        self, subscriber_type: str | None = None
+        self,
+        subscriber_type: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[SubscriberRecord, None, None]:
         params: dict[str, Any] = {}
         if subscriber_type:
             params["subscriber_type"] = subscriber_type
+        if updated_since:
+            params["updated_since"] = updated_since
         logger.info("Fetching dotmac_sub subscribers with params: %s", params)
-        for item in self._paginate("/subscribers", params=params):
+        for item in self._sync_paginate("/subscribers/sync", params=params):
             yield self._parse_subscriber(item)
 
     def get_subscriber(self, subscriber_id: str) -> SubscriberRecord:
@@ -630,6 +748,7 @@ class DotmacSubClient:
             status=item.get("status", ""),
             balance=_dec(item.get("balance")),
             is_active=bool(item.get("is_active", True)),
+            updated_at=item.get("updated_at"),
         )
 
     def get_billing_accounts(
@@ -639,7 +758,7 @@ class DotmacSubClient:
         if reseller_id:
             params["reseller_id"] = reseller_id
         logger.info("Fetching dotmac_sub billing accounts with params: %s", params)
-        for item in self._paginate("/billing-accounts", params=params):
+        for item in self._sync_paginate("/billing-accounts/sync", params=params):
             yield self._parse_billing_account(item)
 
     def get_billing_account(self, billing_account_id: str) -> BillingAccountRecord:
@@ -647,14 +766,6 @@ class DotmacSubClient:
         return self._parse_billing_account(
             self._request("GET", f"/billing-accounts/{billing_account_id}")
         )
-
-    def get_subscriptions(
-        self, account_id: str | None = None
-    ) -> Generator[dict[str, Any], None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        yield from self._paginate("/subscriptions", params=params)
 
     def _parse_invoice(self, item: dict[str, Any]) -> InvoiceRecord:
         lines = [
@@ -683,20 +794,25 @@ class DotmacSubClient:
             paid_at=item.get("paid_at"),
             memo=item.get("memo"),
             is_proforma=bool(item.get("is_proforma", False)),
+            updated_at=item.get("updated_at"),
             lines=lines,
             allocations=_allocations(item.get("payment_allocations")),
         )
 
     def get_invoices(
-        self, account_id: str | None = None, status: str | None = None
+        self,
+        account_id: str | None = None,
+        status: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[InvoiceRecord, None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        if status:
-            params["status"] = status
+        params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub invoices with params: %s", params)
-        for item in self._paginate("/invoices", params=params):
+        # Bulk AR pulls use Sub's sync-specific projection: it includes invoice
+        # lines but omits payment allocations and UI/detail fields. A larger page
+        # keeps the initial backfill efficient without making Sub hydrate the
+        # expensive full InvoiceRead graph for every row.
+        for item in self._sync_paginate("/invoices/sync", params=params):
             yield self._parse_invoice(item)
 
     def get_invoice(self, invoice_id: str) -> InvoiceRecord:
@@ -716,19 +832,20 @@ class DotmacSubClient:
             memo=item.get("memo"),
             payment_method_id=item.get("payment_method_id"),
             payment_channel_id=item.get("payment_channel_id"),
+            updated_at=item.get("updated_at"),
             allocations=_allocations(item.get("allocations")),
         )
 
     def get_payments(
-        self, account_id: str | None = None, status: str | None = None
+        self,
+        account_id: str | None = None,
+        status: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[PaymentRecord, None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        if status:
-            params["status"] = status
+        params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub payments with params: %s", params)
-        for item in self._paginate("/payments", params=params):
+        for item in self._sync_paginate("/payments/sync", params=params):
             yield self._parse_payment(item)
 
     def get_payment(self, payment_id: str) -> PaymentRecord:
@@ -759,24 +876,25 @@ class DotmacSubClient:
             applied_total=_dec(item.get("applied_total")),
             memo=item.get("memo"),
             issued_at=item.get("issued_at") or item.get("created_at"),
+            updated_at=item.get("updated_at"),
             lines=lines,
         )
 
     def get_credit_notes(
-        self, account_id: str | None = None, status: str | None = None
+        self,
+        account_id: str | None = None,
+        status: str | None = None,
+        *,
+        updated_since: str | None = None,
     ) -> Generator[CreditNoteRecord, None, None]:
-        params: dict[str, Any] = {}
-        if account_id:
-            params["account_id"] = account_id
-        if status:
-            params["status"] = status
+        params = _watermark_params(account_id, status, updated_since)
         logger.info("Fetching dotmac_sub credit notes with params: %s", params)
-        for item in self._paginate("/credit-notes", params=params):
+        for item in self._sync_paginate("/credit-notes/sync", params=params):
             yield self._parse_credit_note(item)
 
     def get_tax_rates(self) -> list[TaxRateRecord]:
         rates: list[TaxRateRecord] = []
-        for item in self._paginate("/tax-rates"):
+        for item in self._sync_paginate("/tax-rates/sync"):
             rates.append(
                 TaxRateRecord(
                     id=str(item.get("id", "")),
@@ -786,9 +904,12 @@ class DotmacSubClient:
             )
         return rates
 
+    def get_payment_channels(self) -> Generator[dict[str, Any], None, None]:
+        yield from self._sync_paginate("/payment-channels/sync")
+
     def test_connection(self) -> bool:
         try:
-            self._request("GET", "/subscribers", params={"limit": 1})
+            self._request("GET", "/subscribers/sync", params={"limit": 1})
             return True
         except DotmacSubError as e:
             logger.error("dotmac_sub connection test failed: %s", e.message)

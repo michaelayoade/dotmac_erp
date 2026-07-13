@@ -235,7 +235,7 @@
     {% endif %}
 
     {# Delete Action #}
-    {% if performance_private_enabled and kpi.status.value == 'DRAFT' %}
+    {% if performance_private_enabled and can_delete_kpi %}
     <div class="card border-red-200 dark:border-red-800">
         <div class="card-header">
             <h3 class="font-medium text-red-600 dark:text-red-400">Danger Zone</h3>

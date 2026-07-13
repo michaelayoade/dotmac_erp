@@ -950,38 +950,6 @@
                     </div>
                 </div>
 
-                <div class="mt-4 space-y-4">
-                    <template x-for="(line, index) in form.lines" :key="'receipt-' + index">
-                        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/50"
-                             x-show="isStockLine(line) && lineTracksSerials(line)"
-                             x-cloak>
-                            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">
-                                        <span x-text="'Line ' + (index + 1)"></span>
-                                        <span class="font-normal text-slate-500 dark:text-slate-400" x-text="line.description ? ' - ' + line.description : ''"></span>
-                                    </p>
-                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-text="selectedItem(line)?.item_code || ''"></p>
-                                </div>
-                                <span class="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">Serial tracked</span>
-                            </div>
-
-                            <div class="grid gap-4">
-                                <div class="sm:col-span-2">
-                                    <label class="inline-flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-                                        <input type="checkbox"
-                                               class="mt-1 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                                               x-model="line.receipt_auto_generate_serials">
-                                        <span>
-                                            <span class="block text-sm font-medium text-slate-900 dark:text-white">Auto-generate serial numbers</span>
-                                            <span class="block text-xs text-slate-500 dark:text-slate-400">Use this when the items do not already have manufacturer serial numbers.</span>
-                                        </span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
             </div>
 
             <!-- Totals -->
@@ -1175,7 +1143,7 @@ function invoiceForm() {
                     receipt_warehouse_id: '{{ line.receipt_warehouse_id or "" }}',
                     receipt_reference: {{ (line.receipt_reference or "") | tojson }},
                     receipt_serial_numbers: {{ (line.receipt_serial_numbers or []) | join('\n') | tojson }},
-                    receipt_auto_generate_serials: {{ 'true' if line.receipt_auto_generate_serials else 'false' }}
+                    receipt_auto_generate_serials: false
                 },
                 {% endfor %}
             ];
@@ -1200,7 +1168,7 @@ function invoiceForm() {
                     receipt_warehouse_id: line.receipt_warehouse_id || '',
                     receipt_reference: line.receipt_reference || '',
                     receipt_serial_numbers: Array.isArray(line.receipt_serial_numbers) ? line.receipt_serial_numbers.join('\n') : (line.receipt_serial_numbers || ''),
-                    receipt_auto_generate_serials: Boolean(line.receipt_auto_generate_serials),
+                    receipt_auto_generate_serials: false,
                 }));
             }
             // Pre-populate lines from PO if available
@@ -1320,11 +1288,6 @@ function invoiceForm() {
             return Boolean((line.track_inventory || (item && item.track_inventory)) && Number(line.quantity || 0) > 0);
         },
 
-        lineTracksSerials(line) {
-            const item = this.selectedItem(line);
-            return Boolean(line.track_serial_numbers || (item && item.track_serial_numbers));
-        },
-
         syncSharedReceiptDetailsFromLines() {
             const firstStockLineWithReceiptDetails = this.form.lines.find((line) => this.isStockLine(line) && (line.receipt_warehouse_id || line.receipt_reference));
             this.form.receipt_warehouse_id = firstStockLineWithReceiptDetails?.receipt_warehouse_id || '';
@@ -1427,8 +1390,8 @@ function invoiceForm() {
                 receipt_warehouse_id: '',
                 receipt_reference: '',
                 receipt_serial_numbers: '',
-                receipt_auto_generate_serials: false,
                 ...line,
+                receipt_auto_generate_serials: false,
             };
 
             if (Array.isArray(normalized.receipt_serial_numbers)) {

@@ -21,6 +21,7 @@ from app.models.finance.ar.performance_obligation import (
     SatisfactionPattern,
 )
 from app.models.finance.ar.quote import Quote, QuoteLine, QuoteStatus
+from app.models.finance.ar.dotmac_sub_sync_watermark import DotmacSubSyncWatermark
 from app.models.finance.ar.revenue_recognition_event import RevenueRecognitionEvent
 from app.models.finance.ar.sales_order import (
     FulfillmentStatus,
@@ -63,4 +64,6 @@ __all__ = [
     "FulfillmentStatus",
     "Shipment",
     "ShipmentLine",
+    # dotmac_sub incremental sync
+    "DotmacSubSyncWatermark",
 ]

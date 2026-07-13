@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from app.models.finance.ar.customer import Customer, CustomerType
 from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import DotmacSubError, SubscriberRecord
 
+from ._base import next_watermark
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,10 @@ class SubscriberSyncMixin:
     _lock_dotmac_sub_customer: Any
     _reseller_customer_id: Any
     _reprime_tenant_context: Any
+    _customer_code: Any
+    _parse_datetime: Any
+    _get_sync_watermark: Any
+    _advance_sync_watermark: Any
 
     def sync_subscribers(
         self,
@@ -46,11 +52,16 @@ class SubscriberSyncMixin:
     ) -> SyncResult:
         result = SyncResult(success=True, entity_type="subscribers")
         processed = 0
+        watermark = self._get_sync_watermark(EntityType.CUSTOMER)
+        updated_since = watermark.isoformat() if watermark else None
+        max_ok: datetime | None = None
+        min_error: datetime | None = None
         try:
-            for subscriber in self.client.get_subscribers():
+            for subscriber in self.client.get_subscribers(updated_since=updated_since):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
+                row_updated_at = self._parse_datetime(subscriber.updated_at)
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_subscriber(
@@ -58,6 +69,12 @@ class SubscriberSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
+                    if row_updated_at is not None:
+                        max_ok = (
+                            row_updated_at
+                            if max_ok is None
+                            else max(max_ok, row_updated_at)
+                        )
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -70,6 +87,16 @@ class SubscriberSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Subscriber {subscriber.id}: {e!s}")
                     logger.exception("Error syncing subscriber %s", subscriber.id)
+                    if row_updated_at is not None:
+                        min_error = (
+                            row_updated_at
+                            if min_error is None
+                            else min(min_error, row_updated_at)
+                        )
+            self._advance_sync_watermark(
+                EntityType.CUSTOMER,
+                next_watermark(watermark, max_ok, min_error),
+            )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "
@@ -153,7 +180,7 @@ class SubscriberSyncMixin:
 
         customer = Customer(
             organization_id=self.organization_id,
-            customer_code=f"{self.SOURCE_PREFIX}-{sub.account_number or sub.id}",
+            customer_code=self._customer_code("", sub.account_number or sub.id),
             customer_type=(
                 CustomerType.COMPANY if is_company else CustomerType.INDIVIDUAL
             ),

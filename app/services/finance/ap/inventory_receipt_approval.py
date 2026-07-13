@@ -33,6 +33,7 @@ from app.services.finance.ap.auto_inventory_receipt import (
     APInvoiceAutoReceiptService,
     AUTO_RECEIPT_SOURCE_DOCUMENT_TYPE,
 )
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
@@ -219,13 +220,11 @@ class APInventoryReceiptApprovalService:
         organization_id: UUID,
         transaction_date: datetime,
     ) -> FiscalPeriod:
-        period = db.scalars(
-            select(FiscalPeriod).where(
-                FiscalPeriod.organization_id == organization_id,
-                FiscalPeriod.start_date <= transaction_date.date(),
-                FiscalPeriod.end_date >= transaction_date.date(),
-            )
-        ).first()
+        period = PeriodGuardService.get_period_for_date(
+            db,
+            organization_id,
+            transaction_date.date(),
+        )
         if not period:
             raise ValidationError(
                 "Cannot approve inventory receipt: no fiscal period exists for today"

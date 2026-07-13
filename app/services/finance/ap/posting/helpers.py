@@ -23,10 +23,14 @@ from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
-from app.models.finance.gl.account import Account
 from app.models.inventory.item import Item
 from app.models.inventory.item_category import ItemCategory
 from app.models.finance.tax.tax_code import TaxCode, TaxType
+from app.services.finance.posting.tax import (
+    create_invoice_tax_transactions,
+    prorate_amount as _prorate,
+    resolve_tax_posting_account_id as _resolve_tax_posting_account_id,
+)
 from app.services.finance.tax.tax_transaction import tax_transaction_service
 
 logger = logging.getLogger(__name__)
@@ -46,16 +50,6 @@ class CashVATRecognitionPayload(TypedDict):
     tax_amount: Decimal
 
 
-def _prorate(
-    allocated_amount: Decimal, component_amount: Decimal, total_amount: Decimal
-) -> Decimal:
-    if total_amount == Decimal("0"):
-        return Decimal("0")
-    return ((allocated_amount * component_amount) / total_amount).quantize(
-        Decimal("0.01")
-    )
-
-
 def resolve_tax_posting_account_id(
     db: Session,
     organization_id: UUID,
@@ -63,19 +57,13 @@ def resolve_tax_posting_account_id(
     *,
     prefer_deferred: bool,
 ) -> UUID | None:
-    tax_code = db.get(TaxCode, tax_code_id)
-    if not tax_code or tax_code.organization_id != organization_id:
-        return None
-
-    account_id = tax_code.tax_paid_account_id
-    if not account_id:
-        return None
-
-    if prefer_deferred and tax_code.tax_type in {TaxType.VAT, TaxType.GST}:
-        account = db.get(Account, account_id)
-        if account and account.deferral_pair_account_id:
-            return account.deferral_pair_account_id
-    return account_id
+    return _resolve_tax_posting_account_id(
+        db,
+        organization_id,
+        tax_code_id,
+        tax_account_attr="tax_paid_account_id",
+        prefer_deferred=prefer_deferred,
+    )
 
 
 def determine_debit_account(
@@ -165,102 +153,20 @@ def create_tax_transactions(
     exchange_rate: Decimal,
     is_credit_note: bool = False,
 ) -> list[UUID]:
-    """
-    Create tax transactions for supplier invoice lines with tax codes.
-
-    Args:
-        db: Database session
-        organization_id: Organization scope
-        invoice: The supplier invoice being posted
-        lines: Invoice lines
-        supplier: Supplier for counterparty info
-        exchange_rate: Exchange rate to functional currency
-        is_credit_note: Whether this is a credit note (negative amounts)
-
-    Returns:
-        List of created tax transaction IDs
-    """
-    from app.models.finance.gl.fiscal_period import FiscalPeriod
-
-    tax_transaction_ids: list[UUID] = []
-
-    # Get fiscal period from invoice date
-    fiscal_period_stmt = select(FiscalPeriod).where(
-        and_(
-            FiscalPeriod.organization_id == organization_id,
-            FiscalPeriod.start_date <= invoice.invoice_date,
-            FiscalPeriod.end_date >= invoice.invoice_date,
-        )
+    """Create AP tax transactions for supplier invoice lines with tax codes."""
+    return create_invoice_tax_transactions(
+        db,
+        organization_id,
+        invoice=invoice,
+        lines=lines,
+        counterparty_name=supplier.legal_name,
+        counterparty_tax_id=supplier.tax_identification_number,
+        exchange_rate=exchange_rate,
+        is_purchase=True,
+        tax_service=tax_transaction_service,
+        is_credit_note=is_credit_note,
+        log_label="AP",
     )
-    fiscal_period = db.scalar(fiscal_period_stmt)
-    if isinstance(fiscal_period, Mock):
-        scalar_result = db.scalars(fiscal_period_stmt)
-        fiscal_period = (
-            scalar_result.first() if hasattr(scalar_result, "first") else None
-        )
-    if isinstance(fiscal_period, Mock) or (
-        fiscal_period is not None and not hasattr(fiscal_period, "fiscal_period_id")
-    ):
-        fiscal_period = None
-
-    if not fiscal_period:
-        # No fiscal period found - skip tax transactions
-        return tax_transaction_ids
-
-    for line in lines:
-        if not line.tax_code_id or line.tax_amount == Decimal("0"):
-            continue
-
-        # For credit notes, we record negative tax (reduces input tax)
-        base_amount = line.line_amount if not is_credit_note else -line.line_amount
-
-        try:
-            tax_txn = tax_transaction_service.create_from_invoice_line(
-                db=db,
-                organization_id=organization_id,
-                fiscal_period_id=fiscal_period.fiscal_period_id,
-                tax_code_id=line.tax_code_id,
-                invoice_id=invoice.invoice_id,
-                invoice_line_id=line.line_id,
-                invoice_number=invoice.invoice_number,
-                transaction_date=invoice.invoice_date,
-                is_purchase=True,  # AP = INPUT tax (purchases)
-                base_amount=base_amount,
-                currency_code=invoice.currency_code,
-                counterparty_name=supplier.legal_name,
-                counterparty_tax_id=supplier.tax_identification_number,
-                exchange_rate=exchange_rate,
-            )
-            tax_transaction_ids.append(tax_txn.transaction_id)
-        except Exception:
-            # Log error but don't fail the posting
-            logger.exception(
-                "create_tax_transaction failed for AP invoice %s",
-                invoice.invoice_number,
-            )
-
-    # Auto-refresh tax return for this period
-    if tax_transaction_ids and fiscal_period:
-        try:
-            from app.models.finance.tax.tax_transaction import TaxTransaction as TaxTxn
-            from app.services.finance.tax.tax_return import TaxReturnService
-
-            first_txn = db.get(TaxTxn, tax_transaction_ids[0])
-            if first_txn:
-                TaxReturnService.auto_refresh_return(
-                    db,
-                    organization_id,
-                    fiscal_period.fiscal_period_id,
-                    first_txn.jurisdiction_id,
-                    organization_id,  # system user fallback
-                )
-        except Exception:
-            logger.exception(
-                "Failed to auto-refresh tax return for AP invoice %s (non-blocking)",
-                invoice.invoice_number,
-            )
-
-    return tax_transaction_ids
 
 
 def create_wht_transaction(

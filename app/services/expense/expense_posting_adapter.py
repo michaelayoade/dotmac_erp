@@ -352,27 +352,6 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            ExpensePostingAdapter._set_action_status(
-                db,
-                org_id,
-                c_id,
-                ExpenseClaimActionType.POST_GL,
-                ExpenseClaimActionStatus.FAILED,
-            )
-            return ExpensePostingResult(success=False, message=error.message)
-
-        # Update claim with journal reference
-        claim.journal_entry_id = journal.journal_entry_id
-
-        # Post to ledger if auto_post enabled
         posting_batch_id = None
         if auto_post:
             if not idempotency_key:
@@ -380,17 +359,21 @@ class ExpensePostingAdapter:
                     c_id, ExpenseClaimActionType.POST_GL
                 )
 
-            posting_result = BasePostingAdapter.post_to_ledger(
-                db,
-                organization_id=org_id,
-                journal_entry_id=journal.journal_entry_id,
-                posting_date=posting_date,
-                idempotency_key=idempotency_key,
-                source_module="EXPENSE",
-                correlation_id=correlation_id,
-                posted_by_user_id=user_id,
-                success_message="Expense claim posted successfully",
+            journal, posting_result = (
+                BasePostingAdapter.create_approve_and_post_journal(
+                    db,
+                    org_id,
+                    journal_input,
+                    user_id,
+                    posting_date=posting_date,
+                    idempotency_key=idempotency_key,
+                    source_module="EXPENSE",
+                    correlation_id=correlation_id,
+                    success_message="Expense claim posted successfully",
+                )
             )
+            if journal is not None:
+                claim.journal_entry_id = journal.journal_entry_id
             if not posting_result.success:
                 ExpensePostingAdapter._set_action_status(
                     db,
@@ -401,12 +384,33 @@ class ExpensePostingAdapter:
                 )
                 return ExpensePostingResult(
                     success=False,
-                    journal_entry_id=journal.journal_entry_id,
+                    journal_entry_id=journal.journal_entry_id if journal else None,
                     message=posting_result.message,
                 )
 
             posting_batch_id = posting_result.posting_batch_id
+        else:
+            journal, error = BasePostingAdapter.create_and_approve_journal(
+                db,
+                org_id,
+                journal_input,
+                user_id,
+                error_prefix="Journal creation failed",
+            )
+            if error:
+                ExpensePostingAdapter._set_action_status(
+                    db,
+                    org_id,
+                    c_id,
+                    ExpenseClaimActionType.POST_GL,
+                    ExpenseClaimActionStatus.FAILED,
+                )
+                return ExpensePostingResult(success=False, message=error.message)
+            claim.journal_entry_id = journal.journal_entry_id
 
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense claim posting"
+        )
         db.flush()
 
         ExpensePostingAdapter._set_action_status(
@@ -710,44 +714,48 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return ExpensePostingResult(success=False, message=error.message)
-
-        # Update advance with journal reference
-        advance.journal_entry_id = journal.journal_entry_id
-
-        # Post to ledger if auto_post enabled
         posting_batch_id = None
         if auto_post:
             if not idempotency_key:
                 idempotency_key = f"{org_id}:ADVANCE:{adv_id}:post:v1"
 
-            posting_result = BasePostingAdapter.post_to_ledger(
-                db,
-                organization_id=org_id,
-                journal_entry_id=journal.journal_entry_id,
-                posting_date=posting_date,
-                idempotency_key=idempotency_key,
-                source_module="EXPENSE",
-                correlation_id=correlation_id,
-                posted_by_user_id=user_id,
-                success_message="Cash advance posted successfully",
+            journal, posting_result = (
+                BasePostingAdapter.create_approve_and_post_journal(
+                    db,
+                    org_id,
+                    journal_input,
+                    user_id,
+                    posting_date=posting_date,
+                    idempotency_key=idempotency_key,
+                    source_module="EXPENSE",
+                    correlation_id=correlation_id,
+                    success_message="Cash advance posted successfully",
+                )
             )
+            if journal is not None:
+                advance.journal_entry_id = journal.journal_entry_id
             if not posting_result.success:
                 return ExpensePostingResult(
                     success=False,
-                    journal_entry_id=journal.journal_entry_id,
+                    journal_entry_id=journal.journal_entry_id if journal else None,
                     message=posting_result.message,
                 )
             posting_batch_id = posting_result.posting_batch_id
+        else:
+            journal, error = BasePostingAdapter.create_and_approve_journal(
+                db,
+                org_id,
+                journal_input,
+                user_id,
+                error_prefix="Journal creation failed",
+            )
+            if error:
+                return ExpensePostingResult(success=False, message=error.message)
+            advance.journal_entry_id = journal.journal_entry_id
 
+        journal = BasePostingAdapter.require_journal(
+            journal, context="cash advance posting"
+        )
         db.flush()
 
         return ExpensePostingResult(
@@ -934,7 +942,6 @@ class ExpensePostingAdapter:
         claim.cash_advance_id = advance.advance_id
         claim.net_payable_amount = claim_amount - settle_amount
 
-        # Post to ledger if auto_post enabled
         posting_batch_id = None
         if auto_post:
             if not idempotency_key:
@@ -1273,37 +1280,29 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        if not idempotency_key:
+            idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:post:v1"
+
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return ExpensePostingResult(success=False, message=error.message)
-
-        # Post to ledger
-        if not idempotency_key:
-            idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:post:v1"
-
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="EXPENSE",
             correlation_id=correlation_id,
-            posted_by_user_id=user_id,
             success_message="Expense reimbursement posted successfully",
         )
         if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense reimbursement posting"
+        )
 
         # Update claim with reimbursement journal reference
         claim.reimbursement_journal_id = journal.journal_entry_id
@@ -1414,37 +1413,30 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        if not idempotency_key:
+            idempotency_key = f"{org_id}:FEE:{reference}:post:v1"
+
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Fee journal creation failed",
-        )
-        if error:
-            return ExpensePostingResult(success=False, message=error.message)
-
-        # Post to ledger
-        if not idempotency_key:
-            idempotency_key = f"{org_id}:FEE:{reference}:post:v1"
-
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="PAYMENTS",
             correlation_id=correlation_id,
-            posted_by_user_id=user_id,
             success_message="Transfer fee posted successfully",
+            creation_error_prefix="Fee journal creation failed",
         )
         if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense settlement posting"
+        )
 
         return ExpensePostingResult(
             success=True,
@@ -1585,36 +1577,29 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:reversal:v1"
+
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Reversal journal creation failed",
-        )
-        if error:
-            return ExpensePostingResult(success=False, message=error.message)
-
-        # Post to ledger
-        idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:reversal:v1"
-
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="EXPENSE",
             correlation_id=correlation_id,
-            posted_by_user_id=user_id,
             success_message="Reimbursement reversal posted successfully",
+            creation_error_prefix="Reversal journal creation failed",
         )
         if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense reversal posting"
+        )
 
         return ExpensePostingResult(
             success=True,
@@ -1730,36 +1715,29 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
+        idempotency_key = f"{org_id}:FEE:{reference}:reversal:v1"
+
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
             org_id,
             journal_input,
             user_id,
-            error_prefix="Fee reversal journal creation failed",
-        )
-        if error:
-            return ExpensePostingResult(success=False, message=error.message)
-
-        # Post to ledger
-        idempotency_key = f"{org_id}:FEE:{reference}:reversal:v1"
-
-        posting_result = BasePostingAdapter.post_to_ledger(
-            db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="PAYMENTS",
             correlation_id=correlation_id,
-            posted_by_user_id=user_id,
             success_message="Transfer fee reversal posted successfully",
+            creation_error_prefix="Fee reversal journal creation failed",
         )
         if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="expense accrual posting"
+        )
 
         return ExpensePostingResult(
             success=True,

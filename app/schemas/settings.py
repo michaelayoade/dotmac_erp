@@ -1,9 +1,16 @@
+from __future__ import annotations
+
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.domain_settings import SettingDomain, SettingValueType
+
+# Matches the placeholder already used by the settings audit log
+# (``app/services/domain_settings.py``), so a masked value reads the same
+# wherever it surfaces.
+MASKED_VALUE = "***MASKED***"
 
 
 class DomainSettingBase(BaseModel):
@@ -36,6 +43,21 @@ class DomainSettingRead(DomainSettingBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _mask_secret_value(self) -> DomainSettingRead:
+        """Never hand a secret's value back out of the settings API.
+
+        Encrypting secrets at rest is defeated if the read endpoints return the
+        plaintext anyway — the ORM decrypts on load, so ``value_text`` here is
+        the live key. Callers that need to know whether a secret is *set* can
+        read ``is_secret`` plus the presence of the setting; callers that need
+        the value itself read it server-side through ``resolve_value``, not over
+        the API.
+        """
+        if self.is_secret and self.value_text is not None:
+            self.value_text = MASKED_VALUE
+        return self
 
 
 # =============================================================================
@@ -139,6 +161,27 @@ class SettingHistoryRead(BaseModel):
     change_reason: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _mask_secret_values(self) -> SettingHistoryRead:
+        """Never serialize a secret's value, in either direction.
+
+        History rows store ``value_text`` verbatim, so a secret setting's
+        plaintext (Mono/Paystack keys, ``jwt_secret``, …) sits in the audit
+        trail. ``is_secret`` is a display hint, not a mask — without this the
+        history endpoints hand the live value straight back to any caller,
+        defeating the write-only fields in the admin UI.
+
+        Masked here, at the serialization boundary, so every endpoint that
+        returns a history entry is covered rather than just the list route.
+        The audit trail keeps *that* the value changed, and who changed it —
+        which is what it is for — without disclosing the value itself.
+        """
+        if self.old_is_secret and self.old_value_text is not None:
+            self.old_value_text = MASKED_VALUE
+        if self.new_is_secret and self.new_value_text is not None:
+            self.new_value_text = MASKED_VALUE
+        return self
 
 
 class SettingHistoryListResponse(BaseModel):

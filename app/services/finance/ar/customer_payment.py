@@ -631,19 +631,17 @@ class CustomerPaymentService(ListResponseMixin):
 
         # Create tax transaction for WHT if applicable
         if wht_amount > Decimal("0") and payment.wht_code_id:
-            from app.models.finance.gl.fiscal_period import FiscalPeriod
+            from app.services.finance.gl.period_guard import PeriodGuardService
             from app.models.finance.tax.tax_transaction import TaxTransactionType
             from app.services.finance.tax.tax_transaction import (
                 TaxTransactionInput,
                 tax_transaction_service,
             )
 
-            fiscal_period = db.scalar(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= payment.payment_date,
-                    FiscalPeriod.end_date >= payment.payment_date,
-                )
+            fiscal_period = PeriodGuardService.get_period_for_date(
+                db,
+                org_id,
+                payment.payment_date,
             )
 
             tax_code = db.get(TaxCode, payment.wht_code_id)

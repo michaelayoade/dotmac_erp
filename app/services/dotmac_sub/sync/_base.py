@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session_context import prime_tenant_context
 from app.models.finance.ar.customer import Customer
+from app.models.finance.ar.dotmac_sub_sync_watermark import DotmacSubSyncWatermark
 from app.models.finance.ar.external_sync import (
     EntityType,
     ExternalSource,
@@ -33,10 +34,52 @@ from ._constants import DEFAULT_BANK_NAME_MAPPING
 logger = logging.getLogger(__name__)
 
 
+def next_watermark(
+    current: datetime | None,
+    max_ok: datetime | None,
+    min_error: datetime | None,
+) -> datetime | None:
+    """Compute the watermark to persist after a batch (advance-only).
+
+    Rows are pulled in ascending ``updated_at`` order. ``max_ok`` is the highest
+    ``updated_at`` processed without error; ``min_error`` is the lowest
+    ``updated_at`` of a row that failed. We never advance past the earliest
+    failure — the watermark filter is inclusive (``updated_at >= wm``), so
+    parking it at ``min_error`` re-pulls (and retries) that row next cycle while
+    re-processing the successful rows at/after it idempotently. With no failures
+    we advance to ``max_ok``. Returns ``current`` unchanged when there is nothing
+    to advance to, or when the candidate would move the watermark backward.
+    """
+    candidate = min_error if min_error is not None else max_ok
+    if candidate is None:
+        return current
+    if current is not None and candidate <= current:
+        return current
+    return candidate
+
+
 class BaseSyncMixin:
     """Core utilities shared by all dotmac_sub sync mixins."""
 
     SOURCE_PREFIX = "DSUB"
+
+    # ar.customer.customer_code is VARCHAR(30); an untruncated
+    # "DSUB-R-<uuid>" (43 chars) fails the INSERT outright.
+    CUSTOMER_CODE_MAX = 30
+
+    def _customer_code(self, marker: str, ref: str) -> str:
+        """Deterministic ``customer_code`` within the column's 30-char limit.
+
+        Short human refs (account numbers) pass through untouched; UUID-style
+        refs are compacted to dash-less hex before truncating so the kept
+        portion is maximally distinctive.
+        """
+        prefix = (
+            f"{self.SOURCE_PREFIX}-{marker}-" if marker else f"{self.SOURCE_PREFIX}-"
+        )
+        if len(prefix) + len(ref) > self.CUSTOMER_CODE_MAX:
+            ref = ref.replace("-", "")
+        return (prefix + ref)[: self.CUSTOMER_CODE_MAX]
 
     # Provided by sibling mixins at runtime (combined in DotmacSubSyncService).
     _cache_reseller: Any
@@ -232,6 +275,59 @@ class BaseSyncMixin:
         except ValueError:
             logger.warning("Could not parse date: %s", date_str)
             return None
+
+    def _parse_datetime(self, value: str | None) -> datetime | None:
+        """Parse an ISO8601 instant into a tz-aware datetime (UTC-normalized)."""
+        if not value:
+            return None
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            logger.warning("Could not parse datetime: %s", value)
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
+
+    # ---- Incremental-sync high-watermark ----
+
+    def _get_sync_watermark(self, entity_type: EntityType) -> datetime | None:
+        """Highest ``updated_at`` already synced for this entity type, or None
+        (never synced → the caller does a full pull)."""
+        stmt = select(DotmacSubSyncWatermark.watermark_at).where(
+            DotmacSubSyncWatermark.organization_id == self.organization_id,
+            DotmacSubSyncWatermark.entity_type == entity_type.value,
+        )
+        return self.db.scalar(stmt)
+
+    def _advance_sync_watermark(
+        self, entity_type: EntityType, new_value: datetime | None
+    ) -> None:
+        """Move the watermark forward to ``new_value`` (never backward)."""
+        if new_value is None:
+            return
+        stmt = select(DotmacSubSyncWatermark).where(
+            DotmacSubSyncWatermark.organization_id == self.organization_id,
+            DotmacSubSyncWatermark.entity_type == entity_type.value,
+        )
+        row = self.db.scalar(stmt)
+        if row is None:
+            self.db.add(
+                DotmacSubSyncWatermark(
+                    organization_id=self.organization_id,
+                    entity_type=entity_type.value,
+                    watermark_at=new_value,
+                )
+            )
+            return
+        current = row.watermark_at
+        # A naive stored value only happens on the SQLite test backend
+        # (DateTime(timezone=True) drops tzinfo there); treat it as UTC so the
+        # advance-only comparison never mixes aware/naive. Postgres stores aware.
+        if current is not None and current.tzinfo is None:
+            current = current.replace(tzinfo=UTC)
+        if current is None or new_value > current:
+            row.watermark_at = new_value
 
     def _get_synced_entity(
         self, entity_type: EntityType, external_id: str

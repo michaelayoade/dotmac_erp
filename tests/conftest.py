@@ -90,6 +90,7 @@ _test_engine = create_engine(
             "platform": None,
             "gl": None,
             "ap": None,
+            "ar": None,
             "core_org": None,
             "hr": None,
             "perf": None,
@@ -377,6 +378,9 @@ from app.models.expense import (  # noqa: E402
     ExpenseClaimItem,
 )
 from app.models.feature_flag import FeatureFlagRegistry  # noqa: E402
+from app.models.finance.ar.dotmac_sub_sync_watermark import (  # noqa: E402
+    DotmacSubSyncWatermark,
+)
 from app.models.finance.platform.idempotency_record import (  # noqa: E402
     IdempotencyRecord,
 )
@@ -421,6 +425,7 @@ SQLITE_COMPATIBLE_TABLES = [
     InfrastructureHealthStatus.__table__,
     InfrastructureAlert.__table__,
     Notification.__table__,
+    DotmacSubSyncWatermark.__table__,
 ]
 
 # Create only SQLite-compatible tables, tolerating per-table failures

@@ -1,37 +1,19 @@
 import logging
-from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import Select, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
+from app.services.response import (
+    ListResponseMixin,
+    apply_ordering as _apply_ordering,
+    apply_pagination as _apply_pagination,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _apply_ordering(
-    query: Select[Any],
-    order_by: str,
-    order_dir: str,
-    allowed_columns: dict[str, Any],
-) -> Select[Any]:
-    if order_by not in allowed_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
-        )
-    column = allowed_columns[order_by]
-    if order_dir == "desc":
-        return query.order_by(column.desc())
-    return query.order_by(column.asc())
-
-
-def _apply_pagination(query: Select[Any], limit: int, offset: int) -> Select[Any]:
-    return query.limit(limit).offset(offset)
 
 
 def _validate_schedule_type(value: str | None) -> ScheduleType | None:
@@ -72,26 +54,21 @@ class ScheduledTasks(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[ScheduledTask]:
-        allowed_columns = {"created_at", "name"}
-        if order_by not in allowed_columns:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
-            )
-
         query = select(ScheduledTask)
         if enabled is not None:
             query = query.where(ScheduledTask.enabled == enabled)
 
-        sort_column = (
-            ScheduledTask.created_at if order_by == "created_at" else ScheduledTask.name
+        query = _apply_ordering(
+            query,
+            order_by,
+            order_dir,
+            {
+                "created_at": ScheduledTask.created_at,
+                "name": ScheduledTask.name,
+            },
         )
-        if order_dir == "desc":
-            query = query.order_by(sort_column.desc())
-        else:
-            query = query.order_by(sort_column.asc())
 
-        return list(db.scalars(query.limit(limit).offset(offset)).all())
+        return list(db.scalars(_apply_pagination(query, limit, offset)).all())
 
     @staticmethod
     def update(

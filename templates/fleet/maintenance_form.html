@@ -51,7 +51,7 @@
                     <label for="description" class="form-label">Description <span class="text-rose-500">*</span></label>
                     <textarea aria-label="Describe the maintenance needed..." id="description" name="description" required rows="3"
                               placeholder="Describe the maintenance needed..."
-                              class="form-textarea"></textarea>
+                              class="form-input min-h-24 w-full resize-y"></textarea>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -100,10 +100,13 @@
             <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                 <h3 class="font-semibold text-slate-900 dark:text-white">Notes</h3>
             </div>
-            <div class="p-4">
-                <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
-                          placeholder="Additional notes..."
-                          class="form-textarea"></textarea>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
+                              placeholder="Additional notes..."
+                              class="form-input min-h-24 w-full resize-y"></textarea>
+                </div>
             </div>
         </div>
 

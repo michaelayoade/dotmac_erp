@@ -20,7 +20,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, aliased
-from starlette.datastructures import UploadFile
 
 from app.models.finance.core_config.numbering_sequence import (
     NumberingSequence,
@@ -68,6 +67,7 @@ from app.services.fixed_assets.depreciation import DepreciationService
 from app.services.people.assets.audit_service import AssetAuditService
 from app.services.formatters import format_currency as _format_currency
 from app.services.formatters import format_date as _format_date
+from app.services.web_forms import safe_form_text as _safe_form_text
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -110,14 +110,6 @@ EDITABLE_ASSET_STATUSES = (
     AssetStatus.UNDER_REPAIR,
     AssetStatus.FULLY_DEPRECIATED,
 )
-
-
-def _safe_form_text(value: object) -> str:
-    if value is None or isinstance(value, UploadFile):
-        return ""
-    if isinstance(value, str):
-        return value
-    return str(value)
 
 
 def _parse_status(value: str | None) -> AssetStatus | None:

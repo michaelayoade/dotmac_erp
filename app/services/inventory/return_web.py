@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models.finance.common.attachment import AttachmentCategory
-from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.inventory import (
     InventoryReturn,
     InventoryReturnMode,
@@ -39,6 +38,7 @@ from app.services.common import (
 )
 from app.services.finance.common import format_file_size
 from app.services.finance.common.attachment import attachment_service
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
@@ -261,13 +261,11 @@ class InventoryReturnWebService:
             raise ValueError("Destination warehouse is not configured for receiving")
 
         txn_date = datetime.strptime(return_date, "%Y-%m-%d")
-        fiscal_period = db.scalars(
-            select(FiscalPeriod).where(
-                FiscalPeriod.organization_id == org_id,
-                FiscalPeriod.start_date <= txn_date.date(),
-                FiscalPeriod.end_date >= txn_date.date(),
-            )
-        ).first()
+        fiscal_period = PeriodGuardService.get_period_for_date(
+            db,
+            org_id,
+            txn_date.date(),
+        )
         if not fiscal_period:
             raise ValueError(
                 "No fiscal period found for the return date. Please open the fiscal period first."

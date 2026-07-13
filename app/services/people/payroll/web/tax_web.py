@@ -7,13 +7,11 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
-from starlette.datastructures import UploadFile
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
@@ -25,6 +23,10 @@ from app.services.common import (
     pagination_context,
 )
 from app.services.people.payroll.paye_calculator import PAYECalculator
+from app.services.web_forms import (
+    get_form_str as _get_form_str,
+    safe_form_text as _safe_form_text,
+)
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -36,24 +38,6 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _get_form_str(form: Any, key: str, default: str = "") -> str:
-    value = form.get(key, default) if form is not None else default
-    if isinstance(value, UploadFile) or value is None:
-        return default
-    return str(value).strip()
-
-
-def _safe_form_text(value: object) -> str:
-    """Normalize form values to text for safe parsing."""
-    if value is None:
-        return ""
-    if isinstance(value, UploadFile):
-        return ""
-    if isinstance(value, str):
-        return value
-    return str(value)
 
 
 class TaxWebService:

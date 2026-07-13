@@ -172,39 +172,31 @@ class TAXPostingAdapter:
             source_document_id=txn_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return TAXPostingResult(success=False, message=error.message)
-
-        # Post to ledger
         if not idempotency_key:
             idempotency_key = BasePostingAdapter.make_idempotency_key(
                 org_id, "TAX:TXN", txn_id, action="post"
             )
 
-        posting_result = BasePostingAdapter.post_to_ledger(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
+            org_id,
+            journal_input,
+            user_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="TAX",
             correlation_id=None,
-            posted_by_user_id=user_id,
             success_message="Tax transaction posted successfully",
         )
         if not posting_result.success:
             return TAXPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="tax liability posting"
+        )
 
         # Update transaction with journal reference
         transaction.journal_entry_id = journal.journal_entry_id
@@ -327,39 +319,31 @@ class TAXPostingAdapter:
             source_document_id=period_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return TAXPostingResult(success=False, message=error.message)
-
-        # Post to ledger
         if not idempotency_key:
             idempotency_key = BasePostingAdapter.make_idempotency_key(
                 org_id, f"TAX:CTAX:{jur_id}", period_id, action="post"
             )
 
-        posting_result = BasePostingAdapter.post_to_ledger(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
+            org_id,
+            journal_input,
+            user_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="TAX",
             correlation_id=None,
-            posted_by_user_id=user_id,
             success_message="Current tax provision posted successfully",
         )
         if not posting_result.success:
             return TAXPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="tax payment posting"
+        )
 
         return TAXPostingResult(
             success=True,
@@ -554,39 +538,31 @@ class TAXPostingAdapter:
             source_document_id=mov_id,
         )
 
-        journal, error = BasePostingAdapter.create_and_approve_journal(
-            db,
-            org_id,
-            journal_input,
-            user_id,
-            error_prefix="Journal creation failed",
-        )
-        if error:
-            return TAXPostingResult(success=False, message=error.message)
-
-        # Post to ledger
         if not idempotency_key:
             idempotency_key = BasePostingAdapter.make_idempotency_key(
                 org_id, "TAX:DT", mov_id, action="post"
             )
 
-        posting_result = BasePostingAdapter.post_to_ledger(
+        journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
             db,
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
+            org_id,
+            journal_input,
+            user_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="TAX",
             correlation_id=None,
-            posted_by_user_id=user_id,
             success_message="Deferred tax movement posted successfully",
         )
         if not posting_result.success:
             return TAXPostingResult(
                 success=False,
-                journal_entry_id=journal.journal_entry_id,
+                journal_entry_id=journal.journal_entry_id if journal else None,
                 message=posting_result.message,
             )
+        journal = BasePostingAdapter.require_journal(
+            journal, context="tax adjustment posting"
+        )
 
         # Update movement with journal reference
         movement.journal_entry_id = journal.journal_entry_id

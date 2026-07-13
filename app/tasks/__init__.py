@@ -41,6 +41,12 @@ from app.tasks.data_health import (
     reconcile_payment_allocations,
     run_data_health_check,
 )
+from app.tasks.dotmac_sub import (
+    cleanup_stale_dotmac_sub_sync_history,
+    run_dotmac_sub_daily_reconciliation,
+    run_dotmac_sub_full_reconciliation,
+    run_dotmac_sub_incremental_sync,
+)
 from app.tasks.email import send_email_async
 from app.tasks.expense import (
     calculate_expense_analytics,
@@ -51,6 +57,7 @@ from app.tasks.expense import (
     refresh_period_usage_cache,
     settle_cash_advance_with_claim,
 )
+from app.tasks.exchange_rates import fetch_daily_exchange_rates
 from app.tasks.feature_flags import archive_expired_feature_flags
 from app.tasks.finance import (
     process_ar_invoices_export,
@@ -78,10 +85,12 @@ from app.tasks.hr import (
     process_contract_expiry_notifications,
     process_performance_review_reminders,
     process_probation_ending_notifications,
+    run_employee_mailcow_offboarding,
     process_work_anniversary_notifications,
     send_hr_birthday_morning_email,
 )
 from app.tasks.inventory import auto_issue_pending_stock_material_requests
+from app.tasks.license import revalidate_license
 from app.tasks.notifications import (
     process_pending_nextcloud_notifications,
     process_pending_notification_emails,
@@ -106,6 +115,10 @@ from app.tasks.performance import (
     process_cycle_phase_transitions,
     sync_all_cycle_progress,
 )
+from app.tasks.staff_sync import (
+    run_staff_sync_reconcile,
+    sync_employee_staff_account,
+)
 from app.tasks.project_sla import (
     process_project_sla_breaches,
 )
@@ -128,6 +141,7 @@ __all__ = [
     "process_performance_review_reminders",
     "process_certification_expiry_notifications",
     "calculate_hr_analytics",
+    "run_employee_mailcow_offboarding",
     # Fleet module tasks
     "process_document_expiry_notifications",
     # Performance module tasks
@@ -143,6 +157,17 @@ __all__ = [
     # Audit tasks
     "log_audit_event",
     "verify_audit_hash_chain",
+    # dotmac_sub sync tasks
+    "sync_employee_staff_account",
+    "run_staff_sync_reconcile",
+    "run_dotmac_sub_incremental_sync",
+    "run_dotmac_sub_daily_reconciliation",
+    "run_dotmac_sub_full_reconciliation",
+    "cleanup_stale_dotmac_sub_sync_history",
+    # Exchange-rate tasks
+    "fetch_daily_exchange_rates",
+    # License tasks
+    "revalidate_license",
     # Payroll tasks
     "send_payslip_email",
     "process_payroll_entry_notifications",

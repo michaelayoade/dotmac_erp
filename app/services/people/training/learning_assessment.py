@@ -1539,9 +1539,10 @@ class AssessmentService(LearningAssessmentBaseService):
 
 
 class AssignmentService(LearningAssessmentBaseService):
-    """Course assignment operations for employees, departments, and roles."""
+    """Course assignment operations for employees, departments, roles,
+    designations, and support teams."""
 
-    VALID_ASSIGNMENT_SOURCES = {"employee", "department", "role"}
+    VALID_ASSIGNMENT_SOURCES = {"employee", "department", "role", "designation", "team"}
 
     def assign_employee(
         self,
@@ -1677,6 +1678,52 @@ class AssignmentService(LearningAssessmentBaseService):
             assignment_source_id=department_id,
         )
 
+    def assign_designation(
+        self,
+        org_id: UUID,
+        course_id: UUID,
+        designation_id: UUID,
+        *,
+        assigned_by: UUID | None = None,
+        due_date: date | None = None,
+        is_mandatory: bool | None = None,
+    ) -> list[TrainingCourseAssignment]:
+        """Assign a course to everyone holding a job designation (title).
+
+        Keyed on ``Employee.designation_id``, so it targets the HR job role the
+        skills matrix speaks — as opposed to ``assign_role``, which targets an
+        RBAC access role.
+        """
+        from app.models.people.hr.designation import Designation
+
+        designation = self.db.scalar(
+            select(Designation).where(
+                Designation.designation_id == designation_id,
+                Designation.organization_id == org_id,
+                Designation.is_active.is_(True),
+            )
+        )
+        if not designation:
+            raise NotFoundError("Designation not found")
+        employee_ids = list(
+            self.db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.designation_id == designation_id,
+                )
+            ).all()
+        )
+        return self.assign_employees(
+            org_id,
+            course_id,
+            employee_ids,
+            assigned_by=assigned_by,
+            due_date=due_date,
+            is_mandatory=is_mandatory,
+            assignment_source="designation",
+            assignment_source_id=designation_id,
+        )
+
     def assign_role(
         self,
         org_id: UUID,
@@ -1711,6 +1758,49 @@ class AssignmentService(LearningAssessmentBaseService):
             is_mandatory=is_mandatory,
             assignment_source="role",
             assignment_source_id=role_id,
+        )
+
+    def assign_team(
+        self,
+        org_id: UUID,
+        course_id: UUID,
+        team_id: UUID,
+        *,
+        assigned_by: UUID | None = None,
+        due_date: date | None = None,
+        is_mandatory: bool | None = None,
+    ) -> list[TrainingCourseAssignment]:
+        """Assign a course to every member of a support team.
+
+        Targets all team members regardless of round-robin availability —
+        ``is_available`` gates ticket routing, not who owes the training.
+        """
+        from app.models.support.team import SupportTeam, SupportTeamMember
+
+        team = self.db.scalar(
+            select(SupportTeam).where(
+                SupportTeam.team_id == team_id,
+                SupportTeam.organization_id == org_id,
+            )
+        )
+        if not team:
+            raise NotFoundError("Team not found")
+        employee_ids = list(
+            self.db.scalars(
+                select(SupportTeamMember.employee_id).where(
+                    SupportTeamMember.team_id == team_id,
+                )
+            ).all()
+        )
+        return self.assign_employees(
+            org_id,
+            course_id,
+            employee_ids,
+            assigned_by=assigned_by,
+            due_date=due_date,
+            is_mandatory=is_mandatory,
+            assignment_source="team",
+            assignment_source_id=team_id,
         )
 
     def list_assignments(

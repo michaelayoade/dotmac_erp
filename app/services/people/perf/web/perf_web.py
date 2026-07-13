@@ -16,7 +16,6 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
-from starlette.datastructures import UploadFile
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
 from app.models.people.perf.appraisal import Appraisal
@@ -33,6 +32,7 @@ from app.services.people.perf import PerformanceService
 from app.services.people.perf.ohcsf_appraisal_service import OHCSFAppraisalService
 from app.services.people.perf.pip_service import PIPService
 from app.services.people.perf.performance_mode_policy import enforce_private_write_mode
+from app.services.web_forms import get_form_str as _get_form_str
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -61,13 +61,6 @@ _PIP_GATE_ERROR_PREFIXES = (
     "Cannot complete appraisal: underperformance detected",
     "Cannot complete appraisal: linked PIP is not resolved",
 )
-
-
-def _get_form_str(form: Any, key: str, default: str = "") -> str:
-    value = form.get(key, default) if form is not None else default
-    if isinstance(value, UploadFile) or value is None:
-        return default
-    return str(value).strip()
 
 
 def _is_pip_gate_error(exc: Exception) -> bool:
@@ -596,9 +589,16 @@ class PerfWebService:
 
         context = base_context(request, auth, "Appraisals", "perf", db=db)
         context["request"] = request
+        success = request.query_params.get("success")
+        error = request.query_params.get("error")
         active_filters = build_active_filters(
             params={"status": status, "cycle_id": cycle_id}
         )
+        deletable_appraisal_ids = {
+            appraisal.appraisal_id
+            for appraisal in result.items
+            if svc.can_delete_appraisal(appraisal)
+        }
         context.update(
             {
                 "appraisals": result.items,
@@ -613,6 +613,9 @@ class PerfWebService:
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
                 "active_filters": active_filters,
+                "deletable_appraisal_ids": deletable_appraisal_ids,
+                "success": success,
+                "error": error,
             }
         )
         return templates.TemplateResponse(
@@ -805,6 +808,7 @@ class PerfWebService:
             {
                 "appraisal": appraisal,
                 "pip_gate": pip_gate,
+                "can_delete_appraisal": svc.can_delete_appraisal(appraisal),
                 "success": success,
                 "error": error,
             }
@@ -943,6 +947,38 @@ class PerfWebService:
         return RedirectResponse(
             url=f"/people/perf/appraisals/{appraisal_id}?saved=1", status_code=303
         )
+
+    def delete_appraisal_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        appraisal_id: str,
+    ) -> RedirectResponse:
+        """Handle appraisal deletion."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = PerformanceService(db)
+
+        try:
+            svc.delete_appraisal(
+                org_id,
+                coerce_uuid(appraisal_id),
+                actor_id=coerce_uuid(auth.employee_id) if auth.employee_id else None,
+            )
+            db.commit()
+            return RedirectResponse(
+                url="/people/perf/appraisals?success=Appraisal+deleted+successfully",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                url=(
+                    f"/people/perf/appraisals/{appraisal_id}"
+                    f"?error={quote_plus(str(exc))}"
+                ),
+                status_code=303,
+            )
 
     def start_self_assessment_response(
         self,
@@ -1886,6 +1922,11 @@ class PerfWebService:
             request, auth, "Goals & KPIs", self._goals_active_module(request), db=db
         )
         context["request"] = request
+        success = request.query_params.get("success")
+        error = request.query_params.get("error")
+        deletable_kpi_ids = {
+            kpi.kpi_id for kpi in result.items if svc.can_delete_kpi(kpi)
+        }
         context.update(
             {
                 "kpis": result.items,
@@ -1901,8 +1942,9 @@ class PerfWebService:
                 "total": result.total,
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
-                "success": request.query_params.get("success"),
-                "error": request.query_params.get("error"),
+                "deletable_kpi_ids": deletable_kpi_ids,
+                "success": success,
+                "error": error,
             }
         )
         return templates.TemplateResponse(request, "people/perf/kpis.html", context)
@@ -2048,6 +2090,7 @@ class PerfWebService:
         db: Session,
         kpi_id: str,
         success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render KPI detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -2067,8 +2110,9 @@ class PerfWebService:
             {
                 "kpi": kpi,
                 "goals_base_url": goals_base_url,
+                "can_delete_kpi": svc.can_delete_kpi(kpi),
                 "success": success,
-                "error": None,
+                "error": error,
             }
         )
         return templates.TemplateResponse(
@@ -2362,16 +2406,24 @@ class PerfWebService:
         try:
             if request.url.path.startswith("/people/perf/pms/"):
                 enforce_private_write_mode(db, org_id)
-            svc.delete_kpi(org_id, coerce_uuid(kpi_id))
+            svc.delete_kpi(
+                org_id,
+                coerce_uuid(kpi_id),
+                actor_id=coerce_uuid(auth.employee_id) if auth.employee_id else None,
+            )
             db.commit()
             return RedirectResponse(
-                url=f"{self._goals_base_url(request)}?success=Record+deleted+successfully",
+                url=f"{self._goals_base_url(request)}?success=KPI+deleted+successfully",
                 status_code=303,
             )
-        except Exception:
+        except Exception as exc:
             db.rollback()
             return RedirectResponse(
-                url=f"{self._goals_base_url(request)}/{kpi_id}", status_code=303
+                url=(
+                    f"{self._goals_base_url(request)}/{kpi_id}"
+                    f"?error={quote_plus(str(exc))}"
+                ),
+                status_code=303,
             )
 
     # ─────────────────────────────────────────────────────────────────────────

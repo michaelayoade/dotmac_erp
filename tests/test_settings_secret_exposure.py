@@ -1,0 +1,137 @@
+"""Settings secret-exposure guards.
+
+The settings substrate stores secret values (payment-provider keys,
+``jwt_secret``, …) as plaintext in ``domain_settings.value_text``, and copies
+them verbatim into the history table on every change. ``is_secret`` is a
+display hint, not a mask.
+
+These tests pin the three properties that keep those values from leaving the
+server: history responses mask secrets, history entries are tenant-scoped, and
+the admin web surface requires an administrator.
+"""
+
+from datetime import datetime
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
+
+from app.api.settings import _owns_history_entry
+from app.schemas.settings import MASKED_VALUE, SettingHistoryRead
+from app.web.deps import require_admin_access
+
+
+def _history_entry(**overrides):
+    values = {
+        "id": uuid4(),
+        "setting_id": uuid4(),
+        "domain": "banking",
+        "key": "mono_secret_key",
+        "action": "UPDATE",
+        "old_value_text": "live_sk_OLD",
+        "old_is_secret": True,
+        "new_value_text": "live_sk_NEW",
+        "new_is_secret": True,
+        "changed_at": datetime(2026, 7, 12, 9, 0, 0),
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+class TestHistoryMasksSecrets:
+    def test_secret_values_are_masked_in_both_directions(self):
+        """A secret's value must never be serialized — old or new.
+
+        Without this, ``GET /api/v1/settings/history?domain=banking&
+        key=mono_secret_key`` hands back the live Mono secret key in plaintext,
+        defeating the write-only field in the admin UI. The same route reaches
+        ``jwt_secret`` and the Paystack keys.
+        """
+        read = SettingHistoryRead.model_validate(_history_entry())
+
+        assert read.old_value_text == MASKED_VALUE
+        assert read.new_value_text == MASKED_VALUE
+        # The audit trail still records THAT it changed, and who changed it.
+        assert read.key == "mono_secret_key"
+        assert read.action == "UPDATE"
+
+    def test_non_secret_values_are_untouched(self):
+        """Masking must not blind the audit trail for ordinary settings."""
+        read = SettingHistoryRead.model_validate(
+            _history_entry(
+                key="mono_enabled",
+                old_value_text="false",
+                old_is_secret=False,
+                new_value_text="true",
+                new_is_secret=False,
+            )
+        )
+
+        assert read.old_value_text == "false"
+        assert read.new_value_text == "true"
+
+    def test_a_value_that_became_secret_masks_its_old_plaintext(self):
+        """Flags are read per-side, so a key flipped to secret still hides the
+        plaintext it used to hold."""
+        read = SettingHistoryRead.model_validate(
+            _history_entry(
+                old_value_text="was_plaintext",
+                old_is_secret=True,
+                new_value_text="now_secret",
+                new_is_secret=True,
+            )
+        )
+
+        assert read.old_value_text == MASKED_VALUE
+        assert read.new_value_text == MASKED_VALUE
+
+
+class TestHistoryIsTenantScoped:
+    """The settings routes run on an RLS-bypass session, so nothing under them
+    scopes a history row to a tenant. The ownership check is the only thing
+    standing between one tenant and another's settings history — including a
+    cross-tenant *write* via ``POST /history/restore``.
+    """
+
+    def test_entry_from_another_organization_is_not_owned(self):
+        auth = {"organization_id": str(uuid4())}
+        entry = _history_entry(organization_id=uuid4())
+
+        assert _owns_history_entry(entry, auth) is False
+
+    def test_entry_from_the_callers_organization_is_owned(self):
+        org = uuid4()
+        auth = {"organization_id": str(org)}
+        entry = _history_entry(organization_id=org)
+
+        assert _owns_history_entry(entry, auth) is True
+
+    def test_global_setting_is_readable(self):
+        """Global settings carry a NULL organization_id and stay visible."""
+        auth = {"organization_id": str(uuid4())}
+        entry = _history_entry(organization_id=None)
+
+        assert _owns_history_entry(entry, auth) is True
+
+
+class TestAdminSurfaceRequiresAdmin:
+    """Every route under /admin depended only on ``optional_web_auth``, which —
+    as the name says — requires nothing. The sole check was
+    ``if auth and auth.organization_id``, so any authenticated user of any role
+    could open the admin settings pages and POST to them, credential forms
+    included.
+    """
+
+    def test_non_admin_is_refused(self):
+        auth = SimpleNamespace(roles=["warehouse_operator"], is_admin=False)
+
+        with pytest.raises(HTTPException) as exc:
+            require_admin_access(auth)
+
+        assert exc.value.status_code == 403
+
+    def test_admin_is_allowed(self):
+        auth = SimpleNamespace(roles=["admin"], is_admin=True)
+
+        assert require_admin_access(auth) is auth
