@@ -22,6 +22,7 @@ from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.services.auth_flow import revoke_sessions_for_person
 from app.services.mailcow.client import MailcowClient
+from app.services.mailcow.cleanup_queue import SogoCleanupQueueClient
 from app.services.mailcow.config import (
     MailcowOffboardingConfig,
     get_mailcow_offboarding_config,
@@ -52,6 +53,7 @@ class EmployeeOffboardingResult:
     mailcow_password_reset: bool = False
     sieve_offboarding_script_updated: bool = False
     sogo_inactive_forward_updated: bool = False
+    sogo_cleanup_request_queued: bool = False
     shared_profiles_cleaned: list[str] = field(default_factory=list)
     shared_sieve_scripts_cleaned: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
@@ -76,12 +78,14 @@ class EmployeeOffboardingService:
         mailcow_client: MailcowClient | None = None,
         sieve_client: ManageSieveClient | None = None,
         sogo_service: SogoProfileService | None = None,
+        sogo_cleanup_client: SogoCleanupQueueClient | None = None,
     ) -> None:
         self.db = db
         self.config = config or get_mailcow_offboarding_config()
         self._mailcow_client = mailcow_client
         self._sieve_client = sieve_client
         self._sogo_service = sogo_service
+        self._sogo_cleanup_client = sogo_cleanup_client
 
     def offboard_employee(
         self, organization_id: UUID, employee_id: UUID
@@ -197,6 +201,12 @@ class EmployeeOffboardingService:
             )
             result.errors.append(f"sieve offboarding update failed: {exc}")
 
+        self._request_sogo_cleanup(email, result)
+
+        if not self.config.sogo_db_configured and self._sogo_service is None:
+            result.skipped.append("Mailcow SOGo DB cleanup is not configured")
+            return
+
         try:
             sogo = self._get_sogo_service()
             result.sogo_inactive_forward_updated = sogo.set_inactive_forward(
@@ -210,6 +220,26 @@ class EmployeeOffboardingService:
             return
 
         self._cleanup_shared_sieve_scripts(email, result)
+
+    def _request_sogo_cleanup(
+        self,
+        email: str,
+        result: EmployeeOffboardingResult,
+    ) -> None:
+        if (
+            not self.config.sogo_cleanup_receiver_configured
+            and self._sogo_cleanup_client is None
+        ):
+            result.skipped.append("Mailcow SOGo cleanup receiver is not configured")
+            return
+
+        try:
+            result.sogo_cleanup_request_queued = (
+                self._get_sogo_cleanup_client().enqueue(email)
+            )
+        except Exception as exc:
+            logger.exception("SOGo cleanup request failed during employee offboarding")
+            result.errors.append(f"sogo cleanup request failed: {exc}")
 
     def _cleanup_shared_sieve_scripts(
         self,
@@ -278,6 +308,18 @@ class EmployeeOffboardingService:
             password=self.config.sogo_db_password or "",
         )
         return self._sogo_service
+
+    def _get_sogo_cleanup_client(self) -> SogoCleanupQueueClient:
+        if self._sogo_cleanup_client:
+            return self._sogo_cleanup_client
+        if not self.config.sogo_cleanup_receiver_configured:
+            raise RuntimeError("Mailcow SOGo cleanup receiver is not configured")
+        self._sogo_cleanup_client = SogoCleanupQueueClient(
+            url=self.config.sogo_cleanup_url,
+            token=self.config.sogo_cleanup_token or "",
+            timeout=self.config.request_timeout,
+        )
+        return self._sogo_cleanup_client
 
 
 def queue_employee_mailcow_offboarding(

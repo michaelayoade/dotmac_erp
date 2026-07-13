@@ -264,6 +264,12 @@ class Settings:
     mailcow_sogo_db_name: str = os.getenv("MAILCOW_SOGO_DB_NAME", "mailcow")
     mailcow_sogo_db_user: str | None = os.getenv("MAILCOW_SOGO_DB_USER") or None
     mailcow_sogo_db_password: str | None = os.getenv("MAILCOW_SOGO_DB_PASSWORD") or None
+    mailcow_sogo_cleanup_url: str = os.getenv("MAILCOW_SOGO_CLEANUP_URL", "").rstrip(
+        "/"
+    )
+    mailcow_sogo_cleanup_token: str | None = (
+        os.getenv("MAILCOW_SOGO_CLEANUP_TOKEN") or None
+    )
 
     # ==========================================================================
     # Analytics (pre-computed metric snapshots)
