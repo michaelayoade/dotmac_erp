@@ -19,15 +19,19 @@ from app.models.people.perf import (
     KPI,
     KRA,
     Appraisal,
+    AppraisalAppeal,
     AppraisalCycle,
     AppraisalCycleStatus,
     AppraisalFeedback,
     AppraisalKRAScore,
+    AppraisalOutcomeAction,
     AppraisalStatus,
     AppraisalTemplate,
     AppraisalTemplateProfile,
     AppraisalTemplateKRA,
+    CompetencyAssessment,
     KPIStatus,
+    PMSGovernanceGrievance,
     Scorecard,
     ScorecardItem,
 )
@@ -1044,11 +1048,48 @@ class PerformanceService:
         self.db.flush()
         return kpi
 
-    def delete_kpi(self, org_id: UUID, kpi_id: UUID) -> None:
-        """Delete a KPI."""
+    def can_delete_kpi(self, kpi: KPI) -> bool:
+        """Return whether a KPI is safe to delete."""
+        return self.get_kpi_delete_block_reason(kpi) is None
+
+    def get_kpi_delete_block_reason(self, kpi: KPI) -> str | None:
+        """Return the reason a KPI cannot be deleted, if any."""
+        if kpi.status != KPIStatus.DRAFT:
+            return "Only draft KPIs can be deleted."
+        if kpi.actual_value is not None:
+            return "KPI delete is blocked after progress has been recorded."
+        if kpi.achievement_percentage is not None:
+            return "KPI delete is blocked after achievement scoring has started."
+        if kpi.evidence:
+            return "KPI delete is blocked after evidence has been attached."
+        return None
+
+    def delete_kpi(
+        self,
+        org_id: UUID,
+        kpi_id: UUID,
+        actor_id: UUID | None = None,
+    ) -> None:
+        """Delete a KPI when it is still safe to remove."""
         kpi = self.get_kpi(org_id, kpi_id)
+        block_reason = self.get_kpi_delete_block_reason(kpi)
+        if block_reason:
+            logger.warning(
+                "Blocked KPI delete for org=%s kpi=%s actor=%s: %s",
+                org_id,
+                kpi_id,
+                actor_id,
+                block_reason,
+            )
+            raise PerformanceServiceError(block_reason)
         self.db.delete(kpi)
         self.db.flush()
+        logger.info(
+            "Deleted KPI %s for org=%s actor=%s",
+            kpi_id,
+            org_id,
+            actor_id,
+        )
 
     # =========================================================================
     # Appraisals
@@ -1276,15 +1317,183 @@ class PerformanceService:
         self.db.flush()
         return appraisal
 
-    def delete_appraisal(self, org_id: UUID, appraisal_id: UUID) -> None:
-        """Delete an appraisal if still draft."""
-        appraisal = self.get_appraisal(org_id, appraisal_id)
+    def can_delete_appraisal(self, appraisal: Appraisal) -> bool:
+        """Return whether an appraisal is safe to delete."""
+        return self.get_appraisal_delete_block_reason(appraisal) is None
+
+    def get_appraisal_delete_block_reason(self, appraisal: Appraisal) -> str | None:
+        """Return the reason an appraisal cannot be deleted, if any."""
         if appraisal.status != AppraisalStatus.DRAFT:
-            raise AppraisalStatusError(
-                appraisal.status.value, AppraisalStatus.DRAFT.value
+            return "Only draft appraisals can be deleted."
+        if appraisal.is_prior_year_carryover:
+            return "Prior-year carryover appraisals cannot be deleted."
+        if appraisal.self_assessment_date is not None:
+            return "Delete is blocked after self-assessment has been submitted."
+        if appraisal.manager_review_date is not None:
+            return "Delete is blocked after manager review has started."
+        if appraisal.calibration_date is not None:
+            return "Delete is blocked after calibration has started."
+        if appraisal.final_score is not None or appraisal.final_rating is not None:
+            return "Delete is blocked after final scoring has started."
+        if appraisal.completed_on is not None:
+            return "Completed appraisals cannot be deleted."
+        return None
+
+    def delete_appraisal(
+        self,
+        org_id: UUID,
+        appraisal_id: UUID,
+        actor_id: UUID | None = None,
+    ) -> None:
+        """Delete an appraisal if it is still draft and unlinked."""
+        appraisal = self.get_appraisal(org_id, appraisal_id)
+        block_reason = self.get_appraisal_delete_block_reason(appraisal)
+        if block_reason:
+            logger.warning(
+                "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
+                org_id,
+                appraisal_id,
+                actor_id,
+                block_reason,
             )
+            raise PerformanceServiceError(block_reason)
+
+        feedback_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(AppraisalFeedback)
+                .where(
+                    AppraisalFeedback.organization_id == org_id,
+                    AppraisalFeedback.appraisal_id == appraisal_id,
+                )
+            )
+            or 0
+        )
+        if feedback_count:
+            block_reason = "Delete is blocked because feedback has been recorded."
+            logger.warning(
+                "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
+                org_id,
+                appraisal_id,
+                actor_id,
+                block_reason,
+            )
+            raise PerformanceServiceError(block_reason)
+
+        appeal_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(AppraisalAppeal)
+                .where(
+                    AppraisalAppeal.organization_id == org_id,
+                    AppraisalAppeal.appraisal_id == appraisal_id,
+                )
+            )
+            or 0
+        )
+        if appeal_count:
+            block_reason = (
+                "Delete is blocked because an appeal exists for this appraisal."
+            )
+            logger.warning(
+                "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
+                org_id,
+                appraisal_id,
+                actor_id,
+                block_reason,
+            )
+            raise PerformanceServiceError(block_reason)
+
+        outcome_action_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(AppraisalOutcomeAction)
+                .where(
+                    AppraisalOutcomeAction.organization_id == org_id,
+                    AppraisalOutcomeAction.appraisal_id == appraisal_id,
+                )
+            )
+            or 0
+        )
+        if outcome_action_count:
+            block_reason = "Delete is blocked because outcome actions have been created for this appraisal."
+            logger.warning(
+                "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
+                org_id,
+                appraisal_id,
+                actor_id,
+                block_reason,
+            )
+            raise PerformanceServiceError(block_reason)
+
+        pip_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(PerformanceImprovementPlan)
+                .where(
+                    PerformanceImprovementPlan.organization_id == org_id,
+                    PerformanceImprovementPlan.appraisal_id == appraisal_id,
+                )
+            )
+            or 0
+        )
+        if pip_count:
+            block_reason = (
+                "Delete is blocked because a PIP is linked to this appraisal."
+            )
+            logger.warning(
+                "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
+                org_id,
+                appraisal_id,
+                actor_id,
+                block_reason,
+            )
+            raise PerformanceServiceError(block_reason)
+
+        grievance_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(PMSGovernanceGrievance)
+                .where(
+                    PMSGovernanceGrievance.organization_id == org_id,
+                    PMSGovernanceGrievance.appraisal_id == appraisal_id,
+                )
+            )
+            or 0
+        )
+        if grievance_count:
+            block_reason = (
+                "Delete is blocked because governance or grievance history exists."
+            )
+            logger.warning(
+                "Blocked appraisal delete for org=%s appraisal=%s actor=%s: %s",
+                org_id,
+                appraisal_id,
+                actor_id,
+                block_reason,
+            )
+            raise PerformanceServiceError(block_reason)
+
+        self.db.execute(
+            delete(CompetencyAssessment).where(
+                CompetencyAssessment.organization_id == org_id,
+                CompetencyAssessment.appraisal_id == appraisal_id,
+            )
+        )
+        self.db.execute(
+            delete(AppraisalKRAScore).where(
+                AppraisalKRAScore.organization_id == org_id,
+                AppraisalKRAScore.appraisal_id == appraisal_id,
+            )
+        )
         self.db.delete(appraisal)
         self.db.flush()
+        logger.info(
+            "Deleted appraisal %s for org=%s actor=%s",
+            appraisal_id,
+            org_id,
+            actor_id,
+        )
 
     def submit_self_assessment(
         self,

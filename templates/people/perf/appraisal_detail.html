@@ -160,6 +160,22 @@
     </div>
     {% endif %}
 
+    {% if can_delete_appraisal %}
+    <div class="card border-red-200 dark:border-red-800">
+        <div class="card-header">
+            <h3 class="font-medium text-red-600 dark:text-red-400">Danger Zone</h3>
+        </div>
+        <div class="card-body">
+            <form method="post"
+                  action="/people/perf/appraisals/{{ appraisal.appraisal_id }}/delete"
+                  onsubmit="return confirm('Delete this appraisal?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="btn btn-danger">Delete Appraisal</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
     {# Details Grid #}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {# Appraisal Information #}
