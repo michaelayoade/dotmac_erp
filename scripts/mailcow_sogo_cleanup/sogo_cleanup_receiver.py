@@ -46,7 +46,7 @@ def enqueue_request(queue_db: str, email: str) -> None:
 
 
 class CleanupRequestHandler(BaseHTTPRequestHandler):
-    server: "CleanupHTTPServer"
+    server: CleanupHTTPServer
 
     def _send_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")

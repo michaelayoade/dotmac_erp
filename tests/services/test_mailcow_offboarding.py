@@ -80,9 +80,7 @@ def test_cleanup_request_client_sends_expected_post(mock_client_class: Mock) -> 
     response.raise_for_status.assert_called_once_with()
     request = http_client.post.call_args
     assert request.args == ("http://10.0.0.20:8765/cleanup",)
-    assert request.kwargs["headers"] == {
-        "Authorization": "Bearer cleanup-secret"
-    }
+    assert request.kwargs["headers"] == {"Authorization": "Bearer cleanup-secret"}
     assert request.kwargs["json"]["email"] == "john@dotmac.ng"
     assert request.kwargs["json"]["event"] == "employee_offboarding"
     requested_at = datetime.fromisoformat(request.kwargs["json"]["requested_at"])
@@ -138,9 +136,7 @@ def test_cleanup_request_failure_does_not_stop_mailcow_offboarding() -> None:
     assert not result.sogo_cleanup_request_queued
     assert result.sogo_inactive_forward_updated
     assert "sogo cleanup request failed: receiver unavailable" in result.errors
-    sogo_service.cleanup_forwarding_references.assert_called_once_with(
-        "john@dotmac.ng"
-    )
+    sogo_service.cleanup_forwarding_references.assert_called_once_with("john@dotmac.ng")
 
 
 def test_autoresponder_template_is_rendered_before_sieve_write() -> None:

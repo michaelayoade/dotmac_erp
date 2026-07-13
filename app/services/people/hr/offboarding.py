@@ -238,7 +238,7 @@ class EmployeeOffboardingService:
                 self._get_sogo_cleanup_client().enqueue(email)
             )
         except Exception as exc:
-            logger.exception("SOGo cleanup request failed for %s", email)
+            logger.exception("SOGo cleanup request failed during employee offboarding")
             result.errors.append(f"sogo cleanup request failed: {exc}")
 
     def _cleanup_shared_sieve_scripts(

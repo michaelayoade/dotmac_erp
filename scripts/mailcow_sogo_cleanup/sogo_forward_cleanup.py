@@ -248,6 +248,7 @@ def main() -> int:
         mysql_service=mysql_service,
     )
     successful: list[CleanupRequest] = []
+    restart_required = False
     failures = 0
     for request in requests:
         try:
@@ -259,6 +260,7 @@ def main() -> int:
                 "" if apply else " (dry run)",
             )
             successful.append(request)
+            restart_required = restart_required or changed_count > 0
         except Exception as exc:
             failures += 1
             logger.exception("Cleanup request %s failed", request.request_id)
@@ -269,7 +271,7 @@ def main() -> int:
         logger.info("Dry run complete; queue entries were left pending")
         return 1 if failures else 0
 
-    if successful and not args.no_restart:
+    if restart_required and not args.no_restart:
         try:
             restart_sogo_services(
                 mailcow_dir=mailcow_dir,

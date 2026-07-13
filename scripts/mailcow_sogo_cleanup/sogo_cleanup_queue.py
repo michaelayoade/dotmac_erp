@@ -13,9 +13,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_QUEUE_DB = (
-    "/var/lib/dotmac-mailcow-offboarding/sogo_cleanup_queue.sqlite3"
-)
+DEFAULT_QUEUE_DB = "/var/lib/dotmac-mailcow-offboarding/sogo_cleanup_queue.sqlite3"
 EMAIL_RE = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
