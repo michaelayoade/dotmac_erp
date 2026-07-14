@@ -26,7 +26,7 @@ def _date_offset_days(left: Any, right: Any) -> int | None:
         left = left.date()
     if hasattr(right, "date"):
         right = right.date()
-    return abs((left - right).days)
+    return int(abs((left - right).days))
 
 
 def _date_within_window(left: Any, right: Any, window_days: int) -> bool:
