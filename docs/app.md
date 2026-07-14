@@ -108,6 +108,7 @@ Celery is configured in `app/celery_app.py`. The scheduler runs from the DB-back
 
 - Health check: `GET /health`
 - Prometheus metrics: `GET /metrics`
+- Scrape safety contract: `docs/METRICS_SCRAPE_SAFETY.md`
 
 ## Testing
 
