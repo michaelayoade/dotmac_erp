@@ -262,3 +262,13 @@ class TestApplyToInvoice:
             svc.apply_to_invoice(invoice)
 
         db.flush.assert_not_called()
+
+
+def test_unallocated_receipt_query_uses_gross_ar_settlement() -> None:
+    db = MagicMock()
+    db.execute.return_value.all.return_value = []
+
+    AdvanceAllocationService(db)._get_unallocated_receipts(ORG_ID, CUSTOMER_ID)
+
+    statement = str(db.execute.call_args.args[0])
+    assert "gross_amount" in statement

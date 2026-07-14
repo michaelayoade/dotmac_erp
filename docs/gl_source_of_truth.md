@@ -26,6 +26,9 @@ Subledgers (Operational Detail)
 Tax Ledger (Supporting)
 - Tax transactions may be created alongside posting
 - Reporting still uses GL as the source of truth
+- External billing systems never supply GL account IDs. For Dotmac Sub billing,
+  the exact ownership and mapping boundary is defined in
+  `dotmac_sub_tax_accounting_contract.md`.
 
 Posting Rules
 -------------

@@ -238,6 +238,6 @@ class CustomerPayment(Base):
 
     @property
     def unallocated_amount(self) -> Decimal:
-        """Net amount minus total allocated across all linked invoices."""
+        """Gross AR settlement minus total allocated across linked invoices."""
         allocated = sum((a.allocated_amount for a in self.allocations), Decimal("0"))
-        return self.amount - allocated
+        return self.gross_amount - allocated

@@ -207,6 +207,35 @@ def test_parse_payment_reads_refunded_amount() -> None:
     assert client._parse_payment(base).refunded_amount == Decimal("0")
 
 
+def test_parse_payment_reads_proof_backed_wht_contract() -> None:
+    client = DotmacSubClient(DotmacSubConfig(api_url="x", api_token="t"))
+
+    payment = client._parse_payment(
+        {
+            "id": "p-wht",
+            "amount": "107.50",
+            "gross_amount": "107.50",
+            "net_amount": "100.00",
+            "wht_amount": "7.50",
+            "wht_rate": "7.5",
+            "wht_status": "certified",
+            "wht_record_id": "wht-1",
+            "wht_certificate_reference": "CERT-42",
+            "wht_resolved_at": "2026-07-03T09:00:00+00:00",
+            "currency": "NGN",
+            "status": "succeeded",
+        }
+    )
+
+    assert payment.gross_amount == Decimal("107.50")
+    assert payment.net_amount == Decimal("100.00")
+    assert payment.wht_amount == Decimal("7.50")
+    assert payment.wht_rate == Decimal("7.5")
+    assert payment.wht_status == "certified"
+    assert payment.wht_certificate_reference == "CERT-42"
+    assert payment.wht_resolved_at == "2026-07-03T09:00:00+00:00"
+
+
 def test_subscriber_full_name_prefers_display_then_company_then_parts() -> None:
     client = DotmacSubClient(DotmacSubConfig(api_url="x", api_token="t"))
     assert (

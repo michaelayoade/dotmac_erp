@@ -470,7 +470,13 @@ class TaxReportService:
             if not source_document_type:
                 return "OTHER"
             prefix = source_document_type.split("_", 1)[0]
-            return prefix if prefix in {"AP", "AR"} else "OTHER"
+            if prefix in {"AP", "AR"}:
+                return prefix
+            if source_document_type.startswith("CUSTOMER_PAYMENT"):
+                return "AR"
+            if source_document_type.startswith("SUPPLIER_PAYMENT"):
+                return "AP"
+            return "OTHER"
 
         # Query WHT transactions
         results = list(
@@ -1149,8 +1155,22 @@ def _wht_report_cash(
         ).scalars()
     )
 
+    write_off_rows = list(
+        db.execute(
+            select(TaxTransaction)
+            .where(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.transaction_date >= start_date,
+                TaxTransaction.transaction_date <= end_date,
+                TaxTransaction.source_document_type == "CUSTOMER_PAYMENT_WHT_WRITE_OFF",
+                TaxTransaction.transaction_type == TaxTransactionType.WITHHOLDING,
+            )
+            .order_by(TaxTransaction.transaction_date.desc())
+        ).scalars()
+    )
+
     transactions: list[dict] = []
-    report.wht_deducted_count = len(ar_rows)
+    report.wht_deducted_count = len(ar_rows) + len(write_off_rows)
     for cp in ar_rows:
         transactions.append(
             {
@@ -1162,6 +1182,20 @@ def _wht_report_cash(
                 "tax_amount": float(cp.wht_amount or 0),
                 "reference": cp.reference,
                 "certificate_number": cp.wht_certificate_number,
+            }
+        )
+
+    for txn in write_off_rows:
+        transactions.append(
+            {
+                "transaction_id": str(txn.transaction_id),
+                "transaction_date": txn.transaction_date.isoformat(),
+                "source_module": "AR",
+                "source_document_type": txn.source_document_type,
+                "base_amount": float(txn.base_amount or 0),
+                "tax_amount": float(txn.tax_amount or 0),
+                "reference": txn.source_document_reference,
+                "certificate_number": None,
             }
         )
 

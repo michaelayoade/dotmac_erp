@@ -28,26 +28,46 @@ def test_posted_amount_changed_only_when_posted_and_amount_differs():
     posted = SimpleNamespace(
         journal_entry_id=uuid.uuid4(),
         amount=Decimal("100"),
+        gross_amount=Decimal("100"),
+        wht_amount=Decimal("0"),
+        wht_code_id=None,
         functional_currency_amount=Decimal("100"),
     )
+
+    def changed(*, amount="100", gross="100", wht="0", code=None, functional="100"):
+        return PaymentSyncMixin._posted_amount_changed(
+            posted,
+            new_amount=Decimal(amount),
+            new_gross_amount=Decimal(gross),
+            new_wht_amount=Decimal(wht),
+            new_wht_code_id=code,
+            new_functional=Decimal(functional),
+        )
+
     # posted + amount changed -> needs reversal
-    assert PaymentSyncMixin._posted_amount_changed(posted, Decimal("80"), Decimal("80"))
+    assert changed(amount="80", gross="80", functional="80")
     # posted + functional changed only -> needs reversal
-    assert PaymentSyncMixin._posted_amount_changed(
-        posted, Decimal("100"), Decimal("95")
-    )
+    assert changed(functional="95")
+    # WHT changes affect both the bank and tax-receivable legs.
+    assert changed(amount="95", wht="5", code=uuid.uuid4())
     # posted but unchanged -> no reversal
-    assert not PaymentSyncMixin._posted_amount_changed(
-        posted, Decimal("100"), Decimal("100")
-    )
+    assert not changed()
     # not yet posted -> never reverses (post_unposted_payments handles it)
     unposted = SimpleNamespace(
         journal_entry_id=None,
         amount=Decimal("100"),
+        gross_amount=Decimal("100"),
+        wht_amount=Decimal("0"),
+        wht_code_id=None,
         functional_currency_amount=Decimal("100"),
     )
     assert not PaymentSyncMixin._posted_amount_changed(
-        unposted, Decimal("80"), Decimal("80")
+        unposted,
+        new_amount=Decimal("80"),
+        new_gross_amount=Decimal("80"),
+        new_wht_amount=Decimal("0"),
+        new_wht_code_id=None,
+        new_functional=Decimal("80"),
     )
 
 
@@ -106,6 +126,7 @@ def test_reverse_preserves_posting_link_on_failure(monkeypatch):
 
 from app.models.finance.ar.customer_payment import PaymentStatus  # noqa: E402
 from app.services.dotmac_sub.sync._types import SyncResult  # noqa: E402
+from app.services.dotmac_sub.client import PaymentRecord  # noqa: E402
 
 
 def _refund_record(amount="100"):
@@ -204,3 +225,32 @@ def test_refund_reversal_failure_leaves_payment_untouched(monkeypatch):
     assert payment.journal_entry_id == original_journal
     assert payment.status == PaymentStatus.CLEARED
     assert result.errors and "reversal failed" in result.errors[0].lower()
+
+
+def test_unchanged_source_payment_repairs_missing_accounting_projection():
+    payment = SimpleNamespace(payment_id=uuid.uuid4())
+    harness = _Harness(db=None, org=uuid.uuid4())
+    repaired = []
+    harness._compute_hash = lambda _data: "same"  # type: ignore[method-assign]
+    harness._has_changed = lambda *_args: False  # type: ignore[method-assign]
+    harness._find_local_payment = lambda _external_id: payment  # type: ignore[method-assign]
+    harness._ensure_synced_payment_posted = (  # type: ignore[method-assign]
+        lambda local, _user: repaired.append(("receipt", local))
+    )
+    harness._ensure_wht_terminal_consequence = (  # type: ignore[method-assign]
+        lambda local, _source, **_kwargs: repaired.append(("wht", local))
+    )
+    result = _result()
+    source = PaymentRecord(
+        id="pay-1",
+        account_id="account-1",
+        billing_account_id=None,
+        amount=Decimal("100"),
+        currency="NGN",
+        status="succeeded",
+    )
+
+    harness._sync_single_payment(source, result, None, skip_unchanged=True)
+
+    assert repaired == [("receipt", payment), ("wht", payment)]
+    assert result.skipped == 1

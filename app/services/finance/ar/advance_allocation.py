@@ -151,7 +151,7 @@ class AdvanceAllocationService:
             select(
                 CustomerPayment,
                 (
-                    CustomerPayment.amount
+                    CustomerPayment.gross_amount
                     - func.coalesce(alloc_sum.c.total_allocated, Decimal("0"))
                 ).label("unallocated"),
             )
@@ -163,11 +163,11 @@ class AdvanceAllocationService:
                 CustomerPayment.organization_id == organization_id,
                 CustomerPayment.customer_id == customer_id,
                 CustomerPayment.status == PaymentStatus.CLEARED,
-                CustomerPayment.amount > Decimal("0"),
+                CustomerPayment.gross_amount > Decimal("0"),
             )
             .having(
                 (
-                    CustomerPayment.amount
+                    CustomerPayment.gross_amount
                     - func.coalesce(alloc_sum.c.total_allocated, Decimal("0"))
                 )
                 > DUST_THRESHOLD
