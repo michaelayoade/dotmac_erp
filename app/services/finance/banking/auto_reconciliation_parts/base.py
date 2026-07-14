@@ -87,8 +87,8 @@ _T = TypeVar("_T")
 
 logger = logging.getLogger(__name__)
 
-# Tolerance for amount matching (handles rounding in bank CSV imports)
-AMOUNT_TOLERANCE = Decimal("0.01")
+# Exact amount matching is required for auto-match.
+AMOUNT_TOLERANCE = Decimal("0.00")
 
 # Paystack transaction IDs are 12-14 hex characters
 _PAYSTACK_REF_RE = re.compile(r"[0-9a-f]{12,14}", re.IGNORECASE)
@@ -124,11 +124,11 @@ class AutoMatchDefaults:
     pass_splynx_date_amount_enabled: bool = True
     pass_ap_payments_enabled: bool = True
     pass_ar_payments_enabled: bool = True
-    pass_bank_fees_enabled: bool = True
-    pass_settlements_enabled: bool = True
-    amount_tolerance: Decimal = Decimal("0.01")
-    date_buffer_days: int = 7
-    settlement_date_window_days: int = 10
+    pass_bank_fees_enabled: bool = False
+    pass_settlements_enabled: bool = False
+    amount_tolerance: Decimal = Decimal("0.00")
+    date_buffer_days: int = 3
+    settlement_date_window_days: int = 1
     finance_cost_account_code: str = "6080"
 
 

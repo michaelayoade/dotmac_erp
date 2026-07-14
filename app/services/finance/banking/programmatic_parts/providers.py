@@ -25,7 +25,7 @@ class PaymentIntentProvider(CandidateProvider):
         if cached is not None:
             return cached
 
-        buffer_days = ctx.config.date_buffer_days if ctx.config else 7
+        buffer_days = ctx.policy.date_buffer_days
         date_buffer = timedelta(days=buffer_days)
         stmt = select(PaymentIntent).where(
             PaymentIntent.organization_id == ctx.organization_id,

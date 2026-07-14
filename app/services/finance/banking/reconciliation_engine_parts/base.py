@@ -54,8 +54,8 @@ logger = logging.getLogger(__name__)
 # Paystack transaction IDs: 12-14 hex characters
 _HEX_REF_RE = re.compile(r"[0-9a-f]{12,14}", re.IGNORECASE)
 
-# Default amount tolerance (1 cent)
-_DEFAULT_TOLERANCE = Decimal("0.01")
+# Default amount tolerance (exact amount only)
+_DEFAULT_TOLERANCE = Decimal("0.00")
 
 # System user for auto-created journals
 _SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")

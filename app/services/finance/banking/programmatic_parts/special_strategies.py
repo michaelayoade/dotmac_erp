@@ -386,7 +386,7 @@ class InterbankCounterpartStrategy(MatchStrategy):
                                 credit_jl,
                                 source_type="INTER_BANK",
                                 source_id=None,
-                                confidence=85,
+                                confidence=95,
                                 explanation=f"Settlement transfer: {settlement_line.reference}",
                             )
                         except Exception:
@@ -531,7 +531,7 @@ class PayrollEntryStrategy(MatchStrategy):
                     journal_line,
                     source_type="PAYROLL_ENTRY",
                     source_id=entry.entry_id,
-                    confidence=90,
+                    confidence=95,
                     explanation=(
                         f"Payroll {entry.entry_number} "
                         f"({entry.payroll_month}/{entry.payroll_year})"
@@ -676,6 +676,14 @@ class ExpenseReimbursementStrategy(MatchStrategy):
                     )
                     continue
 
+                if self.strategy_id not in ctx.policy.journal_creation_strategy_keys:
+                    logger.debug(
+                        "Skipping reimbursement journal creation for claim %s; "
+                        "journal creation is disabled by reconciliation policy",
+                        claim.claim_number,
+                    )
+                    continue
+
                 # Create reimbursement journal via the posting adapter
                 correlation_id = f"exp-reimb-{claim.claim_id}"
                 posting_result = ExpensePostingAdapter.post_expense_reimbursement(
@@ -779,8 +787,8 @@ class LegacyCustomRuleStrategy(MatchStrategy):
                 ctx.bank_account,
                 ctx.unmatched_lines,
                 ctx.matched_line_ids,
-                amount_tolerance=ctx.config.amount_tolerance,
-                date_buffer_days=ctx.config.date_buffer_days,
+                amount_tolerance=ctx.policy.amount_tolerance,
+                date_buffer_days=ctx.policy.date_buffer_days,
                 extra_gl_account_ids=ctx.extra_gl_account_ids,
             )
             ctx.result.matched += engine_result.matched

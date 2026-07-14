@@ -278,7 +278,8 @@ class ReconciliationEngineHelpers:
     ) -> None:
         """Perform a match and log it."""
         action = "MATCHED"
-        if confidence < rule.min_confidence:
+        required_confidence = max(rule.min_confidence or 0, 95)
+        if confidence < required_confidence:
             action = "SUGGESTED"
             # Don't actually match — just log the suggestion
             rule_service.log_match(
