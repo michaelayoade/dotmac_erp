@@ -125,12 +125,7 @@ class APInvoiceAutoReceiptService:
         if line.receipt_auto_generate_serials:
             return APInvoiceAutoReceiptService._generated_serial_numbers(invoice, line)
         serial_numbers = line.receipt_serial_numbers or []
-        if not serial_numbers:
-            raise ValidationError(
-                "Cannot create inventory receipt: serial numbers are required for "
-                f"serial-tracked line {line.line_number}"
-            )
-        return serial_numbers
+        return serial_numbers or None
 
     @staticmethod
     def create_for_invoice(
@@ -231,6 +226,9 @@ class APInvoiceAutoReceiptService:
                 or invoice.supplier_invoice_number
                 or invoice.invoice_number,
                 serial_numbers=serial_numbers,
+                allow_missing_serial_numbers=bool(
+                    item.track_serial_numbers and not serial_numbers
+                ),
             )
 
             try:
