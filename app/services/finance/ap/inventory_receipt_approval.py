@@ -473,6 +473,9 @@ class APInventoryReceiptApprovalService:
             or invoice.supplier_invoice_number
             or invoice.invoice_number,
             serial_numbers=effective_serials,
+            allow_missing_serial_numbers=bool(
+                item.track_serial_numbers and not effective_serials
+            ),
         )
 
         try:

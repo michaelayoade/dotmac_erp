@@ -330,6 +330,47 @@ def test_missing_warehouse_blocks_receipt_creation_clearly():
         )
 
 
+def test_serial_tracked_auto_receipt_without_serials_does_not_block_submission():
+    db = MagicMock()
+    org_id = uuid4()
+    invoice = _invoice(org_id)
+    item_id = uuid4()
+    warehouse_id = uuid4()
+    line = _line(invoice.invoice_id, item_id, warehouse_id)
+    item = _item(org_id, item_id, serial=True)
+    warehouse = _warehouse(org_id, warehouse_id)
+    transaction = SimpleNamespace(transaction_id=uuid4())
+
+    def _get(model, _id):
+        if model.__name__ == "SupplierInvoice":
+            return invoice
+        if model.__name__ == "Item":
+            return item
+        if model.__name__ == "Warehouse":
+            return warehouse
+        return None
+
+    db.get.side_effect = _get
+    db.scalars.side_effect = [
+        _ScalarResult([line]),
+        _ScalarResult([]),
+        _ScalarResult([_period()]),
+    ]
+
+    with patch(
+        "app.services.finance.ap.auto_inventory_receipt.InventoryTransactionService.create_receipt",
+        return_value=transaction,
+    ) as create_receipt:
+        result = APInvoiceAutoReceiptService.create_for_invoice(
+            db, org_id, invoice.invoice_id, uuid4()
+        )
+
+    assert result.created_count == 1
+    txn_input = create_receipt.call_args.args[2]
+    assert txn_input.serial_numbers is None
+    assert txn_input.allow_missing_serial_numbers is True
+
+
 def test_store_approval_mode_creates_pending_approval_without_inventory_receipt():
     db = MagicMock()
     org_id = uuid4()
@@ -379,6 +420,48 @@ def test_store_approval_mode_creates_pending_approval_without_inventory_receipt(
     assert approval.item_id == item_id
     assert approval.warehouse_id == warehouse_id
     assert approval.requested_quantity == line.quantity
+
+
+def test_store_approval_serial_tracked_line_without_serials_creates_pending_request():
+    db = MagicMock()
+    org_id = uuid4()
+    invoice = _invoice(
+        org_id,
+        auto=False,
+        receipt_mode=InventoryReceiptMode.STORE_APPROVAL,
+    )
+    item_id = uuid4()
+    warehouse_id = uuid4()
+    line = _line(invoice.invoice_id, item_id, warehouse_id)
+    item = _item(org_id, item_id, serial=True)
+    warehouse = _warehouse(org_id, warehouse_id)
+
+    def _get(model, _id):
+        if model.__name__ == "SupplierInvoice":
+            return invoice
+        if model.__name__ == "Item":
+            return item
+        if model.__name__ == "Warehouse":
+            return warehouse
+        return None
+
+    db.get.side_effect = _get
+    db.scalars.side_effect = [
+        _ScalarResult([line]),
+        _ScalarResult([]),
+    ]
+
+    result = APInventoryReceiptApprovalService.create_pending_from_invoice(
+        db, org_id, invoice.invoice_id, uuid4()
+    )
+
+    assert result.created_count == 1
+    approval = next(
+        call.args[0]
+        for call in db.add.call_args_list
+        if isinstance(call.args[0], InvoiceInventoryReceiptApproval)
+    )
+    assert approval.receipt_serial_numbers is None
 
 
 def test_store_approval_notification_targets_inventory_approvers():
@@ -576,6 +659,61 @@ def test_approve_store_receipt_posts_inventory_and_links_line():
     assert txn_input.quantity == Decimal("2")
     assert txn_input.source_document_id == invoice.invoice_id
     assert txn_input.source_document_line_id == line.line_id
+
+
+def test_approve_store_receipt_allows_serial_tracked_item_without_serials():
+    db = MagicMock()
+    org_id = uuid4()
+    user_id = uuid4()
+    invoice = _invoice(
+        org_id,
+        auto=False,
+        receipt_mode=InventoryReceiptMode.STORE_APPROVAL,
+    )
+    item_id = uuid4()
+    warehouse_id = uuid4()
+    line = _line(invoice.invoice_id, item_id, warehouse_id)
+    item = _item(org_id, item_id, serial=True)
+    item.costing_method = SimpleNamespace(name="FIFO")
+    warehouse = _warehouse(org_id, warehouse_id)
+    warehouse.is_receiving = True
+    approval = _approval(
+        org_id, invoice.invoice_id, line.line_id, item_id, warehouse_id
+    )
+    transaction = SimpleNamespace(transaction_id=uuid4())
+
+    def _get(model, _id):
+        if model.__name__ == "InvoiceInventoryReceiptApproval":
+            return approval
+        if model.__name__ == "SupplierInvoice":
+            return invoice
+        if model.__name__ == "SupplierInvoiceLine":
+            return line
+        if model.__name__ == "Item":
+            return item
+        if model.__name__ == "Warehouse":
+            return warehouse
+        return None
+
+    db.get.side_effect = _get
+    db.scalars.side_effect = [_ScalarResult([_period()])]
+
+    with patch(
+        "app.services.finance.ap.inventory_receipt_approval."
+        "InventoryTransactionService.create_receipt",
+        return_value=transaction,
+    ) as create_receipt:
+        APInventoryReceiptApprovalService.approve(
+            db,
+            org_id,
+            approval.approval_id,
+            user_id,
+            approved_quantity=Decimal("2"),
+        )
+
+    txn_input = create_receipt.call_args.args[2]
+    assert txn_input.serial_numbers is None
+    assert txn_input.allow_missing_serial_numbers is True
 
 
 def test_approve_store_receipt_posts_inventory_before_invoice_posting_or_payment():
