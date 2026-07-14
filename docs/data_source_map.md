@@ -66,6 +66,10 @@ Banking Module (Operational)
 Tax Module (Compliance)
 -----------------------
 - /tax/*: Tax subledger (compliance), reconciles to GL where applicable
+- Dotmac Sub billing imports: Sub supplies invoice/credit-line tax facts and WHT
+  evidence state; ERP resolves those facts to ERP TaxCodes, owns every tax
+  transaction and balanced journal, and is authoritative for returns and
+  financial reporting. See `dotmac_sub_tax_accounting_contract.md`.
 
 FA / Lease / Financial Instruments
 ----------------------------------

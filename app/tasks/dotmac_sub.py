@@ -404,6 +404,11 @@ def run_dotmac_sub_incremental_sync(
             credit_notes = service.sync_credit_notes(
                 created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
             )
+            invoice_post = service.post_unposted_invoices(
+                created_by_user_id=SYSTEM_USER_ID
+            )
+            if invoice_post["errors"]:
+                invoices.errors.extend(invoice_post["errors"][:100])
             post = service.post_unposted_payments(created_by_user_id=SYSTEM_USER_ID)
             if post["errors"]:
                 payments.errors.extend(post["errors"][:100])
@@ -459,6 +464,11 @@ def run_dotmac_sub_daily_reconciliation(
                 batch_size=batch_size,
             )
             results.append(payments)
+            invoice_post = service.post_unposted_invoices(
+                created_by_user_id=SYSTEM_USER_ID
+            )
+            if invoice_post["errors"]:
+                results[0].errors.extend(invoice_post["errors"][:100])
             post = service.post_unposted_payments(created_by_user_id=SYSTEM_USER_ID)
             if post["errors"]:
                 payments.errors.extend(post["errors"][:100])

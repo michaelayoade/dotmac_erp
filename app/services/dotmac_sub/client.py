@@ -203,6 +203,7 @@ class InvoiceLineRecord:
     unit_price: Decimal
     amount: Decimal
     tax_rate_id: str | None = None
+    tax_application: str = "exclusive"
 
 
 @dataclass
@@ -254,6 +255,14 @@ class PaymentRecord:
     # refunded_amount. Defaults to 0 when dotmac_sub hasn't deployed the field
     # yet, so the two apps deploy in any order.
     refunded_amount: Decimal = Decimal("0")
+    gross_amount: Decimal | None = None
+    net_amount: Decimal | None = None
+    wht_amount: Decimal = Decimal("0")
+    wht_rate: Decimal | None = None
+    wht_status: str | None = None
+    wht_record_id: str | None = None
+    wht_certificate_reference: str | None = None
+    wht_resolved_at: str | None = None
     paid_at: str | None = None
     external_id: str | None = None
     memo: str | None = None
@@ -278,6 +287,7 @@ class CreditNoteLineRecord:
     unit_price: Decimal
     amount: Decimal
     tax_rate_id: str | None = None
+    tax_application: str = "exclusive"
 
 
 @dataclass
@@ -308,6 +318,8 @@ class TaxRateRecord:
     id: str
     name: str
     rate: Decimal
+    code: str | None = None
+    is_active: bool = True
 
 
 def _dec(value: Any, default: str = "0") -> Decimal:
@@ -776,6 +788,7 @@ class DotmacSubClient:
                 unit_price=_dec(line.get("unit_price")),
                 amount=_dec(line.get("amount")),
                 tax_rate_id=line.get("tax_rate_id"),
+                tax_application=line.get("tax_application", "exclusive"),
             )
             for line in item.get("lines", [])
         ]
@@ -825,6 +838,20 @@ class DotmacSubClient:
             billing_account_id=item.get("billing_account_id"),
             amount=_dec(item.get("amount")),
             refunded_amount=_dec(item.get("refunded_amount")),
+            gross_amount=_dec(item.get("gross_amount"))
+            if item.get("gross_amount") is not None
+            else None,
+            net_amount=_dec(item.get("net_amount"))
+            if item.get("net_amount") is not None
+            else None,
+            wht_amount=_dec(item.get("wht_amount")),
+            wht_rate=_dec(item.get("wht_rate"))
+            if item.get("wht_rate") is not None
+            else None,
+            wht_status=item.get("wht_status"),
+            wht_record_id=item.get("wht_record_id"),
+            wht_certificate_reference=item.get("wht_certificate_reference"),
+            wht_resolved_at=item.get("wht_resolved_at"),
             currency=item.get("currency", settings.default_functional_currency_code),
             status=item.get("status", ""),
             paid_at=item.get("paid_at"),
@@ -860,6 +887,7 @@ class DotmacSubClient:
                 unit_price=_dec(line.get("unit_price")),
                 amount=_dec(line.get("amount")),
                 tax_rate_id=line.get("tax_rate_id"),
+                tax_application=line.get("tax_application", "exclusive"),
             )
             for line in item.get("lines", [])
         ]
@@ -900,6 +928,8 @@ class DotmacSubClient:
                     id=str(item.get("id", "")),
                     name=item.get("name", ""),
                     rate=_dec(item.get("rate")),
+                    code=item.get("code"),
+                    is_active=bool(item.get("is_active", True)),
                 )
             )
         return rates

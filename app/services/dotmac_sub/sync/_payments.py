@@ -58,6 +58,7 @@ class PaymentSyncMixin:
     _generate_payment_number: Any
     _reprime_tenant_context: Any
     _functional_amount: Any
+    _resolve_source_wht_code: Any
 
     def sync_payments(
         self,
@@ -154,6 +155,14 @@ class PaymentSyncMixin:
             {
                 "amount": str(pay.amount),
                 "refunded": str(pay.refunded_amount),
+                "gross_amount": str(pay.gross_amount),
+                "net_amount": str(pay.net_amount),
+                "wht_amount": str(pay.wht_amount),
+                "wht_rate": str(pay.wht_rate),
+                "wht_status": pay.wht_status,
+                "wht_record_id": pay.wht_record_id,
+                "wht_certificate_reference": pay.wht_certificate_reference,
+                "wht_resolved_at": pay.wht_resolved_at,
                 "status": pay.status,
                 "paid_at": pay.paid_at,
                 "account_id": pay.effective_account_id,
@@ -166,6 +175,17 @@ class PaymentSyncMixin:
         if skip_unchanged and not self._has_changed(
             EntityType.PAYMENT, external_id, data_hash
         ):
+            payment = self._find_local_payment(external_id)
+            if payment is not None:
+                # An unchanged source row can still repair a missing ERP
+                # projection. Reconciliation is driven from canonical Sub
+                # facts, not from the import hash alone.
+                self._ensure_synced_payment_posted(payment, created_by_user_id)
+                self._ensure_wht_terminal_consequence(
+                    payment,
+                    pay,
+                    created_by_user_id=created_by_user_id,
+                )
             result.skipped += 1
             return
 
@@ -195,12 +215,38 @@ class PaymentSyncMixin:
             or pay.currency
             or settings.default_functional_currency_code
         )
+        # Net cash actually received = source net cash minus refunds. For a WHT
+        # settlement, Sub's payment amount is the gross customer credit while
+        # the proof-backed WHT record supplies the smaller bank receipt.
+        source_gross = pay.gross_amount if pay.gross_amount is not None else pay.amount
+        source_net = pay.net_amount if pay.net_amount is not None else pay.amount
+        gross_amount = source_gross - pay.refunded_amount
+        net_amount = source_net - pay.refunded_amount
+        wht_amount = pay.wht_amount or Decimal("0")
+        if gross_amount < 0 or net_amount < 0:
+            raise ValueError("Sub payment refund exceeds its source settlement amount")
+        if (net_amount + wht_amount - gross_amount).copy_abs() > Decimal("0.01"):
+            raise ValueError(
+                "Sub payment accounting facts do not balance: "
+                f"net {net_amount} + WHT {wht_amount} != gross {gross_amount}"
+            )
+        wht_code_id = None
+        if wht_amount > Decimal("0"):
+            if pay.wht_rate is None:
+                raise ValueError("Sub WHT payment is missing its source WHT rate")
+            wht_code_id = self._resolve_source_wht_code(
+                rate_percent=pay.wht_rate,
+                effective_date=payment_date,
+            ).tax_code_id
+
+        # A partial refund reduces the cash/AR settlement but does not silently
+        # erase an already-recognized WHT receivable.
+        #
         # Net cash actually received = gross captured minus refunds. A partial
         # refund (partially_refunded is "settled") reduces this, so the receipt
         # GL and the C2 change-detection post the net — otherwise ERP overstates
         # cash by the refunded amount. A full refund flips status out of settled
         # and is reversed by _handle_unsettled_payment instead.
-        net_amount = pay.amount - pay.refunded_amount
         exch_rate, functional_amount = self._functional_amount(
             net_amount, currency_code, payment_date
         )
@@ -220,9 +266,11 @@ class PaymentSyncMixin:
                 payment_date=payment_date,
                 payment_method=method,
                 currency_code=currency_code,
-                gross_amount=pay.amount,
+                gross_amount=gross_amount,
                 amount=net_amount,
-                wht_amount=Decimal("0"),
+                wht_code_id=wht_code_id,
+                wht_amount=wht_amount,
+                wht_certificate_number=pay.wht_certificate_reference,
                 exchange_rate=exch_rate,
                 functional_currency_amount=functional_amount,
                 bank_account_id=bank_account_id,
@@ -249,7 +297,14 @@ class PaymentSyncMixin:
             # subledger shows the new one. If the reversal can't be created,
             # leave the payment (and its GL) untouched rather than diverge — the
             # next sync retries.
-            if self._posted_amount_changed(payment, net_amount, functional_amount):
+            if self._posted_amount_changed(
+                payment,
+                new_amount=net_amount,
+                new_gross_amount=gross_amount,
+                new_wht_amount=wht_amount,
+                new_wht_code_id=wht_code_id,
+                new_functional=functional_amount,
+            ):
                 if not self._reverse_posted_payment_gl(payment, created_by_user_id):
                     result.errors.append(
                         f"Payment {external_id}: GL reversal failed on amount "
@@ -260,8 +315,11 @@ class PaymentSyncMixin:
             payment.payment_date = payment_date
             payment.payment_method = method
             payment.currency_code = currency_code
-            payment.gross_amount = pay.amount
+            payment.gross_amount = gross_amount
             payment.amount = net_amount
+            payment.wht_code_id = wht_code_id
+            payment.wht_amount = wht_amount
+            payment.wht_certificate_number = pay.wht_certificate_reference
             payment.exchange_rate = exch_rate
             payment.functional_currency_amount = functional_amount
             payment.bank_account_id = bank_account_id
@@ -272,18 +330,246 @@ class PaymentSyncMixin:
             result.updated += 1
 
         self._apply_allocations(payment, pay, payment_date)
+        self._ensure_synced_payment_posted(payment, created_by_user_id)
+        self._ensure_wht_terminal_consequence(
+            payment,
+            pay,
+            created_by_user_id=created_by_user_id,
+        )
         self._record_sync(
             EntityType.PAYMENT, external_id, payment.payment_id, data_hash
         )
 
+    def _ensure_synced_payment_posted(
+        self,
+        payment: CustomerPayment,
+        created_by_user_id: UUID | None,
+    ) -> None:
+        """Require the ERP-owned balanced receipt journal in the source savepoint."""
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
+
+        CustomerPaymentService.ensure_gl_posted(
+            self.db,
+            payment,
+            posted_by_user_id=created_by_user_id,
+        )
+        if payment.gross_amount != Decimal("0") and payment.journal_entry_id is None:
+            raise ValueError(
+                "ERP failed to post the synced payment to its canonical GL"
+            )
+
+    def _ensure_wht_terminal_consequence(
+        self,
+        payment: CustomerPayment,
+        pay: PaymentRecord,
+        *,
+        created_by_user_id: UUID | None,
+    ) -> None:
+        """Post ERP's balanced consequence for a terminal Sub WHT decision.
+
+        Sub owns the evidence-backed reclaimed/written-off decision. ERP owns
+        the accounts and journal: reclaim applies the receivable against the
+        mapped tax-liability account; write-off moves it to the mapped expense
+        account. Missing configuration fails the entire source savepoint.
+        """
+        terminal_status = (pay.wht_status or "").lower()
+        if terminal_status not in {"reclaimed", "written_off"}:
+            return
+        if payment.wht_amount <= Decimal("0") or payment.wht_code_id is None:
+            raise ValueError("Terminal Sub WHT state has no ERP WHT amount/code")
+        if not pay.wht_record_id:
+            raise ValueError("Terminal Sub WHT state is missing its source record id")
+
+        from app.models.finance.gl.journal_entry import JournalType
+        from app.models.finance.tax.tax_code import TaxCode, TaxType
+        from app.services.finance.gl.journal import JournalInput, JournalLineInput
+        from app.services.finance.posting.base import BasePostingAdapter
+        from app.services.finance.posting.idempotency import PostingIdempotencyService
+
+        document_type = (
+            "CUSTOMER_PAYMENT_WHT_RECLAIM"
+            if terminal_status == "reclaimed"
+            else "CUSTOMER_PAYMENT_WHT_WRITE_OFF"
+        )
+        if PostingIdempotencyService.source_journal_exists(
+            self.db,
+            source_module="AR",
+            source_document_type=document_type,
+            source_document_id=payment.payment_id,
+            exclude_reversal_journals=True,
+        ):
+            return
+
+        tax_code = self.db.get(TaxCode, payment.wht_code_id)
+        if not (
+            tax_code
+            and tax_code.organization_id == self.organization_id
+            and tax_code.tax_type == TaxType.WITHHOLDING
+            and tax_code.tax_paid_account_id
+        ):
+            raise ValueError("ERP WHT receivable account is not configured")
+        debit_account_id = (
+            tax_code.tax_collected_account_id
+            if terminal_status == "reclaimed"
+            else tax_code.tax_expense_account_id
+        )
+        if debit_account_id is None:
+            required = "tax-liability" if terminal_status == "reclaimed" else "expense"
+            raise ValueError(
+                f"ERP WHT {required} account is required for {terminal_status}"
+            )
+
+        resolved_at = self._parse_datetime(pay.wht_resolved_at)
+        if resolved_at is None:
+            raise ValueError(
+                "Terminal Sub WHT state is missing its resolution timestamp"
+            )
+        posting_date = resolved_at.date()
+        exchange_rate = payment.exchange_rate or Decimal("1")
+        amount = payment.wht_amount
+        functional_amount = amount * exchange_rate
+        label = "reclaimed" if terminal_status == "reclaimed" else "written off"
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=posting_date,
+            posting_date=posting_date,
+            description=(
+                f"Sub WHT {label} for {payment.payment_number} ({pay.wht_record_id})"
+            ),
+            reference=pay.wht_certificate_reference or pay.wht_record_id,
+            currency_code=payment.currency_code,
+            exchange_rate=exchange_rate,
+            lines=[
+                JournalLineInput(
+                    account_id=debit_account_id,
+                    debit_amount=amount,
+                    credit_amount=Decimal("0"),
+                    debit_amount_functional=functional_amount,
+                    credit_amount_functional=Decimal("0"),
+                    description=f"WHT {label}",
+                ),
+                JournalLineInput(
+                    account_id=tax_code.tax_paid_account_id,
+                    debit_amount=Decimal("0"),
+                    credit_amount=amount,
+                    debit_amount_functional=Decimal("0"),
+                    credit_amount_functional=functional_amount,
+                    description="Clear WHT receivable",
+                ),
+            ],
+            source_module="AR",
+            source_document_type=document_type,
+            source_document_id=payment.payment_id,
+            correlation_id=payment.correlation_id,
+        )
+        user_id = created_by_user_id or payment.created_by_user_id or SYSTEM_USER_ID
+        journal, result = BasePostingAdapter.create_approve_and_post_journal(
+            self.db,
+            self.organization_id,
+            journal_input,
+            user_id,
+            posting_date=posting_date,
+            idempotency_key=BasePostingAdapter.make_idempotency_key(
+                self.organization_id,
+                "AR:PAY:WHT",
+                payment.payment_id,
+                action=terminal_status,
+            ),
+            source_module="AR",
+            correlation_id=payment.correlation_id,
+            success_message=f"WHT {label} posted successfully",
+        )
+        if not result.success or journal is None:
+            raise ValueError(result.message)
+
+        if terminal_status == "written_off":
+            self._record_wht_write_off_tax_reversal(
+                payment,
+                pay,
+                tax_code=tax_code,
+                posting_date=posting_date,
+                journal_entry_id=journal.journal_entry_id,
+            )
+
+    def _record_wht_write_off_tax_reversal(
+        self,
+        payment: CustomerPayment,
+        pay: PaymentRecord,
+        *,
+        tax_code: Any,
+        posting_date: date,
+        journal_entry_id: UUID,
+    ) -> None:
+        """Negate the original WHT tax credit without rewriting its history."""
+        from app.models.finance.tax.tax_transaction import (
+            TaxRecognitionBasis,
+            TaxTransaction,
+            TaxTransactionType,
+        )
+        from app.services.finance.gl.period_guard import PeriodGuardService
+        from app.services.finance.tax.tax_transaction import (
+            TaxTransactionInput,
+            tax_transaction_service,
+        )
+
+        existing = self.db.scalar(
+            select(TaxTransaction.transaction_id).where(
+                TaxTransaction.organization_id == self.organization_id,
+                TaxTransaction.source_document_type == "CUSTOMER_PAYMENT_WHT_WRITE_OFF",
+                TaxTransaction.source_document_id == payment.payment_id,
+            )
+        )
+        if existing is not None:
+            return
+        fiscal_period = PeriodGuardService.get_period_for_date(
+            self.db, self.organization_id, posting_date
+        )
+        if fiscal_period is None:
+            raise ValueError(
+                f"ERP fiscal period is not configured for WHT write-off {posting_date}"
+            )
+        exchange_rate = payment.exchange_rate or Decimal("1")
+        tax_transaction = tax_transaction_service.create_transaction(
+            db=self.db,
+            organization_id=self.organization_id,
+            input=TaxTransactionInput(
+                fiscal_period_id=fiscal_period.fiscal_period_id,
+                tax_code_id=tax_code.tax_code_id,
+                jurisdiction_id=tax_code.jurisdiction_id,
+                transaction_type=TaxTransactionType.WITHHOLDING,
+                recognition_basis=TaxRecognitionBasis.ACCRUAL,
+                transaction_date=posting_date,
+                source_document_type="CUSTOMER_PAYMENT_WHT_WRITE_OFF",
+                source_document_id=payment.payment_id,
+                source_document_reference=pay.wht_record_id,
+                currency_code=payment.currency_code,
+                base_amount=Decimal("0"),
+                tax_rate=tax_code.tax_rate,
+                tax_amount=-payment.wht_amount,
+                functional_base_amount=Decimal("0"),
+                functional_tax_amount=-(payment.wht_amount * exchange_rate),
+                exchange_rate=exchange_rate,
+            ),
+        )
+        tax_transaction.journal_entry_id = journal_entry_id
+
     @staticmethod
     def _posted_amount_changed(
-        payment: CustomerPayment, new_amount: Decimal, new_functional: Decimal
+        payment: CustomerPayment,
+        *,
+        new_amount: Decimal,
+        new_gross_amount: Decimal,
+        new_wht_amount: Decimal,
+        new_wht_code_id: UUID | None,
+        new_functional: Decimal,
     ) -> bool:
         """True when a GL-posted payment's cash amount is materially changing —
         the case that needs a GL reversal, not an in-place mutation."""
         return payment.journal_entry_id is not None and (
             payment.amount != new_amount
+            or payment.gross_amount != new_gross_amount
+            or payment.wht_amount != new_wht_amount
+            or payment.wht_code_id != new_wht_code_id
             or payment.functional_currency_amount != new_functional
         )
 
@@ -493,12 +779,22 @@ class PaymentSyncMixin:
             CustomerPayment.dotmac_sub_id.is_not(None),
         )
         for payment in self.db.scalars(stmt).all():
+            savepoint = self.db.begin_nested()
             try:
                 if CustomerPaymentService.ensure_gl_posted(
                     self.db, payment, posted_by_user_id=created_by_user_id
                 ):
                     stats["posted"] += 1
+                if (
+                    payment.gross_amount != Decimal("0")
+                    and payment.journal_entry_id is None
+                ):
+                    raise ValueError(
+                        "ERP failed to post the synced payment to its canonical GL"
+                    )
+                savepoint.commit()
             except Exception as e:  # noqa: BLE001
+                savepoint.rollback()
                 logger.exception("Failed to GL-post payment %s", payment.payment_id)
-                stats["errors"].append(str(e))
+                stats["errors"].append(f"Payment {payment.payment_number}: {e}")
         return stats

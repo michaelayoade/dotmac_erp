@@ -163,30 +163,27 @@ class TestPostPayment:
         # Mock scalars().all() for allocation query
         mock_db.scalars.return_value.all.return_value = payment.allocations
 
+        mock_db.scalar.return_value = None
+
         with patch(
-            "app.services.finance.ar.customer_payment._resolve_bank_gl_account_id",
+            "app.services.finance.ar.posting.payment._resolve_bank_gl_account_id",
             return_value=uuid4(),
         ):
             with patch(
-                "app.services.finance.ar.customer_payment.post_vat_reclass_for_payment",
+                "app.services.finance.ar.posting.payment.post_vat_reclass_for_payment",
                 return_value=None,
             ) as mock_vat_reclass:
                 with patch(
-                    "app.services.finance.gl.journal.JournalService"
-                ) as mock_journal_cls:
-                    with patch(
-                        "app.services.finance.gl.ledger_posting.LedgerPostingService"
-                    ) as mock_posting_cls:
-                        mock_journal = MagicMock(journal_entry_id=uuid4())
-                        mock_journal_cls.create_journal.return_value = mock_journal
-                        mock_journal_cls.submit_journal.return_value = None
-                        mock_journal_cls.approve_journal.return_value = None
-                        mock_posting_cls.post_journal_entry.return_value = MagicMock(
-                            success=True, posting_batch_id=uuid4()
-                        )
-                        result = CustomerPaymentService.post_payment(
-                            mock_db, org_id, payment.payment_id, user_id
-                        )
+                    "app.services.finance.ar.posting.payment.BasePostingAdapter.create_approve_and_post_journal"
+                ) as mock_post:
+                    mock_journal = MagicMock(journal_entry_id=uuid4())
+                    mock_post.return_value = (
+                        mock_journal,
+                        MagicMock(success=True, posting_batch_id=uuid4()),
+                    )
+                    result = CustomerPaymentService.post_payment(
+                        mock_db, org_id, payment.payment_id, user_id
+                    )
 
         assert result.status == PaymentStatus.CLEARED
         mock_vat_reclass.assert_called_once()

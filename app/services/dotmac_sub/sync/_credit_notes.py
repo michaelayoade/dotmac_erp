@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -49,6 +48,9 @@ class CreditNoteSyncMixin:
     _extract_tax: Any
     _create_lines: Any
     _replace_lines: Any
+    _posted_invoice_accounting_changed: Any
+    _reverse_posted_invoice_gl: Any
+    _ensure_synced_invoice_posted: Any
     _reprime_tenant_context: Any
     _functional_amount: Any
 
@@ -134,10 +136,28 @@ class CreditNoteSyncMixin:
         external_id = cn.id
         data_hash = self._compute_hash(
             {
+                "account_id": cn.account_id,
                 "number": cn.credit_number,
+                "currency": cn.currency,
+                "subtotal": str(cn.subtotal),
+                "tax_total": str(cn.tax_total),
                 "total": str(cn.total),
+                "applied_total": str(cn.applied_total),
                 "status": cn.status,
                 "invoice_id": cn.invoice_id,
+                "issued_at": cn.issued_at,
+                "memo": cn.memo,
+                "lines": [
+                    {
+                        "id": line.id,
+                        "quantity": str(line.quantity),
+                        "unit_price": str(line.unit_price),
+                        "amount": str(line.amount),
+                        "tax_rate_id": line.tax_rate_id,
+                        "tax_application": line.tax_application,
+                    }
+                    for line in sorted(cn.lines, key=lambda item: item.id)
+                ],
             }
         )
         if skip_unchanged and not self._has_changed(
@@ -145,6 +165,19 @@ class CreditNoteSyncMixin:
         ):
             result.skipped += 1
             return
+
+        source_status = (cn.status or "").lower()
+        if source_status == "draft":
+            result.skipped += 1
+            return
+        if source_status == "void":
+            local_status = InvoiceStatus.VOID
+        elif source_status == "applied":
+            local_status = InvoiceStatus.PAID
+        elif source_status == "partially_applied":
+            local_status = InvoiceStatus.PARTIALLY_PAID
+        else:
+            local_status = InvoiceStatus.POSTED
 
         customer_id = self._get_customer_for_account(cn.account_id)
         if not customer_id:
@@ -189,16 +222,46 @@ class CreditNoteSyncMixin:
             )
 
         if existing:
+            if existing.journal_entry_id is not None and (
+                local_status == InvoiceStatus.VOID
+                or self._posted_invoice_accounting_changed(
+                    existing,
+                    cn,
+                    invoice_date=cn_date,
+                    currency_code=cn.currency,
+                    exchange_rate=exch_rate,
+                    functional_amount=functional_amount,
+                    is_credit_note=True,
+                )
+            ):
+                if not self._reverse_posted_invoice_gl(
+                    existing,
+                    created_by_user_id,
+                    reason=(
+                        f"dotmac_sub credit note {cn.status or 'changed'} ({cn.id})"
+                    ),
+                ):
+                    raise ValueError(
+                        "ERP could not reverse the existing credit-note journal; "
+                        "the source correction was not applied"
+                    )
             existing.customer_id = customer_id
+            existing.invoice_date = cn_date
+            existing.due_date = cn_date
+            existing.currency_code = cn.currency
             existing.subtotal = cn_subtotal
             existing.tax_amount = cn_tax
             existing.total_amount = cn_total
+            existing.amount_paid = -abs(cn.applied_total)
             existing.functional_currency_amount = functional_amount
             existing.exchange_rate = exch_rate
+            existing.status = local_status
+            existing.notes = cn.memo
             existing.dotmac_sub_id = cn.id
             existing.dotmac_sub_number = cn.credit_number
             existing.last_synced_at = datetime.now(UTC)
             self._replace_lines(existing.invoice_id, cn, is_credit_note=True)
+            self._ensure_synced_invoice_posted(existing, created_by_user_id)
             result.updated += 1
             self._record_sync(
                 EntityType.CREDIT_NOTE, external_id, existing.invoice_id, data_hash
@@ -216,10 +279,10 @@ class CreditNoteSyncMixin:
             subtotal=cn_subtotal,
             tax_amount=cn_tax,
             total_amount=cn_total,
-            amount_paid=cn_total if cn.status == "applied" else Decimal("0"),
+            amount_paid=-abs(cn.applied_total),
             functional_currency_amount=functional_amount,
             exchange_rate=exch_rate,
-            status=InvoiceStatus.POSTED,
+            status=local_status,
             ar_control_account_id=self.ar_control_account_id,
             source_document_type="dotmac_sub_credit_note",
             correlation_id=f"dotmac-sub-cn-{cn.id}",
@@ -233,6 +296,7 @@ class CreditNoteSyncMixin:
         self.db.add(credit_note)
         self.db.flush()
         self._create_lines(credit_note.invoice_id, cn, is_credit_note=True)
+        self._ensure_synced_invoice_posted(credit_note, created_by_user_id)
         result.created += 1
         self._record_sync(
             EntityType.CREDIT_NOTE, external_id, credit_note.invoice_id, data_hash

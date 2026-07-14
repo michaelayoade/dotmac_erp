@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -25,9 +25,12 @@ from app.models.finance.ar.external_sync import (
     ExternalSync,
 )
 from app.models.finance.ar.invoice import Invoice
-from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.tax.tax_code import TaxCode, TaxType
-from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
+from app.services.dotmac_sub.client import (
+    DotmacSubClient,
+    DotmacSubConfig,
+    TaxRateRecord,
+)
 
 from ._constants import DEFAULT_BANK_NAME_MAPPING
 
@@ -109,8 +112,9 @@ class BaseSyncMixin:
         self._bank_account_mapping: dict[str, UUID] = {}
         self._default_bank_account_cache: dict[str, UUID] = {}
 
-        self._sales_tax_code_resolved: bool = False
-        self._sales_tax_code: TaxCode | None = None
+        self._source_tax_rates: dict[str, TaxRateRecord] | None = None
+        self._source_tax_code_cache: dict[tuple[str, str, date], TaxCode] = {}
+        self._source_wht_code_cache: dict[tuple[Decimal, date], TaxCode] = {}
 
     def _reprime_tenant_context(self) -> None:
         prime_tenant_context(self.db, self.organization_id)
@@ -156,90 +160,105 @@ class BaseSyncMixin:
             self._client.close()
             self._client = None
 
-    @property
-    def sales_tax_code(self) -> TaxCode | None:
-        if not self._sales_tax_code_resolved:
-            live = self._resolve_sales_tax()
-            if live is not None:
-                from types import SimpleNamespace
+    def _get_source_tax_rate(self, source_tax_rate_id: str) -> TaxRateRecord:
+        """Return a Sub tax-rate fact without making Sub's id an ERP account key."""
+        if self._source_tax_rates is None:
+            self._source_tax_rates = {
+                rate.id: rate for rate in self.client.get_tax_rates()
+            }
+        rate = self._source_tax_rates.get(source_tax_rate_id)
+        if rate is None:
+            raise ValueError(
+                f"dotmac_sub tax rate {source_tax_rate_id} is missing from the tax feed"
+            )
+        return rate
 
-                self._sales_tax_code = SimpleNamespace(  # type: ignore[assignment]
-                    tax_code_id=live.tax_code_id,
-                    tax_code=live.tax_code,
-                    tax_name=live.tax_name,
-                    tax_rate=live.tax_rate,
-                    is_inclusive=live.is_inclusive,
-                    is_compound=live.is_compound,
-                    tax_collected_account_id=live.tax_collected_account_id,
-                    tax_paid_account_id=live.tax_paid_account_id,
+    @staticmethod
+    def _source_rate_ratio(rate_percent: Decimal) -> Decimal:
+        """Sub stores percentages (7.5); ERP TaxCode stores ratios (0.075)."""
+        return (rate_percent / Decimal("100")).normalize()
+
+    def _resolve_source_sales_tax_code(
+        self,
+        *,
+        source_tax_rate_id: str,
+        tax_application: str,
+        effective_date: date,
+    ) -> TaxCode:
+        """Resolve a source tax fact to exactly one ERP-owned sales tax code.
+
+        The source id is never treated as a chart/account identifier. ERP's own
+        effective TaxCode records and their control-account mappings decide the
+        posting. Missing or ambiguous configuration fails closed.
+        """
+        application = (tax_application or "exclusive").strip().lower()
+        if application not in {"exclusive", "inclusive"}:
+            raise ValueError(f"Unsupported taxable application: {tax_application}")
+        key = (source_tax_rate_id, application, effective_date)
+        cached = self._source_tax_code_cache.get(key)
+        if cached is not None:
+            return cached
+
+        source_rate = self._get_source_tax_rate(source_tax_rate_id)
+        ratio = self._source_rate_ratio(source_rate.rate)
+        predicates = [
+            TaxCode.organization_id == self.organization_id,
+            TaxCode.tax_type.in_([TaxType.VAT, TaxType.GST, TaxType.SALES_TAX]),
+            TaxCode.applies_to_sales.is_(True),
+            TaxCode.tax_rate == ratio,
+            TaxCode.is_inclusive.is_(application == "inclusive"),
+            TaxCode.is_active.is_(True),
+            TaxCode.effective_from <= effective_date,
+            or_(
+                TaxCode.effective_to.is_(None),
+                TaxCode.effective_to >= effective_date,
+            ),
+            TaxCode.tax_collected_account_id.is_not(None),
+        ]
+        if source_rate.code:
+            predicates.append(TaxCode.tax_code == source_rate.code)
+        candidates = list(self.db.scalars(select(TaxCode).where(*predicates)).all())
+        if len(candidates) != 1:
+            raise ValueError(
+                "ERP must have exactly one effective sales tax code with a "
+                f"collected-tax account for Sub rate {source_rate.name} "
+                f"({source_rate.rate}%, {application}); found {len(candidates)}"
+            )
+        self._source_tax_code_cache[key] = candidates[0]
+        return candidates[0]
+
+    def _resolve_source_wht_code(
+        self, *, rate_percent: Decimal, effective_date: date
+    ) -> TaxCode:
+        """Resolve customer-deducted WHT to one ERP WHT-receivable tax code."""
+        key = (rate_percent.normalize(), effective_date)
+        cached = self._source_wht_code_cache.get(key)
+        if cached is not None:
+            return cached
+        ratio = self._source_rate_ratio(rate_percent)
+        candidates = list(
+            self.db.scalars(
+                select(TaxCode).where(
+                    TaxCode.organization_id == self.organization_id,
+                    TaxCode.tax_type == TaxType.WITHHOLDING,
+                    TaxCode.tax_rate == ratio,
+                    TaxCode.is_active.is_(True),
+                    TaxCode.effective_from <= effective_date,
+                    or_(
+                        TaxCode.effective_to.is_(None),
+                        TaxCode.effective_to >= effective_date,
+                    ),
+                    TaxCode.tax_paid_account_id.is_not(None),
                 )
-            self._sales_tax_code_resolved = True
-        return self._sales_tax_code
-
-    def _resolve_sales_tax(self) -> TaxCode | None:
-        today = date.today()
-        stmt = (
-            select(TaxCode)
-            .where(
-                TaxCode.organization_id == self.organization_id,
-                TaxCode.tax_type == TaxType.VAT,
-                TaxCode.applies_to_sales.is_(True),
-                TaxCode.is_active.is_(True),
-                TaxCode.effective_from <= today,
-                or_(
-                    TaxCode.effective_to.is_(None),
-                    TaxCode.effective_to >= today,
-                ),
-            )
-            .order_by(
-                TaxCode.is_inclusive.desc(),
-                TaxCode.effective_from.desc(),
-            )
-            .limit(1)
+            ).all()
         )
-        tax_code = self.db.scalar(stmt)
-        if not tax_code:
-            logger.warning(
-                "No active VAT sales tax code for org %s — invoices synced "
-                "without tax extraction",
-                self.organization_id,
+        if len(candidates) != 1:
+            raise ValueError(
+                "ERP must have exactly one effective WHT code with a receivable "
+                f"account for Sub rate {rate_percent}%; found {len(candidates)}"
             )
-        return tax_code
-
-    def _extract_tax(self, total: Decimal) -> tuple[Decimal, Decimal]:
-        tc = self.sales_tax_code
-        if not tc or tc.tax_rate == Decimal("0"):
-            return total, Decimal("0")
-        if tc.is_inclusive:
-            divisor = Decimal("1") + tc.tax_rate
-            tax_amount = (total * tc.tax_rate / divisor).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            subtotal = total - tax_amount
-        else:
-            subtotal = total
-            tax_amount = (total * tc.tax_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-        return subtotal, tax_amount
-
-    def _create_line_tax_record(
-        self, line_id: UUID, base_amount: Decimal, tax_amount: Decimal
-    ) -> None:
-        tc = self.sales_tax_code
-        if not tc or tax_amount == Decimal("0"):
-            return
-        self.db.add(
-            InvoiceLineTax(
-                line_id=line_id,
-                tax_code_id=tc.tax_code_id,
-                base_amount=base_amount,
-                tax_rate=tc.tax_rate,
-                tax_amount=tax_amount,
-                is_inclusive=tc.is_inclusive,
-                sequence=1,
-            )
-        )
+        self._source_wht_code_cache[key] = candidates[0]
+        return candidates[0]
 
     def _generate_invoice_number(self, reference_date: date | None = None) -> str:
         from app.models.finance.core_config.numbering_sequence import SequenceType

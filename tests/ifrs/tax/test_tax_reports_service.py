@@ -103,3 +103,72 @@ class TestStampDutyReport:
         assert txn["source_module"] == "AR"
         assert txn["treatment"] == "DEDUCTED"
         assert txn["stamp_duty_amount"] == Decimal("1000.00")
+
+
+class TestWHTReport:
+    """WHT reports preserve customer/supplier direction and write-offs."""
+
+    def test_accrual_report_classifies_payment_source_types(self):
+        from app.services.finance.tax.tax_reports import tax_report_service
+
+        mock_db = MagicMock()
+        mock_db.execute.return_value = [
+            (
+                "WHT-5",
+                "WHT 5%",
+                Decimal("0.05"),
+                "CUSTOMER_PAYMENT",
+                Decimal("100"),
+                Decimal("5"),
+                1,
+            ),
+            (
+                "WHT-5",
+                "WHT 5%",
+                Decimal("0.05"),
+                "CUSTOMER_PAYMENT_WHT_WRITE_OFF",
+                Decimal("0"),
+                Decimal("-2"),
+                1,
+            ),
+            (
+                "WHT-5",
+                "WHT 5%",
+                Decimal("0.05"),
+                "SUPPLIER_PAYMENT",
+                Decimal("60"),
+                Decimal("3"),
+                1,
+            ),
+        ]
+
+        report = tax_report_service.get_wht_report(
+            mock_db,
+            uuid.uuid4(),
+            date(2026, 7, 1),
+            date(2026, 7, 31),
+        )
+
+        assert report.wht_deducted_by_customers == Decimal("3")
+        assert report.wht_withheld_from_suppliers == Decimal("3")
+        assert report.net_wht_payable == Decimal("0")
+        assert {row["source_module"] for row in report.by_rate} == {"AR", "AP"}
+
+    def test_cash_report_applies_current_period_write_off_adjustment(self):
+        from app.services.finance.tax.tax_reports import tax_report_service
+
+        mock_db = MagicMock()
+        # AR receipts, AR write-off adjustment, AP payments.
+        mock_db.scalar.side_effect = [Decimal("10"), Decimal("-4"), Decimal("3")]
+
+        report = tax_report_service.get_wht_report(
+            mock_db,
+            uuid.uuid4(),
+            date(2026, 7, 1),
+            date(2026, 7, 31),
+            basis="cash",
+        )
+
+        assert report.wht_deducted_by_customers == Decimal("6")
+        assert report.wht_withheld_from_suppliers == Decimal("3")
+        assert report.net_wht_payable == Decimal("-3")

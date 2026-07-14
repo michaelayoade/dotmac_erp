@@ -86,9 +86,16 @@ class DotmacSubSyncService(
             skip_unchanged=skip_unchanged,
         )
 
-        post_stats = self.post_unposted_payments(created_by_user_id=created_by_user_id)
-        if post_stats["errors"]:
-            payments.errors.extend(post_stats["errors"][:100])
+        invoice_post_stats = self.post_unposted_invoices(
+            created_by_user_id=created_by_user_id
+        )
+        if invoice_post_stats["errors"]:
+            invoices.errors.extend(invoice_post_stats["errors"][:100])
+        payment_post_stats = self.post_unposted_payments(
+            created_by_user_id=created_by_user_id
+        )
+        if payment_post_stats["errors"]:
+            payments.errors.extend(payment_post_stats["errors"][:100])
 
         duration = time.time() - start
         total_errors = (
@@ -99,10 +106,10 @@ class DotmacSubSyncService(
             + len(credit_notes.errors)
         )
         logger.info(
-            "Full dotmac_sub sync done in %.2fs (%d errors, %d payments posted)",
+            "Full dotmac_sub sync done in %.2fs (%d errors, %d documents posted)",
             duration,
             total_errors,
-            post_stats["posted"],
+            invoice_post_stats["posted"] + payment_post_stats["posted"],
         )
         return FullSyncResult(
             resellers=resellers,
@@ -136,6 +143,9 @@ class DotmacSubSyncService(
         inv = self.client.get_invoice(invoice_id)
         self._sync_single_invoice(inv, created_by_user_id, result, skip_unchanged=False)
         self.db.flush()
+        post = self.post_unposted_invoices(created_by_user_id=created_by_user_id)
+        if post["errors"]:
+            result.errors.extend(post["errors"][:50])
         return result
 
     def sync_payment_by_id(

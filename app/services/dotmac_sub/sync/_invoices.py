@@ -55,6 +55,7 @@ def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
                 "unit_price": str(line.unit_price),
                 "amount": str(line.amount),
                 "tax_rate_id": line.tax_rate_id,
+                "tax_application": line.tax_application,
             }
             for line in sorted(inv.lines, key=lambda item: item.id)
         ],
@@ -62,15 +63,13 @@ def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
 
 
 class InvoiceSyncMixin:
-    """Sync dotmac_sub invoices → ERP AR subledger (not GL-posted)."""
+    """Sync dotmac_sub invoices into ERP's canonical AR and GL."""
 
     db: Any
     client: Any
     organization_id: UUID
     ar_control_account_id: UUID
     default_revenue_account_id: UUID | None
-    sales_tax_code: Any
-
     _compute_hash: Any
     _has_changed: Any
     _record_sync: Any
@@ -84,8 +83,8 @@ class InvoiceSyncMixin:
     _generate_invoice_number: Any
     _generate_credit_note_number: Any
     _map_invoice_status: Any
-    _extract_tax: Any
-    _create_line_tax_record: Any
+    _get_source_tax_rate: Any
+    _resolve_source_sales_tax_code: Any
     _reprime_tenant_context: Any
     _functional_amount: Any
 
@@ -185,7 +184,7 @@ class InvoiceSyncMixin:
             result.skipped += 1
             return
 
-        if inv.is_proforma:
+        if inv.is_proforma or (inv.status or "").lower() == "draft":
             result.skipped += 1
             return
 
@@ -229,6 +228,27 @@ class InvoiceSyncMixin:
         )
 
         if existing:
+            if existing.journal_entry_id is not None and (
+                status.name == "VOID"
+                or self._posted_invoice_accounting_changed(
+                    existing,
+                    inv,
+                    invoice_date=invoice_date,
+                    currency_code=inv.currency,
+                    exchange_rate=exch_rate,
+                    functional_amount=functional_amount,
+                    is_credit_note=False,
+                )
+            ):
+                if not self._reverse_posted_invoice_gl(
+                    existing,
+                    created_by_user_id,
+                    reason=(f"dotmac_sub invoice {inv.status or 'changed'} ({inv.id})"),
+                ):
+                    raise ValueError(
+                        "ERP could not reverse the existing invoice journal; "
+                        "the source correction was not applied"
+                    )
             existing.customer_id = customer_id
             existing.invoice_date = invoice_date
             existing.due_date = due_date
@@ -245,6 +265,7 @@ class InvoiceSyncMixin:
             existing.dotmac_sub_number = inv.invoice_number
             existing.last_synced_at = datetime.now(UTC)
             self._replace_lines(existing.invoice_id, inv, is_credit_note=False)
+            self._ensure_synced_invoice_posted(existing, created_by_user_id)
             result.updated += 1
             self._record_sync(
                 EntityType.INVOICE, external_id, existing.invoice_id, data_hash
@@ -279,6 +300,7 @@ class InvoiceSyncMixin:
         self.db.add(invoice)
         self.db.flush()
         self._create_lines(invoice.invoice_id, inv, is_credit_note=False)
+        self._ensure_synced_invoice_posted(invoice, created_by_user_id)
         result.created += 1
         self._record_sync(
             EntityType.INVOICE, external_id, invoice.invoice_id, data_hash
@@ -292,8 +314,7 @@ class InvoiceSyncMixin:
         is_credit_note: bool,
     ) -> None:
         if not self.default_revenue_account_id:
-            return
-        tc = self.sales_tax_code
+            raise ValueError("ERP default revenue account is required for Sub invoices")
         # InvoiceLineRecord and CreditNoteLineRecord are structurally identical;
         # type as Any so the union of the two list types doesn't collapse to
         # ``list[object]`` under mypy invariance.
@@ -304,14 +325,11 @@ class InvoiceSyncMixin:
         )
 
         sign = Decimal("-1") if is_credit_note else Decimal("1")
+        projected = self._project_source_lines(doc, is_credit_note=is_credit_note)
 
         if lines:
-            line_totals = [
-                (item.amount or (item.quantity * item.unit_price)) for item in lines
-            ]
-            splits = self._allocate_doc_amounts(doc, line_totals)
-            for seq, (item, (line_subtotal, line_tax)) in enumerate(
-                zip(lines, splits, strict=True), 1
+            for seq, (item, line_subtotal, line_tax, tax_code) in enumerate(
+                projected, 1
             ):
                 self._add_line(
                     invoice_id,
@@ -321,9 +339,13 @@ class InvoiceSyncMixin:
                     item.unit_price,
                     sign * line_subtotal,
                     sign * line_tax,
-                    tc,
+                    tax_code,
                 )
         else:
+            if doc.tax_total != Decimal("0"):
+                raise ValueError(
+                    f"Sub {label} {number} has tax but no line-level tax contract"
+                )
             self._add_line(
                 invoice_id,
                 1,
@@ -331,47 +353,77 @@ class InvoiceSyncMixin:
                 Decimal("1"),
                 sign * doc.subtotal,
                 sign * doc.subtotal,
-                sign * doc.tax_total,
-                tc,
+                Decimal("0"),
+                None,
             )
 
-    def _allocate_doc_amounts(
-        self, doc: InvoiceRecord | CreditNoteRecord, line_totals: list[Decimal]
-    ) -> list[tuple[Decimal, Decimal]]:
-        """Split the document's authoritative subtotal + tax_total across its
-        lines in proportion to each line total, the last line absorbing the
-        rounding remainder so the line amounts sum EXACTLY to sub's subtotal and
-        tax_total.
+    def _project_source_lines(
+        self,
+        doc: InvoiceRecord | CreditNoteRecord,
+        *,
+        is_credit_note: bool,
+    ) -> list[tuple[Any, Decimal, Decimal, Any]]:
+        """Validate Sub's line contract and resolve ERP-owned posting codes."""
+        lines: list[Any] = list(doc.lines)
+        label = "Credit Note" if is_credit_note else "Invoice"
+        number = getattr(doc, "credit_number", None) or getattr(
+            doc, "invoice_number", ""
+        )
+        effective_date = self._parse_date(doc.issued_at) or date.today()
+        projected: list[tuple[Any, Decimal, Decimal, Any]] = []
+        for item in lines:
+            line_subtotal, line_tax, tax_code = self._source_line_amounts(
+                item, effective_date=effective_date
+            )
+            projected.append((item, line_subtotal, line_tax, tax_code))
 
-        This carries sub's real tax through the mirror instead of re-deriving
-        each line from the org's single VAT code (``_extract_tax``). The old
-        re-derivation posted phantom output VAT on a zero-tax invoice (e.g. a
-        CRM installation invoice, where sub sets ``tax_total = 0``) whenever the
-        org code was tax-inclusive, and left the invoice header's tax disagreeing
-        with its own line/``InvoiceLineTax`` subledger. Returning positive
-        magnitudes; the caller applies the credit-note sign.
-        """
-        subtotal = doc.subtotal or Decimal("0")
-        tax_total = doc.tax_total or Decimal("0")
-        base = sum(line_totals, Decimal("0"))
-        splits: list[tuple[Decimal, Decimal]] = []
-        alloc_sub = Decimal("0")
-        alloc_tax = Decimal("0")
-        last = len(line_totals) - 1
-        for i, line_total in enumerate(line_totals):
-            if i < last and base:
-                weight = line_total / base
-                line_sub = (subtotal * weight).quantize(_CENTS, rounding=ROUND_HALF_UP)
-                line_tax = (tax_total * weight).quantize(_CENTS, rounding=ROUND_HALF_UP)
-            else:
-                # Last line (or a degenerate all-zero base) absorbs the remainder
-                # so the parts reconcile to the document totals to the cent.
-                line_sub = subtotal - alloc_sub
-                line_tax = tax_total - alloc_tax
-            alloc_sub += line_sub
-            alloc_tax += line_tax
-            splits.append((line_sub, line_tax))
-        return splits
+        projected_subtotal = sum((item[1] for item in projected), Decimal("0"))
+        projected_tax = sum((item[2] for item in projected), Decimal("0"))
+        line_mismatch = bool(lines) and (
+            projected_subtotal.quantize(_CENTS) != doc.subtotal.quantize(_CENTS)
+            or projected_tax.quantize(_CENTS) != doc.tax_total.quantize(_CENTS)
+        )
+        if line_mismatch or (doc.subtotal + doc.tax_total).quantize(
+            _CENTS
+        ) != doc.total.quantize(_CENTS):
+            raise ValueError(
+                f"Sub {label} {number} tax lines do not reconcile to the "
+                f"source header: lines={projected_subtotal}+{projected_tax}, "
+                f"header={doc.subtotal}+{doc.tax_total}={doc.total}"
+            )
+        return projected
+
+    def _source_line_amounts(
+        self, item: Any, *, effective_date: date
+    ) -> tuple[Decimal, Decimal, Any]:
+        """Mirror Sub's line tax facts; ERP only resolves the posting TaxCode."""
+        amount = (
+            item.amount if item.amount is not None else item.quantity * item.unit_price
+        ).quantize(_CENTS, rounding=ROUND_HALF_UP)
+        application = (item.tax_application or "exclusive").strip().lower()
+        if application == "exempt" or not item.tax_rate_id:
+            return amount, Decimal("0"), None
+        if application not in {"exclusive", "inclusive"}:
+            raise ValueError(f"Unsupported source tax application: {application}")
+
+        source_rate = self._get_source_tax_rate(str(item.tax_rate_id))
+        ratio = source_rate.rate / Decimal("100")
+        if ratio <= Decimal("0"):
+            return amount, Decimal("0"), None
+        if application == "inclusive":
+            tax_amount = (amount - (amount / (Decimal("1") + ratio))).quantize(
+                _CENTS, rounding=ROUND_HALF_UP
+            )
+            line_subtotal = amount - tax_amount
+        else:
+            line_subtotal = amount
+            tax_amount = (amount * ratio).quantize(_CENTS, rounding=ROUND_HALF_UP)
+        tax_code = self._resolve_source_sales_tax_code(
+            source_tax_rate_id=str(item.tax_rate_id),
+            tax_application=application,
+            effective_date=effective_date,
+        )
+        return line_subtotal, tax_amount, tax_code
 
     def _add_line(
         self,
@@ -399,7 +451,163 @@ class InvoiceSyncMixin:
         )
         self.db.add(line)
         self.db.flush()
-        self._create_line_tax_record(line.line_id, line_amount, tax_amount)
+        if tc is not None and tax_amount != Decimal("0"):
+            self.db.add(
+                InvoiceLineTax(
+                    line_id=line.line_id,
+                    tax_code_id=tc.tax_code_id,
+                    base_amount=line_amount,
+                    tax_rate=tc.tax_rate,
+                    tax_amount=tax_amount,
+                    is_inclusive=tc.is_inclusive,
+                    sequence=1,
+                )
+            )
+
+    def _posted_invoice_accounting_changed(
+        self,
+        invoice: Invoice,
+        doc: InvoiceRecord | CreditNoteRecord,
+        *,
+        invoice_date: date,
+        currency_code: str,
+        exchange_rate: Decimal,
+        functional_amount: Decimal,
+        is_credit_note: bool,
+    ) -> bool:
+        """Compare only fields consumed by ERP's invoice posting adapter."""
+        sign = Decimal("-1") if is_credit_note else Decimal("1")
+        projected = self._project_source_lines(doc, is_credit_note=is_credit_note)
+        expected = [
+            (
+                sequence,
+                sign * subtotal,
+                sign * tax,
+                tax_code.tax_code_id if tax_code else None,
+                self.default_revenue_account_id,
+            )
+            for sequence, (_item, subtotal, tax, tax_code) in enumerate(projected, 1)
+        ]
+        if not expected:
+            expected = [
+                (
+                    1,
+                    sign * doc.subtotal,
+                    Decimal("0"),
+                    None,
+                    self.default_revenue_account_id,
+                )
+            ]
+        current = [
+            (
+                line.line_number,
+                line.line_amount,
+                line.tax_amount or Decimal("0"),
+                line.tax_code_id,
+                line.revenue_account_id,
+            )
+            for line in self.db.scalars(
+                select(InvoiceLine)
+                .where(InvoiceLine.invoice_id == invoice.invoice_id)
+                .order_by(InvoiceLine.line_number)
+            ).all()
+        ]
+        return (
+            invoice.invoice_date != invoice_date
+            or invoice.currency_code != currency_code
+            or invoice.subtotal != sign * doc.subtotal
+            or invoice.tax_amount != sign * doc.tax_total
+            or invoice.total_amount != sign * doc.total
+            or invoice.exchange_rate != exchange_rate
+            or invoice.functional_currency_amount != functional_amount
+            or current != expected
+        )
+
+    def _reverse_posted_invoice_gl(
+        self,
+        invoice: Invoice,
+        created_by_user_id: UUID | None,
+        *,
+        reason: str,
+    ) -> bool:
+        from app.services.finance.gl.reversal import ReversalService
+
+        journal_id = invoice.journal_entry_id
+        if journal_id is None:
+            return False
+        user_id = created_by_user_id or invoice.created_by_user_id or SYSTEM_USER_ID
+        try:
+            reversal = ReversalService.create_reversal(
+                db=self.db,
+                organization_id=self.organization_id,
+                original_journal_id=journal_id,
+                reversal_date=date.today(),
+                created_by_user_id=user_id,
+                reason=reason,
+                auto_post=True,
+                idempotency_key=(
+                    f"{self.organization_id}:AR:INV:{invoice.invoice_id}:"
+                    f"sub-resync:{journal_id}"
+                ),
+            )
+        except Exception:
+            logger.exception("GL reversal errored for invoice %s", invoice.invoice_id)
+            return False
+        if not getattr(reversal, "success", False):
+            return False
+        invoice.journal_entry_id = None
+        invoice.posting_batch_id = None
+        invoice.posting_status = "NOT_POSTED"
+        return True
+
+    def _ensure_synced_invoice_posted(
+        self, invoice: Invoice, created_by_user_id: UUID | None
+    ) -> None:
+        from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
+
+        postable = {
+            InvoiceStatus.POSTED,
+            InvoiceStatus.PAID,
+            InvoiceStatus.PARTIALLY_PAID,
+            InvoiceStatus.OVERDUE,
+        }
+        if invoice.status not in postable or invoice.total_amount == Decimal("0"):
+            return
+        ARInvoiceService.ensure_gl_posted(
+            self.db,
+            invoice,
+            posted_by_user_id=created_by_user_id,
+        )
+        if invoice.journal_entry_id is None:
+            raise ValueError(
+                "ERP failed to post the synced document to its canonical GL"
+            )
+
+    def post_unposted_invoices(
+        self, created_by_user_id: UUID | None = None
+    ) -> dict[str, Any]:
+        """Repair legacy Sub documents that reached ERP before GL posting."""
+        stats: dict[str, Any] = {"posted": 0, "errors": []}
+        stmt = select(Invoice).where(
+            Invoice.organization_id == self.organization_id,
+            Invoice.source_document_type.in_(
+                ["dotmac_sub_invoice", "dotmac_sub_credit_note"]
+            ),
+            Invoice.journal_entry_id.is_(None),
+        )
+        for invoice in self.db.scalars(stmt).all():
+            savepoint = self.db.begin_nested()
+            try:
+                self._ensure_synced_invoice_posted(invoice, created_by_user_id)
+                if invoice.journal_entry_id is not None:
+                    stats["posted"] += 1
+                savepoint.commit()
+            except Exception as exc:  # noqa: BLE001
+                savepoint.rollback()
+                logger.exception("Failed to GL-post invoice %s", invoice.invoice_id)
+                stats["errors"].append(f"Invoice {invoice.invoice_number}: {exc}")
+        return stats
 
     def _replace_lines(
         self,
