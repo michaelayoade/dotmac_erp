@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.payment_allocation import PaymentAllocation
+from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalType
 from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.common import coerce_uuid
@@ -263,8 +264,7 @@ def post_payment(
             message="Payment bank account is not mapped to a valid GL account",
         )
 
-    wht_code: TaxCode | None = None
-    wht_fiscal_period = None
+    wht_context: tuple[TaxCode, FiscalPeriod, UUID] | None = None
     if wht_amount > Decimal("0"):
         wht_code_id = getattr(payment, "wht_code_id", None)
         wht_code = db.get(TaxCode, wht_code_id) if wht_code_id else None
@@ -291,6 +291,11 @@ def post_payment(
                     f"{payment.payment_date}"
                 ),
             )
+        wht_context = (
+            wht_code,
+            wht_fiscal_period,
+            wht_code.tax_paid_account_id,
+        )
 
     # Build journal lines
     journal_lines = [
@@ -303,11 +308,11 @@ def post_payment(
             description=f"AR Payment: {payment.reference}",
         )
     ]
-    if wht_amount > Decimal("0"):
-        assert wht_code is not None and wht_code.tax_paid_account_id is not None
+    if wht_context is not None:
+        wht_code, _wht_fiscal_period, wht_receivable_account_id = wht_context
         journal_lines.append(
             JournalLineInput(
-                account_id=wht_code.tax_paid_account_id,
+                account_id=wht_receivable_account_id,
                 debit_amount=wht_amount,
                 credit_amount=Decimal("0"),
                 debit_amount_functional=wht_functional,
@@ -380,14 +385,14 @@ def post_payment(
     if vat_reclass_result is not None and not vat_reclass_result.success:
         return vat_reclass_result
 
-    if wht_amount > Decimal("0"):
+    if wht_context is not None:
         from app.models.finance.tax.tax_transaction import TaxTransactionType
         from app.services.finance.tax.tax_transaction import (
             TaxTransactionInput,
             tax_transaction_service,
         )
 
-        assert wht_code is not None and wht_fiscal_period is not None
+        wht_code, wht_fiscal_period, _wht_receivable_account_id = wht_context
         tax_transaction_service.create_transaction(
             db=db,
             organization_id=org_id,
