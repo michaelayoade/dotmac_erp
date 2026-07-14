@@ -28,7 +28,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Incident Details</h3>
             </div>
             <div class="p-4 space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <label for="vehicle_id" class="form-label">Vehicle <span class="text-rose-500">*</span></label>
                         <select id="vehicle_id" name="vehicle_id" required class="form-select">
@@ -44,6 +44,19 @@
                         <label for="incident_date" class="form-label">Incident Date <span class="text-rose-500">*</span></label>
                         <input type="date" id="incident_date" name="incident_date" required class="form-input" value="{{ incident.incident_date.isoformat() if incident and incident.incident_date else '' }}">
                     </div>
+                    {% if not is_edit %}
+                    <div>
+                        <label for="status" class="form-label">Status <span class="text-rose-500">*</span></label>
+                        <select id="status" name="status" required class="form-select">
+                            {% set incident_statuses = statuses if statuses is defined and statuses else ['REPORTED', 'INVESTIGATING', 'INSURANCE_FILED', 'RESOLVED', 'CLOSED'] %}
+                            {% for status in incident_statuses %}
+                            <option value="{{ status }}" {{ 'selected' if status == 'REPORTED' else '' }}>
+                                {{ status | replace('_', ' ') | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-3">
@@ -72,9 +85,10 @@
                 </div>
 
                 <div>
-                    <label for="location" class="form-label">Location</label>
+                    <label for="location" class="form-label">Location <span class="text-rose-500">*</span></label>
                     <input aria-label="Where the incident occurred" type="text" id="location" name="location"
                            placeholder="Where the incident occurred"
+                           required
                            class="form-input"
                            value="{{ incident.location or '' if incident else '' }}">
                 </div>

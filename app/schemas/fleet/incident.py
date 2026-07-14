@@ -21,7 +21,7 @@ class IncidentBase(BaseModel):
     severity: IncidentSeverity
     incident_date: date
     incident_time: str | None = Field(default=None, max_length=10)
-    location: str | None = Field(default=None, max_length=300)
+    location: str = Field(max_length=300)
     description: str
     driver_id: UUID | None = None
     third_party_involved: bool = False
@@ -33,6 +33,7 @@ class IncidentCreate(IncidentBase):
     """Create incident request."""
 
     reported_by_id: UUID
+    status: IncidentStatus = IncidentStatus.REPORTED
     expense_claim_id: UUID | None = None
 
 

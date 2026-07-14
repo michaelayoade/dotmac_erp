@@ -29,7 +29,7 @@ class MaintenanceBase(BaseModel):
 class MaintenanceCreate(MaintenanceBase):
     """Create maintenance record request."""
 
-    pass
+    status: MaintenanceStatus = MaintenanceStatus.SCHEDULED
 
 
 class MaintenanceUpdate(BaseModel):

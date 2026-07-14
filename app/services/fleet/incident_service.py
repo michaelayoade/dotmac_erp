@@ -172,6 +172,10 @@ class IncidentService:
                 "vehicle_id": str(data.vehicle_id),
                 "incident_type": data.incident_type.value,
                 "severity": data.severity.value,
+                "status": data.status.value
+                if hasattr(data.status, "value")
+                else str(data.status),
+                "location": data.location,
             },
         )
 

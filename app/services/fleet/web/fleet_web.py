@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import inspect, or_
 from sqlalchemy import select as sa_select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
@@ -73,6 +73,7 @@ class FleetWebService:
     )
     FUEL_LOG_ATTACHMENT_ENTITY_TYPE = "FLEET_FUEL_LOG"
     INCIDENT_ATTACHMENT_ENTITY_TYPE = "FLEET_INCIDENT"
+    MAINTENANCE_ATTACHMENT_ENTITY_TYPE = "FLEET_MAINTENANCE"
     MAINTENANCE_PROVIDER_OPTIONS = (
         "Mr IDOWU (Idowu Orile Enterprise)",
         "Mr JOSEPH (Joe Joe Automobile)",
@@ -114,6 +115,45 @@ class FleetWebService:
             .order_by(Employee.employee_code.asc())
         )
         return list(self.db.scalars(stmt).all())
+
+    def _resolve_active_employee_id_for_auth(
+        self, organization_id: UUID, auth: Any
+    ) -> UUID:
+        """Resolve the current web auth principal to an active HR employee."""
+        employee_id = getattr(auth, "employee_id", None)
+        person_id = getattr(auth, "person_id", None)
+        user_id = getattr(auth, "user_id", None)
+
+        employee_conditions = []
+        for candidate in (employee_id, person_id, user_id):
+            if candidate is None:
+                continue
+            candidate_uuid = coerce_uuid(candidate)
+            employee_conditions.append(Employee.employee_id == candidate_uuid)
+            employee_conditions.append(Employee.person_id == candidate_uuid)
+
+        if not employee_conditions:
+            raise ServiceError(
+                "Your login is not linked to an active employee record. "
+                "Please contact HR/Admin before reporting an incident."
+            )
+
+        stmt = (
+            sa_select(Employee.employee_id)
+            .where(
+                Employee.organization_id == coerce_uuid(organization_id),
+                Employee.status == EmployeeStatus.ACTIVE,
+                or_(*employee_conditions),
+            )
+            .limit(1)
+        )
+        resolved_employee_id = self.db.scalar(stmt)
+        if not resolved_employee_id:
+            raise ServiceError(
+                "Your login is not linked to an active employee record. "
+                "Please contact HR/Admin before reporting an incident."
+            )
+        return resolved_employee_id
 
     def _empty_list_context(self) -> dict[str, Any]:
         return {
@@ -1027,6 +1067,7 @@ class FleetWebService:
                     "maintenance_records": [],
                     "statuses": [s.value for s in MaintenanceStatus],
                     "maintenance_types": [t.value for t in MaintenanceType],
+                    "vehicles": [],
                     "current_status": status,
                     "current_maintenance_type": maintenance_type,
                     "current_vehicle_id": vehicle_id,
@@ -1035,6 +1076,7 @@ class FleetWebService:
             return context
         org_id = coerce_uuid(organization_id)
         service = MaintenanceService(self.db, org_id)
+        vehicle_service = VehicleService(self.db, org_id)
 
         status_filter = MaintenanceStatus(status) if status else None
         type_filter = MaintenanceType(maintenance_type) if maintenance_type else None
@@ -1045,6 +1087,10 @@ class FleetWebService:
             status=status_filter,
             maintenance_type=type_filter,
             params=params,
+        )
+        vehicles_result = vehicle_service.list_vehicles(
+            status=VehicleStatus.ACTIVE,
+            params=PaginationParams(limit=200),
         )
 
         active_filters = build_active_filters(
@@ -1063,6 +1109,7 @@ class FleetWebService:
             "has_prev": result.has_prev,
             "statuses": [s.value for s in MaintenanceStatus],
             "maintenance_types": [t.value for t in MaintenanceType],
+            "vehicles": vehicles_result.items,
             "current_status": status,
             "current_maintenance_type": maintenance_type,
             "current_vehicle_id": vehicle_id,
@@ -1080,7 +1127,9 @@ class FleetWebService:
             return {
                 "vehicles": [],
                 "maintenance_types": [t.value for t in MaintenanceType],
+                "statuses": [s.value for s in MaintenanceStatus],
                 "selected_vehicle_id": vehicle_id,
+                "maintenance_attachment_max_size": self._maintenance_attachment_max_size_label(),
                 "maintenance_provider_options": self.MAINTENANCE_PROVIDER_OPTIONS,
             }
         org_id = coerce_uuid(organization_id)
@@ -1095,11 +1144,25 @@ class FleetWebService:
         context: dict[str, Any] = {
             "vehicles": vehicles_result.items,
             "maintenance_types": [t.value for t in MaintenanceType],
+            "statuses": [s.value for s in MaintenanceStatus],
             "selected_vehicle_id": vehicle_id,
+            "maintenance_attachment_max_size": self._maintenance_attachment_max_size_label(),
             "maintenance_provider_options": self.MAINTENANCE_PROVIDER_OPTIONS,
         }
 
         return context
+
+    @staticmethod
+    def _maintenance_attachment_max_size_label() -> str:
+        """Return the configured Fleet maintenance attachment upload size."""
+        from app.services.file_upload import (
+            format_file_size,
+            get_fleet_maintenance_attachment_upload,
+        )
+
+        return format_file_size(
+            get_fleet_maintenance_attachment_upload().config.max_size_bytes
+        )
 
     def maintenance_detail_context(
         self,
@@ -1112,9 +1175,16 @@ class FleetWebService:
         org_id = coerce_uuid(organization_id)
         service = MaintenanceService(self.db, org_id)
         record = service.get_or_raise(record_id)
+        maintenance_attachments = self._attachment_views(
+            org_id,
+            [record],
+            id_attr="maintenance_id",
+            entity_type=self.MAINTENANCE_ATTACHMENT_ENTITY_TYPE,
+        ).get(str(record.maintenance_id), [])
 
         return {
             "record": record,
+            "maintenance_attachments": maintenance_attachments,
             "recent_activity": get_recent_activity_for_record(
                 self.db,
                 org_id,
@@ -1381,6 +1451,7 @@ class FleetWebService:
                 "vehicles": [],
                 "incident_types": [t.value for t in IncidentType],
                 "severities": [s.value for s in IncidentSeverity],
+                "statuses": [s.value for s in IncidentStatus],
                 "selected_vehicle_id": vehicle_id,
                 "incident_attachment_max_size": self._incident_attachment_max_size_label(),
                 "incident": None,
@@ -1414,6 +1485,7 @@ class FleetWebService:
             "vehicles": vehicles,
             "incident_types": [t.value for t in IncidentType],
             "severities": [s.value for s in IncidentSeverity],
+            "statuses": [s.value for s in IncidentStatus],
             "selected_vehicle_id": vehicle_id,
             "incident_attachment_max_size": self._incident_attachment_max_size_label(),
             "incident": incident,
@@ -1976,30 +2048,35 @@ class FleetWebService:
                 "service_cls": IncidentService,
                 "schema_cls": IncidentCreate,
                 "list_url": "/fleet/incidents",
-                "extra_fields": {"reported_by_id": user_id},
+                "form_url": "/fleet/incidents/new",
+                "extra_fields": {},
             },
             "reservation": {
                 "service_cls": ReservationService,
                 "schema_cls": ReservationCreate,
                 "list_url": "/fleet/reservations",
+                "form_url": "/fleet/reservations/new",
                 "extra_fields": {"employee_id": user_id},
             },
             "document": {
                 "service_cls": DocumentService,
                 "schema_cls": DocumentCreate,
                 "list_url": "/fleet/documents",
+                "form_url": "/fleet/documents/new",
                 "extra_fields": {},
             },
             "fuel": {
                 "service_cls": FuelService,
                 "schema_cls": FuelLogCreate,
                 "list_url": "/fleet/fuel",
+                "form_url": "/fleet/fuel/new",
                 "extra_fields": {"employee_id": user_id},
             },
             "maintenance": {
                 "service_cls": MaintenanceService,
                 "schema_cls": MaintenanceCreate,
                 "list_url": "/fleet/maintenance",
+                "form_url": "/fleet/maintenance/new",
                 "extra_fields": {},
             },
         }
@@ -2010,10 +2087,15 @@ class FleetWebService:
                 status_code=400, detail=f"Unknown entity type: {entity_type}"
             )
 
-        # Add inferred fields
-        data.update(cfg["extra_fields"])
-
         try:
+            if entity_type == "incident":
+                data["reported_by_id"] = self._resolve_active_employee_id_for_auth(
+                    org_id, auth
+                )
+
+            # Add inferred fields
+            data.update(cfg["extra_fields"])
+
             schema = cfg["schema_cls"](**data)
             service = cfg["service_cls"](db, org_id)
             record = service.create(schema)
@@ -2045,6 +2127,20 @@ class FleetWebService:
                         upload=upload,
                         uploaded_by=user_id,
                     )
+            elif entity_type == "maintenance":
+                uploads = [
+                    upload
+                    for upload in form.getlist("maintenance_files")
+                    if isinstance(upload, StarletteUploadFile) and upload.filename
+                ]
+                for upload in uploads:
+                    await self._save_maintenance_attachment(
+                        db=db,
+                        organization_id=org_id,
+                        maintenance_id=record.maintenance_id,
+                        upload=upload,
+                        uploaded_by=user_id,
+                    )
             elif entity_type == "document":
                 document_upload = form.get("document_file")
                 if (
@@ -2058,11 +2154,25 @@ class FleetWebService:
                     )
             db.commit()
             logger.info("Created fleet %s for org %s", entity_type, org_id)
+        except IntegrityError as exc:
+            logger.warning(
+                "Fleet %s creation failed due to integrity error", entity_type
+            )
+            logger.debug("Fleet %s integrity error detail: %s", entity_type, exc)
+            db.rollback()
+            message = (
+                "Unable to save this record because one of the selected related "
+                "records is no longer available. Please refresh the form and try again."
+            )
+            return RedirectResponse(
+                url=f"{cfg['form_url']}?error={quote(message)}",
+                status_code=303,
+            )
         except Exception as e:
             logger.warning("Fleet %s creation failed: %s", entity_type, e)
             db.rollback()
             return RedirectResponse(
-                url=f"{cfg['list_url']}?error={str(e)[:200]}",
+                url=f"{cfg['form_url']}?error={quote(str(e)[:200])}",
                 status_code=303,
             )
 
@@ -2383,6 +2493,66 @@ class FleetWebService:
             content_type=upload.content_type or "application/octet-stream",
             category=AttachmentCategory.OTHER,
             description="Fleet incident attachment",
+            storage_provider="S3",
+            checksum=upload_result.checksum,
+            uploaded_by=coerce_uuid(uploaded_by),
+            uploaded_at=datetime.utcnow(),
+        )
+        db.add(attachment)
+        db.flush()
+
+    async def _save_maintenance_attachment(
+        self,
+        *,
+        db: Session,
+        organization_id: UUID,
+        maintenance_id: UUID,
+        upload: Any,
+        uploaded_by: Any,
+    ) -> None:
+        """Validate and save a maintenance attachment."""
+        from datetime import datetime
+
+        from app.models.finance.common.attachment import Attachment, AttachmentCategory
+        from app.services.file_upload import (
+            FileUploadError,
+            get_fleet_maintenance_attachment_upload,
+        )
+        from app.services.upload_utils import read_upload_bytes
+
+        if uploaded_by is None:
+            raise ValueError("Authenticated user is required to upload attachments")
+
+        upload_service = get_fleet_maintenance_attachment_upload()
+        max_bytes = upload_service.config.max_size_bytes
+        file_bytes = await read_upload_bytes(
+            upload,
+            max_bytes,
+            error_detail=f"Maintenance attachment is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
+        )
+        try:
+            upload_result = upload_service.save(
+                file_bytes,
+                content_type=upload.content_type,
+                subdirs=[
+                    str(coerce_uuid(organization_id)),
+                    self.MAINTENANCE_ATTACHMENT_ENTITY_TYPE.lower(),
+                ],
+                original_filename=upload.filename,
+            )
+        except FileUploadError as exc:
+            raise ValueError(str(exc)) from exc
+
+        attachment = Attachment(
+            organization_id=coerce_uuid(organization_id),
+            entity_type=self.MAINTENANCE_ATTACHMENT_ENTITY_TYPE,
+            entity_id=coerce_uuid(maintenance_id),
+            file_name=upload.filename,
+            file_path=upload_result.relative_path,
+            file_size=upload_result.file_size,
+            content_type=upload.content_type or "application/octet-stream",
+            category=AttachmentCategory.OTHER,
+            description="Fleet maintenance attachment",
             storage_provider="S3",
             checksum=upload_result.checksum,
             uploaded_by=coerce_uuid(uploaded_by),

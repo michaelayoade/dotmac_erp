@@ -57,6 +57,17 @@ class _FakeIncidentAttachmentUpload:
         )
 
 
+class _FakeMaintenanceAttachmentUpload:
+    config = SimpleNamespace(max_size_bytes=20 * 1024 * 1024)
+
+    def save(self, file_data, content_type=None, subdirs=None, original_filename=None):
+        return SimpleNamespace(
+            relative_path="/".join([*(subdirs or []), "maintenance_123.pdf"]),
+            file_size=len(file_data),
+            checksum="maint123",
+        )
+
+
 class _FakeRequest:
     def __init__(self, form_data):
         self._form_data = form_data
@@ -142,6 +153,41 @@ async def test_save_incident_attachment_creates_common_attachment(monkeypatch):
     assert attachment.file_name == "damage.jpg"
     assert attachment.file_size == len(b"\xff\xd8\xffincident photo")
     assert attachment.content_type == "image/jpeg"
+    assert attachment.category == AttachmentCategory.OTHER
+    assert attachment.uploaded_by == TEST_USER_ID
+
+
+@pytest.mark.asyncio
+async def test_save_maintenance_attachment_creates_common_attachment(monkeypatch):
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    upload = UploadFile(
+        BytesIO(b"%PDF maintenance estimate"),
+        filename="estimate.pdf",
+        headers={"content-type": "application/pdf"},
+    )
+    monkeypatch.setattr(
+        "app.services.file_upload.get_fleet_maintenance_attachment_upload",
+        lambda: _FakeMaintenanceAttachmentUpload(),
+    )
+
+    await FleetWebService(db)._save_maintenance_attachment(
+        db=db,
+        organization_id=TEST_ORG_ID,
+        maintenance_id=maintenance_id,
+        upload=upload,
+        uploaded_by=TEST_USER_ID,
+    )
+
+    assert db.flushed is True
+    assert len(db.added) == 1
+    attachment = db.added[0]
+    assert attachment.organization_id == TEST_ORG_ID
+    assert attachment.entity_type == FleetWebService.MAINTENANCE_ATTACHMENT_ENTITY_TYPE
+    assert attachment.entity_id == maintenance_id
+    assert attachment.file_name == "estimate.pdf"
+    assert attachment.file_size == len(b"%PDF maintenance estimate")
+    assert attachment.content_type == "application/pdf"
     assert attachment.category == AttachmentCategory.OTHER
     assert attachment.uploaded_by == TEST_USER_ID
 

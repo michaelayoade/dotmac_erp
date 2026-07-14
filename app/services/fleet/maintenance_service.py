@@ -169,6 +169,9 @@ class MaintenanceService:
                 "maintenance_type": data.maintenance_type.value
                 if hasattr(data.maintenance_type, "value")
                 else str(data.maintenance_type),
+                "status": data.status.value
+                if hasattr(data.status, "value")
+                else str(data.status),
                 "description": data.description,
                 "scheduled_date": str(data.scheduled_date),
             },

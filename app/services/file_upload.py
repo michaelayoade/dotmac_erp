@@ -824,6 +824,44 @@ def _fleet_incident_attachment_config() -> FileUploadConfig:
     )
 
 
+def _fleet_maintenance_attachment_config() -> FileUploadConfig:
+    import os
+
+    max_size = int(
+        os.getenv("MAX_FLEET_MAINTENANCE_ATTACHMENT_SIZE", str(20 * 1024 * 1024))
+    )
+    return FileUploadConfig(
+        base_dir="uploads/attachments",
+        allowed_content_types=frozenset(
+            {
+                "image/jpeg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "image/heic",
+                "image/heif",
+                "application/pdf",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp",
+                ".heic",
+                ".heif",
+                ".pdf",
+            }
+        ),
+        max_size_bytes=max_size,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="attachments",
+    )
+
+
 def _generated_docs_config() -> FileUploadConfig:
     return FileUploadConfig(
         base_dir=settings.generated_docs_dir,
@@ -846,6 +884,11 @@ def get_fleet_fuel_receipt_upload() -> FileUploadService:
 def get_fleet_incident_attachment_upload() -> FileUploadService:
     """Get Fleet incident attachment upload service."""
     return FileUploadService(_fleet_incident_attachment_config())
+
+
+def get_fleet_maintenance_attachment_upload() -> FileUploadService:
+    """Get Fleet maintenance attachment upload service."""
+    return FileUploadService(_fleet_maintenance_attachment_config())
 
 
 def get_generated_docs_upload() -> FileUploadService:

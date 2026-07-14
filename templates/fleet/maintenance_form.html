@@ -16,7 +16,7 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-    <form method="POST" action="/fleet/maintenance/new" class="space-y-6">
+    <form method="POST" action="/fleet/maintenance/new" enctype="multipart/form-data" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <!-- Vehicle & Type -->
         <div class="card">
@@ -24,7 +24,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Maintenance Details</h3>
             </div>
             <div class="p-4 space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <label for="vehicle_id" class="form-label">Vehicle <span class="text-rose-500">*</span></label>
                         <select id="vehicle_id" name="vehicle_id" required class="form-select">
@@ -42,6 +42,17 @@
                             <option value="">Select type...</option>
                             {% for mt in maintenance_types %}
                             <option value="{{ mt }}">{{ mt | replace('_', ' ') | title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="status" class="form-label">Status <span class="text-rose-500">*</span></label>
+                        <select id="status" name="status" required class="form-select">
+                            {% set maintenance_statuses = statuses if statuses is defined and statuses else ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] %}
+                            {% for status in maintenance_statuses %}
+                            <option value="{{ status }}" {{ 'selected' if status == 'SCHEDULED' else '' }}>
+                                {{ status | replace('_', ' ') | title }}
+                            </option>
                             {% endfor %}
                         </select>
                     </div>
@@ -91,6 +102,34 @@
                             {% endfor %}
                         </select>
                     </div>
+                </div>
+                <div x-data='{ count: 0 }'>
+                    <label for="maintenance_files" class="form-label">Attachments</label>
+                    <label
+                        for="maintenance_files"
+                        class="flex cursor-pointer items-center gap-4 rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-5 transition-colors hover:border-amber-400 hover:bg-amber-50/40 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/10"
+                    >
+                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            {{ icon_svg("cloud-upload", "h-5 w-5") }}
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block text-sm font-medium text-slate-800 dark:text-slate-100" x-text="count ? count + ' file' + (count === 1 ? '' : 's') + ' selected' : 'Click to upload maintenance files'"></span>
+                            <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Images or PDFs only. Maximum size: {{ maintenance_attachment_max_size if maintenance_attachment_max_size else '20 MB' }} per file.</span>
+                        </span>
+                    </label>
+                    <input
+                        aria-label="Upload maintenance images or PDFs"
+                        type="file"
+                        id="maintenance_files"
+                        name="maintenance_files"
+                        multiple
+                        accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf"
+                        class="sr-only"
+                        @change="count = $event.target.files.length"
+                    >
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Optional. Add invoices, estimates, inspection photos, or related documents.
+                    </p>
                 </div>
             </div>
         </div>
