@@ -71,6 +71,8 @@ from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
+DEPARTMENT_DISCIPLINE_READ_PERMISSION = "discipline:department:read"
+
 
 class SelfServiceWebService:
     """View service for employee self-service pages."""
@@ -110,6 +112,7 @@ class SelfServiceWebService:
                     "discipline:cases:read",
                     "discipline:cases:create",
                     "discipline:cases:update",
+                    DEPARTMENT_DISCIPLINE_READ_PERMISSION,
                     "discipline:workflow:manage",
                 ]
             )
@@ -645,6 +648,47 @@ class SelfServiceWebService:
                 db, org_id, manager_employee_id
             )
         }
+
+    @staticmethod
+    def _get_department_discipline_employee_ids(
+        db: Session,
+        org_id: UUID,
+        manager_employee_id: UUID,
+    ) -> set[UUID]:
+        department_id = db.scalar(
+            select(Employee.department_id).where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == manager_employee_id,
+            )
+        )
+        if department_id is None:
+            return set()
+        return set(
+            db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.department_id == department_id,
+                )
+            ).all()
+        )
+
+    def _get_team_discipline_employee_ids(
+        self,
+        db: Session,
+        org_id: UUID,
+        manager_employee_id: UUID,
+        auth: WebAuthContext,
+    ) -> set[UUID]:
+        employee_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
+        if auth.has_permission(DEPARTMENT_DISCIPLINE_READ_PERMISSION):
+            employee_ids.update(
+                self._get_department_discipline_employee_ids(
+                    db,
+                    org_id,
+                    manager_employee_id,
+                )
+            )
+        return employee_ids
 
     @staticmethod
     def _has_team_expense_approvals(
@@ -3076,7 +3120,7 @@ class SelfServiceWebService:
         include_closed: bool = False,
         page: int = 1,
     ) -> HTMLResponse:
-        """List discipline cases for direct reports."""
+        """List discipline cases for permitted team scope."""
         from app.models.people.discipline import CaseStatus, DisciplinaryCase
 
         org_id = coerce_uuid(auth.organization_id)
@@ -3098,14 +3142,22 @@ class SelfServiceWebService:
         reports = self._get_direct_reports(db, org_id, manager_employee_id)
         report_ids = [emp.employee_id for emp in reports]
         has_direct_reports = bool(report_ids)
+        team_employee_ids = self._get_team_discipline_employee_ids(
+            db,
+            org_id,
+            manager_employee_id,
+            auth,
+        )
+        has_team_scope = bool(team_employee_ids)
+        can_create_team_discipline = has_direct_reports
 
         pagination = PaginationParams.from_page(page, per_page=20)
         total = 0
         cases = []
-        if report_ids:
+        if team_employee_ids:
             query = select(DisciplinaryCase).where(
                 DisciplinaryCase.organization_id == org_id,
-                DisciplinaryCase.employee_id.in_(report_ids),
+                DisciplinaryCase.employee_id.in_(team_employee_ids),
                 DisciplinaryCase.status != CaseStatus.WITHDRAWN,
             )
             if not include_closed:
@@ -3132,6 +3184,8 @@ class SelfServiceWebService:
                 "cases": cases,
                 "include_closed": include_closed,
                 "has_direct_reports": has_direct_reports,
+                "has_team_scope": has_team_scope,
+                "can_create_team_discipline": can_create_team_discipline,
                 "page": page,
                 "total_pages": total_pages,
                 "total": total,
@@ -3146,7 +3200,7 @@ class SelfServiceWebService:
             or self._has_team_expense_approvals(
                 db, org_id, person_id, employee_id=manager_employee_id
             )
-            or has_direct_reports
+            or has_team_scope
         )
         context["can_team_leave"] = self._has_team_approvals(
             db, org_id, person_id, employee_id=manager_employee_id
@@ -3365,7 +3419,7 @@ class SelfServiceWebService:
         *,
         case_id: UUID,
     ) -> HTMLResponse:
-        """View team discipline case detail."""
+        """View team discipline case detail within permitted team scope."""
         from app.models.people.discipline import CaseStatus
         from app.services.people.discipline import DisciplineService
 
@@ -3386,6 +3440,12 @@ class SelfServiceWebService:
             raise
 
         report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
+        team_employee_ids = self._get_team_discipline_employee_ids(
+            db,
+            org_id,
+            manager_employee_id,
+            auth,
+        )
 
         try:
             case = DisciplineService(db).get_case_detail(case_id)
@@ -3394,9 +3454,12 @@ class SelfServiceWebService:
 
         if case.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Case not found")
-        if case.employee_id not in report_ids:
+        if case.employee_id not in team_employee_ids:
             raise HTTPException(status_code=403, detail="Forbidden")
 
+        can_issue_query = (
+            case.status == CaseStatus.DRAFT and case.employee_id in report_ids
+        )
         context = base_context(
             request,
             auth,
@@ -3407,7 +3470,7 @@ class SelfServiceWebService:
         context.update(
             {
                 "case": case,
-                "can_issue_query": case.status == CaseStatus.DRAFT,
+                "can_issue_query": can_issue_query,
             }
         )
         context["has_team_approvals"] = (
@@ -3417,7 +3480,7 @@ class SelfServiceWebService:
             or self._has_team_expense_approvals(
                 db, org_id, person_id, employee_id=manager_employee_id
             )
-            or bool(report_ids)
+            or bool(team_employee_ids)
         )
         context["can_team_leave"] = self._has_team_approvals(
             db, org_id, person_id, employee_id=manager_employee_id

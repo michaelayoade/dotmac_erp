@@ -452,6 +452,7 @@ def _load_rbac_claims(db: Session, person_id: str) -> tuple[list[str], list[str]
         "discipline:cases:read",
         "discipline:cases:create",
         "discipline:cases:update",
+        "discipline:department:read",
         "discipline:workflow:manage",
         "self:access",
         "inv:material_requests:read",

@@ -426,6 +426,10 @@ HR_PERMISSIONS = [
     ("discipline:cases:read", "View disciplinary cases"),
     ("discipline:cases:create", "Create disciplinary cases"),
     ("discipline:cases:update", "Update disciplinary case records"),
+    (
+        "discipline:department:read",
+        "View disciplinary cases for own HR department",
+    ),
     ("discipline:workflow:manage", "Manage disciplinary workflow actions"),
     # -------------------------------------------------------------------------
     # Employee Management (Core HR)

@@ -2192,8 +2192,9 @@ def require_self_service_discipline_manager(
 
     Full discipline permissions still grant access. Managers without People/HR
     access are allowed through only when the HR position tree shows current
-    direct reports; the self-service discipline service then scopes every case
-    operation to those direct reports.
+    direct reports. Department-scoped discipline access is allowed only when
+    the user has an employee profile with a department; the self-service
+    discipline service then scopes every case operation to the permitted team.
     """
     if auth.is_admin:
         return auth
@@ -2207,6 +2208,7 @@ def require_self_service_discipline_manager(
         ]
     ):
         return auth
+    has_department_scope = auth.has_permission("discipline:department:read")
     if auth.organization_id is None or auth.person_id is None:
         raise HTTPException(
             status_code=403,
@@ -2225,11 +2227,22 @@ def require_self_service_discipline_manager(
             )
         )
 
-    if employee_id is not None and OrgResolver(db).get_direct_reports(
-        employee_id,
-        auth.organization_id,
-    ):
-        return auth
+    if employee_id is not None:
+        if has_department_scope:
+            department_id = db.scalar(
+                select(Employee.department_id).where(
+                    Employee.organization_id == auth.organization_id,
+                    Employee.employee_id == employee_id,
+                )
+            )
+            if department_id is not None:
+                return auth
+
+        if OrgResolver(db).get_direct_reports(
+            employee_id,
+            auth.organization_id,
+        ):
+            return auth
 
     raise HTTPException(
         status_code=403,

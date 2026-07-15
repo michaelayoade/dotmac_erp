@@ -233,6 +233,57 @@ def test_self_service_discipline_allows_manager_with_direct_reports():
     )
 
 
+def test_self_service_discipline_allows_department_scope_with_department():
+    org_id = uuid.uuid4()
+    employee_id = uuid.uuid4()
+    department_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=employee_id,
+        roles=[],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.return_value = department_id
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        result = require_self_service_discipline_manager(auth, db)
+
+    assert result is auth
+    db.scalar.assert_called_once()
+    resolver_cls.assert_not_called()
+
+
+def test_self_service_discipline_rejects_department_scope_without_department():
+    org_id = uuid.uuid4()
+    employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=employee_id,
+        roles=[],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.return_value = None
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        resolver_cls.return_value.get_direct_reports.return_value = []
+
+        with pytest.raises(HTTPException) as excinfo:
+            require_self_service_discipline_manager(auth, db)
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Team discipline permission required"
+    resolver_cls.return_value.get_direct_reports.assert_called_once_with(
+        employee_id,
+        org_id,
+    )
+
+
 def test_self_service_discipline_rejects_non_manager_without_permission():
     org_id = uuid.uuid4()
     employee_id = uuid.uuid4()
