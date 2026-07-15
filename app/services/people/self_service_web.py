@@ -3371,7 +3371,19 @@ class SelfServiceWebService:
 
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
-        manager_employee_id = self._get_employee_id(db, org_id, person_id)
+        try:
+            manager_employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "Team Discipline",
+                    "self-team-discipline",
+                    detail=exc.detail,
+                )
+            raise
 
         report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
 
