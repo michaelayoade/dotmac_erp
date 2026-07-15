@@ -257,7 +257,7 @@
             <div class="card">
                 <div class="card-header flex items-center justify-between px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Documents</h3>
-                    {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
+                    {% if can_manage_case_actions and case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
                     <button type="button" onclick="document.getElementById('uploadDocModal').classList.remove('hidden')" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
                         + Upload
                     </button>
@@ -283,12 +283,14 @@
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
+                                {% if can_manage_case_actions %}
                                 <a href="/people/hr/discipline/{{ case.case_id }}/documents/{{ doc.document_id }}/download"
                                    class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
                                    title="Download" aria-label="Download">
                                     {{ icon_svg("download", "w-4 h-4") }}
                                 </a>
-                                {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
+                                {% endif %}
+                                {% if can_manage_case_actions and case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
                                 <form method="post" action="/people/hr/discipline/{{ case.case_id }}/documents/{{ doc.document_id }}/delete" onsubmit="return confirm('Delete this document?');" class="inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                                     <button type="submit" class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" title="Delete" aria-label="Delete">
@@ -378,7 +380,7 @@
             </div>
 
             <!-- Workflow Actions -->
-            {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
+            {% if can_manage_case_actions and case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
             <div class="card">
                 <div class="card-header px-6 pt-6">
                     <h4 class="font-medium text-slate-900 dark:text-white">Actions</h4>
@@ -562,6 +564,7 @@
     </div>
 </div>
 
+{% if can_manage_case_actions %}
 <!-- Upload Document Modal -->
 <div id="uploadDocModal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="upload-doc-modal-title" role="dialog" aria-modal="true">
     <div class="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
@@ -638,4 +641,5 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}

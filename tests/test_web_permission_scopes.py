@@ -18,6 +18,7 @@ from app.models.people.hr.employee import Employee
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.auth_flow import _issue_access_token
+from app.services.people.discipline.web.discipline_web import DisciplineWebService
 from app.web.deps import (
     WebAuthContext,
     optional_web_auth,
@@ -281,6 +282,63 @@ def test_self_service_discipline_rejects_department_scope_without_department():
     resolver_cls.return_value.get_direct_reports.assert_called_once_with(
         employee_id,
         org_id,
+    )
+
+
+def test_hr_discipline_detail_allows_department_scope_for_same_department():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    department_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        department_id,
+        department_id,
+    ]
+
+    assert (
+        DisciplineWebService._can_view_department_case(
+            db,
+            org_id,
+            auth,
+            case_employee_id,
+        )
+        is True
+    )
+
+
+def test_hr_discipline_detail_rejects_department_scope_for_other_department():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        uuid.uuid4(),
+        uuid.uuid4(),
+    ]
+
+    assert (
+        DisciplineWebService._can_view_department_case(
+            db,
+            org_id,
+            auth,
+            case_employee_id,
+        )
+        is False
     )
 
 

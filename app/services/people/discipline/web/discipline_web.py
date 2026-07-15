@@ -15,8 +15,10 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import ValidationError as PydanticValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.session_context import allow_cross_org
 from app.models.people.discipline import (
     ActionType,
     CaseStatus,
@@ -59,6 +61,59 @@ def parse_uuid(value: str | None) -> UUID | None:
 
 class DisciplineWebService:
     """HR Admin Discipline Web Service."""
+
+    @staticmethod
+    def _can_view_case_detail(auth: WebAuthContext) -> bool:
+        return auth.is_admin or auth.has_any_permission(
+            [
+                "discipline:access",
+                "discipline:cases:read",
+                "discipline:cases:create",
+                "discipline:cases:update",
+                "discipline:workflow:manage",
+            ]
+        )
+
+    @staticmethod
+    def _can_manage_case_actions(auth: WebAuthContext) -> bool:
+        return auth.is_admin or auth.has_any_permission(
+            [
+                "discipline:access",
+                "discipline:cases:create",
+                "discipline:cases:update",
+                "discipline:workflow:manage",
+            ]
+        )
+
+    @staticmethod
+    def _can_view_department_case(
+        db: Session,
+        org_id: UUID,
+        auth: WebAuthContext,
+        case_employee_id: UUID,
+    ) -> bool:
+        if not auth.has_permission("discipline:department:read"):
+            return False
+        if auth.person_id is None:
+            return False
+
+        with allow_cross_org(db):
+            viewer_department_id = db.scalar(
+                select(Employee.department_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.person_id == auth.person_id,
+                )
+            )
+            if viewer_department_id is None:
+                return False
+
+            case_employee_department_id = db.scalar(
+                select(Employee.department_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.employee_id == case_employee_id,
+                )
+            )
+        return case_employee_department_id == viewer_department_id
 
     @staticmethod
     def _build_case_form_context(
@@ -166,13 +221,26 @@ class DisciplineWebService:
 
         if case.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Case not found")
+        can_view_case_detail = self._can_view_case_detail(auth)
+        can_view_department_case = self._can_view_department_case(
+            db,
+            org_id,
+            auth,
+            case.employee_id,
+        )
+        if not (can_view_case_detail or can_view_department_case):
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        can_manage_case_actions = self._can_manage_case_actions(auth)
 
         # Get employees for dropdowns
-        employee_service = EmployeeService(db, org_id)
-        employees = employee_service.list_employees(
-            filters=EmployeeFilters(status=EmployeeStatus.ACTIVE),
-            pagination=PaginationParams(limit=500),
-        ).items
+        employees = []
+        if can_manage_case_actions:
+            employee_service = EmployeeService(db, org_id)
+            employees = employee_service.list_employees(
+                filters=EmployeeFilters(status=EmployeeStatus.ACTIVE),
+                pagination=PaginationParams(limit=500),
+            ).items
 
         context = base_context(
             request, auth, f"Case {case.case_number}", "hr-discipline", db=db
@@ -185,6 +253,7 @@ class DisciplineWebService:
                 "action_types": [a.value for a in ActionType],
                 "document_types": [d.value for d in DocumentType],
                 "today_iso": date.today().isoformat(),
+                "can_manage_case_actions": can_manage_case_actions,
             }
         )
         response = templates.TemplateResponse(
