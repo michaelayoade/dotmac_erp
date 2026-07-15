@@ -430,6 +430,10 @@ HR_PERMISSIONS = [
         "discipline:department:read",
         "View disciplinary cases for own HR department",
     ),
+    (
+        "discipline:department:workflow",
+        "Manage disciplinary workflow acknowledgements for own HR department",
+    ),
     ("discipline:workflow:manage", "Manage disciplinary workflow actions"),
     # -------------------------------------------------------------------------
     # Employee Management (Core HR)

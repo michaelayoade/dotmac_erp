@@ -342,6 +342,75 @@ def test_hr_discipline_detail_rejects_department_scope_for_other_department():
     )
 
 
+def test_hr_discipline_acknowledge_allows_scoped_department_workflow():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    department_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=[
+            "self:access",
+            "discipline:department:read",
+            "discipline:department:workflow",
+        ],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        department_id,
+        department_id,
+    ]
+
+    has_department_workflow = auth.has_permission(
+        "discipline:department:workflow"
+    ) and DisciplineWebService._can_view_department_case(
+        db,
+        org_id,
+        auth,
+        case_employee_id,
+    )
+
+    assert DisciplineWebService._can_acknowledge_case_response(auth) is False
+    assert has_department_workflow is True
+
+
+def test_hr_discipline_acknowledge_rejects_scoped_workflow_outside_department():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=[
+            "self:access",
+            "discipline:department:read",
+            "discipline:department:workflow",
+        ],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        uuid.uuid4(),
+        uuid.uuid4(),
+    ]
+
+    has_department_workflow = auth.has_permission(
+        "discipline:department:workflow"
+    ) and DisciplineWebService._can_view_department_case(
+        db,
+        org_id,
+        auth,
+        case_employee_id,
+    )
+
+    assert DisciplineWebService._can_acknowledge_case_response(auth) is False
+    assert has_department_workflow is False
+
+
 def test_self_service_discipline_rejects_non_manager_without_permission():
     org_id = uuid.uuid4()
     employee_id = uuid.uuid4()

@@ -86,6 +86,15 @@ class DisciplineWebService:
         )
 
     @staticmethod
+    def _can_acknowledge_case_response(auth: WebAuthContext) -> bool:
+        return auth.is_admin or auth.has_any_permission(
+            [
+                "discipline:access",
+                "discipline:workflow:manage",
+            ]
+        )
+
+    @staticmethod
     def _can_view_department_case(
         db: Session,
         org_id: UUID,
@@ -738,7 +747,13 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        service.get_case_or_404(case_id, organization_id=org_id)
+        case = service.get_case_or_404(case_id, organization_id=org_id)
+        has_full_workflow = self._can_acknowledge_case_response(auth)
+        has_department_workflow = auth.has_permission(
+            "discipline:department:workflow"
+        ) and self._can_view_department_case(db, org_id, auth, case.employee_id)
+        if not (has_full_workflow or has_department_workflow):
+            raise HTTPException(status_code=403, detail="Forbidden")
 
         service.acknowledge_response(response_id, acknowledged_by_id=person_id)
         db.commit()

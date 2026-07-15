@@ -438,7 +438,7 @@ def add_witness(
 def acknowledge_response(
     case_id: UUID,
     response_id: UUID,
-    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
+    auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db_for_org),
 ):
     """Acknowledge an employee response."""
