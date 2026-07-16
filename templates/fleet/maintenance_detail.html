@@ -25,9 +25,15 @@
                 </div>
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white font-display">{{ record.maintenance_type | replace('_', ' ') | title }}</h2>
+                    {% if auth.has_any_permission(["fleet:vehicles:read", "fleet:vehicles:manage"]) %}
                     <a href="/fleet/vehicles/{{ record.vehicle_id }}" class="text-sm font-mono text-teal-600 hover:text-teal-700 dark:text-teal-400">
                         {{ record.vehicle.registration_number }} - {{ record.vehicle.make }} {{ record.vehicle.model }}
                     </a>
+                    {% else %}
+                    <p class="text-sm font-mono text-slate-600 dark:text-slate-300">
+                        {{ record.vehicle.registration_number }} - {{ record.vehicle.make }} {{ record.vehicle.model }}
+                    </p>
+                    {% endif %}
                     <div class="mt-2 flex flex-wrap items-center gap-2">
                         {{ status_badge(record.status) }}
                         {% if record.is_overdue %}

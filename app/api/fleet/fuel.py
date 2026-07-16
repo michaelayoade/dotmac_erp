@@ -10,7 +10,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_with_org, require_organization_id
+from app.api.deps import (
+    get_db_with_org,
+    require_organization_id,
+    require_tenant_permission,
+)
 from app.schemas.fleet.fuel import (
     FuelEfficiencyReport,
     FuelLogBrief,
@@ -85,6 +89,7 @@ def get_fuel_log(
 @router.post("", response_model=FuelLogRead, status_code=status.HTTP_201_CREATED)
 def create_fuel_log(
     data: FuelLogCreate,
+    _auth: dict = Depends(require_tenant_permission("fleet:fuel:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -103,6 +108,7 @@ def create_fuel_log(
 def update_fuel_log(
     fuel_log_id: UUID,
     data: FuelLogUpdate,
+    _auth: dict = Depends(require_tenant_permission("fleet:fuel:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -118,6 +124,7 @@ def update_fuel_log(
 @router.delete("/{fuel_log_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_fuel_log(
     fuel_log_id: UUID,
+    _auth: dict = Depends(require_tenant_permission("fleet:fuel:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):

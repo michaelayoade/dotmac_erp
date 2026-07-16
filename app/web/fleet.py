@@ -44,6 +44,80 @@ from app.web.deps import (
 router = APIRouter(prefix="/fleet", tags=["fleet-web"])
 
 
+def require_fleet_permissions(
+    permissions: list[str],
+    detail: str = "Fleet permission required",
+):
+    """Require Fleet module access plus at least one specific Fleet permission."""
+
+    def dependency(
+        auth: WebAuthContext = Depends(require_fleet_access),
+    ) -> WebAuthContext:
+        if not auth.has_any_permission(permissions):
+            raise HTTPException(status_code=403, detail=detail)
+        return auth
+
+    return dependency
+
+
+require_fleet_vehicle_read = require_fleet_permissions(
+    ["fleet:vehicles:read", "fleet:vehicles:manage"],
+    "Fleet vehicle access required",
+)
+require_fleet_vehicle_manage = require_fleet_permissions(
+    ["fleet:vehicles:manage"],
+    "Fleet vehicle management access required",
+)
+require_fleet_fuel_read = require_fleet_permissions(
+    ["fleet:fuel:read", "fleet:fuel:manage"],
+    "Fleet fuel log access required",
+)
+require_fleet_fuel_manage = require_fleet_permissions(
+    ["fleet:fuel:manage"],
+    "Fleet fuel log management access required",
+)
+require_fleet_maintenance_read = require_fleet_permissions(
+    ["fleet:maintenance:read", "fleet:maintenance:manage"],
+    "Fleet maintenance access required",
+)
+require_fleet_maintenance_manage = require_fleet_permissions(
+    ["fleet:maintenance:manage"],
+    "Fleet maintenance management access required",
+)
+require_fleet_incident_read = require_fleet_permissions(
+    ["fleet:incidents:read", "fleet:incidents:manage"],
+    "Fleet incident access required",
+)
+require_fleet_incident_manage = require_fleet_permissions(
+    ["fleet:incidents:manage"],
+    "Fleet incident management access required",
+)
+require_fleet_reservation_read = require_fleet_permissions(
+    ["fleet:reservations:read", "fleet:reservations:manage"],
+    "Fleet reservation access required",
+)
+require_fleet_reservation_manage = require_fleet_permissions(
+    ["fleet:reservations:manage"],
+    "Fleet reservation management access required",
+)
+require_fleet_document_read = require_fleet_permissions(
+    ["fleet:documents:read", "fleet:documents:manage"],
+    "Fleet document access required",
+)
+require_fleet_document_manage = require_fleet_permissions(
+    ["fleet:documents:manage"],
+    "Fleet document management access required",
+)
+require_fleet_report_read = require_fleet_permissions(
+    ["fleet:reports:read"],
+    "Fleet report access required",
+)
+require_fleet_import_manage = require_fleet_permissions(
+    ["fleet:imports:manage"],
+    "Fleet import access required",
+)
+
+
 # =============================================================================
 # Dashboard
 # =============================================================================
@@ -70,7 +144,7 @@ def fleet_dashboard(
 @router.get("/reports", response_class=HTMLResponse)
 def fleet_reports_index(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet reports landing page."""
@@ -83,7 +157,7 @@ def fleet_reports_index(
 @router.get("/reports/expenses", response_class=HTMLResponse)
 def fleet_reports_expenses(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet expense reports (expense claims linked to vehicles)."""
@@ -101,7 +175,7 @@ def fleet_reports_expense_vehicle_detail(
     end_date: str | None = None,
     year: str | None = None,
     month: str | None = None,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet expense report detail for a single vehicle."""
@@ -154,7 +228,7 @@ def fleet_reports_expense_vehicle_detail(
 @router.get("/reports/invoices", response_class=HTMLResponse)
 def fleet_reports_invoices(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet invoice reports (AP invoices linked to vehicles)."""
@@ -172,7 +246,7 @@ def fleet_reports_invoice_vehicle_detail(
     end_date: str | None = None,
     year: str | None = None,
     month: str | None = None,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet invoice report detail for a single vehicle."""
@@ -235,7 +309,7 @@ def vehicle_list(
     department_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_vehicle_read),
     db: Session = Depends(get_db_for_org),
 ):
     """List all vehicles."""
@@ -257,7 +331,7 @@ def vehicle_list(
 @router.get("/vehicles/new", response_class=HTMLResponse)
 def vehicle_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_vehicle_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """New vehicle form."""
@@ -270,7 +344,7 @@ def vehicle_new(
 @router.post("/vehicles/new")
 async def vehicle_new_submit(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_vehicle_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Create new vehicle from form."""
@@ -284,7 +358,7 @@ async def vehicle_new_submit(
 async def vehicle_edit_submit(
     request: Request,
     vehicle_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_vehicle_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Update existing vehicle from form."""
@@ -297,7 +371,7 @@ async def vehicle_edit_submit(
 @router.get("/vehicles/import", response_class=HTMLResponse)
 def vehicle_import_form(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_import_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Vehicle import form."""
@@ -320,7 +394,7 @@ def vehicle_import_form(
 @router.post("/vehicles/import", response_class=HTMLResponse)
 async def vehicle_import_submit(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_import_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle vehicle CSV import."""
@@ -403,7 +477,7 @@ async def vehicle_import_submit(
 
 @router.get("/vehicles/template-csv")
 def vehicle_import_template(
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_import_manage),
 ):
     """Download a CSV template for vehicle import."""
     if not auth.has_all_permissions(["fleet:access", "fleet:dashboard"]):
@@ -466,7 +540,7 @@ def vehicle_import_template(
 def vehicle_detail(
     request: Request,
     vehicle_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_vehicle_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Vehicle detail view."""
@@ -485,7 +559,7 @@ def vehicle_detail(
 def vehicle_edit(
     request: Request,
     vehicle_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_vehicle_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit vehicle form."""
@@ -513,7 +587,7 @@ def maintenance_list(
     maintenance_type: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_maintenance_read),
     db: Session = Depends(get_db_for_org),
 ):
     """List maintenance records."""
@@ -536,7 +610,7 @@ def maintenance_list(
 def maintenance_new(
     request: Request,
     vehicle_id: UUID | None = None,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """New maintenance record form."""
@@ -553,7 +627,7 @@ def maintenance_new(
 @router.post("/maintenance/new")
 async def maintenance_create(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Create maintenance record from form submission."""
@@ -565,7 +639,7 @@ async def maintenance_create(
 def maintenance_detail(
     request: Request,
     record_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_maintenance_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Maintenance record detail view."""
@@ -595,7 +669,7 @@ def fuel_list(
     vehicle_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_fuel_read),
     db: Session = Depends(get_db_for_org),
 ):
     """List fuel log entries."""
@@ -616,7 +690,7 @@ def fuel_list(
 def fuel_new(
     request: Request,
     vehicle_id: UUID | None = None,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_fuel_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """New fuel log entry form."""
@@ -631,7 +705,7 @@ def fuel_new(
 @router.post("/fuel/new")
 async def fuel_create(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_fuel_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Create fuel log from form submission."""
@@ -643,7 +717,7 @@ async def fuel_create(
 def fuel_edit(
     request: Request,
     fuel_log_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_fuel_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit fuel log entry form."""
@@ -665,7 +739,7 @@ def fuel_edit(
 async def fuel_update(
     request: Request,
     fuel_log_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_fuel_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Update fuel log from form submission."""
@@ -679,7 +753,12 @@ async def fuel_update(
 def fleet_expense_claim_search(
     q: str = Query(..., min_length=1),
     limit: int = Query(default=8, ge=1, le=20),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(
+        require_fleet_permissions(
+            ["fleet:fuel:manage", "fleet:incidents:manage"],
+            "Fleet form access required",
+        )
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Search expense claims for fleet fuel/incident form linking."""
@@ -705,7 +784,7 @@ def incident_list(
     severity: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_incident_read),
     db: Session = Depends(get_db_for_org),
 ):
     """List incidents."""
@@ -728,7 +807,7 @@ def incident_list(
 def incident_new(
     request: Request,
     vehicle_id: UUID | None = None,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_incident_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """New incident report form."""
@@ -743,7 +822,7 @@ def incident_new(
 @router.post("/incidents/new")
 async def incident_create(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_incident_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Create incident from form submission."""
@@ -755,7 +834,7 @@ async def incident_create(
 def incident_edit(
     request: Request,
     incident_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_incident_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit incident report form."""
@@ -777,7 +856,7 @@ def incident_edit(
 async def incident_update(
     request: Request,
     incident_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_incident_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Update incident from form submission."""
@@ -791,7 +870,7 @@ async def incident_update(
 def incident_detail(
     request: Request,
     incident_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_incident_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Incident detail view."""
@@ -820,7 +899,7 @@ def reservation_list(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_reservation_read),
     db: Session = Depends(get_db_for_org),
 ):
     """List reservations."""
@@ -841,7 +920,7 @@ def reservation_list(
 @router.get("/reservations/new", response_class=HTMLResponse)
 def reservation_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_reservation_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """New reservation form."""
@@ -854,7 +933,7 @@ def reservation_new(
 @router.post("/reservations/new")
 async def reservation_create(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_reservation_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Create reservation from form submission."""
@@ -866,7 +945,7 @@ async def reservation_create(
 def reservation_detail(
     request: Request,
     reservation_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_reservation_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Reservation detail view."""
@@ -889,7 +968,7 @@ def reservation_detail(
 async def reservation_cancel(
     request: Request,
     reservation_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_reservation_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Cancel a reservation from form submission."""
@@ -913,7 +992,7 @@ def document_list(
     expiring_soon: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_document_read),
     db: Session = Depends(get_db_for_org),
 ):
     """List documents."""
@@ -937,7 +1016,7 @@ def document_list(
 def document_new(
     request: Request,
     vehicle_id: UUID | None = None,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_document_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """New document form."""
@@ -952,7 +1031,7 @@ def document_new(
 @router.post("/documents/new")
 async def document_create(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_document_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Create document from form submission."""
@@ -964,7 +1043,7 @@ async def document_create(
 def document_edit(
     request: Request,
     document_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_document_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit document form."""
@@ -986,7 +1065,7 @@ def document_edit(
 async def document_update(
     request: Request,
     document_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_document_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Update document from form submission."""
@@ -998,7 +1077,7 @@ async def document_update(
 def document_detail(
     request: Request,
     document_id: UUID,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_document_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Document detail view."""
@@ -1023,7 +1102,7 @@ def document_detail(
 @router.get("/import", response_class=HTMLResponse)
 def fleet_import_dashboard(
     request: Request,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_import_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet import dashboard page."""
@@ -1038,7 +1117,7 @@ def fleet_import_dashboard(
 def fleet_import_form(
     request: Request,
     entity_type: str,
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_import_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet import form for a specific entity type."""
@@ -1082,7 +1161,7 @@ async def fleet_import_preview(
     request: Request,
     entity_type: str,
     file: UploadFile = File(...),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_import_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Preview fleet import with validation and column mapping."""
@@ -1111,7 +1190,7 @@ async def fleet_execute_import(
     skip_duplicates: str | None = Form(default=None),
     dry_run: str | None = Form(default=None),
     column_mapping: str | None = Form(default=None),
-    auth: WebAuthContext = Depends(require_fleet_access),
+    auth: WebAuthContext = Depends(require_fleet_import_manage),
     db: Session = Depends(get_db_for_org),
 ):
     """Execute fleet import operation (web route)."""
