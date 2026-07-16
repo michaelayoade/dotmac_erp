@@ -82,6 +82,9 @@ class VehicleUpdate(BaseModel):
     registration_number: str | None = Field(default=None, max_length=20)
     vin: str | None = Field(default=None, max_length=50)
     engine_number: str | None = Field(default=None, max_length=50)
+    make: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=50)
+    year: int | None = Field(default=None, ge=1900, le=2100)
     color: str | None = Field(default=None, max_length=30)
     vehicle_type: VehicleType | None = None
     fuel_type: FuelType | None = None
@@ -105,6 +108,7 @@ class VehicleUpdate(BaseModel):
     assigned_cost_center_id: UUID | None = None
     has_gps_tracker: bool | None = None
     gps_device_id: str | None = Field(default=None, max_length=50)
+    current_odometer: int | None = Field(default=None, ge=0)
     notes: str | None = None
 
 

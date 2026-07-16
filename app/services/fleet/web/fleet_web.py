@@ -1884,6 +1884,8 @@ class FleetWebService:
         db: Session,
     ) -> "RedirectResponse":
         """Handle POST to update an existing vehicle from form data."""
+        from fastapi.responses import RedirectResponse
+
         from app.schemas.fleet.vehicle import VehicleUpdate
         from app.services.fleet.vehicle_service import VehicleService
 
@@ -1896,6 +1898,9 @@ class FleetWebService:
             otype_raw = str(form.get("ownership_type", "")) or None
             update_payload: dict[str, Any] = {
                 "registration_number": str(form.get("registration_number", "")) or None,
+                "make": str(form.get("make", "")) or None,
+                "model": str(form.get("model", "")) or None,
+                "year": int(str(form["year"])) if form.get("year") else None,
                 "vehicle_type": VehicleType(vtype_raw) if vtype_raw else None,
                 "fuel_type": FuelType(ftype_raw) if ftype_raw else None,
                 "color": str(form.get("color", "")) or None,
@@ -1918,6 +1923,9 @@ class FleetWebService:
                 "assigned_employee_id": UUID(str(form["assigned_employee_id"]))
                 if form.get("assigned_employee_id")
                 else None,
+                "current_odometer": int(str(form["current_odometer_km"]))
+                if form.get("current_odometer_km")
+                else None,
                 "assignment_type": AssignmentType.POOL
                 if "is_pool_vehicle" in form
                 else AssignmentType.PERSONAL,
@@ -1938,8 +1946,9 @@ class FleetWebService:
             svc = VehicleService(db, org_id)
             svc.update(vid, data)
             db.commit()
+            success = quote("Vehicle saved.")
             return RedirectResponse(
-                url=f"/fleet/vehicles/{vehicle_id}",
+                url=f"/fleet/vehicles/{vehicle_id}/edit?success={success}",
                 status_code=303,
             )
         except (ValueError, RuntimeError) as exc:
