@@ -15,10 +15,12 @@
 {% endblock %}
 
 {% block header_actions %}
+{% if auth.has_permission("fleet:maintenance:manage") %}
 <a href="/fleet/maintenance/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-2") }}
     Schedule Maintenance
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -125,9 +127,15 @@
                     {% for record in maintenance_list %}
                     <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td>
+                            {% if auth.has_any_permission(["fleet:vehicles:read", "fleet:vehicles:manage"]) %}
                             <a href="/fleet/vehicles/{{ record.vehicle_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                 {{ record.vehicle.registration_number if record.vehicle else record.vehicle_id }}
                             </a>
+                            {% else %}
+                            <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                {{ record.vehicle.registration_number if record.vehicle else record.vehicle_id }}
+                            </span>
+                            {% endif %}
                         </td>
                         <td>
                             {% set maintenance_type_value = record.maintenance_type.value if record.maintenance_type.value is defined else record.maintenance_type %}
@@ -164,10 +172,12 @@
                                 </div>
                                 <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">No maintenance records</h3>
                                 <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">Schedule your first maintenance task</p>
+                                {% if auth.has_permission("fleet:maintenance:manage") %}
                                 <a href="/fleet/maintenance/new" class="btn btn-primary mt-4">
                                     {{ icon_svg("plus", "h-4 w-4 mr-2") }}
                                     Schedule Maintenance
                                 </a>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

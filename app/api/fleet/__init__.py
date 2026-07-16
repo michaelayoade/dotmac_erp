@@ -29,13 +29,37 @@ router = APIRouter(
     dependencies=[Depends(require_tenant_permission("fleet:access"))],
 )
 
-router.include_router(vehicles_router)
-router.include_router(maintenance_router)
-router.include_router(fuel_router)
-router.include_router(incidents_router)
-router.include_router(import_router)
-router.include_router(documents_router)
-router.include_router(reservations_router)
-router.include_router(assignments_router)
+router.include_router(
+    vehicles_router,
+    dependencies=[Depends(require_tenant_permission("fleet:vehicles:manage"))],
+)
+router.include_router(
+    maintenance_router,
+    dependencies=[Depends(require_tenant_permission("fleet:maintenance:read"))],
+)
+router.include_router(
+    fuel_router,
+    dependencies=[Depends(require_tenant_permission("fleet:fuel:read"))],
+)
+router.include_router(
+    incidents_router,
+    dependencies=[Depends(require_tenant_permission("fleet:incidents:read"))],
+)
+router.include_router(
+    import_router,
+    dependencies=[Depends(require_tenant_permission("fleet:imports:manage"))],
+)
+router.include_router(
+    documents_router,
+    dependencies=[Depends(require_tenant_permission("fleet:documents:manage"))],
+)
+router.include_router(
+    reservations_router,
+    dependencies=[Depends(require_tenant_permission("fleet:reservations:manage"))],
+)
+router.include_router(
+    assignments_router,
+    dependencies=[Depends(require_tenant_permission("fleet:vehicles:manage"))],
+)
 
 __all__ = ["router"]

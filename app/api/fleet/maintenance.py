@@ -10,7 +10,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_with_org, require_organization_id
+from app.api.deps import (
+    get_db_with_org,
+    require_organization_id,
+    require_tenant_permission,
+)
 from app.models.fleet.enums import MaintenanceStatus, MaintenanceType
 from app.schemas.fleet.maintenance import (
     MaintenanceBrief,
@@ -78,6 +82,7 @@ def get_maintenance(
 @router.post("", response_model=MaintenanceRead, status_code=status.HTTP_201_CREATED)
 def create_maintenance(
     data: MaintenanceCreate,
+    _auth: dict = Depends(require_tenant_permission("fleet:maintenance:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -94,6 +99,7 @@ def create_maintenance(
 def update_maintenance(
     maintenance_id: UUID,
     data: MaintenanceUpdate,
+    _auth: dict = Depends(require_tenant_permission("fleet:maintenance:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -111,6 +117,7 @@ def update_maintenance(
 @router.post("/{maintenance_id}/start", response_model=MaintenanceRead)
 def start_maintenance(
     maintenance_id: UUID,
+    _auth: dict = Depends(require_tenant_permission("fleet:maintenance:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -129,6 +136,7 @@ def start_maintenance(
 def complete_maintenance(
     maintenance_id: UUID,
     data: MaintenanceComplete,
+    _auth: dict = Depends(require_tenant_permission("fleet:maintenance:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -147,6 +155,7 @@ def complete_maintenance(
 def cancel_maintenance(
     maintenance_id: UUID,
     reason: str | None = None,
+    _auth: dict = Depends(require_tenant_permission("fleet:maintenance:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):

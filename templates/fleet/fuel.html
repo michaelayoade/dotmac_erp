@@ -15,10 +15,12 @@
 {% endblock %}
 
 {% block header_actions %}
+{% if auth.has_permission("fleet:fuel:manage") %}
 <a href="/fleet/fuel/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-2") }}
     Record Fuel
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -68,9 +70,15 @@
                             {{ log.log_date | format_date }}
                         </td>
                         <td>
+                            {% if auth.has_any_permission(["fleet:vehicles:read", "fleet:vehicles:manage"]) %}
                             <a href="/fleet/vehicles/{{ log.vehicle_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                 {{ log.vehicle.registration_number }}
                             </a>
+                            {% else %}
+                            <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                {{ log.vehicle.registration_number }}
+                            </span>
+                            {% endif %}
                         </td>
                         <td class="text-right font-mono text-sm text-slate-900 dark:text-white">
                             {{ "{:.2f}".format(log.quantity_liters) }}
@@ -99,7 +107,11 @@
                             {% endif %}
                         </td>
                         <td class="text-right">
+                            {% if auth.has_permission("fleet:fuel:manage") %}
                             {{ action_buttons(edit_href="/fleet/fuel/" ~ log.fuel_log_id ~ "/edit") }}
+                            {% else %}
+                            <span class="text-sm text-slate-400">-</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
@@ -111,10 +123,12 @@
                                 </div>
                                 <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">No fuel records</h3>
                                 <p class="text-sm text-slate-500 dark:text-slate-400">Record your first fuel purchase</p>
+                                {% if auth.has_permission("fleet:fuel:manage") %}
                                 <a href="/fleet/fuel/new" class="btn btn-primary mt-4">
                                     {{ icon_svg("plus", "h-4 w-4 mr-2") }}
                                     Record Fuel
                                 </a>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

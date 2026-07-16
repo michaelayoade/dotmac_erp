@@ -15,10 +15,12 @@
 {% endblock %}
 
 {% block header_actions %}
+{% if auth.has_permission("fleet:incidents:manage") %}
 <a href="/fleet/incidents/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-2") }}
     Report Incident
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -128,9 +130,15 @@
                             {{ incident.incident_date | format_date }}
                         </td>
                         <td>
+                            {% if auth.has_any_permission(["fleet:vehicles:read", "fleet:vehicles:manage"]) %}
                             <a href="/fleet/vehicles/{{ incident.vehicle_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                 {{ incident.vehicle.registration_number }}
                             </a>
+                            {% else %}
+                            <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                {{ incident.vehicle.registration_number }}
+                            </span>
+                            {% endif %}
                         </td>
                         <td>
                             <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
@@ -160,7 +168,11 @@
                             {% endif %}
                         </td>
                         <td class="text-right">
+                            {% if auth.has_permission("fleet:incidents:manage") %}
                             {{ action_buttons(view_href="/fleet/incidents/" ~ incident.incident_id, edit_href="/fleet/incidents/" ~ incident.incident_id ~ "/edit") }}
+                            {% else %}
+                            {{ action_buttons(view_href="/fleet/incidents/" ~ incident.incident_id) }}
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
