@@ -185,3 +185,84 @@ raise SystemExit(main())
         cwd=str(REPO_ROOT),
         env=env,
     )
+
+
+def test_backup_script_defaults_to_current_db_container_without_password(
+    tmp_path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+
+    local_dir = tmp_path / "local"
+    remote_root = tmp_path / "remote"
+    remote_dir = remote_root / "db.backup" / "dotmac_erp"
+    remote_dir.mkdir(parents=True)
+
+    docker_script = """#!/usr/bin/env python3
+import sys
+
+expected = [
+    "exec",
+    "-u",
+    "postgres",
+    "dotmac_pg_local",
+    "pg_dump",
+    "-d",
+    "dotmac_erp",
+]
+if sys.argv[1:] != expected:
+    raise SystemExit(f"unexpected docker invocation: {sys.argv[1:]}")
+
+sys.stdout.write("-- fake pg_dump output\\n")
+"""
+    _write_executable(fake_bin / "docker", docker_script)
+
+    rclone_script = f"""#!/usr/bin/env python3
+import shutil
+import sys
+from pathlib import Path
+
+REMOTE_ROOT = Path({str(remote_root)!r})
+
+
+def resolve_remote(remote_path: str) -> Path:
+    _, _, relative = remote_path.partition(":")
+    relative = relative.lstrip("/")
+    return REMOTE_ROOT / relative
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    if args[0] == "copy":
+        src = Path(args[1])
+        dest = resolve_remote(args[2])
+        dest.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest / src.name)
+        return 0
+    if args[0] == "lsf":
+        return 0
+    raise SystemExit(f"unsupported rclone invocation: {{args}}")
+
+
+raise SystemExit(main())
+"""
+    _write_executable(fake_bin / "rclone", rclone_script)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["LOCAL_DIR"] = str(local_dir)
+    env["REMOTE"] = "Backup:db.backup"
+    env["REMOTE_DIR"] = "Backup:db.backup/dotmac_erp"
+    env["KEEP_LAST"] = "5"
+    env["ENV_FILE"] = str(tmp_path / "missing.env")
+    env.pop("PGPASSWORD", None)
+    env.pop("POSTGRES_PASSWORD", None)
+    env.pop("DB_CONTAINER", None)
+    env.pop("DB_OS_USER", None)
+
+    subprocess.run(  # noqa: S603
+        [str(SCRIPT_PATH)],
+        check=True,
+        cwd=str(REPO_ROOT),
+        env=env,
+    )
