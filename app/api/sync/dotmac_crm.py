@@ -85,6 +85,8 @@ from app.schemas.sync.dotmac_crm import (
     InventoryItemDetail,
     InventoryListResponse,
     PersonListResponse,
+    ReconcileOrphansRequest,
+    ReconcileOrphansResponse,
     SyncError,
     WorkforceEmployeeListResponse,
 )
@@ -230,6 +232,24 @@ def require_service_scope(scope: str):
     return _dep
 
 
+def require_any_service_scope(*required: str):
+    """Dependency factory enforcing that the key carries at least one of
+    ``required``. Same grandfathering as ``require_service_scope``: an
+    unscoped key (empty scopes) keeps full access.
+    """
+
+    def _dep(auth: dict = Depends(require_service_auth)) -> dict:
+        scopes = auth.get("scopes") or []
+        if scopes and not any(scope in scopes for scope in required):
+            raise HTTPException(
+                status_code=403,
+                detail=f"API key missing required scope: one of {', '.join(required)}",
+            )
+        return auth
+
+    return _dep
+
+
 def get_db_with_service_org(
     auth: dict = Depends(require_service_auth),
 ):
@@ -367,6 +387,50 @@ def bulk_sync(
         work_orders_synced=work_orders_synced,
         errors=errors,
     )
+
+
+@router.post(
+    "/reconcile-orphans",
+    response_model=ReconcileOrphansResponse,
+    status_code=200,
+    dependencies=[Depends(require_any_service_scope("crm:sync:write", "crm:write"))],
+)
+def reconcile_orphans(
+    payload: ReconcileOrphansRequest,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> ReconcileOrphansResponse:
+    """
+    Reconcile orphaned CRM entities after a full CRM sync run.
+
+    CRM sends the complete set of ids a clean ``sync_all_active`` run saw for
+    one entity type; ACTIVE mappings not in that set are soft-closed (with
+    min-fetch / max-terminate safety rails — a suspicious set is skipped, not
+    applied). Idempotent: already-closed mappings are never re-examined.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    try:
+        result = service.reconcile_orphans(
+            org_id,
+            entity_type=payload.entity_type,
+            seen_crm_ids=payload.seen_crm_ids,
+            active_count=payload.active_count,
+        )
+        db.commit()
+        return ReconcileOrphansResponse(**result)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "Failed to reconcile CRM orphans entity_type=%s", payload.entity_type
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
 
 
 # ============ Webhook Endpoint (CRM → ERP real-time) ============
