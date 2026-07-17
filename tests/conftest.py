@@ -381,6 +381,9 @@ from app.models.feature_flag import FeatureFlagRegistry  # noqa: E402
 from app.models.finance.ar.dotmac_sub_sync_watermark import (  # noqa: E402
     DotmacSubSyncWatermark,
 )
+from app.models.finance.automation.custom_field import (  # noqa: E402
+    CustomFieldDefinition,
+)
 from app.models.finance.platform.idempotency_record import (  # noqa: E402
     IdempotencyRecord,
 )
@@ -414,6 +417,7 @@ SQLITE_COMPATIBLE_TABLES = [
     AuditEvent.__table__,
     DomainSetting.__table__,
     DomainSettingHistory.__table__,
+    CustomFieldDefinition.__table__,
     ScheduledTask.__table__,
     ExpenseCategory.__table__,
     ExpenseClaim.__table__,
