@@ -17,6 +17,7 @@ HTTP client for the dotmac_sub subscriber-management system at
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections.abc import Generator
 from dataclasses import dataclass, field
@@ -24,11 +25,43 @@ from decimal import Decimal
 from typing import Any
 
 import httpx
+from dotmac_integration import (
+    IntegrationHttpClient,
+    ReachabilityCircuit,
+    exponential_backoff,
+)
 
 from app.config import settings
-from app.metrics import categorize_http_status, observe_integration_request
+from app.metrics import observe_integration_request
+from app.observability import get_request_id
 
 logger = logging.getLogger(__name__)
+
+# Reachability-circuit cooldown (seconds); <= 0 disables the breaker.
+_CIRCUIT_COOLDOWN_ENV = "DOTMAC_SUB_CIRCUIT_SECONDS"
+_CIRCUIT_COOLDOWN_DEFAULT = 30.0
+
+
+def _circuit_cooldown_seconds() -> float:
+    raw = os.getenv(_CIRCUIT_COOLDOWN_ENV, "")
+    if not raw:
+        return _CIRCUIT_COOLDOWN_DEFAULT
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid %s=%r; using default %.0fs",
+            _CIRCUIT_COOLDOWN_ENV,
+            raw,
+            _CIRCUIT_COOLDOWN_DEFAULT,
+        )
+        return _CIRCUIT_COOLDOWN_DEFAULT
+
+
+def _request_id_provider() -> str | None:
+    """Propagate ERP's x-request-id contextvar onto outbound sub calls."""
+    request_id = get_request_id()
+    return request_id or None
 
 
 class DotmacSubError(Exception):
@@ -49,7 +82,29 @@ class DotmacSubNotFoundError(DotmacSubError):
 
 
 class DotmacSubRateLimitError(DotmacSubError):
-    """Rate limit exceeded."""
+    """Rate limit exceeded.
+
+    ``retry_after`` (seconds, already capped at the client's
+    ``_RETRY_AFTER_CAP``) carries a parsed ``Retry-After`` header; the retry
+    engine honours it over exponential backoff when set.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        retry_after: float | None = None,
+    ) -> None:
+        super().__init__(message, status_code)
+        self.retry_after = retry_after
+
+
+class _TransientServerError(DotmacSubError):
+    """Internal: a 5xx response, distinguishable so the engine retries it.
+
+    Never escapes ``DotmacSubClient._request`` — exhausted retries are
+    re-wrapped as a plain :class:`DotmacSubError`, exactly like the old loop.
+    """
 
 
 @dataclass
@@ -382,6 +437,27 @@ class DotmacSubClient:
     def __init__(self, config: DotmacSubConfig | None = None) -> None:
         self.config = config or DotmacSubConfig.from_settings()
         self._client: httpx.Client | None = None
+        # Shared retry/transport engine (dotmac-integration-client). Policy:
+        #   - 429  -> DotmacSubRateLimitError with Retry-After honoured (capped)
+        #   - 5xx  -> _TransientServerError, retried with jittered backoff
+        #   - connect/timeout transport failures retried; trip the circuit
+        #   - auth/404/other typed errors raise immediately
+        self._engine = IntegrationHttpClient(
+            client_factory=lambda: self.client,
+            response_handler=self._handle_response,
+            backoff=exponential_backoff(
+                base=self._RETRY_BACKOFF_BASE, cap=self._RETRY_BACKOFF_CAP
+            ),
+            max_attempts=self.config.max_retries,
+            rate_limit_exc=DotmacSubRateLimitError,
+            retryable_excs=(_TransientServerError,),
+            non_retryable_excs=(DotmacSubError,),
+            loop_exhausted_factory=self._loop_exhausted_error,
+            circuit=ReachabilityCircuit(cooldown_seconds=_circuit_cooldown_seconds()),
+            auth_headers=lambda: {"X-Api-Key": self._api_key()},
+            edge="dotmac_sub",
+            request_id_provider=_request_id_provider,
+        )
 
     def __enter__(self) -> DotmacSubClient:
         return self
@@ -429,23 +505,55 @@ class DotmacSubClient:
             )
         return self.config.api_token
 
-    def _backoff_seconds(self, attempt: int) -> float:
-        """Exponential backoff delay (seconds) for retry ``attempt`` (0-indexed)."""
-        delay = self._RETRY_BACKOFF_BASE * (2.0**attempt)
-        return float(min(delay, self._RETRY_BACKOFF_CAP))
+    def _parse_retry_after(self, header_value: str | None) -> float | None:
+        """Parse a 429 ``Retry-After`` header, capped at ``_RETRY_AFTER_CAP``.
 
-    def _retry_after_seconds(self, header_value: str | None, attempt: int) -> float:
-        """Seconds to wait after a 429, honouring ``Retry-After`` when present.
-
-        Only the integer-seconds form of ``Retry-After`` is parsed (the common
-        case); anything else falls back to exponential backoff.
+        Only the integer-seconds form is parsed (the common case); anything
+        else returns ``None`` so the engine falls back to exponential backoff.
         """
         if header_value:
             try:
                 return min(float(int(header_value)), self._RETRY_AFTER_CAP)
             except (ValueError, TypeError):
                 pass
-        return self._backoff_seconds(attempt)
+        return None
+
+    def _handle_response(self, response: httpx.Response, *, endpoint: str) -> Any:
+        """Map a dotmac_sub response to a parsed body or a typed error.
+
+        Retry classification keys off the exception type: 429 raises the
+        rate-limit error (with parsed ``retry_after``), 5xx raises the
+        transient subclass; auth/404 raise immediately.
+        """
+        status = response.status_code
+        if status in (401, 403):
+            raise DotmacSubAuthenticationError(
+                "Authentication failed for dotmac_sub.", status_code=status
+            )
+        if status == 404:
+            raise DotmacSubNotFoundError(
+                f"Resource not found: {endpoint}", status_code=404
+            )
+        if status == 429:
+            raise DotmacSubRateLimitError(
+                "Rate limit exceeded.",
+                status_code=429,
+                retry_after=self._parse_retry_after(
+                    response.headers.get("Retry-After")
+                ),
+            )
+        if status >= 500:
+            raise _TransientServerError(f"Server error: {status}", status_code=status)
+        response.raise_for_status()
+        return response.json()
+
+    def _loop_exhausted_error(self, exc: BaseException, retries: int) -> DotmacSubError:
+        """Wrap engine give-up cases (429 exhaustion, circuit open)."""
+        if isinstance(exc, DotmacSubRateLimitError):
+            return DotmacSubRateLimitError(
+                "Rate limit exceeded. Try again later.", status_code=429
+            )
+        return DotmacSubError(f"dotmac_sub temporarily unavailable: {exc}")
 
     def _request(
         self,
@@ -454,128 +562,75 @@ class DotmacSubClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
     ) -> Any:
-        last_error: Exception | None = None
+        """Issue one logical request via the shared integration engine.
+
+        The engine (``dotmac-integration-client``) owns the retry loop,
+        jittered exponential backoff, 429 Retry-After honouring, the
+        reachability circuit, X-Api-Key auth injection, and x-request-id
+        propagation. This wrapper owns the metrics contract: exactly one
+        ``observe_integration_request`` per logical call with the legacy
+        status vocabulary, duration measured across all attempts.
+
+        Behavioural deltas vs the old hand-rolled loop (accepted):
+        - Backoff sleeps now carry up-to-0.25s of jitter.
+        - A short reachability circuit (``DOTMAC_SUB_CIRCUIT_SECONDS``,
+          default 30s) fails fast after a transport failure.
+        - ``x-request-id`` is propagated from ERP's request context.
+        - Transport retries cover connect + timeout failures; other
+          ``httpx.RequestError`` subclasses (read/write/protocol errors) now
+          fail fast instead of retrying, but still surface as the same
+          ``DotmacSubError`` with a ``request_error`` metric.
+        - Retried 429s emit one ``rate_limited`` metric per call rather than
+          one per attempt, and 429 exhaustion sleeps once more before raising.
+        """
         started_at = time.perf_counter()
-        metric_status = "unknown"
-
-        for attempt in range(self.config.max_retries):
-            try:
-                # dotmac_sub service auth: scoped API key via X-Api-Key. Its
-                # Bearer path only accepts session-bound login JWTs — a
-                # long-lived key sent as Bearer is rejected with 401.
-                headers = {"X-Api-Key": self._api_key()}
-                response = self.client.request(
-                    method=method,
-                    url=endpoint,
-                    params=params,
-                    json=json,
-                    headers=headers,
+        metric_status: str | None = None
+        try:
+            result = self._engine.request(
+                method,
+                endpoint,
+                params=params,
+                json_data=json,
+                handler_kwargs={"endpoint": endpoint},
+            )
+            metric_status = "success"
+            return result
+        except _TransientServerError as e:
+            metric_status = "server_error"
+            raise DotmacSubError(
+                f"Request failed after {self.config.max_retries} attempts: {e}"
+            ) from e
+        except DotmacSubAuthenticationError as e:
+            # A response-mapped 401/403 counts as auth_error; a locally raised
+            # missing-api-key error (status None) never reached the wire and,
+            # as before, emits no metric.
+            if e.status_code is not None:
+                metric_status = "auth_error"
+            raise
+        except DotmacSubNotFoundError:
+            metric_status = "not_found"
+            raise
+        except DotmacSubRateLimitError:
+            metric_status = "rate_limited"
+            raise
+        except httpx.TimeoutException as e:
+            metric_status = "timeout"
+            raise DotmacSubError(
+                f"Request failed after {self.config.max_retries} attempts: {e}"
+            ) from e
+        except httpx.RequestError as e:
+            metric_status = "request_error"
+            raise DotmacSubError(
+                f"Request failed after {self.config.max_retries} attempts: {e}"
+            ) from e
+        finally:
+            if metric_status is not None:
+                observe_integration_request(
+                    "dotmac_sub",
+                    f"{method.upper()} {endpoint}",
+                    metric_status,
+                    max(time.perf_counter() - started_at, 0.0),
                 )
-                if response.status_code in (401, 403):
-                    metric_status = "auth_error"
-                    raise DotmacSubAuthenticationError(
-                        "Authentication failed for dotmac_sub.",
-                        status_code=response.status_code,
-                    )
-                elif response.status_code == 404:
-                    metric_status = "not_found"
-                    raise DotmacSubNotFoundError(
-                        f"Resource not found: {endpoint}", status_code=404
-                    )
-                elif response.status_code == 429:
-                    metric_status = "rate_limited"
-                    if attempt < self.config.max_retries - 1:
-                        delay = self._retry_after_seconds(
-                            response.headers.get("Retry-After"), attempt
-                        )
-                        logger.warning(
-                            "dotmac_sub rate limited (attempt %d/%d); "
-                            "retrying in %.1fs: %s",
-                            attempt + 1,
-                            self.config.max_retries,
-                            delay,
-                            endpoint,
-                        )
-                        last_error = DotmacSubRateLimitError(
-                            "Rate limit exceeded.", status_code=429
-                        )
-                        time.sleep(delay)
-                        continue
-                    raise DotmacSubRateLimitError(
-                        "Rate limit exceeded. Try again later.", status_code=429
-                    )
-                elif response.status_code >= 500:
-                    metric_status = "server_error"
-                    raise DotmacSubError(
-                        f"Server error: {response.status_code}",
-                        status_code=response.status_code,
-                    )
-
-                response.raise_for_status()
-                metric_status = categorize_http_status(response.status_code)
-                return response.json()
-
-            except httpx.TimeoutException as e:
-                metric_status = "timeout"
-                last_error = e
-                logger.warning(
-                    "dotmac_sub request timeout (attempt %d/%d): %s",
-                    attempt + 1,
-                    self.config.max_retries,
-                    endpoint,
-                )
-                if attempt < self.config.max_retries - 1:
-                    time.sleep(self._backoff_seconds(attempt))
-            except httpx.RequestError as e:
-                metric_status = "request_error"
-                last_error = e
-                logger.warning(
-                    "dotmac_sub request error (attempt %d/%d): %s - %s",
-                    attempt + 1,
-                    self.config.max_retries,
-                    endpoint,
-                    str(e),
-                )
-                if attempt < self.config.max_retries - 1:
-                    time.sleep(self._backoff_seconds(attempt))
-            except DotmacSubRateLimitError:
-                raise
-            except DotmacSubError as e:
-                metric_status = (
-                    categorize_http_status(e.status_code)
-                    if e.status_code is not None
-                    else "request_error"
-                )
-                if e.status_code and e.status_code >= 500:
-                    last_error = e
-                    logger.warning(
-                        "dotmac_sub server error (attempt %d/%d): %s",
-                        attempt + 1,
-                        self.config.max_retries,
-                        e.message,
-                    )
-                    if attempt < self.config.max_retries - 1:
-                        time.sleep(self._backoff_seconds(attempt))
-                else:
-                    raise
-            finally:
-                if attempt == self.config.max_retries - 1 or metric_status in {
-                    "success",
-                    "auth_error",
-                    "not_found",
-                    "rate_limited",
-                    "client_error",
-                }:
-                    observe_integration_request(
-                        "dotmac_sub",
-                        f"{method.upper()} {endpoint}",
-                        metric_status,
-                        max(time.perf_counter() - started_at, 0.0),
-                    )
-
-        raise DotmacSubError(
-            f"Request failed after {self.config.max_retries} attempts: {last_error}"
-        )
 
     def _paginate(
         self,
