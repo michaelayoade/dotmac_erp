@@ -198,6 +198,31 @@ class BulkSyncResponse(BaseModel):
     errors: list[SyncError] = Field(default_factory=list)
 
 
+class ReconcileOrphansRequest(BaseModel):
+    """Full-run reconcile summary from DotMac CRM for one entity type.
+
+    ``seen_crm_ids`` is the complete set of CRM ids a FULL ``sync_all_active``
+    run saw upstream-side; mappings for that entity type not in the set are
+    orphan candidates (canceled/soft-deleted in CRM, so they silently dropped
+    out of the push).
+    """
+
+    entity_type: Literal["project", "ticket", "work_order"]
+    seen_crm_ids: list[str] = Field(default_factory=list, max_length=50_000)
+    active_count: int = Field(0, ge=0, description="CRM-side active count for the run")
+
+
+class ReconcileOrphansResponse(BaseModel):
+    """Result of an orphan reconcile pass."""
+
+    entity_type: str
+    examined: int = 0
+    orphaned: int = 0
+    closed: int = 0
+    skipped_reason: str | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
 class CRMInventoryItemResponse(BaseModel):
     """Response for CRM inventory item upsert."""
 
