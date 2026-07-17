@@ -108,15 +108,20 @@ async def dotmac_sub_webhook(
 
     # Dedupe on dotmac_sub's delivery id: the sender retries the SAME delivery
     # id with backoff, and we ACK before processing below, so a replayed
-    # delivery must not enqueue duplicate work. (Correctness is additionally
-    # guarded by the idempotent handler + DB uniques; this avoids re-work.)
-    if x_webhook_delivery_id:
-        if not _record_webhook_delivery(db, organization_id, x_webhook_delivery_id):
-            logger.info(
-                "dotmac_sub webhook duplicate delivery %s ignored",
-                x_webhook_delivery_id,
-            )
-            return WebhookResponse(status="ok", message="duplicate delivery")
+    # delivery must not enqueue duplicate work. Ordering matters: the record is
+    # written only AFTER a successful enqueue — a broker outage leaves no
+    # record, so the sender's retry re-attempts fully instead of dedupe-
+    # dropping the event onto the slow incremental-sync path. The residual
+    # check→enqueue race is at-most-double-process, which the idempotent
+    # handler + DB uniques make safe.
+    if x_webhook_delivery_id and _webhook_delivery_seen(
+        db, organization_id, x_webhook_delivery_id
+    ):
+        logger.info(
+            "dotmac_sub webhook duplicate delivery %s ignored",
+            x_webhook_delivery_id,
+        )
+        return WebhookResponse(status="ok", message="duplicate delivery")
 
     # ACK fast and process asynchronously. The dispatch reads back into
     # dotmac_sub, whose rate limiter throttles synchronous bursts (observed
@@ -134,16 +139,37 @@ async def dotmac_sub_webhook(
             status_code=503, detail=f"Webhook enqueue failed: {e}"
         ) from e
 
+    if x_webhook_delivery_id:
+        _record_webhook_delivery(db, organization_id, x_webhook_delivery_id)
+
     return WebhookResponse(status="accepted", message="queued for processing")
+
+
+def _webhook_delivery_seen(
+    db: Session, organization_id: UUID, delivery_id: str
+) -> bool:
+    """Has this delivery id already been recorded (post-enqueue)?"""
+    from app.models.finance.platform.idempotency_record import IdempotencyRecord
+
+    return (
+        db.query(IdempotencyRecord.record_id)
+        .filter(
+            IdempotencyRecord.organization_id == organization_id,
+            IdempotencyRecord.endpoint == "dotmac_sub_webhook",
+            IdempotencyRecord.idempotency_key == delivery_id[:200],
+        )
+        .first()
+        is not None
+    )
 
 
 def _record_webhook_delivery(
     db: Session, organization_id: UUID, delivery_id: str
 ) -> bool:
-    """Record a webhook delivery id; False when it was already recorded.
+    """Record a webhook delivery id AFTER enqueue; False on concurrent replay.
 
-    Uses the platform idempotency table's (organization, endpoint, key) unique
-    constraint as the arbiter so concurrent replays cannot both win.
+    A lost unique-constraint race here means a concurrent replay also enqueued
+    — at most double-processing, which the idempotent handler absorbs.
     """
     from hashlib import sha256
 

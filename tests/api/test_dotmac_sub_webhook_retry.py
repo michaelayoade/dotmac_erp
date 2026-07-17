@@ -96,10 +96,11 @@ def test_duplicate_delivery_id_is_acknowledged_without_enqueue(monkeypatch):
         "delay",
         lambda *a, **k: enqueued.append((a, k)),
     )
-    # First delivery wins the idempotency insert; the replay does not.
+    # The first delivery is unseen (enqueues, then records); the replay is seen.
     monkeypatch.setattr(
-        ds, "_record_webhook_delivery", lambda db, org, did: did == "d-1-first"
+        ds, "_webhook_delivery_seen", lambda db, org, did: did != "d-1-first"
     )
+    monkeypatch.setattr(ds, "_record_webhook_delivery", lambda db, org, did: True)
 
     first = _call(
         json.dumps({"event_type": "invoice.updated"}).encode(),
@@ -122,3 +123,28 @@ def test_task_retries_locally_on_rate_limit():
     assert process_dotmac_sub_webhook.rate_limit == "30/m"
     assert process_dotmac_sub_webhook.retry_backoff is True
     assert process_dotmac_sub_webhook.max_retries == 8
+
+
+def test_broker_outage_leaves_no_dedupe_record(monkeypatch):
+    """Enqueue-first ordering: a 503 must not poison the sender's retry."""
+    _configure(monkeypatch)
+    import app.tasks.dotmac_sub as tasks
+
+    recorded: list[str] = []
+    monkeypatch.setattr(ds, "_webhook_delivery_seen", lambda db, org, did: False)
+    monkeypatch.setattr(
+        ds, "_record_webhook_delivery", lambda db, org, did: recorded.append(did)
+    )
+
+    def _boom(*a, **k):
+        raise RuntimeError("broker unavailable")
+
+    monkeypatch.setattr(tasks.process_dotmac_sub_webhook, "delay", _boom)
+
+    with pytest.raises(HTTPException) as exc:
+        _call(
+            json.dumps({"event_type": "payment.received"}).encode(),
+            delivery_id="d-broker-down",
+        )
+    assert exc.value.status_code == 503
+    assert recorded == []  # nothing recorded -> sender retry re-attempts fully
