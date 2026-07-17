@@ -201,7 +201,7 @@ class CRMClient:
             def _linear_jittered(attempt: int) -> float:
                 import random
 
-                return retry_delay * (attempt + 1) + random.uniform(0.0, 0.25)  # noqa: S311 — retry jitter, not crypto
+                return retry_delay * (attempt + 1) + random.uniform(0.0, 0.25)  # noqa: S311  # nosec B311 - retry jitter, not crypto
 
             self._engine_cache = IntegrationHttpClient(
                 client_factory=lambda: self.client,
