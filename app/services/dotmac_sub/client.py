@@ -126,9 +126,11 @@ class DotmacSubConfig:
     @classmethod
     def from_settings(cls) -> DotmacSubConfig:
         """Create config from application settings (env fallback / bootstrap)."""
+        from app.services.secrets import resolve_secret
+
         return cls(
             api_url=settings.dotmac_sub_api_url,
-            api_token=settings.dotmac_sub_api_token,
+            api_token=resolve_secret(settings.dotmac_sub_api_token) or "",
             timeout=settings.dotmac_sub_request_timeout,
             max_retries=settings.dotmac_sub_max_retries,
         )
