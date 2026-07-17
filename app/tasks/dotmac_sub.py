@@ -525,3 +525,45 @@ def run_dotmac_sub_full_reconciliation(
             raise self.retry(exc=exc)
         finally:
             service.close()
+
+
+@shared_task(
+    bind=True,
+    max_retries=8,
+    autoretry_for=(),
+    retry_backoff=True,
+    retry_backoff_max=3600,
+    retry_jitter=True,
+    rate_limit="30/m",
+)
+def process_dotmac_sub_webhook(
+    self,
+    organization_id: str,
+    event_type: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Process one dotmac_sub webhook event asynchronously.
+
+    The webhook endpoint ACKs immediately and enqueues here so the synchronous
+    read-back into dotmac_sub (which its rate limiter throttles under bursts)
+    happens off the request path, paced by this task's rate_limit and retried
+    locally with backoff on DotmacSubRateLimitError. Retry exhaustion is safe:
+    the scheduled incremental sync remains the authoritative backstop, and the
+    handler is idempotent (upsert + change-hash + journal-gated posting).
+    """
+    from app.services.dotmac_sub.client import DotmacSubRateLimitError
+    from app.services.dotmac_sub.webhook_dispatch import dispatch_webhook
+
+    org_id = UUID(organization_id)
+    try:
+        with session_for_org(org_id) as db:
+            return dispatch_webhook(db, org_id, event_type, payload)
+    except DotmacSubRateLimitError as exc:
+        raise self.retry(exc=exc)
+    except Exception:
+        logger.exception(
+            "dotmac_sub webhook task failed (event=%s); incremental sync will "
+            "reconcile",
+            event_type,
+        )
+        raise
