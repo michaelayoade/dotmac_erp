@@ -254,6 +254,11 @@ class CustomFieldsService:
         """
         Validate custom field values against their definitions.
 
+        A `field_code` with no matching definition is a validation error
+        (a caller-side typo would otherwise pass silently and, once value
+        storage exists, get persisted under a code no definition can ever
+        resolve) rather than being silently ignored.
+
         Returns:
             Tuple of (is_valid, list of error messages)
         """
@@ -273,7 +278,7 @@ class CustomFieldsService:
         for field_code, value in field_values.items():
             defn_for_field = definitions_by_code.get(field_code)
             if not defn_for_field:
-                # Unknown field - could ignore or error
+                errors.append(f"Unknown custom field: {field_code!r}")
                 continue
 
             is_valid, error = defn_for_field.validate_value(value)

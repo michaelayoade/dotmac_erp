@@ -237,8 +237,30 @@ class CustomFieldDefinition(Base):
     )
 
     def validate_value(self, value: Any) -> tuple[bool, str | None]:
-        """Validate a value against this field's rules."""
+        """Validate a value against this field's rules.
+
+        NUMBER/DECIMAL are additionally range-checked against `min_value`/
+        `max_value` (both free-text columns) via `Decimal` comparison — the
+        columns existed and were settable from the form but were never
+        enforced. A non-numeric stored bound (e.g. a `min_value` that isn't
+        a valid number) is skipped rather than raising, since a malformed
+        bound on the *definition* is a separate concern from validating an
+        incoming *value* against it.
+
+        BOOLEAN requires an actual `bool` (`True`/`False`), not a truthy
+        string like `"true"`. DATE/DATETIME accept a native `date`/
+        `datetime` object, or a string parseable by
+        `date.fromisoformat`/`datetime.fromisoformat` (ISO 8601).
+
+        URL, PHONE, and CURRENCY are deliberately left as passthrough — no
+        format check runs for them here. Real-world formats vary too much
+        per project (international phone numbers, currency codes vs.
+        symbols, internal vs. public URLs) to bake in one opinion. Set
+        `validation_regex` (+ optionally `validation_message`) on the field
+        definition to enforce a project-specific format for these types.
+        """
         import re
+        from datetime import date
         from decimal import Decimal, InvalidOperation
 
         # Required check
@@ -251,15 +273,45 @@ class CustomFieldDefinition(Base):
         # Type-specific validation
         if self.field_type == CustomFieldType.NUMBER:
             try:
-                int(value)
+                numeric = int(value)
             except (ValueError, TypeError):
                 return False, f"{self.field_name} must be a number"
+            range_error = self._range_error(Decimal(numeric))
+            if range_error:
+                return False, range_error
 
         elif self.field_type == CustomFieldType.DECIMAL:
             try:
-                Decimal(str(value))
+                numeric = Decimal(str(value))
             except (InvalidOperation, ValueError, TypeError):
                 return False, f"{self.field_name} must be a decimal number"
+            range_error = self._range_error(numeric)
+            if range_error:
+                return False, range_error
+
+        elif self.field_type == CustomFieldType.BOOLEAN:
+            if not isinstance(value, bool):
+                return False, f"{self.field_name} must be true or false"
+
+        elif self.field_type == CustomFieldType.DATE:
+            if not isinstance(value, date):
+                try:
+                    date.fromisoformat(str(value))
+                except ValueError:
+                    return (
+                        False,
+                        f"{self.field_name} must be a valid date (YYYY-MM-DD)",
+                    )
+
+        elif self.field_type == CustomFieldType.DATETIME:
+            if not isinstance(value, datetime):
+                try:
+                    datetime.fromisoformat(str(value))
+                except ValueError:
+                    return (
+                        False,
+                        f"{self.field_name} must be a valid datetime (ISO 8601)",
+                    )
 
         elif self.field_type == CustomFieldType.EMAIL:
             email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -293,3 +345,23 @@ class CustomFieldDefinition(Base):
             )
 
         return True, None
+
+    def _range_error(self, numeric: Any) -> str | None:
+        """min_value/max_value are stored as free-text strings; compare as
+        Decimal. A non-numeric stored bound is skipped (not raised) — see
+        `validate_value`'s docstring."""
+        from decimal import Decimal, InvalidOperation
+
+        if self.min_value is not None:
+            try:
+                if numeric < Decimal(self.min_value):
+                    return f"{self.field_name} must be at least {self.min_value}"
+            except InvalidOperation:
+                pass
+        if self.max_value is not None:
+            try:
+                if numeric > Decimal(self.max_value):
+                    return f"{self.field_name} must be at most {self.max_value}"
+            except InvalidOperation:
+                pass
+        return None
