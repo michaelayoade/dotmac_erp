@@ -160,6 +160,8 @@ class Settings:
     crm_api_url: str = os.getenv("CRM_API_URL", "")
     # CRM API authentication token
     crm_api_token: str | None = os.getenv("CRM_API_TOKEN") or None
+    # Scoped CRM service ApiKey (preferred over the legacy static bearer).
+    crm_api_key: str | None = os.getenv("CRM_API_KEY") or None
     # CRM webhook secret for validating incoming webhooks
     crm_webhook_secret: str | None = os.getenv("CRM_WEBHOOK_SECRET") or None
     # CRM sync interval in minutes (for periodic pull)

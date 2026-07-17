@@ -53,6 +53,7 @@ class CRMConfig:
 
     url: str
     api_token: str | None = None
+    api_key: str | None = None
     timeout: float = 30.0
     max_retries: int = 3
     retry_delay: float = 1.0
@@ -63,6 +64,7 @@ class CRMConfig:
         return cls(
             url=settings.crm_api_url,
             api_token=settings.crm_api_token,
+            api_key=settings.crm_api_key,
             timeout=settings.crm_request_timeout,
             max_retries=settings.crm_max_retries,
         )
@@ -106,7 +108,12 @@ class CRMClient:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
-            if self.config.api_token:
+            # Scoped service ApiKey preferred (CRM resolves X-API-Key through
+            # its ApiKey-principal path with the linked person's RBAC); the
+            # legacy static Bearer remains only until the key is provisioned.
+            if self.config.api_key:
+                headers["X-API-Key"] = self.config.api_key
+            elif self.config.api_token:
                 headers["Authorization"] = f"Bearer {self.config.api_token}"
 
             self._client = httpx.Client(
