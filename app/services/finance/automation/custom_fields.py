@@ -10,16 +10,23 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.finance.automation import (
     CustomFieldDefinition,
     CustomFieldEntityType,
     CustomFieldType,
 )
+from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
+
+# Fallback used when the `custom_fields_max_per_entity` setting
+# (app/services/settings_spec.py, SettingDomain.automation) has no
+# configured value — matches that spec's own `default=20`.
+_DEFAULT_MAX_PER_ENTITY = 20
 
 
 @dataclass
@@ -59,7 +66,44 @@ class CustomFieldsService:
         input_data: CustomFieldInput,
         created_by: UUID,
     ) -> CustomFieldDefinition:
-        """Create a new custom field definition."""
+        """Create a new custom field definition.
+
+        Enforces the `custom_fields_max_per_entity` setting
+        (SettingDomain.automation, app/services/settings_spec.py) via the
+        same `resolve_value` resolver every other setting-backed limit in
+        this codebase reads (see `app/services/fixed_assets/depreciation.py`)
+        — the spec was declared but never read anywhere, so the limit was
+        silently unenforced. Counts *active* definitions for this
+        (organization_id, entity_type) pair; deactivated (soft-deleted)
+        definitions don't count against the limit.
+        """
+        resolved = resolve_value(
+            db, SettingDomain.automation, "custom_fields_max_per_entity"
+        )
+        limit = int(str(resolved)) if resolved is not None else _DEFAULT_MAX_PER_ENTITY
+        active_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(CustomFieldDefinition)
+                .where(
+                    and_(
+                        CustomFieldDefinition.organization_id == organization_id,
+                        CustomFieldDefinition.entity_type == input_data.entity_type,
+                        CustomFieldDefinition.is_active == True,  # noqa: E712
+                    )
+                )
+            )
+            or 0
+        )
+        if active_count >= limit:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Custom field limit reached ({limit}) for "
+                    f"{input_data.entity_type.value}"
+                ),
+            )
+
         # Check for duplicate field code
         existing = db.execute(
             select(CustomFieldDefinition).where(
