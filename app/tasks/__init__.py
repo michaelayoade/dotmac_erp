@@ -43,6 +43,7 @@ from app.tasks.data_health import (
 )
 from app.tasks.dotmac_sub import (
     cleanup_stale_dotmac_sub_sync_history,
+    process_dotmac_sub_webhook,
     run_dotmac_sub_daily_reconciliation,
     run_dotmac_sub_full_reconciliation,
     run_dotmac_sub_incremental_sync,
@@ -160,6 +161,7 @@ __all__ = [
     # dotmac_sub sync tasks
     "sync_employee_staff_account",
     "run_staff_sync_reconcile",
+    "process_dotmac_sub_webhook",
     "run_dotmac_sub_incremental_sync",
     "run_dotmac_sub_daily_reconciliation",
     "run_dotmac_sub_full_reconciliation",
