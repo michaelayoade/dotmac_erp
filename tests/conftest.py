@@ -69,27 +69,47 @@ pg_dialect.UUID = PatchedUUID
 
 
 class PatchedJSONB(TypeDecorator):
-    """Patched JSONB that uses TEXT storage for SQLite, JSON-(de)serialized.
+    """Patched JSONB: real PostgreSQL JSONB on `postgresql`, JSON-serialized
+    TEXT on every other dialect (SQLite unit tests).
 
-    Previously this subclassed `Text` directly with no (de)serialization,
-    so any real dict/list value (e.g. `CustomFieldDefinition.field_options`)
-    failed to bind at all (`sqlite3.ProgrammingError: type 'dict' is not
-    supported`) the first time a test actually flushed one to the DB — no
-    existing test did, so the gap was latent until the SELECT/MULTISELECT
-    options-guard tests needed it.
+    This class replaces `sqlalchemy.dialects.postgresql.JSONB` at the
+    MODULE level (`pg_dialect.JSONB = PatchedJSONB` below) before any app
+    model is imported, so `from sqlalchemy.dialects.postgresql import JSONB`
+    in a model file binds to *this* class for the lifetime of the process
+    -- regardless of which engine/dialect a given test session later
+    connects with. It must therefore decide its real (de)serialization
+    behavior per-dialect at bind/result time rather than assume SQLite.
+
+    Earlier revision subclassed `Text` directly with no (de)serialization
+    at all, so any real dict/list value (e.g.
+    `CustomFieldDefinition.field_options`) failed to bind under SQLite
+    (`sqlite3.ProgrammingError: type 'dict' is not supported`). A first fix
+    added unconditional `json.dumps`/`json.loads`, but that ran even when
+    the dialect was real `postgresql` (e.g. `tests/integration/`, which
+    imports every model in the same process before connecting to a real
+    Postgres service) -- forcing a JSON-string bind into a genuine `jsonb`
+    column, which Postgres rejects: `DatatypeMismatch: column "..." is of
+    type jsonb but expression is of type character varying`. Dispatching on
+    `dialect.name` fixes both: real Postgres gets the real JSONB type
+    (native dict/list binding), SQLite gets the JSON-text fallback.
     """
 
     impl = Text
     cache_ok = True
 
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql" and _original_jsonb is not None:
+            return dialect.type_descriptor(_original_jsonb())
+        return dialect.type_descriptor(Text())
+
     def process_bind_param(self, value, dialect):
-        if value is None:
-            return None
+        if value is None or dialect.name == "postgresql":
+            return value
         return json.dumps(value)
 
     def process_result_value(self, value, dialect):
-        if value is None:
-            return None
+        if value is None or dialect.name == "postgresql":
+            return value
         return json.loads(value)
 
 
