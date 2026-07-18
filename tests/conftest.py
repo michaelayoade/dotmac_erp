@@ -68,49 +68,55 @@ class PatchedUUID(SQLiteUUID):
 pg_dialect.UUID = PatchedUUID
 
 
-class PatchedJSONB(TypeDecorator):
-    """Patched JSONB: real PostgreSQL JSONB on `postgresql`, JSON-serialized
-    TEXT on every other dialect (SQLite unit tests).
+class PatchedJSONB(Text):
+    """Patched JSONB that uses TEXT storage for SQLite, JSON-(de)serialized.
 
-    This class replaces `sqlalchemy.dialects.postgresql.JSONB` at the
-    MODULE level (`pg_dialect.JSONB = PatchedJSONB` below) before any app
-    model is imported, so `from sqlalchemy.dialects.postgresql import JSONB`
-    in a model file binds to *this* class for the lifetime of the process
-    -- regardless of which engine/dialect a given test session later
-    connects with. It must therefore decide its real (de)serialization
-    behavior per-dialect at bind/result time rather than assume SQLite.
+    MUST stay a direct `Text` subclass (not a `TypeDecorator`):
+    `tests/integration/conftest.py` -- which runs `tests/integration/`
+    against a REAL Postgres service -- has its own repair step,
+    `_fix_patched_types()`, that finds this class via
+    `Text.__subclasses__()` (matched by `__name__ == "PatchedJSONB"`) and
+    replaces every column's type with the real `postgresql.JSONB` before
+    any query runs, restoring native jsonb binding *and* JSONB's
+    getitem/`.astext` SQL comparator support. A revision that restructured
+    this as `TypeDecorator(impl=Text)` broke that `isinstance` detection
+    (a `TypeDecorator` doesn't appear in `Text.__subclasses__()`), so real
+    Postgres sessions kept using this SQLite-oriented type instead of
+    getting the real JSONB back -- causing both a `DatatypeMismatch`
+    (jsonb column vs. `::VARCHAR`-cast bind, since bare `Text` bind/DDL
+    typing is VARCHAR-like) and a `NotImplementedError` on
+    `Customer.primary_contact["email"]` (getitem needs JSONB's own
+    Comparator; `Text` has none). Overriding `bind_processor`/
+    `result_processor` (the raw `TypeEngine` hook points -- NOT
+    `TypeDecorator`'s `process_bind_param`/`process_result_value`, which
+    only a `TypeDecorator` subclass has) adds SQLite JSON (de)serialization
+    without touching the class hierarchy `_fix_patched_types()` relies on.
 
-    Earlier revision subclassed `Text` directly with no (de)serialization
-    at all, so any real dict/list value (e.g.
-    `CustomFieldDefinition.field_options`) failed to bind under SQLite
-    (`sqlite3.ProgrammingError: type 'dict' is not supported`). A first fix
-    added unconditional `json.dumps`/`json.loads`, but that ran even when
-    the dialect was real `postgresql` (e.g. `tests/integration/`, which
-    imports every model in the same process before connecting to a real
-    Postgres service) -- forcing a JSON-string bind into a genuine `jsonb`
-    column, which Postgres rejects: `DatatypeMismatch: column "..." is of
-    type jsonb but expression is of type character varying`. Dispatching on
-    `dialect.name` fixes both: real Postgres gets the real JSONB type
-    (native dict/list binding), SQLite gets the JSON-text fallback.
+    Previously this had neither override, so any real dict/list value
+    (e.g. `CustomFieldDefinition.field_options`) failed to bind under
+    SQLite at all (`sqlite3.ProgrammingError: type 'dict' is not
+    supported`) the first time a test actually flushed one to the DB -- no
+    existing test did, so the gap was latent until the SELECT/MULTISELECT
+    options-guard tests needed it.
     """
 
-    impl = Text
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
-        if dialect.name == "postgresql" and _original_jsonb is not None:
-            return dialect.type_descriptor(_original_jsonb())
-        return dialect.type_descriptor(Text())
+    def bind_processor(self, dialect):
+        def process(value):
+            if value is None:
+                return None
+            return json.dumps(value)
 
-    def process_bind_param(self, value, dialect):
-        if value is None or dialect.name == "postgresql":
-            return value
-        return json.dumps(value)
+        return process
 
-    def process_result_value(self, value, dialect):
-        if value is None or dialect.name == "postgresql":
-            return value
-        return json.loads(value)
+    def result_processor(self, dialect, coltype):
+        def process(value):
+            if value is None:
+                return None
+            return json.loads(value)
+
+        return process
 
 
 if _original_jsonb is not None:
