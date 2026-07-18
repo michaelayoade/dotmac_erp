@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -59,6 +60,23 @@ def next_watermark(
     if current is not None and candidate <= current:
         return current
     return candidate
+
+
+# Bounded non-blocking acquire for the per-subscriber customer lock. Batch
+# transactions hold every acquired xact lock until the outer commit (up to 500
+# entities between commits; savepoints release nothing), so total worst-case
+# wait stays short of the batch cadence while never joining a blocking cycle.
+_CUSTOMER_LOCK_ATTEMPTS = 20
+_CUSTOMER_LOCK_RETRY_DELAY_SECONDS = 0.25
+
+
+class CustomerLockContentionError(RuntimeError):
+    """Another sync stream holds this subscriber's customer lock.
+
+    Raised after the bounded try-lock poll gives up. Callers' per-entity
+    error handling defers just the contended entity; the next sync run
+    retries it once the competing batch transaction has committed.
+    """
 
 
 class BaseSyncMixin:
@@ -503,14 +521,34 @@ class BaseSyncMixin:
         arrives before its subscriber). Without a guard both find "not found"
         and both insert a customer for one subscriber, fragmenting that
         subscriber's AR across two accounts. A transaction-level advisory lock
-        keyed on (org, dotmac_sub_id) makes the second path block until the
+        keyed on (org, dotmac_sub_id) makes the second path wait until the
         first commits. No-op off PostgreSQL (the SQLite test harness).
+
+        The acquire is a bounded ``pg_try_advisory_xact_lock`` poll, never a
+        blocking wait: xact locks are held to the OUTER commit (up to 500
+        entities between commits; per-entity savepoints release nothing), so
+        two sync streams accumulating the same per-subscriber locks in
+        different orders deadlocked in prod (2026-07-18, invoice sync vs
+        subscriber sync). A poll cannot join a Postgres wait cycle; when the
+        budget runs out, :class:`CustomerLockContentionError` defers just this
+        entity to the caller's per-entity handling and the next run.
         """
         if not dotmac_sub_id or self.db.get_bind().dialect.name != "postgresql":
             return
-        self.db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-            {"key": f"erp_customer:{self.organization_id}:{dotmac_sub_id}"},
+        key = f"erp_customer:{self.organization_id}:{dotmac_sub_id}"
+        for attempt in range(_CUSTOMER_LOCK_ATTEMPTS):
+            acquired = self.db.execute(
+                text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"),
+                {"key": key},
+            ).scalar()
+            if acquired:
+                return
+            if attempt < _CUSTOMER_LOCK_ATTEMPTS - 1:
+                time.sleep(_CUSTOMER_LOCK_RETRY_DELAY_SECONDS)
+        raise CustomerLockContentionError(
+            f"customer lock for dotmac_sub subscriber {dotmac_sub_id} still "
+            f"held by a concurrent sync after {_CUSTOMER_LOCK_ATTEMPTS} "
+            "attempts; entity deferred to the next run"
         )
 
     def _get_customer_by_dotmac_sub_id(self, dotmac_sub_id: str) -> Customer | None:
