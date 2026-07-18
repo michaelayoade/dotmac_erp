@@ -28,6 +28,32 @@ logger = logging.getLogger(__name__)
 # configured value — matches that spec's own `default=20`.
 _DEFAULT_MAX_PER_ENTITY = 20
 
+_OPTION_FIELD_TYPES = (CustomFieldType.SELECT, CustomFieldType.MULTISELECT)
+_SELECT_OPTIONS_CONSISTENCY_KEYS = {"field_type", "field_options"}
+
+
+def _validate_select_options(
+    field_type: CustomFieldType, field_options: dict[str, Any] | None
+) -> None:
+    """Definition self-consistency, checked up front (same pattern as the
+    duplicate-code / identifier-format checks in `create_field` below):
+    `CustomFieldDefinition.validate_value`'s SELECT branch only checks
+    membership `if self.field_options:` (see
+    `app/models/finance/automation/custom_field.py`) — an options-less
+    SELECT/MULTISELECT definition silently skips membership validation
+    forever after, so any value passes. Reject it here instead: a
+    SELECT/MULTISELECT definition must always carry at least one non-empty
+    option in `field_options["options"]`.
+    """
+    if field_type not in _OPTION_FIELD_TYPES:
+        return
+    options = (field_options or {}).get("options") or []
+    if not options:
+        raise HTTPException(
+            status_code=400,
+            detail="SELECT/MULTISELECT fields require at least one option",
+        )
+
 
 @dataclass
 class CustomFieldInput:
@@ -76,7 +102,12 @@ class CustomFieldsService:
         silently unenforced. Counts *active* definitions for this
         (organization_id, entity_type) pair; deactivated (soft-deleted)
         definitions don't count against the limit.
+
+        Also enforces `_validate_select_options` up front — a SELECT/
+        MULTISELECT definition must declare at least one option.
         """
+        _validate_select_options(input_data.field_type, input_data.field_options)
+
         resolved = resolve_value(
             db, SettingDomain.automation, "custom_fields_max_per_entity"
         )
@@ -393,6 +424,11 @@ class CustomFieldsService:
         # Don't allow changing entity_type or field_code
         updates.pop("entity_type", None)
         updates.pop("field_code", None)
+
+        if _SELECT_OPTIONS_CONSISTENCY_KEYS & updates.keys():
+            effective_type = updates.get("field_type", field.field_type)
+            effective_options = updates.get("field_options", field.field_options)
+            _validate_select_options(effective_type, effective_options)
 
         for key, value in updates.items():
             if hasattr(field, key):

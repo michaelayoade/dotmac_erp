@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import uuid
@@ -67,10 +68,29 @@ class PatchedUUID(SQLiteUUID):
 pg_dialect.UUID = PatchedUUID
 
 
-class PatchedJSONB(Text):
-    """Patched JSONB that uses TEXT storage for SQLite."""
+class PatchedJSONB(TypeDecorator):
+    """Patched JSONB that uses TEXT storage for SQLite, JSON-(de)serialized.
 
+    Previously this subclassed `Text` directly with no (de)serialization,
+    so any real dict/list value (e.g. `CustomFieldDefinition.field_options`)
+    failed to bind at all (`sqlite3.ProgrammingError: type 'dict' is not
+    supported`) the first time a test actually flushed one to the DB — no
+    existing test did, so the gap was latent until the SELECT/MULTISELECT
+    options-guard tests needed it.
+    """
+
+    impl = Text
     cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return json.dumps(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return json.loads(value)
 
 
 if _original_jsonb is not None:
