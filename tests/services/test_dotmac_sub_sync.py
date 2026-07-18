@@ -511,11 +511,13 @@ def test_lock_dotmac_sub_customer_issues_advisory_lock_on_postgres() -> None:
     db.get_bind.return_value.dialect.name = "postgresql"
     fake = SimpleNamespace(db=db, organization_id="org-1")
 
+    db.execute.return_value.scalar.return_value = True
+
     BaseSyncMixin._lock_dotmac_sub_customer(fake, "sub-9")
 
     assert db.execute.call_count == 1
     sql, params = db.execute.call_args.args
-    assert "pg_advisory_xact_lock" in str(sql)
+    assert "pg_try_advisory_xact_lock" in str(sql)
     assert params == {"key": "erp_customer:org-1:sub-9"}
 
 
@@ -538,6 +540,67 @@ def test_lock_dotmac_sub_customer_noop_off_postgres_or_without_id() -> None:
         SimpleNamespace(db=pg_db, organization_id="o"), ""
     )
     pg_db.execute.assert_not_called()
+
+
+def test_lock_dotmac_sub_customer_never_blocks_and_defers_on_contention(
+    monkeypatch,
+) -> None:
+    """Deadlock fix (2026-07-18): batch transactions hold every acquired xact
+    lock until the outer commit, so invoice sync and subscriber sync
+    accumulating the same per-subscriber locks in different orders formed a
+    wait cycle. The acquire must poll pg_try_advisory_xact_lock (never a
+    blocking pg_advisory_xact_lock) and give up after the bounded budget so
+    only the contended entity is deferred."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from app.services.dotmac_sub.sync import _base
+    from app.services.dotmac_sub.sync._base import (
+        BaseSyncMixin,
+        CustomerLockContentionError,
+    )
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(_base.time, "sleep", sleeps.append)
+
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "postgresql"
+    db.execute.return_value.scalar.return_value = False
+    fake = SimpleNamespace(db=db, organization_id="org-1")
+
+    with pytest.raises(CustomerLockContentionError):
+        BaseSyncMixin._lock_dotmac_sub_customer(fake, "sub-9")
+
+    assert db.execute.call_count == _base._CUSTOMER_LOCK_ATTEMPTS
+    assert len(sleeps) == _base._CUSTOMER_LOCK_ATTEMPTS - 1
+    for call in db.execute.call_args_list:
+        assert "pg_try_advisory_xact_lock" in str(call.args[0])
+        assert "pg_advisory_xact_lock(" not in str(call.args[0]).replace(
+            "pg_try_advisory_xact_lock(", ""
+        )
+
+
+def test_lock_dotmac_sub_customer_acquires_after_transient_contention(
+    monkeypatch,
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.dotmac_sub.sync import _base
+    from app.services.dotmac_sub.sync._base import BaseSyncMixin
+
+    monkeypatch.setattr(_base.time, "sleep", lambda _s: None)
+
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "postgresql"
+    db.execute.return_value.scalar.side_effect = [False, False, True]
+    fake = SimpleNamespace(db=db, organization_id="org-1")
+
+    BaseSyncMixin._lock_dotmac_sub_customer(fake, "sub-9")
+
+    assert db.execute.call_count == 3
 
 
 def test_customer_code_fits_column_limit() -> None:
