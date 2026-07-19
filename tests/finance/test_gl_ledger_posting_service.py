@@ -43,13 +43,112 @@ def test_post_journal_entry_idempotent_posted_batch():
         status=BatchStatus.POSTED,
         posted_entries=2,
         correlation_id="c",
+        idempotency_key="key",
     )
-    # Idempotency check: db.scalar(select(PostingBatch).where(...))
-    db.scalar.return_value = batch
+    # db.scalar sequence: existing-batch lookup, then the reversal-awareness
+    # probe finding a LIVE (POSTED) journal on the batch — a genuine replay
+    # of a live batch must still short-circuit.
+    db.scalar.side_effect = [batch, uuid4()]
     req = _make_request()
     result = LedgerPostingService.post_journal_entry(db, req)
     assert result.success is True
     assert result.batch_id == batch.batch_id
+    assert result.message == "Already posted (idempotent replay)"
+    # No new rows, no key mutation on the live batch.
+    db.add.assert_not_called()
+    assert batch.idempotency_key == "key"
+
+
+def test_post_journal_entry_reposts_when_batch_journal_reversed():
+    """A POSTED batch whose journal has been REVERSED no longer satisfies the
+    idempotent-replay short-circuit: the key becomes actionable again, the
+    dead batch's unique key is retired (flushed BEFORE the new batch insert),
+    and the repost journal actually posts."""
+    db = MagicMock()
+    org_id = uuid4()
+    journal_id = uuid4()
+    reversed_batch = SimpleNamespace(
+        batch_id=uuid4(),
+        status=BatchStatus.POSTED,
+        posted_entries=2,
+        correlation_id="c",
+        idempotency_key="key",
+    )
+    req = PostingRequest(
+        organization_id=org_id,
+        journal_entry_id=journal_id,
+        posting_date=date.today(),
+        idempotency_key="key",
+        source_module="GL",
+        posted_by_user_id=uuid4(),
+        entries=[
+            PostingEntry(
+                account_id=uuid4(),
+                debit_amount_functional=Decimal("10"),
+                credit_amount_functional=Decimal("0"),
+            ),
+            PostingEntry(
+                account_id=uuid4(),
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=Decimal("10"),
+            ),
+        ],
+    )
+    # db.scalar sequence: existing-batch lookup → reversal probe finds NO
+    # live (POSTED) journal → finds a REVERSED journal on the batch. Later
+    # incidental scalar calls (balance invalidation, hooks) get None.
+    scalar_results = iter([reversed_batch, None, uuid4()])
+    db.scalar.side_effect = lambda *a, **k: next(scalar_results, None)
+    journal = SimpleNamespace(
+        journal_entry_id=journal_id,
+        organization_id=org_id,
+        status=JournalStatus.APPROVED,
+        journal_number="J-2",
+        entry_date=date.today(),
+        reference="REF",
+        source_document_type=None,
+        source_document_id=None,
+        created_by_user_id=uuid4(),
+    )
+    db.get.side_effect = [journal, SimpleNamespace(fiscal_period_id=uuid4())]
+    db.scalars.return_value.all.return_value = [
+        SimpleNamespace(account_id=req.entries[0].account_id, account_code="1000"),
+        SimpleNamespace(account_id=req.entries[1].account_id, account_code="2000"),
+    ]
+
+    with (
+        patch(
+            "app.services.finance.gl.ledger_posting.PeriodGuardService.require_open_period",
+            return_value=uuid4(),
+        ),
+        patch(
+            "app.services.finance.gl.ledger_posting.LedgerPostingService._publish_posting_event",
+            return_value=None,
+        ),
+    ):
+        result = LedgerPostingService.post_journal_entry(db, req)
+
+    assert result.success is True
+    assert result.posted_lines == 2
+    assert journal.status == JournalStatus.POSTED
+
+    # The dead batch's key was retired with a deterministic suffix; the new
+    # batch takes over the caller's key.
+    assert (
+        reversed_batch.idempotency_key == f"key:superseded:{reversed_batch.batch_id}"
+    )
+    added_batches = [
+        c.args[0]
+        for c in db.add.call_args_list
+        if c.args[0].__class__.__name__ == "PostingBatch"
+    ]
+    assert len(added_batches) == 1
+    assert added_batches[0].idempotency_key == "key"
+
+    # Unique-key safety: the retiring UPDATE is flushed before the new batch
+    # row is added, so the INSERT never collides with the dead row's key.
+    calls = [name for name, _args, _kwargs in db.method_calls]
+    assert calls.index("flush") < calls.index("add")
 
 
 def test_post_journal_entry_retries_failed_batch_in_place():
