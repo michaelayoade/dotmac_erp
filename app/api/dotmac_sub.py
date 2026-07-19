@@ -63,27 +63,34 @@ def verify_dotmac_sub_signature(
     return hmac.compare_digest(expected, sig)
 
 
-def _resolve_webhook_org(db: Session, raw_body: bytes, signature: str):
-    """Authenticate the webhook AND resolve its organization (audit S4b).
+# Allowed webhook org-attribution modes (audit D2); mirrored by the startup
+# validation in app/startup.py (DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION_MODES).
+_ORG_RESOLUTION_MODES = ("legacy", "shadow", "strict")
 
-    Order: the env secret authenticates the env-configured default org
-    (single-org behaviour, unchanged); otherwise each active per-org
-    ``IntegrationConfig(DOTMAC_SUB)`` row's ``api_secret`` is tried — a match
-    both authenticates the delivery and identifies the org, so onboarding a
-    second org is a config row, not a code change. Returns the organization id
-    or ``None`` when nothing verifies.
+
+def _org_resolution_mode() -> str:
+    """Return the validated webhook org-attribution mode (audit D2).
+
+    Startup validation (app/startup.py) rejects unknown values before the app
+    serves traffic; this guard keeps the failure loud if that seam is bypassed.
     """
-    if settings.dotmac_sub_webhook_secret and settings.default_organization_id:
-        if verify_dotmac_sub_signature(raw_body, signature):
-            return UUID(settings.default_organization_id)
+    mode = settings.dotmac_sub_webhook_org_resolution
+    if mode not in _ORG_RESOLUTION_MODES:
+        raise ValueError(
+            f"Invalid DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION={mode!r}: "
+            f"must be one of {', '.join(_ORG_RESOLUTION_MODES)}"
+        )
+    return mode
 
+
+def _active_binding_rows(db: Session) -> list[Any]:
+    """All active per-org ``IntegrationConfig(DOTMAC_SUB)`` binding rows."""
     from sqlalchemy import select
 
     from app.models.sync import IntegrationType
     from app.models.sync.integration_config import IntegrationConfig
-    from app.services.integration_config import decrypt_credential
 
-    rows = (
+    return list(
         db.execute(
             select(IntegrationConfig).where(
                 IntegrationConfig.integration_type == IntegrationType.DOTMAC_SUB,
@@ -93,13 +100,113 @@ def _resolve_webhook_org(db: Session, raw_body: bytes, signature: str):
         .scalars()
         .all()
     )
-    for cfg in rows:
+
+
+def _resolve_org_by_binding(
+    db: Session, raw_body: bytes, signature: str
+) -> UUID | None:
+    """Resolve the org from per-org ``IntegrationConfig(DOTMAC_SUB)`` bindings.
+
+    The strategic authority (audit D2): the credential that verifies the
+    signature IS the identity. The signature is checked against ALL active
+    bindings — exactly one matching org attributes the delivery; zero matches
+    return ``None`` (reject path); more than one matching org is a
+    configuration error (the secret→org binding must be injective for
+    attribution to trace to a single source), so attribution is refused and a
+    loud error names the colliding orgs. This function is structurally barred
+    from reading ``default_organization_id`` / ``dotmac_sub_webhook_secret``
+    (pinned by tests/architecture/test_webhook_org_attribution.py).
+    """
+    from app.services.integration_config import decrypt_credential
+
+    matched_orgs: list[UUID] = []
+    for cfg in _active_binding_rows(db):
         org_secret = decrypt_credential(cfg.api_secret, db)
         if org_secret and verify_dotmac_sub_signature(
             raw_body, signature, secret=org_secret
         ):
-            return cfg.organization_id
+            if cfg.organization_id not in matched_orgs:
+                matched_orgs.append(cfg.organization_id)
+    if not matched_orgs:
+        return None
+    if len(matched_orgs) > 1:
+        logger.error(
+            "ambiguous webhook binding: secret shared by orgs %s - attribution refused",
+            ",".join(sorted(str(org) for org in matched_orgs)),
+        )
+        return None
+    return matched_orgs[0]
+
+
+def _resolve_org_legacy_env(raw_body: bytes, signature: str) -> UUID | None:
+    """Legacy authority (retiring, audit D2): env secret → env default org.
+
+    A signature match on the shared env secret attributes the delivery to
+    ``DEFAULT_ORGANIZATION_ID`` without the credential identifying the sender's
+    org. Kept only behind the ``legacy``/``shadow`` modes; the retirement PR
+    deletes this path.
+    """
+    if settings.dotmac_sub_webhook_secret and settings.default_organization_id:
+        if verify_dotmac_sub_signature(raw_body, signature):
+            return UUID(settings.default_organization_id)
     return None
+
+
+def _resolve_webhook_org(
+    db: Session,
+    raw_body: bytes,
+    signature: str,
+    delivery_id: str | None = None,
+) -> UUID | None:
+    """Authenticate the webhook AND resolve its organization (audit D2).
+
+    Composes the two authorities per ``DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION``:
+    ``strict`` uses bindings only (fail closed); ``legacy`` keeps the old
+    env-first precedence; ``shadow`` (default) decides with legacy precedence
+    but always runs the binding resolution too and logs any divergence as
+    cutover evidence. Returns the organization id or ``None`` when nothing
+    verifies.
+    """
+    mode = _org_resolution_mode()
+    if mode == "strict":
+        return _resolve_org_by_binding(db, raw_body, signature)
+
+    legacy_org = _resolve_org_legacy_env(raw_body, signature)
+    if mode == "legacy":
+        return (
+            legacy_org
+            if legacy_org is not None
+            else _resolve_org_by_binding(db, raw_body, signature)
+        )
+
+    # shadow: legacy precedence still decides; the binding resolution always
+    # runs and any divergence between the two authorities is the cutover
+    # evidence for flipping the default to strict.
+    binding_org = _resolve_org_by_binding(db, raw_body, signature)
+    decided = legacy_org if legacy_org is not None else binding_org
+    if legacy_org != binding_org:
+        logger.warning(
+            "dotmac_sub webhook org-resolution divergence (mode=shadow): "
+            "legacy_env=%s binding=%s decided=%s delivery_id=%s",
+            legacy_org,
+            binding_org,
+            decided,
+            delivery_id,
+        )
+    return decided
+
+
+def _webhook_auth_configured(db: Session, mode: str) -> bool:
+    """True when at least one attribution authority exists (audit D2).
+
+    In ``strict`` mode only active bindings count — the env secret is
+    irrelevant. In ``legacy``/``shadow`` either the env secret or an active
+    binding is an authority, so a config-row-only deployment can receive
+    webhooks without the env secret.
+    """
+    if mode != "strict" and settings.dotmac_sub_webhook_secret:
+        return True
+    return bool(_active_binding_rows(db))
 
 
 @webhook_router.post("/webhook", response_model=WebhookResponse)
@@ -111,7 +218,11 @@ async def dotmac_sub_webhook(
     db: Session = Depends(get_db),
 ) -> WebhookResponse:
     """Handle a dotmac_sub webhook event (HMAC-verified, no auth dependency)."""
-    if not settings.dotmac_sub_webhook_secret:
+    # 503 only when NO attribution authority exists at all (audit D2): neither
+    # an env secret (legacy/shadow) nor an active per-org binding. A
+    # config-row-only deployment must still be able to receive webhooks.
+    mode = _org_resolution_mode()
+    if not _webhook_auth_configured(db, mode):
         raise HTTPException(
             status_code=503,
             detail="dotmac_sub webhook authentication is not configured",
@@ -124,9 +235,12 @@ async def dotmac_sub_webhook(
     if not signature:
         logger.warning("dotmac_sub webhook received without signature")
         raise HTTPException(status_code=400, detail="Missing signature")
-    # Authenticate AND resolve the org in one step (audit S4b): the env secret
-    # maps to the default org; per-org IntegrationConfig secrets map to theirs.
-    organization_id = _resolve_webhook_org(db, raw_body, signature)
+    # Authenticate AND resolve the org in one step (audit D2): the credential
+    # that verifies the signature identifies the org (per-org IntegrationConfig
+    # bindings), composed with the retiring env path per the resolution mode.
+    organization_id = _resolve_webhook_org(
+        db, raw_body, signature, delivery_id=x_webhook_delivery_id
+    )
     if organization_id is None:
         logger.warning("dotmac_sub webhook signature verification failed")
         raise HTTPException(status_code=401, detail="Invalid signature")

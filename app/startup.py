@@ -56,6 +56,11 @@ WEAK_SECRET_PATTERNS = [
 ]
 
 
+# Allowed values for DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION (audit D2). See
+# app/config.py for what each mode means.
+DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION_MODES = ("legacy", "shadow", "strict")
+
+
 class StartupValidationError(Exception):
     """Raised when startup validation fails."""
 
@@ -210,6 +215,24 @@ def validate_required_secrets(db: Session | None = None) -> list[str]:
     return errors
 
 
+def validate_webhook_org_resolution_mode() -> list[str]:
+    """Validate the dotmac_sub webhook org-attribution mode (audit D2).
+
+    An unknown value must fail loudly at startup rather than silently picking
+    a resolution behaviour for inbound webhooks.
+    """
+    from app.config import settings
+
+    mode = settings.dotmac_sub_webhook_org_resolution
+    if mode not in DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION_MODES:
+        allowed = ", ".join(DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION_MODES)
+        return [
+            f"Invalid DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION={mode!r}: "
+            f"must be one of {allowed}"
+        ]
+    return []
+
+
 def validate_openbao_connectivity() -> list[str]:
     """Validate OpenBao connectivity if any secrets reference it.
 
@@ -286,6 +309,9 @@ def validate_startup(db: Session | None = None, exit_on_failure: bool = True) ->
 
     # Check required secrets (with OpenBao resolution)
     all_errors.extend(validate_required_secrets(db))
+
+    # Check the dotmac_sub webhook org-attribution mode (audit D2)
+    all_errors.extend(validate_webhook_org_resolution_mode())
 
     # Non-fatal security warning for potentially unsafe webhook automation config.
     warn_unconfigured_webhook_allowlist(db)

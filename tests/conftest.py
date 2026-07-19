@@ -370,6 +370,10 @@ class MockSettings:
     db_statement_timeout_ms = 30000
     # Default org
     default_organization_id = None
+    # dotmac_sub webhook org attribution (audit D2)
+    dotmac_sub_webhook_secret = None
+    dotmac_sub_webhook_org_resolution = "shadow"
+    dotmac_sub_api_url = ""
 
 
 mock_config_module.settings = MockSettings()

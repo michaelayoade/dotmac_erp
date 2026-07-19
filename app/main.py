@@ -79,6 +79,7 @@ from app.models.domain_settings import DomainSetting, SettingDomain
 from app.observability import ObservabilityMiddleware
 from app.services import audit as audit_service
 from app.services.htmx import is_htmx_request
+from app.services.integration_config import seed_dotmac_sub_webhook_binding
 from app.services.settings_seed import seed_all_settings
 from app.startup import log_startup_info, validate_startup
 from app.telemetry import setup_otel
@@ -179,6 +180,10 @@ async def lifespan(app: FastAPI):
             db.execute(text("SELECT pg_advisory_xact_lock(451002, 20260522)"))
         with allow_cross_org(db):
             seed_all_settings(db)
+            # Audit D2: migrate the env webhook secret into the default org's
+            # IntegrationConfig(DOTMAC_SUB) binding (idempotent; the binding
+            # rows are the webhook org-attribution authority).
+            seed_dotmac_sub_webhook_binding(db)
 
         # Register payroll lifecycle event handlers so posted runs/slips
         # can create notifications and queue payslip emails.
