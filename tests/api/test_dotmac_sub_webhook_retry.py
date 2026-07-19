@@ -46,6 +46,12 @@ def _call(payload: bytes, delivery_id: str | None = None):
 
 
 def _configure(monkeypatch):
+    # These tests pin ACK/dedupe/retry behaviour, not org attribution (covered
+    # by test_dotmac_sub_webhook_org.py). Run the legacy env path so the
+    # hermetic db=None harness never reaches the binding-row query (audit D2).
+    monkeypatch.setattr(
+        ds.settings, "dotmac_sub_webhook_org_resolution", "legacy", raising=False
+    )
     monkeypatch.setattr(ds.settings, "dotmac_sub_webhook_secret", "s", raising=False)
     monkeypatch.setattr(
         ds.settings, "default_organization_id", str(uuid.uuid4()), raising=False

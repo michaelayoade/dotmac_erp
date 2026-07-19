@@ -202,6 +202,24 @@ class Settings:
     dotmac_sub_webhook_secret: str | None = (
         os.getenv("DOTMAC_SUB_WEBHOOK_SECRET") or None
     )
+    # Inbound-webhook organization attribution (audit D2). Attribution derives
+    # from the credential that verified the signature; per-org
+    # IntegrationConfig(DOTMAC_SUB) rows are the single definition authority
+    # and the env-secret + DEFAULT_ORGANIZATION_ID path is a retiring legacy
+    # authority. Modes (validated at startup, app/startup.py):
+    #   legacy — old precedence: the env secret attributes to
+    #            DEFAULT_ORGANIZATION_ID first, config rows second. Escape
+    #            hatch during the retirement window only.
+    #   shadow — (default) legacy precedence still decides, but the config-row
+    #            resolution ALWAYS runs too; any divergence (different org, or
+    #            one authority resolving when the other does not) emits one
+    #            structured warning naming both outcomes and the delivery id —
+    #            the cutover evidence for flipping to strict.
+    #   strict — config rows ONLY: the env path never attributes; ambiguous or
+    #            missing bindings fail closed (reject).
+    dotmac_sub_webhook_org_resolution: str = os.getenv(
+        "DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION", "shadow"
+    )
     dotmac_sub_request_timeout: float = float(
         os.getenv("DOTMAC_SUB_REQUEST_TIMEOUT", "60.0")
     )
