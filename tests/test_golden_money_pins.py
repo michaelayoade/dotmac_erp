@@ -160,6 +160,7 @@ _LEAKABLE_SESSION_LISTENERS = (
     ("app.db.org_listener", "do_orm_execute", "_add_org_filter"),
     ("app.services.audit_listener", "before_flush", "_on_before_flush"),
     ("app.services.audit_listener", "after_flush", "_on_after_flush"),
+    ("app.services.audit.field_tracker", "before_flush", "_on_before_flush"),
 )
 
 
