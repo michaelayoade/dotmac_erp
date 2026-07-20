@@ -24,6 +24,7 @@
     preview     — "image" / "icon" / "none" (default "none")
     current_url — URL of existing file to show as preview
     remove_name — if set, shows a "remove current file" checkbox with this name
+    required    — whether the browser must require a selected file
 #}
 
 {% macro file_upload_zone(
@@ -34,12 +35,13 @@
     max_size_mb=10,
     preview="none",
     current_url="",
-    remove_name=""
+    remove_name="",
+    required=false
 ) %}
 <div x-data='fileUpload({ maxSizeMB: {{ max_size_mb }}, accept: "{{ accept }}", preview: "{{ preview }}", inputName: "{{ name }}", label: "{{ label }}" })'>
     {# Label #}
     {% if label %}
-    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{{ label }}</label>
+    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5{% if required %} required{% endif %}">{{ label }}</label>
     {% endif %}
 
     {# Existing file preview #}
@@ -117,6 +119,7 @@
            x-on:change="onInputChange($event)"
            name="{{ name }}"
            {% if accept %}accept="{{ accept }}"{% endif %}
+           {% if required %}required{% endif %}
            class="sr-only"
            tabindex="-1">
 
