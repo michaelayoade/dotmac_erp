@@ -30,3 +30,23 @@ def test_sub_sync_router_covers_every_phase5_transport() -> None:
     }
 
     assert expected <= actual
+
+
+def test_material_support_routes_use_the_neutral_sub_adapter() -> None:
+    material_routes = {
+        (method, route.path): route
+        for route in router.routes
+        for method in (route.methods or set())
+        if "material-requests" in route.path
+    }
+
+    assert (
+        material_routes[("POST", "/sync/sub/material-requests")].endpoint.__module__
+        == "app.api.sync.dotmac_sub"
+    )
+    assert (
+        material_routes[
+            ("GET", "/sync/sub/material-requests/{omni_id}")
+        ].endpoint.__module__
+        == "app.api.sync.dotmac_sub"
+    )

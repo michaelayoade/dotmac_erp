@@ -4,21 +4,20 @@ The CRM namespace remains available during transition, but new Sub clients use
 this route so no new operational dependency is named or anchored on CRM.
 """
 
+import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.api.sync.dotmac_crm import (
     bulk_sync,
     create_expense_claim,
-    create_material_request,
     create_purchase_order,
     create_purchase_order_variation,
     create_purchase_invoice,
     get_expense_claim_status,
     get_inventory_item,
-    get_material_request_status,
     get_db_with_service_org,
     list_available_inventory_serials,
     list_expense_categories,
@@ -35,6 +34,7 @@ from app.schemas.sync.dotmac_crm import (
     CRMExpenseCategoriesResponse,
     CRMExpenseClaimResponse,
     CRMExpenseClaimStatusResponse,
+    CRMMaterialRequestPayload,
     CRMMaterialRequestResponse,
     CRMMaterialRequestStatusRead,
     CRMPurchaseOrderResponse,
@@ -45,6 +45,7 @@ from app.schemas.sync.dotmac_crm import (
     InventoryItemDetail,
     InventoryListResponse,
 )
+from app.services.inventory.material_support import MaterialSupportService
 from app.schemas.sync.dotmac_sub import SubPurchaseInvoiceStatusResponse
 from app.services.sync.sub_purchase_invoice_status import (
     PurchaseInvoiceStatusNotFoundError,
@@ -52,6 +53,7 @@ from app.services.sync.sub_purchase_invoice_status import (
 )
 
 router = APIRouter(prefix="/sync/sub", tags=["sub-sync"])
+logger = logging.getLogger(__name__)
 
 
 def require_sub_ap_scope(auth: dict = Depends(require_service_auth)) -> dict:
@@ -180,24 +182,69 @@ def upload_sub_purchase_invoice_attachment(
     return upload_purchase_invoice_attachment(purchase_invoice_id, payload, auth, db)
 
 
-# These are aliases over ERP's established idempotent services. The legacy
-# /sync/crm routes remain available only for the old client during migration.
-router.add_api_route(
+@router.post(
     "/material-requests",
-    create_material_request,
-    methods=["POST"],
     response_model=CRMMaterialRequestResponse,
     status_code=201,
     dependencies=[Depends(require_sub_material_scope)],
-    name="create_sub_material_request",
 )
-router.add_api_route(
+def create_sub_material_request(
+    payload: CRMMaterialRequestPayload,
+    response: Response,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMMaterialRequestResponse:
+    """Accept a Sub service-workflow need into ERP-owned material support."""
+    service = MaterialSupportService(db)
+    try:
+        acceptance = service.accept_sub_request(
+            organization_id=auth["organization_id"],
+            payload=payload,
+            actor_person_id=auth["person_id"],
+        )
+        response.status_code = 200 if acceptance.replayed else 201
+        db.commit()
+        return acceptance.outcome
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "Failed to accept Sub material support request source_id=%s",
+            payload.omni_id,
+        )
+        raise HTTPException(status_code=500, detail=str(exc)[:200]) from exc
+
+
+@router.get(
     "/material-requests/{omni_id}",
-    get_material_request_status,
-    methods=["GET"],
     response_model=CRMMaterialRequestStatusRead,
-    name="get_sub_material_request_status",
 )
+def get_sub_material_request_status(
+    omni_id: str,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMMaterialRequestStatusRead:
+    """Return ERP's authoritative backoffice outcome for a Sub request."""
+    result = MaterialSupportService(db).get_sub_outcome(
+        organization_id=auth["organization_id"],
+        source_request_id=omni_id,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Material support request not found: {omni_id}",
+        )
+    return result
+
+
+# The remaining routes are aliases over ERP's established idempotent services.
+# Legacy /sync/crm routes remain available only for the old client during
+# migration and are protected by Sub's per-flow single-writer cutover guard.
 router.add_api_route(
     "/expense-claims",
     create_expense_claim,

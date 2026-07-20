@@ -304,19 +304,42 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 ),
             ),
             SOTService(
+                name="inventory.material_support",
+                module="app.services.inventory.material_support",
+                owns=(
+                    "Sub material-support intake and immutable replay contract",
+                    "ERP material-support outcome lookup",
+                    "routing accepted support needs through ERP inventory policy",
+                ),
+                depends_on=("sync.crm_procurement",),
+                notes=(
+                    "Sub owns the service work order and material need; ERP owns "
+                    "warehouse, stock, serial, fiscal-period, and issue decisions. "
+                    "The crm_id/omni_id names are temporary compatibility storage "
+                    "for the immutable Sub request UUID, not CRM authority. See "
+                    "docs/dotmac_sub_material_support_contract.md."
+                ),
+            ),
+            SOTService(
                 name="sync.crm_procurement",
                 module="app.services.sync.crm.procurement",
-                owns=("CRM material/PO/purchase-invoice sync mappings",),
+                owns=(
+                    "legacy CRM material/PO/purchase-invoice sync mappings",
+                    "compatibility material-request inventory policy engine",
+                ),
                 notes=(
                     "REPAIR-FIRST (ledger finding 9): the #118 money-bug "
                     "class lives on this edge; no extraction or convergence "
-                    "until closed."
+                    "until closed. New Sub material requests enter through "
+                    "inventory.material_support; this service remains its "
+                    "compatibility engine until the CRM path is retired."
                 ),
             ),
         ),
         entrypoints=(
             "app.tasks.dotmac_sub",
             "app.api.dotmac_sub",
+            "app.api.sync.dotmac_sub",
             "app.tasks.expense",
         ),
         rule=(
