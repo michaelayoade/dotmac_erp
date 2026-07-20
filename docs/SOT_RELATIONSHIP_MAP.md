@@ -16,6 +16,13 @@ from decisions and consequences. A change that adds, moves, or splits an owner
 updates the registry (and this map) in the same change — one coherent domain
 slice per change.
 
+HTTP is one such adapter boundary. Domain and application services do not
+import FastAPI or Starlette request/response types and do not raise
+`HTTPException`. They return domain values or raise transport-neutral errors;
+the HTTP route maps those outcomes to status codes. This keeps the same owner
+callable from tasks, jobs, webhooks, commands, and reconcilers without HTTP
+semantics.
+
 ## Domains
 
 | Domain | Owns | Rule in one line |

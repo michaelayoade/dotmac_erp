@@ -85,6 +85,9 @@ class SomeService:
 4. **Log important operations** - Creates, updates, deletes
 5. **Type hint everything** - All parameters and return types
 6. **Multi-tenant filtering** - Always filter by organization_id
+7. **No HTTP coupling** - Do not import FastAPI/Starlette request, response, or
+   exception types in domain/application services. Raise transport-neutral
+   domain errors with stable codes/context; routes translate them to HTTP.
 
 ## Querying Pattern
 

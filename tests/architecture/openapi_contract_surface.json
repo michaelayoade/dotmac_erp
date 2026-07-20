@@ -4532,6 +4532,17 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/sub/purchase-invoices/{source_invoice_id}": {
+   "params": [
+    "header:x-api-key!",
+    "path:source_invoice_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "cefdc3483dda",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/tax/codes": {
    "params": [
     "cookie:access_token",
@@ -10007,6 +10018,7 @@
   "StatusCheckRequest": "4477acfa6554",
   "StatusCheckResponse": "c6d10c82dff2",
   "StockBalanceRead": "a8b074040ca3",
+  "SubPurchaseInvoiceStatusResponse": "87c793a503f6",
   "SupplierCreate": "02f1e6b5db4a",
   "SupplierRead": "3810c24b704c",
   "SupplierUpdate": "9ac48b235796",
