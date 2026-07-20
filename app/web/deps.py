@@ -23,7 +23,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import AsyncSessionLocal, SessionLocal, get_auth_db_session
+from app.db import AsyncSessionLocal, SessionLocal
 from app.db.session_context import allow_cross_org, prime_session, prime_tenant_context
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
@@ -74,50 +74,6 @@ def _get_person_for_web_session(db: Session, person_id: UUID) -> Person | None:
         return db.get(Person, person_id)
     with allow_cross_org(db):
         return db.get(Person, person_id)
-
-
-def _get_auth_db_for_sso() -> Session | None:
-    """Get auth database session for SSO validation in web routes.
-
-    When SSO is enabled and this is an SSO client (not provider),
-    returns a session to the shared auth database.
-    """
-    if settings.sso_enabled and not settings.sso_provider_mode:
-        return get_auth_db_session()
-    return None
-
-
-def _validate_session_sso(
-    session_id,
-    person_id,
-    now: datetime,
-    auth_db: Session,
-) -> AuthSession | None:
-    """Validate session against SSO auth database.
-
-    Handles timezone-naive expires_at values (SQLite compatibility).
-    """
-    session = auth_db.scalar(
-        select(AuthSession).where(
-            AuthSession.id == session_id,
-            AuthSession.person_id == person_id,
-            AuthSession.status == SessionStatus.active,
-            AuthSession.revoked_at.is_(None),
-        )
-    )
-
-    if not session:
-        return None
-
-    # Handle timezone-naive expires_at (SQLite doesn't preserve timezone)
-    expires_at = session.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-
-    if expires_at <= now:
-        return None
-
-    return session
 
 
 def get_db():
@@ -1246,36 +1202,25 @@ def _resolve_session_from_refresh_token(
     refresh_token: str,
     now: datetime,
 ) -> tuple[UUID, UUID] | None:
-    """Resolve (person_id, session_id) from refresh token with SSO support."""
+    """Resolve (person_id, session_id) from an ERP refresh token."""
     token_hash = hash_session_token(refresh_token)
-    auth_db = _get_auth_db_for_sso()
-    try:
-        target_db = auth_db if auth_db else db
-        session = target_db.scalar(
-            select(AuthSession).where(
-                AuthSession.token_hash == token_hash,
-                AuthSession.status == SessionStatus.active,
-                AuthSession.revoked_at.is_(None),
-                AuthSession.expires_at > now,
-            )
+    session = db.scalar(
+        select(AuthSession).where(
+            AuthSession.token_hash == token_hash,
+            AuthSession.status == SessionStatus.active,
+            AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at > now,
         )
-        if not session or is_session_inactive(session, now):
-            return None
-        # Update session activity tracking (throttled to avoid row-lock contention)
-        if (
-            not session.last_seen_at
-            or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
-        ):
-            if auth_db:
-                session.last_seen_at = now
-                auth_db.commit()
-            else:
-                session.last_seen_at = now
-                db.flush()
-        return session.person_id, session.id
-    finally:
-        if auth_db:
-            auth_db.close()
+    )
+    if not session or is_session_inactive(session, now):
+        return None
+    if (
+        not session.last_seen_at
+        or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
+    ):
+        session.last_seen_at = now
+        db.flush()
+    return session.person_id, session.id
 
 
 def _normalize_roles_scopes(
@@ -1334,8 +1279,7 @@ def require_web_auth(
     """
     Require authentication for web routes and set tenant context.
 
-    Supports SSO by validating tokens against shared auth database when
-    SSO is enabled and this app is an SSO client.
+    OIDC users reach this dependency only after ERP has issued a local session.
 
     Checks for JWT in:
     1. Authorization header (Bearer token)
@@ -1362,7 +1306,6 @@ def require_web_auth(
     payload = None
     if token:
         try:
-            # Decode token (uses SSO secret when SSO is enabled)
             payload = decode_access_token(db, token)
         except HTTPException:
             payload = None
@@ -1379,50 +1322,27 @@ def require_web_auth(
         person_uuid = coerce_uuid(person_id)
         session_uuid = coerce_uuid(session_id)
 
-        # SSO: validate session against shared auth database
-        auth_db = _get_auth_db_for_sso()
-        try:
-            if auth_db:
-                # SSO client mode - validate against shared auth database
-                session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-            else:
-                # SSO provider or non-SSO mode - validate against local database
-                session = db.scalar(
-                    select(AuthSession).where(
-                        AuthSession.id == session_uuid,
-                        AuthSession.person_id == person_uuid,
-                        AuthSession.status == SessionStatus.active,
-                        AuthSession.revoked_at.is_(None),
-                        AuthSession.expires_at > now,
-                    )
-                )
-
-            if not session:
-                raise HTTPException(
-                    status_code=401, detail="Session expired or invalid"
-                )
-
-            # Check for activity timeout (session idle too long)
-            if is_session_inactive(session, now):
-                raise HTTPException(
-                    status_code=401, detail="Session expired due to inactivity"
-                )
-
-            # Update session activity tracking (throttled to avoid row-lock contention)
-            if (
-                not session.last_seen_at
-                or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
-            ):
-                if auth_db:
-                    session.last_seen_at = now
-                    auth_db.commit()
-                else:
-                    session.last_seen_at = now
-                    db.flush()
-
-        finally:
-            if auth_db:
-                auth_db.close()
+        session = db.scalar(
+            select(AuthSession).where(
+                AuthSession.id == session_uuid,
+                AuthSession.person_id == person_uuid,
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
+        )
+        if not session:
+            raise HTTPException(status_code=401, detail="Session expired or invalid")
+        if is_session_inactive(session, now):
+            raise HTTPException(
+                status_code=401, detail="Session expired due to inactivity"
+            )
+        if (
+            not session.last_seen_at
+            or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
+        ):
+            session.last_seen_at = now
+            db.flush()
 
         # Web sessions must reflect admin RBAC edits without waiting for the
         # existing access token to expire. Reload DB roles/scopes after the
@@ -1624,7 +1544,7 @@ def optional_web_auth(
     db: Session = Depends(get_db),
 ) -> WebAuthContext:
     """
-    Optional authentication for web routes with SSO support.
+    Optional authentication for web routes using ERP-owned sessions.
 
     Similar to require_web_auth but returns a guest context
     if no valid authentication is provided.
@@ -1652,46 +1572,23 @@ def optional_web_auth(
         person_uuid = coerce_uuid(person_id)
         session_uuid = coerce_uuid(session_id)
 
-        # SSO: validate session against shared auth database
-        auth_db = _get_auth_db_for_sso()
-        try:
-            if auth_db:
-                # SSO client mode - validate against shared auth database
-                session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-            else:
-                # SSO provider or non-SSO mode - validate against local database
-                session = db.scalar(
-                    select(AuthSession).where(
-                        AuthSession.id == session_uuid,
-                        AuthSession.person_id == person_uuid,
-                        AuthSession.status == SessionStatus.active,
-                        AuthSession.revoked_at.is_(None),
-                        AuthSession.expires_at > now,
-                    )
-                )
-
-            if not session:
-                return WebAuthContext(is_authenticated=False)
-
-            # Check for activity timeout (session idle too long)
-            if is_session_inactive(session, now):
-                return WebAuthContext(is_authenticated=False)
-
-            # Update session activity tracking (throttled to avoid row-lock contention)
-            if (
-                not session.last_seen_at
-                or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
-            ):
-                if auth_db:
-                    session.last_seen_at = now
-                    auth_db.commit()
-                else:
-                    session.last_seen_at = now
-                    db.flush()
-
-        finally:
-            if auth_db:
-                auth_db.close()
+        session = db.scalar(
+            select(AuthSession).where(
+                AuthSession.id == session_uuid,
+                AuthSession.person_id == person_uuid,
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
+        )
+        if not session or is_session_inactive(session, now):
+            return WebAuthContext(is_authenticated=False)
+        if (
+            not session.last_seen_at
+            or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
+        ):
+            session.last_seen_at = now
+            db.flush()
 
         # Web sessions must reflect admin RBAC edits without waiting for the
         # existing access token to expire. Reload DB roles/scopes after the

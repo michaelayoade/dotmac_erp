@@ -9,6 +9,18 @@ source facts from Sub, maps them through ERP configuration, and creates the
 canonical accounting projection. Sub must not contain a parallel chart of
 accounts, balanced journal, tax-return ledger, or financial-statement path.
 
+Tax identity remains system-local. A tax identifier held for a subscriber in
+Sub is not ERP's customer tax-identification record and is not copied into it.
+ERP users or an ERP-owned validation/FIRS integration establish and govern the
+ERP customer, supplier, and organization tax identities independently. A
+versioned integration may carry a source tax identifier as explicit evidence
+when a concrete accounting process requires it, but it does not silently
+promote that observation into ERP master data.
+
+Legacy imported values are not cleared automatically because their provenance
+was not retained and some may have since been independently verified in ERP.
+They require an ERP-owned Finance audit before FIRS validation or filing use.
+
 | Concern | Owning system | Canonical record |
 |---|---|---|
 | Customer charge, invoice and credit-note lines | Sub | Billing document and line |

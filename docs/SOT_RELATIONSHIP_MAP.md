@@ -37,6 +37,32 @@ semantics.
 | `external_sync` | Sub AR ingestion, CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
+## Replaceable application boundary
+
+Dotmac ERP is an independent backoffice product, not an enterprise control
+plane or a runtime dependency of Dotmac Sub. Dotmac Sub owns subscribers,
+services, provisioning, billing facts, and operational service workflows.
+Dotmac ERP owns only the backoffice and accounting records created inside ERP.
+
+- Collaboration uses versioned APIs or events; neither product queries the
+  other's database or holds cross-system foreign keys.
+- External IDs are scoped correlation evidence, not enterprise identities or
+  delegated decision authority.
+- Each product owns its own tax-identity records and validation policy. The Sub
+  subscriber import must not populate ERP's locally governed customer tax ID.
+- Provider-specific Sub endpoints and mappings are adapters. Replacing ERP with
+  Zoho or another backoffice product does not require moving Sub domain state.
+- Delivery failure is retried and reconciled locally; there is no shared
+  transaction or required shared business-domain runtime.
+
+Authentication now follows the same boundary. ERP uses OIDC Authorization Code
+with PKCE to accept an identity assertion, resolves the opaque issuer/subject
+through an ERP-owned binding, and creates an ERP-owned session. ERP does not
+query an identity-provider database, share JWT signing secrets, share cookies,
+or accept provider roles as ERP permissions. See `docs/oidc_identity_contract.md`.
+
+The detailed local contract is `docs/replaceable_application_boundary.md`.
+
 ## Status and expansion
 
 This is the Phase-0 seed: entries record **as-built** owners verified at the

@@ -107,18 +107,7 @@ def _setting_value(db: Session | None, key: str) -> str | None:
 
 
 def _jwt_secret(db: Session | None) -> str:
-    """Get JWT secret for token signing/verification.
-
-    When SSO is enabled, uses SSO_JWT_SECRET for cross-app token validation.
-    Falls back to JWT_SECRET for single-app deployments.
-    """
-    # Use SSO secret when SSO is enabled
-    if app_settings.sso_enabled and app_settings.sso_jwt_secret:
-        secret = resolve_secret(app_settings.sso_jwt_secret, db)
-        if secret:
-            return secret
-
-    # Fall back to standard JWT secret
+    """Get ERP's private JWT secret for its own local sessions."""
     secret = _env_value("JWT_SECRET") or _setting_value(db, "jwt_secret")
     secret = resolve_secret(secret, db)
     if not secret:
@@ -226,17 +215,9 @@ def _refresh_cookie_samesite(db: Session | None) -> str:
     """Get refresh cookie SameSite attribute.
 
     Defaults to 'strict' for production security to prevent CSRF attacks.
-    When SSO is enabled with cross-domain cookies, defaults to 'lax' to
-    allow cookies to be sent on cross-origin redirects.
+    OIDC login state uses its own short-lived SameSite=Lax callback cookie;
+    ERP session cookies are never shared with another application.
     """
-    # SSO requires 'lax' for cross-app redirects to work
-    if app_settings.sso_enabled and app_settings.sso_cookie_domain:
-        explicit = _env_value("REFRESH_COOKIE_SAMESITE") or _setting_value(
-            db, "refresh_cookie_samesite"
-        )
-        # If explicitly set, use that value; otherwise default to 'lax' for SSO
-        return explicit or "lax"
-
     return (
         _env_value("REFRESH_COOKIE_SAMESITE")
         or _setting_value(db, "refresh_cookie_samesite")
@@ -245,15 +226,7 @@ def _refresh_cookie_samesite(db: Session | None) -> str:
 
 
 def _refresh_cookie_domain(db: Session | None) -> str | None:
-    """Get cookie domain for refresh token.
-
-    When SSO is enabled, uses SSO_COOKIE_DOMAIN (e.g., ".company.com")
-    to share cookies across all apps under the same parent domain.
-    """
-    # Use SSO cookie domain when SSO is enabled
-    if app_settings.sso_enabled and app_settings.sso_cookie_domain:
-        return app_settings.sso_cookie_domain
-
+    """Get ERP-local cookie domain for refresh tokens."""
     return _env_value("REFRESH_COOKIE_DOMAIN") or _setting_value(
         db, "refresh_cookie_domain"
     )
@@ -688,14 +661,43 @@ def _audit_auth_event(
 
 class AuthFlow(ListResponseMixin):
     @staticmethod
+    def set_auth_cookies(
+        db: Session | None,
+        response: Response,
+        payload: dict[str, str],
+    ) -> Response:
+        """Attach ERP-owned refresh and access cookies to a response."""
+        refresh_settings = AuthFlow.refresh_cookie_settings(db)
+        access_settings = AuthFlow.access_cookie_settings(db)
+        response.set_cookie(
+            key=refresh_settings["key"],
+            value=payload["refresh_token"],
+            httponly=refresh_settings["httponly"],
+            secure=refresh_settings["secure"],
+            samesite=refresh_settings["samesite"],
+            domain=refresh_settings["domain"],
+            path=refresh_settings["path"],
+            max_age=refresh_settings["max_age"],
+        )
+        response.set_cookie(
+            key=access_settings["key"],
+            value=payload["access_token"],
+            httponly=access_settings["httponly"],
+            secure=access_settings["secure"],
+            samesite=access_settings["samesite"],
+            domain=access_settings["domain"],
+            path=access_settings["path"],
+            max_age=access_settings["max_age"],
+        )
+        return response
+
+    @staticmethod
     def _response_with_refresh_cookie(
         db: Session | None,
         payload: dict,
         model_cls,
         status_code: int = status.HTTP_200_OK,
     ) -> Response:
-        settings = AuthFlow.refresh_cookie_settings(db)
-        access_settings = AuthFlow.access_cookie_settings(db)
         # Explicitly omit refresh token from cookie payload.
         payload_without_refresh = {**payload, "refresh_token": None}  # nosec B105
         body_content = model_cls(**payload_without_refresh).model_dump_json()
@@ -704,28 +706,8 @@ class AuthFlow(ListResponseMixin):
             status_code=status_code,
             media_type="application/json",
         )
-        response.set_cookie(
-            key=settings["key"],
-            value=payload["refresh_token"],
-            httponly=settings["httponly"],
-            secure=settings["secure"],
-            samesite=settings["samesite"],
-            domain=settings["domain"],
-            path=settings["path"],
-            max_age=settings["max_age"],
-        )
-        access_token = payload.get("access_token")
-        if access_token:
-            response.set_cookie(
-                key=access_settings["key"],
-                value=access_token,
-                httponly=access_settings["httponly"],
-                secure=access_settings["secure"],
-                samesite=access_settings["samesite"],
-                domain=access_settings["domain"],
-                path=access_settings["path"],
-                max_age=access_settings["max_age"],
-            )
+        if payload.get("access_token"):
+            return AuthFlow.set_auth_cookies(db, response, payload)
         return response
 
     @staticmethod
@@ -788,6 +770,11 @@ class AuthFlow(ListResponseMixin):
             raise HTTPException(
                 status_code=400, detail="Invalid auth provider"
             ) from exc
+        if resolved_provider != AuthProvider.local:
+            raise HTTPException(
+                status_code=400,
+                detail="Federated login must use the OIDC authorization flow",
+            )
         if not username:
             raise HTTPException(status_code=401, detail="Wrong username")
 
@@ -1126,10 +1113,7 @@ class AuthFlow(ListResponseMixin):
 
     @staticmethod
     def access_cookie_settings(db: Session | None = None) -> dict[str, Any]:
-        """Get access token cookie settings.
-
-        Used for setting access_token cookie with SSO-aware domain.
-        """
+        """Get ERP-local access-token cookie settings."""
         return {
             "key": "access_token",
             "httponly": True,
