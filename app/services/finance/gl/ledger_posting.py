@@ -164,16 +164,29 @@ class LedgerPostingService(ListResponseMixin):
         )
 
         batch: PostingBatch | None = None
+        superseded_batch: PostingBatch | None = None
         if existing_batch:
             if existing_batch.status == BatchStatus.POSTED:
-                # Already posted - return success (idempotent)
-                return PostingResult(
-                    success=True,
-                    batch_id=existing_batch.batch_id,
-                    posted_lines=existing_batch.posted_entries,
-                    message="Already posted (idempotent replay)",
-                    correlation_id=existing_batch.correlation_id,
-                )
+                if LedgerPostingService._batch_posting_reversed(
+                    db, org_id, existing_batch
+                ):
+                    # The posting this batch represents has been undone by a
+                    # posted reversal: its journal is REVERSED and no journal
+                    # remains POSTED under it. The idempotency key is
+                    # actionable again — fall through and post fresh. The
+                    # dead batch's unique key is retired just before the new
+                    # batch row is created (step 8), so the UPDATE releases
+                    # the key ahead of the INSERT.
+                    superseded_batch = existing_batch
+                else:
+                    # Already posted - return success (idempotent)
+                    return PostingResult(
+                        success=True,
+                        batch_id=existing_batch.batch_id,
+                        posted_lines=existing_batch.posted_entries,
+                        message="Already posted (idempotent replay)",
+                        correlation_id=existing_batch.correlation_id,
+                    )
             elif existing_batch.status == BatchStatus.FAILED:
                 # Failed previously - retry in the same batch record (idempotency_key is unique)
                 if (existing_batch.posted_entries or 0) > 0:
@@ -238,6 +251,8 @@ class LedgerPostingService(ListResponseMixin):
 
         # 8. Create (or reuse) posting batch
         if batch is None:
+            if superseded_batch is not None:
+                LedgerPostingService._retire_superseded_batch_key(db, superseded_batch)
             batch = PostingBatch(
                 organization_id=org_id,
                 fiscal_period_id=fiscal_period_id,
@@ -407,6 +422,66 @@ class LedgerPostingService(ListResponseMixin):
             total_credit=total_credit,
             message="Journal posted successfully",
             correlation_id=request.correlation_id,
+        )
+
+    @staticmethod
+    def _batch_posting_reversed(
+        db: Session,
+        organization_id: UUID,
+        batch: PostingBatch,
+    ) -> bool:
+        """Whether the posting a batch represents has been undone by reversal.
+
+        True only when the batch's journal carries status REVERSED and no
+        journal remains POSTED under the batch. A genuine replay of a live
+        POSTED batch must still short-circuit, so any surviving POSTED
+        journal keeps the batch authoritative for its idempotency key.
+        """
+        live_journal_id = db.scalar(
+            select(JournalEntry.journal_entry_id)
+            .where(
+                JournalEntry.organization_id == organization_id,
+                JournalEntry.posting_batch_id == batch.batch_id,
+                JournalEntry.status == JournalStatus.POSTED,
+            )
+            .limit(1)
+        )
+        if live_journal_id is not None:
+            return False
+        reversed_journal_id = db.scalar(
+            select(JournalEntry.journal_entry_id)
+            .where(
+                JournalEntry.organization_id == organization_id,
+                JournalEntry.posting_batch_id == batch.batch_id,
+                JournalEntry.status == JournalStatus.REVERSED,
+            )
+            .limit(1)
+        )
+        return reversed_journal_id is not None
+
+    @staticmethod
+    def _retire_superseded_batch_key(db: Session, batch: PostingBatch) -> None:
+        """Retire the unique idempotency key of a reversed (superseded) batch.
+
+        ``gl.posting_batch.idempotency_key`` carries a global unique
+        constraint (``uq_batch_idempotency``), so a repost after reversal
+        cannot insert a second batch row under the live key. The dead row's
+        key is suffixed with its own batch_id (deterministic and unique) and
+        flushed BEFORE the new batch row is created, so the UPDATE releases
+        the key ahead of the INSERT. Only the dead row's key is mutated —
+        live replay semantics are untouched, and concurrent reposts are still
+        arbitrated by the unique constraint exactly as concurrent first posts
+        are.
+        """
+        suffix = f":superseded:{batch.batch_id}"
+        key_type = PostingBatch.__table__.c.idempotency_key.type
+        max_len = getattr(key_type, "length", None) or 200
+        batch.idempotency_key = batch.idempotency_key[: max_len - len(suffix)] + suffix
+        db.flush()
+        logger.info(
+            "Retired idempotency key of reversed posting batch %s; "
+            "key is actionable again for repost",
+            batch.batch_id,
         )
 
     @staticmethod
