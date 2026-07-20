@@ -13,10 +13,11 @@ and eventually kernel adoption — cannot drift them silently:
 3. dotmac_sub reverse-and-repost: the reversal journal + swapped ledger
    lines written when a posted Sub invoice's accounting changes
    (``InvoiceSyncMixin._reverse_posted_invoice_gl``), the invoice's cleared
-   GL pointers, and the repost's journal provenance — including the
-   CURRENT repost idempotency-key collision (see the KNOWN GAP note in the
-   test) under which the repost journal strands APPROVED and the ledger
-   nets to zero for the document.
+   GL pointers, and the repost — the posting service's idempotent-replay
+   match is reversal-aware, so the repost genuinely posts: new journal
+   POSTED under a fresh batch that takes over the deterministic key (the
+   reversed original batch's key is retired with a ``:superseded:`` suffix),
+   and the document's GL nets to the invoice totals again.
 
 Deliberately complements — never duplicates — the existing mock-based
 service suites (tests/finance/test_gl_ledger_posting_service.py,
@@ -155,8 +156,68 @@ class _SubSyncHarness(InvoiceSyncMixin):
         self.organization_id = organization_id
 
 
+_LEAKABLE_SESSION_LISTENERS = (
+    ("app.db.org_listener", "do_orm_execute", "_add_org_filter"),
+    ("app.services.audit_listener", "before_flush", "_on_before_flush"),
+    ("app.services.audit_listener", "after_flush", "_on_after_flush"),
+    ("app.services.audit.field_tracker", "before_flush", "_on_before_flush"),
+)
+
+
+def _detach_global_session_listeners():
+    """Strip app-global SQLAlchemy Session listeners for this fixture's life.
+
+    Building the real app (some earlier test does) registers ``do_orm_execute``
+    (org filter) and ``before_flush``/``after_flush`` (auto-audit) hooks on the
+    global ``Session`` class. This world flushes real rows on an unprimed SQLite
+    session during SETUP; a leaked org filter raises MissingOrgContextError and
+    a leaked audit hook fails mid-flush, detaching the journal
+    ("not persistent within this Session"). conftest strips these AFTER each
+    test — too late for a fixture that works during setup — so strip them here,
+    before we flush, and restore what was present on teardown. Order-independent.
+    """
+    import importlib
+
+    from sqlalchemy import event
+    from sqlalchemy.orm import Session
+
+    restored = []
+    for modname, evt, fname in _LEAKABLE_SESSION_LISTENERS:
+        try:
+            fn = getattr(importlib.import_module(modname), fname, None)
+        except Exception:
+            fn = None
+        if fn is not None and event.contains(Session, evt, fn):
+            event.remove(Session, evt, fn)
+            restored.append((evt, fn))
+
+    def _restore():
+        for evt, fn in restored:
+            if not event.contains(Session, evt, fn):
+                event.listen(Session, evt, fn)
+
+    return _restore
+
+
 @pytest.fixture()
 def world():
+    _restore_listeners = _detach_global_session_listeners()
+    # The posting path calls fire_audit_event -> AuditLogService.log_change,
+    # which writes to audit.audit_log on THIS session. That table has a
+    # Postgres ARRAY column SQLite cannot create, and a failed write aborts
+    # the SQLite transaction, stranding the journal INSERT that follows
+    # ('not persistent within this Session') — order-dependent because
+    # whether the write is attempted turns on global audit state an earlier
+    # test may seed. The audit row is fire-and-forget and orthogonal to the
+    # GL rows these tests pin, so stub the single DB-writing method for the
+    # world's lifetime.
+    from unittest.mock import patch as _patch
+
+    _audit_stub = _patch(
+        "app.services.finance.platform.audit_log.AuditLogService.log_change",
+        return_value=None,
+    )
+    _audit_stub.start()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -235,6 +296,8 @@ def world():
     finally:
         db.close()
         engine.dispose()
+        _audit_stub.stop()
+        _restore_listeners()
 
 
 def _posted_lines(db: Session, journal_id: uuid.UUID) -> list[PostedLedgerLine]:
@@ -493,9 +556,10 @@ def test_ar_payment_settlement_ledger_rows(world: _World) -> None:
 def test_sub_sync_reverse_and_repost_row_pairing(world: _World) -> None:
     """When a posted Sub invoice's accounting changes, the sync path reverses
     the original journal (swapped-line REVERSAL journal, original REVERSED,
-    invoice pointers cleared); the subsequent repost currently strands
-    APPROVED because its idempotency key replays the original batch — a
-    characterized money-correctness gap, pinned exactly below."""
+    invoice pointers cleared); the subsequent repost then genuinely posts —
+    the posting service's idempotent-replay match is reversal-aware, so the
+    unchanged deterministic key is actionable again and the fresh journal
+    reaches the ledger under a new batch."""
     db, org = world.db, world.org_id
     now = datetime.now(UTC)
     invoice = Invoice(
@@ -616,17 +680,16 @@ def test_sub_sync_reverse_and_repost_row_pairing(world: _World) -> None:
     )
 
     # -- Repost. -------------------------------------------------------------
-    # KNOWN GAP (characterized, not endorsed): the repost goes back through
-    # ensure_gl_posted, whose idempotency key ("ensure-gl-inv-<invoice_id>")
-    # is unchanged from the ORIGINAL post. LedgerPostingService therefore
-    # short-circuits on the original POSTED batch ("Already posted
-    # (idempotent replay)") and the fresh journal below NEVER REACHES THE
-    # LEDGER: it strands in APPROVED with no posted lines, while the invoice
-    # claims posting_status="POSTED" against the stale original batch. After
-    # a reverse-and-repost the GL nets to ZERO for this invoice — AR and
-    # revenue are silently understated. When this is fixed (reversal-aware
-    # idempotency key), these pins MUST be updated to: repost POSTED, 2 new
-    # ledger lines, 6-line trail.
+    # The repost goes back through ensure_gl_posted, whose idempotency key
+    # ("ensure-gl-inv-<invoice_id>") is unchanged from the ORIGINAL post.
+    # LedgerPostingService recognizes that the original batch's journal has
+    # been REVERSED, retires the dead batch's unique key with a
+    # ":superseded:<batch_id>" suffix, and posts the fresh journal under a
+    # NEW batch that takes over the deterministic key — AR and revenue are
+    # restated, not silently understated.
+    ensure_key = f"ensure-gl-inv-{invoice.invoice_id}"
+    original_batch_id = original.posting_batch_id
+    assert original_batch_id is not None
     harness._ensure_synced_invoice_posted(invoice, _USER)
     repost_journal_id = invoice.journal_entry_id
     assert repost_journal_id is not None
@@ -635,23 +698,83 @@ def test_sub_sync_reverse_and_repost_row_pairing(world: _World) -> None:
     assert repost is not None
     assert repost.source_document_type == "INVOICE"
     assert repost.source_document_id == invoice.invoice_id
-    # The repost journal is created with full provenance but strands
-    # APPROVED — the replay short-circuit means it is never ledger-posted.
-    assert repost.status == JournalStatus.APPROVED
-    assert _posted_lines(db, repost_journal_id) == []
-    # The invoice nonetheless claims POSTED, linked to the ORIGINAL
-    # (now-reversed) batch.
+    # The repost journal genuinely reaches the ledger.
+    assert repost.status == JournalStatus.POSTED
+    assert repost.posting_batch_id is not None
+    assert repost.posting_batch_id != original_batch_id
+    # Invoice pointers land on the NEW journal and NEW batch.
     assert invoice.posting_status == "POSTED"
-    assert invoice.posting_batch_id == original.posting_batch_id
+    assert invoice.posting_batch_id == repost.posting_batch_id
 
-    # Ledger trail for the document is only original + reversal (net zero):
-    # 4 lines, not the 6 a real repost would leave.
+    # The deterministic key now belongs to the repost batch; the reversed
+    # original batch keeps its rows under the retired ":superseded:" key.
+    repost_batch = db.scalar(
+        select(PostingBatch).where(PostingBatch.idempotency_key == ensure_key)
+    )
+    assert repost_batch is not None
+    assert repost_batch.batch_id == repost.posting_batch_id
+    assert repost_batch.status == BatchStatus.POSTED
+    superseded = db.get(PostingBatch, original_batch_id)
+    assert superseded is not None
+    assert superseded.idempotency_key == f"{ensure_key}:superseded:{original_batch_id}"
+
+    # Repost ledger rows mirror the original post exactly, on the new batch.
+    repost_lines = _posted_lines(db, repost_journal_id)
+    assert [
+        (line.account_code, line.debit_amount, line.credit_amount)
+        for line in repost_lines
+    ] == [
+        ("1100", Decimal("100.00"), Decimal("0")),
+        ("4000", Decimal("0"), Decimal("100.00")),
+    ]
+    for line in repost_lines:
+        assert line.posting_batch_id == repost_batch.batch_id
+
+    # The idempotency guard once again sees an active (non-reversal) journal.
+    assert (
+        PostingIdempotencyService.source_journal_exists(
+            db,
+            source_module="AR",
+            source_document_type="INVOICE",
+            source_document_id=invoice.invoice_id,
+            exclude_reversal_journals=True,
+        )
+        is True
+    )
+
+    # Full ledger trail: original + reversal + repost = 6 lines, and the
+    # document's GL nets back to the invoice totals per account.
     trail = db.scalars(
         select(PostedLedgerLine).where(
             PostedLedgerLine.source_document_id == invoice.invoice_id
         )
     ).all()
-    assert len(trail) == 4
-    assert sum(
-        (line.debit_amount - line.credit_amount for line in trail), Decimal("0")
-    ) == Decimal("0")
+    assert len(trail) == 6
+    net_by_account: dict[str, Decimal] = {}
+    for line in trail:
+        net_by_account[line.account_code] = net_by_account.get(
+            line.account_code, Decimal("0")
+        ) + (line.debit_amount - line.credit_amount)
+    assert net_by_account == {
+        "1100": Decimal("100.00"),  # AR control restated
+        "4000": Decimal("-100.00"),  # revenue restated
+    }
+
+    # A replay of the SAME key against the now-live repost batch is once
+    # again a pure no-op — reversal-awareness did not weaken live-batch
+    # idempotency.
+    replay = LedgerPostingService.post_journal_entry(
+        db,
+        PostingRequest(
+            organization_id=org,
+            journal_entry_id=repost_journal_id,
+            posting_date=_TODAY,
+            idempotency_key=ensure_key,
+            source_module="AR",
+            posted_by_user_id=_USER,
+        ),
+    )
+    assert replay.success is True
+    assert replay.batch_id == repost_batch.batch_id
+    assert replay.message == "Already posted (idempotent replay)"
+    assert len(_posted_lines(db, repost_journal_id)) == 2

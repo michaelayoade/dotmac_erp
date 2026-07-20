@@ -187,8 +187,6 @@ mock_db_module.SessionLocal = _TestSessionLocal
 mock_db_module.AsyncSessionLocal = _MockAsyncSessionLocal
 mock_db_module.get_engine = lambda: _test_engine
 mock_db_module.get_async_session_local = lambda: _TestSessionLocal
-mock_db_module.get_auth_db_session = lambda: _TestSessionLocal()
-mock_db_module.get_auth_db = lambda: _TestSessionLocal()
 
 
 def _get_db_session():
@@ -322,12 +320,15 @@ class MockSettings:
     app_version = "test"
     # CRM webhook secret
     crm_webhook_secret = None
-    # SSO settings
-    sso_enabled = False
-    sso_provider_mode = False
-    sso_provider_url = None
-    sso_jwt_secret = None
-    sso_cookie_domain = None
+    # OpenID Connect settings
+    oidc_enabled = False
+    oidc_issuer = None
+    oidc_client_id = None
+    oidc_client_secret = None
+    oidc_discovery_url = None
+    oidc_redirect_uri = None
+    oidc_scopes = "openid profile email"
+    oidc_request_timeout = 10.0
     # Multi-org session listener defaults on; tests keep the same posture.
     enforce_org_filter = True
     # Coach / Intelligence Engine
@@ -406,6 +407,7 @@ from app.models.analytics.org_metric_snapshot import OrgMetricSnapshot  # noqa: 
 from app.models.audit import AuditActorType, AuditEvent  # noqa: E402
 from app.models.auth import (  # noqa: E402
     ApiKey,
+    FederatedIdentity,
     MFAMethod,
     SessionStatus,
     UserCredential,
@@ -454,6 +456,7 @@ from app.models.scheduler import ScheduledTask, ScheduleType  # noqa: E402
 SQLITE_COMPATIBLE_TABLES = [
     Person.__table__,
     UserCredential.__table__,
+    FederatedIdentity.__table__,
     AuthSession.__table__,
     ApiKey.__table__,
     MFAMethod.__table__,
@@ -583,6 +586,7 @@ def _strip_leaked_global_session_listeners():
         ("app.db.org_listener", "do_orm_execute", "_add_org_filter"),
         ("app.services.audit_listener", "before_flush", "_on_before_flush"),
         ("app.services.audit_listener", "after_flush", "_on_after_flush"),
+        ("app.services.audit.field_tracker", "before_flush", "_on_before_flush"),
     ):
         try:
             fn = getattr(importlib.import_module(modname), fname, None)

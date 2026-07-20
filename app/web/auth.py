@@ -4,12 +4,13 @@ Web routes for authentication pages.
 Provides login, admin login, and logout pages for the web interface.
 """
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Cookie, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.services.auth_web import auth_web_service
+from app.services.sso.oidc import OIDC_STATE_COOKIE
 from app.web.deps import WebAuthContext, optional_web_auth
 
 router = APIRouter(tags=["web-auth"])
@@ -56,10 +57,27 @@ def logout_page(
     """
     Log out the user by revoking session and clearing cookies.
 
-    For SSO: revokes session in shared database so logout propagates
-    across all apps.
+    Revokes only the ERP-owned session and clears ERP-owned cookies.
     """
     return auth_web_service.logout_response(request, next)
+
+
+@router.get("/auth/oidc/callback", response_class=HTMLResponse)
+def oidc_callback(
+    request: Request,
+    code: str = Query(...),
+    state: str = Query(...),
+    state_cookie: str | None = Cookie(default=None, alias=OIDC_STATE_COOKIE),
+    db: Session = Depends(get_db),
+):
+    """Complete OIDC login and create an ERP-owned local session."""
+    return auth_web_service.oidc_callback_response(
+        request,
+        code=code,
+        state=state,
+        state_cookie=state_cookie,
+        db=db,
+    )
 
 
 @router.get("/forgot-password", response_class=HTMLResponse)

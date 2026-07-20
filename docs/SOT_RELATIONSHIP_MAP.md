@@ -16,6 +16,13 @@ from decisions and consequences. A change that adds, moves, or splits an owner
 updates the registry (and this map) in the same change — one coherent domain
 slice per change.
 
+HTTP is one such adapter boundary. Domain and application services do not
+import FastAPI or Starlette request/response types and do not raise
+`HTTPException`. They return domain values or raise transport-neutral errors;
+the HTTP route maps those outcomes to status codes. This keeps the same owner
+callable from tasks, jobs, webhooks, commands, and reconcilers without HTTP
+semantics.
+
 ## Domains
 
 | Domain | Owns | Rule in one line |
@@ -44,6 +51,32 @@ engine during migration, not a second business owner. The per-flow Sub cutover
 guard prevents CRM and Sub from originating the ERP write concurrently. The
 full request, outcome, reconciliation, cutover, rollback, and retirement rules
 are in `docs/dotmac_sub_material_support_contract.md`.
+
+## Replaceable application boundary
+
+Dotmac ERP is an independent backoffice product, not an enterprise control
+plane or a runtime dependency of Dotmac Sub. Dotmac Sub owns subscribers,
+services, provisioning, billing facts, and operational service workflows.
+Dotmac ERP owns only the backoffice and accounting records created inside ERP.
+
+- Collaboration uses versioned APIs or events; neither product queries the
+  other's database or holds cross-system foreign keys.
+- External IDs are scoped correlation evidence, not enterprise identities or
+  delegated decision authority.
+- Each product owns its own tax-identity records and validation policy. The Sub
+  subscriber import must not populate ERP's locally governed customer tax ID.
+- Provider-specific Sub endpoints and mappings are adapters. Replacing ERP with
+  Zoho or another backoffice product does not require moving Sub domain state.
+- Delivery failure is retried and reconciled locally; there is no shared
+  transaction or required shared business-domain runtime.
+
+Authentication now follows the same boundary. ERP uses OIDC Authorization Code
+with PKCE to accept an identity assertion, resolves the opaque issuer/subject
+through an ERP-owned binding, and creates an ERP-owned session. ERP does not
+query an identity-provider database, share JWT signing secrets, share cookies,
+or accept provider roles as ERP permissions. See `docs/oidc_identity_contract.md`.
+
+The detailed local contract is `docs/replaceable_application_boundary.md`.
 
 ## Status and expansion
 

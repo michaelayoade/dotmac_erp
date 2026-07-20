@@ -587,6 +587,35 @@ def _form_attachment_config() -> FileUploadConfig:
     )
 
 
+def _employee_document_config() -> FileUploadConfig:
+    return FileUploadConfig(
+        base_dir="/app/uploads/employee_documents",
+        allowed_content_types=frozenset(
+            {
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "image/jpeg",
+                "image/png",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".pdf",
+                ".doc",
+                ".docx",
+                ".jpg",
+                ".jpeg",
+                ".png",
+            }
+        ),
+        max_size_bytes=10 * 1024 * 1024,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="employee_documents",
+    )
+
+
 def get_avatar_upload() -> FileUploadService:
     """Get avatar upload service (lazily configured from settings)."""
     return FileUploadService(_avatar_config())
@@ -615,6 +644,11 @@ def get_support_attachment_upload() -> FileUploadService:
 def get_form_attachment_upload() -> FileUploadService:
     """Get generic form attachment upload service."""
     return FileUploadService(_form_attachment_config())
+
+
+def get_employee_document_upload() -> FileUploadService:
+    """Get employee document upload service."""
+    return FileUploadService(_employee_document_config())
 
 
 def _pm_attachment_config() -> FileUploadConfig:

@@ -66,6 +66,17 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "DELETE /api/v1/auth/oidc/identities/{binding_id}": {
+   "params": [
+    "header:authorization",
+    "path:binding_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "5e67e314f78c",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "DELETE /api/v1/banking/statements/{statement_id}": {
    "params": [
     "cookie:access_token",
@@ -786,6 +797,16 @@
    "responses": {
     "200": "2edc44a576b5",
     "401": "4e95924cace6",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/auth/oidc/identities": {
+   "params": [
+    "header:authorization"
+   ],
+   "request": null,
+   "responses": {
+    "200": "df781c2206f1",
     "422": "a11c9d9b2af8"
    }
   },
@@ -4532,6 +4553,17 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/sub/purchase-invoices/{source_invoice_id}": {
+   "params": [
+    "header:x-api-key!",
+    "path:source_invoice_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "cefdc3483dda",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/tax/codes": {
    "params": [
     "cookie:access_token",
@@ -5703,6 +5735,16 @@
     "200": "04163c33e70b",
     "401": "4e95924cace6",
     "404": "6341468254e3",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/auth/oidc/identities": {
+   "params": [
+    "header:authorization"
+   ],
+   "request": "8a849586e90c",
+   "responses": {
+    "201": "5e67e314f78c",
     "422": "a11c9d9b2af8"
    }
   },
@@ -9647,6 +9689,8 @@
   "ExpenseTotalsResponse": "a57e60a710d1",
   "FIFOInventoryRead": "bc93daf81a13",
   "FIFOLayerRead": "dc0491f468a7",
+  "FederatedIdentityCreate": "c9d432500a56",
+  "FederatedIdentityRead": "ee8105f3ec7e",
   "FiscalPeriodCreate": "f7d6a8efc032",
   "FiscalPeriodRead": "c773241c1c47",
   "FleetSummary": "71a0e3d3ca28",
@@ -10007,6 +10051,7 @@
   "StatusCheckRequest": "4477acfa6554",
   "StatusCheckResponse": "c6d10c82dff2",
   "StockBalanceRead": "a8b074040ca3",
+  "SubPurchaseInvoiceStatusResponse": "87c793a503f6",
   "SupplierCreate": "02f1e6b5db4a",
   "SupplierRead": "3810c24b704c",
   "SupplierUpdate": "9ac48b235796",

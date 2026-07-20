@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.19.2")
+    app_version: str = os.getenv("APP_VERSION", "1.19.3")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -126,21 +126,19 @@ class Settings:
     # Application URL (for email links)
     app_url: str = os.getenv("APP_URL", "http://localhost:8000")
 
-    # SSO Configuration
-    # Enable SSO for cross-app authentication under same parent domain
-    sso_enabled: bool = os.getenv("SSO_ENABLED", "false").lower() == "true"
-    # True for App #1 (hosts auth database), False for App #2/#3 (SSO clients)
-    sso_provider_mode: bool = os.getenv("SSO_PROVIDER_MODE", "false").lower() == "true"
-    # Shared auth database URL for SSO clients (connects to App #1's database)
-    # If not set, uses main DATABASE_URL
-    auth_database_url: str | None = os.getenv("AUTH_DATABASE_URL") or None
-    # Cookie domain for cross-app SSO (e.g., ".company.com")
-    sso_cookie_domain: str | None = os.getenv("SSO_COOKIE_DOMAIN") or None
-    # Shared JWT secret (must be same across all apps)
-    # Falls back to JWT_SECRET environment variable if not set
-    sso_jwt_secret: str | None = os.getenv("SSO_JWT_SECRET") or None
-    # SSO Provider URL for login redirects (e.g., "https://sso.company.com")
-    sso_provider_url: str | None = os.getenv("SSO_PROVIDER_URL") or None
+    # OpenID Connect authentication boundary. The identity provider proves the
+    # user's identity; ERP remains authoritative for local people, roles,
+    # permissions, sessions, and cookies. No identity-provider database or JWT
+    # signing secret is shared with ERP.
+    oidc_enabled: bool = os.getenv("OIDC_ENABLED", "false").lower() == "true"
+    oidc_issuer: str | None = os.getenv("OIDC_ISSUER") or None
+    oidc_client_id: str | None = os.getenv("OIDC_CLIENT_ID") or None
+    # May be an OpenBao reference resolved by app.services.secrets.
+    oidc_client_secret: str | None = os.getenv("OIDC_CLIENT_SECRET") or None
+    oidc_discovery_url: str | None = os.getenv("OIDC_DISCOVERY_URL") or None
+    oidc_redirect_uri: str | None = os.getenv("OIDC_REDIRECT_URI") or None
+    oidc_scopes: str = os.getenv("OIDC_SCOPES", "openid profile email")
+    oidc_request_timeout: float = float(os.getenv("OIDC_REQUEST_TIMEOUT", "10.0"))
 
     # ==========================================================================
     # S3 / MinIO Object Storage

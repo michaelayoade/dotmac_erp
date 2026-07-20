@@ -163,7 +163,6 @@ class SubscriberSyncMixin:
             existing.legal_name = sub.full_name
             existing.trading_name = sub.company_name
             existing.is_active = sub.is_active
-            existing.tax_identification_number = sub.tax_id
             existing.primary_contact = contact
             existing.billing_address = billing_address
             if not existing.dotmac_sub_id:
@@ -187,7 +186,6 @@ class SubscriberSyncMixin:
             legal_name=sub.full_name,
             trading_name=sub.company_name,
             is_active=sub.is_active,
-            tax_identification_number=sub.tax_id,
             ar_control_account_id=self.ar_control_account_id,
             default_revenue_account_id=self.default_revenue_account_id,
             primary_contact=contact,

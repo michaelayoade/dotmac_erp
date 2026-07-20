@@ -8,7 +8,7 @@ except ImportError:  # pragma: no cover
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from starlette.requests import Request
 
@@ -16,6 +16,7 @@ from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
 from app.services.auth_flow import AuthFlow, hash_session_token
 from app.services.auth_web import auth_web_service
+from app.services.sso.oidc import OIDCLogin
 from app.web.deps import require_web_auth
 
 
@@ -59,30 +60,39 @@ def _request(path: str, headers: list[tuple[bytes, bytes]] | None = None) -> Req
     )
 
 
-def test_sso_login_url_keeps_absolute_safe_next(monkeypatch):
+def test_oidc_login_keeps_absolute_safe_next_in_signed_state(monkeypatch):
     from app.services import auth_web as auth_web_module
 
     monkeypatch.setattr(
         auth_web_module,
         "settings",
-        SimpleNamespace(
-            sso_enabled=True,
-            sso_provider_mode=False,
-            sso_provider_url="https://sso.example.com",
-            sso_cookie_domain=None,
-        ),
+        SimpleNamespace(oidc_enabled=True),
+    )
+    captured = {}
+
+    def _start_login(db, request, next_url):
+        captured["next"] = next_url
+        return OIDCLogin(
+            authorization_url="https://identity.example.com/authorize?state=opaque",
+            state_cookie="signed-state",
+        )
+
+    monkeypatch.setattr(auth_web_module.oidc_client, "start_login", _start_login)
+    monkeypatch.setattr(
+        AuthFlow,
+        "refresh_cookie_settings",
+        staticmethod(lambda _db=None: {"secure": True}),
     )
 
     next_url = "https://testserver/finance/dashboard?tab=summary"
-    sso_url = auth_web_service._get_sso_login_url(_request("/login"), next_url)
-    assert sso_url is not None
+    response = auth_web_service._oidc_login_response(
+        _request("/login"), next_url, MagicMock()
+    )
 
-    parsed = urlparse(sso_url)
-    assert parsed.netloc == "sso.example.com"
-    assert parsed.path.endswith("/login")
-
-    next_params = parse_qs(parsed.query).get("next", [])
-    assert next_params == [next_url]
+    assert response is not None
+    assert urlparse(response.headers["location"]).netloc == "identity.example.com"
+    assert captured["next"] == next_url
+    assert "erp_oidc_state=signed-state" in response.headers["set-cookie"]
 
 
 def test_logout_response_uses_cookie_defaults_when_settings_lookup_fails(monkeypatch):

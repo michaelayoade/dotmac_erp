@@ -8,6 +8,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.sync.dotmac_crm import (
@@ -46,6 +47,11 @@ from app.schemas.sync.dotmac_crm import (
     InventoryListResponse,
 )
 from app.services.inventory.material_support import MaterialSupportService
+from app.schemas.sync.dotmac_sub import SubPurchaseInvoiceStatusResponse
+from app.services.sync.sub_purchase_invoice_status import (
+    PurchaseInvoiceStatusNotFoundError,
+    get_purchase_invoice_status,
+)
 
 router = APIRouter(prefix="/sync/sub", tags=["sub-sync"])
 logger = logging.getLogger(__name__)
@@ -58,6 +64,19 @@ def require_sub_ap_scope(auth: dict = Depends(require_service_auth)) -> dict:
 
         raise HTTPException(
             status_code=403, detail="API key missing required scope: sub:ap:write"
+        )
+    return auth
+
+
+def require_sub_ap_read_scope(auth: dict = Depends(require_service_auth)) -> dict:
+    scopes = auth.get("scopes") or []
+    if scopes and not {
+        "sub:ap:read",
+        "sub:ap:write",
+        "crm:ap:write",
+    }.intersection(scopes):
+        raise HTTPException(
+            status_code=403, detail="API key missing required scope: sub:ap:read"
         )
     return auth
 
@@ -123,6 +142,30 @@ def create_sub_purchase_invoice(
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMPurchaseInvoiceResponse:
     return create_purchase_invoice(payload, auth, db)
+
+
+@router.get(
+    "/purchase-invoices/{source_invoice_id}",
+    response_model=SubPurchaseInvoiceStatusResponse,
+    dependencies=[Depends(require_sub_ap_read_scope)],
+)
+def get_sub_purchase_invoice_status(
+    source_invoice_id: UUID,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubPurchaseInvoiceStatusResponse:
+    """Return ERP's current AP status for one Sub-originated invoice."""
+    try:
+        observation = get_purchase_invoice_status(
+            db,
+            organization_id=UUID(str(auth["organization_id"])),
+            source_invoice_id=source_invoice_id,
+        )
+    except PurchaseInvoiceStatusNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return SubPurchaseInvoiceStatusResponse.model_validate(
+        observation, from_attributes=True
+    )
 
 
 @router.post(
