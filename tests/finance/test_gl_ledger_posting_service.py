@@ -134,9 +134,7 @@ def test_post_journal_entry_reposts_when_batch_journal_reversed():
 
     # The dead batch's key was retired with a deterministic suffix; the new
     # batch takes over the caller's key.
-    assert (
-        reversed_batch.idempotency_key == f"key:superseded:{reversed_batch.batch_id}"
-    )
+    assert reversed_batch.idempotency_key == f"key:superseded:{reversed_batch.batch_id}"
     added_batches = [
         c.args[0]
         for c in db.add.call_args_list
