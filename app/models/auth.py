@@ -95,6 +95,54 @@ class UserCredential(Base):
     person = relationship("Person")
 
 
+class FederatedIdentity(Base):
+    """ERP-owned binding from a protocol identity to a local person.
+
+    The OIDC issuer and subject are opaque external identifiers. Authorization
+    remains local to ERP and is never copied from identity-provider claims.
+    """
+
+    __tablename__ = "federated_identities"
+    __table_args__ = (
+        UniqueConstraint(
+            "issuer",
+            "subject",
+            name="uq_federated_identities_issuer_subject",
+        ),
+        UniqueConstraint(
+            "person_id",
+            "issuer",
+            name="uq_federated_identities_person_issuer",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("people.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    issuer: Mapped[str] = mapped_column(String(512), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_authenticated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    person = relationship("Person")
+
+
 class MFAMethod(Base):
     __tablename__ = "mfa_methods"
     __table_args__ = (

@@ -37,7 +37,7 @@ Classifications: **reuse** (adopt kernel contract nearly as-is / lift into kerne
 |---|---|---|---|
 | Organization/tenancy | `core_org.organization` + dual-layer enforcement: ORM listener (`app/db/org_listener.py`, fail-closed `MissingOrgContextError`, gated by `ENFORCE_ORG_FILTER` default true) AND native PostgreSQL RLS (`app/rls.py` GUCs `app.current_organization_id`/`app.bypass_rls`; dynamic policy migration over every `organization_id` table) | adapt | Stronger than the recon assumption of app-only scoping. The GUC convention is directly **reusable** by the kernel RLS contract. Both layers must be primed together — canonical deps (`get_db_with_org`, `get_db_for_org`, `session_for_org`) + a CI guard enforce this; kernel adoption must preserve or atomically unify the invariant |
 | Person/credentials/sessions | `Person` (single login identity, org-scoped, globally-unique email) + `UserCredential`/`MFAMethod`/`Session`/`ApiKey` (colon-namespaced key scopes) | migrate-later | Maps cleanly to kernel Party/identity; Person is load-bearing across HR/RBAC/audit FKs — adapter first, migrate when kernel auth is proven |
-| Multi-app SSO | Shared auth **database** on the provider + second engine (`AUTH_DATABASE_URL`, `app/services/sso/`) | **retire** | Cross-app DB coupling contradicts the Dotmac API/webhook-only integration standard; replace with the kernel identity/session contract |
+| External identity | OIDC Authorization Code + PKCE adapter (`app/services/sso/oidc.py`) + ERP-owned `federated_identities` bindings and local sessions | adapt | Shared auth DB, cross-app JWT secret, and shared-cookie paths retired. The provider proves identity only; ERP authorization remains local and the provider is replaceable by configuration and binding migration |
 | Employee / Customer / Supplier | `hr.employee` (1:1 Person), `ar.customer`, `ap.supplier` — counterparties carry no Person link | product-owned | Whether kernel Party absorbs counterparties is a later explicit decision; today there is no link to confuse |
 | RBAC | Global `roles`/`permissions`/`role_permissions`/`person_roles` + dependency guards; colon-namespaced read/manage codes seeded by `scripts/seed_rbac.py`; admin bypass; fail-closed unseeded keys | reuse (pattern) / adapt (storage) | This is the fleet-pattern source. **Decision needed:** tables are global, not org-scoped — safe only via the implicit one-org-per-person invariant. Also: the permission-check join is duplicated inline 4× across guard families (no `has_permission` owner) |
 | Settings + feature flags | `settings_spec.py` registry + `domain_settings` (org override → global → default, typed, history, cache, secrets crypto); flags = `feature_flag_registry` metadata + `domain='features'` rows; flags gate router inclusion | adapt | The most kernel-shaped subsystem in the repo. Findings: 7+ modules construct `DomainSetting` directly (history only on the canonical service path); flag authority split across spec/seed/registry |
@@ -83,8 +83,10 @@ Classifications: **reuse** (adopt kernel contract nearly as-is / lift into kerne
    startup, but signature verification cannot genuinely pass. Decide: wire a real
    key (build-time, per-product) or gate the module off until the kernel licensing
    contract lands.
-4. **Shared-auth-DB SSO** — violates the API/webhook-only integration standard;
-   retirement target once kernel identity exists.
+4. **External identity cutover** — shared-auth-DB SSO is retired. Production
+   cutover still requires provisioning issuer/subject bindings and OIDC client
+   configuration before enabling `OIDC_ENABLED`; local login remains the
+   fallback until that operational gate is complete.
 5. **DomainSetting multi-writer** — 7+ modules construct rows directly; setting
    history is only guaranteed through the canonical service. Plus flag authority
    split across spec list, seed list, and registry table.

@@ -101,6 +101,19 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 ),
             ),
             SOTService(
+                name="auth.oidc",
+                module="app.services.sso.oidc",
+                owns=(
+                    "OIDC Authorization Code + PKCE protocol exchange",
+                    "issuer/subject to ERP person binding resolution",
+                ),
+                depends_on=("auth.flow", "auth.rbac"),
+                notes=(
+                    "The identity provider proves identity only. ERP owns its "
+                    "sessions, cookies, roles, permissions, and user status."
+                ),
+            ),
+            SOTService(
                 name="auth.rbac",
                 module="app.services.rbac",
                 owns=(
@@ -116,9 +129,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         ),
         entrypoints=("app.api.auth_flow", "app.web.auth", "app.api.rbac"),
         rule=(
-            "Person is the single login identity; credentials, sessions, MFA, "
-            "and API keys bind to person_id. Counterparties (Customer, "
-            "Supplier) are not identities."
+            "Person is the single ERP login identity; credentials, sessions, "
+            "MFA, API keys, and federated issuer/subject bindings resolve to "
+            "person_id. External authorization claims and counterparties "
+            "(Customer, Supplier) are not ERP identities or permission owners."
         ),
     ),
     DomainSOT(
@@ -284,7 +298,9 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 notes=(
                     "Pull-based per the checked-in contract: Sub owns ISP "
                     "billing facts, ERP owns accounting; webhook ingress "
-                    "feeds the same service — no second decision path."
+                    "feeds the same service — no second decision path. The "
+                    "adapter never promotes Sub's customer tax identifier into "
+                    "ERP's locally governed customer tax-identity field."
                 ),
             ),
             SOTService(
@@ -306,7 +322,9 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         rule=(
             "External systems are transports or explicitly contracted "
             "authorities; local mirrors are rebuildable projections with "
-            "reconciliation paths."
+            "reconciliation paths. ERP remains independently replaceable: no "
+            "direct external database access, cross-system foreign keys, shared "
+            "transactions, or shared business-domain runtime."
         ),
     ),
     DomainSOT(

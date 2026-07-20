@@ -3,9 +3,9 @@ Auth web view service.
 
 Provides response builders for auth-related web routes.
 
-SSO Support:
-When SSO is enabled and this app is an SSO client (not provider),
-login pages redirect to the SSO provider for authentication.
+OIDC Support:
+When OIDC is enabled, login pages use Authorization Code + PKCE. ERP then
+creates its own local session from a pre-provisioned federated identity binding.
 """
 
 import logging
@@ -26,9 +26,13 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import SessionLocal, get_auth_db_session
-from app.net import get_request_host, get_request_scheme
+from app.db import SessionLocal
 from app.services.auth_flow import AuthFlow, hash_session_token
+from app.services.sso.oidc import (
+    OIDC_STATE_COOKIE,
+    OIDC_STATE_TTL_SECONDS,
+    oidc_client,
+)
 from app.templates import templates
 from app.web.deps import WebAuthContext, brand_context, org_brand_context
 
@@ -49,7 +53,6 @@ def _is_safe_redirect_url(url: str, request: Request) -> bool:
     A URL is considered safe if:
     - It's a relative path (starts with /)
     - It's an absolute URL to the same host
-    - For SSO, it's to an allowed SSO domain
 
     Args:
         url: The redirect URL to validate
@@ -83,17 +86,7 @@ def _is_safe_redirect_url(url: str, request: Request) -> bool:
     request_host = request.url.netloc.split(":")[0].lower()
     target_host = (parsed.netloc.split(":")[0]).lower()
 
-    # Same host is always safe
-    if target_host == request_host:
-        return True
-
-    # For SSO, allow redirect to SSO cookie domain
-    if settings.sso_enabled and settings.sso_cookie_domain:
-        sso_domain = settings.sso_cookie_domain.lstrip(".")
-        if target_host == sso_domain or target_host.endswith(f".{sso_domain}"):
-            return True
-
-    return False
+    return target_host == request_host
 
 
 def _sanitize_redirect_url(url: str, request: Request, default: str = "/") -> str:
@@ -110,33 +103,28 @@ def _sanitize_redirect_url(url: str, request: Request, default: str = "/") -> st
 class AuthWebService:
     """View service for auth web routes."""
 
-    def _get_sso_login_url(self, request: Request, next_url: str) -> str | None:
-        """Get SSO provider login URL if this is an SSO client.
-
-        Returns None if SSO is not enabled or this is the SSO provider.
-        """
-        if not settings.sso_enabled:
+    def _oidc_login_response(
+        self,
+        request: Request,
+        next_url: str,
+        db: "Session | None",
+    ) -> RedirectResponse | None:
+        if not settings.oidc_enabled:
             return None
-        if settings.sso_provider_mode:
-            # This is the SSO provider, handle login locally
-            return None
-        if not settings.sso_provider_url:
-            # No SSO provider URL configured
-            return None
-
-        # Build redirect URL back to this app.
-        # next_url may already be an absolute URL if it passed sanitization.
-        parsed_next = urlparse(next_url)
-        if parsed_next.scheme in ("http", "https") and parsed_next.netloc:
-            redirect_url = next_url
-        else:
-            scheme = get_request_scheme(request)
-            host = get_request_host(request) or request.url.netloc
-            redirect_url = f"{scheme}://{host}{next_url}"
-
-        # Build SSO provider login URL with redirect parameter
-        params = urlencode({"next": redirect_url})
-        return f"{settings.sso_provider_url}/login?{params}"
+        if db is None:
+            raise RuntimeError("OIDC login requires an ERP database session")
+        login = oidc_client.start_login(db, request, next_url)
+        response = RedirectResponse(url=login.authorization_url, status_code=302)
+        response.set_cookie(
+            key=OIDC_STATE_COOKIE,
+            value=login.state_cookie,
+            httponly=True,
+            secure=AuthFlow.refresh_cookie_settings(db)["secure"],
+            samesite="lax",
+            path="/auth/oidc",
+            max_age=OIDC_STATE_TTL_SECONDS,
+        )
+        return response
 
     def _get_brand_for_login(
         self,
@@ -192,10 +180,9 @@ class AuthWebService:
         if auth.is_authenticated:
             return RedirectResponse(url=safe_next_url, status_code=302)
 
-        # SSO: redirect to SSO provider for login (use sanitized URL)
-        sso_login_url = self._get_sso_login_url(request, safe_next_url)
-        if sso_login_url:
-            return RedirectResponse(url=sso_login_url, status_code=302)
+        oidc_response = self._oidc_login_response(request, safe_next_url, db)
+        if oidc_response:
+            return oidc_response
 
         brand = self._get_brand_for_login(db, org_slug)
 
@@ -225,10 +212,9 @@ class AuthWebService:
         if auth.is_authenticated and "admin" in auth.roles:
             return RedirectResponse(url=safe_next_url, status_code=302)
 
-        # SSO: redirect to SSO provider for admin login
-        sso_login_url = self._get_sso_login_url(request, safe_next_url)
-        if sso_login_url:
-            return RedirectResponse(url=sso_login_url, status_code=302)
+        oidc_response = self._oidc_login_response(request, safe_next_url, db)
+        if oidc_response:
+            return oidc_response
 
         brand = self._get_brand_for_login(db)
 
@@ -251,8 +237,8 @@ class AuthWebService:
     def logout_response(self, request: Request, next_url: str) -> RedirectResponse:
         """Revoke session and clear auth cookies.
 
-        For SSO: revokes session in shared database and clears cookies
-        with SSO domain so logout propagates across all apps.
+        Only the ERP-local session is revoked. Identity-provider single logout
+        is intentionally outside ERP's session authority.
         """
         # Sanitize redirect URL to prevent open redirect attacks
         safe_next_url = _sanitize_redirect_url(next_url, request, default="/login")
@@ -294,7 +280,7 @@ class AuthWebService:
         finally:
             db.close()
 
-        # Clear access token cookie with proper domain (for SSO)
+        # Clear ERP-local auth cookies.
         response.delete_cookie(
             key=access_settings["key"],
             domain=access_settings["domain"],
@@ -311,10 +297,7 @@ class AuthWebService:
         return response
 
     def _revoke_session(self, refresh_token: str, db) -> None:
-        """Revoke the session associated with the refresh token.
-
-        For SSO clients, revokes in the shared auth database.
-        """
+        """Revoke the ERP-local session associated with the refresh token."""
         from datetime import datetime
 
         from sqlalchemy import select
@@ -324,44 +307,44 @@ class AuthWebService:
 
         token_hash = hash_session_token(refresh_token)
 
-        # Determine which database to use for session revocation
-        if settings.sso_enabled and not settings.sso_provider_mode:
-            # SSO client - revoke in shared auth database
-            auth_db = get_auth_db_session()
-            try:
-                session = auth_db.scalar(
-                    select(AuthSession).where(
-                        AuthSession.token_hash == token_hash,
-                        AuthSession.revoked_at.is_(None),
-                    )
+        try:
+            session = db.scalar(
+                select(AuthSession).where(
+                    AuthSession.token_hash == token_hash,
+                    AuthSession.revoked_at.is_(None),
                 )
-                if session:
-                    session.status = SessionStatus.revoked
-                    session.revoked_at = datetime.now(UTC)
-                    auth_db.commit()
-                    logger.info("SSO session revoked: %s", session.id)
-            except Exception as e:
-                logger.warning("Failed to revoke SSO session: %s", e)
-                auth_db.rollback()
-            finally:
-                auth_db.close()
-        else:
-            # SSO provider or non-SSO - revoke in local database
-            try:
-                session = db.scalar(
-                    select(AuthSession).where(
-                        AuthSession.token_hash == token_hash,
-                        AuthSession.revoked_at.is_(None),
-                    )
-                )
-                if session:
-                    session.status = SessionStatus.revoked
-                    session.revoked_at = datetime.now(UTC)
-                    db.commit()
-                    logger.info("Session revoked: %s", session.id)
-            except Exception as e:
-                logger.warning("Failed to revoke session: %s", e)
-                db.rollback()
+            )
+            if session:
+                session.status = SessionStatus.revoked
+                session.revoked_at = datetime.now(UTC)
+                db.commit()
+                logger.info("Session revoked: %s", session.id)
+        except Exception as e:
+            logger.warning("Failed to revoke session: %s", e)
+            db.rollback()
+
+    def oidc_callback_response(
+        self,
+        request: Request,
+        *,
+        code: str,
+        state: str,
+        state_cookie: str | None,
+        db: "Session",
+    ) -> RedirectResponse:
+        authentication = oidc_client.complete_login(
+            db,
+            request,
+            code=code,
+            state=state,
+            state_cookie=state_cookie,
+        )
+        next_url = _sanitize_redirect_url(authentication.next_url, request, default="/")
+        tokens = AuthFlow._issue_tokens(db, authentication.person_id, request)
+        response = RedirectResponse(url=next_url, status_code=302)
+        AuthFlow.set_auth_cookies(db, response, tokens)
+        response.delete_cookie(key=OIDC_STATE_COOKIE, path="/auth/oidc")
+        return response
 
     def forgot_password_response(
         self,

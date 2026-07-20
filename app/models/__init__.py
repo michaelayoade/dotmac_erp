@@ -22,6 +22,7 @@ from app.models.audit_field_tracking import FieldChangeLog  # noqa: F401
 from app.models.auth import (  # noqa: F401
     ApiKey,
     AuthProvider,
+    FederatedIdentity,
     MFAMethod,
     MFAMethodType,
     Session,
