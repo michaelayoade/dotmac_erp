@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, BinaryIO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -35,6 +35,7 @@ from app.models.people.hr import (
     Skill,
     SkillCategory,
 )
+from app.services.file_upload import FileUploadError, get_employee_document_upload
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +187,33 @@ class EmployeeDocumentService:
     ) -> EmployeeDocument:
         """Create a new document record."""
         self._get_employee(employee_id)
+        return self._create_document_record(
+            employee_id=employee_id,
+            document_type=document_type,
+            document_name=document_name,
+            file_path=file_path,
+            file_name=file_name,
+            file_size=file_size,
+            mime_type=mime_type,
+            description=description,
+            issue_date=issue_date,
+            expiry_date=expiry_date,
+        )
+
+    def _create_document_record(
+        self,
+        employee_id: uuid.UUID,
+        document_type: DocumentType,
+        document_name: str,
+        file_path: str,
+        file_name: str,
+        file_size: int | None = None,
+        mime_type: str | None = None,
+        description: str | None = None,
+        issue_date: date | None = None,
+        expiry_date: date | None = None,
+    ) -> EmployeeDocument:
+        """Persist document metadata after employee ownership is validated."""
         doc = EmployeeDocument(
             organization_id=self.organization_id,
             employee_id=employee_id,
@@ -202,6 +230,69 @@ class EmployeeDocumentService:
         self.db.add(doc)
         self.db.flush()
         return doc
+
+    def upload_document(
+        self,
+        employee_id: uuid.UUID,
+        document_type: DocumentType,
+        document_name: str,
+        file_content: BinaryIO,
+        file_name: str,
+        content_type: str | None,
+        description: str | None = None,
+        issue_date: date | None = None,
+        expiry_date: date | None = None,
+    ) -> EmployeeDocument:
+        """Upload a file and create its tenant-scoped employee document record."""
+        self._get_employee(employee_id)
+
+        original_filename = file_name.strip()
+        if not original_filename:
+            raise EmployeeExtendedDataError("Select a file to upload")
+
+        file_bytes = file_content.read()
+        if not file_bytes:
+            raise EmployeeExtendedDataError("The selected file is empty")
+
+        upload_service = get_employee_document_upload()
+        try:
+            upload_result = upload_service.save(
+                file_data=file_bytes,
+                content_type=content_type or "application/octet-stream",
+                subdirs=(str(self.organization_id), str(employee_id)),
+                original_filename=original_filename,
+            )
+        except FileUploadError as exc:
+            raise EmployeeExtendedDataError(str(exc)) from exc
+
+        try:
+            document = self._create_document_record(
+                employee_id=employee_id,
+                document_type=document_type,
+                document_name=document_name,
+                file_path=upload_result.relative_path,
+                file_name=original_filename,
+                file_size=upload_result.file_size,
+                mime_type=content_type,
+                description=description,
+                issue_date=issue_date,
+                expiry_date=expiry_date,
+            )
+        except Exception:
+            try:
+                upload_service.delete(upload_result.relative_path)
+            except Exception:
+                logger.exception(
+                    "Failed to clean up employee document upload after database error"
+                )
+            raise
+
+        logger.info(
+            "Uploaded employee document %s for employee %s",
+            document.document_id,
+            employee_id,
+        )
+        return document
 
     def update_document(
         self,

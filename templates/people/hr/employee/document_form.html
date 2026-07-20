@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 
 {% block page_title %}Upload Document - {{ employee.full_name }}{% endblock %}
 
@@ -25,8 +26,8 @@
     </div>
     {% endif %}
 
-    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/documents/new" class="space-y-6">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/documents/new" enctype="multipart/form-data" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
 
         <div class="card">
             <div class="card-header">
@@ -66,20 +67,14 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">File Information</h3>
             </div>
             <div class="card-body space-y-4">
-                <div>
-                    <label for="file_path" class="form-label required">File Path/URL</label>
-                    <input type="text" name="file_path" id="file_path" required
-                           class="form-input w-full" value="{{ form_data.file_path or '' }}"
-                           placeholder="/uploads/documents/file.pdf or https://...">
-                    <p class="text-xs text-slate-500 mt-1">Storage path or URL where the file is stored.</p>
-                </div>
-
-                <div>
-                    <label for="file_name" class="form-label required">Original Filename</label>
-                    <input type="text" name="file_name" id="file_name" required
-                           class="form-input w-full" value="{{ form_data.file_name or '' }}"
-                           placeholder="contract.pdf">
-                </div>
+                {{ file_upload_zone(
+                    name="file",
+                    label="File",
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png",
+                    max_size_mb=10,
+                    hint="Max 10MB. Allowed: PDF, Word, JPEG, and PNG files.",
+                    required=true
+                ) }}
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
