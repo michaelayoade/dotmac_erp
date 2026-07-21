@@ -227,3 +227,40 @@ def test_create_document_route_requires_hr_access():
     )
 
     assert auth_dependency.dependency is require_hr_access
+
+
+def test_download_document_route_streams_resolved_document():
+    organization_id = uuid4()
+    employee_id = uuid4()
+    document_id = uuid4()
+
+    class _DocumentService:
+        def __init__(self, db, org_id):
+            assert org_id == organization_id
+
+        def resolve_owned_document_download(self, employee_id_arg, document_id_arg):
+            assert employee_id_arg == employee_id
+            assert document_id_arg == document_id
+            return SimpleNamespace(
+                chunks=iter([b"pdf-bytes"]),
+                content_type="application/pdf",
+                content_length=9,
+                filename="safe.pdf",
+            )
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            employee_document_routes,
+            "EmployeeDocumentService",
+            _DocumentService,
+        )
+        response = employee_document_routes.download_document(
+            employee_id=str(employee_id),
+            document_id=str(document_id),
+            auth=SimpleNamespace(organization_id=organization_id),
+            db=MagicMock(),
+        )
+
+    assert response.status_code == 200
+    assert "attachment;" in response.headers["Content-Disposition"]
+    assert "safe.pdf" in response.headers["Content-Disposition"]

@@ -262,6 +262,8 @@ The DotMac ERP is a well-architected, primarily feature-complete financial and H
 - ✅ Employee Lifecycle (onboarding, probation, offboarding)
 - ✅ Job Descriptions
 - ✅ Employee Info Change Requests
+  Self-service remains a submission adapter only. HR is the approval owner for My Info plus extended-profile sections covering qualifications, certifications, skills, and dependants.
+  Approved changes update authoritative HR records only after request review. Approval and verification remain separate, and section ownership stays tenant-scoped to the authenticated employee.
 - ✅ Handbook Management
 - ✅ Onboarding Checklists
 - ✅ Location Management

@@ -12,6 +12,7 @@ from app.models.people.hr.info_change_request import (
     InfoChangeType,
 )
 from app.services.people.hr.info_change_service import InfoChangeService
+from app.services.people.self_service_web import self_service_web_service
 from app.templates import templates
 from app.web.deps import get_db_for_org, WebAuthContext, base_context, require_hr_access
 
@@ -132,6 +133,7 @@ def info_change_request_detail(
             "request_item": req,
             "success": success,
             "error": error,
+            "has_pending_evidence": bool(req.pending_document_path),
         }
     )
     return templates.TemplateResponse(
@@ -222,4 +224,19 @@ def reject_info_change_request(
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Rejected",
         status_code=303,
+    )
+
+
+@router.get("/info-changes/{request_id}/evidence")
+def download_info_change_evidence(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Download pending evidence for an info change request."""
+    return self_service_web_service.download_pending_info_change_evidence_response(
+        auth,
+        db,
+        request_id=request_id,
+        require_owner_only=False,
     )

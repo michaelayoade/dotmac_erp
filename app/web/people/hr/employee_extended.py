@@ -6,6 +6,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
@@ -219,6 +220,44 @@ def create_document(
         "people/hr/employee/document_form.html",
         context,
         status_code=400,
+    )
+
+
+@router.get("/employees/{employee_id}/documents/{document_id}/download")
+def download_document(
+    employee_id: str,
+    document_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Stream an employee document for authorized HR users."""
+    org_id = coerce_uuid(auth.organization_id)
+    emp_id = coerce_uuid(employee_id)
+    doc_svc = EmployeeDocumentService(db, org_id)
+    try:
+        resolved = doc_svc.resolve_owned_document_download(
+            emp_id,
+            coerce_uuid(document_id),
+        )
+    except EmployeeExtendedDataError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+
+    from fastapi.responses import StreamingResponse
+    from urllib.parse import quote
+
+    quoted = quote(resolved.filename)
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{resolved.filename}"; '
+            f"filename*=UTF-8''{quoted}"
+        )
+    }
+    if resolved.content_length is not None:
+        headers["Content-Length"] = str(resolved.content_length)
+    return StreamingResponse(
+        resolved.chunks,
+        media_type=resolved.content_type,
+        headers=headers,
     )
 
 
