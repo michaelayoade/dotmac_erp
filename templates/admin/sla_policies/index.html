@@ -1,0 +1,109 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import empty_state, icon_svg, status_badge %}
+
+{% block page_title %}SLA Policies{% endblock %}
+{% block page_subtitle %}Create, review, and publish service level agreement content{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if request.query_params.get("created") %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        SLA policy draft created successfully.
+    </div>
+    {% elif request.query_params.get("updated") %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        SLA policy updated successfully.
+    </div>
+    {% elif request.query_params.get("published") %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        SLA policy published successfully.
+    </div>
+    {% elif request.query_params.get("archived") %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        SLA policy archived successfully.
+    </div>
+    {% endif %}
+
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+            {{ policies | length }} polic{{ "y" if policies | length == 1 else "ies" }}
+        </p>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ url_for('sla_policies_page') }}" class="btn btn-secondary">
+                {{ icon_svg("eye", "h-4 w-4") }}
+                View Published Page
+            </a>
+            <a href="{{ url_for('admin_sla_policy_new') }}" class="btn btn-primary">
+                {{ icon_svg("plus", "h-4 w-4") }}
+                Create SLA Policy
+            </a>
+        </div>
+    </div>
+
+    <div id="results-container">
+        <div class="admin-card overflow-hidden">
+            {% if policies %}
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Policy</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Updated</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        {% for policy in policies %}
+                        <tr class="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td class="px-6 py-4">
+                                <p class="font-medium text-slate-900 dark:text-white">{{ policy.title }}</p>
+                                {% if policy.summary %}
+                                <p class="mt-1 max-w-xl truncate text-sm text-slate-500 dark:text-slate-400">{{ policy.summary }}</p>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4">{{ status_badge(policy.status.value, "sm") }}</td>
+                            <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                                {{ policy.updated_at | format_date }}
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex flex-wrap justify-end gap-2">
+                                    <a href="{{ url_for('admin_sla_policy_edit', article_id=policy.article_id) }}" class="btn btn-secondary btn-sm">
+                                        {{ icon_svg("edit", "h-4 w-4") }}
+                                        Edit
+                                    </a>
+                                    {% if policy.status.value != "PUBLISHED" %}
+                                    <form action="{{ url_for('admin_sla_policy_publish', article_id=policy.article_id) }}" method="POST">
+                                        {{ request.state.csrf_form | safe }}
+                                        <button type="submit" class="btn btn-primary btn-sm">Publish</button>
+                                    </form>
+                                    {% endif %}
+                                    {% if policy.status.value != "ARCHIVED" %}
+                                    <form action="{{ url_for('admin_sla_policy_archive', article_id=policy.article_id) }}" method="POST">
+                                        {{ request.state.csrf_form | safe }}
+                                        <button type="submit" class="btn btn-secondary btn-sm">
+                                            {{ icon_svg("archive", "h-4 w-4") }}
+                                            Archive
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            {{ empty_state(
+                "No SLA policies yet",
+                "Create the first policy as a draft, then publish it when it is ready.",
+                "document",
+                "Create SLA Policy",
+                url_for('admin_sla_policy_new')
+            ) }}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
