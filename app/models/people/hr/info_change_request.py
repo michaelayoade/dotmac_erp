@@ -35,6 +35,18 @@ class InfoChangeType(str, enum.Enum):
     PENSION_INFO = "PENSION_INFO"  # RSA PIN, PFA code
     NHF_INFO = "NHF_INFO"  # NHF number
     COMBINED = "COMBINED"  # Multiple types in one request
+    QUALIFICATION = "QUALIFICATION"
+    CERTIFICATION = "CERTIFICATION"
+    SKILL = "SKILL"
+    DEPENDENT = "DEPENDENT"
+    DOCUMENT = "DOCUMENT"
+
+
+class InfoChangeOperation(str, enum.Enum):
+    """Requested operation for the target section."""
+
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
 
 
 class InfoChangeStatus(str, enum.Enum):
@@ -95,10 +107,21 @@ class EmployeeInfoChangeRequest(Base):
         Enum(InfoChangeType, name="info_change_type", schema="hr"),
         nullable=False,
     )
+    operation: Mapped[InfoChangeOperation] = mapped_column(
+        Enum(InfoChangeOperation, name="info_change_operation", schema="hr"),
+        nullable=False,
+        default=InfoChangeOperation.UPDATE,
+        server_default=InfoChangeOperation.UPDATE.value,
+    )
     status: Mapped[InfoChangeStatus] = mapped_column(
         Enum(InfoChangeStatus, name="info_change_status", schema="hr"),
         default=InfoChangeStatus.PENDING,
         nullable=False,
+    )
+    target_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Target extended-profile record for update requests",
     )
 
     # The actual changes
@@ -111,6 +134,30 @@ class EmployeeInfoChangeRequest(Base):
         JSONB,
         nullable=False,
         comment="Previous values before change (for audit)",
+    )
+    pending_document_path: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Pending evidence storage path scoped to the request",
+    )
+    pending_document_name: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Original filename for pending evidence",
+    )
+    pending_document_size: Mapped[int | None] = mapped_column(
+        nullable=True,
+        comment="Pending evidence size in bytes",
+    )
+    pending_document_mime_type: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Pending evidence MIME type",
+    )
+    pending_document_checksum: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Pending evidence checksum when available",
     )
 
     # Request metadata
@@ -211,4 +258,8 @@ class EmployeeInfoChangeRequest(Base):
         return ", ".join(parts) if parts else "No changes"
 
     def __repr__(self) -> str:
-        return f"<InfoChangeRequest {self.request_id} emp={self.employee_id} status={self.status.value}>"
+        return (
+            f"<InfoChangeRequest {self.request_id} emp={self.employee_id} "
+            f"type={self.change_type.value} op={self.operation.value} "
+            f"status={self.status.value}>"
+        )

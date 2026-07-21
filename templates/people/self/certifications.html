@@ -1,0 +1,84 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import status_badge %}
+
+{% block page_title %}Certifications{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people/self" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Self Service</a></li>
+        <li>/</li>
+        <li class="font-medium text-slate-900 dark:text-white" aria-current="page">Certifications</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-6">
+    <div class="card p-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Certifications</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Submit professional certification changes for HR approval. Approval does not mark evidence as verified.</p>
+            </div>
+            {% if pending_request %}<div class="space-y-2 text-right">{{ status_badge(pending_request.status.value, 'sm') }}<p class="text-xs text-amber-700 dark:text-amber-300">This section is locked until the pending request is reviewed.</p></div>{% endif %}
+        </div>
+    </div>
+    <div class="card p-4">
+        <div class="flex flex-wrap gap-2">
+            <a href="/people/self/qualifications" class="btn btn-secondary">Qualifications</a>
+            <a href="/people/self/certifications" class="btn btn-secondary">Certifications</a>
+            <a href="/people/self/skills" class="btn btn-secondary">Skills</a>
+            <a href="/people/self/dependents" class="btn btn-secondary">Dependants</a>
+            <a href="/people/self/documents" class="btn btn-secondary">My Documents</a>
+        </div>
+    </div>
+    {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ error }}</div>{% endif %}
+    {% if pending_request %}
+    <div class="card p-6">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Pending Request</h3>
+        <div class="mt-3 grid gap-3 md:grid-cols-3 text-sm">
+            <div><span class="text-slate-500 dark:text-slate-400">Operation</span><p class="font-medium text-slate-900 dark:text-white">{{ pending_request.operation.value | title }}</p></div>
+            <div><span class="text-slate-500 dark:text-slate-400">Submitted</span><p class="font-medium text-slate-900 dark:text-white">{{ pending_request.created_at | format_datetime if pending_request.created_at else '-' }}</p></div>
+            <div><span class="text-slate-500 dark:text-slate-400">Target</span><p class="font-medium text-slate-900 dark:text-white">{{ pending_request.target_record_id if pending_request.target_record_id else 'New certification' }}</p></div>
+        </div>
+        {% if pending_request.pending_document_path %}<a href="/people/self/info-change-evidence/{{ pending_request.request_id }}" class="mt-4 inline-flex text-sm font-medium text-violet-600 hover:underline dark:text-violet-400">Download pending evidence</a>{% endif %}
+    </div>
+    {% endif %}
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700"><h3 class="text-lg font-semibold text-slate-900 dark:text-white">Current Certifications</h3></div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for record in records %}
+            <div class="px-6 py-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">{{ record.certification_name }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ record.issuing_authority }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Issued {{ record.issue_date | format_date if record.issue_date else '-' }}</p>
+                </div>
+                <a href="/people/self/certifications?edit_id={{ record.certification_id }}" class="btn btn-secondary" {% if pending_request %}aria-disabled="true"{% endif %}>Edit</a>
+            </div>
+            {% else %}
+            <div class="px-6 py-8 text-sm text-slate-500 dark:text-slate-400">No certifications have been recorded yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="card p-6 space-y-4">
+        {{ request.state.csrf_form | safe }}
+        {% if edit_record %}<input type="hidden" name="certification_id" value="{{ edit_record.certification_id }}">{% endif %}
+        <div><h3 class="text-lg font-semibold text-slate-900 dark:text-white">{{ "Edit Certification" if edit_record else "Add Certification" }}</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Supporting evidence is optional and remains attached to the pending request until HR approves it.</p></div>
+        <fieldset class="grid gap-4 md:grid-cols-2" {% if pending_request %}disabled{% endif %}>
+            <div><label for="certification_name" class="form-label">Certification Name</label><input id="certification_name" name="certification_name" class="form-input w-full" value="{{ form_data.get('certification_name') if form_data else (edit_record.certification_name if edit_record else '') }}"></div>
+            <div><label for="issuing_authority" class="form-label">Issuing Authority</label><input id="issuing_authority" name="issuing_authority" class="form-input w-full" value="{{ form_data.get('issuing_authority') if form_data else (edit_record.issuing_authority if edit_record else '') }}"></div>
+            <div><label for="issue_date" class="form-label">Issue Date</label><input type="date" id="issue_date" name="issue_date" class="form-input w-full" value="{{ form_data.get('issue_date') if form_data else (edit_record.issue_date.isoformat() if edit_record and edit_record.issue_date else '') }}"></div>
+            <div><label for="expiry_date" class="form-label">Expiry Date</label><input type="date" id="expiry_date" name="expiry_date" class="form-input w-full" value="{{ form_data.get('expiry_date') if form_data else (edit_record.expiry_date.isoformat() if edit_record and edit_record.expiry_date else '') }}"></div>
+            <div><label class="form-label">Does Not Expire</label><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="does_not_expire" value="1" {% set dne_value = form_data.get('does_not_expire') if form_data else (edit_record.does_not_expire if edit_record else false) %}{% if dne_value %}checked{% endif %}>No expiry date</label></div>
+            <div><label for="credential_id" class="form-label">Credential ID</label><input id="credential_id" name="credential_id" class="form-input w-full" value="{{ form_data.get('credential_id') if form_data else (edit_record.credential_id if edit_record and edit_record.credential_id else '') }}"></div>
+            <div class="md:col-span-2"><label for="credential_url" class="form-label">Verification URL</label><input id="credential_url" name="credential_url" class="form-input w-full" value="{{ form_data.get('credential_url') if form_data else (edit_record.credential_url if edit_record and edit_record.credential_url else '') }}"></div>
+            <div class="md:col-span-2"><label for="supporting_file" class="form-label">Supporting File</label><input id="supporting_file" type="file" name="supporting_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="form-input w-full"><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Max 10 MB. Approved types only.</p></div>
+            <div class="md:col-span-2"><label for="notes" class="form-label">Notes</label><textarea id="notes" name="notes" rows="3" class="form-input w-full">{{ form_data.get('notes') if form_data else (edit_record.notes if edit_record and edit_record.notes else '') }}</textarea></div>
+        </fieldset>
+        <div class="flex justify-end"><button type="submit" class="btn btn-primary" {% if pending_request %}disabled{% endif %}>Submit for HR Approval</button></div>
+    </form>
+</div>
+{% endblock %}
