@@ -248,8 +248,7 @@ def download_document(
     quoted = quote(resolved.filename)
     headers = {
         "Content-Disposition": (
-            f'attachment; filename="{resolved.filename}"; '
-            f"filename*=UTF-8''{quoted}"
+            f"attachment; filename=\"{resolved.filename}\"; filename*=UTF-8''{quoted}"
         )
     }
     if resolved.content_length is not None:

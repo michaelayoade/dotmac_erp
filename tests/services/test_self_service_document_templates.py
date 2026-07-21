@@ -14,9 +14,7 @@ def test_self_service_document_form_uses_multipart_csrf_and_no_employee_id():
 
 
 def test_self_service_document_listing_links_to_secure_downloads():
-    template = Path("templates/people/self/documents.html").read_text(
-        encoding="utf-8"
-    )
+    template = Path("templates/people/self/documents.html").read_text(encoding="utf-8")
 
     assert "/people/self/documents/{{ doc.document_id }}/download" in template
     assert "/people/self/documents/pending/{{ req.request_id }}/download" in template

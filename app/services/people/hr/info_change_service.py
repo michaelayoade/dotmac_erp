@@ -266,10 +266,18 @@ class InfoChangeService:
             requester_notes=requester_notes,
             expires_at=expires_at,
             pending_document_path=pending_evidence.path if pending_evidence else None,
-            pending_document_name=pending_evidence.file_name if pending_evidence else None,
-            pending_document_size=pending_evidence.file_size if pending_evidence else None,
-            pending_document_mime_type=pending_evidence.mime_type if pending_evidence else None,
-            pending_document_checksum=pending_evidence.checksum if pending_evidence else None,
+            pending_document_name=pending_evidence.file_name
+            if pending_evidence
+            else None,
+            pending_document_size=pending_evidence.file_size
+            if pending_evidence
+            else None,
+            pending_document_mime_type=pending_evidence.mime_type
+            if pending_evidence
+            else None,
+            pending_document_checksum=pending_evidence.checksum
+            if pending_evidence
+            else None,
         )
         self.db.add(request)
         self.db.flush()
@@ -932,12 +940,16 @@ class InfoChangeService:
             "is_ongoing": bool(record.is_ongoing),
             "grade": record.grade,
             "score": str(record.score) if record.score is not None else None,
-            "max_score": str(record.max_score) if record.max_score is not None else None,
+            "max_score": str(record.max_score)
+            if record.max_score is not None
+            else None,
             "notes": record.notes,
             "document_id": str(record.document_id) if record.document_id else None,
         }
 
-    def _validate_qualification_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _validate_qualification_payload(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         qualification_type_raw = self._clean_text(payload.get("qualification_type"))
         qualification_name = self._clean_text(payload.get("qualification_name"))
         institution_name = self._clean_text(payload.get("institution_name"))
@@ -968,7 +980,11 @@ class InfoChangeService:
             ("qualification_name", qualification_name, 200),
             ("field_of_study", self._clean_text(payload.get("field_of_study")), 200),
             ("institution_name", institution_name, 255),
-            ("institution_location", self._clean_text(payload.get("institution_location")), 200),
+            (
+                "institution_location",
+                self._clean_text(payload.get("institution_location")),
+                200,
+            ),
             ("grade", self._clean_text(payload.get("grade")), 50),
         ):
             self._require_length(value, field_name, max_length)
@@ -977,7 +993,9 @@ class InfoChangeService:
             "qualification_name": qualification_name,
             "field_of_study": self._clean_text(payload.get("field_of_study")),
             "institution_name": institution_name,
-            "institution_location": self._clean_text(payload.get("institution_location")),
+            "institution_location": self._clean_text(
+                payload.get("institution_location")
+            ),
             "start_date": start_date,
             "end_date": end_date,
             "is_ongoing": is_ongoing,
@@ -1044,7 +1062,9 @@ class InfoChangeService:
             "certification_name": record.certification_name,
             "issuing_authority": record.issuing_authority,
             "issue_date": record.issue_date.isoformat() if record.issue_date else None,
-            "expiry_date": record.expiry_date.isoformat() if record.expiry_date else None,
+            "expiry_date": record.expiry_date.isoformat()
+            if record.expiry_date
+            else None,
             "does_not_expire": bool(record.does_not_expire),
             "credential_id": record.credential_id,
             "credential_url": record.credential_url,
@@ -1052,7 +1072,9 @@ class InfoChangeService:
             "document_id": str(record.document_id) if record.document_id else None,
         }
 
-    def _validate_certification_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _validate_certification_payload(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         certification_name = self._clean_text(payload.get("certification_name"))
         issuing_authority = self._clean_text(payload.get("issuing_authority"))
         issue_date = self._coerce_date(payload.get("issue_date"), "issue_date")
@@ -1161,7 +1183,9 @@ class InfoChangeService:
         )
         if years_experience is not None and years_experience < 0:
             raise ValueError("Years of experience cannot be negative")
-        last_used_date = self._coerce_date(payload.get("last_used_date"), "last_used_date")
+        last_used_date = self._coerce_date(
+            payload.get("last_used_date"), "last_used_date"
+        )
         duplicate_stmt = select(func.count(EmployeeSkill.employee_skill_id)).where(
             EmployeeSkill.organization_id == organization_id,
             EmployeeSkill.employee_id == employee_id,
@@ -1248,7 +1272,9 @@ class InfoChangeService:
             raise ValueError("Invalid relationship") from exc
         gender_raw = self._clean_text(payload.get("gender"))
         gender = DependentGender(gender_raw) if gender_raw else None
-        emergency_priority_raw = self._clean_text(payload.get("emergency_contact_priority"))
+        emergency_priority_raw = self._clean_text(
+            payload.get("emergency_contact_priority")
+        )
         emergency_priority = (
             int(emergency_priority_raw) if emergency_priority_raw is not None else None
         )
@@ -1268,7 +1294,9 @@ class InfoChangeService:
         return {
             "full_name": full_name,
             "relationship": relationship,
-            "date_of_birth": self._coerce_date(payload.get("date_of_birth"), "date_of_birth"),
+            "date_of_birth": self._coerce_date(
+                payload.get("date_of_birth"), "date_of_birth"
+            ),
             "gender": gender.value if gender else None,
             "phone": self._clean_text(payload.get("phone")),
             "email": email_value,
@@ -1352,7 +1380,9 @@ class InfoChangeService:
         offset: int = 0,
     ) -> list[EmployeeInfoChangeRequest]:
         """List info change requests with optional filters and eager-loaded employee."""
-        self.expire_requests(organization_id, employee_id=employee_id, change_type=change_type)
+        self.expire_requests(
+            organization_id, employee_id=employee_id, change_type=change_type
+        )
         stmt = (
             select(EmployeeInfoChangeRequest)
             .options(joinedload(EmployeeInfoChangeRequest.employee))
@@ -1404,7 +1434,9 @@ class InfoChangeService:
         Returns:
             List of pending requests
         """
-        self.expire_requests(organization_id, employee_id=employee_id, change_type=change_type)
+        self.expire_requests(
+            organization_id, employee_id=employee_id, change_type=change_type
+        )
         stmt = (
             select(EmployeeInfoChangeRequest)
             .where(
@@ -1479,7 +1511,9 @@ class InfoChangeService:
         change_type: InfoChangeType | None = None,
     ) -> bool:
         """Check if employee has a pending change request in the requested scope."""
-        self.expire_requests(organization_id, employee_id=employee_id, change_type=change_type)
+        self.expire_requests(
+            organization_id, employee_id=employee_id, change_type=change_type
+        )
         count = self.db.scalar(
             select(func.count(EmployeeInfoChangeRequest.request_id)).where(
                 EmployeeInfoChangeRequest.organization_id == organization_id,
@@ -1502,7 +1536,9 @@ class InfoChangeService:
                     EmployeeInfoChangeRequest.organization_id == organization_id,
                     EmployeeInfoChangeRequest.employee_id == employee_id,
                     EmployeeInfoChangeRequest.status == InfoChangeStatus.PENDING,
-                    EmployeeInfoChangeRequest.change_type.in_(self.MY_INFO_CHANGE_TYPES),
+                    EmployeeInfoChangeRequest.change_type.in_(
+                        self.MY_INFO_CHANGE_TYPES
+                    ),
                 )
             )
         return (count or 0) > 0

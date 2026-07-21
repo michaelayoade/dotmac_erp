@@ -410,13 +410,18 @@ async def submit_qualification(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    qualification_id = coerce_uuid(_safe_form_text(form.get("qualification_id"))) if _safe_form_text(form.get("qualification_id")) else None
+    qualification_id = (
+        coerce_uuid(_safe_form_text(form.get("qualification_id")))
+        if _safe_form_text(form.get("qualification_id"))
+        else None
+    )
     payload = {
         "qualification_type": _safe_form_text(form.get("qualification_type")) or None,
         "qualification_name": _safe_form_text(form.get("qualification_name")) or None,
         "field_of_study": _safe_form_text(form.get("field_of_study")) or None,
         "institution_name": _safe_form_text(form.get("institution_name")) or None,
-        "institution_location": _safe_form_text(form.get("institution_location")) or None,
+        "institution_location": _safe_form_text(form.get("institution_location"))
+        or None,
         "start_date": _safe_form_text(form.get("start_date")) or None,
         "end_date": _safe_form_text(form.get("end_date")) or None,
         "is_ongoing": bool(form.get("is_ongoing")),
@@ -465,7 +470,11 @@ async def submit_certification(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    certification_id = coerce_uuid(_safe_form_text(form.get("certification_id"))) if _safe_form_text(form.get("certification_id")) else None
+    certification_id = (
+        coerce_uuid(_safe_form_text(form.get("certification_id")))
+        if _safe_form_text(form.get("certification_id"))
+        else None
+    )
     payload = {
         "certification_name": _safe_form_text(form.get("certification_name")) or None,
         "issuing_authority": _safe_form_text(form.get("issuing_authority")) or None,
@@ -516,7 +525,11 @@ async def submit_skill(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    employee_skill_id = coerce_uuid(_safe_form_text(form.get("employee_skill_id"))) if _safe_form_text(form.get("employee_skill_id")) else None
+    employee_skill_id = (
+        coerce_uuid(_safe_form_text(form.get("employee_skill_id")))
+        if _safe_form_text(form.get("employee_skill_id"))
+        else None
+    )
     payload = {
         "skill_id": _safe_form_text(form.get("skill_id")) or None,
         "proficiency_level": _safe_form_text(form.get("proficiency_level")) or None,
@@ -564,7 +577,11 @@ async def submit_dependent(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    dependent_id = coerce_uuid(_safe_form_text(form.get("dependent_id"))) if _safe_form_text(form.get("dependent_id")) else None
+    dependent_id = (
+        coerce_uuid(_safe_form_text(form.get("dependent_id")))
+        if _safe_form_text(form.get("dependent_id"))
+        else None
+    )
     payload = {
         "full_name": _safe_form_text(form.get("full_name")) or None,
         "relationship": _safe_form_text(form.get("relationship")) or None,
@@ -574,9 +591,13 @@ async def submit_dependent(
         "email": _safe_form_text(form.get("email")) or None,
         "address": _safe_form_text(form.get("address")) or None,
         "is_emergency_contact": bool(form.get("is_emergency_contact")),
-        "emergency_contact_priority": _safe_form_text(form.get("emergency_contact_priority")) or None,
+        "emergency_contact_priority": _safe_form_text(
+            form.get("emergency_contact_priority")
+        )
+        or None,
         "is_beneficiary": bool(form.get("is_beneficiary")),
-        "beneficiary_percentage": _safe_form_text(form.get("beneficiary_percentage")) or None,
+        "beneficiary_percentage": _safe_form_text(form.get("beneficiary_percentage"))
+        or None,
         "notes": _safe_form_text(form.get("notes")) or None,
     }
     return self_service_web_service.submit_extended_profile_response(

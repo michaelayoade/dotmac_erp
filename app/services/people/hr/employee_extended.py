@@ -625,8 +625,12 @@ class EmployeeQualificationService:
         """Update a qualification."""
         qual = self.get_qualification(qualification_id)
         merged = {
-            "qualification_type": kwargs.get("qualification_type", qual.qualification_type),
-            "qualification_name": kwargs.get("qualification_name", qual.qualification_name),
+            "qualification_type": kwargs.get(
+                "qualification_type", qual.qualification_type
+            ),
+            "qualification_name": kwargs.get(
+                "qualification_name", qual.qualification_name
+            ),
             "institution_name": kwargs.get("institution_name", qual.institution_name),
             "field_of_study": kwargs.get("field_of_study", qual.field_of_study),
             "institution_location": kwargs.get(
@@ -637,7 +641,9 @@ class EmployeeQualificationService:
             "end_date": kwargs.get("end_date", qual.end_date),
             "is_ongoing": kwargs.get("is_ongoing", qual.is_ongoing),
             "grade": kwargs.get("grade", qual.grade),
-            "score": kwargs.get("score", float(qual.score) if qual.score is not None else None),
+            "score": kwargs.get(
+                "score", float(qual.score) if qual.score is not None else None
+            ),
             "max_score": kwargs.get(
                 "max_score",
                 float(qual.max_score) if qual.max_score is not None else None,
@@ -727,7 +733,11 @@ class EmployeeCertificationService:
     ) -> None:
         certification_name_clean = _clean_text(certification_name)
         issuing_authority_clean = _clean_text(issuing_authority)
-        if not certification_name_clean or not issuing_authority_clean or not issue_date:
+        if (
+            not certification_name_clean
+            or not issuing_authority_clean
+            or not issue_date
+        ):
             raise EmployeeExtendedDataError(
                 "Certification name, issuing authority, and issue date are required"
             )
@@ -1525,8 +1535,12 @@ class EmployeeExtendedSelfServiceService:
 
     def list_profile(self, employee_id: uuid.UUID) -> dict[str, list[Any]]:
         return {
-            "qualifications": self.qualification_service.list_qualifications(employee_id),
-            "certifications": self.certification_service.list_certifications(employee_id),
+            "qualifications": self.qualification_service.list_qualifications(
+                employee_id
+            ),
+            "certifications": self.certification_service.list_certifications(
+                employee_id
+            ),
             "dependents": self.dependent_service.list_dependents(employee_id),
             "skills": self.skill_service.list_employee_skills(employee_id),
             "skill_catalog": self.catalog_service.list_skills(active_only=True),
@@ -1539,7 +1553,9 @@ class EmployeeExtendedSelfServiceService:
     ) -> EmployeeQualification:
         qualification = self.qualification_service.get_qualification(qualification_id)
         if qualification.employee_id != employee_id:
-            raise QualificationNotFoundError(f"Qualification {qualification_id} not found")
+            raise QualificationNotFoundError(
+                f"Qualification {qualification_id} not found"
+            )
         return qualification
 
     def get_owned_certification(
@@ -1549,7 +1565,9 @@ class EmployeeExtendedSelfServiceService:
     ) -> EmployeeCertification:
         certification = self.certification_service.get_certification(certification_id)
         if certification.employee_id != employee_id:
-            raise CertificationNotFoundError(f"Certification {certification_id} not found")
+            raise CertificationNotFoundError(
+                f"Certification {certification_id} not found"
+            )
         return certification
 
     def get_owned_dependent(

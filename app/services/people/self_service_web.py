@@ -80,7 +80,10 @@ from app.services.people.hr.employee_extended import (
     EmployeeExtendedSelfServiceService,
 )
 from app.services.people.hr.employee_types import EmployeeFilters
-from app.services.people.hr.info_change_service import InfoChangeService, PendingEvidence
+from app.services.people.hr.info_change_service import (
+    InfoChangeService,
+    PendingEvidence,
+)
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.leave import LeaveService
 from app.services.people.leave.leave_service import LeaveServiceError
@@ -512,7 +515,7 @@ class SelfServiceWebService:
         quoted = quote(filename)
         headers = {
             "Content-Disposition": (
-                f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quoted}'
+                f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted}"
             )
         }
         if content_length is not None:
@@ -1087,7 +1090,13 @@ class SelfServiceWebService:
         )
 
     @staticmethod
-    def _build_extended_query(base_path: str, *, success: str | None = None, error: str | None = None, edit_id: UUID | None = None) -> str:
+    def _build_extended_query(
+        base_path: str,
+        *,
+        success: str | None = None,
+        error: str | None = None,
+        edit_id: UUID | None = None,
+    ) -> str:
         params: dict[str, str] = {}
         if success:
             params["success"] = success
@@ -1149,12 +1158,16 @@ class SelfServiceWebService:
                 "field_of_study": record.field_of_study,
                 "institution_name": record.institution_name,
                 "institution_location": record.institution_location,
-                "start_date": record.start_date.isoformat() if record.start_date else None,
+                "start_date": record.start_date.isoformat()
+                if record.start_date
+                else None,
                 "end_date": record.end_date.isoformat() if record.end_date else None,
                 "is_ongoing": bool(record.is_ongoing),
                 "grade": record.grade,
                 "score": str(record.score) if record.score is not None else None,
-                "max_score": str(record.max_score) if record.max_score is not None else None,
+                "max_score": str(record.max_score)
+                if record.max_score is not None
+                else None,
                 "notes": record.notes,
                 "document_id": str(record.document_id) if record.document_id else None,
             }
@@ -1162,8 +1175,12 @@ class SelfServiceWebService:
             return {
                 "certification_name": record.certification_name,
                 "issuing_authority": record.issuing_authority,
-                "issue_date": record.issue_date.isoformat() if record.issue_date else None,
-                "expiry_date": record.expiry_date.isoformat() if record.expiry_date else None,
+                "issue_date": record.issue_date.isoformat()
+                if record.issue_date
+                else None,
+                "expiry_date": record.expiry_date.isoformat()
+                if record.expiry_date
+                else None,
                 "does_not_expire": bool(record.does_not_expire),
                 "credential_id": record.credential_id,
                 "credential_url": record.credential_url,
@@ -1369,7 +1386,9 @@ class SelfServiceWebService:
             item for item in all_requests if item.change_type == InfoChangeType.DOCUMENT
         ]
         pending_requests = [
-            item for item in document_requests if item.status == InfoChangeStatus.PENDING
+            item
+            for item in document_requests
+            if item.status == InfoChangeStatus.PENDING
         ]
         recent_history = [
             item
@@ -1395,7 +1414,9 @@ class SelfServiceWebService:
         context["can_team_expenses"] = self._has_team_expense_approvals(
             db, org_id, person_id, employee_id=employee_id
         )
-        return templates.TemplateResponse(request, "people/self/documents.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/documents.html", context
+        )
 
     def document_upload_form_response(
         self,
@@ -1426,7 +1447,9 @@ class SelfServiceWebService:
         employee = EmployeeExtendedSelfServiceService(
             db, org_id
         ).get_employee_for_person(person_id)
-        context = base_context(request, auth, "Upload Document", "self-documents", db=db)
+        context = base_context(
+            request, auth, "Upload Document", "self-documents", db=db
+        )
         context.update(
             {
                 "employee": employee,
@@ -1511,7 +1534,9 @@ class SelfServiceWebService:
         org_id = coerce_uuid(auth.organization_id)
         employee_id = self._get_employee_id(db, org_id, coerce_uuid(auth.person_id))
         try:
-            resolved = EmployeeDocumentService(db, org_id).resolve_owned_document_download(
+            resolved = EmployeeDocumentService(
+                db, org_id
+            ).resolve_owned_document_download(
                 employee_id,
                 document_id,
             )
@@ -1556,7 +1581,9 @@ class SelfServiceWebService:
 
         extended_service = EmployeeExtendedSelfServiceService(db, org_id)
         operation = (
-            InfoChangeOperation.UPDATE if record_id is not None else InfoChangeOperation.CREATE
+            InfoChangeOperation.UPDATE
+            if record_id is not None
+            else InfoChangeOperation.CREATE
         )
         pending_evidence = None
         upload_service = get_employee_document_upload()
@@ -1640,12 +1667,12 @@ class SelfServiceWebService:
         if require_owner_only:
             employee_id = self._get_employee_id(db, org_id, coerce_uuid(auth.person_id))
         try:
-            chunks, content_type, content_length, filename = (
-                InfoChangeService(db).resolve_pending_evidence_download(
-                    org_id,
-                    request_id,
-                    employee_id=employee_id,
-                )
+            chunks, content_type, content_length, filename = InfoChangeService(
+                db
+            ).resolve_pending_evidence_download(
+                org_id,
+                request_id,
+                employee_id=employee_id,
             )
         except ValueError as exc:
             raise HTTPException(status_code=404, detail="Evidence not found") from exc
