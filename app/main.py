@@ -108,6 +108,7 @@ from app.web.profile import router as profile_web_router
 from app.web.projects import router as projects_web_router
 from app.web.public_sector import router as public_sector_web_router
 from app.web.settings import router as module_settings_web_router
+from app.web.sla_policies import router as sla_policies_web_router
 from app.web.support import router as support_web_router
 from app.web.workflow_tasks import router as workflow_tasks_web_router
 from app.web_home import router as web_home_router
@@ -702,6 +703,7 @@ app.include_router(
 _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(service_hooks_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(web_home_router)
+app.include_router(sla_policies_web_router)
 app.include_router(help_web_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
