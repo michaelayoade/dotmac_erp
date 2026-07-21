@@ -1,0 +1,158 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
+
+{% block page_title %}{{ "Edit SLA Policy" if policy else "Create SLA Policy" }}{% endblock %}
+{% block page_subtitle %}{{ "Update the policy content without changing its publication status" if policy else "Create a draft policy for review and publication" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl space-y-6">
+    <a href="{{ url_for('admin_sla_policy_list') }}" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200">
+        {{ icon_svg("arrow-left", "h-4 w-4") }}
+        Back to SLA Policies
+    </a>
+
+    {% if policy %}
+    <div class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+        <span class="text-sm text-slate-500 dark:text-slate-400">Current status</span>
+        {{ status_badge(policy.status.value, "sm") }}
+    </div>
+    {% endif %}
+
+    <form
+        action="{{ url_for('admin_sla_policy_update', article_id=policy.article_id) if policy else url_for('admin_sla_policy_create') }}"
+        method="POST"
+        class="space-y-6"
+        x-data='{ sections: {{ form_data.sections | tojson }} }'
+    >
+        {{ request.state.csrf_form | safe }}
+
+        {% if error %}
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+            <div class="flex items-start gap-3">
+                {{ icon_svg("exclamation-circle", "mt-0.5 h-5 w-5 flex-shrink-0 text-red-500") }}
+                <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <section class="admin-card space-y-6 p-6">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Policy details</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Titles and summaries are displayed on the authenticated SLA Policies page.</p>
+            </div>
+
+            <div>
+                <label for="title" class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Policy title <span class="text-red-500">*</span>
+                </label>
+                <input
+                    id="title"
+                    name="title"
+                    type="text"
+                    maxlength="300"
+                    required
+                    value="{{ form_data.title }}"
+                    class="form-input w-full"
+                    placeholder="Service availability policy"
+                >
+            </div>
+
+            <div>
+                <label for="summary" class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Summary</label>
+                <textarea
+                    id="summary"
+                    name="summary"
+                    rows="3"
+                    maxlength="2000"
+                    class="form-textarea w-full"
+                    placeholder="A concise explanation of this policy"
+                >{{ form_data.summary }}</textarea>
+            </div>
+        </section>
+
+        <section class="admin-card space-y-5 p-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Policy sections</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Each item should appear on its own line. At least one body or item is required per section.</p>
+                </div>
+                <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="if (sections.length < 25) sections.push({ title: '', body: '', items_text: '' })"
+                    :disabled="sections.length >= 25"
+                >
+                    {{ icon_svg("plus", "h-4 w-4") }}
+                    Add Section
+                </button>
+            </div>
+
+            <div class="space-y-5">
+                <template x-for="(section, index) in sections" :key="index">
+                    <fieldset class="rounded-xl border border-slate-200 p-5 dark:border-slate-700">
+                        <div class="mb-5 flex items-center justify-between gap-3">
+                            <legend class="text-sm font-semibold text-slate-900 dark:text-white">
+                                Section <span x-text="index + 1"></span>
+                            </legend>
+                            <button
+                                type="button"
+                                class="text-sm font-medium text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400"
+                                @click="sections.splice(index, 1)"
+                                :disabled="sections.length === 1"
+                            >
+                                Remove
+                            </button>
+                        </div>
+
+                        <div class="space-y-5">
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    Section title <span class="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="section_title"
+                                    type="text"
+                                    maxlength="300"
+                                    required
+                                    x-model="section.title"
+                                    class="form-input w-full"
+                                >
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Body</label>
+                                <textarea
+                                    name="section_body"
+                                    rows="7"
+                                    maxlength="20000"
+                                    x-model="section.body"
+                                    class="form-textarea w-full"
+                                ></textarea>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Items</label>
+                                <textarea
+                                    name="section_items"
+                                    rows="5"
+                                    x-model="section.items_text"
+                                    class="form-textarea w-full"
+                                    placeholder="Response time: 30 minutes&#10;Resolution target: 4 hours"
+                                ></textarea>
+                            </div>
+                        </div>
+                    </fieldset>
+                </template>
+            </div>
+        </section>
+
+        <div class="flex items-center justify-between gap-3">
+            <a href="{{ url_for('admin_sla_policy_list') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("check", "h-4 w-4") }}
+                {{ "Save Changes" if policy else "Create Draft" }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
