@@ -2615,6 +2615,7 @@ ROLE_PERMISSIONS = {
         "coach:reports:read",
         "coach:chat:access",
         # Self-service permissions
+        "self:access",
         "selfservice:profile:read",
         "selfservice:profile:update",
         "selfservice:documents:read",

@@ -56,6 +56,12 @@
                     </p>
                 </div>
                 <div>
+                    <p class="text-slate-500 dark:text-slate-400">Operation</p>
+                    <p class="text-slate-900 dark:text-white font-medium">
+                        {{ request_item.operation.value | title }}
+                    </p>
+                </div>
+                <div>
                     <p class="text-slate-500 dark:text-slate-400">Submitted</p>
                     <p class="text-slate-900 dark:text-white font-medium">
                         {{ request_item.created_at | format_datetime if request_item.created_at else '-' }}
@@ -65,11 +71,20 @@
                     <p class="text-slate-500 dark:text-slate-400">Status</p>
                     <p class="text-slate-900 dark:text-white font-medium">{{ request_item.status.value }}</p>
                 </div>
+                <div>
+                    <p class="text-slate-500 dark:text-slate-400">Target Record</p>
+                    <p class="text-slate-900 dark:text-white font-medium">{{ request_item.target_record_id if request_item.target_record_id else 'New record' }}</p>
+                </div>
             </div>
             {% if request_item.requester_notes %}
             <div class="pt-2">
                 <p class="text-slate-500 dark:text-slate-400 text-sm">Requester Notes</p>
                 <p class="text-slate-900 dark:text-white text-sm">{{ request_item.requester_notes }}</p>
+            </div>
+            {% endif %}
+            {% if has_pending_evidence %}
+            <div class="pt-2">
+                <a href="/people/hr/info-changes/{{ request_item.request_id }}/evidence" class="text-sm font-medium text-violet-600 hover:underline dark:text-violet-400">Download pending evidence</a>
             </div>
             {% endif %}
         </div>
@@ -95,7 +110,7 @@
                             {{ key | replace('_', ' ') | title }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                            {{ request_item.previous_values.get(key, '-') }}
+                            {{ request_item.previous_values.get(key, '-') if request_item.previous_values.get(key, '-') is not none else '-' }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                             {{ value if value is not none else '-' }}
