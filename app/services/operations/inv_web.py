@@ -2520,6 +2520,34 @@ class OperationsInventoryWebService:
         context = base_context(request, auth, "Inventory Reports", "reports")
         return templates.TemplateResponse(request, "inventory/reports.html", context)
 
+    def low_stock_report_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        include_below_minimum: bool = True,
+    ) -> HTMLResponse:
+        """Low-stock and reorder-alert report page."""
+        from app.services.inventory.web import InventoryWebService
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=400, detail="Organization is required")
+
+        context = base_context(request, auth, "Low Stock Alert", "reports")
+        context.update(
+            InventoryWebService.low_stock_dashboard_context(
+                db=db,
+                organization_id=str(org_id),
+                include_below_minimum=include_below_minimum,
+            )
+        )
+        return templates.TemplateResponse(
+            request,
+            "inventory/report_low_stock.html",
+            context,
+        )
+
     def serial_stock_report_response(
         self,
         request: Request,

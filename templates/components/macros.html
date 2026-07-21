@@ -15,6 +15,8 @@
 {% set status_clean = status_upper|replace('_', ' ') %}
 {% set badge_classes = {
   'URGENT': 'badge-overdue',
+  'CRITICAL': 'badge-overdue',
+  'LOW': 'badge-pending',
   'WARNING': 'badge-overdue',
   'ATTENTION': 'badge-pending',
   'INFO': 'badge-approved',
@@ -112,6 +114,9 @@
   'CLOSED': '-',
   'REJECTED': 'x',
   'OVERDUE': '!',
+  'CRITICAL': '!',
+  'LOW': '!',
+  'WARNING': '!',
   'CANCELLED': 'x'
 }.get(status_upper, '*') %}
 {% set resolved_size = badge_size_classes.get(size, badge_size_classes.md) %}

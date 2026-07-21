@@ -11,6 +11,87 @@ from starlette.datastructures import FormData
 from starlette.datastructures import UploadFile
 
 from app.services.operations.inv_web import OperationsInventoryWebService
+from app.web.inventory import router as inventory_router
+
+
+def test_low_stock_report_route_is_registered() -> None:
+    route = next(
+        route
+        for route in inventory_router.routes
+        if route.path == "/inventory/reports/low-stock"
+    )
+
+    assert "GET" in route.methods
+
+
+def test_low_stock_report_response_uses_existing_tenant_context(monkeypatch) -> None:
+    service = OperationsInventoryWebService()
+    request = MagicMock()
+    db = MagicMock()
+    org_id = uuid.uuid4()
+    auth = MagicMock(organization_id=org_id)
+    captured: dict[str, object] = {}
+
+    def fake_low_stock_context(**kwargs):
+        captured["context_kwargs"] = kwargs
+        return {
+            "items": [],
+            "total_items": 0,
+            "critical_count": 0,
+            "low_count": 0,
+            "warning_count": 0,
+            "total_suggested_value": "₦0.00",
+            "include_below_minimum": False,
+        }
+
+    def fake_template_response(request_arg, template_name, context):
+        captured["request"] = request_arg
+        captured["template_name"] = template_name
+        captured["context"] = context
+        return "response"
+
+    monkeypatch.setattr(
+        "app.services.operations.inv_web.base_context",
+        lambda request_arg, auth_arg, title, section: {
+            "title": title,
+            "section": section,
+        },
+    )
+    monkeypatch.setattr(
+        "app.services.inventory.web.InventoryWebService.low_stock_dashboard_context",
+        fake_low_stock_context,
+    )
+    monkeypatch.setattr(
+        "app.services.operations.inv_web.templates.TemplateResponse",
+        fake_template_response,
+    )
+
+    response = service.low_stock_report_response(
+        request=request,
+        auth=auth,
+        db=db,
+        include_below_minimum=False,
+    )
+
+    assert response == "response"
+    assert captured["request"] is request
+    assert captured["template_name"] == "inventory/report_low_stock.html"
+    assert captured["context_kwargs"] == {
+        "db": db,
+        "organization_id": str(org_id),
+        "include_below_minimum": False,
+    }
+    assert captured["context"] == {
+        "title": "Low Stock Alert",
+        "section": "reports",
+        "items": [],
+        "total_items": 0,
+        "critical_count": 0,
+        "low_count": 0,
+        "warning_count": 0,
+        "total_suggested_value": "₦0.00",
+        "include_below_minimum": False,
+    }
 
 
 def test_extract_uploads_returns_multiple_images() -> None:

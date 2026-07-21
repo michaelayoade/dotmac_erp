@@ -1,0 +1,99 @@
+{% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import empty_state, icon_svg, stats_card, status_badge %}
+
+{% block page_title %}Low Stock Alert{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="transition-colors hover:text-amber-600 dark:hover:text-amber-400">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory/reports" class="transition-colors hover:text-amber-600 dark:hover:text-amber-400">Reports</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Low Stock Alert</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/inventory/reports/stock-on-hand" class="btn btn-secondary">
+    {{ icon_svg("cube", "mr-2 h-4 w-4") }}
+    Stock on Hand
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Items Requiring Attention", total_items | default(0), icon="warning", color="amber") }}
+        {{ stats_card("Critical", critical_count | default(0), icon="warning", color="rose") }}
+        {{ stats_card("Low", low_count | default(0), icon="trending-down", color="amber") }}
+        {{ stats_card("Suggested Reorder Value", total_suggested_value if total_suggested_value else "0.00", icon="currency", color="emerald") }}
+    </div>
+
+    <div class="card p-4">
+        <form method="GET" action="/inventory/reports/low-stock" class="flex flex-wrap items-end gap-3">
+            <div class="min-w-64">
+                <label for="include-below-minimum" class="form-label">Alert scope</label>
+                <select id="include-below-minimum" name="include_below_minimum" class="form-select w-full">
+                    <option value="true" {{ 'selected' if include_below_minimum else '' }}>Reorder point and minimum stock</option>
+                    <option value="false" {{ 'selected' if not include_below_minimum else '' }}>Reorder point only</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Apply</button>
+        </form>
+    </div>
+
+    <div id="results-container" class="card overflow-hidden">
+        {% if items %}
+        <div class="table-container">
+            <table class="table table-ledger">
+                <thead>
+                    <tr>
+                        <th scope="col">Item</th>
+                        <th scope="col" class="text-right">On Hand</th>
+                        <th scope="col" class="text-right">Available</th>
+                        <th scope="col" class="text-right">Reorder Point</th>
+                        <th scope="col" class="text-right">Reorder Qty</th>
+                        <th scope="col" class="text-right">Suggested Order</th>
+                        <th scope="col" class="text-right">Suggested Value</th>
+                        <th scope="col" class="text-right">Lead Time</th>
+                        <th scope="col">Urgency</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>
+                            <a href="/inventory/items/{{ item.item_id }}" class="font-medium text-slate-900 hover:text-amber-700 dark:text-white dark:hover:text-amber-300">
+                                {{ item.item_name }}
+                            </a>
+                            <div class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ item.item_code }}</div>
+                        </td>
+                        <td class="text-right font-mono tabular-nums">{{ "{:,.2f}".format(item.quantity_on_hand or 0) }}</td>
+                        <td class="text-right font-mono tabular-nums {{ 'text-rose-600 dark:text-rose-400' if (item.quantity_available or 0) <= 0 else '' }}">{{ "{:,.2f}".format(item.quantity_available or 0) }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ "{:,.2f}".format(item.reorder_point or 0) }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ "{:,.2f}".format(item.reorder_quantity or 0) }}</td>
+                        <td class="text-right font-mono font-semibold tabular-nums">{{ "{:,.2f}".format(item.suggested_order_qty or 0) }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ item.suggested_value }}</td>
+                        <td class="text-right">{{ item.lead_time_days ~ ' days' if item.lead_time_days else '—' }}</td>
+                        <td>{{ status_badge(item.urgency, "sm") }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="py-8 text-center text-slate-500 dark:text-slate-400">No low-stock items found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        {{ empty_state(
+            "No low-stock items",
+            "All tracked items are currently above their configured reorder thresholds.",
+            icon="check-circle",
+            cta_text="Review stock on hand",
+            cta_href="/inventory/reports/stock-on-hand"
+        ) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
