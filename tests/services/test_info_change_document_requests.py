@@ -11,7 +11,10 @@ from app.models.people.hr.info_change_request import (
     InfoChangeStatus,
     InfoChangeType,
 )
-from app.services.people.hr.info_change_service import InfoChangeService, PendingEvidence
+from app.services.people.hr.info_change_service import (
+    InfoChangeService,
+    PendingEvidence,
+)
 
 
 def test_validate_document_payload_enforces_self_service_allowlist():
