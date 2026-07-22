@@ -651,6 +651,29 @@ def get_employee_document_upload() -> FileUploadService:
     return FileUploadService(_employee_document_config())
 
 
+def _sla_policy_document_config() -> FileUploadConfig:
+    return FileUploadConfig(
+        base_dir="/app/uploads/sla_policies",
+        allowed_content_types=frozenset(
+            {
+                "application/pdf",
+                "image/jpeg",
+                "image/png",
+            }
+        ),
+        allowed_extensions=frozenset({".pdf", ".jpg", ".jpeg", ".png"}),
+        max_size_bytes=10 * 1024 * 1024,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="sla_policies",
+    )
+
+
+def get_sla_policy_document_upload() -> FileUploadService:
+    """Get the SLA policy document upload service."""
+    return FileUploadService(_sla_policy_document_config())
+
+
 def _pm_attachment_config() -> FileUploadConfig:
     return FileUploadConfig(
         base_dir="/app/uploads/projects",

@@ -378,7 +378,14 @@ async def csp_middleware(request: Request, call_next):
     response.headers["Content-Security-Policy"] = add_unsafe_eval_to_csp(
         response.headers.get("Content-Security-Policy")
     )
-    response.headers["X-Frame-Options"] = "DENY"
+    route = getattr(request, "scope", {}).get("route")
+    allow_sla_document_frame = (
+        getattr(route, "name", None) == "sla_policy_document_view"
+        and getattr(request.state, "allow_sla_document_frame", False) is True
+    )
+    response.headers["X-Frame-Options"] = (
+        "SAMEORIGIN" if allow_sla_document_frame else "DENY"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = (

@@ -1,0 +1,65 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
+{% from "components/_file_upload.html" import file_upload_zone %}
+
+{% block page_title %}Upload SLA Policy Document{% endblock %}
+{% block page_subtitle %}Add a PDF or image for inline viewing on the published SLA Policies page{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl space-y-6">
+    <a href="{{ url_for('admin_sla_policy_list') }}" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200">
+        {{ icon_svg("arrow-left", "h-4 w-4") }}
+        Back to SLA Policies
+    </a>
+
+    <form action="{{ url_for('admin_sla_policy_upload_create') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        {% if error %}
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+            <div class="flex items-start gap-3">
+                {{ icon_svg("exclamation-circle", "mt-0.5 h-5 w-5 flex-shrink-0 text-red-500") }}
+                <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <section class="admin-card space-y-6 p-6">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Policy details</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">The upload is created as a draft. Publish it from the SLA Policies list when it is ready.</p>
+            </div>
+
+            <div>
+                <label for="title" class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Policy title <span class="text-red-500">*</span>
+                </label>
+                <input id="title" name="title" type="text" maxlength="300" required value="{{ form_data.title }}" class="form-input w-full" placeholder="Service availability policy">
+            </div>
+
+            <div>
+                <label for="summary" class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Summary</label>
+                <textarea id="summary" name="summary" rows="3" maxlength="2000" class="form-textarea w-full" placeholder="A concise explanation of this policy">{{ form_data.summary }}</textarea>
+            </div>
+
+            {{ file_upload_zone(
+                name="document",
+                label="Policy document",
+                hint="PDF, JPEG, or PNG only. Maximum size: 10 MiB.",
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png",
+                max_size_mb=10,
+                preview="none",
+                required=true
+            ) }}
+        </section>
+
+        <div class="flex items-center justify-between gap-3">
+            <a href="{{ url_for('admin_sla_policy_list') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("upload", "h-4 w-4") }}
+                Upload Draft
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
