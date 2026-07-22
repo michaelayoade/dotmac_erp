@@ -1868,6 +1868,22 @@ def stock_on_hand_report(
     )
 
 
+@router.get("/reports/low-stock", response_class=HTMLResponse)
+def low_stock_report(
+    request: Request,
+    include_below_minimum: bool = Query(default=True),
+    auth: WebAuthContext = Depends(require_inventory_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Low-stock and reorder-alert report."""
+    return operations_inv_web_service.low_stock_report_response(
+        request=request,
+        auth=auth,
+        db=db,
+        include_below_minimum=include_below_minimum,
+    )
+
+
 @router.get("/reports/serial-stock", response_class=HTMLResponse)
 def serial_stock_report(
     request: Request,
