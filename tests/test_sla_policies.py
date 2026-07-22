@@ -7,6 +7,7 @@ from sqlalchemy.dialects import postgresql
 from starlette.requests import Request
 
 from app.services.sla_policies_web import SLAPolicyReadService
+from app.templates import templates
 from app.web.deps import get_db, require_web_auth
 from app.web.sla_policies import router, sla_policies_page
 
@@ -14,7 +15,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _request() -> Request:
-    return Request({"type": "http", "method": "GET", "path": "/sla-policies"})
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/sla-policies",
+            "headers": [],
+        }
+    )
 
 
 def test_read_service_query_is_strictly_scoped():
@@ -114,3 +122,36 @@ def test_page_template_has_safe_read_only_empty_state():
     assert "| safe" not in template
     assert "<form" not in template
     assert "<input" not in template
+
+
+def test_manage_link_is_visible_only_to_admin_users():
+    template = templates.env.get_template("sla_policies/index.html")
+    common_context = {
+        "request": _request(),
+        "policies": [],
+        "page_title": "SLA Policies",
+    }
+    standard_html = template.render(
+        **common_context,
+        user=SimpleNamespace(
+            is_authenticated=True,
+            is_admin=False,
+            name="Standard User",
+            initials="SU",
+        ),
+    )
+    admin_html = template.render(
+        **common_context,
+        user=SimpleNamespace(
+            is_authenticated=True,
+            is_admin=True,
+            name="Admin User",
+            initials="AU",
+        ),
+    )
+
+    manage_link = 'href="/admin/sla-policies"'
+    assert manage_link not in standard_html
+    assert "Manage SLA Policies" not in standard_html
+    assert manage_link in admin_html
+    assert "Manage SLA Policies" in admin_html

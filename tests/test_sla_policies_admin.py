@@ -206,3 +206,17 @@ def test_admin_templates_protect_posts_and_do_not_mark_content_safe():
     )
     assert "form_data.sections | tojson | safe" not in form_template
     assert "policy.title | safe" not in list_template
+
+
+def test_admin_sidebar_places_sla_policies_under_service_management():
+    sidebar = (REPO_ROOT / "templates/admin/base_admin.html").read_text()
+
+    service_management_position = sidebar.index(">Service Management</p>")
+    sla_link_position = sidebar.index("<!-- SLA Policies -->")
+    system_position = sidebar.index(">System</p>")
+    sla_link = sidebar[sla_link_position:system_position]
+
+    assert service_management_position < sla_link_position < system_position
+    assert "url_for('admin_sla_policy_list')" in sla_link
+    assert "SLA Policies</span>" in sla_link
+    assert "flex items-center gap-3 px-3 py-2.5 rounded-xl" in sla_link
