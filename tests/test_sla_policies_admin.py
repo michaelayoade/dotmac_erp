@@ -1,7 +1,9 @@
 import uuid
+import hashlib
+import re
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -9,7 +11,11 @@ from sqlalchemy.dialects import postgresql
 from starlette.datastructures import FormData
 from starlette.requests import Request
 
-from app.models.help.models import ArticleStatus
+from app.models.help.models import ArticleStatus, HelpArticleOverride
+from app.services.file_upload import (
+    InvalidMagicBytesError,
+    get_sla_policy_document_upload,
+)
 from app.services.sla_policies_admin_web import (
     SLAPolicyAdminService,
     SLAPolicyValidationError,
@@ -131,6 +137,116 @@ def test_create_is_always_a_classified_draft_with_expected_body_shape():
     db.flush.assert_called_once_with()
 
 
+def test_document_upload_uses_s3_uuid_name_magic_validation_and_checksum():
+    service = get_sla_policy_document_upload()
+    storage = MagicMock()
+    pdf = b"%PDF-1.7\npolicy"
+
+    assert service.config.allowed_content_types == {
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+    }
+    assert service.config.allowed_extensions == {".pdf", ".jpg", ".jpeg", ".png"}
+    assert service.config.max_size_bytes == 10 * 1024 * 1024
+    assert service.config.require_magic_bytes is True
+    assert service.config.compute_checksum is True
+
+    with patch.object(service, "_get_storage", return_value=storage):
+        result = service.save(
+            pdf,
+            content_type="application/pdf",
+            subdirs=("org-id", "article-id"),
+            original_filename="Policy.pdf",
+        )
+
+    assert re.fullmatch(
+        r"sla_policies/org-id/article-id/[0-9a-f]{12}\.pdf", result.s3_key
+    )
+    assert result.file_size == len(pdf)
+    assert result.checksum == hashlib.sha256(pdf).hexdigest()
+    storage.upload.assert_called_once_with(result.s3_key, pdf, "application/pdf")
+
+    with pytest.raises(InvalidMagicBytesError):
+        service.validate("application/pdf", "fake.pdf", 8, b"not-pdf")
+
+
+def test_document_input_restricts_extension_mime_and_empty_files():
+    form = FormData({"title": "Uploaded policy", "summary": "Summary"})
+
+    document = SLAPolicyAdminService.build_document_input(
+        form,
+        file_name=r"C:\\fakepath\\Policy.pdf",
+        file_content_type="application/pdf",
+        file_data=b"%PDF-1.7",
+    )
+    assert document.file_name == "Policy.pdf"
+
+    with pytest.raises(SLAPolicyValidationError, match="PDF, JPEG, or PNG"):
+        SLAPolicyAdminService.build_document_input(
+            form,
+            file_name="Policy.docx",
+            file_content_type=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+            file_data=b"PK\x03\x04",
+        )
+    with pytest.raises(SLAPolicyValidationError, match="matches its file type"):
+        SLAPolicyAdminService.build_document_input(
+            form,
+            file_name="Policy.pdf",
+            file_content_type="image/png",
+            file_data=b"%PDF-1.7",
+        )
+    with pytest.raises(SLAPolicyValidationError, match="empty"):
+        SLAPolicyAdminService.build_document_input(
+            form,
+            file_name="Policy.pdf",
+            file_content_type="application/pdf",
+            file_data=b"",
+        )
+
+
+def test_create_document_persists_only_approved_metadata_as_a_draft():
+    organization_id = uuid.uuid4()
+    db = MagicMock()
+    upload_service = MagicMock()
+    upload_service.save.return_value = SimpleNamespace(
+        s3_key="sla_policies/org/article/abc123.pdf",
+        file_size=12,
+        checksum="a" * 64,
+    )
+    service = SLAPolicyAdminService(db)
+    document_input = service.build_document_input(
+        FormData({"title": "Uploaded policy", "summary": "Summary"}),
+        file_name="Policy.pdf",
+        file_content_type="application/pdf",
+        file_data=b"%PDF-1.7\n",
+    )
+
+    with patch(
+        "app.services.sla_policies_admin_web.get_sla_policy_document_upload",
+        return_value=upload_service,
+    ):
+        policy = service.create_document(organization_id, document_input)
+
+    assert policy.organization_id == organization_id
+    assert policy.module_key == "sla_policies"
+    assert policy.content_type == "sla_policy"
+    assert policy.status is ArticleStatus.DRAFT
+    assert policy.body_json is None
+    assert policy.file_path == "sla_policies/org/article/abc123.pdf"
+    assert policy.file_name == "Policy.pdf"
+    assert policy.file_content_type == "application/pdf"
+    assert policy.file_size_bytes == 12
+    assert policy.content_hash == "a" * 64
+    upload_service.save.assert_called_once()
+    assert upload_service.save.call_args.kwargs["subdirs"][0] == str(organization_id)
+    assert uuid.UUID(upload_service.save.call_args.kwargs["subdirs"][1])
+    db.add.assert_called_once_with(policy)
+    db.flush.assert_called_once_with()
+
+
 def test_publish_and_archive_use_existing_status_values():
     organization_id = uuid.uuid4()
     article_id = uuid.uuid4()
@@ -197,6 +313,9 @@ def test_admin_input_is_autoescaped_on_public_page():
 def test_admin_templates_protect_posts_and_do_not_mark_content_safe():
     list_template = (REPO_ROOT / "templates/admin/sla_policies/index.html").read_text()
     form_template = (REPO_ROOT / "templates/admin/sla_policies/form.html").read_text()
+    upload_template = (
+        REPO_ROOT / "templates/admin/sla_policies/upload.html"
+    ).read_text()
 
     assert list_template.count('method="POST"') == list_template.count(
         "request.state.csrf_form | safe"
@@ -206,6 +325,33 @@ def test_admin_templates_protect_posts_and_do_not_mark_content_safe():
     )
     assert "form_data.sections | tojson | safe" not in form_template
     assert "policy.title | safe" not in list_template
+    assert 'enctype="multipart/form-data"' in upload_template
+    assert "request.state.csrf_form | safe" in upload_template
+    assert "application/pdf,image/jpeg,image/png" in upload_template
+    assert "max_size_mb=10" in upload_template
+
+
+def test_help_article_override_has_only_the_approved_nullable_file_columns():
+    expected = {
+        "file_path",
+        "file_name",
+        "file_content_type",
+        "file_size_bytes",
+        "content_hash",
+    }
+    table = HelpArticleOverride.__table__
+
+    assert expected.issubset(table.columns.keys())
+    assert all(table.columns[name].nullable for name in expected)
+
+    migration = (
+        REPO_ROOT / "alembic/versions/20260722_add_sla_policy_document_columns.py"
+    ).read_text()
+    assert migration.count('op.add_column(\n        "help_article_override"') == 5
+    assert (
+        'down_revision: str | tuple[str, ...] = "20260721_extended_info_changes"'
+        in migration
+    )
 
 
 def test_admin_sidebar_places_sla_policies_under_service_management():

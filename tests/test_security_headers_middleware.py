@@ -4,6 +4,7 @@ except ImportError:  # py310 support
     from exceptiongroup import BaseExceptionGroup as ExceptionGroup
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
 
 import pytest
 from starlette.requests import Request
@@ -30,6 +31,37 @@ async def test_csp_middleware_sets_security_headers():
         response.headers["Strict-Transport-Security"]
         == "max-age=31536000; includeSubDomains"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("route_name", "marker", "expected"),
+    [
+        ("sla_policy_document_view", True, "SAMEORIGIN"),
+        ("sla_policy_document_view", False, "DENY"),
+        ("another_route", True, "DENY"),
+    ],
+)
+async def test_frame_exception_is_limited_to_successful_sla_document_route(
+    route_name, marker, expected
+):
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/sla-policies/id/document",
+            "headers": [],
+            "route": SimpleNamespace(name=route_name),
+        }
+    )
+    if marker:
+        request.state.allow_sla_document_frame = True
+    call_next = AsyncMock(return_value=Response(status_code=200))
+
+    with patch("app.main.add_unsafe_eval_to_csp", return_value="default-src 'self'"):
+        response = await csp_middleware(request, call_next)
+
+    assert response.headers["X-Frame-Options"] == expected
 
 
 @pytest.mark.asyncio

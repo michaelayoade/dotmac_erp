@@ -17,7 +17,16 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,6 +63,27 @@ class HelpArticleOverride(Base):
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     body_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    file_path: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="S3 object key for an uploaded policy document",
+    )
+    file_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Original uploaded document filename",
+    )
+    file_content_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Uploaded document MIME type",
+    )
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="SHA-256 hash of the uploaded document",
+    )
     module_key: Mapped[str] = mapped_column(String(50), nullable=False)
     content_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="workflow"

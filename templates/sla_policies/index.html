@@ -37,6 +37,22 @@
                 {% endif %}
             </header>
 
+            {% if policy.file_path and policy.file_content_type == "application/pdf" %}
+            <iframe
+                src="{{ url_for('sla_policy_document_view', article_id=policy.article_id) }}"
+                title="{{ policy.title }} document"
+                class="mt-6 h-[75vh] min-h-[32rem] w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700"
+            ></iframe>
+            {% elif policy.file_path and policy.file_content_type in ["image/jpeg", "image/png"] %}
+            <div class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700">
+                <img
+                    src="{{ url_for('sla_policy_document_view', article_id=policy.article_id) }}"
+                    alt="{{ policy.title }} document"
+                    class="mx-auto max-h-[75vh] max-w-full object-contain"
+                >
+            </div>
+            {% endif %}
+
             {% if sections %}
             <div class="mt-6 space-y-6">
                 {% for section in sections %}

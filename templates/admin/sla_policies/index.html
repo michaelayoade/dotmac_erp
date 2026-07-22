@@ -10,6 +10,10 @@
     <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
         SLA policy draft created successfully.
     </div>
+    {% elif request.query_params.get("uploaded") %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        SLA policy document uploaded as a draft successfully.
+    </div>
     {% elif request.query_params.get("updated") %}
     <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
         SLA policy updated successfully.
@@ -37,6 +41,10 @@
                 {{ icon_svg("plus", "h-4 w-4") }}
                 Create SLA Policy
             </a>
+            <a href="{{ url_for('admin_sla_policy_upload') }}" class="btn btn-primary">
+                {{ icon_svg("upload", "h-4 w-4") }}
+                Upload Document
+            </a>
         </div>
     </div>
 
@@ -61,6 +69,9 @@
                                 {% if policy.summary %}
                                 <p class="mt-1 max-w-xl truncate text-sm text-slate-500 dark:text-slate-400">{{ policy.summary }}</p>
                                 {% endif %}
+                                {% if policy.file_name %}
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Uploaded document: {{ policy.file_name }}</p>
+                                {% endif %}
                             </td>
                             <td class="px-6 py-4">{{ status_badge(policy.status.value, "sm") }}</td>
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
@@ -68,10 +79,12 @@
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex flex-wrap justify-end gap-2">
+                                    {% if not policy.file_path %}
                                     <a href="{{ url_for('admin_sla_policy_edit', article_id=policy.article_id) }}" class="btn btn-secondary btn-sm">
                                         {{ icon_svg("edit", "h-4 w-4") }}
                                         Edit
                                     </a>
+                                    {% endif %}
                                     {% if policy.status.value != "PUBLISHED" %}
                                     <form action="{{ url_for('admin_sla_policy_publish', article_id=policy.article_id) }}" method="POST">
                                         {{ request.state.csrf_form | safe }}

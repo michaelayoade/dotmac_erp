@@ -5,6 +5,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, TypedDict, cast
 from uuid import UUID, uuid4
 
@@ -12,6 +13,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.help.models import ArticleStatus, HelpArticleOverride
+from app.services.file_upload import (
+    FileUploadError,
+    get_sla_policy_document_upload,
+)
 
 try:
     from datetime import UTC  # type: ignore
@@ -44,6 +49,17 @@ class SLAPolicyInput:
     body_json: SLAPolicyBody
 
 
+@dataclass(frozen=True)
+class SLAPolicyDocumentInput:
+    """Validated metadata and bytes for an uploaded SLA policy document."""
+
+    title: str
+    summary: str
+    file_name: str
+    file_content_type: str
+    file_data: bytes
+
+
 class SLAPolicyValidationError(ValueError):
     """Raised when an SLA policy form is invalid."""
 
@@ -59,6 +75,13 @@ class SLAPolicyAdminService:
     CONTENT_TYPE = "sla_policy"
     MAX_SECTIONS = 25
     MAX_ITEMS_PER_SECTION = 50
+    MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
+    DOCUMENT_CONTENT_TYPES = {
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+    }
 
     def __init__(self, db: Session):
         self.db = db
@@ -113,6 +136,54 @@ class SLAPolicyAdminService:
         self.db.add(policy)
         self.db.flush()
         logger.info("Created SLA policy: %s", policy.article_id)
+        return policy
+
+    def create_document(
+        self,
+        organization_id: UUID,
+        document_input: SLAPolicyDocumentInput,
+    ) -> HelpArticleOverride:
+        """Create a draft SLA policy backed by an S3 document object."""
+        article_id = uuid4()
+        upload_service = get_sla_policy_document_upload()
+        try:
+            upload = upload_service.save(
+                file_data=document_input.file_data,
+                content_type=document_input.file_content_type,
+                subdirs=(str(organization_id), str(article_id)),
+                original_filename=document_input.file_name,
+            )
+        except FileUploadError as exc:
+            raise SLAPolicyValidationError(str(exc)) from exc
+
+        policy = HelpArticleOverride(
+            article_id=article_id,
+            organization_id=organization_id,
+            slug=f"sla-policy-{article_id}",
+            title=document_input.title,
+            summary=document_input.summary,
+            body_json=None,
+            file_path=upload.s3_key,
+            file_name=document_input.file_name,
+            file_content_type=document_input.file_content_type,
+            file_size_bytes=upload.file_size,
+            content_hash=upload.checksum,
+            module_key=self.MODULE_KEY,
+            content_type=self.CONTENT_TYPE,
+            status=ArticleStatus.DRAFT,
+        )
+        try:
+            self.db.add(policy)
+            self.db.flush()
+        except Exception:
+            try:
+                upload_service.delete(upload.s3_key)
+            except Exception:
+                logger.exception(
+                    "Failed to clean up SLA policy document after database error"
+                )
+            raise
+        logger.info("Created SLA policy document: %s", policy.article_id)
         return policy
 
     def update(
@@ -220,6 +291,65 @@ class SLAPolicyAdminService:
             summary=summary,
             body_json={"sections": sections},
         )
+
+    @classmethod
+    def build_document_input(
+        cls,
+        form: Any,
+        *,
+        file_name: str,
+        file_content_type: str | None,
+        file_data: bytes,
+    ) -> SLAPolicyDocumentInput:
+        """Validate an uploaded policy document and its display metadata."""
+        title = cls._normalize_text(
+            cls._form_value(form, "title"),
+            field="Policy title",
+            max_length=300,
+            required=True,
+        )
+        summary = cls._normalize_text(
+            cls._form_value(form, "summary"),
+            field="Summary",
+            max_length=2000,
+            multiline=True,
+        )
+        normalized_name = cls._normalize_text(
+            file_name.replace("\\", "/").rsplit("/", maxsplit=1)[-1],
+            field="File name",
+            max_length=255,
+            required=True,
+        )
+        extension = Path(normalized_name).suffix.lower()
+        expected_content_type = cls.DOCUMENT_CONTENT_TYPES.get(extension)
+        normalized_content_type = (
+            (file_content_type or "").split(";", maxsplit=1)[0].strip().lower()
+        )
+        if (
+            expected_content_type is None
+            or normalized_content_type != expected_content_type
+        ):
+            raise SLAPolicyValidationError(
+                "Upload a PDF, JPEG, or PNG file whose content matches its file type."
+            )
+        if not file_data:
+            raise SLAPolicyValidationError("The selected document is empty.")
+
+        return SLAPolicyDocumentInput(
+            title=title,
+            summary=summary,
+            file_name=normalized_name,
+            file_content_type=normalized_content_type,
+            file_data=file_data,
+        )
+
+    @classmethod
+    def document_form_data(cls, form: Any) -> dict[str, str]:
+        """Return safe scalar values when the upload form must be re-rendered."""
+        return {
+            "title": cls._form_value(form, "title"),
+            "summary": cls._form_value(form, "summary"),
+        }
 
     @classmethod
     def form_data(cls, form: Any) -> dict[str, Any]:
