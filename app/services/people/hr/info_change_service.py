@@ -41,6 +41,7 @@ from app.models.people.hr.employee_extended import (
     RelationshipType,
 )
 from app.models.people.hr.info_change_request import (
+    EmployeeInfoChangeBatch,
     EmployeeInfoChangeRequest,
     InfoChangeOperation,
     InfoChangeStatus,
@@ -81,6 +82,25 @@ class PendingEvidence:
     checksum: str | None = None
 
 
+@dataclass(frozen=True)
+class ExtendedBatchItemInput:
+    """Normalized extended-profile batch item."""
+
+    proposed_changes: dict[str, Any]
+    previous_values: dict[str, Any]
+    operation: InfoChangeOperation = InfoChangeOperation.CREATE
+    target_record_id: UUID | None = None
+    pending_evidence: PendingEvidence | None = None
+
+
+@dataclass(frozen=True)
+class DocumentBatchItemInput:
+    """Normalized document batch item."""
+
+    proposed_changes: dict[str, Any]
+    pending_evidence: PendingEvidence
+
+
 class InfoChangeService:
     """
     Service for managing employee info change requests.
@@ -108,6 +128,8 @@ class InfoChangeService:
         InfoChangeType.DEPENDENT,
     )
     DOCUMENT_CHANGE_TYPES = (InfoChangeType.DOCUMENT,)
+    MAX_BATCH_ITEMS = 20
+    MAX_BATCH_TOTAL_UPLOAD_BYTES = 50 * 1024 * 1024
     SELF_SERVICE_DOCUMENT_TYPES = frozenset(
         {
             DocumentType.ID_PROOF,
@@ -231,32 +253,173 @@ class InfoChangeService:
         expiry_days: int = DEFAULT_EXPIRY_DAYS,
     ) -> EmployeeInfoChangeRequest:
         """Submit an extended-profile change request for approval."""
-        if change_type not in self.EXTENDED_CHANGE_TYPES:
-            raise ValueError("Unsupported extended profile change type")
-        if operation == InfoChangeOperation.UPDATE and target_record_id is None:
-            raise ValueError("Update requests require a target record")
-        if operation == InfoChangeOperation.CREATE and target_record_id is not None:
-            raise ValueError("Create requests cannot specify a target record")
-
-        employee = self._get_employee_or_raise(organization_id, employee_id)
-        self.expire_requests(
-            organization_id,
-            employee_id=employee_id,
-            change_type=change_type,
-        )
-        if self.has_pending_request(
+        batch = self.submit_extended_change_batch(
             organization_id,
             employee_id,
             change_type=change_type,
-        ):
-            raise ValueError(
-                f"A pending {change_type.value.lower().replace('_', ' ')} request already exists"
-            )
+            items=[
+                ExtendedBatchItemInput(
+                    proposed_changes=proposed_changes,
+                    previous_values=previous_values,
+                    operation=operation,
+                    target_record_id=target_record_id,
+                    pending_evidence=pending_evidence,
+                )
+            ],
+            requester_notes=requester_notes,
+            expiry_days=expiry_days,
+        )
+        return batch.items[0]
 
-        expires_at = datetime.now(UTC) + timedelta(days=expiry_days)
-        request = EmployeeInfoChangeRequest(
+    def submit_document_change_request(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        proposed_changes: dict[str, Any],
+        requester_notes: str | None = None,
+        pending_evidence: PendingEvidence,
+        expiry_days: int = DEFAULT_EXPIRY_DAYS,
+    ) -> EmployeeInfoChangeRequest:
+        """Submit a self-service employee document upload for HR approval."""
+        batch = self.submit_document_change_batch(
+            organization_id,
+            employee_id,
+            items=[
+                DocumentBatchItemInput(
+                    proposed_changes=proposed_changes,
+                    pending_evidence=pending_evidence,
+                )
+            ],
+            requester_notes=requester_notes,
+            expiry_days=expiry_days,
+        )
+        return batch.items[0]
+
+    def submit_extended_change_batch(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        change_type: InfoChangeType,
+        items: list[ExtendedBatchItemInput],
+        requester_notes: str | None = None,
+        expiry_days: int = DEFAULT_EXPIRY_DAYS,
+    ) -> EmployeeInfoChangeBatch:
+        """Submit a repeatable extended-profile batch for approval."""
+        if change_type not in self.EXTENDED_CHANGE_TYPES:
+            raise ValueError("Unsupported extended profile change type")
+        employee = self._get_employee_or_raise(organization_id, employee_id)
+        normalized_items = self._prepare_extended_batch_items(
+            organization_id,
+            employee_id,
+            change_type=change_type,
+            items=items,
+        )
+        batch = self._create_batch_record(
             organization_id=organization_id,
             employee_id=employee_id,
+            change_type=change_type,
+            requester_notes=requester_notes,
+            expiry_days=expiry_days,
+        )
+        for index, item in enumerate(normalized_items, start=1):
+            self._append_batch_request(
+                batch=batch,
+                employee_id=employee_id,
+                change_type=change_type,
+                operation=item.operation,
+                proposed_changes=item.proposed_changes,
+                previous_values=item.previous_values,
+                requester_notes=requester_notes,
+                target_record_id=item.target_record_id,
+                batch_item_order=index,
+                pending_evidence=item.pending_evidence,
+            )
+        self.db.flush()
+        self._notify_pending_batch(batch, employee)
+        return batch
+
+    def submit_document_change_batch(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        items: list[DocumentBatchItemInput],
+        requester_notes: str | None = None,
+        expiry_days: int = DEFAULT_EXPIRY_DAYS,
+    ) -> EmployeeInfoChangeBatch:
+        """Submit a repeatable document batch for approval."""
+        employee = self._get_employee_or_raise(organization_id, employee_id)
+        normalized_items = self._prepare_document_batch_items(
+            organization_id,
+            employee_id,
+            items=items,
+        )
+        batch = self._create_batch_record(
+            organization_id=organization_id,
+            employee_id=employee_id,
+            change_type=InfoChangeType.DOCUMENT,
+            requester_notes=requester_notes,
+            expiry_days=expiry_days,
+        )
+        for index, item in enumerate(normalized_items, start=1):
+            self._append_batch_request(
+                batch=batch,
+                employee_id=employee_id,
+                change_type=InfoChangeType.DOCUMENT,
+                operation=InfoChangeOperation.CREATE,
+                proposed_changes=item.proposed_changes,
+                previous_values={},
+                requester_notes=requester_notes,
+                target_record_id=None,
+                batch_item_order=index,
+                pending_evidence=item.pending_evidence,
+            )
+        self.db.flush()
+        self._notify_pending_batch(batch, employee)
+        return batch
+
+    def _create_batch_record(
+        self,
+        *,
+        organization_id: UUID,
+        employee_id: UUID,
+        change_type: InfoChangeType,
+        requester_notes: str | None,
+        expiry_days: int,
+    ) -> EmployeeInfoChangeBatch:
+        expires_at = datetime.now(UTC) + timedelta(days=expiry_days)
+        batch = EmployeeInfoChangeBatch(
+            organization_id=organization_id,
+            employee_id=employee_id,
+            change_type=change_type,
+            requester_notes=requester_notes,
+            expires_at=expires_at,
+        )
+        self.db.add(batch)
+        self.db.flush()
+        return batch
+
+    def _append_batch_request(
+        self,
+        *,
+        batch: EmployeeInfoChangeBatch,
+        employee_id: UUID,
+        change_type: InfoChangeType,
+        operation: InfoChangeOperation,
+        proposed_changes: dict[str, Any],
+        previous_values: dict[str, Any],
+        requester_notes: str | None,
+        target_record_id: UUID | None,
+        batch_item_order: int,
+        pending_evidence: PendingEvidence | None,
+    ) -> EmployeeInfoChangeRequest:
+        request = EmployeeInfoChangeRequest(
+            organization_id=batch.organization_id,
+            employee_id=employee_id,
+            batch=batch,
+            batch_item_order=batch_item_order,
             change_type=change_type,
             operation=operation,
             target_record_id=target_record_id,
@@ -264,7 +427,7 @@ class InfoChangeService:
             proposed_changes=proposed_changes,
             previous_values=previous_values,
             requester_notes=requester_notes,
-            expires_at=expires_at,
+            expires_at=batch.expires_at,
             pending_document_path=pending_evidence.path if pending_evidence else None,
             pending_document_name=pending_evidence.file_name
             if pending_evidence
@@ -281,76 +444,6 @@ class InfoChangeService:
         )
         self.db.add(request)
         self.db.flush()
-        logger.info(
-            "Created extended info change request %s for employee %s (type=%s op=%s)",
-            request.request_id,
-            employee_id,
-            change_type.value,
-            operation.value,
-        )
-        self._notify_pending_request(request, employee)
-        return request
-
-    def submit_document_change_request(
-        self,
-        organization_id: UUID,
-        employee_id: UUID,
-        *,
-        proposed_changes: dict[str, Any],
-        requester_notes: str | None = None,
-        pending_evidence: PendingEvidence,
-        expiry_days: int = DEFAULT_EXPIRY_DAYS,
-    ) -> EmployeeInfoChangeRequest:
-        """Submit a self-service employee document upload for HR approval."""
-        employee = self._get_employee_or_raise(organization_id, employee_id)
-        self.expire_requests(
-            organization_id,
-            employee_id=employee_id,
-            change_type=InfoChangeType.DOCUMENT,
-        )
-        normalized = self._validate_document_payload(proposed_changes)
-        duplicate = self._find_duplicate_pending_document_request(
-            organization_id,
-            employee_id,
-            proposed_changes=normalized,
-            original_filename=pending_evidence.file_name,
-            checksum=pending_evidence.checksum,
-        )
-        if duplicate:
-            raise ValueError("A matching document upload is already pending review")
-
-        expires_at = datetime.now(UTC) + timedelta(days=expiry_days)
-        request = EmployeeInfoChangeRequest(
-            organization_id=organization_id,
-            employee_id=employee_id,
-            change_type=InfoChangeType.DOCUMENT,
-            operation=InfoChangeOperation.CREATE,
-            target_record_id=None,
-            status=InfoChangeStatus.PENDING,
-            proposed_changes={
-                **normalized,
-                "pending_original_filename": pending_evidence.file_name,
-                "pending_file_size": pending_evidence.file_size,
-                "pending_mime_type": pending_evidence.mime_type,
-                "pending_checksum": pending_evidence.checksum,
-            },
-            previous_values={},
-            requester_notes=requester_notes,
-            expires_at=expires_at,
-            pending_document_path=pending_evidence.path,
-            pending_document_name=pending_evidence.file_name,
-            pending_document_size=pending_evidence.file_size,
-            pending_document_mime_type=pending_evidence.mime_type,
-            pending_document_checksum=pending_evidence.checksum,
-        )
-        self.db.add(request)
-        self.db.flush()
-        logger.info(
-            "Created document info change request %s for employee %s",
-            request.request_id,
-            employee_id,
-        )
-        self._notify_pending_request(request, employee)
         return request
 
     def expire_requests(
@@ -523,6 +616,370 @@ class InfoChangeService:
         request.pending_document_mime_type = None
         request.pending_document_checksum = None
 
+    def _validate_batch_size(
+        self,
+        items_count: int,
+        *,
+        total_upload_bytes: int = 0,
+    ) -> None:
+        if items_count <= 0:
+            raise ValueError("At least one non-blank row is required")
+        if items_count > self.MAX_BATCH_ITEMS:
+            raise ValueError(
+                f"You can submit at most {self.MAX_BATCH_ITEMS} items at once"
+            )
+        if total_upload_bytes > self.MAX_BATCH_TOTAL_UPLOAD_BYTES:
+            raise ValueError("Combined uploads exceed the total request size limit")
+
+    def _prepare_extended_batch_items(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        change_type: InfoChangeType,
+        items: list[ExtendedBatchItemInput],
+    ) -> list[ExtendedBatchItemInput]:
+        total_upload_bytes = sum(
+            item.pending_evidence.file_size for item in items if item.pending_evidence
+        )
+        self._validate_batch_size(len(items), total_upload_bytes=total_upload_bytes)
+        prepared: list[ExtendedBatchItemInput] = []
+        seen_keys: set[str] = set()
+        for item in items:
+            if (
+                item.operation == InfoChangeOperation.UPDATE
+                and item.target_record_id is None
+            ):
+                raise ValueError("Update requests require a target record")
+            if (
+                item.operation == InfoChangeOperation.CREATE
+                and item.target_record_id is not None
+            ):
+                raise ValueError("Create requests cannot specify a target record")
+            normalized = self._validate_extended_payload(
+                organization_id,
+                employee_id,
+                change_type=change_type,
+                payload=item.proposed_changes,
+                target_record_id=item.target_record_id,
+            )
+            key = self._dedupe_key_for_change(change_type, normalized)
+            if item.operation == InfoChangeOperation.CREATE and key in seen_keys:
+                raise ValueError(
+                    "Duplicate rows are not allowed in the same submission"
+                )
+            if item.operation == InfoChangeOperation.CREATE:
+                seen_keys.add(key)
+            self._assert_extended_conflicts(
+                organization_id,
+                employee_id,
+                change_type=change_type,
+                operation=item.operation,
+                proposed_changes=normalized,
+                target_record_id=item.target_record_id,
+            )
+            prepared.append(
+                ExtendedBatchItemInput(
+                    proposed_changes=normalized,
+                    previous_values=item.previous_values,
+                    operation=item.operation,
+                    target_record_id=item.target_record_id,
+                    pending_evidence=item.pending_evidence,
+                )
+            )
+        return prepared
+
+    def _prepare_document_batch_items(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        items: list[DocumentBatchItemInput],
+    ) -> list[DocumentBatchItemInput]:
+        total_upload_bytes = sum(item.pending_evidence.file_size for item in items)
+        self._validate_batch_size(len(items), total_upload_bytes=total_upload_bytes)
+        prepared: list[DocumentBatchItemInput] = []
+        seen_keys: set[str] = set()
+        for item in items:
+            normalized = self._validate_document_payload(item.proposed_changes)
+            duplicate = self._find_duplicate_pending_document_request(
+                organization_id,
+                employee_id,
+                proposed_changes=normalized,
+                original_filename=item.pending_evidence.file_name,
+                checksum=item.pending_evidence.checksum,
+            )
+            if duplicate:
+                raise ValueError("A matching document upload is already pending review")
+            duplicate_key = self._document_duplicate_key(
+                normalized,
+                item.pending_evidence.file_name,
+                item.pending_evidence.checksum,
+            )
+            if duplicate_key in seen_keys:
+                raise ValueError("Duplicate document rows are not allowed")
+            seen_keys.add(duplicate_key)
+            self._assert_document_not_already_uploaded(
+                organization_id,
+                employee_id,
+                normalized,
+                item.pending_evidence.file_name,
+                item.pending_evidence.checksum,
+            )
+            prepared.append(
+                DocumentBatchItemInput(
+                    proposed_changes={
+                        **normalized,
+                        "pending_original_filename": item.pending_evidence.file_name,
+                        "pending_file_size": item.pending_evidence.file_size,
+                        "pending_mime_type": item.pending_evidence.mime_type,
+                        "pending_checksum": item.pending_evidence.checksum,
+                    },
+                    pending_evidence=item.pending_evidence,
+                )
+            )
+        return prepared
+
+    def _validate_extended_payload(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        change_type: InfoChangeType,
+        payload: dict[str, Any],
+        target_record_id: UUID | None,
+    ) -> dict[str, Any]:
+        if change_type == InfoChangeType.QUALIFICATION:
+            return self._validate_qualification_payload(payload)
+        if change_type == InfoChangeType.CERTIFICATION:
+            return self._validate_certification_payload(payload)
+        if change_type == InfoChangeType.SKILL:
+            return self._validate_skill_payload(
+                organization_id,
+                employee_id,
+                payload,
+                target_employee_skill_id=target_record_id,
+            )
+        if change_type == InfoChangeType.DEPENDENT:
+            return self._validate_dependent_payload(payload)
+        raise ValueError("Unsupported extended profile change type")
+
+    def _assert_extended_conflicts(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        change_type: InfoChangeType,
+        operation: InfoChangeOperation,
+        proposed_changes: dict[str, Any],
+        target_record_id: UUID | None,
+    ) -> None:
+        self.expire_requests(
+            organization_id,
+            employee_id=employee_id,
+            change_type=change_type,
+        )
+        pending = self.get_pending_requests(
+            organization_id,
+            employee_id=employee_id,
+            change_type=change_type,
+            limit=200,
+        )
+        if operation == InfoChangeOperation.UPDATE:
+            if target_record_id is None:
+                raise ValueError("Update requests require a target record")
+            for request in pending:
+                if (
+                    request.operation == InfoChangeOperation.UPDATE
+                    and request.target_record_id == target_record_id
+                ):
+                    raise ValueError("A pending update already exists for this record")
+            return
+
+        duplicate_key = self._dedupe_key_for_change(change_type, proposed_changes)
+        for request in pending:
+            if request.operation != InfoChangeOperation.CREATE:
+                continue
+            if (
+                self._dedupe_key_for_change(change_type, request.proposed_changes)
+                == duplicate_key
+            ):
+                raise ValueError("A matching request is already pending review")
+        self._assert_no_approved_duplicate(
+            organization_id,
+            employee_id,
+            change_type=change_type,
+            proposed_changes=proposed_changes,
+        )
+
+    def _dedupe_key_for_change(
+        self,
+        change_type: InfoChangeType,
+        proposed_changes: dict[str, Any],
+    ) -> str:
+        if change_type == InfoChangeType.QUALIFICATION:
+            return "|".join(
+                [
+                    self._normalized_token(proposed_changes.get("qualification_type")),
+                    self._normalized_token(proposed_changes.get("qualification_name")),
+                    self._normalized_token(proposed_changes.get("institution_name")),
+                    self._normalized_token(proposed_changes.get("start_date")),
+                    self._normalized_token(proposed_changes.get("end_date")),
+                ]
+            )
+        if change_type == InfoChangeType.CERTIFICATION:
+            return "|".join(
+                [
+                    self._normalized_token(proposed_changes.get("certification_name")),
+                    self._normalized_token(proposed_changes.get("issuing_authority")),
+                    self._normalized_token(proposed_changes.get("credential_id")),
+                ]
+            )
+        if change_type == InfoChangeType.SKILL:
+            return self._normalized_token(proposed_changes.get("skill_id"))
+        if change_type == InfoChangeType.DEPENDENT:
+            return "|".join(
+                [
+                    self._normalized_token(proposed_changes.get("full_name")),
+                    self._normalized_token(proposed_changes.get("relationship")),
+                    self._normalized_token(proposed_changes.get("date_of_birth")),
+                ]
+            )
+        if change_type == InfoChangeType.DOCUMENT:
+            return self._document_duplicate_key(
+                proposed_changes,
+                proposed_changes.get("pending_original_filename"),
+                proposed_changes.get("pending_checksum"),
+            )
+        raise ValueError("Unsupported change type")
+
+    @staticmethod
+    def _normalized_token(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip().lower()
+
+    def _assert_no_approved_duplicate(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        *,
+        change_type: InfoChangeType,
+        proposed_changes: dict[str, Any],
+    ) -> None:
+        if change_type == InfoChangeType.QUALIFICATION:
+            qualifications = EmployeeQualificationService(
+                self.db, organization_id
+            ).list_qualifications(employee_id)
+            candidate = self._dedupe_key_for_change(change_type, proposed_changes)
+            if any(
+                self._dedupe_key_for_change(
+                    change_type, self._qualification_snapshot(item)
+                )
+                == candidate
+                for item in qualifications
+            ):
+                raise ValueError("This qualification already exists")
+            return
+        if change_type == InfoChangeType.CERTIFICATION:
+            certifications = EmployeeCertificationService(
+                self.db, organization_id
+            ).list_certifications(employee_id)
+            candidate = self._dedupe_key_for_change(change_type, proposed_changes)
+            if any(
+                self._dedupe_key_for_change(
+                    change_type, self._certification_snapshot(item)
+                )
+                == candidate
+                for item in certifications
+            ):
+                raise ValueError("This certification already exists")
+            return
+        if change_type == InfoChangeType.SKILL:
+            candidate = self._dedupe_key_for_change(change_type, proposed_changes)
+            skills = EmployeeSkillService(
+                self.db, organization_id
+            ).list_employee_skills(employee_id)
+            if any(
+                self._dedupe_key_for_change(change_type, self._skill_snapshot(item))
+                == candidate
+                for item in skills
+            ):
+                raise ValueError("This skill is already assigned to the employee")
+            return
+        if change_type == InfoChangeType.DEPENDENT:
+            dependants = EmployeeDependentService(
+                self.db, organization_id
+            ).list_dependents(employee_id)
+            candidate = self._dedupe_key_for_change(change_type, proposed_changes)
+            if any(
+                self._dedupe_key_for_change(change_type, self._dependent_snapshot(item))
+                == candidate
+                for item in dependants
+            ):
+                raise ValueError("This dependant already exists")
+
+    def _document_duplicate_key(
+        self,
+        proposed_changes: dict[str, Any],
+        original_filename: str | None,
+        checksum: str | None,
+    ) -> str:
+        return "|".join(
+            [
+                self._document_metadata_key(proposed_changes),
+                self._normalized_token(original_filename),
+                self._normalized_token(checksum),
+            ]
+        )
+
+    def _document_metadata_key(
+        self,
+        proposed_changes: dict[str, Any],
+    ) -> str:
+        return "|".join(
+            [
+                self._normalized_token(proposed_changes.get("document_type")),
+                self._normalized_token(proposed_changes.get("document_name")),
+                self._normalized_token(proposed_changes.get("description")),
+                self._normalized_token(proposed_changes.get("issue_date")),
+                self._normalized_token(proposed_changes.get("expiry_date")),
+            ]
+        )
+
+    def _assert_document_not_already_uploaded(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+        proposed_changes: dict[str, Any],
+        original_filename: str,
+        checksum: str | None,
+    ) -> None:
+        documents = EmployeeDocumentService(self.db, organization_id).list_documents(
+            employee_id
+        )
+        candidate_checksum = self._normalized_token(checksum)
+        candidate_metadata = self._document_metadata_key(proposed_changes)
+        candidate_filename = self._normalized_token(original_filename)
+        for item in documents:
+            metadata = {
+                "document_type": item.document_type.value,
+                "document_name": item.document_name,
+                "description": item.description,
+                "issue_date": item.issue_date.isoformat() if item.issue_date else None,
+                "expiry_date": item.expiry_date.isoformat()
+                if item.expiry_date
+                else None,
+            }
+            same_metadata = self._document_metadata_key(metadata) == candidate_metadata
+            same_filename = self._normalized_token(item.file_name) == candidate_filename
+            same_checksum = (
+                bool(candidate_checksum)
+                and self._normalized_token(item.content_checksum) == candidate_checksum
+            )
+            if (same_checksum and same_metadata) or (same_metadata and same_filename):
+                raise ValueError("A matching approved document already exists")
+
     # =========================================================================
     # Approve/Reject Requests
     # =========================================================================
@@ -630,6 +1087,182 @@ class InfoChangeService:
         self._notify_decision(request, approved=False)
 
         return request
+
+    def approve_batch(
+        self,
+        organization_id: UUID,
+        batch_id: UUID,
+        reviewer_id: UUID,
+        *,
+        reviewer_notes: str | None = None,
+    ) -> EmployeeInfoChangeBatch:
+        """Approve all actionable items in a batch atomically."""
+        batch = self._get_batch_for_update(organization_id, batch_id)
+        if not batch:
+            raise ValueError(f"Batch {batch_id} not found")
+        actionable = [item for item in batch.items if item.is_actionable]
+        if not actionable:
+            raise ValueError("Batch has no actionable items")
+        for item in actionable:
+            self._revalidate_actionable_batch_item(item)
+        for item in actionable:
+            self._apply_changes(item)
+        reviewed_at = datetime.now(UTC)
+        for item in actionable:
+            item.status = InfoChangeStatus.APPROVED
+            item.reviewer_id = reviewer_id
+            item.reviewer_notes = reviewer_notes
+            item.reviewed_at = reviewed_at
+        self.db.flush()
+        self._notify_batch_decision(batch, actionable, approved=True)
+        return batch
+
+    def reject_batch(
+        self,
+        organization_id: UUID,
+        batch_id: UUID,
+        reviewer_id: UUID,
+        *,
+        reviewer_notes: str | None = None,
+    ) -> EmployeeInfoChangeBatch:
+        """Reject all actionable items in a batch."""
+        batch = self._get_batch_for_update(organization_id, batch_id)
+        if not batch:
+            raise ValueError(f"Batch {batch_id} not found")
+        actionable = [item for item in batch.items if item.is_actionable]
+        if not actionable:
+            raise ValueError("Batch has no actionable items")
+        reviewed_at = datetime.now(UTC)
+        for item in actionable:
+            item.status = InfoChangeStatus.REJECTED
+            item.reviewer_id = reviewer_id
+            item.reviewer_notes = reviewer_notes
+            item.reviewed_at = reviewed_at
+            self._cleanup_pending_evidence(item)
+        self.db.flush()
+        self._notify_batch_decision(batch, actionable, approved=False)
+        return batch
+
+    def _get_batch_for_update(
+        self,
+        organization_id: UUID,
+        batch_id: UUID,
+    ) -> EmployeeInfoChangeBatch | None:
+        batch = self.db.scalar(
+            select(EmployeeInfoChangeBatch)
+            .options(
+                joinedload(EmployeeInfoChangeBatch.employee),
+                joinedload(EmployeeInfoChangeBatch.items).joinedload(
+                    EmployeeInfoChangeRequest.employee
+                ),
+            )
+            .where(
+                EmployeeInfoChangeBatch.organization_id == organization_id,
+                EmployeeInfoChangeBatch.batch_id == batch_id,
+            )
+            .with_for_update()
+        )
+        if batch is None:
+            return None
+        self.db.scalars(
+            select(EmployeeInfoChangeRequest)
+            .where(
+                EmployeeInfoChangeRequest.organization_id == organization_id,
+                EmployeeInfoChangeRequest.batch_id == batch_id,
+            )
+            .with_for_update()
+        ).all()
+        return batch
+
+    def _revalidate_actionable_batch_item(
+        self,
+        request: EmployeeInfoChangeRequest,
+    ) -> None:
+        if request.change_type == InfoChangeType.DOCUMENT:
+            self._assert_document_request_still_unique(request)
+            return
+        if request.change_type in self.EXTENDED_CHANGE_TYPES:
+            self._assert_extended_request_still_valid(request)
+
+    def _assert_extended_request_still_valid(
+        self,
+        request: EmployeeInfoChangeRequest,
+    ) -> None:
+        if request.operation == InfoChangeOperation.CREATE:
+            self._assert_no_approved_duplicate(
+                request.organization_id,
+                request.employee_id,
+                change_type=request.change_type,
+                proposed_changes=request.proposed_changes,
+            )
+            return
+        if request.target_record_id is None:
+            raise ValueError("Update request is missing a target record")
+        employee = self._get_employee_or_raise(
+            request.organization_id,
+            request.employee_id,
+        )
+        if request.change_type == InfoChangeType.QUALIFICATION:
+            qualification = EmployeeQualificationService(
+                self.db, request.organization_id
+            ).get_qualification(request.target_record_id)
+            if qualification.employee_id != employee.employee_id:
+                raise ValueError("Qualification not found")
+            self._assert_snapshot_matches(
+                self._qualification_snapshot(qualification),
+                request.previous_values,
+                entity_name="Qualification",
+            )
+            return
+        if request.change_type == InfoChangeType.CERTIFICATION:
+            certification = EmployeeCertificationService(
+                self.db, request.organization_id
+            ).get_certification(request.target_record_id)
+            if certification.employee_id != employee.employee_id:
+                raise ValueError("Certification not found")
+            self._assert_snapshot_matches(
+                self._certification_snapshot(certification),
+                request.previous_values,
+                entity_name="Certification",
+            )
+            return
+        if request.change_type == InfoChangeType.SKILL:
+            skill = EmployeeSkillService(
+                self.db, request.organization_id
+            ).get_employee_skill(request.target_record_id)
+            if skill.employee_id != employee.employee_id:
+                raise ValueError("Skill not found")
+            self._assert_snapshot_matches(
+                self._skill_snapshot(skill),
+                request.previous_values,
+                entity_name="Skill",
+            )
+            return
+        if request.change_type == InfoChangeType.DEPENDENT:
+            dependant = EmployeeDependentService(
+                self.db, request.organization_id
+            ).get_dependent(request.target_record_id)
+            if dependant.employee_id != employee.employee_id:
+                raise ValueError("Dependant not found")
+            self._assert_snapshot_matches(
+                self._dependent_snapshot(dependant),
+                request.previous_values,
+                entity_name="Dependent",
+            )
+
+    def _assert_document_request_still_unique(
+        self,
+        request: EmployeeInfoChangeRequest,
+    ) -> None:
+        original_filename = request.pending_document_name or ""
+        checksum = request.pending_document_checksum
+        self._assert_document_not_already_uploaded(
+            request.organization_id,
+            request.employee_id,
+            request.proposed_changes,
+            original_filename,
+            checksum,
+        )
 
     def _apply_changes(self, request: EmployeeInfoChangeRequest) -> None:
         """Apply the proposed changes to employee/tax profile."""
@@ -829,6 +1462,7 @@ class InfoChangeService:
         *,
         document_type: DocumentType,
         document_name: str,
+        description: str | None = None,
         issue_date: date | None = None,
         expiry_date: date | None = None,
     ) -> UUID | None:
@@ -843,6 +1477,8 @@ class InfoChangeService:
             file_name=request.pending_document_name,
             file_size=request.pending_document_size,
             mime_type=request.pending_document_mime_type,
+            content_checksum=request.pending_document_checksum,
+            description=description,
             issue_date=issue_date,
             expiry_date=expiry_date,
         )
@@ -919,6 +1555,7 @@ class InfoChangeService:
             request,
             document_type=DocumentType(validated["document_type"]),
             document_name=validated["document_name"],
+            description=validated.get("description"),
             issue_date=self._coerce_date(validated.get("issue_date"), "issue_date"),
             expiry_date=self._coerce_date(validated.get("expiry_date"), "expiry_date"),
         )
@@ -1385,7 +2022,10 @@ class InfoChangeService:
         )
         stmt = (
             select(EmployeeInfoChangeRequest)
-            .options(joinedload(EmployeeInfoChangeRequest.employee))
+            .options(
+                joinedload(EmployeeInfoChangeRequest.employee),
+                joinedload(EmployeeInfoChangeRequest.batch),
+            )
             .where(EmployeeInfoChangeRequest.organization_id == organization_id)
             .order_by(EmployeeInfoChangeRequest.created_at.desc())
             .offset(offset)
@@ -1408,7 +2048,10 @@ class InfoChangeService:
         self.expire_requests(organization_id)
         return self.db.scalar(
             select(EmployeeInfoChangeRequest)
-            .options(joinedload(EmployeeInfoChangeRequest.employee))
+            .options(
+                joinedload(EmployeeInfoChangeRequest.employee),
+                joinedload(EmployeeInfoChangeRequest.batch),
+            )
             .where(
                 EmployeeInfoChangeRequest.request_id == request_id,
                 EmployeeInfoChangeRequest.organization_id == organization_id,
@@ -1459,11 +2102,17 @@ class InfoChangeService:
     ) -> EmployeeInfoChangeRequest | None:
         """Get a specific request by ID within organization scope."""
         self.expire_requests(organization_id)
-        request = self.db.get(EmployeeInfoChangeRequest, request_id)
-        if request and request.organization_id != organization_id:
-            # Request exists but belongs to different org - treat as not found
-            return None
-        return request
+        return self.db.scalar(
+            select(EmployeeInfoChangeRequest)
+            .options(
+                joinedload(EmployeeInfoChangeRequest.employee),
+                joinedload(EmployeeInfoChangeRequest.batch),
+            )
+            .where(
+                EmployeeInfoChangeRequest.request_id == request_id,
+                EmployeeInfoChangeRequest.organization_id == organization_id,
+            )
+        )
 
     def get_employee_requests(
         self,
@@ -1502,6 +2151,27 @@ class InfoChangeService:
             )
 
         return list(self.db.scalars(stmt).all())
+
+    def get_batch_detail(
+        self,
+        organization_id: UUID,
+        batch_id: UUID,
+    ) -> EmployeeInfoChangeBatch | None:
+        """Get a single batch with ordered child requests."""
+        self.expire_requests(organization_id)
+        return self.db.scalar(
+            select(EmployeeInfoChangeBatch)
+            .options(
+                joinedload(EmployeeInfoChangeBatch.employee),
+                joinedload(EmployeeInfoChangeBatch.items).joinedload(
+                    EmployeeInfoChangeRequest.employee
+                ),
+            )
+            .where(
+                EmployeeInfoChangeBatch.organization_id == organization_id,
+                EmployeeInfoChangeBatch.batch_id == batch_id,
+            )
+        )
 
     def has_pending_request(
         self,
@@ -1675,6 +2345,73 @@ class InfoChangeService:
                 request.organization_id,
             )
 
+    def _notify_pending_batch(
+        self,
+        batch: EmployeeInfoChangeBatch,
+        employee: Employee,
+    ) -> None:
+        """Send one notification for a newly submitted batch."""
+        first_item = batch.items[0] if batch.items else None
+        if first_item is None:
+            return
+        action_path = f"/people/hr/info-changes/batches/{batch.batch_id}"
+        action_url = self._build_app_url(action_path)
+        change_label = batch.change_type.value.lower().replace("_", " ")
+        employee_name = employee.full_name or employee.employee_code
+        item_count = len(batch.items)
+
+        resolver = OrgResolver(self.db)
+        manager = resolver.get_manager(employee.employee_id, batch.organization_id)
+        resolver.notify_hr_for_vacancy_routing_alerts(batch.organization_id)
+        recipients: list[Person] = []
+        if manager and manager.person_id:
+            manager_person = self.db.get(Person, manager.person_id)
+            if manager_person is not None:
+                recipients.append(manager_person)
+        recipients.extend(self._get_admin_recipients(batch.organization_id))
+        seen_recipient_ids: set[UUID] = set()
+        for recipient in recipients:
+            if recipient.id in seen_recipient_ids:
+                continue
+            seen_recipient_ids.add(recipient.id)
+            try:
+                self.notification_service.create(
+                    self.db,
+                    organization_id=batch.organization_id,
+                    recipient_id=recipient.id,
+                    entity_type=EntityType.EMPLOYEE,
+                    entity_id=batch.batch_id,
+                    notification_type=NotificationType.SUBMITTED,
+                    title="Employee Info Update Batch",
+                    message=(
+                        f"{employee_name} submitted {item_count} {change_label} item(s) "
+                        "for review."
+                    ),
+                    channel=NotificationChannel.IN_APP,
+                    action_url=action_path,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to notify batch recipient %s: %s", recipient.id, exc
+                )
+            subject = "Employee info change batch submitted"
+            body_text = (
+                f"{employee_name} submitted {item_count} {change_label} item(s) for review.\n"
+                f"Review batch: {action_url}"
+            )
+            body_html = (
+                f"<p>{html.escape(employee_name)} submitted {item_count} "
+                f"{html.escape(change_label)} item(s) for review.</p>"
+                f'<p><a href="{action_url}">Review batch</a></p>'
+            )
+            self._send_email_safe(
+                recipient.email,
+                subject,
+                body_html,
+                body_text,
+                batch.organization_id,
+            )
+
     def _notify_decision(
         self,
         request: EmployeeInfoChangeRequest,
@@ -1689,7 +2426,7 @@ class InfoChangeService:
         notification_type = (
             NotificationType.APPROVED if approved else NotificationType.REJECTED
         )
-        action_path = "/people/self/tax-info"
+        action_path = self._decision_action_path(request)
         action_url = self._build_app_url(action_path)
         change_label = request.change_type.value.lower().replace("_", " ")
         employee_email = employee.work_email or employee.personal_email
@@ -1748,3 +2485,79 @@ class InfoChangeService:
             body_text,
             request.organization_id,
         )
+
+    def _notify_batch_decision(
+        self,
+        batch: EmployeeInfoChangeBatch,
+        items: list[EmployeeInfoChangeRequest],
+        *,
+        approved: bool,
+    ) -> None:
+        employee = self.db.get(Employee, batch.employee_id)
+        if not employee or not employee.person_id:
+            return
+        if not employee_can_receive_email(employee):
+            return
+        status = "approved" if approved else "rejected"
+        count = len(items) or len(batch.items)
+        action_path = self._decision_action_path(items[0] if items else batch.items[0])
+        action_url = self._build_app_url(action_path)
+        change_label = batch.change_type.value.lower().replace("_", " ")
+        notes = next(
+            (item.reviewer_notes for item in items if item.reviewer_notes),
+            None,
+        )
+        try:
+            self.notification_service.create(
+                self.db,
+                organization_id=batch.organization_id,
+                recipient_id=employee.person_id,
+                entity_type=EntityType.EMPLOYEE,
+                entity_id=batch.batch_id,
+                notification_type=(
+                    NotificationType.APPROVED if approved else NotificationType.REJECTED
+                ),
+                title=f"Info Update Batch {status.title()}",
+                message=(
+                    f"Your {count} {change_label} item(s) were {status}."
+                    + (f" Reason: {notes}" if notes else "")
+                ),
+                channel=NotificationChannel.IN_APP,
+                action_url=action_path,
+            )
+        except Exception as exc:
+            logger.warning("Failed to notify employee of batch decision: %s", exc)
+
+        subject = f"Your info change batch was {status}"
+        body_text = (
+            f"Your {count} {change_label} item(s) were {status}."
+            + (f"\nReason: {notes}" if notes else "")
+            + f"\nView details: {action_url}"
+        )
+        body_html = (
+            f"<p>Your {count} {html.escape(change_label)} item(s) were {status}.</p>"
+            + (f"<p>Reason: {html.escape(notes)}</p>" if notes else "")
+            + f'<p><a href="{action_url}">View details</a></p>'
+        )
+        self._send_email_safe(
+            employee.work_email or employee.personal_email,
+            subject,
+            body_html,
+            body_text,
+            batch.organization_id,
+        )
+
+    def _decision_action_path(self, request: EmployeeInfoChangeRequest) -> str:
+        mapping = {
+            InfoChangeType.BANK_DETAILS: "/people/self/tax-info",
+            InfoChangeType.TAX_INFO: "/people/self/tax-info",
+            InfoChangeType.PENSION_INFO: "/people/self/tax-info",
+            InfoChangeType.NHF_INFO: "/people/self/tax-info",
+            InfoChangeType.COMBINED: "/people/self/tax-info",
+            InfoChangeType.QUALIFICATION: "/people/self/qualifications",
+            InfoChangeType.CERTIFICATION: "/people/self/certifications",
+            InfoChangeType.SKILL: "/people/self/skills",
+            InfoChangeType.DEPENDENT: "/people/self/dependents",
+            InfoChangeType.DOCUMENT: "/people/self/documents",
+        }
+        return mapping[request.change_type]

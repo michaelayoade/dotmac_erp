@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dotmac_erp"
-version = "1.21.0"
+version = "1.22.0"
 description = "IFRS-based multi-tenant accounting software"
 authors = ["DotMac <dev@dotmac.ng>"]
 package-mode = false

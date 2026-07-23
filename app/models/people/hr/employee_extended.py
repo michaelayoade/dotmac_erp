@@ -182,6 +182,11 @@ class EmployeeDocument(Base, AuditMixin):
         String(100),
         nullable=True,
     )
+    content_checksum: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="SHA-256 checksum of the uploaded file when available",
+    )
 
     # Dates
     issue_date: Mapped[date | None] = mapped_column(

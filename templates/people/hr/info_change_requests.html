@@ -25,7 +25,7 @@
 
     {# Filters #}
     {% call(filter_attrs) compact_filters(
-        base_url="/people/hr/info-change-requests",
+        base_url="/people/hr/info-changes",
         active_filters=active_filters | default([])
     ) %}
     <div>
@@ -75,6 +75,14 @@
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                             {{ req.change_type.value | replace('_', ' ') | title }}
+                            {% if req.batch_id %}
+                            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                Batch
+                                <a href="/people/hr/info-changes/batches/{{ req.batch_id }}" class="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                                    {{ req.batch_reference }}
+                                </a>
+                            </div>
+                            {% endif %}
                         </td>
                         <td class="px-4 py-3">
                             {{ status_badge(req.status.value, 'sm') }}
@@ -83,7 +91,11 @@
                             {{ req.created_at | format_datetime if req.created_at else '-' }}
                         </td>
                         <td class="px-4 py-3 text-right">
+                            {% if req.batch_id %}
+                            <a href="/people/hr/info-changes/batches/{{ req.batch_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">Review Batch</a>
+                            {% else %}
                             <a href="/people/hr/info-changes/{{ req.request_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">Review</a>
+                            {% endif %}
                         </td>
                     </tr>
 
