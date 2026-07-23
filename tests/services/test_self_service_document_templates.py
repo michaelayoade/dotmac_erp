@@ -8,7 +8,9 @@ def test_self_service_document_form_uses_multipart_csrf_and_no_employee_id():
 
     assert 'enctype="multipart/form-data"' in template
     assert "request.state.csrf_form | safe" in template
-    assert 'name="file"' in template
+    assert "Add another" in template
+    assert "Submit all for approval" in template
+    assert "`file_${index + 1}`" in template
     assert 'name="employee_id"' not in template
     assert 'name="file_path"' not in template
 

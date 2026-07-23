@@ -72,6 +72,18 @@
                     <p class="text-slate-900 dark:text-white font-medium">{{ request_item.status.value }}</p>
                 </div>
                 <div>
+                    <p class="text-slate-500 dark:text-slate-400">Batch Reference</p>
+                    <p class="text-slate-900 dark:text-white font-medium">
+                        {% if request_item.batch_id %}
+                        <a href="/people/hr/info-changes/batches/{{ request_item.batch_id }}" class="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            {{ request_item.batch_reference }}
+                        </a>
+                        {% else %}
+                        Legacy single request
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
                     <p class="text-slate-500 dark:text-slate-400">Target Record</p>
                     <p class="text-slate-900 dark:text-white font-medium">{{ request_item.target_record_id if request_item.target_record_id else 'New record' }}</p>
                 </div>

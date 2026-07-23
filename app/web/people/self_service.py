@@ -67,6 +67,64 @@ def _coerce_iso_date(value: object | None, field_name: str) -> date | None:
     return None
 
 
+def _collect_indexed_rows(
+    form,
+    *,
+    fields: list[str],
+    file_fields: list[str] | None = None,
+) -> list[dict[str, object]]:
+    indexes: set[int] = set()
+    file_fields = file_fields or []
+    for key in form:
+        for field_name in [*fields, *file_fields]:
+            prefix = f"{field_name}_"
+            if key.startswith(prefix):
+                suffix = key[len(prefix) :]
+                if suffix.isdigit():
+                    indexes.add(int(suffix))
+    rows: list[dict[str, object]] = []
+    for index in sorted(indexes):
+        row: dict[str, object] = {}
+        for field_name in fields:
+            if field_name in {
+                "is_ongoing",
+                "does_not_expire",
+                "is_primary",
+                "is_emergency_contact",
+                "is_beneficiary",
+            }:
+                row[field_name] = bool(form.get(f"{field_name}_{index}"))
+            else:
+                row[field_name] = (
+                    _safe_form_text(form.get(f"{field_name}_{index}")) or None
+                )
+        for field_name in file_fields:
+            row["_upload"] = form.get(f"{field_name}_{index}")
+        non_blank_values = [
+            value
+            for key, value in row.items()
+            if key != "_upload" and value not in (None, "", False)
+        ]
+        has_upload = bool(getattr(row.get("_upload"), "filename", None))
+        if non_blank_values or has_upload:
+            rows.append(row)
+    return rows
+
+
+def _has_indexed_row_fields(
+    form,
+    *,
+    fields: list[str],
+    file_fields: list[str] | None = None,
+) -> bool:
+    for key in form:
+        for field_name in [*fields, *(file_fields or [])]:
+            prefix = f"{field_name}_"
+            if key.startswith(prefix) and key[len(prefix) :].isdigit():
+                return True
+    return False
+
+
 def require_self_service_profile_read(
     auth: WebAuthContext = Depends(require_self_service_access),
 ) -> WebAuthContext:
@@ -338,6 +396,30 @@ async def submit_my_document(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    indexed_fields = [
+        "document_type",
+        "document_name",
+        "description",
+        "issue_date",
+        "expiry_date",
+    ]
+    indexed_file_fields = ["file"]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    )
+    if _has_indexed_row_fields(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    ):
+        return self_service_web_service.submit_document_upload_batch_response(
+            request,
+            auth,
+            db,
+            rows=rows,
+        )
     payload = {
         "document_type": _safe_form_text(form.get("document_type")) or None,
         "document_name": _safe_form_text(form.get("document_name")) or None,
@@ -410,6 +492,38 @@ async def submit_qualification(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    indexed_fields = [
+        "qualification_type",
+        "qualification_name",
+        "field_of_study",
+        "institution_name",
+        "institution_location",
+        "start_date",
+        "end_date",
+        "is_ongoing",
+        "grade",
+        "score",
+        "max_score",
+        "notes",
+    ]
+    indexed_file_fields = ["supporting_file"]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    )
+    if _has_indexed_row_fields(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    ) and not _safe_form_text(form.get("qualification_id")):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="qualifications",
+            rows=rows,
+        )
     qualification_id = (
         coerce_uuid(_safe_form_text(form.get("qualification_id")))
         if _safe_form_text(form.get("qualification_id"))
@@ -470,6 +584,34 @@ async def submit_certification(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    indexed_fields = [
+        "certification_name",
+        "issuing_authority",
+        "issue_date",
+        "expiry_date",
+        "does_not_expire",
+        "credential_id",
+        "credential_url",
+        "notes",
+    ]
+    indexed_file_fields = ["supporting_file"]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    )
+    if _has_indexed_row_fields(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    ) and not _safe_form_text(form.get("certification_id")):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="certifications",
+            rows=rows,
+        )
     certification_id = (
         coerce_uuid(_safe_form_text(form.get("certification_id")))
         if _safe_form_text(form.get("certification_id"))
@@ -525,6 +667,28 @@ async def submit_skill(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    indexed_fields = [
+        "skill_id",
+        "proficiency_level",
+        "years_experience",
+        "last_used_date",
+        "is_primary",
+        "notes",
+    ]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+    )
+    if _has_indexed_row_fields(form, fields=indexed_fields) and not _safe_form_text(
+        form.get("employee_skill_id")
+    ):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="skills",
+            rows=rows,
+        )
     employee_skill_id = (
         coerce_uuid(_safe_form_text(form.get("employee_skill_id")))
         if _safe_form_text(form.get("employee_skill_id"))
@@ -577,6 +741,34 @@ async def submit_dependent(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    indexed_fields = [
+        "full_name",
+        "relationship",
+        "date_of_birth",
+        "gender",
+        "phone",
+        "email",
+        "address",
+        "is_emergency_contact",
+        "emergency_contact_priority",
+        "is_beneficiary",
+        "beneficiary_percentage",
+        "notes",
+    ]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+    )
+    if _has_indexed_row_fields(form, fields=indexed_fields) and not _safe_form_text(
+        form.get("dependent_id")
+    ):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="dependents",
+            rows=rows,
+        )
     dependent_id = (
         coerce_uuid(_safe_form_text(form.get("dependent_id")))
         if _safe_form_text(form.get("dependent_id"))
