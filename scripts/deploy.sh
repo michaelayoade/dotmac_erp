@@ -29,6 +29,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-150}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8003/health}"
+DEPLOY_COMPOSE_PROJECT_NAME="dotmac"
+
+# Production uses fixed container names (dotmac_erp_app, dotmac_erp_redis, etc.).
+# Compose otherwise derives its project name from the current directory, which
+# changes for revision-named release worktrees and causes container-name
+# conflicts before migrations can run. Fail closed on a conflicting caller
+# value, then export the stable name for every compose command and rollback.
+if [[ -n "${COMPOSE_PROJECT_NAME:-}" && \
+      "$COMPOSE_PROJECT_NAME" != "$DEPLOY_COMPOSE_PROJECT_NAME" ]]; then
+    echo "ERROR: COMPOSE_PROJECT_NAME must be '$DEPLOY_COMPOSE_PROJECT_NAME' for production deploys (got '$COMPOSE_PROJECT_NAME')." >&2
+    exit 2
+fi
+export COMPOSE_PROJECT_NAME="$DEPLOY_COMPOSE_PROJECT_NAME"
 
 cd "$PROJECT_DIR"
 PREV_SHA="$(git rev-parse HEAD)"
@@ -40,7 +53,7 @@ PREV_IMAGE_TAG="${PREV_IMAGE_TAG:-latest}"
 export ERP_IMAGE_TAG="$PREV_IMAGE_TAG"
 
 echo "=== DotMac ERP Deploy ==="
-echo "Project: $PROJECT_DIR   (current: ${PREV_SHA:0:12}, image: ${PREV_IMAGE_TAG})"
+echo "Project: $PROJECT_DIR   (compose: ${COMPOSE_PROJECT_NAME}, current: ${PREV_SHA:0:12}, image: ${PREV_IMAGE_TAG})"
 echo ""
 
 rollback() {
