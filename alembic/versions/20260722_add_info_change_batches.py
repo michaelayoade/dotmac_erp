@@ -22,6 +22,21 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    info_change_type_enum = postgresql.ENUM(
+        "BANK_DETAILS",
+        "TAX_INFO",
+        "PENSION_INFO",
+        "NHF_INFO",
+        "COMBINED",
+        "QUALIFICATION",
+        "CERTIFICATION",
+        "SKILL",
+        "DEPENDENT",
+        "DOCUMENT",
+        name="info_change_type",
+        schema="hr",
+        create_type=False,
+    )
 
     if not inspector.has_table("employee_info_change_batch", schema="hr"):
         op.create_table(
@@ -49,21 +64,7 @@ def upgrade() -> None:
             ),
             sa.Column(
                 "change_type",
-                sa.Enum(
-                    "BANK_DETAILS",
-                    "TAX_INFO",
-                    "PENSION_INFO",
-                    "NHF_INFO",
-                    "COMBINED",
-                    "QUALIFICATION",
-                    "CERTIFICATION",
-                    "SKILL",
-                    "DEPENDENT",
-                    "DOCUMENT",
-                    name="info_change_type",
-                    schema="hr",
-                    create_type=False,
-                ),
+                info_change_type_enum,
                 nullable=False,
             ),
             sa.Column("requester_notes", sa.Text(), nullable=True),
