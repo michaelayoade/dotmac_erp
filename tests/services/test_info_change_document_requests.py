@@ -12,6 +12,7 @@ from app.models.people.hr.info_change_request import (
     InfoChangeType,
 )
 from app.services.people.hr.info_change_service import (
+    DocumentBatchItemInput,
     InfoChangeService,
     PendingEvidence,
 )
@@ -50,7 +51,7 @@ def test_submit_document_change_request_stores_pending_metadata():
     db = MagicMock()
     db.scalar.return_value = SimpleNamespace(employee_id=employee_id, person=None)
     service = InfoChangeService(db)
-    service._notify_pending_request = MagicMock()
+    service._notify_pending_batch = MagicMock()
 
     request = service.submit_document_change_request(
         organization_id,
@@ -74,8 +75,8 @@ def test_submit_document_change_request_stores_pending_metadata():
     assert request.pending_document_name == "passport.pdf"
     assert request.pending_document_checksum == "a" * 64
     assert request.proposed_changes["pending_original_filename"] == "passport.pdf"
-    db.add.assert_called_once_with(request)
-    db.flush.assert_called_once()
+    assert db.add.call_count == 2
+    assert db.flush.call_count >= 2
 
 
 def test_submit_document_change_request_rejects_duplicate_pending_upload():
@@ -84,7 +85,7 @@ def test_submit_document_change_request_rejects_duplicate_pending_upload():
     db = MagicMock()
     db.scalar.return_value = SimpleNamespace(employee_id=employee_id, person=None)
     service = InfoChangeService(db)
-    service._notify_pending_request = MagicMock()
+    service._notify_pending_batch = MagicMock()
     service.get_pending_requests = MagicMock(
         return_value=[
             SimpleNamespace(
@@ -117,3 +118,64 @@ def test_submit_document_change_request_rejects_duplicate_pending_upload():
         )
 
     db.add.assert_not_called()
+
+
+def test_submit_document_change_batch_rejects_empty_batch():
+    organization_id = uuid4()
+    employee_id = uuid4()
+    db = MagicMock()
+    db.scalar.return_value = SimpleNamespace(employee_id=employee_id, person=None)
+    service = InfoChangeService(db)
+
+    with pytest.raises(ValueError, match="At least one non-blank row is required"):
+        service.submit_document_change_batch(
+            organization_id,
+            employee_id,
+            items=[],
+        )
+
+
+def test_submit_document_change_batch_rejects_duplicate_rows():
+    organization_id = uuid4()
+    employee_id = uuid4()
+    db = MagicMock()
+    db.scalar.return_value = SimpleNamespace(employee_id=employee_id, person=None)
+    service = InfoChangeService(db)
+    service._notify_pending_batch = MagicMock()
+
+    evidence_one = PendingEvidence(
+        path=f"{organization_id}/{employee_id}/passport-1.pdf",
+        file_name="passport.pdf",
+        file_size=1024,
+        mime_type="application/pdf",
+        checksum="c" * 64,
+    )
+    evidence_two = PendingEvidence(
+        path=f"{organization_id}/{employee_id}/passport-2.pdf",
+        file_name="passport.pdf",
+        file_size=1024,
+        mime_type="application/pdf",
+        checksum="c" * 64,
+    )
+
+    with pytest.raises(ValueError, match="Duplicate document rows are not allowed"):
+        service.submit_document_change_batch(
+            organization_id,
+            employee_id,
+            items=[
+                DocumentBatchItemInput(
+                    proposed_changes={
+                        "document_type": "PASSPORT",
+                        "document_name": "International Passport",
+                    },
+                    pending_evidence=evidence_one,
+                ),
+                DocumentBatchItemInput(
+                    proposed_changes={
+                        "document_type": "PASSPORT",
+                        "document_name": "International Passport",
+                    },
+                    pending_evidence=evidence_two,
+                ),
+            ],
+        )

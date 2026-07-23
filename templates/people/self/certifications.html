@@ -14,16 +14,22 @@
 {% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-5xl space-y-6">
+<div class="mx-auto max-w-6xl space-y-6">
     <div class="card p-6">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Certifications</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Submit professional certification changes for HR approval. Approval does not mark evidence as verified.</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Submit one or more certifications for HR approval. Existing-record edits remain one-at-a-time.</p>
             </div>
-            {% if pending_request %}<div class="space-y-2 text-right">{{ status_badge(pending_request.status.value, 'sm') }}<p class="text-xs text-amber-700 dark:text-amber-300">This section is locked until the pending request is reviewed.</p></div>{% endif %}
+            <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <span>Max {{ max_batch_items }} items per submission</span>
+                {% if create_pending_requests %}
+                {{ status_badge('PENDING', 'sm') }}
+                {% endif %}
+            </div>
         </div>
     </div>
+
     <div class="card p-4">
         <div class="flex flex-wrap gap-2">
             <a href="/people/self/qualifications" class="btn btn-secondary">Qualifications</a>
@@ -33,19 +39,10 @@
             <a href="/people/self/documents" class="btn btn-secondary">My Documents</a>
         </div>
     </div>
+
     {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ success }}</div>{% endif %}
     {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ error }}</div>{% endif %}
-    {% if pending_request %}
-    <div class="card p-6">
-        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Pending Request</h3>
-        <div class="mt-3 grid gap-3 md:grid-cols-3 text-sm">
-            <div><span class="text-slate-500 dark:text-slate-400">Operation</span><p class="font-medium text-slate-900 dark:text-white">{{ pending_request.operation.value | title }}</p></div>
-            <div><span class="text-slate-500 dark:text-slate-400">Submitted</span><p class="font-medium text-slate-900 dark:text-white">{{ pending_request.created_at | format_datetime if pending_request.created_at else '-' }}</p></div>
-            <div><span class="text-slate-500 dark:text-slate-400">Target</span><p class="font-medium text-slate-900 dark:text-white">{{ pending_request.target_record_id if pending_request.target_record_id else 'New certification' }}</p></div>
-        </div>
-        {% if pending_request.pending_document_path %}<a href="/people/self/info-change-evidence/{{ pending_request.request_id }}" class="mt-4 inline-flex text-sm font-medium text-violet-600 hover:underline dark:text-violet-400">Download pending evidence</a>{% endif %}
-    </div>
-    {% endif %}
+
     <div class="card overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700"><h3 class="text-lg font-semibold text-slate-900 dark:text-white">Current Certifications</h3></div>
         <div class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -56,29 +53,86 @@
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ record.issuing_authority }}</p>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Issued {{ record.issue_date | format_date if record.issue_date else '-' }}</p>
                 </div>
-                <a href="/people/self/certifications?edit_id={{ record.certification_id }}" class="btn btn-secondary" {% if pending_request %}aria-disabled="true"{% endif %}>Edit</a>
+                <a href="/people/self/certifications?edit_id={{ record.certification_id }}" class="btn btn-secondary">Edit</a>
             </div>
             {% else %}
             <div class="px-6 py-8 text-sm text-slate-500 dark:text-slate-400">No certifications have been recorded yet.</div>
             {% endfor %}
         </div>
     </div>
+
+    {% if edit_record %}
     <form method="post" enctype="multipart/form-data" class="card p-6 space-y-4">
         {{ request.state.csrf_form | safe }}
-        {% if edit_record %}<input type="hidden" name="certification_id" value="{{ edit_record.certification_id }}">{% endif %}
-        <div><h3 class="text-lg font-semibold text-slate-900 dark:text-white">{{ "Edit Certification" if edit_record else "Add Certification" }}</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Supporting evidence is optional and remains attached to the pending request until HR approves it.</p></div>
-        <fieldset class="grid gap-4 md:grid-cols-2" {% if pending_request %}disabled{% endif %}>
+        <input type="hidden" name="certification_id" value="{{ edit_record.certification_id }}">
+        <div><h3 class="text-lg font-semibold text-slate-900 dark:text-white">Edit Certification</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Updates are submitted one at a time for approval. Supporting evidence is optional.</p></div>
+        <fieldset class="grid gap-4 md:grid-cols-2">
             <div><label for="certification_name" class="form-label">Certification Name</label><input id="certification_name" name="certification_name" class="form-input w-full" value="{{ form_data.get('certification_name') if form_data else (edit_record.certification_name if edit_record else '') }}"></div>
             <div><label for="issuing_authority" class="form-label">Issuing Authority</label><input id="issuing_authority" name="issuing_authority" class="form-input w-full" value="{{ form_data.get('issuing_authority') if form_data else (edit_record.issuing_authority if edit_record else '') }}"></div>
             <div><label for="issue_date" class="form-label">Issue Date</label><input type="date" id="issue_date" name="issue_date" class="form-input w-full" value="{{ form_data.get('issue_date') if form_data else (edit_record.issue_date.isoformat() if edit_record and edit_record.issue_date else '') }}"></div>
             <div><label for="expiry_date" class="form-label">Expiry Date</label><input type="date" id="expiry_date" name="expiry_date" class="form-input w-full" value="{{ form_data.get('expiry_date') if form_data else (edit_record.expiry_date.isoformat() if edit_record and edit_record.expiry_date else '') }}"></div>
-            <div><label class="form-label">Does Not Expire</label><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="does_not_expire" value="1" {% set dne_value = form_data.get('does_not_expire') if form_data else (edit_record.does_not_expire if edit_record else false) %}{% if dne_value %}checked{% endif %}>No expiry date</label></div>
+            <div><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="does_not_expire" value="1" {% set dne_value = form_data.get('does_not_expire') if form_data else (edit_record.does_not_expire if edit_record else false) %}{% if dne_value %}checked{% endif %}>No expiry date</label></div>
             <div><label for="credential_id" class="form-label">Credential ID</label><input id="credential_id" name="credential_id" class="form-input w-full" value="{{ form_data.get('credential_id') if form_data else (edit_record.credential_id if edit_record and edit_record.credential_id else '') }}"></div>
             <div class="md:col-span-2"><label for="credential_url" class="form-label">Verification URL</label><input id="credential_url" name="credential_url" class="form-input w-full" value="{{ form_data.get('credential_url') if form_data else (edit_record.credential_url if edit_record and edit_record.credential_url else '') }}"></div>
-            <div class="md:col-span-2"><label for="supporting_file" class="form-label">Supporting File</label><input id="supporting_file" type="file" name="supporting_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="form-input w-full"><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Max 10 MB. Approved types only.</p></div>
+            <div class="md:col-span-2"><label for="supporting_file" class="form-label">Supporting File</label><input id="supporting_file" type="file" name="supporting_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="form-input w-full"><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Approved types only. Max 10 MB.</p></div>
             <div class="md:col-span-2"><label for="notes" class="form-label">Notes</label><textarea id="notes" name="notes" rows="3" class="form-input w-full">{{ form_data.get('notes') if form_data else (edit_record.notes if edit_record and edit_record.notes else '') }}</textarea></div>
         </fieldset>
-        <div class="flex justify-end"><button type="submit" class="btn btn-primary" {% if pending_request %}disabled{% endif %}>Submit for HR Approval</button></div>
+        <div class="flex justify-end gap-3"><a href="/people/self/certifications" class="btn btn-secondary">Cancel</a><button type="submit" class="btn btn-primary">Submit for HR Approval</button></div>
     </form>
+    {% else %}
+    <form method="post" enctype="multipart/form-data" class="card p-6 space-y-6"
+          x-data='{
+              rows: {{ form_rows | tojson | safe }},
+              maxRows: {{ max_batch_items }},
+              submitting: false,
+              blankRow: {{ {
+                  "certification_name": "",
+                  "issuing_authority": "",
+                  "issue_date": "",
+                  "expiry_date": "",
+                  "does_not_expire": false,
+                  "credential_id": "",
+                  "credential_url": "",
+                  "notes": "",
+                  "_errors": {}
+              } | tojson | safe }},
+              addRow() { if (this.rows.length < this.maxRows) this.rows.push(JSON.parse(JSON.stringify(this.blankRow))); },
+              removeRow(index) { if (this.rows.length > 1) this.rows.splice(index, 1); }
+          }'
+          @submit="submitting = true">
+        {{ request.state.csrf_form | safe }}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Add Certifications</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Add one certification, then use <span class="font-medium">Add another</span> for the rest. Files must be reselected if validation fails.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" @click="addRow()" :disabled="rows.length >= maxRows">Add another</button>
+        </div>
+        <template x-for="(row, index) in rows" :key="index">
+            <section class="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h4 class="text-base font-semibold text-slate-900 dark:text-white" x-text="`Certification ${index + 1}`"></h4>
+                    <button type="button" class="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" x-show="rows.length > 1" @click="removeRow(index)">Remove</button>
+                </div>
+                <template x-if="row._errors && row._errors.row"><p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300" x-text="row._errors.row"></p></template>
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div><label class="form-label">Certification Name</label><input class="form-input w-full" :name="`certification_name_${index + 1}`" x-model="row.certification_name"><p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.certification_name" x-text="row._errors && row._errors.certification_name"></p></div>
+                    <div><label class="form-label">Issuing Authority</label><input class="form-input w-full" :name="`issuing_authority_${index + 1}`" x-model="row.issuing_authority"><p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.issuing_authority" x-text="row._errors && row._errors.issuing_authority"></p></div>
+                    <div><label class="form-label">Issue Date</label><input type="date" class="form-input w-full" :name="`issue_date_${index + 1}`" x-model="row.issue_date"></div>
+                    <div><label class="form-label">Expiry Date</label><input type="date" class="form-input w-full" :name="`expiry_date_${index + 1}`" x-model="row.expiry_date"></div>
+                    <div><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" value="1" :name="`does_not_expire_${index + 1}`" x-model="row.does_not_expire">No expiry date</label></div>
+                    <div><label class="form-label">Credential ID</label><input class="form-input w-full" :name="`credential_id_${index + 1}`" x-model="row.credential_id"></div>
+                    <div class="md:col-span-2"><label class="form-label">Verification URL</label><input class="form-input w-full" :name="`credential_url_${index + 1}`" x-model="row.credential_url"></div>
+                    <div class="md:col-span-2"><label class="form-label">Supporting File</label><input type="file" class="form-input w-full" :name="`supporting_file_${index + 1}`" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"></div>
+                    <div class="md:col-span-2"><label class="form-label">Notes</label><textarea rows="3" class="form-input w-full" :name="`notes_${index + 1}`" x-model="row.notes"></textarea></div>
+                </div>
+            </section>
+        </template>
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Blank rows are ignored. Completely empty submissions are rejected.</p>
+            <button type="submit" class="btn btn-primary" :disabled="submitting"><span x-show="!submitting">Submit all for approval</span><span x-show="submitting">Submitting...</span></button>
+        </div>
+    </form>
+    {% endif %}
 </div>
 {% endblock %}

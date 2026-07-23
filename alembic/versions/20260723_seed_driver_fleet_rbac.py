@@ -1,7 +1,7 @@
 """Ensure the restricted Fleet Driver role and grants exist.
 
 Revision ID: 20260723_driver_fleet_rbac
-Revises: 20260722_sla_policy_documents
+Revises: 20260722_info_change_batches
 Create Date: 2026-07-23
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260723_driver_fleet_rbac"
-down_revision: str | tuple[str, ...] = "20260722_sla_policy_documents"
+down_revision: str | tuple[str, ...] = "20260722_info_change_batches"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

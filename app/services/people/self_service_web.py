@@ -81,6 +81,8 @@ from app.services.people.hr.employee_extended import (
 )
 from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.info_change_service import (
+    DocumentBatchItemInput,
+    ExtendedBatchItemInput,
     InfoChangeService,
     PendingEvidence,
 )
@@ -1244,6 +1246,88 @@ class SelfServiceWebService:
             raise EmployeeExtendedDataError("Unsupported self-service section")
         return mapping[section]
 
+    @staticmethod
+    def _default_section_row(section: str) -> dict[str, Any]:
+        defaults: dict[str, dict[str, Any]] = {
+            "qualifications": {
+                "qualification_type": "",
+                "qualification_name": "",
+                "field_of_study": "",
+                "institution_name": "",
+                "institution_location": "",
+                "start_date": "",
+                "end_date": "",
+                "is_ongoing": False,
+                "grade": "",
+                "score": "",
+                "max_score": "",
+                "notes": "",
+                "_errors": {},
+            },
+            "certifications": {
+                "certification_name": "",
+                "issuing_authority": "",
+                "issue_date": "",
+                "expiry_date": "",
+                "does_not_expire": False,
+                "credential_id": "",
+                "credential_url": "",
+                "notes": "",
+                "_errors": {},
+            },
+            "skills": {
+                "skill_id": "",
+                "proficiency_level": "",
+                "years_experience": "",
+                "last_used_date": "",
+                "is_primary": False,
+                "notes": "",
+                "_errors": {},
+            },
+            "dependents": {
+                "full_name": "",
+                "relationship": "",
+                "date_of_birth": "",
+                "gender": "",
+                "phone": "",
+                "email": "",
+                "address": "",
+                "is_emergency_contact": False,
+                "emergency_contact_priority": "",
+                "is_beneficiary": False,
+                "beneficiary_percentage": "",
+                "notes": "",
+                "_errors": {},
+            },
+        }
+        return defaults[section].copy()
+
+    @staticmethod
+    def _default_document_row() -> dict[str, Any]:
+        return {
+            "document_type": "",
+            "document_name": "",
+            "description": "",
+            "issue_date": "",
+            "expiry_date": "",
+            "_errors": {},
+        }
+
+    @staticmethod
+    def _assign_row_error(row: dict[str, Any], message: str) -> None:
+        lowered = message.lower()
+        matched_fields: list[str] = []
+        for field_name in row:
+            if field_name.startswith("_"):
+                continue
+            if field_name in lowered or field_name.replace("_", " ") in lowered:
+                matched_fields.append(field_name)
+        if not matched_fields:
+            row.setdefault("_errors", {})["row"] = message
+            return
+        for field_name in matched_fields:
+            row.setdefault("_errors", {})[field_name] = message
+
     def extended_profile_response(
         self,
         request: Request,
@@ -1255,6 +1339,7 @@ class SelfServiceWebService:
         error: str | None = None,
         edit_id: UUID | None = None,
         form_data: dict[str, Any] | None = None,
+        form_rows: list[dict[str, Any]] | None = None,
     ) -> HTMLResponse:
         title, active_module, change_type = self._extended_section_config(section)
         org_id = coerce_uuid(auth.organization_id)
@@ -1282,10 +1367,15 @@ class SelfServiceWebService:
             org_id,
             employee_id=employee_id,
             change_type=change_type,
-            limit=1,
+            limit=50,
         )
         if pending_requests:
             pending_request = pending_requests[0]
+        create_pending_requests = [
+            item
+            for item in pending_requests
+            if item.operation == InfoChangeOperation.CREATE
+        ]
         recent_requests = info_change_service.get_employee_requests(
             org_id,
             employee_id,
@@ -1324,6 +1414,10 @@ class SelfServiceWebService:
                 "edit_record": edit_record,
                 "edit_id": edit_id,
                 "form_data": form_data or {},
+                "form_rows": form_rows or [self._default_section_row(section)],
+                "pending_requests": pending_requests,
+                "create_pending_requests": create_pending_requests,
+                "max_batch_items": InfoChangeService.MAX_BATCH_ITEMS,
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
@@ -1426,6 +1520,7 @@ class SelfServiceWebService:
         *,
         error: str | None = None,
         form_data: dict[str, Any] | None = None,
+        form_rows: list[dict[str, Any]] | None = None,
     ) -> HTMLResponse:
         self._require_permission(auth, "selfservice:documents:upload")
         org_id = coerce_uuid(auth.organization_id)
@@ -1455,7 +1550,9 @@ class SelfServiceWebService:
                 "employee": employee,
                 "document_types": self._employee_document_type_options(),
                 "form_data": form_data or {},
+                "form_rows": form_rows or [self._default_document_row()],
                 "error": error,
+                "max_batch_items": InfoChangeService.MAX_BATCH_ITEMS,
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
@@ -1523,6 +1620,89 @@ class SelfServiceWebService:
                 form_data=payload,
             )
 
+    def submit_document_upload_batch_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        rows: list[dict[str, Any]],
+    ) -> RedirectResponse | HTMLResponse:
+        self._require_permission(auth, "selfservice:documents:upload")
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        info_change_service = InfoChangeService(db)
+        normalized_rows: list[DocumentBatchItemInput] = []
+        row_errors = False
+        upload_service = get_employee_document_upload()
+        uploaded: list[PendingEvidence] = []
+        try:
+            for row in rows:
+                row.setdefault("_errors", {})
+                try:
+                    normalized = info_change_service._validate_document_payload(row)
+                except ValueError as exc:
+                    self._assign_row_error(row, str(exc))
+                    row_errors = True
+                    continue
+                upload = row.get("_upload")
+                try:
+                    pending = self._upload_pending_evidence(
+                        org_id=org_id,
+                        employee_id=employee_id,
+                        upload=upload,
+                    )
+                except EmployeeExtendedDataError as exc:
+                    row["_errors"]["file"] = str(exc)
+                    row_errors = True
+                    continue
+                if pending is None:
+                    row["_errors"]["file"] = "Select a file to upload"
+                    row_errors = True
+                    continue
+                uploaded.append(pending)
+                normalized_rows.append(
+                    DocumentBatchItemInput(
+                        proposed_changes=normalized,
+                        pending_evidence=pending,
+                    )
+                )
+            if row_errors:
+                for item in uploaded:
+                    upload_service.delete(item.path)
+                return self.document_upload_form_response(
+                    request,
+                    auth,
+                    db,
+                    error="Correct the highlighted rows and try again",
+                    form_rows=rows,
+                )
+            info_change_service.submit_document_change_batch(
+                organization_id=org_id,
+                employee_id=employee_id,
+                items=normalized_rows,
+            )
+            db.commit()
+            return RedirectResponse(
+                url="/people/self/documents?success=Documents+submitted+for+HR+approval",
+                status_code=303,
+            )
+        except (EmployeeExtendedDataError, ValueError) as exc:
+            db.rollback()
+            for item in uploaded:
+                try:
+                    upload_service.delete(item.path)
+                except Exception:
+                    logger.exception("Failed to clean up pending self-service document")
+            return self.document_upload_form_response(
+                request,
+                auth,
+                db,
+                error=str(exc),
+                form_rows=rows,
+            )
+
     def download_document_response(
         self,
         auth: WebAuthContext,
@@ -1567,18 +1747,6 @@ class SelfServiceWebService:
         employee_id = self._get_employee_id(db, org_id, person_id)
 
         info_change_service = InfoChangeService(db)
-        if info_change_service.has_pending_request(
-            org_id,
-            employee_id,
-            change_type=change_type,
-        ):
-            path = self._build_extended_query(
-                f"/people/self/{section}",
-                error="A pending request already exists for this section",
-                edit_id=record_id,
-            )
-            return RedirectResponse(url=path, status_code=303)
-
         extended_service = EmployeeExtendedSelfServiceService(db, org_id)
         operation = (
             InfoChangeOperation.UPDATE
@@ -1652,6 +1820,102 @@ class SelfServiceWebService:
                 error=str(exc),
                 edit_id=record_id,
                 form_data=payload,
+            )
+
+    def submit_extended_profile_batch_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        section: str,
+        rows: list[dict[str, Any]],
+    ) -> RedirectResponse | HTMLResponse:
+        _, _, change_type = self._extended_section_config(section)
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        info_change_service = InfoChangeService(db)
+        upload_service = get_employee_document_upload()
+        prepared: list[ExtendedBatchItemInput] = []
+        uploaded: list[PendingEvidence] = []
+        row_errors = False
+        try:
+            for row in rows:
+                row.setdefault("_errors", {})
+                try:
+                    normalized = info_change_service._validate_extended_payload(
+                        org_id,
+                        employee_id,
+                        change_type=change_type,
+                        payload=row,
+                        target_record_id=None,
+                    )
+                except ValueError as exc:
+                    self._assign_row_error(row, str(exc))
+                    row_errors = True
+                    continue
+                pending_evidence = None
+                if section in {"qualifications", "certifications"}:
+                    try:
+                        pending_evidence = self._upload_pending_evidence(
+                            org_id=org_id,
+                            employee_id=employee_id,
+                            upload=row.get("_upload"),
+                        )
+                    except EmployeeExtendedDataError as exc:
+                        row["_errors"]["supporting_file"] = str(exc)
+                        row_errors = True
+                        continue
+                    if pending_evidence:
+                        uploaded.append(pending_evidence)
+                prepared.append(
+                    ExtendedBatchItemInput(
+                        proposed_changes=normalized,
+                        previous_values={},
+                        operation=InfoChangeOperation.CREATE,
+                        pending_evidence=pending_evidence,
+                    )
+                )
+            if row_errors:
+                for item in uploaded:
+                    upload_service.delete(item.path)
+                return self.extended_profile_response(
+                    request,
+                    auth,
+                    db,
+                    section=section,
+                    error="Correct the highlighted rows and try again",
+                    form_rows=rows,
+                )
+            info_change_service.submit_extended_change_batch(
+                organization_id=org_id,
+                employee_id=employee_id,
+                change_type=change_type,
+                items=prepared,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=self._build_extended_query(
+                    f"/people/self/{section}",
+                    success="Changes submitted for HR approval",
+                ),
+                status_code=303,
+            )
+        except (EmployeeExtendedDataError, ValueError) as exc:
+            db.rollback()
+            for item in uploaded:
+                try:
+                    upload_service.delete(item.path)
+                except Exception:
+                    logger.exception("Failed to clean up pending self-service evidence")
+            return self.extended_profile_response(
+                request,
+                auth,
+                db,
+                section=section,
+                error=str(exc),
+                form_rows=rows,
             )
 
     def download_pending_info_change_evidence_response(

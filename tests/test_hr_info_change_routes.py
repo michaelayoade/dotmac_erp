@@ -4,7 +4,9 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from app.web.people.hr.info_changes import (
+    approve_info_change_batch,
     approve_info_change_request,
+    reject_info_change_batch,
     reject_info_change_request,
 )
 
@@ -76,3 +78,45 @@ def test_reject_info_change_request_commits_and_redirects_success():
     db.rollback.assert_not_called()
     assert response.status_code == 303
     assert response.headers["location"].endswith(f"{request_id}?success=Rejected")
+
+
+def test_approve_info_change_batch_commits_and_redirects_success():
+    db = MagicMock()
+    auth = _auth_context()
+    batch_id = uuid4()
+
+    with patch("app.web.people.hr.info_changes.InfoChangeService") as svc_cls:
+        response = approve_info_change_batch(
+            batch_id=batch_id,
+            reviewer_notes="Approve all",
+            auth=auth,
+            db=db,
+        )
+
+    svc_cls.return_value.approve_batch.assert_called_once()
+    db.commit.assert_called_once()
+    db.rollback.assert_not_called()
+    assert response.status_code == 303
+    assert response.headers["location"].endswith(f"{batch_id}?success=Approved")
+
+
+def test_reject_info_change_batch_rolls_back_and_redirects_error():
+    db = MagicMock()
+    auth = _auth_context()
+    batch_id = uuid4()
+
+    with patch("app.web.people.hr.info_changes.InfoChangeService") as svc_cls:
+        svc_cls.return_value.reject_batch.side_effect = ValueError(
+            "Batch has no actionable items"
+        )
+        response = reject_info_change_batch(
+            batch_id=batch_id,
+            reviewer_notes="Reject all",
+            auth=auth,
+            db=db,
+        )
+
+    db.commit.assert_not_called()
+    db.rollback.assert_called_once()
+    assert response.status_code == 303
+    assert "error=Batch%20has%20no%20actionable%20items" in response.headers["location"]
