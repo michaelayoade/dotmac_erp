@@ -3698,36 +3698,32 @@ class OperationsInventoryWebService:
             for line in request.items
         }
 
-        project_ids = {
-            line.project_id or request.project_id
-            for transaction in material_request_transactions
-            if (request := requests_by_id.get(transaction.source_document_id))
-            is not None
-            for line in [
-                lines_by_request_and_id.get(
-                    (
-                        transaction.source_document_id,
-                        transaction.source_document_line_id,
-                    )
+        project_ids: set[UUID] = set()
+        ticket_ids: set[UUID] = set()
+        for transaction in material_request_transactions:
+            request = requests_by_id.get(transaction.source_document_id)
+            if request is None:
+                continue
+            line = lines_by_request_and_id.get(
+                (
+                    transaction.source_document_id,
+                    transaction.source_document_line_id,
                 )
-            ]
-            if (line.project_id if line is not None else None) or request.project_id
-        }
-        ticket_ids = {
-            line.ticket_id or request.ticket_id
-            for transaction in material_request_transactions
-            if (request := requests_by_id.get(transaction.source_document_id))
-            is not None
-            for line in [
-                lines_by_request_and_id.get(
-                    (
-                        transaction.source_document_id,
-                        transaction.source_document_line_id,
-                    )
-                )
-            ]
-            if (line.ticket_id if line is not None else None) or request.ticket_id
-        }
+            )
+            project_id = (
+                line.project_id
+                if line is not None and line.project_id is not None
+                else request.project_id
+            )
+            ticket_id = (
+                line.ticket_id
+                if line is not None and line.ticket_id is not None
+                else request.ticket_id
+            )
+            if project_id is not None:
+                project_ids.add(project_id)
+            if ticket_id is not None:
+                ticket_ids.add(ticket_id)
 
         projects = (
             list(
