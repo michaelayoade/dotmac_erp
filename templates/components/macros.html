@@ -18,6 +18,14 @@
   'CRITICAL': 'badge-overdue',
   'LOW': 'badge-pending',
   'WARNING': 'badge-overdue',
+  'APPROACHING REORDER': 'badge-pending',
+  'APPROACHING_REORDER': 'badge-pending',
+  'REACHED REORDER': 'badge-at-reorder',
+  'REACHED_REORDER': 'badge-at-reorder',
+  'AT REORDER': 'badge-at-reorder',
+  'AT_REORDER': 'badge-at-reorder',
+  'BELOW REORDER': 'badge-rejected',
+  'BELOW_REORDER': 'badge-rejected',
   'ATTENTION': 'badge-pending',
   'INFO': 'badge-approved',
   'NOT_IN_USE': 'badge-draft',
@@ -117,6 +125,10 @@
   'CRITICAL': '!',
   'LOW': '!',
   'WARNING': '!',
+  'APPROACHING REORDER': '!',
+  'REACHED REORDER': '!',
+  'AT REORDER': '!',
+  'BELOW REORDER': '!',
   'CANCELLED': 'x'
 }.get(status_upper, '*') %}
 {% set resolved_size = badge_size_classes.get(size, badge_size_classes.md) %}
@@ -133,15 +145,26 @@
           {{ stats_card("Revenue", "$125,000", variant="revenue", sparkline=true) }}
    Supports variants: revenue, expenses, receivables, payables (adds top border accent)
    ============================================ #}
-{% macro stats_card(label, value, icon="chart", color="slate", href=none, subtitle=none, trend=none, variant=none, sparkline=false) %}
+{% macro stats_card(label, value, icon="chart", color="slate", href=none, subtitle=none, trend=none, variant=none, sparkline=false, active=false) %}
 {% set colors = {
   'emerald': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-600 dark:text-emerald-400'},
   'rose': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-600 dark:text-rose-400'},
   'blue': {'bg': 'bg-blue-100 dark:bg-blue-900/30', 'text': 'text-blue-600 dark:text-blue-400'},
   'amber': {'bg': 'bg-amber-100 dark:bg-amber-900/30', 'text': 'text-amber-600 dark:text-amber-400'},
+  'orange': {'bg': 'bg-orange-100 dark:bg-orange-900/30', 'text': 'text-orange-600 dark:text-orange-400'},
   'teal': {'bg': 'bg-teal-100 dark:bg-teal-900/30', 'text': 'text-teal-600 dark:text-teal-400'},
   'violet': {'bg': 'bg-violet-100 dark:bg-violet-900/30', 'text': 'text-violet-600 dark:text-violet-400'},
   'slate': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400'}
+} %}
+{% set active_classes = {
+  'emerald': 'border-2 border-emerald-300 dark:border-emerald-700',
+  'rose': 'border-2 border-rose-300 dark:border-rose-700',
+  'blue': 'border-2 border-blue-300 dark:border-blue-700',
+  'amber': 'border-2 border-amber-300 dark:border-amber-700',
+  'orange': 'border-2 border-amber-300 dark:border-amber-700',
+  'teal': 'border-2 border-teal-300 dark:border-teal-700',
+  'violet': 'border-2 border-violet-300 dark:border-violet-700',
+  'slate': 'border-2 border-slate-300 dark:border-slate-600'
 } %}
 {% set variant_classes = {
   'revenue': 'stat-card-revenue',
@@ -154,7 +177,8 @@
 {% set card_class = 'stat-card' if variant else 'card' %}
 {% set variant_class = variant_classes.get(variant, '') %}
 {% set sparkline_class = 'stat-card-sparkline' if sparkline else '' %}
-<{{ tag }} {% if href %}href="{{ href }}"{% endif %} class="{{ card_class }} {{ variant_class }} {{ sparkline_class }} p-5 {{ 'card-hover group hover-lift' if href else '' }}">
+{% set active_class = active_classes.get(color, active_classes.slate) if active else '' %}
+<{{ tag }} {% if href %}href="{{ href }}"{% endif %}{% if active %} aria-current="true"{% endif %} class="{{ card_class }} {{ variant_class }} {{ sparkline_class }} {{ active_class }} p-5 {{ 'card-hover group hover-lift' if href else '' }}">
   <div class="flex items-center justify-between mb-3">
     <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ label }}</span>
     <div class="flex h-9 w-9 items-center justify-center rounded-lg {{ c.bg }} {{ c.text }}">
