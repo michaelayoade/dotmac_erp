@@ -600,8 +600,10 @@ SETTINGS_SPECS: list[SettingSpec] = [
         default=20,
         min_value=1,
         max_value=100,
-        label="Low Stock Threshold (%)",
-        description="Percentage of minimum stock level to trigger alerts",
+        label="Reorder Approach Threshold (%)",
+        description=(
+            "Percentage above an item's reorder level that is considered approaching"
+        ),
     ),
     SettingSpec(
         domain=SettingDomain.inventory,

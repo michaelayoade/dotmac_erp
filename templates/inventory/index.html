@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import empty_state, icon_svg, stats_card, status_badge %}
 
 {% block page_title %}Inventory{% endblock %}
 
@@ -14,9 +14,147 @@
 
 {% block content %}
 <div class="space-y-6 page-enter">
+    {% if show_reorder_dashboard %}
+    <section class="space-y-4" aria-labelledby="reorder-dashboard-title">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 id="reorder-dashboard-title" class="text-xl font-semibold text-slate-900 dark:text-white">Reorder attention</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Available stock is compared with each item's reorder level. Approaching means within
+                    {{ "{:g}".format(reorder_approach_threshold_percent) }}% above that level.
+                </p>
+            </div>
+            {% if reorder_selected_status %}
+            <a href="/inventory" class="btn btn-secondary btn-sm">
+                {{ icon_svg("x-mark", "mr-2 h-4 w-4") }}
+                Clear filter
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-3">
+            {% for card in reorder_cards %}
+                {{ stats_card(
+                    card.label,
+                    card.count,
+                    icon=card.icon,
+                    color=card.color,
+                    href=card.href,
+                    subtitle="Click to filter the chart and table",
+                    active=card.active
+                ) }}
+            {% endfor %}
+        </div>
+
+        {% if reorder_items %}
+        <div class="card p-4 sm:p-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">{{ reorder_selected_label }}</h3>
+                    <p id="reorder-chart-description" class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Bars show available stock as a percentage of the reorder level. The reorder level is 100%.
+                    </p>
+                </div>
+                <div class="flex flex-wrap gap-2 text-xs font-medium" aria-label="Reorder status legend">
+                    <span class="inline-flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                        <span class="h-2.5 w-2.5 rounded-sm bg-amber-500" aria-hidden="true"></span>
+                        Approaching
+                    </span>
+                    <span class="inline-flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                        <span class="h-2.5 w-2.5 rounded-sm bg-orange-500" aria-hidden="true"></span>
+                        Reached
+                    </span>
+                    <span class="inline-flex items-center gap-2 text-rose-700 dark:text-rose-400">
+                        <span class="h-2.5 w-2.5 rounded-sm bg-rose-600" aria-hidden="true"></span>
+                        Below
+                    </span>
+                </div>
+            </div>
+            <div class="mt-5" style="height: {{ reorder_chart_height }}px;">
+                <canvas
+                    data-chart="bar"
+                    data-chart-config='{{ reorder_chart_config | tojson }}'
+                    role="img"
+                    aria-label="Color-coded reorder status bar chart"
+                    aria-describedby="reorder-chart-description">
+                    A bar chart of stock items approaching, at, or below their reorder levels.
+                </canvas>
+            </div>
+        </div>
+
+        <div id="results-container" class="card overflow-hidden">
+            <div class="border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:px-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Stock details</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {{ reorder_items | length }} of {{ reorder_total_attention_count }} item(s) shown.
+                </p>
+            </div>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Item</th>
+                            <th scope="col" class="hidden text-right md:table-cell">On hand</th>
+                            <th scope="col" class="hidden text-right lg:table-cell">Reserved</th>
+                            <th scope="col" class="text-right">Available</th>
+                            <th scope="col" class="text-right">Reorder level</th>
+                            <th scope="col" class="hidden text-right sm:table-cell">Level</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in reorder_items %}
+                        <tr>
+                            <td>
+                                <a href="/inventory/items/{{ item.item_id }}" class="font-medium text-slate-900 transition-colors hover:text-emerald-700 dark:text-white dark:hover:text-emerald-300">
+                                    {{ item.item_name }}
+                                </a>
+                                <div class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ item.item_code }} · {{ item.base_uom }}</div>
+                            </td>
+                            <td class="hidden text-right font-mono tabular-nums md:table-cell">{{ "{:,.2f}".format(item.quantity_on_hand) }}</td>
+                            <td class="hidden text-right font-mono tabular-nums lg:table-cell">{{ "{:,.2f}".format(item.quantity_reserved) }}</td>
+                            <td class="text-right font-mono tabular-nums {{ 'text-rose-600 dark:text-rose-400' if item.quantity_available < item.reorder_point else '' }}">
+                                {{ "{:,.2f}".format(item.quantity_available) }}
+                            </td>
+                            <td class="text-right font-mono tabular-nums">{{ "{:,.2f}".format(item.reorder_point) }}</td>
+                            <td class="hidden text-right font-mono tabular-nums sm:table-cell">{{ "{:,.1f}".format(item.stock_to_reorder_percent) }}%</td>
+                            <td>{{ status_badge(item.status_label, "sm") }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7">{{ empty_state("No stock items found", "No items match the selected reorder status.", "check-circle") }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div id="results-container" class="card">
+            {{ empty_state(
+                "No items require reorder attention",
+                "All configured stock items are currently above the reorder approach range.",
+                "check-circle"
+            ) }}
+        </div>
+        {% endif %}
+
+        {% if reorder_unconfigured_count %}
+        <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-800/50">
+            <div class="mt-0.5 text-slate-500 dark:text-slate-400">{{ icon_svg("information-circle", "h-5 w-5") }}</div>
+            <p class="text-slate-600 dark:text-slate-300">
+                <span class="font-semibold">{{ reorder_unconfigured_count }}</span>
+                active stock item(s) have no reorder level and are not included.
+                <a href="/inventory/items" class="font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Review items</a>
+            </p>
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
     <div class="card p-6">
-        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Inventory</h2>
-        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Choose an inventory category to continue.</p>
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Inventory areas</h2>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Choose an inventory area to continue.</p>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
