@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from datetime import date as date_type
@@ -3701,14 +3702,22 @@ class OperationsInventoryWebService:
         project_ids: set[UUID] = set()
         ticket_ids: set[UUID] = set()
         for transaction in material_request_transactions:
-            request = requests_by_id.get(transaction.source_document_id)
+            request_id = transaction.source_document_id
+            if request_id is None:
+                continue
+            request = requests_by_id.get(request_id)
             if request is None:
                 continue
-            line = lines_by_request_and_id.get(
-                (
-                    transaction.source_document_id,
-                    transaction.source_document_line_id,
+            line_id = transaction.source_document_line_id
+            line = (
+                lines_by_request_and_id.get(
+                    (
+                        request_id,
+                        line_id,
+                    )
                 )
+                if line_id is not None
+                else None
             )
             project_id = (
                 line.project_id
@@ -3754,14 +3763,22 @@ class OperationsInventoryWebService:
 
         contexts: dict[UUID, StockMovementRequestContext] = {}
         for transaction in material_request_transactions:
-            request = requests_by_id.get(transaction.source_document_id)
+            request_id = transaction.source_document_id
+            if request_id is None:
+                continue
+            request = requests_by_id.get(request_id)
             if request is None:
                 continue
-            line = lines_by_request_and_id.get(
-                (
-                    transaction.source_document_id,
-                    transaction.source_document_line_id,
+            line_id = transaction.source_document_line_id
+            line = (
+                lines_by_request_and_id.get(
+                    (
+                        request_id,
+                        line_id,
+                    )
                 )
+                if line_id is not None
+                else None
             )
             project_id = (
                 line.project_id
@@ -3773,8 +3790,8 @@ class OperationsInventoryWebService:
                 if line is not None and line.ticket_id
                 else request.ticket_id
             )
-            project = projects_by_id.get(project_id)
-            ticket = tickets_by_id.get(ticket_id)
+            project = projects_by_id.get(project_id) if project_id is not None else None
+            ticket = tickets_by_id.get(ticket_id) if ticket_id is not None else None
             contexts[transaction.transaction_id] = StockMovementRequestContext(
                 request_number=request.request_number,
                 project_code=project.project_code if project is not None else None,
@@ -3786,7 +3803,7 @@ class OperationsInventoryWebService:
 
     @staticmethod
     def _stock_movement_rows(
-        row_data: list[tuple[Any, Any, Any, Any]],
+        row_data: Sequence[Any],
         request_contexts: dict[UUID, StockMovementRequestContext],
     ) -> tuple[list[dict[str, Any]], dict[str, int], Decimal, Decimal]:
         """Build the shared screen/export stock movement projection."""
