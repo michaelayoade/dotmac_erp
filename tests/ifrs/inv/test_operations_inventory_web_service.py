@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -10,7 +11,10 @@ import pytest
 from starlette.datastructures import FormData
 from starlette.datastructures import UploadFile
 
-from app.services.operations.inv_web import OperationsInventoryWebService
+from app.services.operations.inv_web import (
+    OperationsInventoryWebService,
+    StockMovementRequestContext,
+)
 from app.web.inventory import router as inventory_router
 
 
@@ -476,7 +480,6 @@ def test_export_wac_breakdown_pdf_response_returns_pdf(monkeypatch) -> None:
         "app.services.finance.rpt.pdf.ReportPDFService.render",
         fake_render,
     )
-
     response = service.export_wac_breakdown_pdf_response(
         auth,
         db,
@@ -712,6 +715,9 @@ def test_stock_movement_report_response_uses_movement_template(monkeypatch) -> N
     txn_obj.total_cost = 250
     txn_obj.reference = "GRN-001"
     txn_obj.transaction_date = None
+    txn_obj.transaction_id = uuid.uuid4()
+    txn_obj.source_document_type = None
+    txn_obj.source_document_id = None
 
     db.scalars.side_effect = [
         _FakeScalarResult([warehouse_obj]),
@@ -730,6 +736,112 @@ def test_stock_movement_report_response_uses_movement_template(monkeypatch) -> N
     assert context["title"] == "Stock Movement"
     assert context["summary"]["total_rows"] == 1
     assert len(context["movement_rows"]) == 1
+    assert context["movement_rows"][0]["request_context"] is None
+
+
+def test_stock_movement_request_context_prefers_line_links_and_falls_back_to_header():
+    service = OperationsInventoryWebService()
+    db = MagicMock()
+    org_id = uuid.uuid4()
+    request_id = uuid.uuid4()
+    header_project_id = uuid.uuid4()
+    line_project_id = uuid.uuid4()
+    header_ticket_id = uuid.uuid4()
+    line_ticket_id = uuid.uuid4()
+
+    overridden_line = MagicMock(
+        item_id=uuid.uuid4(),
+        project_id=line_project_id,
+        ticket_id=line_ticket_id,
+    )
+    fallback_line = MagicMock(
+        item_id=uuid.uuid4(),
+        project_id=None,
+        ticket_id=None,
+    )
+    material_request = MagicMock(
+        request_id=request_id,
+        request_number="MR-00042",
+        project_id=header_project_id,
+        ticket_id=header_ticket_id,
+        items=[overridden_line, fallback_line],
+    )
+    projects = [
+        MagicMock(
+            project_id=header_project_id,
+            project_code="PRJ-HEADER",
+            project_name="Header Project",
+        ),
+        MagicMock(
+            project_id=line_project_id,
+            project_code="PRJ-LINE",
+            project_name="Line Project",
+        ),
+    ]
+    tickets = [
+        MagicMock(
+            ticket_id=header_ticket_id,
+            ticket_number="TKT-HEADER",
+            subject="Header Ticket",
+        ),
+        MagicMock(
+            ticket_id=line_ticket_id,
+            ticket_number="TKT-LINE",
+            subject="Line Ticket",
+        ),
+    ]
+    overridden_txn = MagicMock(
+        transaction_id=uuid.uuid4(),
+        source_document_type="MATERIAL_REQUEST",
+        source_document_id=request_id,
+        source_document_line_id=overridden_line.item_id,
+    )
+    fallback_txn = MagicMock(
+        transaction_id=uuid.uuid4(),
+        source_document_type="MATERIAL_REQUEST",
+        source_document_id=request_id,
+        source_document_line_id=fallback_line.item_id,
+    )
+
+    class _FakeScalarResult:
+        def __init__(self, values):
+            self._values = values
+
+        def unique(self):
+            return self
+
+        def all(self):
+            return self._values
+
+    db.scalars.side_effect = [
+        _FakeScalarResult([material_request]),
+        _FakeScalarResult(projects),
+        _FakeScalarResult(tickets),
+    ]
+
+    contexts = service._stock_movement_request_contexts(
+        db,
+        org_id,
+        [overridden_txn, fallback_txn],
+    )
+
+    assert contexts[overridden_txn.transaction_id] == StockMovementRequestContext(
+        request_number="MR-00042",
+        project_code="PRJ-LINE",
+        project_name="Line Project",
+        ticket_number="TKT-LINE",
+        ticket_subject="Line Ticket",
+    )
+    assert contexts[fallback_txn.transaction_id] == StockMovementRequestContext(
+        request_number="MR-00042",
+        project_code="PRJ-HEADER",
+        project_name="Header Project",
+        ticket_number="TKT-HEADER",
+        ticket_subject="Header Ticket",
+    )
+    assert all(
+        "organization_id" in str(call.args[0]) for call in db.scalars.call_args_list
+    )
 
 
 def test_export_stock_movement_pdf_response_returns_pdf(monkeypatch) -> None:
@@ -757,6 +869,9 @@ def test_export_stock_movement_pdf_response_returns_pdf(monkeypatch) -> None:
     txn.unit_cost = Decimal("25")
     txn.total_cost = Decimal("250")
     txn.reference = "GRN-001"
+    txn.transaction_id = uuid.uuid4()
+    txn.source_document_type = None
+    txn.source_document_id = None
 
     class _FakeExecuteResult:
         def all(self):
@@ -774,6 +889,18 @@ def test_export_stock_movement_pdf_response_returns_pdf(monkeypatch) -> None:
     monkeypatch.setattr(
         "app.services.finance.rpt.pdf.ReportPDFService.render",
         fake_render,
+    )
+    request_context = StockMovementRequestContext(
+        request_number="MR-00042",
+        project_code="PRJ-012",
+        project_name="Abuja Fibre Expansion",
+        ticket_number="TKT-1058",
+        ticket_subject="Replace damaged customer ONT",
+    )
+    monkeypatch.setattr(
+        service,
+        "_stock_movement_request_contexts",
+        lambda db_arg, org_id_arg, transactions: {txn.transaction_id: request_context},
     )
 
     response = service.export_stock_movement_pdf_response(
@@ -795,6 +922,21 @@ def test_export_stock_movement_pdf_response_returns_pdf(monkeypatch) -> None:
     assert context["row_count"] == 1
     assert context["scope_label"] == 'Receipt, Search "GRN"'
     assert context["summary"]["total_value"] == Decimal("250")
+    assert context["movement_rows"][0]["request_context"] == request_context
+
+
+def test_stock_movement_pdf_renders_material_request_context_column() -> None:
+    project_root = Path(__file__).resolve().parents[3]
+    pdf = (
+        project_root / "templates/finance/reports/stock_movement_pdf.html"
+    ).read_text(encoding="utf-8")
+
+    assert "Request For" in pdf
+    assert "row.request_context.request_number" in pdf
+    assert "row.request_context.ticket_number" in pdf
+    assert "row.request_context.ticket_subject" in pdf
+    assert "row.request_context.project_code" in pdf
+    assert "row.request_context.project_name" in pdf
 
 
 def test_yearly_stock_movement_report_calculates_opening_and_closing(
