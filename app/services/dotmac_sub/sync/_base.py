@@ -126,6 +126,11 @@ class BaseSyncMixin:
         self._reseller_cache: dict[str, UUID] = {}
         self._subscriber_cache: dict[str, UUID] = {}
         self._account_cache: dict[str, UUID] = {}
+        # account_ids that could not be resolved to an ERP customer this run
+        # (orphaned in dotmac_sub, or the resolve call was rate-limited). Cached
+        # so the same account is not re-fetched for every invoice/payment that
+        # references it within one run. Reset per run, so it is retried next run.
+        self._unresolvable_accounts: set[str] = set()
         self._payment_channel_names: dict[str, str] = {}
         self._bank_account_mapping: dict[str, UUID] = {}
         self._default_bank_account_cache: dict[str, UUID] = {}
@@ -454,6 +459,12 @@ class BaseSyncMixin:
     def _get_customer_for_account(self, account_id: str) -> UUID | None:
         if account_id in self._account_cache:
             return self._account_cache[account_id]
+        if account_id in self._unresolvable_accounts:
+            # Already determined unresolvable earlier this run. Don't re-hit
+            # dotmac_sub for the same account again (it will stay unresolved
+            # this run, and re-fetching only burns the rate limit); retried
+            # fresh on the next sync run.
+            return None
         mapped = self._get_synced_entity(EntityType.BILLING_ACCOUNT, account_id)
         if mapped:
             self._account_cache[account_id] = mapped
@@ -462,6 +473,8 @@ class BaseSyncMixin:
         if customer_id:
             self._account_cache[account_id] = customer_id
             self._record_sync(EntityType.BILLING_ACCOUNT, account_id, customer_id)
+        else:
+            self._unresolvable_accounts.add(account_id)
         return customer_id
 
     def _resolve_account_owner(self, account_id: str) -> UUID | None:
@@ -477,7 +490,10 @@ class BaseSyncMixin:
         consolidation concept; if an ``account_id`` is one of those instead, map
         it to the reseller's ERP *parent* customer (which posts to GL).
         """
-        from app.services.dotmac_sub.client import DotmacSubError
+        from app.services.dotmac_sub.client import (
+            DotmacSubError,
+            DotmacSubRateLimitError,
+        )
 
         # 1) Already-synced subscriber → child customer.
         cust = self._get_customer_by_dotmac_sub_id(account_id)
@@ -489,6 +505,11 @@ class BaseSyncMixin:
         #    but batch limits or webhooks can arrive out of order).
         try:
             sub = self.client.get_subscriber(account_id)
+        except DotmacSubRateLimitError:
+            # Throttled, not missing. Skip the billing-account fallback (it would
+            # be throttled too) and leave the account for the next run rather than
+            # treating a rate limit as "not found".
+            return None
         except DotmacSubError:
             sub = None
         if sub is not None:
@@ -506,6 +527,8 @@ class BaseSyncMixin:
         # 3) Fallback: a reseller-level billing account → reseller parent customer.
         try:
             account = self.client.get_billing_account(account_id)
+        except DotmacSubRateLimitError:
+            return None
         except DotmacSubError:
             account = None
         if account and account.reseller_id:
