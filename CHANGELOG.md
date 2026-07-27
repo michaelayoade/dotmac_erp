@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - Self-service pending evidence cleanup now rolls back all uploaded files for failed batch submissions and preserves duplicate checks across pending and approved employee-profile items.
+- Production deploys now enforce the stable `dotmac` Docker Compose project name so revision-named release worktrees update the existing stack instead of colliding with fixed container names.
 
 ## [1.1.9] - 2026-05-22
 

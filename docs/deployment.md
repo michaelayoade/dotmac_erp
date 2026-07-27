@@ -42,6 +42,9 @@ For production deployments, use the deploy script which handles everything:
 This script will:
 - Back up the database (pre-migration)
 - Pull latest changes and the container image
+- Enforce the stable Docker Compose project name `dotmac`, including when the
+  script runs from a revision-named release worktree. A conflicting
+  `COMPOSE_PROJECT_NAME` is rejected before backup or container changes.
 - **Pin the image tag** to the deployed commit's immutable `sha-<short>` tag
   (published by CI) so `app`/`worker`/`beat` all run one reproducible artifact
   instead of the mutable `:latest`
