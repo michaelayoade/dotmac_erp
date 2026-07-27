@@ -49,11 +49,23 @@ router = APIRouter(prefix="/inventory", tags=["inventory-web"])
 @router.get("/", response_class=HTMLResponse)
 def inventory_index(
     request: Request,
+    reorder_status: str | None = Query(default=None),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Inventory landing page."""
     context = base_context(request, auth, "Inventory", "inventory", db=db)
+    context["show_reorder_dashboard"] = False
+    if auth.has_permission("inventory:dashboard") and auth.has_permission(
+        "inventory:stock:read"
+    ):
+        context.update(
+            inv_web_service.dashboard_context(
+                db,
+                str(auth.organization_id),
+                reorder_status=reorder_status,
+            )
+        )
     if auth.has_permission("inventory:receipt_approvals:read"):
         context["pending_receipt_approval_count"] = (
             db.scalar(
