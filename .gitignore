@@ -138,3 +138,8 @@ backups/
 # Secrets
 firebase-service-account.json
 *service-account*.json
+
+# Generated VPN/PKI server configs embed CA + server PRIVATE KEYS. Regenerable
+# at provisioning time; never commit them. See scripts/ci/scan_private_keys.sh.
+/configs/openvpn/
+/configs/**/*.conf
