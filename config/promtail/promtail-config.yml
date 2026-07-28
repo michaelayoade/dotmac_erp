@@ -1,0 +1,125 @@
+# Promtail: ship this host's container logs to the central Dotmac Observability
+# Loki (observability.dotmac.io). The application already emits structured logs
+# and exposes /metrics; nothing was collecting them, which is why this stack did
+# not appear in Grafana at all.
+#
+# Requires promtail to run with `-config.expand-env=true` (set in the compose
+# command) so the ${...} values below resolve from the environment. No endpoint
+# is hardcoded here — the push URL and host labels come from .env, so relocating
+# the host does not require a config edit.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /positions/positions.yaml
+
+clients:
+  - url: ${LOKI_PUSH_URL}
+    external_labels:
+      app: dotmac_erp
+      host: ${DEPLOY_HOST}
+      environment: ${DEPLOY_ENV}
+
+scrape_configs:
+  # Everything in this compose project except the services with dedicated jobs
+  # below, so a newly added service is observable immediately rather than
+  # silently uncollected.
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/?dotmac_erp_.*'
+        action: keep
+
+      # app-dev is the dev-profile container; it must never be collected as if
+      # it were the production app.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        regex: 'app|worker|beat|app-dev'
+        action: drop
+
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/?(.*)'
+        target_label: container
+
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: project
+
+    pipeline_stages:
+      - drop:
+          older_than: 24h
+      - regex:
+          expression: '(?P<level>DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL|FATAL)'
+      - labels:
+          level:
+
+  # FastAPI app (gunicorn). Deliberately keeps only `app`, not `app-dev`.
+  - job_name: app
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        regex: app
+        action: keep
+
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/?(.*)'
+        target_label: container
+
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+
+      # dotmac_sub's equivalent job omitted this, which meant a project-scoped
+      # Loki query returned nothing for the app and workers. Set it from the start.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: project
+
+    pipeline_stages:
+      - drop:
+          older_than: 24h
+      - regex:
+          expression: '(?P<level>DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL)'
+      - regex:
+          expression: '"(?P<method>GET|POST|PUT|DELETE|PATCH|OPTIONS)\s+(?P<path>[^\s]+)\s+HTTP/[^"]+"\s+(?P<status>\d+)'
+      - labels:
+          level:
+          method:
+          status:
+
+  # Celery worker and beat.
+  - job_name: celery
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        regex: 'worker|beat'
+        action: keep
+
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/?(.*)'
+        target_label: container
+
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: project
+
+    pipeline_stages:
+      - drop:
+          older_than: 24h
+      - regex:
+          expression: '\[(?P<level>\w+)/(?P<worker_name>[^\]]+)\]'
+      - regex:
+          expression: 'Task\s+(?P<task_name>[^\s\[]+)'
+      - labels:
+          level:
+          task_name:
