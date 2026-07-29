@@ -285,6 +285,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(minute="*/5"),  # Every 5 minutes
             "kwargs": {"limit_per_org": 100},
         },
+        "inventory-low-stock-notifications": {
+            "task": "app.tasks.inventory.send_low_stock_notifications",
+            "schedule": crontab(hour=7, minute=15),  # Daily at 7:15 AM
+        },
         "dotmac-sub-incremental-sync": {
             "task": "app.tasks.dotmac_sub.run_dotmac_sub_incremental_sync",
             "schedule": crontab(minute="*/30"),  # Every 30 minutes
