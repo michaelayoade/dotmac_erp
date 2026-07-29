@@ -10,6 +10,7 @@ from __future__ import annotations
 import html
 import logging
 from collections.abc import AsyncIterable, Iterable
+from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -69,6 +70,23 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def _json_safe_value(value: Any) -> Any:
+    """Convert validated workflow data into values accepted by JSON columns."""
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_value(item) for item in value]
+    return value
 
 
 @dataclass(frozen=True)
@@ -218,8 +236,8 @@ class InfoChangeService:
             employee_id=employee_id,
             change_type=change_type,
             status=InfoChangeStatus.PENDING,
-            proposed_changes=proposed_changes,
-            previous_values=previous_values,
+            proposed_changes=_json_safe_value(proposed_changes),
+            previous_values=_json_safe_value(previous_values),
             requester_notes=requester_notes,
             expires_at=expires_at,
         )
@@ -424,8 +442,8 @@ class InfoChangeService:
             operation=operation,
             target_record_id=target_record_id,
             status=InfoChangeStatus.PENDING,
-            proposed_changes=proposed_changes,
-            previous_values=previous_values,
+            proposed_changes=_json_safe_value(proposed_changes),
+            previous_values=_json_safe_value(previous_values),
             requester_notes=requester_notes,
             expires_at=batch.expires_at,
             pending_document_path=pending_evidence.path if pending_evidence else None,
@@ -591,11 +609,14 @@ class InfoChangeService:
             .where(
                 Employee.organization_id == organization_id,
                 Employee.employee_id == employee_id,
-                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:
             raise ValueError(f"Employee {employee_id} not found")
+        if getattr(employee, "status", None) == EmployeeStatus.TERMINATED:
+            raise ValueError(
+                "Terminated employees cannot submit profile change requests"
+            )
         return employee
 
     def _cleanup_pending_evidence(self, request: EmployeeInfoChangeRequest) -> None:
