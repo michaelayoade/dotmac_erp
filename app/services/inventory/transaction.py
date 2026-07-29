@@ -62,6 +62,7 @@ class TransactionInput:
     reference: str | None = None
     reason_code: str | None = None
     serial_numbers: list[str] | None = None
+    allow_missing_serial_numbers: bool = False
 
 
 @dataclass
@@ -376,7 +377,12 @@ class InventoryTransactionService(ListResponseMixin):
         serial_numbers = InventorySerialService.normalize_serial_numbers(
             input.serial_numbers
         )
-        if getattr(item, "track_serial_numbers", False):
+        skip_serial_tracking = (
+            input.allow_missing_serial_numbers
+            and getattr(item, "track_serial_numbers", False)
+            and not serial_numbers
+        )
+        if getattr(item, "track_serial_numbers", False) and not skip_serial_tracking:
             InventorySerialService.validate_serial_quantity(
                 input.quantity, serial_numbers
             )
@@ -450,7 +456,7 @@ class InventoryTransactionService(ListResponseMixin):
 
         db.flush()
 
-        if getattr(item, "track_serial_numbers", False):
+        if getattr(item, "track_serial_numbers", False) and not skip_serial_tracking:
             InventorySerialService.receive_serials(
                 db,
                 organization_id=org_id,

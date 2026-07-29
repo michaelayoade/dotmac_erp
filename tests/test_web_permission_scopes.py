@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
 
 
 try:
@@ -7,8 +8,9 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from starlette.requests import Request
+import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
@@ -16,10 +18,12 @@ from app.models.people.hr.employee import Employee
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.auth_flow import _issue_access_token
+from app.services.people.discipline.web.discipline_web import DisciplineWebService
 from app.web.deps import (
     WebAuthContext,
     optional_web_auth,
     require_fixed_assets_access,
+    require_self_service_discipline_manager,
     require_web_auth,
 )
 
@@ -186,3 +190,245 @@ def test_finance_scope_does_not_grant_fixed_assets_access():
         assert exc.status_code == 403
     else:
         raise AssertionError("Expected fixed assets access to require fa scope")
+
+
+def test_self_service_discipline_allows_existing_discipline_permission():
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=uuid.uuid4(),
+        roles=[],
+        scopes=["self:access", "discipline:cases:create"],
+    )
+    db = MagicMock()
+
+    result = require_self_service_discipline_manager(auth, db)
+
+    assert result is auth
+    db.scalar.assert_not_called()
+
+
+def test_self_service_discipline_allows_manager_with_direct_reports():
+    org_id = uuid.uuid4()
+    manager_employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=manager_employee_id,
+        roles=[],
+        scopes=["self:access"],
+    )
+    db = MagicMock()
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        resolver_cls.return_value.get_direct_reports.return_value = [object()]
+
+        result = require_self_service_discipline_manager(auth, db)
+
+    assert result is auth
+    db.scalar.assert_not_called()
+    resolver_cls.return_value.get_direct_reports.assert_called_once_with(
+        manager_employee_id,
+        org_id,
+    )
+
+
+def test_self_service_discipline_allows_department_scope_with_department():
+    org_id = uuid.uuid4()
+    employee_id = uuid.uuid4()
+    department_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=employee_id,
+        roles=[],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.return_value = department_id
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        result = require_self_service_discipline_manager(auth, db)
+
+    assert result is auth
+    db.scalar.assert_called_once()
+    resolver_cls.assert_not_called()
+
+
+def test_self_service_discipline_rejects_department_scope_without_department():
+    org_id = uuid.uuid4()
+    employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=employee_id,
+        roles=[],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.return_value = None
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        resolver_cls.return_value.get_direct_reports.return_value = []
+
+        with pytest.raises(HTTPException) as excinfo:
+            require_self_service_discipline_manager(auth, db)
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Team discipline permission required"
+    resolver_cls.return_value.get_direct_reports.assert_called_once_with(
+        employee_id,
+        org_id,
+    )
+
+
+def test_hr_discipline_detail_allows_department_scope_for_same_department():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    department_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        department_id,
+        department_id,
+    ]
+
+    assert (
+        DisciplineWebService._can_view_department_case(
+            db,
+            org_id,
+            auth,
+            case_employee_id,
+        )
+        is True
+    )
+
+
+def test_hr_discipline_detail_rejects_department_scope_for_other_department():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=["self:access", "discipline:department:read"],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        uuid.uuid4(),
+        uuid.uuid4(),
+    ]
+
+    assert (
+        DisciplineWebService._can_view_department_case(
+            db,
+            org_id,
+            auth,
+            case_employee_id,
+        )
+        is False
+    )
+
+
+def test_hr_discipline_acknowledge_allows_scoped_department_workflow():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    department_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=[
+            "self:access",
+            "discipline:department:read",
+            "discipline:department:workflow",
+        ],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        department_id,
+        department_id,
+    ]
+
+    has_department_workflow = auth.has_permission(
+        "discipline:department:workflow"
+    ) and DisciplineWebService._can_view_department_case(
+        db,
+        org_id,
+        auth,
+        case_employee_id,
+    )
+
+    assert DisciplineWebService._can_acknowledge_case_response(auth) is False
+    assert has_department_workflow is True
+
+
+def test_hr_discipline_acknowledge_rejects_scoped_workflow_outside_department():
+    org_id = uuid.uuid4()
+    person_id = uuid.uuid4()
+    case_employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=person_id,
+        organization_id=org_id,
+        roles=["customer_experience_discipline_viewer"],
+        scopes=[
+            "self:access",
+            "discipline:department:read",
+            "discipline:department:workflow",
+        ],
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [
+        uuid.uuid4(),
+        uuid.uuid4(),
+    ]
+
+    has_department_workflow = auth.has_permission(
+        "discipline:department:workflow"
+    ) and DisciplineWebService._can_view_department_case(
+        db,
+        org_id,
+        auth,
+        case_employee_id,
+    )
+
+    assert DisciplineWebService._can_acknowledge_case_response(auth) is False
+    assert has_department_workflow is False
+
+
+def test_self_service_discipline_rejects_non_manager_without_permission():
+    org_id = uuid.uuid4()
+    employee_id = uuid.uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid.uuid4(),
+        organization_id=org_id,
+        employee_id=employee_id,
+        roles=[],
+        scopes=["self:access"],
+    )
+    db = MagicMock()
+
+    with patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls:
+        resolver_cls.return_value.get_direct_reports.return_value = []
+
+        with pytest.raises(HTTPException) as excinfo:
+            require_self_service_discipline_manager(auth, db)
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Team discipline permission required"

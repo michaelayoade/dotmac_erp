@@ -78,7 +78,7 @@
 
     <!-- Chart.js for dashboard visualizations (local) -->
     <script defer src="/static/js/vendor/chart.js"></script>
-    <script defer src="/static/js/charts.js?v=20260205b"></script>
+    <script defer src="/static/js/charts.js?v=20260724a"></script>
 
     <style>
         .sidebar-floating-tooltip {
@@ -183,6 +183,10 @@
                                 <a href="/dashboard" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">
                                     {{ icon_svg("home", "h-4 w-4") }}
                                     Dashboard
+                                </a>
+                                <a href="/sla-policies" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">
+                                    {{ icon_svg("document", "h-4 w-4") }}
+                                    SLA Policies
                                 </a>
                                 {% if user.is_admin %}
                                 <a href="/admin/users" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">

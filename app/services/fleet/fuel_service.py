@@ -116,6 +116,11 @@ class FuelService:
         log = self.get_or_raise(fuel_log_id)
 
         update_data = data.model_dump(exclude_unset=True)
+        vehicle_id = update_data.get("vehicle_id")
+        if vehicle_id is not None:
+            vehicle = self.db.get(Vehicle, vehicle_id)
+            if not vehicle or vehicle.organization_id != self.organization_id:
+                raise NotFoundError(f"Vehicle {vehicle_id} not found")
         for field, value in update_data.items():
             setattr(log, field, value)
 

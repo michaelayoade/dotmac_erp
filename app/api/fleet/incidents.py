@@ -10,7 +10,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_with_org, require_organization_id
+from app.api.deps import (
+    get_db_with_org,
+    require_organization_id,
+    require_tenant_permission,
+)
 from app.models.fleet.enums import IncidentSeverity, IncidentStatus, IncidentType
 from app.schemas.fleet.incident import (
     IncidentBrief,
@@ -83,6 +87,7 @@ def get_incident(
 @router.post("", response_model=IncidentRead, status_code=status.HTTP_201_CREATED)
 def create_incident(
     data: IncidentCreate,
+    _auth: dict = Depends(require_tenant_permission("fleet:incidents:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -99,6 +104,7 @@ def create_incident(
 def update_incident(
     incident_id: UUID,
     data: IncidentUpdate,
+    _auth: dict = Depends(require_tenant_permission("fleet:incidents:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -117,6 +123,7 @@ def update_incident(
 def resolve_incident(
     incident_id: UUID,
     data: IncidentResolve,
+    _auth: dict = Depends(require_tenant_permission("fleet:incidents:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -134,6 +141,7 @@ def resolve_incident(
 @router.post("/{incident_id}/close", response_model=IncidentRead)
 def close_incident(
     incident_id: UUID,
+    _auth: dict = Depends(require_tenant_permission("fleet:incidents:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -151,6 +159,7 @@ def close_incident(
 @router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_incident(
     incident_id: UUID,
+    _auth: dict = Depends(require_tenant_permission("fleet:incidents:manage")),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):

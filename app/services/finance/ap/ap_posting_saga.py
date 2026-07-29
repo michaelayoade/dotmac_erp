@@ -513,7 +513,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
         context: dict[str, Any],
     ) -> StepResult:
         """Create tax transaction records for input tax."""
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.services.finance.gl.period_guard import PeriodGuardService
 
         org_id = coerce_uuid(payload["organization_id"])
         invoice_id = coerce_uuid(payload["invoice_id"])
@@ -537,12 +537,10 @@ class APInvoicePostingSaga(SagaOrchestrator):
         is_credit_note = invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE
 
         # Get fiscal period
-        fiscal_period = db.scalar(
-            select(FiscalPeriod).where(
-                FiscalPeriod.organization_id == org_id,
-                FiscalPeriod.start_date <= invoice.invoice_date,
-                FiscalPeriod.end_date >= invoice.invoice_date,
-            )
+        fiscal_period = PeriodGuardService.get_period_for_date(
+            db,
+            org_id,
+            invoice.invoice_date,
         )
 
         if not fiscal_period:

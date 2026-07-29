@@ -9,17 +9,39 @@ Handles:
 - Inventory data for CRM field service
 """
 
+import base64
+import binascii
+import hashlib
+import io
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 try:
     from datetime import UTC  # type: ignore
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
+# Only refresh ApiKey.last_used_at (a write + commit) at most this often per key.
+# Doing it on every call adds a row UPDATE + transaction to hot read paths (e.g.
+# per-project expense-totals) and contends on a single key.
+_LAST_USED_THROTTLE = timedelta(minutes=5)
+
+
+def _last_used_is_stale(last_used: datetime | None, now: datetime) -> bool:
+    """True when last_used_at is unset or older than the throttle window."""
+    if last_used is None:
+        return True
+    try:
+        return (now - last_used) >= _LAST_USED_THROTTLE
+    except TypeError:
+        # Defensive: a naive stored value — refresh it (and normalise going fwd).
+        return True
+
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -35,6 +57,10 @@ from app.schemas.sync.dotmac_crm import (
     BulkSyncResponse,
     CompanyListResponse,
     CRMAvailableSerialListResponse,
+    CRMExpenseCategoriesResponse,
+    CRMExpenseClaimPayload,
+    CRMExpenseClaimResponse,
+    CRMExpenseClaimStatusResponse,
     CRMInventoryItemPayload,
     CRMInventoryItemResponse,
     CRMMaterialRequestPayload,
@@ -45,6 +71,10 @@ from app.schemas.sync.dotmac_crm import (
     CRMPurchaseOrderPayload,
     CRMPurchaseOrderResponse,
     CRMPurchaseOrderVariationPayload,
+    CRMPurchaseInvoiceAttachmentPayload,
+    CRMPurchaseInvoiceAttachmentResponse,
+    CRMPurchaseInvoicePayload,
+    CRMPurchaseInvoiceResponse,
     CRMTicketPayload,
     CRMTicketRead,
     CRMWorkOrderPayload,
@@ -55,12 +85,16 @@ from app.schemas.sync.dotmac_crm import (
     InventoryItemDetail,
     InventoryListResponse,
     PersonListResponse,
+    ReconcileOrphansRequest,
+    ReconcileOrphansResponse,
     SyncError,
     WorkforceEmployeeListResponse,
 )
 from app.services.auth import hash_api_key
 from app.services.auth_dependencies import require_tenant_auth
 from app.services.common import coerce_uuid
+from app.services.finance.rpt.ncc_financials import ncc_financials_context
+from app.services.people.hr.ncc_staff_report import NccStaffReportService
 from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
 
 logger = logging.getLogger(__name__)
@@ -144,24 +178,76 @@ def require_service_auth(
             detail="User has no organization access",
         )
 
-    # Set RLS context for data isolation
-    set_current_organization_sync(db, person.organization_id)
+    # Copy scalar identity values before commit. SQLAlchemy expires ORM objects
+    # on commit; reloading ``person`` after switching tenant/RLS context can raise
+    # ObjectDeletedError even though authentication succeeded.
+    person_org_id = person.organization_id
+    person_id = person.id
+    api_key_id = api_key.id
+    service_label = api_key.label
+    api_key_scopes = list(api_key.scopes) if api_key.scopes else []
 
-    # Update last used
-    api_key.last_used_at = now
+    # Set RLS context for data isolation
+    set_current_organization_sync(db, person_org_id)
+
+    # Update last used — throttled to once per window (see _LAST_USED_THROTTLE)
+    # so hot read paths don't each incur a row UPDATE + commit. This session
+    # (``_get_db``) closes without committing and the route handler runs on a
+    # separate session, so when we do write it we commit here or it is lost.
+    if _last_used_is_stale(api_key.last_used_at, now):
+        api_key.last_used_at = now
+        db.commit()
 
     logger.info(
         "CRM service authenticated: org=%s, key=%s",
-        person.organization_id,
-        api_key.label or api_key.id,
+        person_org_id,
+        service_label or api_key_id,
     )
 
     return {
-        "organization_id": person.organization_id,
-        "person_id": person.id,
-        "api_key_id": api_key.id,
-        "service_label": api_key.label,
+        "organization_id": person_org_id,
+        "person_id": person_id,
+        "api_key_id": api_key_id,
+        "service_label": service_label,
+        "scopes": api_key_scopes,
     }
+
+
+def require_service_scope(scope: str):
+    """Dependency factory enforcing that the authenticated service key carries
+    ``scope``. An unscoped key (empty scopes) is grandfathered to full access,
+    so this is safe to add to endpoints without breaking existing keys — new,
+    scoped keys are restricted to exactly what they're granted.
+    """
+
+    def _dep(auth: dict = Depends(require_service_auth)) -> dict:
+        scopes = auth.get("scopes") or []
+        if scopes and scope not in scopes:
+            raise HTTPException(
+                status_code=403,
+                detail=f"API key missing required scope: {scope}",
+            )
+        return auth
+
+    return _dep
+
+
+def require_any_service_scope(*required: str):
+    """Dependency factory enforcing that the key carries at least one of
+    ``required``. Same grandfathering as ``require_service_scope``: an
+    unscoped key (empty scopes) keeps full access.
+    """
+
+    def _dep(auth: dict = Depends(require_service_auth)) -> dict:
+        scopes = auth.get("scopes") or []
+        if scopes and not any(scope in scopes for scope in required):
+            raise HTTPException(
+                status_code=403,
+                detail=f"API key missing required scope: one of {', '.join(required)}",
+            )
+        return auth
+
+    return _dep
 
 
 def get_db_with_service_org(
@@ -301,6 +387,50 @@ def bulk_sync(
         work_orders_synced=work_orders_synced,
         errors=errors,
     )
+
+
+@router.post(
+    "/reconcile-orphans",
+    response_model=ReconcileOrphansResponse,
+    status_code=200,
+    dependencies=[Depends(require_any_service_scope("crm:sync:write", "crm:write"))],
+)
+def reconcile_orphans(
+    payload: ReconcileOrphansRequest,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> ReconcileOrphansResponse:
+    """
+    Reconcile orphaned CRM entities after a full CRM sync run.
+
+    CRM sends the complete set of ids a clean ``sync_all_active`` run saw for
+    one entity type; ACTIVE mappings not in that set are soft-closed (with
+    min-fetch / max-terminate safety rails — a suspicious set is skipped, not
+    applied). Idempotent: already-closed mappings are never re-examined.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    try:
+        result = service.reconcile_orphans(
+            org_id,
+            entity_type=payload.entity_type,
+            seen_crm_ids=payload.seen_crm_ids,
+            active_count=payload.active_count,
+        )
+        db.commit()
+        return ReconcileOrphansResponse(**result)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "Failed to reconcile CRM orphans entity_type=%s", payload.entity_type
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
 
 
 # ============ Webhook Endpoint (CRM → ERP real-time) ============
@@ -600,7 +730,11 @@ def list_inventory(
 # ============ Workforce / Department Endpoints (ERP → CRM) ============
 
 
-@router.get("/workforce/employees", response_model=WorkforceEmployeeListResponse)
+@router.get(
+    "/workforce/employees",
+    response_model=WorkforceEmployeeListResponse,
+    dependencies=[Depends(require_service_scope("crm:workforce:read"))],
+)
 def list_workforce_employees(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
@@ -706,6 +840,7 @@ def list_people_contacts(
     "/material-requests",
     response_model=CRMMaterialRequestResponse,
     status_code=201,
+    dependencies=[Depends(require_service_scope("crm:material:write"))],
 )
 def create_material_request(
     payload: CRMMaterialRequestPayload,
@@ -779,6 +914,107 @@ def get_material_request_status(
     return result
 
 
+# ============ Expense Claim Endpoints (CRM → ERP) ============
+
+
+@router.post(
+    "/expense-claims",
+    response_model=CRMExpenseClaimResponse,
+    status_code=201,
+    dependencies=[Depends(require_service_scope("crm:expense:write"))],
+)
+def create_expense_claim(
+    payload: CRMExpenseClaimPayload,
+    response: Response,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMExpenseClaimResponse:
+    """
+    Create an expense claim from a CRM field-technician expense request.
+
+    Immutable idempotent create-and-submit endpoint: an identical resend of
+    the same omni_id returns the existing claim (200); a changed resend is
+    rejected (409).
+    """
+    from app.models.expense.expense_claim import ExpenseClaim
+
+    org_id = auth["organization_id"]
+    person_id = auth["person_id"]
+    service = DotMacCRMSyncService(db)
+    existed_before = bool(
+        db.scalar(
+            select(ExpenseClaim.claim_id).where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.crm_id == payload.omni_id,
+            )
+        )
+    )
+
+    try:
+        result = service.create_expense_claim(org_id, payload, person_id)
+        if existed_before:
+            response.status_code = 200
+        else:
+            response.status_code = 201
+        db.commit()
+        return result
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to create expense claim omni_id=%s", payload.omni_id)
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+@router.get(
+    "/expense-claims/{omni_id}",
+    response_model=CRMExpenseClaimStatusResponse,
+)
+def get_expense_claim_status(
+    omni_id: str,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMExpenseClaimStatusResponse:
+    """
+    Get expense claim status by CRM omni_id.
+
+    Used by CRM to poll claim status (approval / rejection / payment)
+    after creation.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+
+    result = service.get_expense_claim_by_crm_id(org_id, omni_id)
+    if not result:
+        raise HTTPException(
+            status_code=404, detail=f"Expense claim not found: {omni_id}"
+        )
+    return result
+
+
+@router.get(
+    "/expense-categories",
+    response_model=CRMExpenseCategoriesResponse,
+)
+def list_expense_categories(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMExpenseCategoriesResponse:
+    """
+    List active expense categories for the CRM expense-request form.
+
+    CRM uses category_code when submitting expense claims; requires_receipt
+    and max_amount_per_claim let the CRM validate before sending.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    return service.list_expense_categories(org_id)
+
+
 # ============ Purchase Order Endpoints (CRM → ERP) ============
 
 
@@ -786,6 +1022,7 @@ def get_material_request_status(
     "/purchase-orders",
     response_model=CRMPurchaseOrderResponse,
     status_code=201,
+    dependencies=[Depends(require_service_scope("crm:po:write"))],
 )
 def create_purchase_order(
     payload: CRMPurchaseOrderPayload,
@@ -815,6 +1052,108 @@ def create_purchase_order(
             payload.omni_work_order_id,
         )
         raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+@router.post(
+    "/purchase-invoices",
+    response_model=CRMPurchaseInvoiceResponse,
+    status_code=201,
+    dependencies=[Depends(require_service_scope("crm:ap:write"))],
+)
+def create_purchase_invoice(
+    payload: CRMPurchaseInvoicePayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMPurchaseInvoiceResponse:
+    """Create an idempotent DRAFT AP invoice matched to an existing PO."""
+    service = DotMacCRMSyncService(db)
+    try:
+        return service.create_purchase_invoice(
+            auth["organization_id"], payload, auth["person_id"]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "Failed to create purchase invoice source_id=%s", payload.crm_invoice_id
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(exc)) from exc
+
+
+@router.post(
+    "/purchase-invoices/{purchase_invoice_id}/attachments",
+    response_model=CRMPurchaseInvoiceAttachmentResponse,
+    status_code=201,
+    dependencies=[Depends(require_service_scope("crm:ap:write"))],
+)
+def upload_purchase_invoice_attachment(
+    purchase_invoice_id: UUID,
+    payload: CRMPurchaseInvoiceAttachmentPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> CRMPurchaseInvoiceAttachmentResponse:
+    """Attach one source document; content checksum makes retries idempotent."""
+    from app.models.finance.ap.supplier_invoice import SupplierInvoice
+    from app.models.finance.common.attachment import Attachment, AttachmentCategory
+    from app.services.finance.common.attachment import (
+        AttachmentInput,
+        attachment_service,
+    )
+
+    org_id = UUID(str(auth["organization_id"]))
+    invoice = db.get(SupplierInvoice, purchase_invoice_id)
+    if invoice is None or invoice.organization_id != org_id:
+        raise HTTPException(status_code=404, detail="Purchase invoice not found")
+    try:
+        content = base64.b64decode(payload.content_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=422, detail="Invalid base64 attachment"
+        ) from exc
+    if not content:
+        raise HTTPException(status_code=422, detail="Attachment is empty")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Attachment exceeds 10 MB")
+
+    checksum = hashlib.sha256(content).hexdigest()
+    existing = db.scalar(
+        select(Attachment).where(
+            Attachment.organization_id == org_id,
+            Attachment.entity_type == "SUPPLIER_INVOICE",
+            Attachment.entity_id == invoice.invoice_id,
+            Attachment.checksum == checksum,
+        )
+    )
+    if existing:
+        return CRMPurchaseInvoiceAttachmentResponse(
+            attachment_id=existing.attachment_id,
+            purchase_invoice_id=invoice.invoice_id,
+            file_name=existing.file_name,
+            created=False,
+        )
+
+    attachment = attachment_service.save_file(
+        db,
+        org_id,
+        AttachmentInput(
+            entity_type="SUPPLIER_INVOICE",
+            entity_id=str(invoice.invoice_id),
+            file_name=payload.file_name,
+            content_type=payload.mime_type,
+            category=AttachmentCategory.INVOICE,
+            description="Uploaded by Sub vendor purchase-invoice sync",
+        ),
+        io.BytesIO(content),
+        UUID(str(auth["person_id"])),
+    )
+    return CRMPurchaseInvoiceAttachmentResponse(
+        attachment_id=attachment.attachment_id,
+        purchase_invoice_id=invoice.invoice_id,
+        file_name=attachment.file_name,
+        created=True,
+    )
 
 
 @router.post(
@@ -852,3 +1191,75 @@ def create_purchase_order_variation(
             payload.omni_work_order_id,
         )
         raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+# ============ NCC Regulatory Endpoints (ERP → CRM) ============
+#
+# Service-authenticated variants of the NCC read endpoints in
+# app/api/finance/ncc.py and app/api/people/ncc.py. Those use JWT-based
+# require_tenant_auth (for the ERP UI); these mirror them behind the CRM's
+# X-API-Key service auth so the CRM regulatory-pack aggregator can pull the
+# year-end return's Section F (financials) and Section G (staff head-count).
+
+
+class NccFinancialsResponse(BaseModel):
+    period: dict
+    summary: dict
+    detail: dict
+    note: str
+
+
+class NccStaffHeadcountResponse(BaseModel):
+    """NCC Section G matrix: category -> nationality -> gender -> count."""
+
+    total_active: int
+    by_category: dict[str, dict[str, dict[str, int]]]
+
+
+@router.get(
+    "/ncc/financials",
+    response_model=NccFinancialsResponse,
+    dependencies=[Depends(require_service_scope("crm:ncc:read"))],
+)
+def ncc_financials(
+    year: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    as_of_date: str | None = None,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> NccFinancialsResponse:
+    """NCC Section F financials for the CRM aggregator.
+
+    Composed from the income-statement / balance-sheet / expense-summary
+    services for the given year (or explicit date range / as-at date).
+    """
+    data = ncc_financials_context(
+        db,
+        auth["organization_id"],
+        year=year,
+        start_date=start_date,
+        end_date=end_date,
+        as_of_date=as_of_date,
+    )
+    return NccFinancialsResponse(**data)
+
+
+@router.get(
+    "/ncc/staff-headcount",
+    response_model=NccStaffHeadcountResponse,
+    dependencies=[Depends(require_service_scope("crm:ncc:read"))],
+)
+def ncc_staff_headcount(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> NccStaffHeadcountResponse:
+    """NCC Section G active-staff head-count for the CRM aggregator.
+
+    Matrix of NCC category x Nigerian/Expatriate x Male/Female.
+    """
+    org_id = auth["organization_id"]
+    if not isinstance(org_id, UUID):
+        org_id = UUID(str(org_id))
+    report = NccStaffReportService(db).build(org_id)
+    return NccStaffHeadcountResponse(**report)

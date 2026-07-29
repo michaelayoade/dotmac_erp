@@ -1,0 +1,110 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Upload Documents{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/documents" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Documents</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Upload</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6">
+    <div>
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Upload Documents</h2>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Add one document, then use <span class="font-medium">Add another</span> for the rest. Files stay pending until HR approves them.</p>
+    </div>
+
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-200">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/self/documents/new" enctype="multipart/form-data" class="card p-6 space-y-6"
+          x-data='{
+              rows: {{ form_rows | tojson | safe }},
+              maxRows: {{ max_batch_items }},
+              submitting: false,
+              blankRow: {{ {
+                  "document_type": "",
+                  "document_name": "",
+                  "description": "",
+                  "issue_date": "",
+                  "expiry_date": "",
+                  "_errors": {}
+              } | tojson | safe }},
+              addRow() { if (this.rows.length < this.maxRows) this.rows.push(JSON.parse(JSON.stringify(this.blankRow))); },
+              removeRow(index) { if (this.rows.length > 1) this.rows.splice(index, 1); }
+          }'
+          @submit="submitting = true">
+        {{ request.state.csrf_form | safe }}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Document Batch</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Files must be reselected if validation fails. Max {{ max_batch_items }} uploads per submission.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" @click="addRow()" :disabled="rows.length >= maxRows">Add another</button>
+        </div>
+
+        <template x-for="(row, index) in rows" :key="index">
+            <section class="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h4 class="text-base font-semibold text-slate-900 dark:text-white" x-text="`Document ${index + 1}`"></h4>
+                    <button type="button" class="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" x-show="rows.length > 1" @click="removeRow(index)">Remove</button>
+                </div>
+                <template x-if="row._errors && row._errors.row"><p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300" x-text="row._errors.row"></p></template>
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                        <label class="form-label required">Document Type</label>
+                        <select class="form-select w-full" :name="`document_type_${index + 1}`" x-model="row.document_type">
+                            <option value="">Select type</option>
+                            {% for dt in document_types %}
+                            <option value="{{ dt.value }}">{{ dt.value | replace('_', ' ') | title }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.document_type" x-text="row._errors && row._errors.document_type"></p>
+                    </div>
+                    <div>
+                        <label class="form-label required">Document Name</label>
+                        <input class="form-input w-full" :name="`document_name_${index + 1}`" x-model="row.document_name" placeholder="e.g., International Passport">
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.document_name" x-text="row._errors && row._errors.document_name"></p>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="form-label">Description</label>
+                        <textarea rows="3" class="form-input w-full" :name="`description_${index + 1}`" x-model="row.description"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label">Issue Date</label>
+                        <input type="date" class="form-input w-full" :name="`issue_date_${index + 1}`" x-model="row.issue_date">
+                    </div>
+                    <div>
+                        <label class="form-label">Expiry Date</label>
+                        <input type="date" class="form-input w-full" :name="`expiry_date_${index + 1}`" x-model="row.expiry_date">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="form-label required">Document File</label>
+                        <input type="file" class="form-input w-full" :name="`file_${index + 1}`" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Max 10MB. Allowed: PDF, DOC, DOCX, JPG, JPEG, PNG.</p>
+                        <p class="mt-1 text-xs text-amber-700 dark:text-amber-400" x-show="row._upload_filename" x-text="`Please select ${row._upload_filename} again — your browser cannot keep a file across a failed submission.`"></p>
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.file" x-text="row._errors && row._errors.file"></p>
+                    </div>
+                </div>
+            </section>
+        </template>
+
+        <div class="flex items-center justify-end gap-3">
+            <a href="/people/self/documents" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary" :disabled="submitting">
+                <span x-show="!submitting">Submit all for approval</span>
+                <span x-show="submitting">Submitting...</span>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

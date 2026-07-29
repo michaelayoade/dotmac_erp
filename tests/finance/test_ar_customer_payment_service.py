@@ -8,7 +8,11 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
+from app.models.finance.ar.customer_payment import (
+    CustomerPayment,
+    PaymentMethod,
+    PaymentStatus,
+)
 from app.models.finance.ar.invoice import InvoiceStatus
 from app.models.finance.tax.tax_code import TaxType
 from app.services.common import ValidationError
@@ -122,6 +126,75 @@ def test_create_payment_calculates_gross_from_wht():
     assert payment.amount == Decimal("90.00")
 
 
+def test_create_wht_payment_allows_allocation_up_to_gross_settlement():
+    db = MagicMock()
+    org_id = uuid4()
+    customer = _make_customer(org_id)
+    invoice_id = uuid4()
+    invoice = SimpleNamespace(
+        invoice_id=invoice_id,
+        organization_id=org_id,
+        customer_id=customer.customer_id,
+        invoice_number="INV-WHT",
+        status=InvoiceStatus.POSTED,
+        balance_due=Decimal("100.00"),
+    )
+    wht_code_id = uuid4()
+    wht_code = SimpleNamespace(
+        tax_code_id=wht_code_id,
+        organization_id=org_id,
+        tax_type=TaxType.WITHHOLDING,
+    )
+
+    def _get(model, record_id):
+        if model.__name__ == "Customer":
+            return customer
+        if model.__name__ == "Invoice" and record_id == invoice_id:
+            return invoice
+        if model.__name__ == "TaxCode":
+            return wht_code
+        return None
+
+    db.get.side_effect = _get
+    with patch(
+        "app.services.finance.ar.customer_payment.SequenceService.get_next_number",
+        return_value="RCPT-WHT",
+    ):
+        payment = CustomerPaymentService.create_payment(
+            db,
+            org_id,
+            CustomerPaymentInput(
+                customer_id=customer.customer_id,
+                payment_date=date.today(),
+                payment_method=PaymentMethod.BANK_TRANSFER,
+                currency_code="NGN",
+                amount=Decimal("95.00"),
+                gross_amount=Decimal("100.00"),
+                wht_amount=Decimal("5.00"),
+                wht_code_id=wht_code_id,
+                allocations=[
+                    PaymentAllocationInput(
+                        invoice_id=invoice_id, amount=Decimal("100.00")
+                    )
+                ],
+            ),
+            created_by_user_id=uuid4(),
+        )
+
+    assert payment.gross_amount == Decimal("100.00")
+    assert db.add.call_count == 2
+
+
+def test_unallocated_amount_uses_gross_settlement() -> None:
+    payment = SimpleNamespace(
+        gross_amount=Decimal("100.00"),
+        amount=Decimal("95.00"),
+        allocations=[SimpleNamespace(allocated_amount=Decimal("100.00"))],
+    )
+
+    assert CustomerPayment.unallocated_amount.fget(payment) == Decimal("0.00")
+
+
 def test_create_payment_rejects_non_withholding_tax_code():
     db = MagicMock()
     org_id = uuid4()
@@ -177,6 +250,7 @@ def test_post_payment_requires_bank_account():
 
 def test_post_payment_wht_requires_receivable_account():
     db = MagicMock()
+    db.scalar.return_value = None
     org_id = uuid4()
     payment = SimpleNamespace(
         payment_id=uuid4(),
@@ -224,6 +298,7 @@ def test_post_payment_wht_requires_receivable_account():
 
 def test_post_payment_success_without_wht():
     db = MagicMock()
+    db.scalar.return_value = None
     org_id = uuid4()
     payment = SimpleNamespace(
         payment_id=uuid4(),
@@ -299,6 +374,7 @@ def test_post_payment_success_without_wht():
 
 def test_post_payment_rejects_unmapped_bank_account():
     db = MagicMock()
+    db.scalar.return_value = None
     org_id = uuid4()
     payment = SimpleNamespace(
         payment_id=uuid4(),
@@ -318,10 +394,14 @@ def test_post_payment_rejects_unmapped_bank_account():
         currency_code="NGN",
         correlation_id="c2",
     )
+    customer = _make_customer(org_id)
+    customer.customer_id = payment.customer_id
 
     def _get(model, _id):
         if model.__name__ == "CustomerPayment":
             return payment
+        if model.__name__ == "Customer":
+            return customer
         if model.__name__ in {"Account", "BankAccount"}:
             return None
         return None

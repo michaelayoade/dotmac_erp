@@ -20,7 +20,7 @@ class ReconciliationPolicy:
     enabled_provider_keys: frozenset[str] = field(default_factory=frozenset)
     enabled_source_types: frozenset[str] = field(default_factory=frozenset)
     enabled_strategy_keys: frozenset[str] = field(default_factory=frozenset)
-    auto_match_threshold: int = 90
+    auto_match_threshold: int = 95
     suggest_threshold: int = 70
     ignore_threshold: int = 0
     journal_creation_strategy_keys: frozenset[str] = field(default_factory=frozenset)
@@ -29,9 +29,9 @@ class ReconciliationPolicy:
     transfer_keywords: tuple[str, ...] = ()
     deposit_keywords: tuple[str, ...] = ()
     gl_mappings: dict[str, str] = field(default_factory=dict)
-    amount_tolerance: Decimal = Decimal("0.01")
-    date_buffer_days: int = 7
-    settlement_window_days: int = 10
+    amount_tolerance: Decimal = Decimal("0.00")
+    date_buffer_days: int = 3
+    settlement_window_days: int = 1
 
     def allows_provider(self, provider_key: str) -> bool:
         return provider_key in self.enabled_provider_keys
@@ -83,14 +83,10 @@ def build_policy_from_config(config: AutoMatchDefaultsLike) -> ReconciliationPol
         journal_creation.add("counterpart_transfer")
         auto_post.add("counterpart_transfer")
 
-    # Expense reimbursement matching — always enabled (matches ACC-PAY references)
+    # Expense reimbursement matching stays enabled for existing reimbursement
+    # journals. New journal creation must be opted into by policy/profile.
     enabled_sources.add("expense_reimbursement")
     enabled_strategies.add("expense_reimbursement")
-    journal_creation.add("expense_reimbursement")
-    auto_post.add("expense_reimbursement")
-
-    # Keep custom DB rules as a legacy extension stage, but behind the same policy surface.
-    enabled_strategies.add("legacy_custom_rules")
 
     return ReconciliationPolicy(
         enabled_provider_keys=frozenset(enabled_providers),
@@ -109,7 +105,7 @@ def build_policy_from_config(config: AutoMatchDefaultsLike) -> ReconciliationPol
             )
             or "6080"
         },
-        amount_tolerance=getattr(config, "amount_tolerance", Decimal("0.01")),
-        date_buffer_days=getattr(config, "date_buffer_days", 7),
-        settlement_window_days=getattr(config, "settlement_date_window_days", 10),
+        amount_tolerance=getattr(config, "amount_tolerance", Decimal("0.00")),
+        date_buffer_days=getattr(config, "date_buffer_days", 3),
+        settlement_window_days=getattr(config, "settlement_date_window_days", 1),
     )

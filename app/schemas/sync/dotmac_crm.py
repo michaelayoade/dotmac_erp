@@ -4,7 +4,7 @@ DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
@@ -19,7 +19,11 @@ from app.config import settings
 class CRMProjectPayload(BaseModel):
     """Project data from DotMac CRM."""
 
-    crm_id: str = Field(..., description="UUID from CRM")
+    crm_id: str = Field(
+        ...,
+        description="Opaque source UUID",
+        validation_alias=AliasChoices("source_id", "crm_id"),
+    )
     name: str = Field(..., max_length=160)
     code: str | None = Field(None, max_length=80)
     project_type: str | None = Field(None, max_length=80)
@@ -39,7 +43,11 @@ class CRMProjectPayload(BaseModel):
 class CRMTicketPayload(BaseModel):
     """Support ticket data from DotMac CRM."""
 
-    crm_id: str = Field(..., description="UUID from CRM")
+    crm_id: str = Field(
+        ...,
+        description="Opaque source UUID",
+        validation_alias=AliasChoices("source_id", "crm_id"),
+    )
     subject: str = Field(..., max_length=255)
     ticket_number: str | None = Field(None, max_length=40)
     ticket_type: str | None = Field(None, max_length=80)
@@ -126,7 +134,11 @@ class CRMTicketActivityEntry(BaseModel):
 class CRMWorkOrderPayload(BaseModel):
     """Work order data from DotMac CRM."""
 
-    crm_id: str = Field(..., description="UUID from CRM")
+    crm_id: str = Field(
+        ...,
+        description="Opaque source UUID",
+        validation_alias=AliasChoices("source_id", "crm_id"),
+    )
     title: str = Field(..., max_length=200)
     work_type: str | None = Field(None, max_length=80)
     status: str = Field("active", description="active, completed, cancelled")
@@ -184,6 +196,31 @@ class BulkSyncResponse(BaseModel):
     tickets_synced: int = 0
     work_orders_synced: int = 0
     errors: list[SyncError] = Field(default_factory=list)
+
+
+class ReconcileOrphansRequest(BaseModel):
+    """Full-run reconcile summary from DotMac CRM for one entity type.
+
+    ``seen_crm_ids`` is the complete set of CRM ids a FULL ``sync_all_active``
+    run saw upstream-side; mappings for that entity type not in the set are
+    orphan candidates (canceled/soft-deleted in CRM, so they silently dropped
+    out of the push).
+    """
+
+    entity_type: Literal["project", "ticket", "work_order"]
+    seen_crm_ids: list[str] = Field(default_factory=list, max_length=50_000)
+    active_count: int = Field(0, ge=0, description="CRM-side active count for the run")
+
+
+class ReconcileOrphansResponse(BaseModel):
+    """Result of an orphan reconcile pass."""
+
+    entity_type: str
+    examined: int = 0
+    orphaned: int = 0
+    closed: int = 0
+    skipped_reason: str | None = None
+    errors: list[str] = Field(default_factory=list)
 
 
 class CRMInventoryItemResponse(BaseModel):
@@ -562,6 +599,79 @@ class CRMMaterialRequestStatusRead(BaseModel):
     created_at: datetime
 
 
+# ============ Expense Claim Sync (CRM → ERP) ============
+
+
+class CRMExpenseClaimItemPayload(BaseModel):
+    """Single expense line in a CRM field-technician expense request."""
+
+    category_code: str = Field(..., min_length=1, max_length=30)
+    description: str = Field(..., min_length=1, max_length=500)
+    claimed_amount: Decimal = Field(..., gt=0)
+    expense_date: str | None = Field(
+        None, description="YYYY-MM-DD expense date; defaults to the claim_date"
+    )
+    vendor_name: str | None = Field(None, max_length=200)
+    receipt_url: str | None = Field(None, max_length=500)
+    notes: str | None = None
+
+
+class CRMExpenseClaimPayload(BaseModel):
+    """Expense claim from DotMac CRM (field-technician expense request)."""
+
+    omni_id: str = Field(
+        ..., max_length=36, description="CRM expense request UUID for idempotency"
+    )
+    purpose: str = Field(..., min_length=1, max_length=500)
+    claim_date: str = Field(..., description="YYYY-MM-DD claim date")
+    requested_by_email: str = Field(..., min_length=3, max_length=255)
+    ticket_crm_id: str | None = Field(None, max_length=36)
+    project_crm_id: str | None = Field(None, max_length=36)
+    currency_code: str | None = Field(None, min_length=3, max_length=3)
+    remarks: str | None = None
+    reference_number: str | None = Field(
+        None, max_length=50, description="CRM expense request number"
+    )
+    items: list[CRMExpenseClaimItemPayload] = Field(..., min_length=1)
+
+
+class CRMExpenseClaimResponse(BaseModel):
+    """Response after creating an expense claim from CRM."""
+
+    claim_id: UUID
+    claim_number: str
+    status: str
+    omni_id: str
+
+
+class CRMExpenseClaimStatusResponse(BaseModel):
+    """Expense claim status for CRM polling."""
+
+    claim_id: UUID
+    claim_number: str
+    status: str
+    rejection_reason: str | None = None
+    paid_on: date | None = None
+    total_claimed_amount: Decimal
+    total_approved_amount: Decimal | None = None
+    omni_id: str
+
+
+class CRMExpenseCategoryItem(BaseModel):
+    """Active expense category exposed to the CRM expense-request form."""
+
+    category_code: str
+    category_name: str
+    requires_receipt: bool = True
+    max_amount_per_claim: Decimal | None = None
+
+
+class CRMExpenseCategoriesResponse(BaseModel):
+    """Response with active expense categories for CRM."""
+
+    items: list[CRMExpenseCategoryItem] = Field(default_factory=list)
+
+
 # ============ Purchase Order Sync (CRM → ERP) ============
 
 
@@ -650,3 +760,82 @@ class CRMPurchaseOrderResponse(BaseModel):
     variation_id: str | None = None
     amendment_version: int = 1
     superseded_po_id: UUID | None = None
+
+
+class CRMPurchaseInvoiceItemPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_type: str | None = Field(None, max_length=80)
+    description: str = Field(..., min_length=1, max_length=2000)
+    quantity: Decimal = Field(..., gt=0)
+    unit_price: Decimal = Field(..., ge=0)
+    amount: Decimal = Field(..., ge=0)
+    notes: str | None = Field(None, max_length=2000)
+
+
+class CRMPurchaseInvoicePayload(BaseModel):
+    """Approved vendor invoice originated by CRM/Sub and matched to an ERP PO."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    crm_invoice_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=36,
+        validation_alias=AliasChoices("source_invoice_id", "crm_invoice_id"),
+    )
+    crm_invoice_number: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        validation_alias=AliasChoices("source_invoice_number", "crm_invoice_number"),
+    )
+    crm_project_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=36,
+        validation_alias=AliasChoices("source_project_id", "crm_project_id"),
+    )
+    installation_project_id: str = Field(..., min_length=1, max_length=36)
+    crm_quote_id: str | None = Field(
+        None,
+        max_length=36,
+        validation_alias=AliasChoices("source_quote_id", "crm_quote_id"),
+    )
+    erp_purchase_order_id: str = Field(..., min_length=1, max_length=100)
+    vendor_erp_id: str | None = Field(None, max_length=255)
+    vendor_name: str = Field(..., min_length=1, max_length=255)
+    vendor_code: str | None = Field(None, max_length=160)
+    project_code: str | None = Field(None, max_length=80)
+    project_name: str | None = Field(None, max_length=200)
+    currency: str = Field(..., min_length=3, max_length=3)
+    tax_rate_percent: Decimal = Field(Decimal("0"), ge=0, le=100)
+    subtotal: Decimal = Field(..., ge=0)
+    tax_total: Decimal = Field(Decimal("0"), ge=0)
+    total: Decimal = Field(..., gt=0)
+    approved_at: datetime | None = None
+    approved_by_email: str | None = Field(None, max_length=255)
+    items: list[CRMPurchaseInvoiceItemPayload] = Field(..., min_length=1)
+
+
+class CRMPurchaseInvoiceResponse(BaseModel):
+    purchase_invoice_id: str
+    invoice_id: UUID
+    invoice_number: str
+    status: str
+    crm_invoice_id: str
+
+
+class CRMPurchaseInvoiceAttachmentPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_name: str = Field(..., min_length=1, max_length=255)
+    mime_type: str = Field(..., min_length=1, max_length=100)
+    content_base64: str = Field(..., min_length=1)
+
+
+class CRMPurchaseInvoiceAttachmentResponse(BaseModel):
+    attachment_id: UUID
+    purchase_invoice_id: UUID
+    file_name: str
+    created: bool

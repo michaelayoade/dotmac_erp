@@ -2,6 +2,8 @@ import logging
 from collections.abc import Callable
 from typing import Any, ClassVar
 
+from fastapi import HTTPException
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,6 +26,29 @@ def list_response(
     # which may not be accurate for pagination. Services should provide total.
     actual_total = total if total is not None else len(items)
     return {"items": items, "total": actual_total, "limit": limit, "offset": offset}
+
+
+def apply_ordering(
+    query: Any,
+    order_by: str,
+    order_dir: str,
+    allowed_columns: dict[str, Any],
+) -> Any:
+    """Apply validated order_by/order_dir clauses to a SQLAlchemy query."""
+    if order_by not in allowed_columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
+        )
+    column = allowed_columns[order_by]
+    if order_dir == "desc":
+        return query.order_by(column.desc())
+    return query.order_by(column.asc())
+
+
+def apply_pagination(query: Any, limit: int, offset: int) -> Any:
+    """Apply limit/offset pagination to a query."""
+    return query.limit(limit).offset(offset)
 
 
 class ListResponseMixin:

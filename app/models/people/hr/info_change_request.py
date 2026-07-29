@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, func, text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +35,18 @@ class InfoChangeType(str, enum.Enum):
     PENSION_INFO = "PENSION_INFO"  # RSA PIN, PFA code
     NHF_INFO = "NHF_INFO"  # NHF number
     COMBINED = "COMBINED"  # Multiple types in one request
+    QUALIFICATION = "QUALIFICATION"
+    CERTIFICATION = "CERTIFICATION"
+    SKILL = "SKILL"
+    DEPENDENT = "DEPENDENT"
+    DOCUMENT = "DOCUMENT"
+
+
+class InfoChangeOperation(str, enum.Enum):
+    """Requested operation for the target section."""
+
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
 
 
 class InfoChangeStatus(str, enum.Enum):
@@ -45,6 +57,90 @@ class InfoChangeStatus(str, enum.Enum):
     REJECTED = "REJECTED"  # Rejected, not applied
     CANCELLED = "CANCELLED"  # Cancelled by requester
     EXPIRED = "EXPIRED"  # Auto-expired after time limit
+
+
+class EmployeeInfoChangeBatch(Base):
+    """Batch envelope for repeatable self-service submissions."""
+
+    __tablename__ = "employee_info_change_batch"
+    __table_args__ = (
+        Index("idx_info_change_batch_org", "organization_id"),
+        Index(
+            "idx_info_change_batch_employee_type",
+            "organization_id",
+            "employee_id",
+            "change_type",
+            "created_at",
+        ),
+        {"schema": "hr"},
+    )
+
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    change_type: Mapped[InfoChangeType] = mapped_column(
+        Enum(InfoChangeType, name="info_change_type", schema="hr"),
+        nullable=False,
+    )
+    requester_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    employee: Mapped["Employee"] = relationship(
+        "Employee",
+        foreign_keys=[employee_id],
+    )
+    items: Mapped[list["EmployeeInfoChangeRequest"]] = relationship(
+        "EmployeeInfoChangeRequest",
+        back_populates="batch",
+        order_by="EmployeeInfoChangeRequest.batch_item_order",
+    )
+
+    @property
+    def derived_status(self) -> InfoChangeStatus | None:
+        """Derive batch status from child request statuses."""
+        if not self.items:
+            return None
+        statuses = [item.status for item in self.items]
+        if all(status == InfoChangeStatus.APPROVED for status in statuses):
+            return InfoChangeStatus.APPROVED
+        if all(status == InfoChangeStatus.REJECTED for status in statuses):
+            return InfoChangeStatus.REJECTED
+        if all(status == InfoChangeStatus.EXPIRED for status in statuses):
+            return InfoChangeStatus.EXPIRED
+        if all(status == InfoChangeStatus.CANCELLED for status in statuses):
+            return InfoChangeStatus.CANCELLED
+        if any(status == InfoChangeStatus.PENDING for status in statuses):
+            return InfoChangeStatus.PENDING
+        return None
+
+    @property
+    def batch_reference(self) -> str:
+        """Human-friendly batch reference for UI surfaces."""
+        return f"ICB-{str(self.batch_id).split('-')[0].upper()}"
 
 
 class EmployeeInfoChangeRequest(Base):
@@ -70,6 +166,11 @@ class EmployeeInfoChangeRequest(Base):
         Index(
             "idx_info_change_request_pending", "organization_id", "status", "created_at"
         ),
+        Index(
+            "idx_info_change_request_batch_order",
+            "batch_id",
+            "batch_item_order",
+        ),
         {"schema": "hr"},
     )
 
@@ -89,16 +190,36 @@ class EmployeeInfoChangeRequest(Base):
         ForeignKey("hr.employee.employee_id", ondelete="CASCADE"),
         nullable=False,
     )
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee_info_change_batch.batch_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    batch_item_order: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
 
     # Request details
     change_type: Mapped[InfoChangeType] = mapped_column(
         Enum(InfoChangeType, name="info_change_type", schema="hr"),
         nullable=False,
     )
+    operation: Mapped[InfoChangeOperation] = mapped_column(
+        Enum(InfoChangeOperation, name="info_change_operation", schema="hr"),
+        nullable=False,
+        default=InfoChangeOperation.UPDATE,
+        server_default=InfoChangeOperation.UPDATE.value,
+    )
     status: Mapped[InfoChangeStatus] = mapped_column(
         Enum(InfoChangeStatus, name="info_change_status", schema="hr"),
         default=InfoChangeStatus.PENDING,
         nullable=False,
+    )
+    target_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Target extended-profile record for update requests",
     )
 
     # The actual changes
@@ -111,6 +232,30 @@ class EmployeeInfoChangeRequest(Base):
         JSONB,
         nullable=False,
         comment="Previous values before change (for audit)",
+    )
+    pending_document_path: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Pending evidence storage path scoped to the request",
+    )
+    pending_document_name: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Original filename for pending evidence",
+    )
+    pending_document_size: Mapped[int | None] = mapped_column(
+        nullable=True,
+        comment="Pending evidence size in bytes",
+    )
+    pending_document_mime_type: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Pending evidence MIME type",
+    )
+    pending_document_checksum: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Pending evidence checksum when available",
     )
 
     # Request metadata
@@ -158,6 +303,10 @@ class EmployeeInfoChangeRequest(Base):
     employee: Mapped["Employee"] = relationship(
         "Employee",
         foreign_keys=[employee_id],
+    )
+    batch: Mapped[EmployeeInfoChangeBatch | None] = relationship(
+        "EmployeeInfoChangeBatch",
+        back_populates="items",
     )
     reviewer: Mapped[Optional["Person"]] = relationship(
         "Person",
@@ -210,5 +359,20 @@ class EmployeeInfoChangeRequest(Base):
 
         return ", ".join(parts) if parts else "No changes"
 
+    @property
+    def batch_reference(self) -> str | None:
+        """Expose batch reference when the request belongs to a batch."""
+        if not self.batch_id:
+            return None
+        return (
+            self.batch.batch_reference
+            if self.batch is not None
+            else f"ICB-{str(self.batch_id).split('-')[0].upper()}"
+        )
+
     def __repr__(self) -> str:
-        return f"<InfoChangeRequest {self.request_id} emp={self.employee_id} status={self.status.value}>"
+        return (
+            f"<InfoChangeRequest {self.request_id} emp={self.employee_id} "
+            f"type={self.change_type.value} op={self.operation.value} "
+            f"status={self.status.value}>"
+        )

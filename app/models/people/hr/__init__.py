@@ -31,6 +31,13 @@ from app.models.people.hr.employee_extended import (
     Skill,
     SkillCategory,
 )
+from app.models.people.hr.info_change_request import (
+    EmployeeInfoChangeBatch,
+    EmployeeInfoChangeRequest,
+    InfoChangeOperation,
+    InfoChangeStatus,
+    InfoChangeType,
+)
 from app.models.people.hr.employee_grade import EmployeeGrade
 from app.models.people.hr.employment_type import EmploymentType
 from app.models.people.hr.position import Position, PositionVacancyRoutingPolicy
@@ -148,6 +155,11 @@ __all__ = [
     "EmployeeDependent",
     "Skill",
     "EmployeeSkill",
+    "EmployeeInfoChangeBatch",
+    "EmployeeInfoChangeRequest",
+    "InfoChangeOperation",
+    "InfoChangeStatus",
+    "InfoChangeType",
     # Job descriptions and competencies
     "CompetencyCategory",
     "JobDescriptionStatus",

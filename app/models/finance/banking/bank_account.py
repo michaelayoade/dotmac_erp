@@ -169,6 +169,24 @@ class BankAccount(Base):
     mono_last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Last time a sync produced *evidence that data actually flowed* — lines
+    # ingested, or Mono's indexer confirming a healthy pull. Distinct from
+    # ``mono_last_synced_at``, which only records that the API answered:
+    # ``/transactions`` serves Mono's cache, so a de-authorised account still
+    # returns 200 with zero rows. Anything deciding "is this link alive?"
+    # must read this, not ``mono_last_synced_at``.
+    mono_last_ingest_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # True when Mono reports the *bank link itself* is broken (reauth needed,
+    # or the indexer's pull failed). Distinct from a transient API error: a
+    # 5xx clears the moment Mono answers again, whereas a dead link keeps
+    # serving 200s from cache and would otherwise be cleared by its own
+    # staleness. Only positive evidence — lines ingested, or Mono confirming
+    # a healthy pull — resets this.
+    mono_link_failed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     mono_last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     mono_sync_buffer_days: Mapped[int] = mapped_column(
         nullable=False, default=7, server_default="7"

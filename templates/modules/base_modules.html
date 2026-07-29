@@ -152,7 +152,7 @@
             </a>
 
 
-            {% with current_module="operations" %}
+            {% with current_module=active_module | default("operations") %}
                 {% include "partials/_module_switcher.html" %}
             {% endwith %}
         </nav>

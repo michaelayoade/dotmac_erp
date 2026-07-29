@@ -26,12 +26,35 @@ from app.services.dotmac_sub import SYSTEM_USER_ID, DotmacSubSyncService
 logger = logging.getLogger(__name__)
 
 
-def _entity_id(payload: dict[str, Any]) -> str | None:
-    """Pull the referenced entity id out of a webhook payload."""
-    raw = payload.get("data")
-    data = raw if isinstance(raw, dict) else payload
+def _entity_id(envelope: dict[str, Any], domain: str) -> str | None:
+    """Pull the referenced upstream entity id out of a dotmac_sub webhook body.
+
+    dotmac_sub sends ``{event_id, event_type, occurred_at, payload, context}``:
+    the entity itself is in ``payload`` and its ids are echoed in ``context``.
+    We look, per domain, in ``context.<domain>_id`` and ``payload.<domain>_id``
+    first (e.g. ``context.invoice_id``, ``payload.payment_id``), then the
+    payload's own ``id`` — falling back to the legacy flat/``data`` shape so any
+    older sender still resolves.
+    """
+    context = envelope.get("context")
+    context = context if isinstance(context, dict) else {}
+    inner = envelope.get("payload")
+    inner = inner if isinstance(inner, dict) else {}
+
+    for val in (
+        context.get(f"{domain}_id"),
+        inner.get(f"{domain}_id"),
+        inner.get("id"),
+        inner.get("entity_id"),
+    ):
+        if val:
+            return str(val)
+
+    # Legacy / other-sender fallback: flat body or a nested "data" object.
+    raw = envelope.get("data")
+    data = raw if isinstance(raw, dict) else envelope
     for key in ("id", "entity_id", "object_id"):
-        val = data.get(key) or payload.get(key)
+        val = data.get(key) or envelope.get(key)
         if val:
             return str(val)
     return None
@@ -53,20 +76,25 @@ def dispatch_webhook(
         _resolve_default_revenue_account,
     )
 
-    entity_id = _entity_id(payload)
-    if not entity_id:
-        return {"status": "ignored", "reason": "no entity id in payload"}
-
     domain = (event_type or "").split(".", 1)[0].lower()
     if domain not in {"subscriber", "invoice", "payment"}:
         return {"status": "ignored", "reason": f"unhandled event {event_type}"}
 
+    entity_id = _entity_id(payload, domain)
+    if not entity_id:
+        return {"status": "ignored", "reason": "no entity id in payload"}
+
     ar_control = _resolve_ar_control_account(db, organization_id)
     revenue = _resolve_default_revenue_account(db, organization_id)
-    if not ar_control or not revenue:
+    # Only invoice/credit-note syncs need a revenue account (it codes the GL
+    # lines). Subscriber upserts and payment receipts never touch revenue, so a
+    # missing revenue account must not block them. AR control is required to
+    # construct the sync service for any entity.
+    if not ar_control or (domain == "invoice" and not revenue):
         logger.error(
-            "dotmac_sub webhook: AR/revenue account unresolved for org %s",
+            "dotmac_sub webhook: required GL accounts unresolved for org %s (event %s)",
             organization_id,
+            event_type,
         )
         return {"status": "error", "reason": "GL accounts unresolved"}
 

@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
+import os
+
 import httpx
+from dotmac_integration import IntegrationHttpClient, ReachabilityCircuit
 
 from app.config import settings
 from app.metrics import categorize_http_status, observe_integration_request
@@ -41,8 +44,14 @@ class CRMNotFoundError(CRMError):
     pass
 
 
+class _TransientServerError(CRMError):
+    """Internal retry marker for 5xx; never escapes _request."""
+
+
 class CRMRateLimitError(CRMError):
     """Rate limit exceeded."""
+
+    retry_after: float | None = None
 
     pass
 
@@ -53,6 +62,7 @@ class CRMConfig:
 
     url: str
     api_token: str | None = None
+    api_key: str | None = None
     timeout: float = 30.0
     max_retries: int = 3
     retry_delay: float = 1.0
@@ -60,9 +70,12 @@ class CRMConfig:
     @classmethod
     def from_settings(cls) -> "CRMConfig":
         """Create config from application settings."""
+        from app.services.secrets import resolve_secret
+
         return cls(
             url=settings.crm_api_url,
-            api_token=settings.crm_api_token,
+            api_token=resolve_secret(settings.crm_api_token),
+            api_key=resolve_secret(settings.crm_api_key),
             timeout=settings.crm_request_timeout,
             max_retries=settings.crm_max_retries,
         )
@@ -97,6 +110,7 @@ class CRMClient:
     def __init__(self, config: CRMConfig | None = None):
         self.config = config or CRMConfig.from_settings()
         self._client: httpx.Client | None = None
+        self._engine_cache: IntegrationHttpClient | None = None
 
     @property
     def client(self) -> httpx.Client:
@@ -106,7 +120,12 @@ class CRMClient:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
-            if self.config.api_token:
+            # Scoped service ApiKey preferred (CRM resolves X-API-Key through
+            # its ApiKey-principal path with the linked person's RBAC); the
+            # legacy static Bearer remains only until the key is provisioned.
+            if self.config.api_key:
+                headers["X-API-Key"] = self.config.api_key
+            elif self.config.api_token:
                 headers["Authorization"] = f"Bearer {self.config.api_token}"
 
             self._client = httpx.Client(
@@ -135,107 +154,109 @@ class CRMClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Make an HTTP request via the shared integration engine.
+
+        Behaviour preserved from the hand-rolled loop: 401/404 raise
+        immediately with the old messages; 429 sleeps Retry-After (default 5s)
+        and retries every attempt; 5xx retries on the original linear
+        ``retry_delay * (attempt + 1)`` schedule (plus jitter); exhaustion
+        raises the last CRMError; metrics emit once per logical call with the
+        same status vocabulary. Deltas (same class as the erp->sub port):
+        jitter added; a reachability circuit (env CRM_CIRCUIT_SECONDS, default
+        30, <=0 disables) fails fast after transport-failure exhaustion;
+        x-request-id is propagated; non-connect httpx.RequestErrors fail fast
+        instead of retrying.
         """
-        Make HTTP request with retry logic.
-
-        Args:
-            method: HTTP method
-            path: API path (relative to base URL)
-            params: Query parameters
-            json: JSON body for POST/PATCH
-
-        Returns:
-            Response JSON data
-
-        Raises:
-            CRMError: On API error
-        """
-        last_error: Exception | None = None
         started_at = time.perf_counter()
-        metric_status = "unknown"
+        outcome = {"status": "unknown"}
+        try:
+            result = self._engine().request(
+                method=method,
+                path=path,
+                params=params,
+                json_data=json,
+                handler_kwargs={"path": path, "outcome": outcome},
+            )
+            return cast(dict[str, Any], result)
+        except _TransientServerError as exc:
+            raise CRMError(exc.args[0], status_code=exc.status_code) from exc
+        except CRMRateLimitError:
+            outcome["status"] = "rate_limited"
+            raise
+        except httpx.RequestError as exc:
+            outcome["status"] = "request_error"
+            raise CRMError(f"Request failed: {exc}") from exc
+        finally:
+            observe_integration_request(
+                "crm",
+                f"{method.upper()} {path}",
+                outcome["status"],
+                max(time.perf_counter() - started_at, 0.0),
+            )
 
-        for attempt in range(self.config.max_retries):
+    def _engine(self) -> IntegrationHttpClient:
+        if self._engine_cache is None:
+            retry_delay = self.config.retry_delay
+
+            def _linear_jittered(attempt: int) -> float:
+                import random
+
+                return retry_delay * (attempt + 1) + random.uniform(0.0, 0.25)  # noqa: S311  # nosec B311 - retry jitter, not crypto
+
+            self._engine_cache = IntegrationHttpClient(
+                client_factory=lambda: self.client,
+                response_handler=self._handle_response,
+                backoff=_linear_jittered,
+                max_attempts=self.config.max_retries,
+                rate_limit_exc=CRMRateLimitError,
+                retryable_excs=(_TransientServerError,),
+                non_retryable_excs=(CRMAuthenticationError, CRMNotFoundError, CRMError),
+                loop_exhausted_factory=lambda exc, retries: (
+                    exc
+                    if isinstance(exc, CRMError)
+                    else CRMError(f"Max retries exceeded: {exc}")
+                ),
+                circuit=ReachabilityCircuit(
+                    cooldown_seconds=float(os.getenv("CRM_CIRCUIT_SECONDS", "30"))
+                ),
+                edge="crm",
+                request_id_provider=_current_request_id,
+            )
+        return self._engine_cache
+
+    def _handle_response(self, response, *, path: str, outcome: dict) -> Any:
+        if response.status_code == 401:
+            outcome["status"] = "auth_error"
+            raise CRMAuthenticationError(
+                "Authentication failed - check CRM_API_TOKEN", status_code=401
+            )
+        if response.status_code == 404:
+            outcome["status"] = "not_found"
+            raise CRMNotFoundError(f"Resource not found: {path}", status_code=404)
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            exc = CRMRateLimitError("Rate limited by CRM API", status_code=429)
             try:
-                response = self.client.request(
-                    method=method,
-                    url=path,
-                    params=params,
-                    json=json,
-                )
-
-                if response.status_code == 401:
-                    metric_status = "auth_error"
-                    raise CRMAuthenticationError(
-                        "Authentication failed - check CRM_API_TOKEN",
-                        status_code=401,
-                    )
-                if response.status_code == 404:
-                    metric_status = "not_found"
-                    raise CRMNotFoundError(
-                        f"Resource not found: {path}",
-                        status_code=404,
-                    )
-                if response.status_code == 429:
-                    metric_status = "rate_limited"
-                    # Rate limited - wait and retry
-                    retry_after = int(response.headers.get("Retry-After", 5))
-                    logger.warning(
-                        "Rate limited by CRM API, waiting %d seconds",
-                        retry_after,
-                    )
-                    time.sleep(retry_after)
-                    continue
-
-                response.raise_for_status()
-                metric_status = categorize_http_status(response.status_code)
-                return cast(dict[str, Any], response.json())
-
-            except httpx.HTTPStatusError as e:
-                metric_status = categorize_http_status(e.response.status_code)
-                last_error = CRMError(
-                    f"HTTP {e.response.status_code}: {e.response.text}",
-                    status_code=e.response.status_code,
-                )
-                if e.response.status_code >= 500:
-                    # Server error - retry
-                    logger.warning(
-                        "CRM API server error (attempt %d/%d): %s",
-                        attempt + 1,
-                        self.config.max_retries,
-                        str(e),
-                    )
-                    time.sleep(self.config.retry_delay * (attempt + 1))
-                    continue
-                raise last_error
-
-            except httpx.RequestError as e:
-                metric_status = "request_error"
-                last_error = CRMError(f"Request failed: {str(e)}")
-                logger.warning(
-                    "CRM API request failed (attempt %d/%d): %s",
-                    attempt + 1,
-                    self.config.max_retries,
-                    str(e),
-                )
-                time.sleep(self.config.retry_delay * (attempt + 1))
-            finally:
-                if attempt == self.config.max_retries - 1 or metric_status in {
-                    "success",
-                    "auth_error",
-                    "not_found",
-                    "rate_limited",
-                    "client_error",
-                }:
-                    observe_integration_request(
-                        "crm",
-                        f"{method.upper()} {path}",
-                        metric_status,
-                        max(time.perf_counter() - started_at, 0.0),
-                    )
-
-        if last_error:
-            raise last_error
-        raise CRMError("Max retries exceeded")
+                exc.retry_after = float(int(retry_after)) if retry_after else 5.0
+            except (TypeError, ValueError):
+                exc.retry_after = 5.0
+            raise exc
+        if response.status_code >= 500:
+            outcome["status"] = categorize_http_status(response.status_code)
+            raise _TransientServerError(
+                f"HTTP {response.status_code}: {response.text}",
+                status_code=response.status_code,
+            )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            outcome["status"] = categorize_http_status(e.response.status_code)
+            raise CRMError(
+                f"HTTP {e.response.status_code}: {e.response.text}",
+                status_code=e.response.status_code,
+            ) from e
+        outcome["status"] = categorize_http_status(response.status_code)
+        return response.json()
 
     def _paginate(
         self,
@@ -414,3 +435,13 @@ class CRMClient:
         except CRMError as e:
             logger.error("CRM health check failed: %s", str(e))
             return False
+
+
+def _current_request_id() -> str | None:
+    """Propagate the inbound request id onto outbound CRM calls."""
+    try:
+        from app.observability import request_id_var
+
+        return request_id_var.get() or None
+    except Exception:  # pragma: no cover
+        return None

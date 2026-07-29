@@ -75,6 +75,17 @@ class CustomerPayment(Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "payment_number", name="uq_payment_number"),
         Index("idx_payment_customer", "customer_id"),
+        # Idempotency backstop for the dotmac_sub payment sync: a given upstream
+        # payment (dotmac_sub_id) maps to at most one CustomerPayment per org, so
+        # a concurrent sync/webhook race can never double-post cash. Partial —
+        # manually-entered payments (NULL dotmac_sub_id) are unconstrained.
+        Index(
+            "uq_customer_payment_dotmac_sub_id",
+            "organization_id",
+            "dotmac_sub_id",
+            unique=True,
+            postgresql_where=text("dotmac_sub_id IS NOT NULL"),
+        ),
         {"schema": "ar"},
     )
 
@@ -227,6 +238,6 @@ class CustomerPayment(Base):
 
     @property
     def unallocated_amount(self) -> Decimal:
-        """Net amount minus total allocated across all linked invoices."""
+        """Gross AR settlement minus total allocated across linked invoices."""
         allocated = sum((a.allocated_amount for a in self.allocations), Decimal("0"))
-        return self.amount - allocated
+        return self.gross_amount - allocated

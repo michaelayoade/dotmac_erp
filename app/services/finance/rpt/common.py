@@ -709,6 +709,10 @@ def _cash_basis_wht_totals(
         CustomerPayment,
         PaymentStatus,
     )
+    from app.models.finance.tax.tax_transaction import (
+        TaxTransaction,
+        TaxTransactionType,
+    )
 
     org_id = coerce_uuid(organization_id)
 
@@ -730,8 +734,20 @@ def _cash_basis_wht_totals(
             {APPaymentStatus.VOID, APPaymentStatus.REJECTED, APPaymentStatus.DRAFT}
         ),
     )
+    ar_write_off_stmt = select(
+        func.coalesce(func.sum(TaxTransaction.tax_amount), 0)
+    ).where(
+        TaxTransaction.organization_id == org_id,
+        TaxTransaction.transaction_date >= start_date,
+        TaxTransaction.transaction_date <= end_date,
+        TaxTransaction.source_document_type == "CUSTOMER_PAYMENT_WHT_WRITE_OFF",
+        TaxTransaction.transaction_type == TaxTransactionType.WITHHOLDING,
+    )
 
     wht_deducted = Decimal(db.scalar(ar_stmt) or 0)  # AR: customers deducted from us
+    # Written-off evidence is a current-period negative tax transaction. It
+    # removes the unusable credit without rewriting the original receipt.
+    wht_deducted += Decimal(db.scalar(ar_write_off_stmt) or 0)
     wht_withheld = Decimal(db.scalar(ap_stmt) or 0)  # AP: we withheld from suppliers
 
     return {

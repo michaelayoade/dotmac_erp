@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
-from app.db import SessionLocal, get_auth_db_session
+from app.db import SessionLocal
 from app.db.session_context import allow_cross_org, prime_tenant_context
 from app.models.auth import ApiKey, SessionStatus
 from app.models.auth import Session as AuthSession
@@ -38,76 +38,6 @@ SESSION_ACTIVITY_TIMEOUT_DAYS = int(os.getenv("SESSION_ACTIVITY_TIMEOUT_DAYS", "
 
 # Session validation cache TTL in seconds (5 minutes default)
 SESSION_CACHE_TTL_SECONDS = int(os.getenv("SESSION_CACHE_TTL_SECONDS", "300"))
-
-
-def _get_auth_db_for_sso() -> Session | None:
-    """Get auth database session for SSO validation.
-
-    When SSO is enabled and this is an SSO client (not provider),
-    returns a session to the shared auth database.
-    When SSO is disabled or this is the SSO provider, returns None
-    (use main database instead).
-    """
-    if app_settings.sso_enabled and not app_settings.sso_provider_mode:
-        return get_auth_db_session()
-    return None
-
-
-def _validate_session_sso(
-    session_id: UUID,
-    person_id: UUID,
-    now: datetime,
-    auth_db: Session,
-) -> AuthSession | None:
-    """Validate session against SSO auth database.
-
-    Args:
-        session_id: Session UUID to validate
-        person_id: Person UUID to match
-        now: Current timestamp (must be timezone-aware)
-        auth_db: Auth database session
-
-    Returns:
-        AuthSession if valid, None if invalid
-    """
-    session = auth_db.scalar(
-        select(AuthSession)
-        .where(AuthSession.id == session_id)
-        .where(AuthSession.person_id == person_id)
-        .where(AuthSession.status == SessionStatus.active)
-        .where(AuthSession.revoked_at.is_(None))
-    )
-
-    if not session:
-        return None
-
-    # Handle timezone-naive expires_at (SQLite doesn't preserve timezone)
-    expires_at = session.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-
-    if expires_at <= now:
-        return None
-
-    return session
-
-
-def _decode_token_for_sso(token: str, db: Session | None = None) -> dict:
-    """Decode access token with SSO-aware secret.
-
-    When SSO is enabled, uses the shared SSO JWT secret.
-    """
-    # The decode_access_token function already uses _jwt_secret
-    # which has been updated to use SSO secret when enabled
-    if db:
-        return decode_access_token(db, token)
-
-    # If no db session provided, create a temporary one for decoding
-    temp_db = SessionLocal()
-    try:
-        return decode_access_token(temp_db, token)
-    finally:
-        temp_db.close()
 
 
 def _session_cache_key(session_id: UUID) -> str:
@@ -152,7 +82,6 @@ def _validate_session_cached(
     person_id: UUID,
     now: datetime,
     db: Session,
-    auth_db: Session | None = None,
 ) -> AuthSession | None:
     """
     Validate session with Redis caching.
@@ -190,16 +119,14 @@ def _validate_session_cached(
                                 )
                                 # Query DB for full session object (needed for activity tracking)
                                 # but skip if we only need validation
-                                return _query_session(
-                                    session_id, person_id, now, db, auth_db
-                                )
+                                return _query_session(session_id, person_id, now, db)
                         except ValueError:
                             pass
                 # Cache invalid, fall through to DB check
                 cache_service.delete(cache_key)
 
     # Query database
-    session = _query_session(session_id, person_id, now, db, auth_db)
+    session = _query_session(session_id, person_id, now, db)
 
     if session and cache_service.is_available:
         # Cache the valid session
@@ -225,12 +152,8 @@ def _query_session(
     person_id: UUID,
     now: datetime,
     db: Session,
-    auth_db: Session | None = None,
 ) -> AuthSession | None:
-    """Query session from database (local or SSO auth DB)."""
-    if auth_db:
-        return _validate_session_sso(session_id, person_id, now, auth_db)
-
+    """Query an ERP-owned session from ERP's local database."""
     return db.scalar(
         select(AuthSession)
         .where(AuthSession.id == session_id)
@@ -301,7 +224,7 @@ def get_current_user_id(
     For API routes only. Web routes should use require_web_auth instead.
     Raises 401 if not authenticated.
 
-    SSO Support: Validates session against shared auth database for SSO clients.
+    Sessions are always validated against ERP's local database.
     """
     token = _extract_bearer_token(authorization)
     if not token:
@@ -317,21 +240,11 @@ def get_current_user_id(
     person_uuid = cast(UUID, coerce_uuid(person_id))
     session_uuid = coerce_uuid(session_id)
 
-    # Validate session with caching (SSO-aware)
-    auth_db = _get_auth_db_for_sso()
-    try:
-        session = _validate_session_cached(session_uuid, person_uuid, now, db, auth_db)
-
-        if not session:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        if is_session_inactive(session, now):
-            raise HTTPException(
-                status_code=401, detail="Session expired due to inactivity"
-            )
-
-    finally:
-        if auth_db:
-            auth_db.close()
+    session = _validate_session_cached(session_uuid, person_uuid, now, db)
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
     return person_uuid
 
@@ -346,7 +259,7 @@ def get_current_org_id(
     For API routes only. Web routes should use require_web_auth instead.
     Raises 401 if not authenticated, 400 if user has no organization.
 
-    SSO Support: Validates session against shared auth database for SSO clients.
+    Sessions are always validated against ERP's local database.
     """
     token = _extract_bearer_token(authorization)
     if not token:
@@ -362,21 +275,11 @@ def get_current_org_id(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # Validate session with caching (SSO-aware)
-    auth_db = _get_auth_db_for_sso()
-    try:
-        session = _validate_session_cached(session_uuid, person_uuid, now, db, auth_db)
-
-        if not session:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        if is_session_inactive(session, now):
-            raise HTTPException(
-                status_code=401, detail="Session expired due to inactivity"
-            )
-
-    finally:
-        if auth_db:
-            auth_db.close()
+    session = _validate_session_cached(session_uuid, person_uuid, now, db)
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
     person = db.get(Person, person_uuid)
     if not person or not person.organization_id:
@@ -445,7 +348,7 @@ def require_audit_auth(
     request: Request = None,
     db: Session = Depends(_get_db),
 ):
-    """Authenticate for audit access with SSO support.
+    """Authenticate for audit access using ERP-owned credentials.
 
     Supports JWT tokens, session tokens, and API keys.
     """
@@ -459,50 +362,35 @@ def require_audit_auth(
             session_id = payload.get("session_id")
             person_id = payload.get("sub")
             if session_id and person_id:
-                # SSO: validate session against shared auth database
-                auth_db = _get_auth_db_for_sso()
-                try:
-                    session_uuid = coerce_uuid(session_id)
-                    person_uuid = coerce_uuid(person_id)
-                    if auth_db:
-                        session = _validate_session_sso(
-                            session_uuid, person_uuid, now, auth_db
-                        )
-                    else:
-                        session = db.get(AuthSession, session_uuid)
-
-                    if not session:
-                        raise HTTPException(status_code=401, detail="Invalid session")
-                    if session.status != SessionStatus.active or session.revoked_at:
-                        raise HTTPException(status_code=401, detail="Invalid session")
-                    if _make_aware(session.expires_at) <= now:
-                        raise HTTPException(status_code=401, detail="Session expired")
-                finally:
-                    if auth_db:
-                        auth_db.close()
+                session_uuid = coerce_uuid(session_id)
+                person_uuid = coerce_uuid(person_id)
+                session = db.scalar(
+                    select(AuthSession).where(
+                        AuthSession.id == session_uuid,
+                        AuthSession.person_id == person_uuid,
+                    )
+                )
+                if not session:
+                    raise HTTPException(status_code=401, detail="Invalid session")
+                if session.status != SessionStatus.active or session.revoked_at:
+                    raise HTTPException(status_code=401, detail="Invalid session")
+                if _make_aware(session.expires_at) <= now:
+                    raise HTTPException(status_code=401, detail="Session expired")
 
             actor_id = str(person_id)
             _set_actor_context(request, actor_id)
             return {"actor_type": "user", "actor_id": actor_id}
 
-        # Session token (hash-based) - requires local database lookup
-        # For SSO clients, session tokens should be validated against shared DB
-        auth_db = _get_auth_db_for_sso()
-        try:
-            target_db = auth_db if auth_db else db
-            session = target_db.scalar(
-                select(AuthSession)
-                .where(AuthSession.token_hash == hash_session_token(token))
-                .where(AuthSession.status == SessionStatus.active)
-                .where(AuthSession.revoked_at.is_(None))
-                .where(AuthSession.expires_at > now)
-            )
-            if session:
-                _set_actor_context(request, session.person_id)
-                return {"actor_type": "user", "actor_id": str(session.person_id)}
-        finally:
-            if auth_db:
-                auth_db.close()
+        session = db.scalar(
+            select(AuthSession)
+            .where(AuthSession.token_hash == hash_session_token(token))
+            .where(AuthSession.status == SessionStatus.active)
+            .where(AuthSession.revoked_at.is_(None))
+            .where(AuthSession.expires_at > now)
+        )
+        if session:
+            _set_actor_context(request, session.person_id)
+            return {"actor_type": "user", "actor_id": str(session.person_id)}
 
     if x_api_key:
         api_key = db.scalar(
@@ -523,11 +411,7 @@ def require_user_auth(
     request: Request = None,
     db: Session = Depends(_get_db),
 ):
-    """Authenticate user from JWT token with SSO support.
-
-    When SSO is enabled and this is an SSO client, validates the session
-    against the shared auth database on the SSO provider.
-    """
+    """Authenticate a user from an ERP-issued JWT and local session."""
     # Try Authorization header first, then fall back to cookie
     token = _extract_bearer_token(authorization)
     if not token and request is not None:
@@ -535,7 +419,6 @@ def require_user_auth(
     if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # Decode token (uses SSO secret when SSO is enabled)
     payload = decode_access_token(db, token)
     person_id = payload.get("sub")
     session_id = payload.get("session_id")
@@ -546,44 +429,21 @@ def require_user_auth(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # SSO: validate session against shared auth database
-    auth_db = _get_auth_db_for_sso()
-    try:
-        if auth_db:
-            # SSO client mode - validate against shared auth database
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            # SSO provider or non-SSO mode - validate against local database
-            with allow_cross_org(db):
-                session = db.scalar(
-                    select(AuthSession)
-                    .where(AuthSession.id == session_uuid)
-                    .where(AuthSession.person_id == person_uuid)
-                    .where(AuthSession.status == SessionStatus.active)
-                    .where(AuthSession.revoked_at.is_(None))
-                    .where(AuthSession.expires_at > now)
-                )
-
-        if not session:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-
-        # Check for activity timeout (session idle too long)
-        if is_session_inactive(session, now):
-            raise HTTPException(
-                status_code=401, detail="Session expired due to inactivity"
-            )
-
-        # Update session activity tracking
-        if auth_db:
-            session.last_seen_at = now
-            auth_db.commit()
-        else:
-            session.last_seen_at = now
-            db.flush()
-
-    finally:
-        if auth_db:
-            auth_db.close()
+    with allow_cross_org(db):
+        session = db.scalar(
+            select(AuthSession)
+            .where(AuthSession.id == session_uuid)
+            .where(AuthSession.person_id == person_uuid)
+            .where(AuthSession.status == SessionStatus.active)
+            .where(AuthSession.revoked_at.is_(None))
+            .where(AuthSession.expires_at > now)
+        )
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+    session.last_seen_at = now
+    db.flush()
 
     roles_value = payload.get("roles")
     scopes_value = payload.get("scopes")
@@ -667,11 +527,11 @@ def require_tenant_auth(
     db: Session = Depends(_get_db),
 ):
     """
-    Authenticate user and set RLS tenant context with SSO support.
+    Authenticate an ERP session and set RLS tenant context.
 
     This dependency:
-    1. Validates the user's JWT token (using SSO secret when enabled)
-    2. Validates session against shared auth database (for SSO clients)
+    1. Validates the ERP-issued JWT token
+    2. Validates the ERP-owned local session
     3. Looks up the user's organization_id
     4. Sets the PostgreSQL session variable for RLS
     5. Returns auth dict with organization_id included
@@ -686,7 +546,6 @@ def require_tenant_auth(
     if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # Decode token (uses SSO secret when SSO is enabled)
     payload = decode_access_token(db, token)
     person_id = payload.get("sub")
     session_id = payload.get("session_id")
@@ -697,43 +556,20 @@ def require_tenant_auth(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # SSO: validate session against shared auth database
-    auth_db = _get_auth_db_for_sso()
-    try:
-        if auth_db:
-            # SSO client mode - validate against shared auth database
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            # SSO provider or non-SSO mode - validate against local database
-            session = db.scalar(
-                select(AuthSession)
-                .where(AuthSession.id == session_uuid)
-                .where(AuthSession.person_id == person_uuid)
-                .where(AuthSession.status == SessionStatus.active)
-                .where(AuthSession.revoked_at.is_(None))
-                .where(AuthSession.expires_at > now)
-            )
-
-        if not session:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-
-        # Check for activity timeout (session idle too long)
-        if is_session_inactive(session, now):
-            raise HTTPException(
-                status_code=401, detail="Session expired due to inactivity"
-            )
-
-        # Update session activity tracking
-        if auth_db:
-            session.last_seen_at = now
-            auth_db.commit()
-        else:
-            session.last_seen_at = now
-            db.flush()
-
-    finally:
-        if auth_db:
-            auth_db.close()
+    session = db.scalar(
+        select(AuthSession)
+        .where(AuthSession.id == session_uuid)
+        .where(AuthSession.person_id == person_uuid)
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
+        .where(AuthSession.expires_at > now)
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+    session.last_seen_at = now
+    db.flush()
 
     # Look up the user's organization (or use default if single-org mode)
     with allow_cross_org(db):
@@ -847,7 +683,7 @@ def require_admin_bypass(
     db: Session = Depends(_get_db),
 ):
     """
-    Admin-only dependency that bypasses RLS with SSO support.
+    Admin-only dependency that bypasses RLS using an ERP-owned session.
 
     Use this for system administration endpoints that need to see
     data across all tenants. Requires the 'admin' role.
@@ -873,38 +709,20 @@ def require_admin_bypass(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # SSO: validate session against shared auth database
-    auth_db = _get_auth_db_for_sso()
-    try:
-        if auth_db:
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            session = db.scalar(
-                select(AuthSession)
-                .where(AuthSession.id == session_uuid)
-                .where(AuthSession.person_id == person_uuid)
-                .where(AuthSession.status == SessionStatus.active)
-                .where(AuthSession.revoked_at.is_(None))
-                .where(AuthSession.expires_at > now)
-            )
-
-        if not session:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        # Check for activity timeout (session idle too long)
-        if is_session_inactive(session, now):
-            raise HTTPException(
-                status_code=401, detail="Session expired due to inactivity"
-            )
-        # Update session activity tracking
-        if auth_db:
-            session.last_seen_at = now
-            auth_db.commit()
-        else:
-            session.last_seen_at = now
-            db.flush()
-    finally:
-        if auth_db:
-            auth_db.close()
+    session = db.scalar(
+        select(AuthSession)
+        .where(AuthSession.id == session_uuid)
+        .where(AuthSession.person_id == person_uuid)
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
+        .where(AuthSession.expires_at > now)
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+    session.last_seen_at = now
+    db.flush()
 
     # Check for admin role
     roles_value = payload.get("roles")
@@ -951,7 +769,7 @@ def _resolve_web_session_from_access_token(
     access_token: str,
     now: datetime,
 ) -> tuple[AuthSession, Person] | None:
-    """Resolve web session from access token with SSO support."""
+    """Resolve an ERP-owned web session from an ERP-issued access token."""
     try:
         payload = decode_access_token(db, access_token)
     except HTTPException:
@@ -964,26 +782,16 @@ def _resolve_web_session_from_access_token(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # SSO: validate session against shared auth database
-    auth_db = _get_auth_db_for_sso()
-    try:
-        if auth_db:
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            session = db.scalar(
-                select(AuthSession)
-                .where(AuthSession.id == session_uuid)
-                .where(AuthSession.person_id == person_uuid)
-                .where(AuthSession.status == SessionStatus.active)
-                .where(AuthSession.revoked_at.is_(None))
-                .where(AuthSession.expires_at > now)
-            )
-
-        if not session or is_session_inactive(session, now):
-            return None
-    finally:
-        if auth_db:
-            auth_db.close()
+    session = db.scalar(
+        select(AuthSession)
+        .where(AuthSession.id == session_uuid)
+        .where(AuthSession.person_id == person_uuid)
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
+        .where(AuthSession.expires_at > now)
+    )
+    if not session or is_session_inactive(session, now):
+        return None
 
     person = _get_person_for_session(db, person_uuid)
     if not person:
@@ -999,11 +807,11 @@ def require_web_session(
     db: Session = Depends(_get_db),
 ):
     """
-    Web session authentication for HTML routes with SSO support.
+    Web session authentication for HTML routes.
 
     This dependency:
     1. Reads the session token from a cookie
-    2. Validates the session against the database (or shared auth DB for SSO)
+    2. Validates the session against ERP's database
     3. Looks up the user's organization_id
     4. Sets the PostgreSQL session variable for RLS
     5. Returns auth dict with user and organization info
@@ -1024,26 +832,17 @@ def require_web_session(
     person = None
 
     if session_token:
-        # SSO: validate session token against shared auth database
-        auth_db = _get_auth_db_for_sso()
-        try:
-            target_db = auth_db if auth_db else db
-            session = target_db.scalar(
-                select(AuthSession)
-                .where(AuthSession.token_hash == hash_session_token(session_token))
-                .where(AuthSession.status == SessionStatus.active)
-                .where(AuthSession.revoked_at.is_(None))
-                .where(AuthSession.expires_at > now)
-            )
-
-            if not session or is_session_inactive(session, now):
-                session = None
-            else:
-                # Get person from main database (not auth database)
-                person = _get_person_for_session(db, session.person_id)
-        finally:
-            if auth_db:
-                auth_db.close()
+        session = db.scalar(
+            select(AuthSession)
+            .where(AuthSession.token_hash == hash_session_token(session_token))
+            .where(AuthSession.status == SessionStatus.active)
+            .where(AuthSession.revoked_at.is_(None))
+            .where(AuthSession.expires_at > now)
+        )
+        if not session or is_session_inactive(session, now):
+            session = None
+        else:
+            person = _get_person_for_session(db, session.person_id)
 
     if not session and access_token:
         resolved = _resolve_web_session_from_access_token(db, access_token, now)
@@ -1114,7 +913,7 @@ def optional_web_session(
     db: Session = Depends(_get_db),
 ):
     """
-    Optional web session authentication with SSO support.
+    Optional ERP-local web session authentication.
 
     Like require_web_session but returns None instead of raising an exception
     when not authenticated. Useful for pages that work with or without auth.
@@ -1137,26 +936,17 @@ def optional_web_session(
     person = None
 
     if session_token:
-        # SSO: validate session token against shared auth database
-        auth_db = _get_auth_db_for_sso()
-        try:
-            target_db = auth_db if auth_db else db
-            session = target_db.scalar(
-                select(AuthSession)
-                .where(AuthSession.token_hash == hash_session_token(session_token))
-                .where(AuthSession.status == SessionStatus.active)
-                .where(AuthSession.revoked_at.is_(None))
-                .where(AuthSession.expires_at > now)
-            )
-
-            if not session or is_session_inactive(session, now):
-                session = None
-            else:
-                # Get person from main database (not auth database)
-                person = _get_person_for_session(db, session.person_id)
-        finally:
-            if auth_db:
-                auth_db.close()
+        session = db.scalar(
+            select(AuthSession)
+            .where(AuthSession.token_hash == hash_session_token(session_token))
+            .where(AuthSession.status == SessionStatus.active)
+            .where(AuthSession.revoked_at.is_(None))
+            .where(AuthSession.expires_at > now)
+        )
+        if not session or is_session_inactive(session, now):
+            session = None
+        else:
+            person = _get_person_for_session(db, session.person_id)
 
     if not session and access_token:
         resolved = _resolve_web_session_from_access_token(db, access_token, now)

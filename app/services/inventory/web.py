@@ -36,6 +36,7 @@ from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.common.numbering import SyncNumberingService
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
 from app.services.formatters import format_currency as _format_currency
@@ -45,6 +46,10 @@ from app.services.inventory.item import (
     ItemInput,
     item_category_service,
     item_service,
+)
+from app.services.inventory.reorder import (
+    ReorderStatus,
+    inventory_reorder_service,
 )
 from app.services.inventory.transaction import TransactionInput
 from app.services.inventory.warehouse import WarehouseInput, warehouse_service
@@ -279,6 +284,150 @@ def _get_batch_stock_quantities(
 
 class InventoryWebService:
     """View service for inventory web routes."""
+
+    @staticmethod
+    def dashboard_context(
+        db: Session,
+        organization_id: str,
+        reorder_status: str | None = None,
+    ) -> dict:
+        """Build the reorder-attention section of the inventory landing page."""
+        org_id = coerce_uuid(organization_id)
+        dashboard = inventory_reorder_service.get_dashboard_data(db, org_id)
+
+        try:
+            selected_status = (
+                ReorderStatus(reorder_status.strip().lower())
+                if reorder_status
+                else None
+            )
+        except ValueError:
+            selected_status = None
+
+        visible_items = [
+            item
+            for item in dashboard.items
+            if selected_status is None or item.status == selected_status
+        ]
+
+        status_presentation = {
+            ReorderStatus.APPROACHING_REORDER: {
+                "label": "Approaching reorder",
+                "color": "amber",
+                "icon": "clock",
+                "chart_color": "rgba(245, 158, 11, 0.85)",
+                "chart_border": "rgb(217, 119, 6)",
+            },
+            ReorderStatus.AT_REORDER: {
+                "label": "Reached reorder",
+                "color": "orange",
+                "icon": "warning",
+                "chart_color": "rgba(249, 115, 22, 0.88)",
+                "chart_border": "rgb(234, 88, 12)",
+            },
+            ReorderStatus.BELOW_REORDER: {
+                "label": "Below reorder",
+                "color": "rose",
+                "icon": "trending-down",
+                "chart_color": "rgba(225, 29, 72, 0.85)",
+                "chart_border": "rgb(190, 18, 60)",
+            },
+        }
+
+        cards = []
+        for status in (
+            ReorderStatus.APPROACHING_REORDER,
+            ReorderStatus.AT_REORDER,
+            ReorderStatus.BELOW_REORDER,
+        ):
+            presentation = status_presentation[status]
+            cards.append(
+                {
+                    "status": status.value,
+                    "label": presentation["label"],
+                    "count": dashboard.counts[status],
+                    "color": presentation["color"],
+                    "icon": presentation["icon"],
+                    "href": f"/inventory?reorder_status={status.value}",
+                    "active": selected_status == status,
+                }
+            )
+
+        items_view = []
+        chart_colors = []
+        chart_borders = []
+        chart_values = []
+        chart_tooltips = []
+        for item in visible_items:
+            presentation = status_presentation[item.status]
+            items_view.append(
+                {
+                    "item_id": str(item.item_id),
+                    "item_code": item.item_code,
+                    "item_name": item.item_name,
+                    "base_uom": item.base_uom,
+                    "quantity_on_hand": item.quantity_on_hand,
+                    "quantity_reserved": item.quantity_reserved,
+                    "quantity_available": item.quantity_available,
+                    "reorder_point": item.reorder_point,
+                    "stock_to_reorder_percent": item.stock_to_reorder_percent,
+                    "status": item.status.value,
+                    "status_label": presentation["label"],
+                }
+            )
+            chart_colors.append(presentation["chart_color"])
+            chart_borders.append(presentation["chart_border"])
+            chart_values.append(round(float(item.stock_to_reorder_percent), 2))
+            chart_tooltips.append(
+                [
+                    f"On hand: {item.quantity_on_hand:,.2f} {item.base_uom}",
+                    f"Reserved: {item.quantity_reserved:,.2f} {item.base_uom}",
+                    f"Available: {item.quantity_available:,.2f} {item.base_uom}",
+                    f"Reorder level: {item.reorder_point:,.2f} {item.base_uom}",
+                    f"Status: {presentation['label']}",
+                ]
+            )
+
+        chart_config = {
+            "labels": [
+                f"{item['item_code']} — {item['item_name']}" for item in items_view
+            ],
+            "datasets": [
+                {
+                    "label": "Available stock vs reorder level",
+                    "data": chart_values,
+                    "backgroundColor": chart_colors,
+                    "borderColor": chart_borders,
+                    "borderWidth": 1,
+                }
+            ],
+            "horizontal": True,
+            "stacked": False,
+            "currency": False,
+            "format": "number",
+            "suffix": "%",
+            "axisTitle": "Available stock as a percentage of reorder level",
+            "tooltipDetails": chart_tooltips,
+        }
+
+        return {
+            "show_reorder_dashboard": True,
+            "reorder_cards": cards,
+            "reorder_items": items_view,
+            "reorder_chart_config": chart_config,
+            "reorder_chart_height": max(320, len(items_view) * 38 + 80),
+            "reorder_selected_status": selected_status.value
+            if selected_status
+            else None,
+            "reorder_selected_label": status_presentation[selected_status]["label"]
+            if selected_status
+            else "All items requiring attention",
+            "reorder_total_attention_count": dashboard.total_attention_count,
+            "reorder_unconfigured_count": dashboard.unconfigured_count,
+            "reorder_approach_threshold_percent": (
+                dashboard.approach_threshold_percent
+            ),
+        }
 
     @staticmethod
     def _sequence_preview(
@@ -2069,7 +2218,6 @@ class InventoryTransactionWebService:
         """Create a manual inventory transaction."""
         from datetime import datetime
 
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
             InventoryTransactionService,
@@ -2119,13 +2267,11 @@ class InventoryTransactionWebService:
                 )
 
             # Get fiscal period
-            fiscal_period = db.scalars(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= txn_date.date(),
-                    FiscalPeriod.end_date >= txn_date.date(),
-                )
-            ).first()
+            fiscal_period = PeriodGuardService.get_period_for_date(
+                db,
+                org_id,
+                txn_date.date(),
+            )
 
             if not fiscal_period:
                 return RedirectResponse(
@@ -2209,7 +2355,6 @@ class InventoryTransactionWebService:
         """Create an inventory transfer."""
         from datetime import datetime
 
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.services.inventory.transaction import InventoryTransactionService
 
         org_id = auth.organization_id
@@ -2224,13 +2369,11 @@ class InventoryTransactionWebService:
             txn_date = datetime.strptime(transaction_date, "%Y-%m-%d")
 
             # Get fiscal period
-            fiscal_period = db.scalars(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= txn_date.date(),
-                    FiscalPeriod.end_date >= txn_date.date(),
-                )
-            ).first()
+            fiscal_period = PeriodGuardService.get_period_for_date(
+                db,
+                org_id,
+                txn_date.date(),
+            )
 
             if not fiscal_period:
                 return RedirectResponse(
@@ -2304,7 +2447,6 @@ class InventoryTransactionWebService:
         """Create an inventory adjustment."""
         from datetime import datetime
 
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
             InventoryTransactionService,
@@ -2324,13 +2466,11 @@ class InventoryTransactionWebService:
             txn_date = datetime.strptime(transaction_date, "%Y-%m-%d")
 
             # Get fiscal period
-            fiscal_period = db.scalars(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= txn_date.date(),
-                    FiscalPeriod.end_date >= txn_date.date(),
-                )
-            ).first()
+            fiscal_period = PeriodGuardService.get_period_for_date(
+                db,
+                org_id,
+                txn_date.date(),
+            )
 
             if not fiscal_period:
                 return RedirectResponse(

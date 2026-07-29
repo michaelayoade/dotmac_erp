@@ -1301,13 +1301,17 @@ async def pms_create_goal(
 def pms_goal_detail(
     request: Request,
     kpi_id: str,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
 ):
     """KPI detail page (PMS mode)."""
     from app.services.people.perf.web import perf_web_service
 
-    return perf_web_service.goal_detail_response(request, auth, db, kpi_id)
+    return perf_web_service.goal_detail_response(
+        request, auth, db, kpi_id, success, error
+    )
 
 
 @router.get("/goals/{kpi_id}/edit", response_class=HTMLResponse)

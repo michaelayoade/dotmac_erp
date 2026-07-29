@@ -5,11 +5,14 @@ from __future__ import annotations
 import csv
 import json
 import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from datetime import date as date_type
 from io import StringIO
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlencode
+from uuid import UUID
 
 try:
     from datetime import UTC  # type: ignore
@@ -31,10 +34,28 @@ from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
 from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.services.inventory.return_web import InventoryReturnWebService
+from app.services.web_forms import safe_form_text as _safe_form_text
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
+if TYPE_CHECKING:
+    from decimal import Decimal
+
+    from app.models.inventory.inventory_transaction import InventoryTransaction
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class StockMovementRequestContext:
+    """Material-request context projected onto a stock movement row."""
+
+    request_number: str
+    project_code: str | None = None
+    project_name: str | None = None
+    ticket_number: str | None = None
+    ticket_subject: str | None = None
+
 
 _RETURN_IMAGE_CONTENT_TYPES = frozenset(
     {
@@ -44,17 +65,6 @@ _RETURN_IMAGE_CONTENT_TYPES = frozenset(
         "image/webp",
     }
 )
-
-
-def _safe_form_text(value: object) -> str:
-    """Normalize form values to text for safe parsing."""
-    if value is None:
-        return ""
-    if isinstance(value, UploadFile):
-        return ""
-    if isinstance(value, str):
-        return value
-    return str(value)
 
 
 def _form_value(form_data: object, key: str) -> object:
@@ -2530,6 +2540,34 @@ class OperationsInventoryWebService:
         context = base_context(request, auth, "Inventory Reports", "reports")
         return templates.TemplateResponse(request, "inventory/reports.html", context)
 
+    def low_stock_report_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        include_below_minimum: bool = True,
+    ) -> HTMLResponse:
+        """Low-stock and reorder-alert report page."""
+        from app.services.inventory.web import InventoryWebService
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=400, detail="Organization is required")
+
+        context = base_context(request, auth, "Low Stock Alert", "reports")
+        context.update(
+            InventoryWebService.low_stock_dashboard_context(
+                db=db,
+                organization_id=str(org_id),
+                include_below_minimum=include_below_minimum,
+            )
+        )
+        return templates.TemplateResponse(
+            request,
+            "inventory/report_low_stock.html",
+            context,
+        )
+
     def serial_stock_report_response(
         self,
         request: Request,
@@ -3615,6 +3653,200 @@ class OperationsInventoryWebService:
             context,
         )
 
+    @staticmethod
+    def _stock_movement_request_contexts(
+        db: Session,
+        organization_id: UUID,
+        transactions: list[InventoryTransaction],
+    ) -> dict[UUID, StockMovementRequestContext]:
+        """Resolve tenant-scoped ticket/project context for material-request rows."""
+        from app.models.finance.core_org.project import Project
+        from app.models.inventory.material_request import (
+            MaterialRequest,
+            MaterialRequestItem,
+        )
+        from app.models.support.ticket import Ticket
+
+        material_request_transactions = [
+            transaction
+            for transaction in transactions
+            if transaction.source_document_type == "MATERIAL_REQUEST"
+            and transaction.source_document_id is not None
+        ]
+        request_ids = {
+            transaction.source_document_id
+            for transaction in material_request_transactions
+        }
+        if not request_ids:
+            return {}
+
+        requests = list(
+            db.scalars(
+                select(MaterialRequest)
+                .options(selectinload(MaterialRequest.items))
+                .where(
+                    MaterialRequest.organization_id == organization_id,
+                    MaterialRequest.request_id.in_(request_ids),
+                )
+            )
+            .unique()
+            .all()
+        )
+        requests_by_id = {request.request_id: request for request in requests}
+        lines_by_request_and_id: dict[tuple[UUID, UUID], MaterialRequestItem] = {
+            (request.request_id, line.item_id): line
+            for request in requests
+            for line in request.items
+        }
+
+        project_ids: set[UUID] = set()
+        ticket_ids: set[UUID] = set()
+        for transaction in material_request_transactions:
+            request_id = transaction.source_document_id
+            if request_id is None:
+                continue
+            request = requests_by_id.get(request_id)
+            if request is None:
+                continue
+            line_id = transaction.source_document_line_id
+            line = (
+                lines_by_request_and_id.get(
+                    (
+                        request_id,
+                        line_id,
+                    )
+                )
+                if line_id is not None
+                else None
+            )
+            project_id = (
+                line.project_id
+                if line is not None and line.project_id is not None
+                else request.project_id
+            )
+            ticket_id = (
+                line.ticket_id
+                if line is not None and line.ticket_id is not None
+                else request.ticket_id
+            )
+            if project_id is not None:
+                project_ids.add(project_id)
+            if ticket_id is not None:
+                ticket_ids.add(ticket_id)
+
+        projects = (
+            list(
+                db.scalars(
+                    select(Project).where(
+                        Project.organization_id == organization_id,
+                        Project.project_id.in_(project_ids),
+                    )
+                ).all()
+            )
+            if project_ids
+            else []
+        )
+        tickets = (
+            list(
+                db.scalars(
+                    select(Ticket).where(
+                        Ticket.organization_id == organization_id,
+                        Ticket.ticket_id.in_(ticket_ids),
+                    )
+                ).all()
+            )
+            if ticket_ids
+            else []
+        )
+        projects_by_id = {project.project_id: project for project in projects}
+        tickets_by_id = {ticket.ticket_id: ticket for ticket in tickets}
+
+        contexts: dict[UUID, StockMovementRequestContext] = {}
+        for transaction in material_request_transactions:
+            request_id = transaction.source_document_id
+            if request_id is None:
+                continue
+            request = requests_by_id.get(request_id)
+            if request is None:
+                continue
+            line_id = transaction.source_document_line_id
+            line = (
+                lines_by_request_and_id.get(
+                    (
+                        request_id,
+                        line_id,
+                    )
+                )
+                if line_id is not None
+                else None
+            )
+            project_id = (
+                line.project_id
+                if line is not None and line.project_id
+                else request.project_id
+            )
+            ticket_id = (
+                line.ticket_id
+                if line is not None and line.ticket_id
+                else request.ticket_id
+            )
+            project = projects_by_id.get(project_id) if project_id is not None else None
+            ticket = tickets_by_id.get(ticket_id) if ticket_id is not None else None
+            contexts[transaction.transaction_id] = StockMovementRequestContext(
+                request_number=request.request_number,
+                project_code=project.project_code if project is not None else None,
+                project_name=project.project_name if project is not None else None,
+                ticket_number=ticket.ticket_number if ticket is not None else None,
+                ticket_subject=ticket.subject if ticket is not None else None,
+            )
+        return contexts
+
+    @staticmethod
+    def _stock_movement_rows(
+        row_data: Sequence[Any],
+        request_contexts: dict[UUID, StockMovementRequestContext],
+    ) -> tuple[list[dict[str, Any]], dict[str, int], Decimal, Decimal]:
+        """Build the shared screen/export stock movement projection."""
+        from decimal import Decimal
+
+        movement_rows: list[dict[str, Any]] = []
+        summary_counts = {
+            "RECEIPT": 0,
+            "ISSUE": 0,
+            "TRANSFER": 0,
+            "ADJUSTMENT": 0,
+        }
+        total_quantity = Decimal("0")
+        total_value = Decimal("0")
+
+        for transaction, row_item, row_warehouse, to_warehouse_row in row_data:
+            movement_type = transaction.transaction_type.value
+            quantity = transaction.quantity or Decimal("0")
+            total_cost = transaction.total_cost or Decimal("0")
+
+            if movement_type in summary_counts:
+                summary_counts[movement_type] += 1
+            total_quantity += quantity
+            total_value += total_cost
+
+            movement_rows.append(
+                {
+                    "transaction": transaction,
+                    "item": row_item,
+                    "warehouse": row_warehouse,
+                    "to_warehouse": to_warehouse_row,
+                    "to_warehouse_name": to_warehouse_row.warehouse_name
+                    if to_warehouse_row is not None
+                    else None,
+                    "quantity": quantity,
+                    "unit_cost": transaction.unit_cost or Decimal("0"),
+                    "total_cost": total_cost,
+                    "request_context": request_contexts.get(transaction.transaction_id),
+                }
+            )
+
+        return movement_rows, summary_counts, total_quantity, total_value
+
     def stock_movement_report_response(
         self,
         request: Request,
@@ -3627,7 +3859,6 @@ class OperationsInventoryWebService:
         page: int = 1,
     ) -> HTMLResponse:
         """Stock movement report page."""
-        from decimal import Decimal
         from uuid import UUID as UUID_Type
 
         from sqlalchemy.orm import aliased
@@ -3742,39 +3973,12 @@ class OperationsInventoryWebService:
             ).all()
         )
 
-        movement_rows = []
-        summary_counts = {
-            "RECEIPT": 0,
-            "ISSUE": 0,
-            "TRANSFER": 0,
-            "ADJUSTMENT": 0,
-        }
-        total_quantity = Decimal("0")
-        total_value = Decimal("0")
-
-        for txn, row_item, row_warehouse, to_warehouse_row in row_data:
-            movement_type = txn.transaction_type.value
-            quantity = txn.quantity or Decimal("0")
-            total_cost = txn.total_cost or Decimal("0")
-
-            if movement_type in summary_counts:
-                summary_counts[movement_type] += 1
-            total_quantity += quantity
-            total_value += total_cost
-
-            movement_rows.append(
-                {
-                    "transaction": txn,
-                    "item": row_item,
-                    "warehouse": row_warehouse,
-                    "to_warehouse_name": to_warehouse_row.warehouse_name
-                    if to_warehouse_row is not None
-                    else None,
-                    "quantity": quantity,
-                    "unit_cost": txn.unit_cost or Decimal("0"),
-                    "total_cost": total_cost,
-                }
-            )
+        (
+            movement_rows,
+            summary_counts,
+            total_quantity,
+            total_value,
+        ) = self._stock_movement_rows(row_data, {})
 
         total_count = len(movement_rows)
         total_pages = max(1, ceil(total_count / per_page))
@@ -4238,7 +4442,6 @@ class OperationsInventoryWebService:
         limit: int = 50,
     ) -> tuple[dict[str, Any], str]:
         """Build stock movement rows for PDF exports."""
-        from decimal import Decimal
         from uuid import UUID as UUID_Type
 
         from sqlalchemy.orm import aliased
@@ -4328,40 +4531,17 @@ class OperationsInventoryWebService:
             ).all()
         )
 
-        movement_rows = []
-        summary_counts = {
-            "RECEIPT": 0,
-            "ISSUE": 0,
-            "TRANSFER": 0,
-            "ADJUSTMENT": 0,
-        }
-        total_quantity = Decimal("0")
-        total_value = Decimal("0")
-
-        for txn, row_item, row_warehouse, to_warehouse_row in row_data:
-            movement_type = txn.transaction_type.value
-            quantity = txn.quantity or Decimal("0")
-            total_cost = txn.total_cost or Decimal("0")
-
-            if movement_type in summary_counts:
-                summary_counts[movement_type] += 1
-            total_quantity += quantity
-            total_value += total_cost
-
-            movement_rows.append(
-                {
-                    "transaction": txn,
-                    "item": row_item,
-                    "warehouse": row_warehouse,
-                    "to_warehouse": to_warehouse_row,
-                    "to_warehouse_name": to_warehouse_row.warehouse_name
-                    if to_warehouse_row is not None
-                    else None,
-                    "quantity": quantity,
-                    "unit_cost": txn.unit_cost or Decimal("0"),
-                    "total_cost": total_cost,
-                }
-            )
+        request_contexts = self._stock_movement_request_contexts(
+            db,
+            org_id,
+            [row[0] for row in row_data],
+        )
+        (
+            movement_rows,
+            summary_counts,
+            total_quantity,
+            total_value,
+        ) = self._stock_movement_rows(row_data, request_contexts)
 
         scope_parts = []
         filename_parts = ["stock_movement"]
@@ -5882,8 +6062,8 @@ class OperationsInventoryWebService:
         show_zero: str | None = None,
         format: str | None = None,
         page: int = 1,
-    ) -> HTMLResponse:
-        """Stock on hand report page."""
+    ) -> Response:
+        """Stock on hand report page (HTML page, or PDF/CSV download)."""
         from decimal import Decimal
         from uuid import UUID as UUID_Type
 
@@ -6187,7 +6367,7 @@ class OperationsInventoryWebService:
                         "Low Stock"
                         if row["is_low_stock"]
                         else "Out of Stock"
-                        if row["on_hand"] <= 0
+                        if Decimal(str(row["on_hand"])) <= 0
                         else "In Stock",
                     ]
                 )

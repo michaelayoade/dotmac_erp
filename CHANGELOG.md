@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Repeatable employee self-service submission for qualifications, certifications, skills, dependants, and documents using approval-backed batch envelopes and itemized HR review.
+
+### Changed
+- HR info change review now supports tenant-scoped batch detail pages plus approve-all and reject-all actions that operate through the owning service layer.
+
+### Fixed
+- Self-service pending evidence cleanup now rolls back all uploaded files for failed batch submissions and preserves duplicate checks across pending and approved employee-profile items.
+- Production deploys now enforce the stable `dotmac` Docker Compose project name so revision-named release worktrees update the existing stack instead of colliding with fixed container names.
+
 ## [1.1.9] - 2026-05-22
 
 ### Fixed

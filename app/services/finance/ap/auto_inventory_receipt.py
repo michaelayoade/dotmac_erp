@@ -27,6 +27,7 @@ from app.models.inventory.inventory_transaction import (
 from app.models.inventory.item import Item
 from app.models.inventory.warehouse import Warehouse
 from app.services.common import NotFoundError, ValidationError, coerce_uuid
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
@@ -68,13 +69,11 @@ class APInvoiceAutoReceiptService:
         organization_id: UUID,
         transaction_date: datetime,
     ) -> FiscalPeriod:
-        period = db.scalars(
-            select(FiscalPeriod).where(
-                FiscalPeriod.organization_id == organization_id,
-                FiscalPeriod.start_date <= transaction_date.date(),
-                FiscalPeriod.end_date >= transaction_date.date(),
-            )
-        ).first()
+        period = PeriodGuardService.get_period_for_date(
+            db,
+            organization_id,
+            transaction_date.date(),
+        )
         if not period:
             raise ValidationError(
                 "Cannot create inventory receipt: no fiscal period exists for today"
@@ -126,12 +125,7 @@ class APInvoiceAutoReceiptService:
         if line.receipt_auto_generate_serials:
             return APInvoiceAutoReceiptService._generated_serial_numbers(invoice, line)
         serial_numbers = line.receipt_serial_numbers or []
-        if not serial_numbers:
-            raise ValidationError(
-                "Cannot create inventory receipt: serial numbers are required for "
-                f"serial-tracked line {line.line_number}"
-            )
-        return serial_numbers
+        return serial_numbers or None
 
     @staticmethod
     def create_for_invoice(
@@ -232,6 +226,9 @@ class APInvoiceAutoReceiptService:
                 or invoice.supplier_invoice_number
                 or invoice.invoice_number,
                 serial_numbers=serial_numbers,
+                allow_missing_serial_numbers=bool(
+                    item.track_serial_numbers and not serial_numbers
+                ),
             )
 
             try:

@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -13,30 +14,93 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc  # type: ignore[assignment]
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from app.db.session_context import prime_tenant_context
 from app.models.finance.ar.customer import Customer
+from app.models.finance.ar.dotmac_sub_sync_watermark import DotmacSubSyncWatermark
 from app.models.finance.ar.external_sync import (
     EntityType,
     ExternalSource,
     ExternalSync,
 )
 from app.models.finance.ar.invoice import Invoice
-from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.tax.tax_code import TaxCode, TaxType
-from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
+from app.services.dotmac_sub.client import (
+    DotmacSubClient,
+    DotmacSubConfig,
+    TaxRateRecord,
+)
 
 from ._constants import DEFAULT_BANK_NAME_MAPPING
 
 logger = logging.getLogger(__name__)
 
 
+def next_watermark(
+    current: datetime | None,
+    max_ok: datetime | None,
+    min_error: datetime | None,
+) -> datetime | None:
+    """Compute the watermark to persist after a batch (advance-only).
+
+    Rows are pulled in ascending ``updated_at`` order. ``max_ok`` is the highest
+    ``updated_at`` processed without error; ``min_error`` is the lowest
+    ``updated_at`` of a row that failed. We never advance past the earliest
+    failure — the watermark filter is inclusive (``updated_at >= wm``), so
+    parking it at ``min_error`` re-pulls (and retries) that row next cycle while
+    re-processing the successful rows at/after it idempotently. With no failures
+    we advance to ``max_ok``. Returns ``current`` unchanged when there is nothing
+    to advance to, or when the candidate would move the watermark backward.
+    """
+    candidate = min_error if min_error is not None else max_ok
+    if candidate is None:
+        return current
+    if current is not None and candidate <= current:
+        return current
+    return candidate
+
+
+# Bounded non-blocking acquire for the per-subscriber customer lock. Batch
+# transactions hold every acquired xact lock until the outer commit (up to 500
+# entities between commits; savepoints release nothing), so total worst-case
+# wait stays short of the batch cadence while never joining a blocking cycle.
+_CUSTOMER_LOCK_ATTEMPTS = 20
+_CUSTOMER_LOCK_RETRY_DELAY_SECONDS = 0.25
+
+
+class CustomerLockContentionError(RuntimeError):
+    """Another sync stream holds this subscriber's customer lock.
+
+    Raised after the bounded try-lock poll gives up. Callers' per-entity
+    error handling defers just the contended entity; the next sync run
+    retries it once the competing batch transaction has committed.
+    """
+
+
 class BaseSyncMixin:
     """Core utilities shared by all dotmac_sub sync mixins."""
 
     SOURCE_PREFIX = "DSUB"
+
+    # ar.customer.customer_code is VARCHAR(30); an untruncated
+    # "DSUB-R-<uuid>" (43 chars) fails the INSERT outright.
+    CUSTOMER_CODE_MAX = 30
+
+    def _customer_code(self, marker: str, ref: str) -> str:
+        """Deterministic ``customer_code`` within the column's 30-char limit.
+
+        Short human refs (account numbers) pass through untouched; UUID-style
+        refs are compacted to dash-less hex before truncating so the kept
+        portion is maximally distinctive.
+        """
+        prefix = (
+            f"{self.SOURCE_PREFIX}-{marker}-" if marker else f"{self.SOURCE_PREFIX}-"
+        )
+        if len(prefix) + len(ref) > self.CUSTOMER_CODE_MAX:
+            ref = ref.replace("-", "")
+        return (prefix + ref)[: self.CUSTOMER_CODE_MAX]
 
     # Provided by sibling mixins at runtime (combined in DotmacSubSyncService).
     _cache_reseller: Any
@@ -62,15 +126,51 @@ class BaseSyncMixin:
         self._reseller_cache: dict[str, UUID] = {}
         self._subscriber_cache: dict[str, UUID] = {}
         self._account_cache: dict[str, UUID] = {}
+        # account_ids that could not be resolved to an ERP customer this run
+        # (orphaned in dotmac_sub, or the resolve call was rate-limited). Cached
+        # so the same account is not re-fetched for every invoice/payment that
+        # references it within one run. Reset per run, so it is retried next run.
+        self._unresolvable_accounts: set[str] = set()
         self._payment_channel_names: dict[str, str] = {}
         self._bank_account_mapping: dict[str, UUID] = {}
         self._default_bank_account_cache: dict[str, UUID] = {}
 
-        self._sales_tax_code_resolved: bool = False
-        self._sales_tax_code: TaxCode | None = None
+        self._source_tax_rates: dict[str, TaxRateRecord] | None = None
+        self._source_tax_code_cache: dict[tuple[str, str, date], TaxCode] = {}
+        self._source_wht_code_cache: dict[tuple[Decimal, date], TaxCode] = {}
 
     def _reprime_tenant_context(self) -> None:
         prime_tenant_context(self.db, self.organization_id)
+
+    def _functional_amount(
+        self, amount: Decimal, currency_code: str, on_date: date
+    ) -> tuple[Decimal, Decimal]:
+        """Resolve ``(exchange_rate, functional_amount)`` for a synced document.
+
+        ``exchange_rate`` is the foreign→functional rate (functional = amount *
+        rate). Falls back to ``1.0`` (no conversion) when the document is already
+        in functional currency or no SPOT rate is configured. Never raises — a
+        missing rate degrades gracefully rather than failing the whole sync.
+        Shared by payments, invoices, and credit notes so all three record the
+        same functional amount and the AR subledger nets to zero.
+        """
+        from app.services.finance.platform.fx import FXService
+
+        info = FXService.lookup_spot_rate(
+            self.db, self.organization_id, currency_code, on_date
+        )
+        # In lookup_spot_rate, ``from`` is the org functional currency and ``to``
+        # is currency_code, so ``inverse_rate`` is currency_code → functional.
+        raw = info.get("inverse_rate")
+        if raw in (None, ""):
+            return Decimal("1"), amount
+        try:
+            rate = Decimal(str(raw))
+        except (ValueError, ArithmeticError):
+            return Decimal("1"), amount
+        if rate <= 0:
+            return Decimal("1"), amount
+        return rate, (amount * rate).quantize(Decimal("0.000001"))
 
     @property
     def client(self) -> DotmacSubClient:
@@ -83,90 +183,105 @@ class BaseSyncMixin:
             self._client.close()
             self._client = None
 
-    @property
-    def sales_tax_code(self) -> TaxCode | None:
-        if not self._sales_tax_code_resolved:
-            live = self._resolve_sales_tax()
-            if live is not None:
-                from types import SimpleNamespace
+    def _get_source_tax_rate(self, source_tax_rate_id: str) -> TaxRateRecord:
+        """Return a Sub tax-rate fact without making Sub's id an ERP account key."""
+        if self._source_tax_rates is None:
+            self._source_tax_rates = {
+                rate.id: rate for rate in self.client.get_tax_rates()
+            }
+        rate = self._source_tax_rates.get(source_tax_rate_id)
+        if rate is None:
+            raise ValueError(
+                f"dotmac_sub tax rate {source_tax_rate_id} is missing from the tax feed"
+            )
+        return rate
 
-                self._sales_tax_code = SimpleNamespace(  # type: ignore[assignment]
-                    tax_code_id=live.tax_code_id,
-                    tax_code=live.tax_code,
-                    tax_name=live.tax_name,
-                    tax_rate=live.tax_rate,
-                    is_inclusive=live.is_inclusive,
-                    is_compound=live.is_compound,
-                    tax_collected_account_id=live.tax_collected_account_id,
-                    tax_paid_account_id=live.tax_paid_account_id,
+    @staticmethod
+    def _source_rate_ratio(rate_percent: Decimal) -> Decimal:
+        """Sub stores percentages (7.5); ERP TaxCode stores ratios (0.075)."""
+        return (rate_percent / Decimal("100")).normalize()
+
+    def _resolve_source_sales_tax_code(
+        self,
+        *,
+        source_tax_rate_id: str,
+        tax_application: str,
+        effective_date: date,
+    ) -> TaxCode:
+        """Resolve a source tax fact to exactly one ERP-owned sales tax code.
+
+        The source id is never treated as a chart/account identifier. ERP's own
+        effective TaxCode records and their control-account mappings decide the
+        posting. Missing or ambiguous configuration fails closed.
+        """
+        application = (tax_application or "exclusive").strip().lower()
+        if application not in {"exclusive", "inclusive"}:
+            raise ValueError(f"Unsupported taxable application: {tax_application}")
+        key = (source_tax_rate_id, application, effective_date)
+        cached = self._source_tax_code_cache.get(key)
+        if cached is not None:
+            return cached
+
+        source_rate = self._get_source_tax_rate(source_tax_rate_id)
+        ratio = self._source_rate_ratio(source_rate.rate)
+        predicates = [
+            TaxCode.organization_id == self.organization_id,
+            TaxCode.tax_type.in_([TaxType.VAT, TaxType.GST, TaxType.SALES_TAX]),
+            TaxCode.applies_to_sales.is_(True),
+            TaxCode.tax_rate == ratio,
+            TaxCode.is_inclusive.is_(application == "inclusive"),
+            TaxCode.is_active.is_(True),
+            TaxCode.effective_from <= effective_date,
+            or_(
+                TaxCode.effective_to.is_(None),
+                TaxCode.effective_to >= effective_date,
+            ),
+            TaxCode.tax_collected_account_id.is_not(None),
+        ]
+        if source_rate.code:
+            predicates.append(TaxCode.tax_code == source_rate.code)
+        candidates = list(self.db.scalars(select(TaxCode).where(*predicates)).all())
+        if len(candidates) != 1:
+            raise ValueError(
+                "ERP must have exactly one effective sales tax code with a "
+                f"collected-tax account for Sub rate {source_rate.name} "
+                f"({source_rate.rate}%, {application}); found {len(candidates)}"
+            )
+        self._source_tax_code_cache[key] = candidates[0]
+        return candidates[0]
+
+    def _resolve_source_wht_code(
+        self, *, rate_percent: Decimal, effective_date: date
+    ) -> TaxCode:
+        """Resolve customer-deducted WHT to one ERP WHT-receivable tax code."""
+        key = (rate_percent.normalize(), effective_date)
+        cached = self._source_wht_code_cache.get(key)
+        if cached is not None:
+            return cached
+        ratio = self._source_rate_ratio(rate_percent)
+        candidates = list(
+            self.db.scalars(
+                select(TaxCode).where(
+                    TaxCode.organization_id == self.organization_id,
+                    TaxCode.tax_type == TaxType.WITHHOLDING,
+                    TaxCode.tax_rate == ratio,
+                    TaxCode.is_active.is_(True),
+                    TaxCode.effective_from <= effective_date,
+                    or_(
+                        TaxCode.effective_to.is_(None),
+                        TaxCode.effective_to >= effective_date,
+                    ),
+                    TaxCode.tax_paid_account_id.is_not(None),
                 )
-            self._sales_tax_code_resolved = True
-        return self._sales_tax_code
-
-    def _resolve_sales_tax(self) -> TaxCode | None:
-        today = date.today()
-        stmt = (
-            select(TaxCode)
-            .where(
-                TaxCode.organization_id == self.organization_id,
-                TaxCode.tax_type == TaxType.VAT,
-                TaxCode.applies_to_sales.is_(True),
-                TaxCode.is_active.is_(True),
-                TaxCode.effective_from <= today,
-                or_(
-                    TaxCode.effective_to.is_(None),
-                    TaxCode.effective_to >= today,
-                ),
-            )
-            .order_by(
-                TaxCode.is_inclusive.desc(),
-                TaxCode.effective_from.desc(),
-            )
-            .limit(1)
+            ).all()
         )
-        tax_code = self.db.scalar(stmt)
-        if not tax_code:
-            logger.warning(
-                "No active VAT sales tax code for org %s — invoices synced "
-                "without tax extraction",
-                self.organization_id,
+        if len(candidates) != 1:
+            raise ValueError(
+                "ERP must have exactly one effective WHT code with a receivable "
+                f"account for Sub rate {rate_percent}%; found {len(candidates)}"
             )
-        return tax_code
-
-    def _extract_tax(self, total: Decimal) -> tuple[Decimal, Decimal]:
-        tc = self.sales_tax_code
-        if not tc or tc.tax_rate == Decimal("0"):
-            return total, Decimal("0")
-        if tc.is_inclusive:
-            divisor = Decimal("1") + tc.tax_rate
-            tax_amount = (total * tc.tax_rate / divisor).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            subtotal = total - tax_amount
-        else:
-            subtotal = total
-            tax_amount = (total * tc.tax_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-        return subtotal, tax_amount
-
-    def _create_line_tax_record(
-        self, line_id: UUID, base_amount: Decimal, tax_amount: Decimal
-    ) -> None:
-        tc = self.sales_tax_code
-        if not tc or tax_amount == Decimal("0"):
-            return
-        self.db.add(
-            InvoiceLineTax(
-                line_id=line_id,
-                tax_code_id=tc.tax_code_id,
-                base_amount=base_amount,
-                tax_rate=tc.tax_rate,
-                tax_amount=tax_amount,
-                is_inclusive=tc.is_inclusive,
-                sequence=1,
-            )
-        )
+        self._source_wht_code_cache[key] = candidates[0]
+        return candidates[0]
 
     def _generate_invoice_number(self, reference_date: date | None = None) -> str:
         from app.models.finance.core_config.numbering_sequence import SequenceType
@@ -202,6 +317,59 @@ class BaseSyncMixin:
         except ValueError:
             logger.warning("Could not parse date: %s", date_str)
             return None
+
+    def _parse_datetime(self, value: str | None) -> datetime | None:
+        """Parse an ISO8601 instant into a tz-aware datetime (UTC-normalized)."""
+        if not value:
+            return None
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            logger.warning("Could not parse datetime: %s", value)
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
+
+    # ---- Incremental-sync high-watermark ----
+
+    def _get_sync_watermark(self, entity_type: EntityType) -> datetime | None:
+        """Highest ``updated_at`` already synced for this entity type, or None
+        (never synced → the caller does a full pull)."""
+        stmt = select(DotmacSubSyncWatermark.watermark_at).where(
+            DotmacSubSyncWatermark.organization_id == self.organization_id,
+            DotmacSubSyncWatermark.entity_type == entity_type.value,
+        )
+        return self.db.scalar(stmt)
+
+    def _advance_sync_watermark(
+        self, entity_type: EntityType, new_value: datetime | None
+    ) -> None:
+        """Move the watermark forward to ``new_value`` (never backward)."""
+        if new_value is None:
+            return
+        stmt = select(DotmacSubSyncWatermark).where(
+            DotmacSubSyncWatermark.organization_id == self.organization_id,
+            DotmacSubSyncWatermark.entity_type == entity_type.value,
+        )
+        row = self.db.scalar(stmt)
+        if row is None:
+            self.db.add(
+                DotmacSubSyncWatermark(
+                    organization_id=self.organization_id,
+                    entity_type=entity_type.value,
+                    watermark_at=new_value,
+                )
+            )
+            return
+        current = row.watermark_at
+        # A naive stored value only happens on the SQLite test backend
+        # (DateTime(timezone=True) drops tzinfo there); treat it as UTC so the
+        # advance-only comparison never mixes aware/naive. Postgres stores aware.
+        if current is not None and current.tzinfo is None:
+            current = current.replace(tzinfo=UTC)
+        if current is None or new_value > current:
+            row.watermark_at = new_value
 
     def _get_synced_entity(
         self, entity_type: EntityType, external_id: str
@@ -277,17 +445,26 @@ class BaseSyncMixin:
         from app.models.finance.ar.invoice import InvoiceStatus
 
         s = (status or "").lower()
+        # Check terminal/explicit statuses BEFORE the zero-balance shortcut: a
+        # voided invoice typically carries balance_due == 0, so the PAID branch
+        # would otherwise mislabel it as PAID.
+        if s == "void":
+            return InvoiceStatus.VOID
         if s == "paid" or balance_due == Decimal("0"):
             return InvoiceStatus.PAID
         if s == "partially_paid":
             return InvoiceStatus.PARTIALLY_PAID
-        if s == "void":
-            return InvoiceStatus.VOID
         return InvoiceStatus.POSTED
 
     def _get_customer_for_account(self, account_id: str) -> UUID | None:
         if account_id in self._account_cache:
             return self._account_cache[account_id]
+        if account_id in self._unresolvable_accounts:
+            # Already determined unresolvable earlier this run. Don't re-hit
+            # dotmac_sub for the same account again (it will stay unresolved
+            # this run, and re-fetching only burns the rate limit); retried
+            # fresh on the next sync run.
+            return None
         mapped = self._get_synced_entity(EntityType.BILLING_ACCOUNT, account_id)
         if mapped:
             self._account_cache[account_id] = mapped
@@ -296,6 +473,8 @@ class BaseSyncMixin:
         if customer_id:
             self._account_cache[account_id] = customer_id
             self._record_sync(EntityType.BILLING_ACCOUNT, account_id, customer_id)
+        else:
+            self._unresolvable_accounts.add(account_id)
         return customer_id
 
     def _resolve_account_owner(self, account_id: str) -> UUID | None:
@@ -311,7 +490,10 @@ class BaseSyncMixin:
         consolidation concept; if an ``account_id`` is one of those instead, map
         it to the reseller's ERP *parent* customer (which posts to GL).
         """
-        from app.services.dotmac_sub.client import DotmacSubError
+        from app.services.dotmac_sub.client import (
+            DotmacSubError,
+            DotmacSubRateLimitError,
+        )
 
         # 1) Already-synced subscriber → child customer.
         cust = self._get_customer_by_dotmac_sub_id(account_id)
@@ -323,6 +505,11 @@ class BaseSyncMixin:
         #    but batch limits or webhooks can arrive out of order).
         try:
             sub = self.client.get_subscriber(account_id)
+        except DotmacSubRateLimitError:
+            # Throttled, not missing. Skip the billing-account fallback (it would
+            # be throttled too) and leave the account for the next run rather than
+            # treating a rate limit as "not found".
+            return None
         except DotmacSubError:
             sub = None
         if sub is not None:
@@ -340,11 +527,52 @@ class BaseSyncMixin:
         # 3) Fallback: a reseller-level billing account → reseller parent customer.
         try:
             account = self.client.get_billing_account(account_id)
+        except DotmacSubRateLimitError:
+            return None
         except DotmacSubError:
             account = None
         if account and account.reseller_id:
             return self._reseller_customer_id(account.reseller_id)
         return None
+
+    def _lock_dotmac_sub_customer(self, dotmac_sub_id: str) -> None:
+        """Serialize concurrent customer upserts for one dotmac_sub subscriber.
+
+        ``Customer.dotmac_sub_id`` is non-unique, and the subscriber can be
+        created from two paths that race: the batch subscriber sync and the
+        on-demand ``_resolve_account_owner`` upsert (when an invoice/payment
+        arrives before its subscriber). Without a guard both find "not found"
+        and both insert a customer for one subscriber, fragmenting that
+        subscriber's AR across two accounts. A transaction-level advisory lock
+        keyed on (org, dotmac_sub_id) makes the second path wait until the
+        first commits. No-op off PostgreSQL (the SQLite test harness).
+
+        The acquire is a bounded ``pg_try_advisory_xact_lock`` poll, never a
+        blocking wait: xact locks are held to the OUTER commit (up to 500
+        entities between commits; per-entity savepoints release nothing), so
+        two sync streams accumulating the same per-subscriber locks in
+        different orders deadlocked in prod (2026-07-18, invoice sync vs
+        subscriber sync). A poll cannot join a Postgres wait cycle; when the
+        budget runs out, :class:`CustomerLockContentionError` defers just this
+        entity to the caller's per-entity handling and the next run.
+        """
+        if not dotmac_sub_id or self.db.get_bind().dialect.name != "postgresql":
+            return
+        key = f"erp_customer:{self.organization_id}:{dotmac_sub_id}"
+        for attempt in range(_CUSTOMER_LOCK_ATTEMPTS):
+            acquired = self.db.execute(
+                text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"),
+                {"key": key},
+            ).scalar()
+            if acquired:
+                return
+            if attempt < _CUSTOMER_LOCK_ATTEMPTS - 1:
+                time.sleep(_CUSTOMER_LOCK_RETRY_DELAY_SECONDS)
+        raise CustomerLockContentionError(
+            f"customer lock for dotmac_sub subscriber {dotmac_sub_id} still "
+            f"held by a concurrent sync after {_CUSTOMER_LOCK_ATTEMPTS} "
+            "attempts; entity deferred to the next run"
+        )
 
     def _get_customer_by_dotmac_sub_id(self, dotmac_sub_id: str) -> Customer | None:
         stmt = select(Customer).where(

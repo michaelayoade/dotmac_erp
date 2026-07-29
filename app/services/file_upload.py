@@ -60,6 +60,8 @@ CONTENT_TYPE_EXTENSIONS: dict[str, str] = {
     "image/png": ".png",
     "image/gif": ".gif",
     "image/webp": ".webp",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
     "image/svg+xml": ".svg",
     "image/x-icon": ".ico",
     "image/vnd.microsoft.icon": ".ico",
@@ -585,6 +587,35 @@ def _form_attachment_config() -> FileUploadConfig:
     )
 
 
+def _employee_document_config() -> FileUploadConfig:
+    return FileUploadConfig(
+        base_dir="/app/uploads/employee_documents",
+        allowed_content_types=frozenset(
+            {
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "image/jpeg",
+                "image/png",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".pdf",
+                ".doc",
+                ".docx",
+                ".jpg",
+                ".jpeg",
+                ".png",
+            }
+        ),
+        max_size_bytes=10 * 1024 * 1024,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="employee_documents",
+    )
+
+
 def get_avatar_upload() -> FileUploadService:
     """Get avatar upload service (lazily configured from settings)."""
     return FileUploadService(_avatar_config())
@@ -613,6 +644,34 @@ def get_support_attachment_upload() -> FileUploadService:
 def get_form_attachment_upload() -> FileUploadService:
     """Get generic form attachment upload service."""
     return FileUploadService(_form_attachment_config())
+
+
+def get_employee_document_upload() -> FileUploadService:
+    """Get employee document upload service."""
+    return FileUploadService(_employee_document_config())
+
+
+def _sla_policy_document_config() -> FileUploadConfig:
+    return FileUploadConfig(
+        base_dir="/app/uploads/sla_policies",
+        allowed_content_types=frozenset(
+            {
+                "application/pdf",
+                "image/jpeg",
+                "image/png",
+            }
+        ),
+        allowed_extensions=frozenset({".pdf", ".jpg", ".jpeg", ".png"}),
+        max_size_bytes=10 * 1024 * 1024,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="sla_policies",
+    )
+
+
+def get_sla_policy_document_upload() -> FileUploadService:
+    """Get the SLA policy document upload service."""
+    return FileUploadService(_sla_policy_document_config())
 
 
 def _pm_attachment_config() -> FileUploadConfig:
@@ -748,6 +807,118 @@ def _expense_receipt_config() -> FileUploadConfig:
     )
 
 
+def _fleet_fuel_receipt_config() -> FileUploadConfig:
+    import os
+
+    max_size = int(os.getenv("MAX_FLEET_FUEL_RECEIPT_SIZE", str(20 * 1024 * 1024)))
+    return FileUploadConfig(
+        base_dir="uploads/attachments",
+        allowed_content_types=frozenset(
+            {
+                "image/jpeg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "image/heic",
+                "image/heif",
+                "application/pdf",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp",
+                ".heic",
+                ".heif",
+                ".pdf",
+            }
+        ),
+        max_size_bytes=max_size,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="attachments",
+    )
+
+
+def _fleet_incident_attachment_config() -> FileUploadConfig:
+    import os
+
+    max_size = int(
+        os.getenv("MAX_FLEET_INCIDENT_ATTACHMENT_SIZE", str(20 * 1024 * 1024))
+    )
+    return FileUploadConfig(
+        base_dir="uploads/attachments",
+        allowed_content_types=frozenset(
+            {
+                "image/jpeg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "image/heic",
+                "image/heif",
+                "application/pdf",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp",
+                ".heic",
+                ".heif",
+                ".pdf",
+            }
+        ),
+        max_size_bytes=max_size,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="attachments",
+    )
+
+
+def _fleet_maintenance_attachment_config() -> FileUploadConfig:
+    import os
+
+    max_size = int(
+        os.getenv("MAX_FLEET_MAINTENANCE_ATTACHMENT_SIZE", str(20 * 1024 * 1024))
+    )
+    return FileUploadConfig(
+        base_dir="uploads/attachments",
+        allowed_content_types=frozenset(
+            {
+                "image/jpeg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "image/heic",
+                "image/heif",
+                "application/pdf",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp",
+                ".heic",
+                ".heif",
+                ".pdf",
+            }
+        ),
+        max_size_bytes=max_size,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="attachments",
+    )
+
+
 def _generated_docs_config() -> FileUploadConfig:
     return FileUploadConfig(
         base_dir=settings.generated_docs_dir,
@@ -760,6 +931,21 @@ def _generated_docs_config() -> FileUploadConfig:
 def get_expense_receipt_upload() -> FileUploadService:
     """Get expense receipt upload service."""
     return FileUploadService(_expense_receipt_config())
+
+
+def get_fleet_fuel_receipt_upload() -> FileUploadService:
+    """Get Fleet fuel receipt upload service."""
+    return FileUploadService(_fleet_fuel_receipt_config())
+
+
+def get_fleet_incident_attachment_upload() -> FileUploadService:
+    """Get Fleet incident attachment upload service."""
+    return FileUploadService(_fleet_incident_attachment_config())
+
+
+def get_fleet_maintenance_attachment_upload() -> FileUploadService:
+    """Get Fleet maintenance attachment upload service."""
+    return FileUploadService(_fleet_maintenance_attachment_config())
 
 
 def get_generated_docs_upload() -> FileUploadService:

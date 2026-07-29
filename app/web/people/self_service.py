@@ -14,10 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
 from app.services.people.self_service_web import self_service_web_service
-from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
-    base_context,
     get_db_for_org,
     require_self_service_access,
     require_self_service_discipline_manager,
@@ -69,6 +67,108 @@ def _coerce_iso_date(value: object | None, field_name: str) -> date | None:
     return None
 
 
+def _collect_indexed_rows(
+    form,
+    *,
+    fields: list[str],
+    file_fields: list[str] | None = None,
+) -> list[dict[str, object]]:
+    indexes: set[int] = set()
+    file_fields = file_fields or []
+    for key in form:
+        for field_name in [*fields, *file_fields]:
+            prefix = f"{field_name}_"
+            if key.startswith(prefix):
+                suffix = key[len(prefix) :]
+                if suffix.isdigit():
+                    indexes.add(int(suffix))
+    rows: list[dict[str, object]] = []
+    for index in sorted(indexes):
+        row: dict[str, object] = {}
+        for field_name in fields:
+            if field_name in {
+                "is_ongoing",
+                "does_not_expire",
+                "is_primary",
+                "is_emergency_contact",
+                "is_beneficiary",
+            }:
+                row[field_name] = bool(form.get(f"{field_name}_{index}"))
+            else:
+                row[field_name] = (
+                    _safe_form_text(form.get(f"{field_name}_{index}")) or None
+                )
+        for field_name in file_fields:
+            row["_upload"] = form.get(f"{field_name}_{index}")
+        non_blank_values = [
+            value
+            for key, value in row.items()
+            if key != "_upload" and value not in (None, "", False)
+        ]
+        has_upload = bool(getattr(row.get("_upload"), "filename", None))
+        if non_blank_values or has_upload:
+            rows.append(row)
+    return rows
+
+
+def _has_indexed_row_fields(
+    form,
+    *,
+    fields: list[str],
+    file_fields: list[str] | None = None,
+) -> bool:
+    for key in form:
+        for field_name in [*fields, *(file_fields or [])]:
+            prefix = f"{field_name}_"
+            if key.startswith(prefix) and key[len(prefix) :].isdigit():
+                return True
+    return False
+
+
+def require_self_service_profile_read(
+    auth: WebAuthContext = Depends(require_self_service_access),
+) -> WebAuthContext:
+    if not auth.has_permission("selfservice:profile:read"):
+        raise HTTPException(
+            status_code=403,
+            detail="Permission 'selfservice:profile:read' required",
+        )
+    return auth
+
+
+def require_self_service_profile_update(
+    auth: WebAuthContext = Depends(require_self_service_profile_read),
+) -> WebAuthContext:
+    if not auth.has_permission("selfservice:profile:update"):
+        raise HTTPException(
+            status_code=403,
+            detail="Permission 'selfservice:profile:update' required",
+        )
+    return auth
+
+
+def require_self_service_documents_read(
+    auth: WebAuthContext = Depends(require_self_service_access),
+) -> WebAuthContext:
+    if not auth.has_permission("selfservice:documents:read"):
+        raise HTTPException(
+            status_code=403,
+            detail="Permission 'selfservice:documents:read' required",
+        )
+    return auth
+
+
+def require_self_service_documents_upload(
+    auth: WebAuthContext = Depends(require_self_service_documents_read),
+) -> WebAuthContext:
+    if not auth.has_permission("selfservice:documents:upload"):
+        raise HTTPException(
+            status_code=403,
+            detail="Permission 'selfservice:documents:upload' required",
+        )
+    return auth
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def self_service_index(
@@ -77,8 +177,7 @@ def self_service_index(
     db: Session = Depends(get_db_for_org),
 ):
     """Self-service landing page."""
-    context = base_context(request, auth, "Self Service", "self", db=db)
-    return templates.TemplateResponse(request, "people/self/index.html", context)
+    return self_service_web_service.index_response(request, auth, db)
 
 
 @router.get("/attendance", response_class=HTMLResponse)
@@ -249,7 +348,7 @@ def my_tax_info(
     request: Request,
     success: str | None = None,
     error: str | None = None,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_profile_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Self-service tax, bank, and personal info page."""
@@ -262,10 +361,465 @@ def my_tax_info(
     )
 
 
+@router.get("/documents", response_class=HTMLResponse)
+def my_documents(
+    request: Request,
+    success: str | None = None,
+    error: str | None = None,
+    auth: WebAuthContext = Depends(require_self_service_documents_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.documents_response(
+        request,
+        auth,
+        db,
+        success=success,
+        error=error,
+    )
+
+
+@router.get("/documents/new", response_class=HTMLResponse)
+def new_my_document(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_documents_upload),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.document_upload_form_response(request, auth, db)
+
+
+@router.post("/documents/new", response_class=HTMLResponse)
+async def submit_my_document(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_documents_upload),
+    db: Session = Depends(get_db_for_org),
+):
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    indexed_fields = [
+        "document_type",
+        "document_name",
+        "description",
+        "issue_date",
+        "expiry_date",
+    ]
+    indexed_file_fields = ["file"]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    )
+    if _has_indexed_row_fields(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    ):
+        return self_service_web_service.submit_document_upload_batch_response(
+            request,
+            auth,
+            db,
+            rows=rows,
+        )
+    payload = {
+        "document_type": _safe_form_text(form.get("document_type")) or None,
+        "document_name": _safe_form_text(form.get("document_name")) or None,
+        "description": _safe_form_text(form.get("description")) or None,
+        "issue_date": _safe_form_text(form.get("issue_date")) or None,
+        "expiry_date": _safe_form_text(form.get("expiry_date")) or None,
+    }
+    return self_service_web_service.submit_document_upload_response(
+        request,
+        auth,
+        db,
+        payload=payload,
+        upload=form.get("file"),
+    )
+
+
+@router.get("/documents/{document_id}/download")
+def download_my_document(
+    document_id: UUID,
+    auth: WebAuthContext = Depends(require_self_service_documents_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.download_document_response(
+        auth,
+        db,
+        document_id=document_id,
+    )
+
+
+@router.get("/documents/pending/{request_id}/download")
+def download_my_pending_document(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_self_service_documents_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.download_pending_info_change_evidence_response(
+        auth,
+        db,
+        request_id=request_id,
+        require_owner_only=True,
+    )
+
+
+@router.get("/qualifications", response_class=HTMLResponse)
+def my_qualifications(
+    request: Request,
+    success: str | None = None,
+    error: str | None = None,
+    edit_id: UUID | None = None,
+    auth: WebAuthContext = Depends(require_self_service_profile_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.extended_profile_response(
+        request,
+        auth,
+        db,
+        section="qualifications",
+        success=success,
+        error=error,
+        edit_id=edit_id,
+    )
+
+
+@router.post("/qualifications")
+async def submit_qualification(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_profile_update),
+    db: Session = Depends(get_db_for_org),
+):
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    indexed_fields = [
+        "qualification_type",
+        "qualification_name",
+        "field_of_study",
+        "institution_name",
+        "institution_location",
+        "start_date",
+        "end_date",
+        "is_ongoing",
+        "grade",
+        "score",
+        "max_score",
+        "notes",
+    ]
+    indexed_file_fields = ["supporting_file"]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    )
+    if _has_indexed_row_fields(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    ) and not _safe_form_text(form.get("qualification_id")):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="qualifications",
+            rows=rows,
+        )
+    qualification_id = (
+        coerce_uuid(_safe_form_text(form.get("qualification_id")))
+        if _safe_form_text(form.get("qualification_id"))
+        else None
+    )
+    payload = {
+        "qualification_type": _safe_form_text(form.get("qualification_type")) or None,
+        "qualification_name": _safe_form_text(form.get("qualification_name")) or None,
+        "field_of_study": _safe_form_text(form.get("field_of_study")) or None,
+        "institution_name": _safe_form_text(form.get("institution_name")) or None,
+        "institution_location": _safe_form_text(form.get("institution_location"))
+        or None,
+        "start_date": _safe_form_text(form.get("start_date")) or None,
+        "end_date": _safe_form_text(form.get("end_date")) or None,
+        "is_ongoing": bool(form.get("is_ongoing")),
+        "grade": _safe_form_text(form.get("grade")) or None,
+        "score": _safe_form_text(form.get("score")) or None,
+        "max_score": _safe_form_text(form.get("max_score")) or None,
+        "notes": _safe_form_text(form.get("notes")) or None,
+    }
+    return self_service_web_service.submit_extended_profile_response(
+        request,
+        auth,
+        db,
+        section="qualifications",
+        payload=payload,
+        upload=form.get("supporting_file"),
+        record_id=qualification_id,
+    )
+
+
+@router.get("/certifications", response_class=HTMLResponse)
+def my_certifications(
+    request: Request,
+    success: str | None = None,
+    error: str | None = None,
+    edit_id: UUID | None = None,
+    auth: WebAuthContext = Depends(require_self_service_profile_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.extended_profile_response(
+        request,
+        auth,
+        db,
+        section="certifications",
+        success=success,
+        error=error,
+        edit_id=edit_id,
+    )
+
+
+@router.post("/certifications")
+async def submit_certification(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_profile_update),
+    db: Session = Depends(get_db_for_org),
+):
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    indexed_fields = [
+        "certification_name",
+        "issuing_authority",
+        "issue_date",
+        "expiry_date",
+        "does_not_expire",
+        "credential_id",
+        "credential_url",
+        "notes",
+    ]
+    indexed_file_fields = ["supporting_file"]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    )
+    if _has_indexed_row_fields(
+        form,
+        fields=indexed_fields,
+        file_fields=indexed_file_fields,
+    ) and not _safe_form_text(form.get("certification_id")):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="certifications",
+            rows=rows,
+        )
+    certification_id = (
+        coerce_uuid(_safe_form_text(form.get("certification_id")))
+        if _safe_form_text(form.get("certification_id"))
+        else None
+    )
+    payload = {
+        "certification_name": _safe_form_text(form.get("certification_name")) or None,
+        "issuing_authority": _safe_form_text(form.get("issuing_authority")) or None,
+        "issue_date": _safe_form_text(form.get("issue_date")) or None,
+        "expiry_date": _safe_form_text(form.get("expiry_date")) or None,
+        "does_not_expire": bool(form.get("does_not_expire")),
+        "credential_id": _safe_form_text(form.get("credential_id")) or None,
+        "credential_url": _safe_form_text(form.get("credential_url")) or None,
+        "notes": _safe_form_text(form.get("notes")) or None,
+    }
+    return self_service_web_service.submit_extended_profile_response(
+        request,
+        auth,
+        db,
+        section="certifications",
+        payload=payload,
+        upload=form.get("supporting_file"),
+        record_id=certification_id,
+    )
+
+
+@router.get("/skills", response_class=HTMLResponse)
+def my_skills(
+    request: Request,
+    success: str | None = None,
+    error: str | None = None,
+    edit_id: UUID | None = None,
+    auth: WebAuthContext = Depends(require_self_service_profile_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.extended_profile_response(
+        request,
+        auth,
+        db,
+        section="skills",
+        success=success,
+        error=error,
+        edit_id=edit_id,
+    )
+
+
+@router.post("/skills")
+async def submit_skill(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_profile_update),
+    db: Session = Depends(get_db_for_org),
+):
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    indexed_fields = [
+        "skill_id",
+        "proficiency_level",
+        "years_experience",
+        "last_used_date",
+        "is_primary",
+        "notes",
+    ]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+    )
+    if _has_indexed_row_fields(form, fields=indexed_fields) and not _safe_form_text(
+        form.get("employee_skill_id")
+    ):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="skills",
+            rows=rows,
+        )
+    employee_skill_id = (
+        coerce_uuid(_safe_form_text(form.get("employee_skill_id")))
+        if _safe_form_text(form.get("employee_skill_id"))
+        else None
+    )
+    payload = {
+        "skill_id": _safe_form_text(form.get("skill_id")) or None,
+        "proficiency_level": _safe_form_text(form.get("proficiency_level")) or None,
+        "years_experience": _safe_form_text(form.get("years_experience")) or None,
+        "last_used_date": _safe_form_text(form.get("last_used_date")) or None,
+        "is_primary": bool(form.get("is_primary")),
+        "notes": _safe_form_text(form.get("notes")) or None,
+    }
+    return self_service_web_service.submit_extended_profile_response(
+        request,
+        auth,
+        db,
+        section="skills",
+        payload=payload,
+        record_id=employee_skill_id,
+    )
+
+
+@router.get("/dependents", response_class=HTMLResponse)
+def my_dependents(
+    request: Request,
+    success: str | None = None,
+    error: str | None = None,
+    edit_id: UUID | None = None,
+    auth: WebAuthContext = Depends(require_self_service_profile_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.extended_profile_response(
+        request,
+        auth,
+        db,
+        section="dependents",
+        success=success,
+        error=error,
+        edit_id=edit_id,
+    )
+
+
+@router.post("/dependents")
+async def submit_dependent(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_profile_update),
+    db: Session = Depends(get_db_for_org),
+):
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    indexed_fields = [
+        "full_name",
+        "relationship",
+        "date_of_birth",
+        "gender",
+        "phone",
+        "email",
+        "address",
+        "is_emergency_contact",
+        "emergency_contact_priority",
+        "is_beneficiary",
+        "beneficiary_percentage",
+        "notes",
+    ]
+    rows = _collect_indexed_rows(
+        form,
+        fields=indexed_fields,
+    )
+    if _has_indexed_row_fields(form, fields=indexed_fields) and not _safe_form_text(
+        form.get("dependent_id")
+    ):
+        return self_service_web_service.submit_extended_profile_batch_response(
+            request,
+            auth,
+            db,
+            section="dependents",
+            rows=rows,
+        )
+    dependent_id = (
+        coerce_uuid(_safe_form_text(form.get("dependent_id")))
+        if _safe_form_text(form.get("dependent_id"))
+        else None
+    )
+    payload = {
+        "full_name": _safe_form_text(form.get("full_name")) or None,
+        "relationship": _safe_form_text(form.get("relationship")) or None,
+        "date_of_birth": _safe_form_text(form.get("date_of_birth")) or None,
+        "gender": _safe_form_text(form.get("gender")) or None,
+        "phone": _safe_form_text(form.get("phone")) or None,
+        "email": _safe_form_text(form.get("email")) or None,
+        "address": _safe_form_text(form.get("address")) or None,
+        "is_emergency_contact": bool(form.get("is_emergency_contact")),
+        "emergency_contact_priority": _safe_form_text(
+            form.get("emergency_contact_priority")
+        )
+        or None,
+        "is_beneficiary": bool(form.get("is_beneficiary")),
+        "beneficiary_percentage": _safe_form_text(form.get("beneficiary_percentage"))
+        or None,
+        "notes": _safe_form_text(form.get("notes")) or None,
+    }
+    return self_service_web_service.submit_extended_profile_response(
+        request,
+        auth,
+        db,
+        section="dependents",
+        payload=payload,
+        record_id=dependent_id,
+    )
+
+
+@router.get("/info-change-evidence/{request_id}")
+def download_my_pending_info_change_evidence(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_self_service_profile_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return self_service_web_service.download_pending_info_change_evidence_response(
+        auth,
+        db,
+        request_id=request_id,
+        require_owner_only=True,
+    )
+
+
 @router.post("/tax-info")
 async def update_tax_info(
     request: Request,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_profile_update),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Submit a change request for tax, bank, and personal info."""

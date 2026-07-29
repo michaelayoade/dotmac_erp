@@ -115,6 +115,24 @@ async def assign_learning_course_role(
     return await training_web_service.assign_role_response(request, auth, db)
 
 
+@router.post("/assignments/designation", response_class=HTMLResponse)
+async def assign_learning_course_designation(
+    request: Request,
+    auth: WebAuthContext = Depends(require_training_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return await training_web_service.assign_designation_response(request, auth, db)
+
+
+@router.post("/assignments/team", response_class=HTMLResponse)
+async def assign_learning_course_team(
+    request: Request,
+    auth: WebAuthContext = Depends(require_training_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return await training_web_service.assign_team_response(request, auth, db)
+
+
 @router.get("/my-courses", response_class=HTMLResponse)
 def my_learning_courses(
     request: Request,

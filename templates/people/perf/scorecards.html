@@ -16,10 +16,26 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/people/perf/scorecards/new" class="btn btn-primary">
-    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-    New Scorecard
-</a>
+<div class="flex items-center gap-2">
+    <form method="post" action="/people/perf/scorecards/generate-active-employees">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
+            Generate Current Year
+        </button>
+    </form>
+    <form method="post" action="/people/perf/scorecards/sync-metrics">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
+            Sync Scorecard Metrics
+        </button>
+    </form>
+    <a href="/people/perf/scorecards/new" class="btn btn-primary">
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+        New Scorecard
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -29,6 +45,15 @@
         <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
             {{ icon_svg("check", "w-5 h-5") }}
             <span>{{ success | replace('+', ' ') }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            {{ icon_svg("exclamation-circle", "w-5 h-5") }}
+            <span>{{ error | replace('+', ' ') }}</span>
         </div>
     </div>
     {% endif %}

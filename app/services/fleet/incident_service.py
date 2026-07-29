@@ -172,6 +172,10 @@ class IncidentService:
                 "vehicle_id": str(data.vehicle_id),
                 "incident_type": data.incident_type.value,
                 "severity": data.severity.value,
+                "status": data.status.value
+                if hasattr(data.status, "value")
+                else str(data.status),
+                "location": data.location,
             },
         )
 
@@ -191,6 +195,11 @@ class IncidentService:
             raise ValidationError("Cannot update closed incident")
 
         update_data = data.model_dump(exclude_unset=True)
+        vehicle_id = update_data.get("vehicle_id")
+        if vehicle_id is not None:
+            vehicle = self.db.get(Vehicle, vehicle_id)
+            if not vehicle or vehicle.organization_id != self.organization_id:
+                raise NotFoundError(f"Vehicle {vehicle_id} not found")
         for field, value in update_data.items():
             setattr(incident, field, value)
 

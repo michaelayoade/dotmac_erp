@@ -21,7 +21,11 @@ from app.schemas.rbac import (
     RoleUpdate,
 )
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
+from app.services.response import (
+    ListResponseMixin,
+    apply_ordering as _apply_ordering,
+    apply_pagination as _apply_pagination,
+)
 
 if TYPE_CHECKING:
     from app.models.rbac import (
@@ -51,24 +55,6 @@ def _rbac_models() -> tuple[type[Any], type[Any], type[Any], type[Any]]:
         module.Role,
         module.RolePermission,
     )
-
-
-def _apply_ordering(
-    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Any:
-    if order_by not in allowed_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
-        )
-    column = allowed_columns[order_by]
-    if order_dir == "desc":
-        return query.order_by(column.desc())
-    return query.order_by(column.asc())
-
-
-def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
-    return query.limit(limit).offset(offset)
 
 
 class Roles(ListResponseMixin):

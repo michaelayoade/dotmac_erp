@@ -176,8 +176,36 @@ const Charts = {
   },
 
   // Create bar chart
-  bar(canvas, { labels, datasets, horizontal, stacked, currency }) {
+  bar(canvas, {
+    labels,
+    datasets,
+    horizontal,
+    stacked,
+    currency,
+    format,
+    suffix,
+    axisTitle,
+    tooltipDetails
+  }) {
     const theme = this.getThemeColors();
+    const valueAxis = {
+      stacked,
+      grid: { color: theme.grid },
+      ticks: { color: theme.text },
+      title: {
+        display: Boolean(axisTitle),
+        text: axisTitle || '',
+        color: theme.text
+      }
+    };
+    const categoryAxis = {
+      stacked,
+      grid: { color: theme.grid },
+      ticks: {
+        color: theme.text,
+        autoSkip: !horizontal
+      }
+    };
 
     return new Chart(canvas, {
       type: 'bar',
@@ -187,16 +215,8 @@ const Charts = {
         maintainAspectRatio: false,
         indexAxis: horizontal ? 'y' : 'x',
         scales: {
-          x: {
-            stacked,
-            grid: { color: theme.grid },
-            ticks: { color: theme.text }
-          },
-          y: {
-            stacked,
-            grid: { color: theme.grid },
-            ticks: { color: theme.text }
-          }
+          x: horizontal ? valueAxis : categoryAxis,
+          y: horizontal ? categoryAxis : valueAxis
         },
         plugins: {
           legend: {
@@ -207,9 +227,11 @@ const Charts = {
             ...this.getTooltipConfig(),
             callbacks: {
               label: (ctx) => {
-                const val = Charts.formatCurrency(ctx.raw, currency);
-                return `${ctx.dataset.label}: ${val}`;
-              }
+                const resolvedFormat = Charts.resolveFormat(currency, format);
+                const val = Charts.formatValue(ctx.raw, currency, resolvedFormat);
+                return `${ctx.dataset.label}: ${val}${suffix || ''}`;
+              },
+              afterLabel: (ctx) => tooltipDetails?.[ctx.dataIndex] || []
             }
           }
         }

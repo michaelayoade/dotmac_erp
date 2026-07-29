@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models.finance.ar.customer import Customer, CustomerType
 from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import DotmacSubError, ResellerRecord
 
+from ._base import next_watermark
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,10 @@ class ResellerSyncMixin:
     _record_sync: Any
     _get_synced_entity: Any
     _reprime_tenant_context: Any
+    _customer_code: Any
+    _parse_datetime: Any
+    _get_sync_watermark: Any
+    _advance_sync_watermark: Any
 
     def sync_resellers(
         self,
@@ -39,8 +45,13 @@ class ResellerSyncMixin:
     ) -> SyncResult:
         result = SyncResult(success=True, entity_type="resellers")
         processed = 0
+        watermark = self._get_sync_watermark(EntityType.RESELLER)
+        updated_since = watermark.isoformat() if watermark else None
+        max_ok: datetime | None = None
+        min_error: datetime | None = None
         try:
-            for reseller in self.client.get_resellers():
+            for reseller in self.client.get_resellers(updated_since=updated_since):
+                row_updated_at = self._parse_datetime(reseller.updated_at)
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_reseller(
@@ -48,6 +59,12 @@ class ResellerSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
+                    if row_updated_at is not None:
+                        max_ok = (
+                            row_updated_at
+                            if max_ok is None
+                            else max(max_ok, row_updated_at)
+                        )
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -59,6 +76,16 @@ class ResellerSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Reseller {reseller.id}: {e!s}")
                     logger.exception("Error syncing reseller %s", reseller.id)
+                    if row_updated_at is not None:
+                        min_error = (
+                            row_updated_at
+                            if min_error is None
+                            else min(min_error, row_updated_at)
+                        )
+            self._advance_sync_watermark(
+                EntityType.RESELLER,
+                next_watermark(watermark, max_ok, min_error),
+            )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "
@@ -96,7 +123,24 @@ class ResellerSyncMixin:
             return
 
         existing = self._get_reseller_customer(external_id)
+        promoted = False
+        if not existing:
+            # Merge-on-promotion: a reseller created by promoting an existing
+            # subscriber is the same real-world entity as that subscriber's
+            # customer row. Promote the row into the reseller parent instead
+            # of creating an empty duplicate — its AR history then belongs to
+            # the reseller without touching any posted document.
+            existing = self._find_promotable_customer(reseller)
+            promoted = existing is not None
         if existing:
+            if promoted:
+                existing.customer_type = CustomerType.COMPANY
+                logger.info(
+                    "Promoting existing customer %s into reseller %s parent "
+                    "(matched by contact email)",
+                    existing.customer_id,
+                    external_id,
+                )
             existing.legal_name = reseller.name
             existing.is_active = reseller.is_active
             existing.primary_contact = {
@@ -116,7 +160,7 @@ class ResellerSyncMixin:
 
         customer = Customer(
             organization_id=self.organization_id,
-            customer_code=f"{self.SOURCE_PREFIX}-R-{reseller.id}",
+            customer_code=self._customer_code("R", reseller.id),
             customer_type=CustomerType.COMPANY,
             legal_name=reseller.name,
             trading_name=reseller.code,
@@ -139,6 +183,33 @@ class ResellerSyncMixin:
         self._record_sync(
             EntityType.RESELLER, external_id, customer.customer_id, data_hash
         )
+
+    def _find_promotable_customer(self, reseller: ResellerRecord) -> Customer | None:
+        """Find the subscriber-created customer that IS this reseller, if any.
+
+        Matched by the reseller's contact email against the customer's
+        ``primary_contact.email``; only an unambiguous single parentless,
+        not-yet-reseller, sub-synced match promotes — anything else falls
+        back to creating a fresh parent.
+        """
+        email = (reseller.contact_email or "").strip().lower()
+        if not email:
+            return None
+        stmt = (
+            select(Customer)
+            .where(
+                Customer.organization_id == self.organization_id,
+                Customer.parent_customer_id.is_(None),
+                Customer.dotmac_sub_reseller_id.is_(None),
+                Customer.dotmac_sub_id.isnot(None),
+                func.lower(Customer.primary_contact["email"].astext) == email,
+            )
+            .limit(2)
+        )
+        matches = list(self.db.scalars(stmt))
+        if len(matches) != 1:
+            return None
+        return matches[0]
 
     def _get_reseller_customer(self, reseller_id: str) -> Customer | None:
         local_id = self._get_synced_entity(EntityType.RESELLER, reseller_id)

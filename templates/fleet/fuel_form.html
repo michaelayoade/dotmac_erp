@@ -1,7 +1,11 @@
 {% extends "modules/base_modules.html" %}
 {% from "components/macros.html" import icon_svg %}
 
-{% block page_title %}Record Fuel Purchase{% endblock %}
+{% set fuel_log = fuel_log if fuel_log is defined else None %}
+{% set is_edit = is_edit if is_edit is defined else false %}
+{% set form_action = form_action if form_action is defined else "/fleet/fuel/new" %}
+
+{% block page_title %}{{ "Edit Fuel Purchase" if is_edit else "Record Fuel Purchase" }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -9,14 +13,14 @@
         <li><a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet/fuel" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fuel Logs</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Record</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if is_edit else "Record" }}</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-    <form method="POST" action="/fleet/fuel/new" class="space-y-6">
+    <form method="POST" action="{{ form_action }}" enctype="multipart/form-data" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <!-- Vehicle & Date -->
         <div class="card">
@@ -38,7 +42,7 @@
                     </div>
                     <div>
                         <label for="log_date" class="form-label">Date <span class="text-rose-500">*</span></label>
-                        <input type="date" id="log_date" name="log_date" required class="form-input">
+                        <input type="date" id="log_date" name="log_date" required class="form-input" value="{{ fuel_log.log_date.isoformat() if fuel_log and fuel_log.log_date else '' }}">
                     </div>
                 </div>
 
@@ -47,7 +51,7 @@
                         <label for="fuel_type" class="form-label">Fuel Type <span class="text-rose-500">*</span></label>
                         <select id="fuel_type" name="fuel_type" required class="form-select">
                             {% for ft in fuel_types %}
-                            <option value="{{ ft }}">{{ ft | replace('_', ' ') | title }}</option>
+                            <option value="{{ ft }}" {{ 'selected' if fuel_log and fuel_log.fuel_type.value == ft else '' }}>{{ ft | replace('_', ' ') | title }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -55,7 +59,8 @@
                         <label for="odometer_reading" class="form-label">Odometer Reading (km) <span class="text-rose-500">*</span></label>
                         <input type="number" id="odometer_reading" name="odometer_reading" required
                                min="0" step="1"
-                               class="form-input">
+                               class="form-input"
+                               value="{{ fuel_log.odometer_reading if fuel_log else '' }}">
                     </div>
                 </div>
             </div>
@@ -72,34 +77,39 @@
                         <label for="quantity_liters" class="form-label">Quantity (Liters) <span class="text-rose-500">*</span></label>
                         <input aria-label="0.00" type="number" id="quantity_liters" name="quantity_liters" required
                                min="0" step="0.01" placeholder="0.00"
-                               class="form-input">
+                               class="form-input"
+                               value="{{ fuel_log.quantity_liters if fuel_log else '' }}">
                     </div>
                     <div>
                         <label for="price_per_liter" class="form-label">Price per Liter <span class="text-rose-500">*</span></label>
                         <input aria-label="0.00" type="number" id="price_per_liter" name="price_per_liter" required
                                min="0" step="0.01" placeholder="0.00"
-                               class="form-input">
+                               class="form-input"
+                               value="{{ fuel_log.price_per_liter if fuel_log else '' }}">
                     </div>
                     <div>
                         <label for="total_cost" class="form-label">Total Cost <span class="text-rose-500">*</span></label>
                         <input aria-label="0.00" type="number" id="total_cost" name="total_cost" required
                                min="0" step="0.01" placeholder="0.00"
-                               class="form-input">
+                               class="form-input"
+                               value="{{ fuel_log.total_cost if fuel_log else '' }}">
                     </div>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="fuel_station" class="form-label">Fuel Station</label>
-                        <input aria-label="Station name" type="text" id="fuel_station" name="fuel_station"
+                        <label for="station_name" class="form-label">Fuel Station</label>
+                        <input aria-label="Station name" type="text" id="station_name" name="station_name"
                                placeholder="Station name"
-                               class="form-input">
+                               class="form-input"
+                               value="{{ fuel_log.station_name or '' if fuel_log else '' }}">
                     </div>
                     <div>
                         <label for="receipt_number" class="form-label">Receipt Number</label>
                         <input aria-label="Receipt/invoice number" type="text" id="receipt_number" name="receipt_number"
                                placeholder="Receipt/invoice number"
-                               class="form-input">
+                               class="form-input"
+                               value="{{ fuel_log.receipt_number or '' if fuel_log else '' }}">
                     </div>
                 </div>
 
@@ -119,6 +129,7 @@
                             type="hidden"
                             id="expense_claim_id"
                             name="expense_claim_id"
+                            value="{{ fuel_log.expense_claim_id or '' if fuel_log else '' }}"
                             data-typeahead-hidden
                         >
                         <div data-typeahead-results></div>
@@ -129,8 +140,35 @@
                 </div>
 
                 <div>
+                    <label for="receipt_files" class="form-label">Receipt Images</label>
+                    {% if is_edit and fuel_receipts %}
+                    <div class="mb-2 flex flex-wrap gap-2">
+                        {% for file in fuel_receipts %}
+                        <a href="{{ file.download_url }}" class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-teal-600 hover:text-teal-700 dark:border-slate-700 dark:bg-slate-800 dark:text-teal-400">
+                            {{ icon_svg("paperclip", "h-3.5 w-3.5") }}
+                            {{ file.file_name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <input
+                        aria-label="Upload receipt images or PDFs"
+                        type="file"
+                        id="receipt_files"
+                        name="receipt_files"
+                        multiple
+                        accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf"
+                        class="form-input"
+                    >
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Optional. Images or PDFs only. Maximum size: {{ fuel_receipt_max_size if fuel_receipt_max_size else '20 MB' }} per file.
+                    </p>
+                </div>
+
+                <div>
                     <label class="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" name="is_full_tank" value="true" class="form-checkbox">
+                        <input type="hidden" name="is_full_tank" value="false">
+                        <input type="checkbox" name="is_full_tank" value="true" class="form-checkbox" {{ 'checked' if (fuel_log and fuel_log.is_full_tank) or not fuel_log else '' }}>
                         <span class="text-sm text-slate-700 dark:text-slate-300">Full tank fill-up</span>
                     </label>
                 </div>
@@ -145,7 +183,7 @@
             <div class="p-4">
                 <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
                           placeholder="Additional notes..."
-                          class="form-textarea"></textarea>
+                          class="form-input min-h-24 w-full resize-y">{{ fuel_log.notes or '' if fuel_log else '' }}</textarea>
             </div>
         </div>
 
@@ -154,7 +192,7 @@
             <a href="/fleet/fuel" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("check", "h-4 w-4 mr-2") }}
-                Record Fuel
+                {{ "Save Changes" if is_edit else "Record Fuel" }}
             </button>
         </div>
     </form>

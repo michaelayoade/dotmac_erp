@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import uuid
@@ -68,9 +69,54 @@ pg_dialect.UUID = PatchedUUID
 
 
 class PatchedJSONB(Text):
-    """Patched JSONB that uses TEXT storage for SQLite."""
+    """Patched JSONB that uses TEXT storage for SQLite, JSON-(de)serialized.
+
+    MUST stay a direct `Text` subclass (not a `TypeDecorator`):
+    `tests/integration/conftest.py` -- which runs `tests/integration/`
+    against a REAL Postgres service -- has its own repair step,
+    `_fix_patched_types()`, that finds this class via
+    `Text.__subclasses__()` (matched by `__name__ == "PatchedJSONB"`) and
+    replaces every column's type with the real `postgresql.JSONB` before
+    any query runs, restoring native jsonb binding *and* JSONB's
+    getitem/`.astext` SQL comparator support. A revision that restructured
+    this as `TypeDecorator(impl=Text)` broke that `isinstance` detection
+    (a `TypeDecorator` doesn't appear in `Text.__subclasses__()`), so real
+    Postgres sessions kept using this SQLite-oriented type instead of
+    getting the real JSONB back -- causing both a `DatatypeMismatch`
+    (jsonb column vs. `::VARCHAR`-cast bind, since bare `Text` bind/DDL
+    typing is VARCHAR-like) and a `NotImplementedError` on
+    `Customer.primary_contact["email"]` (getitem needs JSONB's own
+    Comparator; `Text` has none). Overriding `bind_processor`/
+    `result_processor` (the raw `TypeEngine` hook points -- NOT
+    `TypeDecorator`'s `process_bind_param`/`process_result_value`, which
+    only a `TypeDecorator` subclass has) adds SQLite JSON (de)serialization
+    without touching the class hierarchy `_fix_patched_types()` relies on.
+
+    Previously this had neither override, so any real dict/list value
+    (e.g. `CustomFieldDefinition.field_options`) failed to bind under
+    SQLite at all (`sqlite3.ProgrammingError: type 'dict' is not
+    supported`) the first time a test actually flushed one to the DB -- no
+    existing test did, so the gap was latent until the SELECT/MULTISELECT
+    options-guard tests needed it.
+    """
 
     cache_ok = True
+
+    def bind_processor(self, dialect):
+        def process(value):
+            if value is None:
+                return None
+            return json.dumps(value)
+
+        return process
+
+    def result_processor(self, dialect, coltype):
+        def process(value):
+            if value is None:
+                return None
+            return json.loads(value)
+
+        return process
 
 
 if _original_jsonb is not None:
@@ -90,6 +136,7 @@ _test_engine = create_engine(
             "platform": None,
             "gl": None,
             "ap": None,
+            "ar": None,
             "core_org": None,
             "hr": None,
             "perf": None,
@@ -140,8 +187,6 @@ mock_db_module.SessionLocal = _TestSessionLocal
 mock_db_module.AsyncSessionLocal = _MockAsyncSessionLocal
 mock_db_module.get_engine = lambda: _test_engine
 mock_db_module.get_async_session_local = lambda: _TestSessionLocal
-mock_db_module.get_auth_db_session = lambda: _TestSessionLocal()
-mock_db_module.get_auth_db = lambda: _TestSessionLocal()
 
 
 def _get_db_session():
@@ -275,12 +320,15 @@ class MockSettings:
     app_version = "test"
     # CRM webhook secret
     crm_webhook_secret = None
-    # SSO settings
-    sso_enabled = False
-    sso_provider_mode = False
-    sso_provider_url = None
-    sso_jwt_secret = None
-    sso_cookie_domain = None
+    # OpenID Connect settings
+    oidc_enabled = False
+    oidc_issuer = None
+    oidc_client_id = None
+    oidc_client_secret = None
+    oidc_discovery_url = None
+    oidc_redirect_uri = None
+    oidc_scopes = "openid profile email"
+    oidc_request_timeout = 10.0
     # Multi-org session listener defaults on; tests keep the same posture.
     enforce_org_filter = True
     # Coach / Intelligence Engine
@@ -323,6 +371,10 @@ class MockSettings:
     db_statement_timeout_ms = 30000
     # Default org
     default_organization_id = None
+    # dotmac_sub webhook org attribution (audit D2)
+    dotmac_sub_webhook_secret = None
+    dotmac_sub_webhook_org_resolution = "shadow"
+    dotmac_sub_api_url = ""
 
 
 mock_config_module.settings = MockSettings()
@@ -355,6 +407,7 @@ from app.models.analytics.org_metric_snapshot import OrgMetricSnapshot  # noqa: 
 from app.models.audit import AuditActorType, AuditEvent  # noqa: E402
 from app.models.auth import (  # noqa: E402
     ApiKey,
+    FederatedIdentity,
     MFAMethod,
     SessionStatus,
     UserCredential,
@@ -377,6 +430,12 @@ from app.models.expense import (  # noqa: E402
     ExpenseClaimItem,
 )
 from app.models.feature_flag import FeatureFlagRegistry  # noqa: E402
+from app.models.finance.ar.dotmac_sub_sync_watermark import (  # noqa: E402
+    DotmacSubSyncWatermark,
+)
+from app.models.finance.automation.custom_field import (  # noqa: E402
+    CustomFieldDefinition,
+)
 from app.models.finance.platform.idempotency_record import (  # noqa: E402
     IdempotencyRecord,
 )
@@ -397,6 +456,7 @@ from app.models.scheduler import ScheduledTask, ScheduleType  # noqa: E402
 SQLITE_COMPATIBLE_TABLES = [
     Person.__table__,
     UserCredential.__table__,
+    FederatedIdentity.__table__,
     AuthSession.__table__,
     ApiKey.__table__,
     MFAMethod.__table__,
@@ -410,6 +470,7 @@ SQLITE_COMPATIBLE_TABLES = [
     AuditEvent.__table__,
     DomainSetting.__table__,
     DomainSettingHistory.__table__,
+    CustomFieldDefinition.__table__,
     ScheduledTask.__table__,
     ExpenseCategory.__table__,
     ExpenseClaim.__table__,
@@ -421,6 +482,7 @@ SQLITE_COMPATIBLE_TABLES = [
     InfrastructureHealthStatus.__table__,
     InfrastructureAlert.__table__,
     Notification.__table__,
+    DotmacSubSyncWatermark.__table__,
 ]
 
 # Create only SQLite-compatible tables, tolerating per-table failures
@@ -524,6 +586,7 @@ def _strip_leaked_global_session_listeners():
         ("app.db.org_listener", "do_orm_execute", "_add_org_filter"),
         ("app.services.audit_listener", "before_flush", "_on_before_flush"),
         ("app.services.audit_listener", "after_flush", "_on_after_flush"),
+        ("app.services.audit.field_tracker", "before_flush", "_on_before_flush"),
     ):
         try:
             fn = getattr(importlib.import_module(modname), fname, None)

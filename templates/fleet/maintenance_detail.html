@@ -25,9 +25,15 @@
                 </div>
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white font-display">{{ record.maintenance_type | replace('_', ' ') | title }}</h2>
+                    {% if auth.has_any_permission(["fleet:vehicles:read", "fleet:vehicles:manage"]) %}
                     <a href="/fleet/vehicles/{{ record.vehicle_id }}" class="text-sm font-mono text-teal-600 hover:text-teal-700 dark:text-teal-400">
                         {{ record.vehicle.registration_number }} - {{ record.vehicle.make }} {{ record.vehicle.model }}
                     </a>
+                    {% else %}
+                    <p class="text-sm font-mono text-slate-600 dark:text-slate-300">
+                        {{ record.vehicle.registration_number }} - {{ record.vehicle.make }} {{ record.vehicle.model }}
+                    </p>
+                    {% endif %}
                     <div class="mt-2 flex flex-wrap items-center gap-2">
                         {{ status_badge(record.status) }}
                         {% if record.is_overdue %}
@@ -138,6 +144,25 @@
             {% endif %}
         </div>
     </div>
+
+    {% if maintenance_attachments %}
+    <div class="card">
+        <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Attachments</h3>
+        </div>
+        <div class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for file in maintenance_attachments %}
+            <a href="{{ file.download_url }}" class="flex items-center justify-between gap-4 px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <span class="flex items-center gap-2 font-medium text-teal-600 dark:text-teal-400">
+                    {{ icon_svg("paperclip", "h-4 w-4") }}
+                    {{ file.file_name }}
+                </span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{ file.content_type }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Back -->
     <div class="flex items-center gap-3">

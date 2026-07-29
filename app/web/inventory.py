@@ -49,11 +49,23 @@ router = APIRouter(prefix="/inventory", tags=["inventory-web"])
 @router.get("/", response_class=HTMLResponse)
 def inventory_index(
     request: Request,
+    reorder_status: str | None = Query(default=None),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Inventory landing page."""
     context = base_context(request, auth, "Inventory", "inventory", db=db)
+    context["show_reorder_dashboard"] = False
+    if auth.has_permission("inventory:dashboard") and auth.has_permission(
+        "inventory:stock:read"
+    ):
+        context.update(
+            inv_web_service.dashboard_context(
+                db,
+                str(auth.organization_id),
+                reorder_status=reorder_status,
+            )
+        )
     if auth.has_permission("inventory:receipt_approvals:read"):
         context["pending_receipt_approval_count"] = (
             db.scalar(
@@ -1865,6 +1877,22 @@ def stock_on_hand_report(
         show_zero=show_zero,
         format=format,
         page=page,
+    )
+
+
+@router.get("/reports/low-stock", response_class=HTMLResponse)
+def low_stock_report(
+    request: Request,
+    include_below_minimum: bool = Query(default=True),
+    auth: WebAuthContext = Depends(require_inventory_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Low-stock and reorder-alert report."""
+    return operations_inv_web_service.low_stock_report_response(
+        request=request,
+        auth=auth,
+        db=db,
+        include_below_minimum=include_below_minimum,
     )
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4 as _new_uuid
 
@@ -318,9 +318,18 @@ class FXRevaluationService:
     ) -> Decimal:
         """Resolve account balance as-of ``period_end_date``.
 
-        Prefer ``last_statement_balance`` when its date is at or after
-        ``period_end_date``; otherwise compute from POSTED GL journal
-        lines on the linked ``gl_account_id``.
+        Use ``last_statement_balance`` only when it is stamped *as of*
+        ``period_end_date`` exactly; otherwise compute from POSTED GL
+        journal lines on the linked ``gl_account_id``.
+
+        The as-of date must match exactly. ``last_statement_balance`` is
+        the balance on ``last_statement_date`` — for a *later* date it has
+        already moved on and is not the period-end balance. This matters
+        for Mono-linked accounts, which restamp the pair with Mono's
+        *current* balance and today's date on every sync: under the old
+        ``>=`` test that made the check trivially true, so revaluing any
+        closed period translated today's balance instead of the balance at
+        period end, and posted a real FX gain/loss journal on it.
 
         KNOWN LIMITATION (Phase 2 fix tracked separately):
         ``last_statement_balance`` is the **foreign-currency** balance per
@@ -339,10 +348,12 @@ class FXRevaluationService:
         """
         stmt_date = getattr(account, "last_statement_date", None)
         stmt_balance = getattr(account, "last_statement_balance", None)
+        if isinstance(stmt_date, datetime):
+            stmt_date = stmt_date.date()
         if (
             stmt_balance is not None
             and stmt_date is not None
-            and stmt_date >= period_end_date
+            and stmt_date == period_end_date
         ):
             return Decimal(str(stmt_balance))
         return self._compute_balance_from_journals(

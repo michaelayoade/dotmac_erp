@@ -10,16 +10,14 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.payment_allocation import PaymentAllocation
-from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.gl.fiscal_period import FiscalPeriod
-from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
-from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalType
+from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.common import coerce_uuid
 from app.services.finance.ar.posting.helpers import build_cash_vat_reclass_entries
 from app.services.finance.ar.posting.result import ARPostingResult
@@ -27,37 +25,13 @@ from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
 )
+from app.services.finance.posting.accounts import (
+    resolve_bank_gl_account_id as _resolve_bank_gl_account_id,
+)
 from app.services.finance.posting.base import BasePostingAdapter
+from app.services.finance.posting.idempotency import PostingIdempotencyService
+from app.services.finance.posting.tax import create_payment_tax_recognitions
 from app.services.finance.tax.tax_transaction import tax_transaction_service
-
-
-def _resolve_bank_gl_account_id(
-    db: Session,
-    organization_id: UUID,
-    bank_account_id: UUID,
-) -> UUID | None:
-    """
-    Resolve payment bank account to a GL account ID.
-
-    Supports both legacy storage patterns:
-    - direct `gl.account.account_id`
-    - `banking.bank_accounts.bank_account_id` (mapped via `gl_account_id`)
-    """
-    gl_account = db.get(Account, bank_account_id)
-    if gl_account and gl_account.organization_id == organization_id:
-        return bank_account_id
-
-    bank_account = db.get(BankAccount, bank_account_id)
-    if (
-        bank_account
-        and bank_account.organization_id == organization_id
-        and bank_account.gl_account_id
-    ):
-        mapped_gl = db.get(Account, bank_account.gl_account_id)
-        if mapped_gl and mapped_gl.organization_id == organization_id:
-            return bank_account.gl_account_id
-
-    return None
 
 
 def post_vat_reclass_for_payment(
@@ -86,15 +60,12 @@ def post_vat_reclass_for_payment(
     if not reclass_entries:
         return None
 
-    existing_reclass_journal = db.scalar(
-        select(JournalEntry).where(
-            JournalEntry.source_module == "AR",
-            JournalEntry.source_document_type == "CUSTOMER_PAYMENT_VAT_RECLASS",
-            JournalEntry.source_document_id == pay_id,
-            JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
-        )
-    )
-    if existing_reclass_journal:
+    if PostingIdempotencyService.source_journal_exists(
+        db,
+        source_module="AR",
+        source_document_type="CUSTOMER_PAYMENT_VAT_RECLASS",
+        source_document_id=pay_id,
+    ):
         return None
 
     grouped: dict[tuple[UUID, UUID], Decimal] = {}
@@ -143,65 +114,43 @@ def post_vat_reclass_for_payment(
         source_document_id=pay_id,
         correlation_id=payment.correlation_id,
     )
-    reclass_journal, reclass_error = BasePostingAdapter.create_and_approve_journal(
-        db,
-        org_id,
-        reclass_input,
-        user_id,
-        error_prefix="VAT reclass journal creation failed",
-    )
-    if reclass_error:
-        return ARPostingResult(success=False, message=reclass_error.message)
-
-    reclass_result = BasePostingAdapter.post_to_ledger(
-        db,
-        organization_id=org_id,
-        journal_entry_id=reclass_journal.journal_entry_id,
-        posting_date=posting_date,
-        idempotency_key=BasePostingAdapter.make_idempotency_key(
-            org_id, "AR:PAY:VAT", pay_id, action="post"
-        ),
-        source_module="AR",
-        correlation_id=payment.correlation_id,
-        posted_by_user_id=user_id,
-        success_message="VAT reclass posted successfully",
+    reclass_journal, reclass_result = (
+        BasePostingAdapter.create_approve_and_post_journal(
+            db,
+            org_id,
+            reclass_input,
+            user_id,
+            posting_date=posting_date,
+            idempotency_key=BasePostingAdapter.make_idempotency_key(
+                org_id, "AR:PAY:VAT", pay_id, action="post"
+            ),
+            source_module="AR",
+            correlation_id=payment.correlation_id,
+            success_message="VAT reclass posted successfully",
+            creation_error_prefix="VAT reclass journal creation failed",
+        )
     )
     if not reclass_result.success:
         return ARPostingResult(
             success=False,
-            journal_entry_id=reclass_journal.journal_entry_id,
+            journal_entry_id=reclass_journal.journal_entry_id
+            if reclass_journal
+            else None,
             message=reclass_result.message,
         )
 
-    fiscal_period = db.scalar(
-        select(FiscalPeriod).where(
-            and_(
-                FiscalPeriod.organization_id == org_id,
-                FiscalPeriod.start_date <= payment.payment_date,
-                FiscalPeriod.end_date >= payment.payment_date,
-            )
-        )
+    create_payment_tax_recognitions(
+        db,
+        org_id,
+        payment=payment,
+        tax_payloads=tax_payloads,
+        source_document_type="CUSTOMER_PAYMENT",
+        is_purchase=False,
+        exchange_rate=exchange_rate,
+        counterparty_name=customer.legal_name,
+        counterparty_tax_id=customer.tax_identification_number,
+        tax_service=tax_transaction_service,
     )
-    if fiscal_period:
-        for payload in tax_payloads:
-            tax_transaction_service.create_payment_recognition(
-                db=db,
-                organization_id=org_id,
-                fiscal_period_id=fiscal_period.fiscal_period_id,
-                tax_code_id=payload["tax_code_id"],
-                transaction_date=payment.payment_date,
-                source_document_type="CUSTOMER_PAYMENT",
-                source_document_id=pay_id,
-                source_document_line_id=payload["source_document_line_id"],
-                source_document_reference=payload["source_document_reference"],
-                is_purchase=False,
-                base_amount=payload["base_amount"],
-                tax_amount=payload["tax_amount"],
-                currency_code=payment.currency_code,
-                exchange_rate=exchange_rate,
-                counterparty_name=customer.legal_name,
-                counterparty_tax_id=customer.tax_identification_number,
-            )
 
     return None
 
@@ -243,6 +192,23 @@ def post_payment(
     if not payment or payment.organization_id != org_id:
         return ARPostingResult(success=False, message="Payment not found")
 
+    existing = PostingIdempotencyService.resolve_existing_journal(
+        db,
+        document=payment,
+        document_id=pay_id,
+        source_module="AR",
+        source_document_type="CUSTOMER_PAYMENT",
+        direct_message="Payment already posted",
+        backfill_message="Payment journal link repaired",
+        log_label="AR payment",
+    )
+    if existing is not None:
+        return ARPostingResult(
+            success=True,
+            journal_entry_id=existing.journal_entry_id,
+            message=existing.message,
+        )
+
     # Allow posting for APPROVED (normal workflow) and for payments that are
     # already in a posted state but missing GL entries (sync/import backfill).
     postable_statuses = {
@@ -255,8 +221,18 @@ def post_payment(
             message=f"Payment must be APPROVED or CLEARED to post (current: {payment.status.value})",
         )
 
-    # Skip zero-amount payments — nothing meaningful to post to GL
-    if payment.amount == Decimal("0"):
+    wht_amount = getattr(payment, "wht_amount", None) or Decimal("0")
+    gross_amount = getattr(payment, "gross_amount", None) or (
+        payment.amount + wht_amount
+    )
+    if (payment.amount + wht_amount - gross_amount).copy_abs() > Decimal("0.01"):
+        return ARPostingResult(
+            success=False,
+            message="Payment net amount + WHT does not equal its gross amount",
+        )
+
+    # Skip zero-gross payments — nothing meaningful to post to GL.
+    if gross_amount == Decimal("0"):
         return ARPostingResult(
             success=True,
             message="Zero amount payment — no GL posting needed",
@@ -268,7 +244,9 @@ def post_payment(
         return ARPostingResult(success=False, message="Customer not found")
 
     exchange_rate = payment.exchange_rate or Decimal("1.0")
-    functional_amount = payment.amount * exchange_rate
+    net_functional = payment.amount * exchange_rate
+    gross_functional = gross_amount * exchange_rate
+    wht_functional = wht_amount * exchange_rate
 
     if not payment.bank_account_id:
         return ARPostingResult(
@@ -286,27 +264,75 @@ def post_payment(
             message="Payment bank account is not mapped to a valid GL account",
         )
 
+    wht_context: tuple[TaxCode, FiscalPeriod, UUID] | None = None
+    if wht_amount > Decimal("0"):
+        wht_code_id = getattr(payment, "wht_code_id", None)
+        wht_code = db.get(TaxCode, wht_code_id) if wht_code_id else None
+        if not (
+            wht_code
+            and wht_code.organization_id == org_id
+            and wht_code.tax_type == TaxType.WITHHOLDING
+            and wht_code.tax_paid_account_id
+        ):
+            return ARPostingResult(
+                success=False,
+                message="WHT payment requires an ERP WHT code with a receivable account",
+            )
+        from app.services.finance.gl.period_guard import PeriodGuardService
+
+        wht_fiscal_period = PeriodGuardService.get_period_for_date(
+            db, org_id, payment.payment_date
+        )
+        if wht_fiscal_period is None:
+            return ARPostingResult(
+                success=False,
+                message=(
+                    "WHT payment requires an open ERP fiscal period for "
+                    f"{payment.payment_date}"
+                ),
+            )
+        wht_context = (
+            wht_code,
+            wht_fiscal_period,
+            wht_code.tax_paid_account_id,
+        )
+
     # Build journal lines
     journal_lines = [
-        # Debit Bank/Cash
         JournalLineInput(
             account_id=bank_gl_account_id,
             debit_amount=payment.amount,
             credit_amount=Decimal("0"),
-            debit_amount_functional=functional_amount,
+            debit_amount_functional=net_functional,
             credit_amount_functional=Decimal("0"),
             description=f"AR Payment: {payment.reference}",
-        ),
-        # Credit AR Control
+        )
+    ]
+    if wht_context is not None:
+        wht_code, _wht_fiscal_period, wht_receivable_account_id = wht_context
+        journal_lines.append(
+            JournalLineInput(
+                account_id=wht_receivable_account_id,
+                debit_amount=wht_amount,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=wht_functional,
+                credit_amount_functional=Decimal("0"),
+                description=(
+                    f"WHT deducted by {customer.legal_name} "
+                    f"(Cert: {getattr(payment, 'wht_certificate_number', None) or 'N/A'})"
+                ),
+            )
+        )
+    journal_lines.append(
         JournalLineInput(
             account_id=customer.ar_control_account_id,
             debit_amount=Decimal("0"),
-            credit_amount=payment.amount,
+            credit_amount=gross_amount,
             debit_amount_functional=Decimal("0"),
-            credit_amount_functional=functional_amount,
+            credit_amount_functional=gross_functional,
             description=f"Payment from {customer.legal_name}",
-        ),
-    ]
+        )
+    )
 
     # Create journal entry
     journal_input = JournalInput(
@@ -324,39 +350,29 @@ def post_payment(
         correlation_id=payment.correlation_id,
     )
 
-    journal, error = BasePostingAdapter.create_and_approve_journal(
-        db,
-        org_id,
-        journal_input,
-        user_id,
-        error_prefix="Journal creation failed",
-    )
-    if error:
-        return ARPostingResult(success=False, message=error.message)
-
-    # Post to ledger
     if not idempotency_key:
         idempotency_key = BasePostingAdapter.make_idempotency_key(
             org_id, "AR:PAY", pay_id, action="post"
         )
 
-    posting_result = BasePostingAdapter.post_to_ledger(
+    journal, posting_result = BasePostingAdapter.create_approve_and_post_journal(
         db,
-        organization_id=org_id,
-        journal_entry_id=journal.journal_entry_id,
+        org_id,
+        journal_input,
+        user_id,
         posting_date=posting_date,
         idempotency_key=idempotency_key,
         source_module="AR",
         correlation_id=payment.correlation_id,
-        posted_by_user_id=user_id,
         success_message="Payment posted successfully",
     )
     if not posting_result.success:
         return ARPostingResult(
             success=False,
-            journal_entry_id=journal.journal_entry_id,
+            journal_entry_id=journal.journal_entry_id if journal else None,
             message=posting_result.message,
         )
+    journal = BasePostingAdapter.require_journal(journal, context="AR payment posting")
 
     vat_reclass_result = post_vat_reclass_for_payment(
         db,
@@ -368,6 +384,38 @@ def post_payment(
     )
     if vat_reclass_result is not None and not vat_reclass_result.success:
         return vat_reclass_result
+
+    if wht_context is not None:
+        from app.models.finance.tax.tax_transaction import TaxTransactionType
+        from app.services.finance.tax.tax_transaction import (
+            TaxTransactionInput,
+            tax_transaction_service,
+        )
+
+        wht_code, wht_fiscal_period, _wht_receivable_account_id = wht_context
+        tax_transaction_service.create_transaction(
+            db=db,
+            organization_id=org_id,
+            input=TaxTransactionInput(
+                fiscal_period_id=wht_fiscal_period.fiscal_period_id,
+                tax_code_id=wht_code.tax_code_id,
+                jurisdiction_id=wht_code.jurisdiction_id,
+                transaction_type=TaxTransactionType.WITHHOLDING,
+                transaction_date=payment.payment_date,
+                source_document_type="CUSTOMER_PAYMENT",
+                source_document_id=pay_id,
+                source_document_reference=payment.payment_number,
+                currency_code=payment.currency_code,
+                base_amount=gross_amount,
+                tax_rate=wht_code.tax_rate,
+                tax_amount=wht_amount,
+                functional_base_amount=gross_functional,
+                functional_tax_amount=wht_functional,
+                exchange_rate=exchange_rate,
+                counterparty_name=customer.legal_name,
+                counterparty_tax_id=customer.tax_identification_number,
+            ),
+        )
 
     return ARPostingResult(
         success=True,

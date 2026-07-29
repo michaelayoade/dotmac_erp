@@ -1202,7 +1202,7 @@ class MaterialRequestWebService:
         import logging
         from datetime import datetime
 
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.services.finance.gl.period_guard import PeriodGuardService
         from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
             InventoryTransactionService,
@@ -1243,13 +1243,11 @@ class MaterialRequestWebService:
         txn_date = now
 
         # Find fiscal period for today
-        fiscal_period = db.scalars(
-            select(FiscalPeriod).where(
-                FiscalPeriod.organization_id == organization_id,
-                FiscalPeriod.start_date <= now.date(),
-                FiscalPeriod.end_date >= now.date(),
-            )
-        ).first()
+        fiscal_period = PeriodGuardService.get_period_for_date(
+            db,
+            organization_id,
+            now.date(),
+        )
         if not fiscal_period:
             raise ValueError(
                 "No fiscal period found for today. "

@@ -32,6 +32,7 @@ from app.web.deps import (
     require_discipline_cases_read,
     require_discipline_cases_update,
     require_discipline_workflow_manage,
+    require_web_auth,
 )
 
 router = APIRouter(prefix="/discipline", tags=["discipline-web"])
@@ -214,7 +215,7 @@ async def create_case(
 def case_detail(
     request: Request,
     case_id: UUID,
-    auth: WebAuthContext = Depends(require_discipline_cases_read),
+    auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db_for_org),
 ):
     """View disciplinary case details."""
@@ -437,7 +438,7 @@ def add_witness(
 def acknowledge_response(
     case_id: UUID,
     response_id: UUID,
-    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
+    auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db_for_org),
 ):
     """Acknowledge an employee response."""

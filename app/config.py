@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.11.0")
+    app_version: str = os.getenv("APP_VERSION", "1.23.2")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -126,21 +126,19 @@ class Settings:
     # Application URL (for email links)
     app_url: str = os.getenv("APP_URL", "http://localhost:8000")
 
-    # SSO Configuration
-    # Enable SSO for cross-app authentication under same parent domain
-    sso_enabled: bool = os.getenv("SSO_ENABLED", "false").lower() == "true"
-    # True for App #1 (hosts auth database), False for App #2/#3 (SSO clients)
-    sso_provider_mode: bool = os.getenv("SSO_PROVIDER_MODE", "false").lower() == "true"
-    # Shared auth database URL for SSO clients (connects to App #1's database)
-    # If not set, uses main DATABASE_URL
-    auth_database_url: str | None = os.getenv("AUTH_DATABASE_URL") or None
-    # Cookie domain for cross-app SSO (e.g., ".company.com")
-    sso_cookie_domain: str | None = os.getenv("SSO_COOKIE_DOMAIN") or None
-    # Shared JWT secret (must be same across all apps)
-    # Falls back to JWT_SECRET environment variable if not set
-    sso_jwt_secret: str | None = os.getenv("SSO_JWT_SECRET") or None
-    # SSO Provider URL for login redirects (e.g., "https://sso.company.com")
-    sso_provider_url: str | None = os.getenv("SSO_PROVIDER_URL") or None
+    # OpenID Connect authentication boundary. The identity provider proves the
+    # user's identity; ERP remains authoritative for local people, roles,
+    # permissions, sessions, and cookies. No identity-provider database or JWT
+    # signing secret is shared with ERP.
+    oidc_enabled: bool = os.getenv("OIDC_ENABLED", "false").lower() == "true"
+    oidc_issuer: str | None = os.getenv("OIDC_ISSUER") or None
+    oidc_client_id: str | None = os.getenv("OIDC_CLIENT_ID") or None
+    # May be an OpenBao reference resolved by app.services.secrets.
+    oidc_client_secret: str | None = os.getenv("OIDC_CLIENT_SECRET") or None
+    oidc_discovery_url: str | None = os.getenv("OIDC_DISCOVERY_URL") or None
+    oidc_redirect_uri: str | None = os.getenv("OIDC_REDIRECT_URI") or None
+    oidc_scopes: str = os.getenv("OIDC_SCOPES", "openid profile email")
+    oidc_request_timeout: float = float(os.getenv("OIDC_REQUEST_TIMEOUT", "10.0"))
 
     # ==========================================================================
     # S3 / MinIO Object Storage
@@ -160,6 +158,8 @@ class Settings:
     crm_api_url: str = os.getenv("CRM_API_URL", "")
     # CRM API authentication token
     crm_api_token: str | None = os.getenv("CRM_API_TOKEN") or None
+    # Scoped CRM service ApiKey (preferred over the legacy static bearer).
+    crm_api_key: str | None = os.getenv("CRM_API_KEY") or None
     # CRM webhook secret for validating incoming webhooks
     crm_webhook_secret: str | None = os.getenv("CRM_WEBHOOK_SECRET") or None
     # CRM sync interval in minutes (for periodic pull)
@@ -194,17 +194,100 @@ class Settings:
     # bootstrap/fallback; per-org credentials managed from the admin UI live in
     # the integration_config table and take precedence (DotmacSubConfig.for_org).
     dotmac_sub_api_url: str = os.getenv("DOTMAC_SUB_API_URL", "")
+    # Service bearer token for dotmac_sub. Staff-credential (session->JWT) login
+    # has been retired (audit S1) — a service token is required.
     dotmac_sub_api_token: str = os.getenv("DOTMAC_SUB_API_TOKEN", "")
-    # Staff credentials for passwordless (session→JWT) auth when no static token.
-    dotmac_sub_username: str = os.getenv("DOTMAC_SUB_USERNAME", "")
-    dotmac_sub_password: str = os.getenv("DOTMAC_SUB_PASSWORD", "")
     dotmac_sub_webhook_secret: str | None = (
         os.getenv("DOTMAC_SUB_WEBHOOK_SECRET") or None
+    )
+    # Inbound-webhook organization attribution (audit D2). Attribution derives
+    # from the credential that verified the signature; per-org
+    # IntegrationConfig(DOTMAC_SUB) rows are the single definition authority
+    # and the env-secret + DEFAULT_ORGANIZATION_ID path is a retiring legacy
+    # authority. Modes (validated at startup, app/startup.py):
+    #   legacy — old precedence: the env secret attributes to
+    #            DEFAULT_ORGANIZATION_ID first, config rows second. Escape
+    #            hatch during the retirement window only.
+    #   shadow — (default) legacy precedence still decides, but the config-row
+    #            resolution ALWAYS runs too; any divergence (different org, or
+    #            one authority resolving when the other does not) emits one
+    #            structured warning naming both outcomes and the delivery id —
+    #            the cutover evidence for flipping to strict.
+    #   strict — config rows ONLY: the env path never attributes; ambiguous or
+    #            missing bindings fail closed (reject).
+    dotmac_sub_webhook_org_resolution: str = os.getenv(
+        "DOTMAC_SUB_WEBHOOK_ORG_RESOLUTION", "shadow"
     )
     dotmac_sub_request_timeout: float = float(
         os.getenv("DOTMAC_SUB_REQUEST_TIMEOUT", "60.0")
     )
     dotmac_sub_max_retries: int = int(os.getenv("DOTMAC_SUB_MAX_RETRIES", "3"))
+    # dotmac_academy -> ERP training-completion webhook (records EmployeeCertification).
+    dotmac_academy_webhook_secret: str | None = (
+        os.getenv("DOTMAC_ACADEMY_WEBHOOK_SECRET") or None
+    )
+    # Staff sync (ERP -> dotmac_sub staff accounts). Disabled unless enabled
+    # explicitly; the API key must carry rbac:assign + rbac:roles:read.
+    dotmac_sub_staff_sync_enabled: bool = (
+        os.getenv("DOTMAC_SUB_STAFF_SYNC_ENABLED", "false").lower() == "true"
+    )
+    dotmac_sub_staff_default_role: str = os.getenv(
+        "DOTMAC_SUB_STAFF_DEFAULT_ROLE", "staff"
+    )
+
+    # ==========================================================================
+    # Mailcow Employee Offboarding
+    # ==========================================================================
+    mailcow_offboarding_enabled: bool = (
+        os.getenv("MAILCOW_OFFBOARDING_ENABLED", "false").lower() == "true"
+    )
+    mailcow_base_url: str = os.getenv("MAILCOW_BASE_URL", "").rstrip("/")
+    mailcow_api_key: str | None = os.getenv("MAILCOW_API_KEY") or None
+    mailcow_request_timeout: float = float(os.getenv("MAILCOW_REQUEST_TIMEOUT", "20.0"))
+    mailcow_inactive_forward_to: str = os.getenv(
+        "MAILCOW_INACTIVE_FORWARD_TO", "inactives@dotmac.ng"
+    )
+    mailcow_autoresponder_subject: str = os.getenv(
+        "MAILCOW_AUTORESPONDER_SUBJECT", "Mailbox no longer monitored"
+    )
+    mailcow_autoresponder_template: str = os.getenv(
+        "MAILCOW_AUTORESPONDER_TEMPLATE",
+        (
+            "Thank you for your email.\n\n"
+            "Please note that {full_name} ({email}) is no longer with "
+            "Dotmac Technologies, and this mailbox is no longer being monitored.\n\n"
+            "If your enquiry is related to technical support or an existing service, "
+            "please contact support@dotmac.ng.\n\n"
+            "For sales, new services, or commercial enquiries, please contact "
+            "sales@dotmac.ng.\n\n"
+            "Your message will not be forwarded automatically, so please resend "
+            "your enquiry to the appropriate email address above.\n\n"
+            "Thank you for your understanding."
+        ),
+    )
+    mailcow_sieve_host: str = os.getenv("MAILCOW_SIEVE_HOST", "")
+    mailcow_sieve_port: int = int(os.getenv("MAILCOW_SIEVE_PORT", "4190"))
+    mailcow_sieve_master_user: str | None = (
+        os.getenv("MAILCOW_SIEVE_MASTER_USER") or None
+    )
+    mailcow_sieve_master_password: str | None = (
+        os.getenv("MAILCOW_SIEVE_MASTER_PASSWORD") or None
+    )
+    mailcow_sieve_script_name: str = os.getenv("MAILCOW_SIEVE_SCRIPT_NAME", "sogo")
+    mailcow_sieve_use_starttls: bool = (
+        os.getenv("MAILCOW_SIEVE_USE_STARTTLS", "true").lower() == "true"
+    )
+    mailcow_sogo_db_host: str = os.getenv("MAILCOW_SOGO_DB_HOST", "")
+    mailcow_sogo_db_port: int = int(os.getenv("MAILCOW_SOGO_DB_PORT", "3306"))
+    mailcow_sogo_db_name: str = os.getenv("MAILCOW_SOGO_DB_NAME", "mailcow")
+    mailcow_sogo_db_user: str | None = os.getenv("MAILCOW_SOGO_DB_USER") or None
+    mailcow_sogo_db_password: str | None = os.getenv("MAILCOW_SOGO_DB_PASSWORD") or None
+    mailcow_sogo_cleanup_url: str = os.getenv("MAILCOW_SOGO_CLEANUP_URL", "").rstrip(
+        "/"
+    )
+    mailcow_sogo_cleanup_token: str | None = (
+        os.getenv("MAILCOW_SOGO_CLEANUP_TOKEN") or None
+    )
 
     # ==========================================================================
     # Analytics (pre-computed metric snapshots)

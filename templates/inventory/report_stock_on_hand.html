@@ -61,7 +61,34 @@
         {% set doc_number = summary.as_of_date if summary and summary.as_of_date else "" %}
         {% include "partials/_document_header.html" %}
     </div>
-    <div id="stock-on-hand-report-content" class="space-y-6">
+    <!-- Filters (outside the swapped region so the bar keeps focus/state) -->
+    {% call(filter_attrs) compact_filters(
+        base_url="/inventory/reports/stock-on-hand",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
+        <select aria-label="Filter by warehouse" name="warehouse" class="form-select w-full" {{ filter_attrs }}>
+            <option value="">All Warehouses</option>
+            {% for wh in warehouses | default([]) %}
+            <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                {{ wh.warehouse_name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <select aria-label="Filter by category" name="category" class="form-select w-full" {{ filter_attrs }}>
+            <option value="">All Categories</option>
+            {% for cat in categories | default([]) %}
+            <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
+                {{ cat.category_name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endcall %}
+    <!-- Swapped region: summary + table both refresh on filter; the bar above stays put -->
+    <div id="results-container" class="space-y-6">
         <!-- Summary Cards -->
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="card p-4">
@@ -82,37 +109,8 @@
             </div>
         </div>
 
-        <!-- Filters -->
-        {# Filters #}
-        {% call(filter_attrs) compact_filters(
-            base_url="/inventory/reports/stock-on-hand",
-            target_id="stock-on-hand-report-content",
-            active_filters=active_filters | default([])
-        ) %}
-        <div>
-                <select aria-label="Filter by warehouse" name="warehouse" class="form-select w-full" {{ filter_attrs }}>
-                    <option value="">All Warehouses</option>
-                    {% for wh in warehouses | default([]) %}
-                    <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
-                        {{ wh.warehouse_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-        </div>
-        <div>
-                <select aria-label="Filter by category" name="category" class="form-select w-full" {{ filter_attrs }}>
-                    <option value="">All Categories</option>
-                    {% for cat in categories | default([]) %}
-                    <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
-                        {{ cat.category_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-        </div>
-        {% endcall %}
-
         <!-- Report Table -->
-        <div id="results-container">
+        <div>
 
     <div class="card overflow-hidden">
         <div class="table-container">

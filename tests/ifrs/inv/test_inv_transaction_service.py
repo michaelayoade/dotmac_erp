@@ -189,6 +189,7 @@ def create_transaction_input(
         reference=kwargs.get("reference"),
         reason_code=kwargs.get("reason_code"),
         serial_numbers=kwargs.get("serial_numbers"),
+        allow_missing_serial_numbers=kwargs.get("allow_missing_serial_numbers", False),
     )
 
 
@@ -2023,6 +2024,60 @@ class TestSerialTrackedTransactions:
 
         assert exc_info.value.status_code == 400
         assert "exactly 2 serial" in exc_info.value.detail
+
+    def test_serial_tracked_receipt_can_skip_missing_serials_for_ap_invoice_flow(self):
+        mock_db = MagicMock()
+        org_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        item_id = uuid.uuid4()
+        wh_id = uuid.uuid4()
+        mock_item = MockItem(
+            item_id=item_id,
+            organization_id=org_id,
+            track_serial_numbers=True,
+        )
+        mock_warehouse = MockWarehouse(warehouse_id=wh_id, organization_id=org_id)
+
+        def mock_get(model_class, _id):
+            from app.models.inventory.item import Item
+            from app.models.inventory.warehouse import Warehouse
+
+            if model_class == Item:
+                return mock_item
+            if model_class == Warehouse:
+                return mock_warehouse
+            return None
+
+        mock_db.get.side_effect = mock_get
+        input_data = create_transaction_input(
+            transaction_type=TransactionType.RECEIPT,
+            item_id=item_id,
+            warehouse_id=wh_id,
+            quantity=Decimal("2"),
+            serial_numbers=None,
+            allow_missing_serial_numbers=True,
+        )
+
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("0"),
+            ),
+            patch.object(
+                InventoryTransactionService,
+                "calculate_weighted_average_cost",
+                return_value=Decimal("10.00"),
+            ),
+            patch(
+                "app.services.inventory.transaction.InventorySerialService.receive_serials"
+            ) as mock_receive,
+        ):
+            InventoryTransactionService.create_receipt(
+                mock_db, org_id, input_data, user_id
+            )
+
+        mock_receive.assert_not_called()
 
     def test_serial_tracked_receipt_registers_serials(self):
         mock_db = MagicMock()

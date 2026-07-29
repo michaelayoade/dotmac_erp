@@ -13,7 +13,6 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
-from starlette.datastructures import UploadFile
 
 from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplicationStatus
@@ -30,6 +29,7 @@ from app.services.people.leave.leave_service import (
     LeaveServiceError,
     LeaveTypeNotFoundError,
 )
+from app.services.web_forms import get_form_str
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -95,10 +95,7 @@ class LeaveWebService:
 
     @staticmethod
     def _get_form_str(form: Any, key: str, default: str = "") -> str:
-        value = form.get(key, default) if form is not None else default
-        if isinstance(value, UploadFile) or value is None:
-            return default
-        return str(value).strip()
+        return get_form_str(form, key, default)
 
     @staticmethod
     def _get_employees(db: Session, org_id: UUID) -> list[LeaveEmployeeOption]:

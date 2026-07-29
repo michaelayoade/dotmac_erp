@@ -211,7 +211,7 @@ class MockBankStatementLine:
         self.statement_id = statement_id or uuid.uuid4()
         self.line_number = line_number
         self.transaction_id = transaction_id
-        self.transaction_date = transaction_date or date.today()
+        self.transaction_date = transaction_date or date(2026, 2, 14)
         self.value_date = value_date
         self.transaction_type = transaction_type
         self.amount = amount

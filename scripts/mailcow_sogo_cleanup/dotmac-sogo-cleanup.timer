@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Dotmac Mailcow SOGo forwarding cleanup every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+Unit=dotmac-sogo-cleanup.service
+
+[Install]
+WantedBy=timers.target

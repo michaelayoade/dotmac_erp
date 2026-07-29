@@ -1,8 +1,12 @@
 """Employee Extended Data routes - Documents, Qualifications, Certifications, Dependents, Skills."""
 
+from __future__ import annotations
+
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
@@ -24,12 +28,14 @@ from app.services.people.hr import (
     EmployeeSkillService,
     SkillService,
 )
+from app.services.people.hr.employee_extended import EmployeeExtendedDataError
 from app.templates import templates
 from app.web.deps import get_db_for_org, WebAuthContext, base_context, require_hr_access
 
 from ._common import _parse_bool
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _load_employee(emp_svc: EmployeeService, employee_id: uuid.UUID) -> Employee:
@@ -148,8 +154,7 @@ def create_document(
     employee_id: str,
     document_type: str = Form(...),
     document_name: str = Form(...),
-    file_path: str = Form(...),
-    file_name: str = Form(...),
+    file: UploadFile = File(...),
     description: str | None = Form(None),
     issue_date: str | None = Form(None),
     expiry_date: str | None = Form(None),
@@ -164,12 +169,13 @@ def create_document(
     from datetime import datetime as dt
 
     try:
-        doc_svc.create_document(
+        doc_svc.upload_document(
             employee_id=emp_id,
             document_type=DocumentType(document_type),
             document_name=document_name,
-            file_path=file_path,
-            file_name=file_name,
+            file_content=file.file,
+            file_name=file.filename or "",
+            content_type=file.content_type,
             description=description or None,
             issue_date=dt.strptime(issue_date, "%Y-%m-%d").date()
             if issue_date
@@ -182,31 +188,76 @@ def create_document(
             url=f"/people/hr/employees/{employee_id}/documents?success=Document+uploaded",
             status_code=303,
         )
-    except Exception as e:
-        emp_svc = EmployeeService(db, org_id)
-        employee = _load_employee(emp_svc, emp_id)
-        context = base_context(
-            request, auth, f"Upload Document - {employee.full_name}", "employees", db=db
+    except (EmployeeExtendedDataError, ValueError) as exc:
+        error_message = str(exc)
+    except Exception:
+        logger.exception(
+            "Failed to upload employee document for employee %s", employee_id
         )
-        context.update(
-            {
-                "employee": employee,
-                "document_types": list(DocumentType),
-                "form_data": {
-                    "document_type": document_type,
-                    "document_name": document_name,
-                    "file_path": file_path,
-                    "file_name": file_name,
-                    "description": description,
-                    "issue_date": issue_date,
-                    "expiry_date": expiry_date,
-                },
-                "error": str(e),
-            }
+        error_message = "Unable to upload the document. Please try again."
+
+    emp_svc = EmployeeService(db, org_id)
+    employee = _load_employee(emp_svc, emp_id)
+    context = base_context(
+        request, auth, f"Upload Document - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "document_types": list(DocumentType),
+            "form_data": {
+                "document_type": document_type,
+                "document_name": document_name,
+                "description": description,
+                "issue_date": issue_date,
+                "expiry_date": expiry_date,
+            },
+            "error": error_message,
+        }
+    )
+    return templates.TemplateResponse(
+        request,
+        "people/hr/employee/document_form.html",
+        context,
+        status_code=400,
+    )
+
+
+@router.get("/employees/{employee_id}/documents/{document_id}/download")
+def download_document(
+    employee_id: str,
+    document_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Stream an employee document for authorized HR users."""
+    org_id = coerce_uuid(auth.organization_id)
+    emp_id = coerce_uuid(employee_id)
+    doc_svc = EmployeeDocumentService(db, org_id)
+    try:
+        resolved = doc_svc.resolve_owned_document_download(
+            emp_id,
+            coerce_uuid(document_id),
         )
-        return templates.TemplateResponse(
-            request, "people/hr/employee/document_form.html", context
+    except EmployeeExtendedDataError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+
+    from fastapi.responses import StreamingResponse
+    from urllib.parse import quote
+
+    quoted = quote(resolved.filename)
+    headers = {
+        "Content-Disposition": (
+            f"attachment; filename=\"{resolved.filename}\"; filename*=UTF-8''{quoted}"
         )
+    }
+    if resolved.content_length is not None:
+        headers["Content-Length"] = str(resolved.content_length)
+    return StreamingResponse(
+        resolved.chunks,
+        media_type=resolved.content_type,
+        headers=headers,
+    )
 
 
 @router.post(

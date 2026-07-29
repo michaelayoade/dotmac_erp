@@ -33,7 +33,7 @@ class ReconciliationEngineCore:
         matched_line_ids: set[UUID],
         *,
         amount_tolerance: Decimal = _DEFAULT_TOLERANCE,
-        date_buffer_days: int = 7,
+        date_buffer_days: int = 3,
         extra_gl_account_ids: set[UUID] | None = None,
     ) -> EngineResult:
         """Process custom rules against unmatched statement lines.

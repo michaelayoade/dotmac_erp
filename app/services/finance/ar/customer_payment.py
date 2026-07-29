@@ -41,10 +41,6 @@ from app.services.finance.ar.input_utils import (
     require_uuid,
     resolve_currency_code,
 )
-from app.services.finance.ar.posting.payment import (
-    _resolve_bank_gl_account_id,
-    post_vat_reclass_for_payment,
-)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
@@ -142,6 +138,32 @@ class CustomerPaymentInput:
     # share the parent's AR control account so the existing single-line AR-control
     # credit posting stays GL-correct.
     consolidated: bool = False
+
+
+def _resolve_receipt_amounts(
+    input: CustomerPaymentInput,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Return canonical ``(net, gross, WHT)`` settlement amounts."""
+    net_amount = input.amount
+    wht_amount = input.wht_amount or Decimal("0")
+    if net_amount < Decimal("0") or wht_amount < Decimal("0"):
+        raise ValidationError("Payment and WHT amounts cannot be negative")
+
+    if input.gross_amount is None:
+        gross_amount = net_amount + wht_amount
+    else:
+        gross_amount = input.gross_amount
+        expected_wht = gross_amount - net_amount
+        if expected_wht < Decimal("0"):
+            raise ValidationError("Gross payment amount cannot be less than net cash")
+        if wht_amount == Decimal("0") and gross_amount != net_amount:
+            wht_amount = expected_wht
+        elif (expected_wht - wht_amount).copy_abs() > Decimal("0.01"):
+            raise ValidationError(
+                f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})"
+            )
+
+    return net_amount, gross_amount, wht_amount
 
 
 class CustomerPaymentService(ListResponseMixin):
@@ -242,11 +264,13 @@ class CustomerPaymentService(ListResponseMixin):
                     "share one AR control account"
                 )
 
+        net_amount, gross_amount, wht_amount = _resolve_receipt_amounts(input)
+
         # Validate allocations
         if input.allocations:
             allocation_total = sum(a.amount for a in input.allocations)
-            if allocation_total > input.amount:
-                raise ValidationError("Allocation total exceeds payment amount")
+            if allocation_total > gross_amount:
+                raise ValidationError("Allocation total exceeds gross payment amount")
 
             for alloc in input.allocations:
                 # Lock the invoice row to prevent over-allocation race condition.
@@ -278,30 +302,6 @@ class CustomerPaymentService(ListResponseMixin):
                     raise ValidationError(
                         f"Allocation exceeds balance due on {invoice.invoice_number}"
                     )
-
-        # Handle WHT amounts (validate BEFORE generating sequence number)
-        # gross_amount = amount before WHT deduction
-        # amount = net amount received (after WHT)
-        # wht_amount = WHT deducted by customer
-        wht_amount = input.wht_amount or Decimal("0")
-        net_amount = input.amount  # The 'amount' input is the net received
-
-        # If gross_amount is provided, use it; otherwise calculate from net + WHT
-        if input.gross_amount is not None:
-            gross_amount = input.gross_amount
-            # Validate: gross = net + wht
-            expected_wht = gross_amount - net_amount
-            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal(
-                "0.01"
-            ):
-                raise ValidationError(
-                    f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})"
-                )
-            if wht_amount == Decimal("0") and gross_amount != net_amount:
-                wht_amount = expected_wht
-        else:
-            # No gross amount provided - calculate from net + WHT
-            gross_amount = net_amount + wht_amount
 
         validated_wht_code_id: UUID | None = None
         if input.wht_code_id:
@@ -475,207 +475,34 @@ class CustomerPaymentService(ListResponseMixin):
             raise ValidationError(
                 f"Cannot post payment with status '{payment.status.value}'"
             )
-
-        # For AR payments, we need a bank account
         if not payment.bank_account_id:
             raise ValidationError("Bank account is required to post payment")
 
-        bank_gl_account_id = _resolve_bank_gl_account_id(
-            db,
-            org_id,
-            payment.bank_account_id,
-        )
-        if not bank_gl_account_id:
-            # Backward-compatible fallback: some legacy posted receipts may have
-            # direct GL account IDs in bank_account_id. Restrict this to payments
-            # that already carry allocations to avoid weakening validation broadly.
-            if getattr(payment, "allocations", None):
-                bank_gl_account_id = payment.bank_account_id
-            else:
-                raise ValidationError(
-                    "Payment bank account is not mapped to a valid GL account"
-                )
+        from app.services.finance.ar.ar_posting_adapter import ARPostingAdapter
 
-        # Temporarily update status for posting adapter check
-        # The adapter expects APPROVED but AR model uses PENDING
-
-        # Create journal entry manually since we don't have APPROVED status
-        from app.models.finance.gl.journal_entry import JournalType
-        from app.services.finance.gl.journal import (
-            JournalInput,
-            JournalLineInput,
-            JournalService,
-        )
-        from app.services.finance.gl.ledger_posting import (
-            LedgerPostingService,
-            PostingRequest,
-        )
-
-        customer = db.get(Customer, payment.customer_id)
-        if not customer:
-            raise NotFoundError("Customer not found")
-
-        exchange_rate = payment.exchange_rate or Decimal("1.0")
-        net_amount = payment.amount  # Net amount received
-        gross_amount = payment.gross_amount  # Gross amount before WHT
-        wht_amount = payment.wht_amount or Decimal("0")
-
-        net_functional = net_amount * exchange_rate
-        gross_functional = gross_amount * exchange_rate
-        wht_functional = wht_amount * exchange_rate
-
-        journal_lines = [
-            # Dr Bank (net amount received)
-            JournalLineInput(
-                account_id=bank_gl_account_id,
-                debit_amount=net_amount,
-                credit_amount=Decimal("0"),
-                debit_amount_functional=net_functional,
-                credit_amount_functional=Decimal("0"),
-                description=f"AR Payment: {payment.reference or payment.payment_number}",
-            ),
-        ]
-
-        # If WHT was deducted, add WHT Receivable entry
-        if wht_amount > Decimal("0"):
-            # Get WHT Receivable account from tax code or organization settings
-            wht_receivable_account_id = None
-            if payment.wht_code_id:
-                wht_code = db.get(TaxCode, payment.wht_code_id)
-                if (
-                    wht_code
-                    and wht_code.organization_id == org_id
-                    and wht_code.tax_type == TaxType.WITHHOLDING
-                ):
-                    # Use the tax_paid_account_id as WHT Receivable
-                    wht_receivable_account_id = wht_code.tax_paid_account_id
-
-            if not wht_receivable_account_id:
-                raise ValidationError(
-                    "WHT Receivable account not configured. Please set up the WHT tax code with a Tax Paid Account."
-                )
-
-            journal_lines.append(
-                # Dr WHT Receivable (WHT amount deducted by customer)
-                JournalLineInput(
-                    account_id=wht_receivable_account_id,
-                    debit_amount=wht_amount,
-                    credit_amount=Decimal("0"),
-                    debit_amount_functional=wht_functional,
-                    credit_amount_functional=Decimal("0"),
-                    description=f"WHT deducted by {customer.legal_name} (Cert: {payment.wht_certificate_number or 'N/A'})",
-                )
-            )
-
-        # Cr AR Control (gross amount - the full invoice amount being settled)
-        journal_lines.append(
-            JournalLineInput(
-                account_id=customer.ar_control_account_id,
-                debit_amount=Decimal("0"),
-                credit_amount=gross_amount,
-                debit_amount_functional=Decimal("0"),
-                credit_amount_functional=gross_functional,
-                description=f"Payment from {customer.legal_name}",
-            )
-        )
-
-        journal_input = JournalInput(
-            journal_type=JournalType.STANDARD,
-            entry_date=payment.payment_date,
-            posting_date=posting_date or payment.payment_date,
-            description=f"AR Payment {payment.payment_number} - {customer.legal_name}",
-            reference=payment.reference or payment.payment_number,
-            currency_code=payment.currency_code,
-            exchange_rate=exchange_rate,
-            lines=journal_lines,
-            source_module="AR",
-            source_document_type="CUSTOMER_PAYMENT",
-            source_document_id=pay_id,
-            correlation_id=payment.correlation_id,
-        )
-
+        # The service owns the workflow transition; the posting adapter is the
+        # sole owner of journal and tax-transaction construction.
+        payment.status = PaymentStatus.APPROVED
         try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
+            posting_result = ARPostingAdapter.post_payment(
+                db=db,
+                organization_id=org_id,
+                payment_id=pay_id,
+                posting_date=posting_date or payment.payment_date,
+                posted_by_user_id=user_id,
             )
-        except Exception as exc:
-            detail = getattr(exc, "detail", None) or str(exc)
-            raise ValidationError(f"Journal creation failed: {detail}")
+        except Exception:
+            payment.status = PaymentStatus.PENDING
+            raise
+        if not posting_result.success or posting_result.journal_entry_id is None:
+            payment.status = PaymentStatus.PENDING
+            raise ValidationError(posting_result.message or "Payment posting failed")
 
-        # Post to ledger
-        idempotency_key = f"{org_id}:AR:PAY:{pay_id}:post:v1"
-
-        posting_request = PostingRequest(
-            organization_id=org_id,
-            journal_entry_id=journal.journal_entry_id,
-            posting_date=posting_date or payment.payment_date,
-            idempotency_key=idempotency_key,
-            source_module="AR",
-            correlation_id=payment.correlation_id,
-            posted_by_user_id=user_id,
-        )
-
-        posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
-
-        if not posting_result.success:
-            raise ValidationError(f"Ledger posting failed: {posting_result.message}")
-
-        # Update payment status
         payment.status = PaymentStatus.CLEARED
         payment.posted_by_user_id = user_id
         payment.posted_at = datetime.now(UTC)
-        payment.journal_entry_id = journal.journal_entry_id
+        payment.journal_entry_id = posting_result.journal_entry_id
         payment.posting_batch_id = posting_result.posting_batch_id
-
-        # Create tax transaction for WHT if applicable
-        if wht_amount > Decimal("0") and payment.wht_code_id:
-            from app.models.finance.gl.fiscal_period import FiscalPeriod
-            from app.models.finance.tax.tax_transaction import TaxTransactionType
-            from app.services.finance.tax.tax_transaction import (
-                TaxTransactionInput,
-                tax_transaction_service,
-            )
-
-            fiscal_period = db.scalar(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= payment.payment_date,
-                    FiscalPeriod.end_date >= payment.payment_date,
-                )
-            )
-
-            tax_code = db.get(TaxCode, payment.wht_code_id)
-            if (
-                fiscal_period
-                and tax_code
-                and tax_code.organization_id == org_id
-                and tax_code.tax_type == TaxType.WITHHOLDING
-            ):
-                tax_transaction_service.create_transaction(
-                    db=db,
-                    organization_id=org_id,
-                    input=TaxTransactionInput(
-                        fiscal_period_id=fiscal_period.fiscal_period_id,
-                        tax_code_id=payment.wht_code_id,
-                        jurisdiction_id=tax_code.jurisdiction_id,
-                        transaction_type=TaxTransactionType.WITHHOLDING,
-                        transaction_date=payment.payment_date,
-                        source_document_type="CUSTOMER_PAYMENT",
-                        source_document_id=pay_id,
-                        source_document_reference=payment.payment_number,
-                        currency_code=payment.currency_code,
-                        base_amount=gross_amount,  # WHT calculated on gross
-                        tax_rate=tax_code.tax_rate,
-                        tax_amount=wht_amount,
-                        functional_base_amount=gross_amount * exchange_rate,
-                        functional_tax_amount=wht_amount * exchange_rate,
-                        exchange_rate=exchange_rate,
-                        counterparty_name=customer.legal_name,
-                        counterparty_tax_id=customer.tax_identification_number,
-                    ),
-                )
 
         # Apply allocations to invoices
         allocations = list(
@@ -692,17 +519,6 @@ class CustomerPaymentService(ListResponseMixin):
                     invoice.status = InvoiceStatus.PAID
                 else:
                     invoice.status = InvoiceStatus.PARTIALLY_PAID
-
-        vat_reclass_result = post_vat_reclass_for_payment(
-            db,
-            organization_id=org_id,
-            payment=payment,
-            customer=customer,
-            posting_date=posting_date or payment.payment_date,
-            posted_by_user_id=user_id,
-        )
-        if vat_reclass_result is not None and not vat_reclass_result.success:
-            raise ValidationError(vat_reclass_result.message)
 
         db.flush()
 
@@ -735,8 +551,9 @@ class CustomerPaymentService(ListResponseMixin):
             return False
         if payment.journal_entry_id is not None:
             return False  # Already has GL entries
-        # Zero-amount payments have nothing to post
-        if payment.amount == Decimal("0"):
+        # A fully withheld receipt can have zero bank cash but still has a gross
+        # AR settlement and WHT receivable to post.
+        if (payment.gross_amount or Decimal("0")) == Decimal("0"):
             return False
 
         try:
@@ -1024,11 +841,13 @@ class CustomerPaymentService(ListResponseMixin):
                     "share one AR control account"
                 )
 
+        net_amount, gross_amount, wht_amount = _resolve_receipt_amounts(input)
+
         # Validate allocations
         if input.allocations:
             allocation_total = sum(a.amount for a in input.allocations)
-            if allocation_total > input.amount:
-                raise ValidationError("Allocation total exceeds payment amount")
+            if allocation_total > gross_amount:
+                raise ValidationError("Allocation total exceeds gross payment amount")
 
             for alloc in input.allocations:
                 # Lock the invoice row to prevent over-allocation race condition.
@@ -1060,24 +879,6 @@ class CustomerPaymentService(ListResponseMixin):
                     raise ValidationError(
                         f"Allocation exceeds balance due on {invoice.invoice_number}"
                     )
-
-        # Handle WHT amounts
-        wht_amount = input.wht_amount or Decimal("0")
-        net_amount = input.amount
-
-        if input.gross_amount is not None:
-            gross_amount = input.gross_amount
-            expected_wht = gross_amount - net_amount
-            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal(
-                "0.01"
-            ):
-                raise ValidationError(
-                    f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})"
-                )
-            if wht_amount == Decimal("0") and gross_amount != net_amount:
-                wht_amount = expected_wht
-        else:
-            gross_amount = net_amount + wht_amount
 
         # Validate WHT code if provided
         validated_wht_code_id: UUID | None = None

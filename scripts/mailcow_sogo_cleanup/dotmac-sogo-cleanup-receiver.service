@@ -1,0 +1,14 @@
+[Unit]
+Description=Dotmac Mailcow SOGo cleanup request receiver
+After=network.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/dotmac-sogo-cleanup.env
+ExecStart=/opt/dotmac-mailcow-offboarding/sogo_cleanup_receiver.py --config /etc/dotmac-sogo-cleanup.env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

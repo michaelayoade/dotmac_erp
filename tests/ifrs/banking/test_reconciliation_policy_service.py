@@ -27,9 +27,17 @@ def test_resolve_uses_legacy_compatibility_when_no_profile() -> None:
     )
 
     assert "gateway_payment_intent" in policy.enabled_provider_keys
-    assert "fee_classification" in policy.enabled_strategy_keys
+    assert "fee_classification" not in policy.enabled_strategy_keys
+    assert "fee_classification" not in policy.journal_creation_strategy_keys
     assert "paystack" in policy.deposit_keywords
     assert policy.gl_mappings["fee_expense_account_code"] == "6080"
+
+
+def test_legacy_bank_fee_pass_requires_explicit_opt_in() -> None:
+    policy = build_policy_from_config(AutoMatchDefaults(pass_bank_fees_enabled=True))
+
+    assert "fee_classification" in policy.enabled_strategy_keys
+    assert "fee_classification" in policy.journal_creation_strategy_keys
 
 
 def test_merge_profile_overrides_keywords_thresholds_and_mappings() -> None:

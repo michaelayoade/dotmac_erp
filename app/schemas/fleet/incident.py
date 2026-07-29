@@ -21,7 +21,7 @@ class IncidentBase(BaseModel):
     severity: IncidentSeverity
     incident_date: date
     incident_time: str | None = Field(default=None, max_length=10)
-    location: str | None = Field(default=None, max_length=300)
+    location: str = Field(max_length=300)
     description: str
     driver_id: UUID | None = None
     third_party_involved: bool = False
@@ -33,12 +33,14 @@ class IncidentCreate(IncidentBase):
     """Create incident request."""
 
     reported_by_id: UUID
+    status: IncidentStatus = IncidentStatus.REPORTED
     expense_claim_id: UUID | None = None
 
 
 class IncidentUpdate(BaseModel):
     """Update incident request."""
 
+    vehicle_id: UUID | None = None
     incident_type: IncidentType | None = None
     severity: IncidentSeverity | None = None
     incident_date: date | None = None
@@ -54,6 +56,7 @@ class IncidentUpdate(BaseModel):
     insurance_claim_date: date | None = None
     insurance_claim_status: str | None = Field(default=None, max_length=30)
     estimated_repair_cost: Decimal | None = Field(default=None, ge=0)
+    expense_claim_id: UUID | None = None
     notes: str | None = None
 
 

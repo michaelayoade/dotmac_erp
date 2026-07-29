@@ -9,7 +9,7 @@ CustomerPayment (Splynx-originated).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 try:
     from datetime import UTC  # type: ignore
@@ -39,13 +39,16 @@ from tests.ifrs.banking.conftest import (
 
 
 @pytest.fixture(autouse=True)
-def _mock_policy_resolve() -> object:
+def _mock_policy_resolve(request: pytest.FixtureRequest) -> object:
     """Patch reconciliation_policy_service.resolve to avoid DB hits."""
     from app.services.finance.banking.reconciliation_policy import (
         build_policy_from_config,
     )
 
     def _resolve(self, db, organization_id, *, legacy_config):
+        if request.node.get_closest_marker("enable_auto_journal_rules"):
+            legacy_config.pass_bank_fees_enabled = True
+            legacy_config.pass_settlements_enabled = True
         return build_policy_from_config(legacy_config)
 
     with patch(
@@ -585,16 +588,15 @@ class TestPaymentIntentMatching:
         assert result.matched == 0
         assert result.skipped == 1
 
-    def test_amount_within_tolerance_matches(
+    def test_amount_within_tolerance_skips(
         self,
         service: AutoReconciliationService,
         mock_db: MagicMock,
         org_id: uuid.UUID,
-        gl_account_id: uuid.UUID,
         statement: MockBankStatement,
         bank_account: MockBankAccount,
     ) -> None:
-        """Matches when amounts differ by <= 0.01 (rounding tolerance)."""
+        """Skips when amounts differ; auto-match now requires exact amount."""
         intent = MockPaymentIntent(
             organization_id=org_id,
             paystack_reference="PSK-CLOSE",
@@ -606,28 +608,87 @@ class TestPaymentIntentMatching:
             reference="PSK-CLOSE",
             amount=Decimal("100.01"),  # Within 0.01 tolerance
         )
-        jl = MockJournalEntryLine(account_id=gl_account_id)
-        je = MockJournalEntry(
+
+        setup_db_get(mock_db, statement, bank_account)
+        setup_db_scalars(mock_db, unmatched_lines=[line], intents=[intent])
+
+        result = service.auto_match_statement(mock_db, org_id, statement.statement_id)
+
+        assert result.matched == 0
+        assert result.skipped == 1
+
+    def test_reference_match_outside_three_day_window_skips(
+        self,
+        service: AutoReconciliationService,
+        mock_db: MagicMock,
+        org_id: uuid.UUID,
+        statement: MockBankStatement,
+        bank_account: MockBankAccount,
+    ) -> None:
+        """Skips exact reference/amount matches outside the +/-3 day window."""
+        paid_at = datetime(2026, 2, 10, 12, 0, tzinfo=UTC)
+        intent = MockPaymentIntent(
             organization_id=org_id,
-            correlation_id=str(intent.intent_id),
-            lines=[jl],
+            paystack_reference="PSK-OLD",
+            amount=Decimal("100.00"),
+            bank_account_id=bank_account.bank_account_id,
+            paid_at=paid_at,
+        )
+        line = MockBankStatementLine(
+            statement_id=statement.statement_id,
+            reference="PSK-OLD",
+            transaction_date=date(2026, 2, 14),
+            amount=Decimal("100.00"),
         )
 
         setup_db_get(mock_db, statement, bank_account)
         setup_db_scalars(mock_db, unmatched_lines=[line], intents=[intent])
-        setup_db_execute_journal(mock_db, je)
 
-        with patch(
-            "app.services.finance.banking.bank_reconciliation.BankReconciliationService"
-        ) as mock_recon_cls:
-            mock_recon = mock_recon_cls.return_value
-            mock_recon.match_statement_line.return_value = line
+        result = service.auto_match_statement(mock_db, org_id, statement.statement_id)
 
-            result = service.auto_match_statement(
-                mock_db, org_id, statement.statement_id
-            )
+        assert result.matched == 0
+        assert result.skipped == 1
 
-        assert result.matched == 1
+    def test_duplicate_payment_intent_reference_is_ambiguous(
+        self,
+        service: AutoReconciliationService,
+        mock_db: MagicMock,
+        org_id: uuid.UUID,
+        statement: MockBankStatement,
+        bank_account: MockBankAccount,
+    ) -> None:
+        """Leaves duplicate possible reference matches for manual review."""
+        intent_date = datetime(2026, 2, 14, 12, 0, tzinfo=UTC)
+        intents = [
+            MockPaymentIntent(
+                organization_id=org_id,
+                paystack_reference="PSK-DUP",
+                amount=Decimal("100.00"),
+                bank_account_id=bank_account.bank_account_id,
+                paid_at=intent_date,
+            ),
+            MockPaymentIntent(
+                organization_id=org_id,
+                paystack_reference="PSK-DUP",
+                amount=Decimal("100.00"),
+                bank_account_id=bank_account.bank_account_id,
+                paid_at=intent_date,
+            ),
+        ]
+        line = MockBankStatementLine(
+            statement_id=statement.statement_id,
+            reference="PSK-DUP",
+            transaction_date=date(2026, 2, 14),
+            amount=Decimal("100.00"),
+        )
+
+        setup_db_get(mock_db, statement, bank_account)
+        setup_db_scalars(mock_db, unmatched_lines=[line], intents=intents)
+
+        result = service.auto_match_statement(mock_db, org_id, statement.statement_id)
+
+        assert result.matched == 0
+        assert result.skipped == 1
 
     def test_no_journal_entry_skips(
         self,
@@ -828,16 +889,15 @@ class TestPaymentIntentMatching:
         assert len(result.errors) == 1
         assert "Line 5" in result.errors[0]
 
-    def test_paystack_opex_expense_fallback_matches_by_date_amount(
+    def test_paystack_opex_expense_fallback_stays_unmatched_without_reference(
         self,
         service: AutoReconciliationService,
         mock_db: MagicMock,
         org_id: uuid.UUID,
-        gl_account_id: uuid.UUID,
         statement: MockBankStatement,
         bank_account: MockBankAccount,
     ) -> None:
-        """Paystack OPEX debit lines can match expense intents by date+amount."""
+        """Expense transfers need a reference; date+amount alone is manual review."""
         from datetime import date
 
         bank_account.account_name = "Paystack OPEX"
@@ -860,29 +920,20 @@ class TestPaymentIntentMatching:
             description="Transfer to employee",
             bank_reference=None,
         )
-        jl = MockJournalEntryLine(account_id=gl_account_id)
-        je = MockJournalEntry(
-            organization_id=org_id,
-            correlation_id=str(intent.intent_id),
-            lines=[jl],
-        )
 
         setup_db_get(mock_db, statement, bank_account)
         setup_db_scalars(mock_db, [line], intents=[intent], splynx_payments=[])
-        setup_db_execute_journal(mock_db, je)
 
         with patch(
             "app.services.finance.banking.bank_reconciliation.BankReconciliationService"
         ) as mock_recon_cls:
-            mock_recon = mock_recon_cls.return_value
-            mock_recon.match_statement_line.return_value = line
-
             result = service.auto_match_statement(
                 mock_db, org_id, statement.statement_id
             )
 
-        assert result.matched == 1
-        assert result.skipped == 0
+        assert result.matched == 0
+        assert result.skipped == 1
+        mock_recon_cls.return_value.match_statement_line.assert_not_called()
 
     def test_expense_fallback_not_applied_for_non_paystack_opex_bank(
         self,
@@ -1436,16 +1487,15 @@ class TestPaystackRefMatching:
 class TestDateAmountMatching:
     """Tests for pass 3 — date + amount unique matching."""
 
-    def test_unique_date_amount_matches(
+    def test_unique_date_amount_stays_unmatched_without_reference(
         self,
         service: AutoReconciliationService,
         mock_db: MagicMock,
         org_id: uuid.UUID,
-        gl_account_id: uuid.UUID,
         statement: MockBankStatement,
         bank_account: MockBankAccount,
     ) -> None:
-        """Matches when exactly one payment and one line share date+amount."""
+        """Date+amount alone is below the 95% auto-match threshold."""
         from datetime import date
 
         pmt = MockCustomerPayment(
@@ -1464,28 +1514,20 @@ class TestDateAmountMatching:
             amount=Decimal("18812.50"),
             transaction_date=date(2026, 2, 14),
         )
-        jl = MockJournalEntryLine(account_id=gl_account_id)
-        je = MockJournalEntry(
-            organization_id=org_id,
-            correlation_id="splynx-pmt-50001",
-            lines=[jl],
-        )
 
         setup_db_get(mock_db, statement, bank_account)
         setup_db_scalars(mock_db, [line], intents=[], splynx_payments=[pmt])
-        setup_db_execute_journal(mock_db, je)
 
         with patch(
             "app.services.finance.banking.bank_reconciliation.BankReconciliationService"
         ) as mock_recon_cls:
-            mock_recon = mock_recon_cls.return_value
-            mock_recon.match_statement_line.return_value = line
-
             result = service.auto_match_statement(
                 mock_db, org_id, statement.statement_id
             )
 
-        assert result.matched == 1
+        assert result.matched == 0
+        assert result.skipped == 1
+        mock_recon_cls.return_value.match_statement_line.assert_not_called()
 
     def test_greedy_pairing_two_payments_one_line(
         self,
@@ -1733,12 +1775,12 @@ class TestAmountsMatch:
             is True
         )
 
-    def test_within_tolerance(self) -> None:
+    def test_within_old_tolerance_no_longer_matches(self) -> None:
         assert (
             AutoReconciliationService._amounts_match(
                 Decimal("100.01"), Decimal("100.00")
             )
-            is True
+            is False
         )
 
     def test_beyond_tolerance(self) -> None:
@@ -1824,6 +1866,7 @@ class MockPostingResult:
 # ── Tests: Bank fee matching (pass 4) ──────────────────────────────
 
 
+@pytest.mark.enable_auto_journal_rules
 class TestBankFeeMatching:
     """Tests for pass 4 — bank fee auto-journal creation and matching."""
 
@@ -2162,6 +2205,7 @@ class TestBankFeeMatching:
 # ── Tests: Settlement matching (pass 5) ────────────────────────────
 
 
+@pytest.mark.enable_auto_journal_rules
 class TestSettlementMatching:
     """Tests for _match_settlements() (pass 5).
 

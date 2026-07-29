@@ -7,8 +7,10 @@ from __future__ import annotations
 import calendar
 import json
 import logging
+from collections.abc import AsyncIterable, Iterable
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from typing import Any
 from urllib.parse import quote, urlencode
 from uuid import UUID
 
@@ -28,6 +30,20 @@ from app.models.people.exp import (
     ExpenseClaimStatus,
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.people.hr.employee_extended import (
+    DocumentType,
+    EmployeeCertification,
+    EmployeeDependent,
+    EmployeeQualification,
+    EmployeeSkill,
+    QualificationType,
+    RelationshipType,
+)
+from app.models.people.hr.info_change_request import (
+    InfoChangeOperation,
+    InfoChangeStatus,
+    InfoChangeType,
+)
 from app.models.people.leave import (
     Holiday,
     HolidayList,
@@ -47,6 +63,7 @@ from app.services.expense.limit_service import (
     ExpenseLimitService,
     ExpenseLimitServiceError,
 )
+from app.services.file_upload import FileUploadError, get_employee_document_upload
 from app.services.finance.banking.bank_directory import BankDirectoryService
 from app.services.people.attendance import AttendanceService
 from app.services.people.attendance.attendance_service import AttendanceServiceError
@@ -57,8 +74,18 @@ from app.services.people.expense import (
     ExpenseServiceError,
 )
 from app.services.people.hr.employees import EmployeeService
+from app.services.people.hr.employee_extended import (
+    EmployeeExtendedDataError,
+    EmployeeDocumentService,
+    EmployeeExtendedSelfServiceService,
+)
 from app.services.people.hr.employee_types import EmployeeFilters
-from app.services.people.hr.info_change_service import InfoChangeService
+from app.services.people.hr.info_change_service import (
+    DocumentBatchItemInput,
+    ExtendedBatchItemInput,
+    InfoChangeService,
+    PendingEvidence,
+)
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.leave import LeaveService
 from app.services.people.leave.leave_service import LeaveServiceError
@@ -71,9 +98,59 @@ from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
+DEPARTMENT_DISCIPLINE_READ_PERMISSION = "discipline:department:read"
+
+# Keys carried on a collected form row purely to move request data into the
+# submit path. They never belong in template context — see
+# SelfServiceWebService._renderable_form_rows.
+TRANSPORT_ROW_KEYS = frozenset({"_upload"})
+
 
 class SelfServiceWebService:
     """View service for employee self-service pages."""
+
+    def index_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        """Render self-service landing page with employee/team capabilities."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        context = base_context(request, auth, "Self Service", "self", db=db)
+
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException:
+            employee_id = None
+
+        has_direct_reports = False
+        if employee_id is not None:
+            has_direct_reports = bool(self._get_direct_reports(db, org_id, employee_id))
+
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_discipline"] = (
+            auth.is_admin
+            or auth.has_any_permission(
+                [
+                    "discipline:access",
+                    "discipline:cases:read",
+                    "discipline:cases:create",
+                    "discipline:cases:update",
+                    DEPARTMENT_DISCIPLINE_READ_PERMISSION,
+                    "discipline:workflow:manage",
+                ]
+            )
+            or has_direct_reports
+        )
+        return templates.TemplateResponse(request, "people/self/index.html", context)
 
     @staticmethod
     def _expense_approver_employee_statuses() -> tuple[EmployeeStatus, ...]:
@@ -425,6 +502,38 @@ class SelfServiceWebService:
         )
 
     @staticmethod
+    def _require_permission(auth: WebAuthContext, permission: str) -> None:
+        if not auth.has_permission(permission):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permission '{permission}' required",
+            )
+
+    @staticmethod
+    def _streaming_download_response(
+        chunks: AsyncIterable[str | bytes] | Iterable[str | bytes],
+        *,
+        content_type: str,
+        content_length: int | None,
+        filename: str,
+    ):
+        from fastapi.responses import StreamingResponse
+
+        quoted = quote(filename)
+        headers = {
+            "Content-Disposition": (
+                f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted}"
+            )
+        }
+        if content_length is not None:
+            headers["Content-Length"] = str(content_length)
+        return StreamingResponse(
+            chunks,
+            media_type=content_type,
+            headers=headers,
+        )
+
+    @staticmethod
     def _get_expense_approver_options(
         db: Session,
         org_id: UUID,
@@ -603,6 +712,47 @@ class SelfServiceWebService:
                 db, org_id, manager_employee_id
             )
         }
+
+    @staticmethod
+    def _get_department_discipline_employee_ids(
+        db: Session,
+        org_id: UUID,
+        manager_employee_id: UUID,
+    ) -> set[UUID]:
+        department_id = db.scalar(
+            select(Employee.department_id).where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == manager_employee_id,
+            )
+        )
+        if department_id is None:
+            return set()
+        return set(
+            db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.department_id == department_id,
+                )
+            ).all()
+        )
+
+    def _get_team_discipline_employee_ids(
+        self,
+        db: Session,
+        org_id: UUID,
+        manager_employee_id: UUID,
+        auth: WebAuthContext,
+    ) -> set[UUID]:
+        employee_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
+        if auth.has_permission(DEPARTMENT_DISCIPLINE_READ_PERMISSION):
+            employee_ids.update(
+                self._get_department_discipline_employee_ids(
+                    db,
+                    org_id,
+                    manager_employee_id,
+                )
+            )
+        return employee_ids
 
     @staticmethod
     def _has_team_expense_approvals(
@@ -944,6 +1094,895 @@ class SelfServiceWebService:
         return RedirectResponse(
             url="/people/self/tax-info?success=Change+request+submitted",
             status_code=303,
+        )
+
+    @staticmethod
+    def _build_extended_query(
+        base_path: str,
+        *,
+        success: str | None = None,
+        error: str | None = None,
+        edit_id: UUID | None = None,
+    ) -> str:
+        params: dict[str, str] = {}
+        if success:
+            params["success"] = success
+        if error:
+            params["error"] = error
+        if edit_id:
+            params["edit_id"] = str(edit_id)
+        query = urlencode(params)
+        return f"{base_path}?{query}" if query else base_path
+
+    @staticmethod
+    def _normalize_text(value: object | None) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        return text
+
+    def _upload_pending_evidence(
+        self,
+        *,
+        org_id: UUID,
+        employee_id: UUID,
+        upload,
+    ) -> PendingEvidence | None:
+        if upload is None or not getattr(upload, "filename", None):
+            return None
+        file_name = str(upload.filename or "").strip()
+        if not file_name:
+            return None
+        file_bytes = upload.file.read()
+        if not file_bytes:
+            raise EmployeeExtendedDataError("The selected file is empty")
+        upload_service = get_employee_document_upload()
+        try:
+            result = upload_service.save(
+                file_data=file_bytes,
+                content_type=upload.content_type or "application/octet-stream",
+                subdirs=(str(org_id), str(employee_id)),
+                original_filename=file_name,
+            )
+        except FileUploadError as exc:
+            raise EmployeeExtendedDataError(str(exc)) from exc
+        return PendingEvidence(
+            path=result.relative_path,
+            file_name=file_name,
+            file_size=result.file_size,
+            mime_type=upload.content_type,
+            checksum=result.checksum,
+        )
+
+    @staticmethod
+    def _extended_record_snapshot(record: object, section: str) -> dict[str, Any]:
+        if section == "qualifications" and isinstance(record, EmployeeQualification):
+            return {
+                "qualification_type": record.qualification_type.value,
+                "qualification_name": record.qualification_name,
+                "field_of_study": record.field_of_study,
+                "institution_name": record.institution_name,
+                "institution_location": record.institution_location,
+                "start_date": record.start_date.isoformat()
+                if record.start_date
+                else None,
+                "end_date": record.end_date.isoformat() if record.end_date else None,
+                "is_ongoing": bool(record.is_ongoing),
+                "grade": record.grade,
+                "score": str(record.score) if record.score is not None else None,
+                "max_score": str(record.max_score)
+                if record.max_score is not None
+                else None,
+                "notes": record.notes,
+                "document_id": str(record.document_id) if record.document_id else None,
+            }
+        if section == "certifications" and isinstance(record, EmployeeCertification):
+            return {
+                "certification_name": record.certification_name,
+                "issuing_authority": record.issuing_authority,
+                "issue_date": record.issue_date.isoformat()
+                if record.issue_date
+                else None,
+                "expiry_date": record.expiry_date.isoformat()
+                if record.expiry_date
+                else None,
+                "does_not_expire": bool(record.does_not_expire),
+                "credential_id": record.credential_id,
+                "credential_url": record.credential_url,
+                "notes": record.notes,
+                "document_id": str(record.document_id) if record.document_id else None,
+            }
+        if section == "skills" and isinstance(record, EmployeeSkill):
+            return {
+                "skill_id": str(record.skill_id),
+                "proficiency_level": record.proficiency_level,
+                "years_experience": str(record.years_experience)
+                if record.years_experience is not None
+                else None,
+                "last_used_date": record.last_used_date.isoformat()
+                if record.last_used_date
+                else None,
+                "is_primary": bool(record.is_primary),
+                "notes": record.notes,
+            }
+        if section == "dependents" and isinstance(record, EmployeeDependent):
+            return {
+                "full_name": record.full_name,
+                "relationship": record.relation_type.value,
+                "date_of_birth": record.date_of_birth.isoformat()
+                if record.date_of_birth
+                else None,
+                "gender": record.gender.value if record.gender else None,
+                "phone": record.phone,
+                "email": record.email,
+                "address": record.address,
+                "is_emergency_contact": bool(record.is_emergency_contact),
+                "emergency_contact_priority": record.emergency_contact_priority,
+                "is_beneficiary": bool(record.is_beneficiary),
+                "beneficiary_percentage": str(record.beneficiary_percentage)
+                if record.beneficiary_percentage is not None
+                else None,
+                "notes": record.notes,
+            }
+        raise EmployeeExtendedDataError("Unsupported record snapshot")
+
+    def _extended_section_config(self, section: str) -> tuple[str, str, InfoChangeType]:
+        mapping = {
+            "qualifications": (
+                "Qualifications",
+                "self-qualifications",
+                InfoChangeType.QUALIFICATION,
+            ),
+            "certifications": (
+                "Certifications",
+                "self-certifications",
+                InfoChangeType.CERTIFICATION,
+            ),
+            "skills": ("Skills", "self-skills", InfoChangeType.SKILL),
+            "dependents": (
+                "Dependants",
+                "self-dependents",
+                InfoChangeType.DEPENDENT,
+            ),
+        }
+        if section not in mapping:
+            raise EmployeeExtendedDataError("Unsupported self-service section")
+        return mapping[section]
+
+    @staticmethod
+    def _default_section_row(section: str) -> dict[str, Any]:
+        defaults: dict[str, dict[str, Any]] = {
+            "qualifications": {
+                "qualification_type": "",
+                "qualification_name": "",
+                "field_of_study": "",
+                "institution_name": "",
+                "institution_location": "",
+                "start_date": "",
+                "end_date": "",
+                "is_ongoing": False,
+                "grade": "",
+                "score": "",
+                "max_score": "",
+                "notes": "",
+                "_errors": {},
+            },
+            "certifications": {
+                "certification_name": "",
+                "issuing_authority": "",
+                "issue_date": "",
+                "expiry_date": "",
+                "does_not_expire": False,
+                "credential_id": "",
+                "credential_url": "",
+                "notes": "",
+                "_errors": {},
+            },
+            "skills": {
+                "skill_id": "",
+                "proficiency_level": "",
+                "years_experience": "",
+                "last_used_date": "",
+                "is_primary": False,
+                "notes": "",
+                "_errors": {},
+            },
+            "dependents": {
+                "full_name": "",
+                "relationship": "",
+                "date_of_birth": "",
+                "gender": "",
+                "phone": "",
+                "email": "",
+                "address": "",
+                "is_emergency_contact": False,
+                "emergency_contact_priority": "",
+                "is_beneficiary": False,
+                "beneficiary_percentage": "",
+                "notes": "",
+                "_errors": {},
+            },
+        }
+        return defaults[section].copy()
+
+    @staticmethod
+    def _default_document_row() -> dict[str, Any]:
+        return {
+            "document_type": "",
+            "document_name": "",
+            "description": "",
+            "issue_date": "",
+            "expiry_date": "",
+            "_errors": {},
+        }
+
+    @staticmethod
+    def _assign_row_error(row: dict[str, Any], message: str) -> None:
+        lowered = message.lower()
+        matched_fields: list[str] = []
+        for field_name in row:
+            if field_name.startswith("_"):
+                continue
+            if field_name in lowered or field_name.replace("_", " ") in lowered:
+                matched_fields.append(field_name)
+        if not matched_fields:
+            row.setdefault("_errors", {})["row"] = message
+            return
+        for field_name in matched_fields:
+            row.setdefault("_errors", {})[field_name] = message
+
+    @staticmethod
+    def _renderable_form_rows(
+        rows: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]] | None:
+        """Project collected rows into JSON-safe form state for the templates.
+
+        Collected rows carry the raw ``UploadFile`` under ``_upload`` so the
+        submit path can read it. The templates hand rows to ``| tojson``, which
+        cannot serialise an ``UploadFile``. This is the single point where rows
+        become template context, so the substitution happens here: the file
+        object is replaced by its name under ``_upload_filename``.
+
+        The name is kept because a browser never repopulates a file input — on a
+        validation failure the user has to pick the file again, and the template
+        can only say which one if the name survives.
+        """
+        if rows is None:
+            return None
+        renderable: list[dict[str, Any]] = []
+        for row in rows:
+            projected = {
+                key: value
+                for key, value in row.items()
+                if key not in TRANSPORT_ROW_KEYS
+            }
+            projected["_upload_filename"] = (
+                getattr(row.get("_upload"), "filename", None) or ""
+            )
+            renderable.append(projected)
+        return renderable
+
+    def extended_profile_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        section: str,
+        success: str | None = None,
+        error: str | None = None,
+        edit_id: UUID | None = None,
+        form_data: dict[str, Any] | None = None,
+        form_rows: list[dict[str, Any]] | None = None,
+    ) -> HTMLResponse:
+        title, active_module, change_type = self._extended_section_config(section)
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    title,
+                    active_module,
+                    detail=exc.detail,
+                )
+            raise
+
+        extended_service = EmployeeExtendedSelfServiceService(db, org_id)
+        employee = extended_service.get_employee_for_person(person_id)
+        profile = extended_service.list_profile(employee_id)
+        info_change_service = InfoChangeService(db)
+        pending_request = None
+        pending_requests = info_change_service.get_pending_requests(
+            org_id,
+            employee_id=employee_id,
+            change_type=change_type,
+            limit=50,
+        )
+        if pending_requests:
+            pending_request = pending_requests[0]
+        create_pending_requests = [
+            item
+            for item in pending_requests
+            if item.operation == InfoChangeOperation.CREATE
+        ]
+        recent_requests = info_change_service.get_employee_requests(
+            org_id,
+            employee_id,
+            include_resolved=True,
+            limit=10,
+        )
+
+        edit_record = None
+        if edit_id:
+            getter_map = {
+                "qualifications": extended_service.get_owned_qualification,
+                "certifications": extended_service.get_owned_certification,
+                "skills": extended_service.get_owned_employee_skill,
+                "dependents": extended_service.get_owned_dependent,
+            }
+            try:
+                edit_record = getter_map[section](employee_id, edit_id)
+            except EmployeeExtendedDataError:
+                error = "Record not found"
+
+        context = base_context(request, auth, title, active_module, db=db)
+        context.update(
+            {
+                "employee": employee,
+                "records": profile[section],
+                "skill_catalog": profile["skill_catalog"],
+                "pending_request": pending_request,
+                "recent_requests": recent_requests,
+                "success": success,
+                "error": error,
+                "section": section,
+                "section_title": title,
+                "section_change_type": change_type,
+                "qualification_types": list(QualificationType),
+                "relationship_types": list(RelationshipType),
+                "edit_record": edit_record,
+                "edit_id": edit_id,
+                "form_data": form_data or {},
+                "form_rows": self._renderable_form_rows(form_rows)
+                or [self._default_section_row(section)],
+                "pending_requests": pending_requests,
+                "create_pending_requests": create_pending_requests,
+                "max_batch_items": InfoChangeService.MAX_BATCH_ITEMS,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        return templates.TemplateResponse(
+            request,
+            f"people/self/{section}.html",
+            context,
+        )
+
+    @staticmethod
+    def _employee_document_type_options() -> list[DocumentType]:
+        return sorted(
+            list(InfoChangeService.SELF_SERVICE_DOCUMENT_TYPES),
+            key=lambda item: item.value,
+        )
+
+    def documents_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        success: str | None = None,
+        error: str | None = None,
+    ) -> HTMLResponse:
+        self._require_permission(auth, "selfservice:documents:read")
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "My Documents",
+                    "self-documents",
+                    detail=exc.detail,
+                )
+            raise
+
+        extended_service = EmployeeExtendedSelfServiceService(db, org_id)
+        employee = extended_service.get_employee_for_person(person_id)
+        document_service = EmployeeDocumentService(db, org_id)
+        approved_documents = document_service.list_documents(employee_id)
+        all_requests = InfoChangeService(db).get_employee_requests(
+            org_id,
+            employee_id,
+            include_resolved=True,
+            limit=50,
+        )
+        document_requests = [
+            item for item in all_requests if item.change_type == InfoChangeType.DOCUMENT
+        ]
+        pending_requests = [
+            item
+            for item in document_requests
+            if item.status == InfoChangeStatus.PENDING
+        ]
+        recent_history = [
+            item
+            for item in document_requests
+            if item.status in {InfoChangeStatus.REJECTED, InfoChangeStatus.EXPIRED}
+        ][:10]
+
+        context = base_context(request, auth, "My Documents", "self-documents", db=db)
+        context.update(
+            {
+                "employee": employee,
+                "approved_documents": approved_documents,
+                "pending_requests": pending_requests,
+                "recent_history": recent_history,
+                "success": success,
+                "error": error,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        return templates.TemplateResponse(
+            request, "people/self/documents.html", context
+        )
+
+    def document_upload_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        error: str | None = None,
+        form_data: dict[str, Any] | None = None,
+        form_rows: list[dict[str, Any]] | None = None,
+    ) -> HTMLResponse:
+        self._require_permission(auth, "selfservice:documents:upload")
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "Upload Document",
+                    "self-documents",
+                    detail=exc.detail,
+                )
+            raise
+
+        employee = EmployeeExtendedSelfServiceService(
+            db, org_id
+        ).get_employee_for_person(person_id)
+        context = base_context(
+            request, auth, "Upload Document", "self-documents", db=db
+        )
+        context.update(
+            {
+                "employee": employee,
+                "document_types": self._employee_document_type_options(),
+                "form_data": form_data or {},
+                "form_rows": self._renderable_form_rows(form_rows)
+                or [self._default_document_row()],
+                "error": error,
+                "max_batch_items": InfoChangeService.MAX_BATCH_ITEMS,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        return templates.TemplateResponse(
+            request,
+            "people/self/document_form.html",
+            context,
+        )
+
+    def submit_document_upload_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        payload: dict[str, Any],
+        upload,
+    ) -> RedirectResponse | HTMLResponse:
+        self._require_permission(auth, "selfservice:documents:upload")
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        pending_evidence = None
+        upload_service = get_employee_document_upload()
+        info_change_service = InfoChangeService(db)
+        try:
+            pending_evidence = self._upload_pending_evidence(
+                org_id=org_id,
+                employee_id=employee_id,
+                upload=upload,
+            )
+            if pending_evidence is None:
+                raise EmployeeExtendedDataError("Select a file to upload")
+            normalized = info_change_service._validate_document_payload(payload)
+            info_change_service.submit_document_change_request(
+                organization_id=org_id,
+                employee_id=employee_id,
+                proposed_changes=normalized,
+                pending_evidence=pending_evidence,
+            )
+            db.commit()
+            return RedirectResponse(
+                url="/people/self/documents?success=Document+submitted+for+HR+approval",
+                status_code=303,
+            )
+        except (EmployeeExtendedDataError, ValueError) as exc:
+            db.rollback()
+            if pending_evidence:
+                try:
+                    upload_service.delete(pending_evidence.path)
+                except Exception:
+                    logger.exception("Failed to clean up pending self-service document")
+            return self.document_upload_form_response(
+                request,
+                auth,
+                db,
+                error=str(exc),
+                form_data=payload,
+            )
+
+    def submit_document_upload_batch_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        rows: list[dict[str, Any]],
+    ) -> RedirectResponse | HTMLResponse:
+        self._require_permission(auth, "selfservice:documents:upload")
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        info_change_service = InfoChangeService(db)
+        normalized_rows: list[DocumentBatchItemInput] = []
+        row_errors = False
+        upload_service = get_employee_document_upload()
+        uploaded: list[PendingEvidence] = []
+        try:
+            for row in rows:
+                row.setdefault("_errors", {})
+                try:
+                    normalized = info_change_service._validate_document_payload(row)
+                except ValueError as exc:
+                    self._assign_row_error(row, str(exc))
+                    row_errors = True
+                    continue
+                upload = row.get("_upload")
+                try:
+                    pending = self._upload_pending_evidence(
+                        org_id=org_id,
+                        employee_id=employee_id,
+                        upload=upload,
+                    )
+                except EmployeeExtendedDataError as exc:
+                    row["_errors"]["file"] = str(exc)
+                    row_errors = True
+                    continue
+                if pending is None:
+                    row["_errors"]["file"] = "Select a file to upload"
+                    row_errors = True
+                    continue
+                uploaded.append(pending)
+                normalized_rows.append(
+                    DocumentBatchItemInput(
+                        proposed_changes=normalized,
+                        pending_evidence=pending,
+                    )
+                )
+            if row_errors:
+                for item in uploaded:
+                    upload_service.delete(item.path)
+                return self.document_upload_form_response(
+                    request,
+                    auth,
+                    db,
+                    error="Correct the highlighted rows and try again",
+                    form_rows=rows,
+                )
+            info_change_service.submit_document_change_batch(
+                organization_id=org_id,
+                employee_id=employee_id,
+                items=normalized_rows,
+            )
+            db.commit()
+            return RedirectResponse(
+                url="/people/self/documents?success=Documents+submitted+for+HR+approval",
+                status_code=303,
+            )
+        except (EmployeeExtendedDataError, ValueError) as exc:
+            db.rollback()
+            for item in uploaded:
+                try:
+                    upload_service.delete(item.path)
+                except Exception:
+                    logger.exception("Failed to clean up pending self-service document")
+            return self.document_upload_form_response(
+                request,
+                auth,
+                db,
+                error=str(exc),
+                form_rows=rows,
+            )
+
+    def download_document_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        document_id: UUID,
+    ):
+        self._require_permission(auth, "selfservice:documents:read")
+        org_id = coerce_uuid(auth.organization_id)
+        employee_id = self._get_employee_id(db, org_id, coerce_uuid(auth.person_id))
+        try:
+            resolved = EmployeeDocumentService(
+                db, org_id
+            ).resolve_owned_document_download(
+                employee_id,
+                document_id,
+            )
+        except EmployeeExtendedDataError as exc:
+            raise HTTPException(status_code=404, detail="Document not found") from exc
+        return self._streaming_download_response(
+            resolved.chunks,
+            content_type=resolved.content_type,
+            content_length=resolved.content_length,
+            filename=resolved.filename,
+        )
+
+    def submit_extended_profile_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        section: str,
+        payload: dict[str, Any],
+        upload=None,
+        record_id: UUID | None = None,
+    ) -> RedirectResponse | HTMLResponse:
+        title, _, change_type = self._extended_section_config(section)
+        del title
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        info_change_service = InfoChangeService(db)
+        extended_service = EmployeeExtendedSelfServiceService(db, org_id)
+        operation = (
+            InfoChangeOperation.UPDATE
+            if record_id is not None
+            else InfoChangeOperation.CREATE
+        )
+        pending_evidence = None
+        upload_service = get_employee_document_upload()
+        try:
+            if section in {"qualifications", "certifications"}:
+                pending_evidence = self._upload_pending_evidence(
+                    org_id=org_id,
+                    employee_id=employee_id,
+                    upload=upload,
+                )
+
+            validator_map = {
+                "qualifications": info_change_service._validate_qualification_payload,
+                "certifications": info_change_service._validate_certification_payload,
+                "skills": lambda data: info_change_service._validate_skill_payload(
+                    org_id,
+                    employee_id,
+                    data,
+                    target_employee_skill_id=record_id,
+                ),
+                "dependents": info_change_service._validate_dependent_payload,
+            }
+            validator_map[section](payload)
+
+            previous_values: dict[str, Any] = {}
+            if record_id:
+                getter_map = {
+                    "qualifications": extended_service.get_owned_qualification,
+                    "certifications": extended_service.get_owned_certification,
+                    "skills": extended_service.get_owned_employee_skill,
+                    "dependents": extended_service.get_owned_dependent,
+                }
+                record = getter_map[section](employee_id, record_id)
+                previous_values = self._extended_record_snapshot(record, section)
+
+            info_change_service.submit_extended_change_request(
+                organization_id=org_id,
+                employee_id=employee_id,
+                change_type=change_type,
+                operation=operation,
+                proposed_changes=payload,
+                previous_values=previous_values,
+                target_record_id=record_id,
+                pending_evidence=pending_evidence,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=self._build_extended_query(
+                    f"/people/self/{section}",
+                    success="Change request submitted for HR approval",
+                ),
+                status_code=303,
+            )
+        except (EmployeeExtendedDataError, ValueError) as exc:
+            db.rollback()
+            if pending_evidence:
+                try:
+                    upload_service.delete(pending_evidence.path)
+                except Exception:
+                    logger.exception("Failed to clean up pending self-service evidence")
+            return self.extended_profile_response(
+                request,
+                auth,
+                db,
+                section=section,
+                error=str(exc),
+                edit_id=record_id,
+                form_data=payload,
+            )
+
+    def submit_extended_profile_batch_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        section: str,
+        rows: list[dict[str, Any]],
+    ) -> RedirectResponse | HTMLResponse:
+        _, _, change_type = self._extended_section_config(section)
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        info_change_service = InfoChangeService(db)
+        upload_service = get_employee_document_upload()
+        prepared: list[ExtendedBatchItemInput] = []
+        uploaded: list[PendingEvidence] = []
+        row_errors = False
+        try:
+            for row in rows:
+                row.setdefault("_errors", {})
+                try:
+                    normalized = info_change_service._validate_extended_payload(
+                        org_id,
+                        employee_id,
+                        change_type=change_type,
+                        payload=row,
+                        target_record_id=None,
+                    )
+                except ValueError as exc:
+                    self._assign_row_error(row, str(exc))
+                    row_errors = True
+                    continue
+                pending_evidence = None
+                if section in {"qualifications", "certifications"}:
+                    try:
+                        pending_evidence = self._upload_pending_evidence(
+                            org_id=org_id,
+                            employee_id=employee_id,
+                            upload=row.get("_upload"),
+                        )
+                    except EmployeeExtendedDataError as exc:
+                        row["_errors"]["supporting_file"] = str(exc)
+                        row_errors = True
+                        continue
+                    if pending_evidence:
+                        uploaded.append(pending_evidence)
+                prepared.append(
+                    ExtendedBatchItemInput(
+                        proposed_changes=normalized,
+                        previous_values={},
+                        operation=InfoChangeOperation.CREATE,
+                        pending_evidence=pending_evidence,
+                    )
+                )
+            if row_errors:
+                for item in uploaded:
+                    upload_service.delete(item.path)
+                return self.extended_profile_response(
+                    request,
+                    auth,
+                    db,
+                    section=section,
+                    error="Correct the highlighted rows and try again",
+                    form_rows=rows,
+                )
+            info_change_service.submit_extended_change_batch(
+                organization_id=org_id,
+                employee_id=employee_id,
+                change_type=change_type,
+                items=prepared,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=self._build_extended_query(
+                    f"/people/self/{section}",
+                    success="Changes submitted for HR approval",
+                ),
+                status_code=303,
+            )
+        except (EmployeeExtendedDataError, ValueError) as exc:
+            db.rollback()
+            for item in uploaded:
+                try:
+                    upload_service.delete(item.path)
+                except Exception:
+                    logger.exception("Failed to clean up pending self-service evidence")
+            return self.extended_profile_response(
+                request,
+                auth,
+                db,
+                section=section,
+                error=str(exc),
+                form_rows=rows,
+            )
+
+    def download_pending_info_change_evidence_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        request_id: UUID,
+        require_owner_only: bool = False,
+    ):
+        org_id = coerce_uuid(auth.organization_id)
+        employee_id = None
+        if require_owner_only:
+            employee_id = self._get_employee_id(db, org_id, coerce_uuid(auth.person_id))
+        try:
+            chunks, content_type, content_length, filename = InfoChangeService(
+                db
+            ).resolve_pending_evidence_download(
+                org_id,
+                request_id,
+                employee_id=employee_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Evidence not found") from exc
+        return self._streaming_download_response(
+            chunks,
+            content_type=content_type,
+            content_length=content_length,
+            filename=filename,
         )
 
     @staticmethod
@@ -3034,7 +4073,7 @@ class SelfServiceWebService:
         include_closed: bool = False,
         page: int = 1,
     ) -> HTMLResponse:
-        """List discipline cases for direct reports."""
+        """List discipline cases for permitted team scope."""
         from app.models.people.discipline import CaseStatus, DisciplinaryCase
 
         org_id = coerce_uuid(auth.organization_id)
@@ -3056,14 +4095,22 @@ class SelfServiceWebService:
         reports = self._get_direct_reports(db, org_id, manager_employee_id)
         report_ids = [emp.employee_id for emp in reports]
         has_direct_reports = bool(report_ids)
+        team_employee_ids = self._get_team_discipline_employee_ids(
+            db,
+            org_id,
+            manager_employee_id,
+            auth,
+        )
+        has_team_scope = bool(team_employee_ids)
+        can_create_team_discipline = has_direct_reports
 
         pagination = PaginationParams.from_page(page, per_page=20)
         total = 0
         cases = []
-        if report_ids:
+        if team_employee_ids:
             query = select(DisciplinaryCase).where(
                 DisciplinaryCase.organization_id == org_id,
-                DisciplinaryCase.employee_id.in_(report_ids),
+                DisciplinaryCase.employee_id.in_(team_employee_ids),
                 DisciplinaryCase.status != CaseStatus.WITHDRAWN,
             )
             if not include_closed:
@@ -3090,6 +4137,8 @@ class SelfServiceWebService:
                 "cases": cases,
                 "include_closed": include_closed,
                 "has_direct_reports": has_direct_reports,
+                "has_team_scope": has_team_scope,
+                "can_create_team_discipline": can_create_team_discipline,
                 "page": page,
                 "total_pages": total_pages,
                 "total": total,
@@ -3104,7 +4153,7 @@ class SelfServiceWebService:
             or self._has_team_expense_approvals(
                 db, org_id, person_id, employee_id=manager_employee_id
             )
-            or has_direct_reports
+            or has_team_scope
         )
         context["can_team_leave"] = self._has_team_approvals(
             db, org_id, person_id, employee_id=manager_employee_id
@@ -3323,15 +4372,33 @@ class SelfServiceWebService:
         *,
         case_id: UUID,
     ) -> HTMLResponse:
-        """View team discipline case detail."""
+        """View team discipline case detail within permitted team scope."""
         from app.models.people.discipline import CaseStatus
         from app.services.people.discipline import DisciplineService
 
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
-        manager_employee_id = self._get_employee_id(db, org_id, person_id)
+        try:
+            manager_employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "Team Discipline",
+                    "self-team-discipline",
+                    detail=exc.detail,
+                )
+            raise
 
         report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
+        team_employee_ids = self._get_team_discipline_employee_ids(
+            db,
+            org_id,
+            manager_employee_id,
+            auth,
+        )
 
         try:
             case = DisciplineService(db).get_case_detail(case_id)
@@ -3340,9 +4407,12 @@ class SelfServiceWebService:
 
         if case.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Case not found")
-        if case.employee_id not in report_ids:
+        if case.employee_id not in team_employee_ids:
             raise HTTPException(status_code=403, detail="Forbidden")
 
+        can_issue_query = (
+            case.status == CaseStatus.DRAFT and case.employee_id in report_ids
+        )
         context = base_context(
             request,
             auth,
@@ -3353,7 +4423,7 @@ class SelfServiceWebService:
         context.update(
             {
                 "case": case,
-                "can_issue_query": case.status == CaseStatus.DRAFT,
+                "can_issue_query": can_issue_query,
             }
         )
         context["has_team_approvals"] = (
@@ -3363,7 +4433,7 @@ class SelfServiceWebService:
             or self._has_team_expense_approvals(
                 db, org_id, person_id, employee_id=manager_employee_id
             )
-            or bool(report_ids)
+            or bool(team_employee_ids)
         )
         context["can_team_leave"] = self._has_team_approvals(
             db, org_id, person_id, employee_id=manager_employee_id

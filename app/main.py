@@ -25,6 +25,8 @@ from app.api.coach import router as coach_router
 from app.api.crm import router as crm_router
 from app.api.crm import webhook_router as crm_webhook_router
 from app.api.deps import require_role, require_tenant_auth
+from app.api.dotmac_academy import webhook_router as dotmac_academy_webhook_router
+from app.api.dotmac_sub import webhook_router as dotmac_sub_webhook_router
 from app.api.expense import router as expense_router
 from app.api.expense_limits import router as expense_limits_router
 from app.api.files import legacy_router as files_legacy_router
@@ -41,6 +43,7 @@ from app.api.finance import (
     ipsas_router,
     lease_router,
     mono_webhook_router,
+    ncc_router as finance_ncc_router,
     opening_balance_router,
     payments_router,
     payments_webhook_router,
@@ -62,6 +65,7 @@ from app.api.service_hooks import router as service_hooks_router
 from app.api.settings import router as settings_router
 from app.api.support import router as support_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
+from app.api.sync.dotmac_sub import router as sub_sync_router
 from app.api.workflow_tasks import router as workflow_tasks_router
 from app.config import settings
 from app.db import SessionLocal
@@ -75,12 +79,14 @@ from app.models.domain_settings import DomainSetting, SettingDomain
 from app.observability import ObservabilityMiddleware
 from app.services import audit as audit_service
 from app.services.htmx import is_htmx_request
+from app.services.integration_config import seed_dotmac_sub_webhook_binding
 from app.services.settings_seed import seed_all_settings
 from app.startup import log_startup_info, validate_startup
 from app.telemetry import setup_otel
 from app.templates import templates
 from app.web.admin import router as admin_web_router
 from app.web.admin_crm_sync import router as admin_crm_sync_router
+from app.web.admin_sla_policies import router as admin_sla_policies_web_router
 from app.web.auth import router as auth_web_router
 from app.web.careers import router as careers_web_router
 from app.web.careers import short_router as careers_short_web_router
@@ -103,6 +109,7 @@ from app.web.profile import router as profile_web_router
 from app.web.projects import router as projects_web_router
 from app.web.public_sector import router as public_sector_web_router
 from app.web.settings import router as module_settings_web_router
+from app.web.sla_policies import router as sla_policies_web_router
 from app.web.support import router as support_web_router
 from app.web.workflow_tasks import router as workflow_tasks_web_router
 from app.web_home import router as web_home_router
@@ -175,6 +182,10 @@ async def lifespan(app: FastAPI):
             db.execute(text("SELECT pg_advisory_xact_lock(451002, 20260522)"))
         with allow_cross_org(db):
             seed_all_settings(db)
+            # Audit D2: migrate the env webhook secret into the default org's
+            # IntegrationConfig(DOTMAC_SUB) binding (idempotent; the binding
+            # rows are the webhook org-attribution authority).
+            seed_dotmac_sub_webhook_binding(db)
 
         # Register payroll lifecycle event handlers so posted runs/slips
         # can create notifications and queue payslip emails.
@@ -367,7 +378,14 @@ async def csp_middleware(request: Request, call_next):
     response.headers["Content-Security-Policy"] = add_unsafe_eval_to_csp(
         response.headers.get("Content-Security-Policy")
     )
-    response.headers["X-Frame-Options"] = "DENY"
+    route = getattr(request, "scope", {}).get("route")
+    allow_sla_document_frame = (
+        getattr(route, "name", None) == "sla_policy_document_view"
+        and getattr(request.state, "allow_sla_document_frame", False) is True
+    )
+    response.headers["X-Frame-Options"] = (
+        "SAMEORIGIN" if allow_sla_document_frame else "DENY"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = (
@@ -693,9 +711,11 @@ app.include_router(
 _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(service_hooks_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(web_home_router)
+app.include_router(sla_policies_web_router)
 app.include_router(help_web_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
+app.include_router(admin_sla_policies_web_router)
 app.include_router(profile_web_router)
 app.include_router(notifications_web_router)
 app.include_router(workflow_tasks_web_router)
@@ -736,6 +756,7 @@ if is_module_enabled("finance"):
     _include_api_router(tax_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(finance_ncc_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(
         import_export_router, dependencies=[Depends(require_tenant_auth)]
@@ -749,6 +770,8 @@ if is_module_enabled("finance"):
     _include_api_router(analysis_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(payments_webhook_router)
     _include_api_router(mono_webhook_router)
+    _include_api_router(dotmac_sub_webhook_router)
+    _include_api_router(dotmac_academy_webhook_router)
 
 # ---------------------------------------------------------------------------
 # Expense module
@@ -835,6 +858,7 @@ if is_module_enabled("crm"):
     _include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(crm_webhook_router)
     _include_api_router(crm_sync_router)
+    _include_api_router(sub_sync_router)
     app.include_router(admin_crm_sync_router)
 
 # ---------------------------------------------------------------------------

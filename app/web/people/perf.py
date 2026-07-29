@@ -263,6 +263,17 @@ def cancel_appraisal(
     return perf_web_service.cancel_appraisal_response(auth, db, appraisal_id)
 
 
+@router.post("/appraisals/{appraisal_id}/delete")
+def delete_appraisal(
+    request: Request,
+    appraisal_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Delete an appraisal."""
+    return perf_web_service.delete_appraisal_response(request, auth, db, appraisal_id)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Appraisal Workflow
 # ─────────────────────────────────────────────────────────────────────────────
@@ -494,15 +505,56 @@ async def create_kpi(
     return await perf_web_service.create_goal_response(request, auth, db)
 
 
+@router.post("/goals/sync-support-metrics")
+def sync_support_goal_metrics(
+    request: Request,
+    employee_id: str | None = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Sync supported ticket metrics into tagged KPI actual values."""
+    return perf_web_service.sync_support_goal_metrics_response(
+        request, auth, db, employee_id
+    )
+
+
+@router.post("/goals/generate-department-templates")
+def generate_department_goal_templates(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Generate department performance templates."""
+    return perf_web_service.generate_department_goal_templates_response(
+        request, auth, db
+    )
+
+
+@router.post("/goals/generate-from-department-templates")
+async def generate_employee_goals_from_department_templates(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Generate employee KPIs from department performance templates."""
+    return await perf_web_service.generate_employee_goals_from_templates_response(
+        request, auth, db
+    )
+
+
 @router.get("/goals/{kpi_id}", response_class=HTMLResponse)
 def kpi_detail(
     request: Request,
     kpi_id: str,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
 ):
     """KPI detail page."""
-    return perf_web_service.goal_detail_response(request, auth, db, kpi_id)
+    return perf_web_service.goal_detail_response(
+        request, auth, db, kpi_id, success, error
+    )
 
 
 @router.get("/goals/{kpi_id}/edit", response_class=HTMLResponse)
@@ -910,6 +962,28 @@ async def create_scorecard(
     return await perf_web_service.create_scorecard_response(request, auth, db)
 
 
+@router.post("/scorecards/generate-active-employees")
+async def generate_active_employee_scorecards(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Generate scorecards for active employees."""
+    return await perf_web_service.generate_active_employee_scorecards_response(
+        request, auth, db
+    )
+
+
+@router.post("/scorecards/sync-metrics")
+def sync_all_scorecard_metrics(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Sync KPI metrics into all in-progress scorecards."""
+    return perf_web_service.sync_all_scorecard_metrics_response(request, auth, db)
+
+
 @router.get("/scorecards/{scorecard_id}", response_class=HTMLResponse)
 def scorecard_detail(
     request: Request,
@@ -921,6 +995,19 @@ def scorecard_detail(
     """Scorecard detail page."""
     return perf_web_service.scorecard_detail_response(
         request, auth, db, scorecard_id, success
+    )
+
+
+@router.post("/scorecards/{scorecard_id}/sync-kpis")
+def sync_scorecard_kpis(
+    request: Request,
+    scorecard_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Populate scorecard items from employee KPIs."""
+    return perf_web_service.sync_scorecard_kpis_response(
+        request, auth, db, scorecard_id
     )
 
 

@@ -60,6 +60,16 @@
     .badge-pending .badge-dot { background: #d97706; }
     .dark .badge-pending { background: rgba(217, 119, 6, 0.2); color: #fbbf24; }
 
+    .badge-at-reorder {
+        background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+        color: #9a3412;
+    }
+    .badge-at-reorder .badge-dot { background: #ea580c; }
+    .dark .badge-at-reorder {
+        background: rgba(234, 88, 12, 0.2);
+        color: #fb923c;
+    }
+
     .badge-approved {
         background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
         color: #065f46;

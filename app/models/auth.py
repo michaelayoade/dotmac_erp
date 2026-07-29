@@ -8,6 +8,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -82,6 +83,54 @@ class UserCredential(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    person = relationship("Person")
+
+
+class FederatedIdentity(Base):
+    """ERP-owned binding from a protocol identity to a local person.
+
+    The OIDC issuer and subject are opaque external identifiers. Authorization
+    remains local to ERP and is never copied from identity-provider claims.
+    """
+
+    __tablename__ = "federated_identities"
+    __table_args__ = (
+        UniqueConstraint(
+            "issuer",
+            "subject",
+            name="uq_federated_identities_issuer_subject",
+        ),
+        UniqueConstraint(
+            "person_id",
+            "issuer",
+            name="uq_federated_identities_person_issuer",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("people.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    issuer: Mapped[str] = mapped_column(String(512), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_authenticated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -186,5 +235,16 @@ class ApiKey(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Least-privilege scopes this key grants, e.g. ["crm:ncc:read", "crm:write"].
+    # NULL / empty = unscoped (full access) so pre-existing keys keep working;
+    # a non-empty list restricts the key to exactly those scopes.
+    scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     person = relationship("Person")
+
+    def has_scope(self, scope: str) -> bool:
+        """True if this key may use ``scope``. An unscoped key (NULL/empty
+        scopes) grants everything — that's the grandfathered default."""
+        if not self.scopes:
+            return True
+        return scope in self.scopes

@@ -65,6 +65,24 @@ from app.services.sync.crm.base import _CRMSyncBase
 
 logger = logging.getLogger(__name__)
 
+# Orphan-reconciliation guards — the exact rails proven in dotmac_crm
+# ``app/services/selfcare.py::_reconcile_selfcare_orphans``: skip when the
+# reported id set looks suspiciously small (likely a partial fetch/outage on
+# the CRM side) or when too large a fraction of the known mappings would be
+# closed in one run — failing safe rather than mass-closing live entities.
+_ORPHAN_MIN_FETCH_RATIO = 0.5
+_ORPHAN_MAX_TERMINATE_RATIO = 0.2
+# Small absolute floor for tiny bases (so a single legitimate deletion isn't
+# blocked) — kept low so it can't bypass the ratio guard and wipe a small base.
+_ORPHAN_MAX_TERMINATE_FLOOR = 3
+
+# Reconcile entity_type strings (CRM wire values) -> mapping entity types.
+_RECONCILE_ENTITY_TYPES = {
+    "project": CRMEntityType.PROJECT,
+    "ticket": CRMEntityType.TICKET,
+    "work_order": CRMEntityType.WORK_ORDER,
+}
+
 
 class _ProjectSyncMixin(_CRMSyncBase):
     def sync_project(
@@ -262,6 +280,137 @@ class _ProjectSyncMixin(_CRMSyncBase):
         )
         return mapping
 
+    def reconcile_orphans(
+        self,
+        org_id: UUID,
+        *,
+        entity_type: str,
+        seen_crm_ids: list[str],
+        active_count: int = 0,
+    ) -> dict[str, Any]:
+        """Soft-close ERP entities whose CRM source vanished from a full push.
+
+        CRM's ``sync_all_active`` only pushes active entities, so a canceled/
+        soft-deleted CRM entity simply stops appearing — no tombstone ever
+        arrives and the upsert-only sync leaves the ERP copy live forever.
+        After a clean FULL run, CRM reports the complete set of ids it saw;
+        ACTIVE mappings for that entity type not in the set are orphans.
+
+        Applies the reference safety rails (see module constants) before
+        touching anything, then per-row soft-closes the local entity via each
+        model's terminal status and marks the mapping CANCELLED. Rows are
+        isolated in savepoints so one failure doesn't abort the batch.
+        """
+        crm_entity_type = _RECONCILE_ENTITY_TYPES.get(entity_type)
+        if crm_entity_type is None:
+            raise ValueError(f"Unknown entity type: {entity_type}")
+
+        result: dict[str, Any] = {
+            "entity_type": entity_type,
+            "examined": 0,
+            "orphaned": 0,
+            "closed": 0,
+            "skipped_reason": None,
+            "errors": [],
+        }
+
+        seen = {str(crm_id).strip() for crm_id in seen_crm_ids if str(crm_id).strip()}
+        stmt = select(CRMSyncMapping).where(
+            CRMSyncMapping.organization_id == org_id,
+            CRMSyncMapping.crm_entity_type == crm_entity_type,
+            CRMSyncMapping.crm_status == CRMSyncStatus.ACTIVE,
+        )
+        mappings = list(self.db.scalars(stmt).all())
+        examined = len(mappings)
+        result["examined"] = examined
+
+        orphans = [m for m in mappings if str(m.crm_id).strip() not in seen]
+        result["orphaned"] = len(orphans)
+        if not orphans:
+            return result
+
+        if len(seen) < examined * _ORPHAN_MIN_FETCH_RATIO:
+            logger.warning(
+                "CRM_ORPHAN_RECONCILE_SKIPPED reason=small_fetch entity_type=%s "
+                "seen=%d active_count=%d examined=%d orphans=%d",
+                entity_type,
+                len(seen),
+                active_count,
+                examined,
+                len(orphans),
+            )
+            result["skipped_reason"] = "small_fetch"
+            return result
+
+        if len(orphans) > max(
+            _ORPHAN_MAX_TERMINATE_FLOOR, int(examined * _ORPHAN_MAX_TERMINATE_RATIO)
+        ):
+            logger.warning(
+                "CRM_ORPHAN_RECONCILE_SKIPPED reason=too_many entity_type=%s "
+                "examined=%d orphans=%d",
+                entity_type,
+                examined,
+                len(orphans),
+            )
+            result["skipped_reason"] = "too_many"
+            return result
+
+        now = datetime.now(UTC)
+        for mapping in orphans:
+            savepoint = self.db.begin_nested()
+            try:
+                self._soft_close_local_entity(mapping)
+                mapping.crm_status = CRMSyncStatus.CANCELLED
+                mapping.synced_at = now
+                self.db.flush()
+                savepoint.commit()
+                result["closed"] += 1
+            except Exception as exc:
+                savepoint.rollback()
+                logger.exception(
+                    "CRM_ORPHAN_CLOSE_FAILED entity_type=%s crm_id=%s",
+                    entity_type,
+                    mapping.crm_id,
+                )
+                result["errors"].append(f"{mapping.crm_id}: {exc}"[:200])
+
+        logger.info(
+            "CRM_ORPHAN_RECONCILE_COMPLETE entity_type=%s examined=%d orphaned=%d closed=%d",
+            entity_type,
+            examined,
+            len(orphans),
+            result["closed"],
+        )
+        return result
+
+    def _soft_close_local_entity(self, mapping: CRMSyncMapping) -> None:
+        """Soft-close the local ERP entity behind an orphaned mapping.
+
+        Uses each model's terminal status (none of Project/Ticket/Task has an
+        ``is_active`` soft-delete column): Project -> CANCELLED, Ticket ->
+        CLOSED, Task -> CANCELLED — the same targets the CRM status maps use
+        for a canceled upstream entity. A missing local row is a no-op; the
+        mapping still gets marked so it stops surfacing as active.
+        """
+        if mapping.local_entity_type == "project":
+            project = self.db.get(Project, mapping.local_entity_id)
+            if project is not None:
+                project.status = ProjectStatus.CANCELLED
+        elif mapping.local_entity_type == "ticket":
+            ticket = self.db.get(Ticket, mapping.local_entity_id)
+            if ticket is not None:
+                ticket.status = TicketStatus.CLOSED
+        elif mapping.local_entity_type == "task":
+            task = self.db.get(Task, mapping.local_entity_id)
+            if task is not None:
+                task.status = TaskStatus.CANCELLED
+        else:
+            logger.warning(
+                "CRM_ORPHAN_UNKNOWN_LOCAL_TYPE local_entity_type=%s crm_id=%s",
+                mapping.local_entity_type,
+                mapping.crm_id,
+            )
+
     def list_projects(
         self,
         org_id: UUID,
@@ -287,6 +436,16 @@ class _ProjectSyncMixin(_CRMSyncBase):
             stmt = stmt.where(
                 CRMSyncMapping.crm_status
                 == CRM_SYNC_STATUS_MAP.get(status.lower(), CRMSyncStatus.ACTIVE)
+            )
+        else:
+            # Hide cancelled/archived CRM entities so a canceled project isn't
+            # selectable for new expense claims. CRM sends the cancellation via
+            # the recently-updated delta (canceling keeps is_active=True), which
+            # marks the mapping CANCELLED — it just wasn't being filtered here.
+            stmt = stmt.where(
+                CRMSyncMapping.crm_status.notin_(
+                    [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+                )
             )
 
         stmt = stmt.order_by(CRMSyncMapping.display_name).limit(limit)
@@ -325,6 +484,12 @@ class _ProjectSyncMixin(_CRMSyncBase):
                 | (CRMSyncMapping.display_code.ilike(search_filter))
             )
 
+        # Hide cancelled/archived tickets from the expense-claim picker.
+        stmt = stmt.where(
+            CRMSyncMapping.crm_status.notin_(
+                [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+            )
+        )
         stmt = stmt.order_by(CRMSyncMapping.created_at.desc()).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
 
@@ -366,6 +531,12 @@ class _ProjectSyncMixin(_CRMSyncBase):
                 & (CRMSyncMapping.local_entity_type == "task"),
             ).where(Task.assigned_to_id == employee_id)
 
+        # Hide cancelled/archived work orders from the expense-claim picker.
+        stmt = stmt.where(
+            CRMSyncMapping.crm_status.notin_(
+                [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+            )
+        )
         stmt = stmt.order_by(CRMSyncMapping.created_at.desc()).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
 

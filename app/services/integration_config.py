@@ -109,6 +109,54 @@ def decrypt_credential(value: str | None, db: Session | None = None) -> str | No
     return value
 
 
+def seed_dotmac_sub_webhook_binding(db: Session) -> IntegrationConfig | None:
+    """Migrate the env webhook secret into the default org's binding (audit D2).
+
+    Per-org ``IntegrationConfig(DOTMAC_SUB)`` rows are the single definition
+    authority for inbound-webhook org attribution; the env-secret +
+    DEFAULT_ORGANIZATION_ID path is retiring. This startup seed carries the env
+    secret into the default org's config row (encrypted, exactly as the admin
+    UI stores it) so the binding authority can attribute those deliveries.
+
+    Idempotent no-op unless ALL of: the resolution mode is not ``legacy``, the
+    env secret is set, ``DEFAULT_ORGANIZATION_ID`` is set, and the default org
+    has no active ``DOTMAC_SUB`` config row. Returns the created row, if any.
+    """
+    from app.config import settings
+
+    if settings.dotmac_sub_webhook_org_resolution == "legacy":
+        return None
+    secret = settings.dotmac_sub_webhook_secret
+    default_org = settings.default_organization_id
+    if not secret or not default_org:
+        return None
+    org_id = uuid.UUID(default_org)
+    service = IntegrationConfigService(db)
+    if service.get_config(org_id, IntegrationType.DOTMAC_SUB) is not None:
+        return None
+    # Same storage path as the admin UI (dotmac_sub_sync_web): api_secret is
+    # the webhook secret, encrypted by create_config; base_url falls back to
+    # the env API URL; api_key stays empty so the outbound client keeps using
+    # env credentials (DotmacSubConfig.for_org falls back per field).
+    config = service.create_config(
+        organization_id=org_id,
+        integration_type=IntegrationType.DOTMAC_SUB,
+        base_url=settings.dotmac_sub_api_url,
+        api_key="",
+        api_secret=secret,
+        company=None,
+    )
+    db.commit()
+    logger.warning(
+        "Seeded DOTMAC_SUB webhook binding for default org %s from the env "
+        "secret (config_id=%s): per-org IntegrationConfig bindings are the "
+        "webhook org-attribution authority; the env path is retiring (audit D2)",
+        org_id,
+        config.config_id,
+    )
+    return config
+
+
 class IntegrationConfigService:
     """
     Service for managing integration configurations.

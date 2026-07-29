@@ -1,0 +1,143 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import status_badge %}
+
+{% block page_title %}Dependants{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people/self" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Self Service</a></li>
+        <li>/</li>
+        <li class="font-medium text-slate-900 dark:text-white" aria-current="page">Dependants</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6">
+    <div class="card p-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Dependants</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Submit one or more dependant records for HR approval. Existing-record edits remain one-at-a-time.</p>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <span>Max {{ max_batch_items }} items per submission</span>
+                {% if create_pending_requests %}
+                {{ status_badge('PENDING', 'sm') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="card p-4">
+        <div class="flex flex-wrap gap-2">
+            <a href="/people/self/qualifications" class="btn btn-secondary">Qualifications</a>
+            <a href="/people/self/certifications" class="btn btn-secondary">Certifications</a>
+            <a href="/people/self/skills" class="btn btn-secondary">Skills</a>
+            <a href="/people/self/dependents" class="btn btn-secondary">Dependants</a>
+            <a href="/people/self/documents" class="btn btn-secondary">My Documents</a>
+        </div>
+    </div>
+    {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700"><h3 class="text-lg font-semibold text-slate-900 dark:text-white">Current Dependants</h3></div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for record in records %}
+            <div class="px-6 py-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">{{ record.full_name }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ record.relation_type.value | replace('_', ' ') | title }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{% if record.is_emergency_contact %}Emergency contact{% endif %}{% if record.is_emergency_contact and record.is_beneficiary %} - {% endif %}{% if record.is_beneficiary %}Beneficiary{% endif %}</p>
+                </div>
+                <a href="/people/self/dependents?edit_id={{ record.dependent_id }}" class="btn btn-secondary">Edit</a>
+            </div>
+            {% else %}
+            <div class="px-6 py-8 text-sm text-slate-500 dark:text-slate-400">No dependants have been recorded yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if edit_record %}
+    <form method="post" class="card p-6 space-y-4">
+        {{ request.state.csrf_form | safe }}
+        <input type="hidden" name="dependent_id" value="{{ edit_record.dependent_id }}">
+        <div><h3 class="text-lg font-semibold text-slate-900 dark:text-white">Edit Dependant</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Updates are submitted one at a time for approval.</p></div>
+        <fieldset class="grid gap-4 md:grid-cols-2">
+            <div><label for="full_name" class="form-label">Full Name</label><input id="full_name" name="full_name" class="form-input w-full" value="{{ form_data.get('full_name') if form_data else (edit_record.full_name if edit_record else '') }}"></div>
+            <div><label for="relationship" class="form-label">Relationship</label><select id="relationship" name="relationship" class="form-select w-full"><option value="">Select relationship</option>{% set selected_relationship = form_data.get("relationship") if form_data else (edit_record.relation_type.value if edit_record else "") %}{% for item in relationship_types %}<option value="{{ item.value }}" {% if selected_relationship == item.value %}selected{% endif %}>{{ item.value | replace('_', ' ') | title }}</option>{% endfor %}</select></div>
+            <div><label for="date_of_birth" class="form-label">Date of Birth</label><input type="date" id="date_of_birth" name="date_of_birth" class="form-input w-full" value="{{ form_data.get('date_of_birth') if form_data else (edit_record.date_of_birth.isoformat() if edit_record and edit_record.date_of_birth else '') }}"></div>
+            <div><label for="gender" class="form-label">Gender</label><input id="gender" name="gender" class="form-input w-full" value="{{ form_data.get('gender') if form_data else (edit_record.gender.value if edit_record and edit_record.gender else '') }}"></div>
+            <div><label for="phone" class="form-label">Phone</label><input id="phone" name="phone" class="form-input w-full" value="{{ form_data.get('phone') if form_data else (edit_record.phone if edit_record and edit_record.phone else '') }}"></div>
+            <div><label for="email" class="form-label">Email</label><input id="email" name="email" class="form-input w-full" value="{{ form_data.get('email') if form_data else (edit_record.email if edit_record and edit_record.email else '') }}"></div>
+            <div class="md:col-span-2"><label for="address" class="form-label">Address</label><textarea id="address" name="address" rows="2" class="form-input w-full">{{ form_data.get('address') if form_data else (edit_record.address if edit_record and edit_record.address else '') }}</textarea></div>
+            <div><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_emergency_contact" value="1" {% set emergency_value = form_data.get('is_emergency_contact') if form_data else (edit_record.is_emergency_contact if edit_record else false) %}{% if emergency_value %}checked{% endif %}>Mark as emergency contact</label></div>
+            <div><label for="emergency_contact_priority" class="form-label">Emergency Priority</label><input id="emergency_contact_priority" name="emergency_contact_priority" class="form-input w-full" value="{{ form_data.get('emergency_contact_priority') if form_data else (edit_record.emergency_contact_priority if edit_record and edit_record.emergency_contact_priority is not none else '') }}"></div>
+            <div><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_beneficiary" value="1" {% set beneficiary_value = form_data.get('is_beneficiary') if form_data else (edit_record.is_beneficiary if edit_record else false) %}{% if beneficiary_value %}checked{% endif %}>Mark as beneficiary</label></div>
+            <div><label for="beneficiary_percentage" class="form-label">Beneficiary Percentage</label><input id="beneficiary_percentage" name="beneficiary_percentage" class="form-input w-full" value="{{ form_data.get('beneficiary_percentage') if form_data else (edit_record.beneficiary_percentage if edit_record and edit_record.beneficiary_percentage is not none else '') }}"></div>
+            <div class="md:col-span-2"><label for="notes" class="form-label">Notes</label><textarea id="notes" name="notes" rows="3" class="form-input w-full">{{ form_data.get('notes') if form_data else (edit_record.notes if edit_record and edit_record.notes else '') }}</textarea></div>
+        </fieldset>
+        <div class="flex justify-end gap-3"><a href="/people/self/dependents" class="btn btn-secondary">Cancel</a><button type="submit" class="btn btn-primary">Submit for HR Approval</button></div>
+    </form>
+    {% else %}
+    <form method="post" class="card p-6 space-y-6"
+          x-data='{
+              rows: {{ form_rows | tojson | safe }},
+              maxRows: {{ max_batch_items }},
+              submitting: false,
+              blankRow: {{ {
+                  "full_name": "",
+                  "relationship": "",
+                  "date_of_birth": "",
+                  "gender": "",
+                  "phone": "",
+                  "email": "",
+                  "address": "",
+                  "is_emergency_contact": false,
+                  "emergency_contact_priority": "",
+                  "is_beneficiary": false,
+                  "beneficiary_percentage": "",
+                  "notes": "",
+                  "_errors": {}
+              } | tojson | safe }},
+              addRow() { if (this.rows.length < this.maxRows) this.rows.push(JSON.parse(JSON.stringify(this.blankRow))); },
+              removeRow(index) { if (this.rows.length > 1) this.rows.splice(index, 1); }
+          }'
+          @submit="submitting = true">
+        {{ request.state.csrf_form | safe }}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div><h3 class="text-lg font-semibold text-slate-900 dark:text-white">Add Dependants</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Add one dependant, then use <span class="font-medium">Add another</span> for the rest.</p></div>
+            <button type="button" class="btn btn-secondary" @click="addRow()" :disabled="rows.length >= maxRows">Add another</button>
+        </div>
+        <template x-for="(row, index) in rows" :key="index">
+            <section class="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h4 class="text-base font-semibold text-slate-900 dark:text-white" x-text="`Dependant ${index + 1}`"></h4>
+                    <button type="button" class="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" x-show="rows.length > 1" @click="removeRow(index)">Remove</button>
+                </div>
+                <template x-if="row._errors && row._errors.row"><p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300" x-text="row._errors.row"></p></template>
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div><label class="form-label">Full Name</label><input class="form-input w-full" :name="`full_name_${index + 1}`" x-model="row.full_name"><p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.full_name" x-text="row._errors && row._errors.full_name"></p></div>
+                    <div><label class="form-label">Relationship</label><select class="form-select w-full" :name="`relationship_${index + 1}`" x-model="row.relationship"><option value="">Select relationship</option>{% for item in relationship_types %}<option value="{{ item.value }}">{{ item.value | replace('_', ' ') | title }}</option>{% endfor %}</select></div>
+                    <div><label class="form-label">Date of Birth</label><input type="date" class="form-input w-full" :name="`date_of_birth_${index + 1}`" x-model="row.date_of_birth"></div>
+                    <div><label class="form-label">Gender</label><input class="form-input w-full" :name="`gender_${index + 1}`" x-model="row.gender"></div>
+                    <div><label class="form-label">Phone</label><input class="form-input w-full" :name="`phone_${index + 1}`" x-model="row.phone"></div>
+                    <div><label class="form-label">Email</label><input class="form-input w-full" :name="`email_${index + 1}`" x-model="row.email"></div>
+                    <div class="md:col-span-2"><label class="form-label">Address</label><textarea rows="2" class="form-input w-full" :name="`address_${index + 1}`" x-model="row.address"></textarea></div>
+                    <div><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" value="1" :name="`is_emergency_contact_${index + 1}`" x-model="row.is_emergency_contact">Mark as emergency contact</label></div>
+                    <div><label class="form-label">Emergency Priority</label><input class="form-input w-full" :name="`emergency_contact_priority_${index + 1}`" x-model="row.emergency_contact_priority"></div>
+                    <div><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" value="1" :name="`is_beneficiary_${index + 1}`" x-model="row.is_beneficiary">Mark as beneficiary</label></div>
+                    <div><label class="form-label">Beneficiary Percentage</label><input class="form-input w-full" :name="`beneficiary_percentage_${index + 1}`" x-model="row.beneficiary_percentage" inputmode="decimal"></div>
+                    <div class="md:col-span-2"><label class="form-label">Notes</label><textarea rows="3" class="form-input w-full" :name="`notes_${index + 1}`" x-model="row.notes"></textarea></div>
+                </div>
+            </section>
+        </template>
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Blank rows are ignored. Completely empty submissions are rejected.</p>
+            <button type="submit" class="btn btn-primary" :disabled="submitting"><span x-show="!submitting">Submit all for approval</span><span x-show="submitting">Submitting...</span></button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

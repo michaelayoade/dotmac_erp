@@ -12,6 +12,7 @@ from app.models.people.hr.info_change_request import (
     InfoChangeType,
 )
 from app.services.people.hr.info_change_service import InfoChangeService
+from app.services.people.self_service_web import self_service_web_service
 from app.templates import templates
 from app.web.deps import get_db_for_org, WebAuthContext, base_context, require_hr_access
 
@@ -132,10 +133,46 @@ def info_change_request_detail(
             "request_item": req,
             "success": success,
             "error": error,
+            "has_pending_evidence": bool(req.pending_document_path),
         }
     )
     return templates.TemplateResponse(
         request, "people/hr/info_change_request_detail.html", context
+    )
+
+
+@router.get("/info-changes/batches/{batch_id}", response_class=HTMLResponse)
+def info_change_batch_detail(
+    request: Request,
+    batch_id: UUID,
+    success: str | None = None,
+    error: str | None = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Detail view for a specific info change batch."""
+    org_id = (
+        auth.organization_id
+        if isinstance(auth.organization_id, UUID)
+        else UUID(auth.organization_id)
+    )
+    svc = InfoChangeService(db)
+    batch = svc.get_batch_detail(org_id, batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    context = base_context(request, auth, "Info Change Batch", "info-changes", db=db)
+    context.update(
+        {
+            "batch": batch,
+            "success": success,
+            "error": error,
+        }
+    )
+    return templates.TemplateResponse(
+        request,
+        "people/hr/info_change_batch_detail.html",
+        context,
     )
 
 
@@ -222,4 +259,93 @@ def reject_info_change_request(
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Rejected",
         status_code=303,
+    )
+
+
+@router.post("/info-changes/batches/{batch_id}/approve-all")
+def approve_info_change_batch(
+    batch_id: UUID,
+    reviewer_notes: str | None = Form(default=None),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+) -> RedirectResponse:
+    """Approve all actionable items in a batch."""
+    org_id = (
+        auth.organization_id
+        if isinstance(auth.organization_id, UUID)
+        else UUID(auth.organization_id)
+    )
+    person_id = (
+        auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
+    )
+    svc = InfoChangeService(db)
+    try:
+        svc.approve_batch(
+            org_id, batch_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/people/hr/info-changes/batches/{batch_id}?error={quote(str(exc))}",
+            status_code=303,
+        )
+    except Exception:
+        db.rollback()
+        raise
+    return RedirectResponse(
+        url=f"/people/hr/info-changes/batches/{batch_id}?success=Approved",
+        status_code=303,
+    )
+
+
+@router.post("/info-changes/batches/{batch_id}/reject-all")
+def reject_info_change_batch(
+    batch_id: UUID,
+    reviewer_notes: str | None = Form(default=None),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+) -> RedirectResponse:
+    """Reject all actionable items in a batch."""
+    org_id = (
+        auth.organization_id
+        if isinstance(auth.organization_id, UUID)
+        else UUID(auth.organization_id)
+    )
+    person_id = (
+        auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
+    )
+    svc = InfoChangeService(db)
+    try:
+        svc.reject_batch(
+            org_id, batch_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/people/hr/info-changes/batches/{batch_id}?error={quote(str(exc))}",
+            status_code=303,
+        )
+    except Exception:
+        db.rollback()
+        raise
+    return RedirectResponse(
+        url=f"/people/hr/info-changes/batches/{batch_id}?success=Rejected",
+        status_code=303,
+    )
+
+
+@router.get("/info-changes/{request_id}/evidence")
+def download_info_change_evidence(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Download pending evidence for an info change request."""
+    return self_service_web_service.download_pending_info_change_evidence_response(
+        auth,
+        db,
+        request_id=request_id,
+        require_owner_only=False,
     )

@@ -10,16 +10,49 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.finance.automation import (
     CustomFieldDefinition,
     CustomFieldEntityType,
     CustomFieldType,
 )
+from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
+
+# Fallback used when the `custom_fields_max_per_entity` setting
+# (app/services/settings_spec.py, SettingDomain.automation) has no
+# configured value — matches that spec's own `default=20`.
+_DEFAULT_MAX_PER_ENTITY = 20
+
+_OPTION_FIELD_TYPES = (CustomFieldType.SELECT, CustomFieldType.MULTISELECT)
+_SELECT_OPTIONS_CONSISTENCY_KEYS = {"field_type", "field_options"}
+
+
+def _validate_select_options(
+    field_type: CustomFieldType, field_options: dict[str, Any] | None
+) -> None:
+    """Definition self-consistency, checked up front (same pattern as the
+    duplicate-code / identifier-format checks in `create_field` below):
+    `CustomFieldDefinition.validate_value`'s SELECT branch only checks
+    membership `if self.field_options:` (see
+    `app/models/finance/automation/custom_field.py`) — an options-less
+    SELECT/MULTISELECT definition silently skips membership validation
+    forever after, so any value passes. Reject it here instead: a
+    SELECT/MULTISELECT definition must always carry at least one non-empty
+    option in `field_options["options"]`.
+    """
+    if field_type not in _OPTION_FIELD_TYPES:
+        return
+    options = (field_options or {}).get("options") or []
+    if not options:
+        raise HTTPException(
+            status_code=400,
+            detail="SELECT/MULTISELECT fields require at least one option",
+        )
 
 
 @dataclass
@@ -59,7 +92,49 @@ class CustomFieldsService:
         input_data: CustomFieldInput,
         created_by: UUID,
     ) -> CustomFieldDefinition:
-        """Create a new custom field definition."""
+        """Create a new custom field definition.
+
+        Enforces the `custom_fields_max_per_entity` setting
+        (SettingDomain.automation, app/services/settings_spec.py) via the
+        same `resolve_value` resolver every other setting-backed limit in
+        this codebase reads (see `app/services/fixed_assets/depreciation.py`)
+        — the spec was declared but never read anywhere, so the limit was
+        silently unenforced. Counts *active* definitions for this
+        (organization_id, entity_type) pair; deactivated (soft-deleted)
+        definitions don't count against the limit.
+
+        Also enforces `_validate_select_options` up front — a SELECT/
+        MULTISELECT definition must declare at least one option.
+        """
+        _validate_select_options(input_data.field_type, input_data.field_options)
+
+        resolved = resolve_value(
+            db, SettingDomain.automation, "custom_fields_max_per_entity"
+        )
+        limit = int(str(resolved)) if resolved is not None else _DEFAULT_MAX_PER_ENTITY
+        active_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(CustomFieldDefinition)
+                .where(
+                    and_(
+                        CustomFieldDefinition.organization_id == organization_id,
+                        CustomFieldDefinition.entity_type == input_data.entity_type,
+                        CustomFieldDefinition.is_active == True,  # noqa: E712
+                    )
+                )
+            )
+            or 0
+        )
+        if active_count >= limit:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Custom field limit reached ({limit}) for "
+                    f"{input_data.entity_type.value}"
+                ),
+            )
+
         # Check for duplicate field code
         existing = db.execute(
             select(CustomFieldDefinition).where(
@@ -210,6 +285,11 @@ class CustomFieldsService:
         """
         Validate custom field values against their definitions.
 
+        A `field_code` with no matching definition is a validation error
+        (a caller-side typo would otherwise pass silently and, once value
+        storage exists, get persisted under a code no definition can ever
+        resolve) rather than being silently ignored.
+
         Returns:
             Tuple of (is_valid, list of error messages)
         """
@@ -229,7 +309,7 @@ class CustomFieldsService:
         for field_code, value in field_values.items():
             defn_for_field = definitions_by_code.get(field_code)
             if not defn_for_field:
-                # Unknown field - could ignore or error
+                errors.append(f"Unknown custom field: {field_code!r}")
                 continue
 
             is_valid, error = defn_for_field.validate_value(value)
@@ -344,6 +424,11 @@ class CustomFieldsService:
         # Don't allow changing entity_type or field_code
         updates.pop("entity_type", None)
         updates.pop("field_code", None)
+
+        if _SELECT_OPTIONS_CONSISTENCY_KEYS & updates.keys():
+            effective_type = updates.get("field_type", field.field_type)
+            effective_options = updates.get("field_options", field.field_options)
+            _validate_select_options(effective_type, effective_options)
 
         for key, value in updates.items():
             if hasattr(field, key):

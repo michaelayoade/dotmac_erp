@@ -1,0 +1,257 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import status_badge %}
+
+{% block page_title %}Qualifications{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people/self" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Self Service</a></li>
+        <li>/</li>
+        <li class="font-medium text-slate-900 dark:text-white" aria-current="page">Qualifications</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6">
+    <div class="card p-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Qualifications</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Submit one or more qualifications for HR approval. Existing-record edits remain one-at-a-time.</p>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <span>Max {{ max_batch_items }} items per submission</span>
+                {% if create_pending_requests %}
+                {{ status_badge('PENDING', 'sm') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-4">
+        <div class="flex flex-wrap gap-2">
+            <a href="/people/self/qualifications" class="btn btn-secondary">Qualifications</a>
+            <a href="/people/self/certifications" class="btn btn-secondary">Certifications</a>
+            <a href="/people/self/skills" class="btn btn-secondary">Skills</a>
+            <a href="/people/self/dependents" class="btn btn-secondary">Dependants</a>
+            <a href="/people/self/documents" class="btn btn-secondary">My Documents</a>
+        </div>
+    </div>
+
+    {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    {% if create_pending_requests %}
+    <div class="card p-6">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Pending Qualification Requests</h3>
+        <div class="mt-4 space-y-3">
+            {% for pending in create_pending_requests %}
+            <div class="rounded-xl border border-slate-200 p-4 text-sm dark:border-slate-700">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="font-medium text-slate-900 dark:text-white">{{ pending.proposed_changes.get("qualification_name") or "Qualification request" }}</p>
+                    <div class="flex items-center gap-2">
+                        {{ status_badge(pending.status.value, 'sm') }}
+                        {% if pending.batch_id %}
+                        <a href="/people/hr/info-changes/batches/{{ pending.batch_id }}" class="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">Batch {{ pending.batch_reference }}</a>
+                        {% endif %}
+                    </div>
+                </div>
+                <p class="mt-1 text-slate-500 dark:text-slate-400">Submitted {{ pending.created_at | format_datetime if pending.created_at else '-' }}</p>
+                {% if pending.pending_document_path %}
+                <a href="/people/self/info-change-evidence/{{ pending.request_id }}" class="mt-2 inline-flex text-sm font-medium text-violet-600 hover:underline dark:text-violet-400">Download pending evidence</a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Current Qualifications</h3>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for record in records %}
+            <div class="px-6 py-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">{{ record.qualification_name }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ record.qualification_type.value | replace('_', ' ') | title }} at {{ record.institution_name }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ record.field_of_study if record.field_of_study else 'Field not specified' }}</p>
+                </div>
+                <a href="/people/self/qualifications?edit_id={{ record.qualification_id }}" class="btn btn-secondary">Edit</a>
+            </div>
+            {% else %}
+            <div class="px-6 py-8 text-sm text-slate-500 dark:text-slate-400">No qualifications have been recorded yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if edit_record %}
+    <form method="post" enctype="multipart/form-data" class="card p-6 space-y-4">
+        {{ request.state.csrf_form | safe }}
+        <input type="hidden" name="qualification_id" value="{{ edit_record.qualification_id }}">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Edit Qualification</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Updates are submitted one at a time for approval. Supporting evidence is optional.</p>
+        </div>
+        <fieldset class="grid gap-4 md:grid-cols-2">
+            <div>
+                <label for="qualification_type" class="form-label">Qualification Type</label>
+                <select id="qualification_type" name="qualification_type" class="form-select w-full">
+                    <option value="">Select type</option>
+                    {% for item in qualification_types %}
+                    {% set selected_value = form_data.get("qualification_type") if form_data else (edit_record.qualification_type.value if edit_record else "") %}
+                    <option value="{{ item.value }}" {% if selected_value == item.value %}selected{% endif %}>{{ item.value | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div><label for="qualification_name" class="form-label">Qualification Name</label><input id="qualification_name" name="qualification_name" class="form-input w-full" value="{{ form_data.get('qualification_name') if form_data else (edit_record.qualification_name if edit_record else '') }}"></div>
+            <div><label for="field_of_study" class="form-label">Field of Study</label><input id="field_of_study" name="field_of_study" class="form-input w-full" value="{{ form_data.get('field_of_study') if form_data else (edit_record.field_of_study if edit_record and edit_record.field_of_study else '') }}"></div>
+            <div><label for="institution_name" class="form-label">Institution Name</label><input id="institution_name" name="institution_name" class="form-input w-full" value="{{ form_data.get('institution_name') if form_data else (edit_record.institution_name if edit_record else '') }}"></div>
+            <div><label for="institution_location" class="form-label">Institution Location</label><input id="institution_location" name="institution_location" class="form-input w-full" value="{{ form_data.get('institution_location') if form_data else (edit_record.institution_location if edit_record and edit_record.institution_location else '') }}"></div>
+            <div><label for="start_date" class="form-label">Start Date</label><input type="date" id="start_date" name="start_date" class="form-input w-full" value="{{ form_data.get('start_date') if form_data else (edit_record.start_date.isoformat() if edit_record and edit_record.start_date else '') }}"></div>
+            <div><label for="end_date" class="form-label">End Date</label><input type="date" id="end_date" name="end_date" class="form-input w-full" value="{{ form_data.get('end_date') if form_data else (edit_record.end_date.isoformat() if edit_record and edit_record.end_date else '') }}"></div>
+            <div><label class="form-label">Ongoing</label><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_ongoing" value="1" {% set ongoing_value = form_data.get('is_ongoing') if form_data else (edit_record.is_ongoing if edit_record else false) %}{% if ongoing_value %}checked{% endif %}>Currently in progress</label></div>
+            <div><label for="grade" class="form-label">Grade</label><input id="grade" name="grade" class="form-input w-full" value="{{ form_data.get('grade') if form_data else (edit_record.grade if edit_record and edit_record.grade else '') }}"></div>
+            <div><label for="score" class="form-label">Score</label><input id="score" name="score" class="form-input w-full" value="{{ form_data.get('score') if form_data else (edit_record.score if edit_record and edit_record.score is not none else '') }}"></div>
+            <div><label for="max_score" class="form-label">Max Score</label><input id="max_score" name="max_score" class="form-input w-full" value="{{ form_data.get('max_score') if form_data else (edit_record.max_score if edit_record and edit_record.max_score is not none else '') }}"></div>
+            <div class="md:col-span-2"><label for="supporting_file" class="form-label">Supporting File</label><input id="supporting_file" type="file" name="supporting_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="form-input w-full"><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Approved types only. Max 10 MB.</p></div>
+            <div class="md:col-span-2"><label for="notes" class="form-label">Notes</label><textarea id="notes" name="notes" rows="3" class="form-input w-full">{{ form_data.get('notes') if form_data else (edit_record.notes if edit_record and edit_record.notes else '') }}</textarea></div>
+        </fieldset>
+        <div class="flex justify-end gap-3">
+            <a href="/people/self/qualifications" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Submit for HR Approval</button>
+        </div>
+    </form>
+    {% else %}
+    <form method="post" enctype="multipart/form-data" class="card p-6 space-y-6"
+          x-data='{
+              rows: {{ form_rows | tojson | safe }},
+              maxRows: {{ max_batch_items }},
+              submitting: false,
+              blankRow: {{ {
+                  "qualification_type": "",
+                  "qualification_name": "",
+                  "field_of_study": "",
+                  "institution_name": "",
+                  "institution_location": "",
+                  "start_date": "",
+                  "end_date": "",
+                  "is_ongoing": false,
+                  "grade": "",
+                  "score": "",
+                  "max_score": "",
+                  "notes": "",
+                  "_errors": {}
+              } | tojson | safe }},
+              addRow() {
+                  if (this.rows.length >= this.maxRows) return;
+                  this.rows.push(JSON.parse(JSON.stringify(this.blankRow)));
+              },
+              removeRow(index) {
+                  if (this.rows.length === 1) return;
+                  this.rows.splice(index, 1);
+              }
+          }'
+          @submit="submitting = true">
+        {{ request.state.csrf_form | safe }}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Add Qualifications</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Add one qualification, then use <span class="font-medium">Add another</span> for the rest. Files must be reselected if validation fails.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" @click="addRow()" :disabled="rows.length >= maxRows">Add another</button>
+        </div>
+
+        <template x-for="(row, index) in rows" :key="index">
+            <section class="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h4 class="text-base font-semibold text-slate-900 dark:text-white" x-text="`Qualification ${index + 1}`"></h4>
+                    <button type="button" class="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" x-show="rows.length > 1" @click="removeRow(index)">Remove</button>
+                </div>
+                <template x-if="row._errors && row._errors.row">
+                    <p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300" x-text="row._errors.row"></p>
+                </template>
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                        <label class="form-label">Qualification Type</label>
+                        <select class="form-select w-full" :name="`qualification_type_${index + 1}`" x-model="row.qualification_type">
+                            <option value="">Select type</option>
+                            {% for item in qualification_types %}
+                            <option value="{{ item.value }}">{{ item.value | replace('_', ' ') | title }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.qualification_type" x-text="row._errors && row._errors.qualification_type"></p>
+                    </div>
+                    <div>
+                        <label class="form-label">Qualification Name</label>
+                        <input class="form-input w-full" :name="`qualification_name_${index + 1}`" x-model="row.qualification_name">
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.qualification_name" x-text="row._errors && row._errors.qualification_name"></p>
+                    </div>
+                    <div>
+                        <label class="form-label">Field of Study</label>
+                        <input class="form-input w-full" :name="`field_of_study_${index + 1}`" x-model="row.field_of_study">
+                    </div>
+                    <div>
+                        <label class="form-label">Institution Name</label>
+                        <input class="form-input w-full" :name="`institution_name_${index + 1}`" x-model="row.institution_name">
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.institution_name" x-text="row._errors && row._errors.institution_name"></p>
+                    </div>
+                    <div>
+                        <label class="form-label">Institution Location</label>
+                        <input class="form-input w-full" :name="`institution_location_${index + 1}`" x-model="row.institution_location">
+                    </div>
+                    <div>
+                        <label class="form-label">Start Date</label>
+                        <input type="date" class="form-input w-full" :name="`start_date_${index + 1}`" x-model="row.start_date">
+                    </div>
+                    <div>
+                        <label class="form-label">End Date</label>
+                        <input type="date" class="form-input w-full" :name="`end_date_${index + 1}`" x-model="row.end_date">
+                    </div>
+                    <div>
+                        <label class="form-label">Grade</label>
+                        <input class="form-input w-full" :name="`grade_${index + 1}`" x-model="row.grade">
+                    </div>
+                    <div>
+                        <label class="form-label">Score</label>
+                        <input class="form-input w-full" :name="`score_${index + 1}`" x-model="row.score" inputmode="decimal">
+                    </div>
+                    <div>
+                        <label class="form-label">Max Score</label>
+                        <input class="form-input w-full" :name="`max_score_${index + 1}`" x-model="row.max_score" inputmode="decimal">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" value="1" :name="`is_ongoing_${index + 1}`" x-model="row.is_ongoing">
+                            Currently in progress
+                        </label>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="form-label">Supporting File</label>
+                        <input type="file" class="form-input w-full" :name="`supporting_file_${index + 1}`" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Approved types only. Max 10 MB.</p>
+                        <p class="mt-1 text-xs text-amber-700 dark:text-amber-400" x-show="row._upload_filename" x-text="`Please select ${row._upload_filename} again — your browser cannot keep a file across a failed submission.`"></p>
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.supporting_file" x-text="row._errors && row._errors.supporting_file"></p>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="form-label">Notes</label>
+                        <textarea rows="3" class="form-input w-full" :name="`notes_${index + 1}`" x-model="row.notes"></textarea>
+                    </div>
+                </div>
+            </section>
+        </template>
+
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Blank rows are ignored. Completely empty submissions are rejected.</p>
+            <button type="submit" class="btn btn-primary" :disabled="submitting">
+                <span x-show="!submitting">Submit all for approval</span>
+                <span x-show="submitting">Submitting...</span>
+            </button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

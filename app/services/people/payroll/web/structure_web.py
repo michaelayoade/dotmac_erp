@@ -7,13 +7,11 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
-from starlette.datastructures import UploadFile
 
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
@@ -30,6 +28,10 @@ from app.services.common import (
     pagination_context,
 )
 from app.services.people.payroll.payroll_service import PayrollService
+from app.services.web_forms import (
+    normalize_form as _normalize_form,
+    safe_form_text as _safe_form_text,
+)
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -43,23 +45,6 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_form_text(value: object) -> str:
-    """Normalize form values to text for safe parsing."""
-    if value is None:
-        return ""
-    if isinstance(value, UploadFile):
-        return ""
-    if isinstance(value, str):
-        return value
-    return str(value)
-
-
-def _normalize_form(form: Any) -> dict[str, str]:
-    if form is None:
-        return {}
-    return {key: value if isinstance(value, str) else "" for key, value in form.items()}
 
 
 class StructureWebService:
