@@ -25,6 +25,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
+from app.db.session_context import prime_tenant_context
 from app.models.people.attendance import Attendance, AttendanceStatus
 from app.models.people.exp import (
     ExpenseClaimStatus,
@@ -108,6 +109,12 @@ TRANSPORT_ROW_KEYS = frozenset({"_upload"})
 
 class SelfServiceWebService:
     """View service for employee self-service pages."""
+
+    @staticmethod
+    def _rollback_and_reprime(db: Session, organization_id: UUID) -> None:
+        """Rollback failed form work and restore both tenant-context layers."""
+        db.rollback()
+        prime_tenant_context(db, organization_id)
 
     def index_response(
         self,
@@ -1644,7 +1651,7 @@ class SelfServiceWebService:
                 status_code=303,
             )
         except (EmployeeExtendedDataError, ValueError) as exc:
-            db.rollback()
+            self._rollback_and_reprime(db, org_id)
             if pending_evidence:
                 try:
                     upload_service.delete(pending_evidence.path)
@@ -1727,7 +1734,7 @@ class SelfServiceWebService:
                 status_code=303,
             )
         except (EmployeeExtendedDataError, ValueError) as exc:
-            db.rollback()
+            self._rollback_and_reprime(db, org_id)
             for item in uploaded:
                 try:
                     upload_service.delete(item.path)
@@ -1844,7 +1851,7 @@ class SelfServiceWebService:
                 status_code=303,
             )
         except (EmployeeExtendedDataError, ValueError) as exc:
-            db.rollback()
+            self._rollback_and_reprime(db, org_id)
             if pending_evidence:
                 try:
                     upload_service.delete(pending_evidence.path)
@@ -1941,7 +1948,7 @@ class SelfServiceWebService:
                 status_code=303,
             )
         except (EmployeeExtendedDataError, ValueError) as exc:
-            db.rollback()
+            self._rollback_and_reprime(db, org_id)
             for item in uploaded:
                 try:
                     upload_service.delete(item.path)
