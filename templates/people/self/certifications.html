@@ -123,7 +123,12 @@
                     <div><label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" value="1" :name="`does_not_expire_${index + 1}`" x-model="row.does_not_expire">No expiry date</label></div>
                     <div><label class="form-label">Credential ID</label><input class="form-input w-full" :name="`credential_id_${index + 1}`" x-model="row.credential_id"></div>
                     <div class="md:col-span-2"><label class="form-label">Verification URL</label><input class="form-input w-full" :name="`credential_url_${index + 1}`" x-model="row.credential_url"></div>
-                    <div class="md:col-span-2"><label class="form-label">Supporting File</label><input type="file" class="form-input w-full" :name="`supporting_file_${index + 1}`" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"></div>
+                    <div class="md:col-span-2">
+                        <label class="form-label">Supporting File</label>
+                        <input type="file" class="form-input w-full" :name="`supporting_file_${index + 1}`" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                        <p class="mt-1 text-xs text-amber-700 dark:text-amber-400" x-show="row._upload_filename" x-text="`Please select ${row._upload_filename} again — your browser cannot keep a file across a failed submission.`"></p>
+                        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.supporting_file" x-text="row._errors && row._errors.supporting_file"></p>
+                    </div>
                     <div class="md:col-span-2"><label class="form-label">Notes</label><textarea rows="3" class="form-input w-full" :name="`notes_${index + 1}`" x-model="row.notes"></textarea></div>
                 </div>
             </section>
