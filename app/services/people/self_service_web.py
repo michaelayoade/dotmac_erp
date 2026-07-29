@@ -100,6 +100,11 @@ logger = logging.getLogger(__name__)
 
 DEPARTMENT_DISCIPLINE_READ_PERMISSION = "discipline:department:read"
 
+# Keys carried on a collected form row purely to move request data into the
+# submit path. They never belong in template context — see
+# SelfServiceWebService._renderable_form_rows.
+TRANSPORT_ROW_KEYS = frozenset({"_upload"})
+
 
 class SelfServiceWebService:
     """View service for employee self-service pages."""
@@ -1328,6 +1333,37 @@ class SelfServiceWebService:
         for field_name in matched_fields:
             row.setdefault("_errors", {})[field_name] = message
 
+    @staticmethod
+    def _renderable_form_rows(
+        rows: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]] | None:
+        """Project collected rows into JSON-safe form state for the templates.
+
+        Collected rows carry the raw ``UploadFile`` under ``_upload`` so the
+        submit path can read it. The templates hand rows to ``| tojson``, which
+        cannot serialise an ``UploadFile``. This is the single point where rows
+        become template context, so the substitution happens here: the file
+        object is replaced by its name under ``_upload_filename``.
+
+        The name is kept because a browser never repopulates a file input — on a
+        validation failure the user has to pick the file again, and the template
+        can only say which one if the name survives.
+        """
+        if rows is None:
+            return None
+        renderable: list[dict[str, Any]] = []
+        for row in rows:
+            projected = {
+                key: value
+                for key, value in row.items()
+                if key not in TRANSPORT_ROW_KEYS
+            }
+            projected["_upload_filename"] = (
+                getattr(row.get("_upload"), "filename", None) or ""
+            )
+            renderable.append(projected)
+        return renderable
+
     def extended_profile_response(
         self,
         request: Request,
@@ -1414,7 +1450,8 @@ class SelfServiceWebService:
                 "edit_record": edit_record,
                 "edit_id": edit_id,
                 "form_data": form_data or {},
-                "form_rows": form_rows or [self._default_section_row(section)],
+                "form_rows": self._renderable_form_rows(form_rows)
+                or [self._default_section_row(section)],
                 "pending_requests": pending_requests,
                 "create_pending_requests": create_pending_requests,
                 "max_batch_items": InfoChangeService.MAX_BATCH_ITEMS,
@@ -1550,7 +1587,8 @@ class SelfServiceWebService:
                 "employee": employee,
                 "document_types": self._employee_document_type_options(),
                 "form_data": form_data or {},
-                "form_rows": form_rows or [self._default_document_row()],
+                "form_rows": self._renderable_form_rows(form_rows)
+                or [self._default_document_row()],
                 "error": error,
                 "max_batch_items": InfoChangeService.MAX_BATCH_ITEMS,
             }
