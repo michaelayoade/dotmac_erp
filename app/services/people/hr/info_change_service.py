@@ -1608,17 +1608,21 @@ class InfoChangeService:
     def _validate_qualification_payload(
         self, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        qualification_type_raw = self._clean_text(payload.get("qualification_type"))
+        qualification_type_input = payload.get("qualification_type")
+        qualification_type_raw = self._clean_text(qualification_type_input)
         qualification_name = self._clean_text(payload.get("qualification_name"))
         institution_name = self._clean_text(payload.get("institution_name"))
         if not qualification_type_raw or not qualification_name or not institution_name:
             raise ValueError(
                 "Qualification type, qualification name, and institution name are required"
             )
-        try:
-            qualification_type = QualificationType(qualification_type_raw)
-        except ValueError as exc:
-            raise ValueError("Invalid qualification type") from exc
+        if isinstance(qualification_type_input, QualificationType):
+            qualification_type = qualification_type_input
+        else:
+            try:
+                qualification_type = QualificationType(qualification_type_raw)
+            except ValueError as exc:
+                raise ValueError("Invalid qualification type") from exc
         start_date = self._coerce_date(payload.get("start_date"), "start_date")
         end_date = self._coerce_date(payload.get("end_date"), "end_date")
         is_ongoing = bool(payload.get("is_ongoing"))
