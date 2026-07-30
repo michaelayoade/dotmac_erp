@@ -39,12 +39,31 @@ def test_metrics_authorized_accepts_matching_token(monkeypatch) -> None:
     assert main_module._metrics_authorized(request) is True
 
 
+def test_metrics_authorized_accepts_bearer_token(monkeypatch) -> None:
+    """Fleet-standard auth: Authorization: Bearer <token>."""
+    monkeypatch.setenv("METRICS_TOKEN", "metrics-secret")
+
+    request = _make_request(headers={"Authorization": "Bearer metrics-secret"})
+
+    assert main_module._metrics_authorized(request) is True
+
+
+def test_metrics_authorized_rejects_wrong_bearer_token(monkeypatch) -> None:
+    monkeypatch.setenv("METRICS_TOKEN", "metrics-secret")
+
+    request = _make_request(headers={"Authorization": "Bearer nope"})
+
+    assert main_module._metrics_authorized(request) is False
+
+
 def test_monitoring_health_requires_auth(monkeypatch) -> None:
+    """Unauthorized observability endpoints answer 404, not 403: on a publicly
+    reachable host the endpoint should be indistinguishable from absent."""
     monkeypatch.setenv("MONITORING_TOKEN", "monitor-secret")
 
     response = main_module.monitoring_health(_make_request())
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_monitoring_health_returns_503_when_sentry_transport_is_unhealthy(

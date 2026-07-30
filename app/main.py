@@ -1,5 +1,6 @@
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Lock
@@ -918,7 +919,7 @@ def monitoring_health(request: Request):
     silent failures (e.g. Loki handler dying after a connection timeout).
     """
     if not _monitoring_authorized(request):
-        return Response(status_code=403)
+        return Response(status_code=404)
 
     from app.monitoring import get_monitoring_status
     from app.telemetry import get_otel_status
@@ -1064,11 +1065,29 @@ def _observability_endpoint_authorized(
     for key in token_env_keys:
         token = os.getenv(key, "").strip()
         if token:
-            header_token = request.headers.get("x-metrics-token", "").strip()
-            return header_token == token
+            return _token_matches(request, token)
 
     # If no token configured, only allow local access.
     return bool(request.client and request.client.host in {"127.0.0.1", "::1"})
+
+
+def _token_matches(request: Request, token: str) -> bool:
+    """Accept the fleet-standard bearer header, or the legacy header.
+
+    Fleet standard (matches the observe stack's minio/openbao/academy scrapes,
+    and lets Prometheus use `authorization: credentials_file:` rather than a
+    custom header): ``Authorization: Bearer <token>``.
+
+    ``x-metrics-token`` stays supported so existing scrapers and runbooks keep
+    working; it is deprecated and should be retired once nothing uses it.
+    Comparisons are constant-time — these endpoints are reachable publicly.
+    """
+    authorization = request.headers.get("authorization", "").strip()
+    if authorization.lower().startswith("bearer "):
+        if secrets.compare_digest(authorization[7:].strip(), token):
+            return True
+    legacy = request.headers.get("x-metrics-token", "").strip()
+    return bool(legacy) and secrets.compare_digest(legacy, token)
 
 
 def _metrics_authorized(request: Request) -> bool:
@@ -1090,6 +1109,6 @@ def _monitoring_authorized(request: Request) -> bool:
 @app.get("/metrics")
 def metrics(request: Request):
     if not _metrics_authorized(request):
-        return Response(status_code=403)
+        return Response(status_code=404)
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
