@@ -68,3 +68,38 @@ def auto_issue_pending_stock_material_requests(
             )
 
     return results
+
+
+@shared_task
+def send_low_stock_notifications() -> dict[str, Any]:
+    """Send daily low-stock summaries to authorized inventory users."""
+    results: dict[str, Any] = {
+        "organizations_checked": 0,
+        "low_stock_items": 0,
+        "notifications_sent": 0,
+        "errors": [],
+    }
+
+    for org_id in _list_active_organization_ids():
+        results["organizations_checked"] += 1
+        try:
+            with session_for_org(org_id) as db:
+                from app.services.inventory.notifications import (
+                    InventoryNotificationService,
+                )
+
+                org_result = InventoryNotificationService(db).notify_low_stock(org_id)
+                db.commit()
+
+            results["low_stock_items"] += org_result["low_stock_items"]
+            results["notifications_sent"] += org_result["notifications_sent"]
+        except Exception as exc:
+            logger.exception(
+                "Failed to send low-stock notifications for organization %s",
+                org_id,
+            )
+            results["errors"].append(
+                {"organization_id": str(org_id), "error": str(exc)}
+            )
+
+    return results
