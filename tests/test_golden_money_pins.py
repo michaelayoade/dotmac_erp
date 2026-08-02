@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -112,6 +112,21 @@ _TABLES = [
 _SCHEMAS = {"gl", "ar", "tax", "core_config", "platform", "audit", "banking"}
 
 _TODAY = date(2026, 7, 15)
+
+
+class _FrozenToday(date):
+    """`date` with `today()` pinned to the scenario date.
+
+    A subclass rather than a Mock so the patched modules keep constructing real
+    dates (`date(...)`) and every `isinstance(x, date)` check still holds — the
+    only altered behaviour is what "today" means.
+    """
+
+    @classmethod
+    def today(cls) -> date:
+        return _TODAY
+
+
 _USER = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
 
 
@@ -218,6 +233,32 @@ def world():
         return_value=None,
     )
     _audit_stub.start()
+
+    # Freeze the sync module's clock to the scenario's date.
+    #
+    # The world seeds exactly ONE fiscal period (2026-07), while
+    # `_reverse_posted_invoice_gl` correctly reversal-dates with `date.today()`.
+    # So from 2026-08-01 onward the reversal asks for a period that this world
+    # never created and `ReversalService` refuses it — the tests began failing
+    # on a calendar rollover, not on a code change, which is why a historically
+    # green `main` was stale rather than correct.
+    #
+    # Freezing here (rather than seeding an August period) is the fix that does
+    # not expire: adding the next month would simply move the failure to the
+    # next rollover. Production behaviour is untouched — only the test's notion
+    # of "today" is pinned, matching every other date in this world.
+    # Only `_invoices` is patched: it is the module holding
+    # `_reverse_posted_invoice_gl`, and it binds `date` at module scope.
+    # `_credit_notes` imports `date` INSIDE a function, so it has no module
+    # attribute to patch — and its `today()` feeds a credit-note date, not a
+    # reversal date, so it is not on the path these tests pin. Left alone
+    # deliberately rather than reached for with a broader `datetime` patch.
+    _clock_stubs = [
+        _patch("app.services.dotmac_sub.sync._invoices.date", _FrozenToday),
+    ]
+    for _stub in _clock_stubs:
+        _stub.start()
+
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -278,43 +319,13 @@ def world():
         )
     )
 
-    # The reversal path posts at date.today() (InvoiceSyncMixin ->
-    # ReversalService, app/services/dotmac_sub/sync/_invoices.py), so the
-    # world must always contain an OPEN period covering the real current
-    # date — the pinned 2026-07 period alone made every reversal test fail
-    # the moment the calendar left July 2026.
-    today = date.today()
-    if not (date(2026, 7, 1) <= today <= date(2026, 7, 31)):
-        fiscal_year_id = year.fiscal_year_id
-        if today.year != 2026:
-            current_year = FiscalYear(
-                organization_id=org_id,
-                year_code=f"FY{today.year}",
-                year_name=f"FY {today.year}",
-                start_date=date(today.year, 1, 1),
-                end_date=date(today.year, 12, 31),
-                created_at=now,
-            )
-            db.add(current_year)
-            db.flush()
-            fiscal_year_id = current_year.fiscal_year_id
-        month_end = (
-            date(today.year + 1, 1, 1) - timedelta(days=1)
-            if today.month == 12
-            else date(today.year, today.month + 1, 1) - timedelta(days=1)
-        )
-        db.add(
-            FiscalPeriod(
-                organization_id=org_id,
-                fiscal_year_id=fiscal_year_id,
-                period_number=today.month,
-                period_name=f"{today.year}-{today.month:02d}",
-                start_date=date(today.year, today.month, 1),
-                end_date=month_end,
-                status=PeriodStatus.OPEN,
-                created_at=now,
-            )
-        )
+    # NOTE: this world deliberately seeds ONE period. An earlier fix additionally
+    # seeded a period covering the real current date, because the reversal path
+    # posts at `date.today()`; freezing that clock (above) addresses the same
+    # failure at its source, so the extra period is no longer reached — and a
+    # world whose SHAPE varied with the wall clock (one period in July, two
+    # otherwise, plus a fiscal year across a year boundary) is precisely what a
+    # golden-pin fixture exists to avoid.
 
     w.customer = Customer(
         organization_id=org_id,
@@ -334,6 +345,8 @@ def world():
     finally:
         db.close()
         engine.dispose()
+        for _stub in reversed(_clock_stubs):
+            _stub.stop()
         _audit_stub.stop()
         _restore_listeners()
 
@@ -672,6 +685,10 @@ def test_sub_sync_reverse_and_repost_row_pairing(world: _World) -> None:
     assert reversal is not None
     assert reversal.journal_type == JournalType.REVERSAL
     assert reversal.is_reversal is True
+    # Pins the frozen clock, not just the reversal: without this the world
+    # could drift back to a real `today()` and the suite would once again pass
+    # or fail depending on the calendar rather than the code.
+    assert reversal.entry_date == _TODAY
     assert reversal.status == JournalStatus.POSTED
     assert reversal.reversed_journal_id == original_journal_id
     # Reversal keeps the ORIGINAL document's provenance.
