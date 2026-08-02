@@ -34,7 +34,11 @@ if TYPE_CHECKING:  # pragma: no cover
     )
     from app.services.finance.platform.outbox_publisher import (  # noqa: F401
         OutboxPublisher,
+        StaleClaimError,
         outbox_publisher,
+    )
+    from app.services.finance.platform.outbox_reconciler import (  # noqa: F401
+        OutboxBalanceReconciler,
     )
     from app.services.finance.platform.sequence import (  # noqa: F401
         SequenceService,
@@ -51,6 +55,8 @@ __all__ = [
     "fx_service",
     "OutboxPublisher",
     "outbox_publisher",
+    "StaleClaimError",
+    "OutboxBalanceReconciler",
     "AuditLogService",
     "audit_log_service",
     "AuthorizationService",
@@ -77,6 +83,8 @@ _NAME_TO_MODULE = {
     "org_context_service": "org_context",
     "OutboxPublisher": "outbox_publisher",
     "outbox_publisher": "outbox_publisher",
+    "StaleClaimError": "outbox_publisher",
+    "OutboxBalanceReconciler": "outbox_reconciler",
     "SequenceService": "sequence",
     "sequence_service": "sequence",
 }

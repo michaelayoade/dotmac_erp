@@ -7,7 +7,11 @@ from app.models.finance.platform.event_handler_checkpoint import (
     CheckpointStatus,
     EventHandlerCheckpoint,
 )
-from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+from app.models.finance.platform.event_outbox import (
+    EventOutbox,
+    EventStatus,
+    TerminalReason,
+)
 from app.models.finance.platform.idempotency_record import IdempotencyRecord
 from app.models.finance.platform.saga_execution import (
     SagaExecution,
@@ -28,6 +32,7 @@ from app.models.finance.platform.service_hook_execution import (
 __all__ = [
     "EventOutbox",
     "EventStatus",
+    "TerminalReason",
     "EventHandlerCheckpoint",
     "CheckpointStatus",
     "IdempotencyRecord",

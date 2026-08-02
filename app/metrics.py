@@ -1,6 +1,6 @@
 import re
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -41,6 +41,54 @@ INTEGRATION_REQUEST_DURATION = Histogram(
     "Outbound integration request duration",
     ["integration", "operation", "status"],
 )
+
+# ── Finance event outbox (claim/deliver/settle relay) ──────────────────
+# Outcome labels: published, no_consequence, retried, dead, unsupported,
+# stale_claim, commit_failed, partial_failure_rolled_back, missing_org.
+OUTBOX_EVENTS = Counter(
+    "outbox_events_total",
+    "Outbox relay delivery outcomes",
+    ["outcome"],
+)
+OUTBOX_REPLAYS = Counter(
+    "outbox_replays_total",
+    "Authorized replays of dead outbox events",
+)
+OUTBOX_OLDEST_PENDING_AGE = Gauge(
+    "outbox_oldest_pending_age_seconds",
+    "Age of the oldest deliverable (PENDING/FAILED) outbox event",
+)
+OUTBOX_OLDEST_LEASE_AGE = Gauge(
+    "outbox_oldest_lease_age_seconds",
+    "Age of the oldest still-active claim lease (0 when none held)",
+)
+OUTBOX_RECONCILIATION = Counter(
+    "outbox_reconciliation_total",
+    "Outbox-vs-consequence reconciliation results",
+    ["result"],  # drift_found | repaired
+)
+
+
+def observe_outbox_outcome(outcome: str, count: int = 1) -> None:
+    if count > 0:
+        OUTBOX_EVENTS.labels(outcome=normalize_metric_label(outcome)).inc(count)
+
+
+def observe_outbox_replay() -> None:
+    OUTBOX_REPLAYS.inc()
+
+
+def set_outbox_backlog_ages(
+    pending_age_seconds: float, lease_age_seconds: float
+) -> None:
+    OUTBOX_OLDEST_PENDING_AGE.set(max(0.0, pending_age_seconds))
+    OUTBOX_OLDEST_LEASE_AGE.set(max(0.0, lease_age_seconds))
+
+
+def observe_outbox_reconciliation(result: str, count: int = 1) -> None:
+    if count > 0:
+        OUTBOX_RECONCILIATION.labels(result=normalize_metric_label(result)).inc(count)
+
 
 LOKI_LOGS_SENT = Counter(
     "loki_logs_sent_total",
