@@ -303,6 +303,22 @@ E3 (outbox hardening) claims, all **confirmed** at 96928fa1:
    the per-line `except Exception: logger.exception(...)` continues the loop,
    then the relay calls `mark_published` unconditionally on normal return.
 
+**E3 update (implemented in this branch):** all three behaviors above are
+repaired. `OutboxPublisher` settlement methods flush only (the relay task
+owns commit/rollback); the relay is claim/deliver/settle
+(`FOR UPDATE SKIP LOCKED` claim + token-gated settlement over new
+`claim_token`/`claimed_at`/`lease_expires_at` columns, migration
+`20260802_add_outbox_claim_lease_columns`); unknown events dead-letter as
+`terminal_reason="unsupported_event"` unless declared no-consequence
+(`DECLARED_NO_CONSEQUENCE*` in `app/tasks/outbox_relay.py`); the ledger
+handler re-raises per-line failures so the whole delivery transaction rolls
+back; replay of DEAD events is audited; and
+`reconcile_outbox_balance_projection` verifies the GL balance projection
+against posted ledger lines, repairing drift via
+`rebuild_balances_for_period`. Canaries:
+`tests/integration/platform/test_outbox_applied_result_canaries.py` (PG) and
+`tests/tasks/test_outbox_relay.py`.
+
 E9 claim confirmed: `app/licensing/validator.py:32` still ships
 `_PUBLIC_KEY_B64 = "REPLACE_WITH_REAL_PUBLIC_KEY_BASE64"`.
 

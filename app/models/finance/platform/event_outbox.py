@@ -33,6 +33,26 @@ class EventStatus(str, enum.Enum):
     DEAD = "DEAD"
 
 
+class TerminalReason:
+    """Well-known values for ``EventOutbox.terminal_reason``.
+
+    A plain string column (not a PG enum) so new reasons stay additive
+    without ``ALTER TYPE``. ``terminal_reason`` distinguishes *why* an
+    event reached a terminal status:
+
+    - on ``DEAD``: why it was dead-lettered (alertable);
+    - on ``PUBLISHED``: ``DECLARED_NO_CONSEQUENCE`` records that the event
+      settled as a documented no-op rather than an applied consequence.
+    """
+
+    UNSUPPORTED_EVENT = "unsupported_event"
+    MAX_RETRIES_EXCEEDED = "max_retries_exceeded"
+    DECLARED_NO_CONSEQUENCE = "declared_no_consequence"
+    MISSING_ORGANIZATION_CONTEXT = "missing_organization_context"
+    INVALID_PAYLOAD = "invalid_payload"
+    MANUAL_DEAD_LETTER = "manual_dead_letter"
+
+
 class EventOutbox(Base):
     """
     Transactional outbox for reliable event delivery.
@@ -46,6 +66,7 @@ class EventOutbox(Base):
             name="uq_outbox_idempotency",
         ),
         Index("idx_outbox_pending", "status", "next_retry_at"),
+        Index("idx_outbox_claim", "status", "lease_expires_at"),
         Index("idx_outbox_aggregate", "aggregate_type", "aggregate_id"),
         Index("idx_outbox_correlation", "correlation_id"),
         {"schema": "platform"},
@@ -116,6 +137,39 @@ class EventOutbox(Base):
         nullable=True,
     )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_class: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+        comment="Exception class name of the most recent delivery failure",
+    )
+    terminal_reason: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Why the event reached a terminal status (see TerminalReason)",
+    )
+
+    # Claim / lease state (claim-deliver-settle relay protocol).
+    # A PENDING/FAILED row with an unexpired lease is claimed and invisible
+    # to other claimants; settlement requires the matching claim_token.
+    claimed_by: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+        comment="Worker identity (host:pid) that last claimed this event",
+    )
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Token stamped at claim time; settlement must present it",
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Claim lease expiry; expired leases are reclaimable",
+    )
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(

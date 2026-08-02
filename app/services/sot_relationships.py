@@ -250,7 +250,19 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             SOTService(
                 name="events.outbox",
                 module="app.services.finance.platform.outbox_publisher",
-                owns=("transactional event publication and retry/dead-letter state",),
+                owns=(
+                    "transactional event publication and claim/lease, "
+                    "retry, dead-letter, and replay state",
+                ),
+                notes=(
+                    "Applied-result semantics: the relay task owns "
+                    "commit/rollback (publisher methods flush only); "
+                    "delivery is claim/deliver/settle with token-gated "
+                    "settlement; unknown events dead-letter as unsupported "
+                    "unless declared no-consequence; replay of DEAD events "
+                    "is audited; the outbox reconciler repairs GL balance "
+                    "projection drift via the canonical rebuild writer."
+                ),
             ),
             SOTService(
                 name="events.hooks",

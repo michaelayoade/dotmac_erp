@@ -101,6 +101,7 @@ from app.tasks.notifications import (
 )
 from app.tasks.outbox_relay import (
     cleanup_published_outbox_events,
+    reconcile_outbox_balance_projection,
     relay_outbox_events,
 )
 from app.tasks.infrastructure_health import run_infrastructure_health_checks_task
@@ -244,5 +245,6 @@ __all__ = [
     # Outbox relay tasks
     "relay_outbox_events",
     "cleanup_published_outbox_events",
+    "reconcile_outbox_balance_projection",
     "run_infrastructure_health_checks_task",
 ]

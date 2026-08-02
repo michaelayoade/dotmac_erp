@@ -265,6 +265,12 @@ class MockEventOutbox:
         occurred_at: datetime = None,
         published_at: datetime | None = None,
         created_at: datetime = None,
+        error_class: str | None = None,
+        terminal_reason: str | None = None,
+        claimed_by: str | None = None,
+        claim_token: uuid.UUID | None = None,
+        claimed_at: datetime | None = None,
+        lease_expires_at: datetime | None = None,
     ):
         self.event_id = event_id or uuid.uuid4()
         self.event_name = event_name
@@ -284,6 +290,12 @@ class MockEventOutbox:
         self.occurred_at = occurred_at or datetime.now(UTC)
         self.published_at = published_at
         self.created_at = created_at or datetime.now(UTC)
+        self.error_class = error_class
+        self.terminal_reason = terminal_reason
+        self.claimed_by = claimed_by
+        self.claim_token = claim_token
+        self.claimed_at = claimed_at
+        self.lease_expires_at = lease_expires_at
 
 
 # ============ Fixtures ============

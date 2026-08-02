@@ -159,15 +159,22 @@ def process_stuck_outbox_events(
 
     org_id, session_context = _task_session(organization_id)
     with session_context as db:
-        from sqlalchemy import select
+        from sqlalchemy import or_, select
 
         from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
 
-        cutoff = datetime.now(UTC) - timedelta(minutes=stuck_minutes)
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(minutes=stuck_minutes)
 
         stmt = select(EventOutbox).where(
             EventOutbox.status == EventStatus.PENDING,
             EventOutbox.created_at < cutoff,
+            # An unexpired claim lease means a relay worker is actively
+            # delivering this event — it is in flight, not stuck.
+            or_(
+                EventOutbox.lease_expires_at.is_(None),
+                EventOutbox.lease_expires_at <= now,
+            ),
         )
         if org_id is not None:
             stmt = stmt.where(

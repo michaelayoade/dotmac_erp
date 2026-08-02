@@ -339,6 +339,11 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(hour=2, minute=30),  # 2:30 AM daily
             "kwargs": {"retention_days": 30, "batch_size": 5000},
         },
+        "outbox-balance-reconciliation": {
+            "task": "app.tasks.outbox_relay.reconcile_outbox_balance_projection",
+            "schedule": crontab(minute=40),  # Hourly at :40
+            "kwargs": {"lookback_hours": 26},
+        },
         "service-hook-execution-cleanup": {
             "task": "app.tasks.hooks.cleanup_old_hook_executions",
             "schedule": crontab(hour=2, minute=45),  # 2:45 AM daily

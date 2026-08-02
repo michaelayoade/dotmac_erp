@@ -32,7 +32,7 @@ semantics.
 | `configuration_control` | settings writes + history, specs, flags | One canonical settings writer; flags never substitute for authorization |
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
-| `platform_events` | transactional outbox, service hooks | Consequences ride the outbox; handlers never commit |
+| `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
 | `external_sync` | Sub AR ingestion, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
