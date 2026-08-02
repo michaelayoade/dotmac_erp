@@ -26,6 +26,7 @@ from app.models.finance.gl.journal_entry import (
 )
 from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from scripts.find_stranded_reposts import find_stranded_reposts
+from tests.test_golden_money_pins import _TODAY
 from tests.test_golden_money_pins import _SubSyncHarness, _World
 
 try:
@@ -162,7 +163,11 @@ def test_find_stranded_reposts_flags_only_the_stranded_invoice(
     assert row.total_amount == Decimal("100.00")
     assert row.functional_currency_amount == Decimal("100.00")
     assert row.original_journal_number == original.journal_number
-    # Reversal date comes from the reversal journal the sync posted "today".
-    assert row.reversal_date == date.today()
+    # Reversal date comes from the reversal journal the sync posted "today" —
+    # and "today" is FROZEN to the world's scenario date by the `world`
+    # fixture. Asserting the real `date.today()` here is what made this test
+    # calendar-dependent: it agreed with the seeded 2026-07 fiscal period only
+    # while the wall clock happened to be in that month.
+    assert row.reversal_date == _TODAY
     assert healthy_inv.invoice_id not in {r.invoice_id for r in rows}
     assert reposted_inv.invoice_id not in {r.invoice_id for r in rows}
