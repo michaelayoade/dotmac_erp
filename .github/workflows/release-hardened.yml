@@ -50,6 +50,8 @@ jobs:
           tags: dotmac-erp-hardened:ci
           cache-from: type=gha,scope=hardened
           cache-to: type=gha,mode=max,scope=hardened
+          secrets: |
+            forgejo_token=${{ secrets.FORGEJO_READ_TOKEN }}
 
       - name: Health check (hardened image)
         run: |  # pragma: allowlist secret

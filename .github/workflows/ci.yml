@@ -15,6 +15,11 @@ env:
   DATABASE_URL: "sqlite:///./test.db"
   SECRET_KEY: "ci-test-secret-key-not-for-production"  # pragma: allowlist secret
   REDIS_URL: "redis://localhost:6379/0"
+  # Read auth for the private Forgejo PyPI index (dotmac-kernel). Same
+  # ci-reader pattern as dotmac_vendor_control_plane; token source of record
+  # is OpenBao (secret/dotmac/forgejo/read-token).
+  POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+  POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
 
 jobs:
   lint:
@@ -189,6 +194,8 @@ jobs:
           tags: dotmac-erp:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: |
+            forgejo_token=${{ secrets.FORGEJO_READ_TOKEN }}
 
       - name: Create CI network
         run: docker network create ci-net
@@ -379,3 +386,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: |
+            forgejo_token=${{ secrets.FORGEJO_READ_TOKEN }}
