@@ -156,9 +156,16 @@ def test_admin_branding_form_offers_no_raw_css_input() -> None:
     )
 
 
-def test_branding_web_context_does_not_carry_raw_css() -> None:
+def test_admin_form_path_never_persists_raw_css() -> None:
     """The admin form path bypasses the pydantic schemas, so it needs its own
-    check — this is where the field would most plausibly be re-added."""
+    check — this is where the field would most plausibly be re-added.
+
+    Checked precisely rather than by substring: `settings_web.py` legitimately
+    mentions `custom_css` in order to REJECT it, so a blunt "not in source"
+    assertion would fail on the fix itself. What must stay true is that the
+    field never appears in the list of names written onto the model.
+    """
+    import ast
     from pathlib import Path
 
     source = (
@@ -168,7 +175,26 @@ def test_branding_web_context_does_not_carry_raw_css() -> None:
         / "admin"
         / "settings_web.py"
     ).read_text()
-    assert "custom_css" not in source, (
-        "settings_web.py references custom_css again — that path writes "
-        "branding fields directly with setattr and would bypass the schema"
-    )
+
+    written_field_lists = [
+        [
+            element.value
+            for element in node.value.elts
+            if isinstance(element, ast.Constant) and isinstance(element.value, str)
+        ]
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.List)
+        and any(
+            isinstance(target, ast.Name) and target.id == "branding_fields"
+            for target in node.targets
+        )
+    ]
+
+    assert written_field_lists, "branding_fields list not found — test is stale"
+    for fields in written_field_lists:
+        assert "custom_css" not in fields, (
+            "custom_css is back in settings_web.py's branding_fields — that "
+            "list is written onto the model with setattr and bypasses the "
+            "schema's extra='forbid' entirely"
+        )
