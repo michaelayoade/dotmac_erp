@@ -46,7 +46,11 @@ RUN apt-get update \
 RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry install --only main --no-interaction --no-ansi
+# dotmac-kernel resolves from the private Forgejo index (BuildKit secret; see Dockerfile).
+RUN --mount=type=secret,id=forgejo_token \
+    POETRY_HTTP_BASIC_FORGEJO_USERNAME=ci-reader \
+    POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)" \
+    poetry install --only main --no-interaction --no-ansi
 RUN pip install --no-cache-dir "pydyf==0.11.0" python-multipart nuitka ordered-set
 
 COPY . .
@@ -79,7 +83,11 @@ RUN apt-get update \
 RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry install --only main --no-interaction --no-ansi
+# dotmac-kernel resolves from the private Forgejo index (BuildKit secret; see Dockerfile).
+RUN --mount=type=secret,id=forgejo_token \
+    POETRY_HTTP_BASIC_FORGEJO_USERNAME=ci-reader \
+    POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)" \
+    poetry install --only main --no-interaction --no-ansi
 RUN pip install --no-cache-dir "pydyf==0.11.0" python-multipart
 
 # Copy compiled .so files from nuitka stage

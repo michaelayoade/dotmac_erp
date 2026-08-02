@@ -8,9 +8,36 @@ No code, schema, dependency, or runtime change is authorized by this document.
 **Evidence pins:**
 
 - `dotmac_erp` `origin/main` at `96928fa1774612ecd5cd28db1ab04b8e45425df4`.
-- `dotmac-kernel==0.1.0a7` (source of record:
+- `dotmac-kernel==0.1.0a8` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
-  The dependency is **not** installed in this repo at this pin.
+  The dependency **is installed** at this exact pin since slice E2 (below).
+
+**E2 status (2026-08-02): landed at pin `0.1.0a8` — install unblocked.** The
+first E2 attempt targeted `0.1.0a7` and was blocked: the a7 wheel's floors
+(`python >=3.12,<3.14`, `fastapi ^0.115`, `pydantic[email] ^2.9`) excluded
+ERP's pins (`python >=3.11,<3.13`, `fastapi 0.111.0`, `pydantic 2.7.4`), so
+the pin existed but poetry resolution failed and the wheel canaries had to
+skip. The `0.1.0a8` release (kernel CHANGELOG, "0.1.0a8 — 2026-08-02")
+resolved every blocker:
+
+- **Floors widened** to `fastapi>=0.111,<0.116`, `pydantic>=2.7.4,<3.0`,
+  `pydantic-settings>=2.2,<3.0`, `python>=3.11` — ERP's pins resolve cleanly
+  with **no python marker** and no ERP pin loosened. Lock delta: adds only
+  `dotmac-kernel 0.1.0a8`, `pydantic-settings 2.14.2`,
+  `typing-inspection 0.4.2`.
+- **Both a7 release defects fixed** (CHANGELOG "Fixed"):
+  `dotmac_kernel.testing` no longer builds the DB engine at import (the deps
+  import moved inside `assembly_test_client`), and `dotmac_kernel.profiles`
+  is now in `SUPPORTED_MODULES`. The old red-sensitive defect pins are
+  replaced by assertions of the FIXED behavior in
+  `tests/architecture/test_kernel_compatibility.py`.
+- **Extras split** (`[testing]` → httpx only; cryptography only via
+  `[licensing]`): ERP installs the kernel with **no extras** — httpx 0.27.0
+  and `cryptography>=44.0.1` are already ERP main dependencies, so the whole
+  testing kit (including `FakeLicenceSigner`) works regardless.
+
+Every E2 canary now RUNS — the skip machinery of the blocked attempt is
+deleted; a missing or wrong-version kernel is a hard failure.
 
 **Authority order (highest wins):**
 
@@ -79,7 +106,7 @@ the touched slice).
 7. ERP and Sub stay independent apps/databases (versioned APIs/events only).
 8. Licence entitlement is separate from RBAC and from data integrity.
 
-## Kernel public-module classification (0.1.0a7)
+## Kernel public-module classification (0.1.0a8)
 
 Classes: **consume-pure** (DB-free contract, importable once the pin lands in
 E2) · **adapt-existing** (kernel contract adapted behind an existing ERP
@@ -99,7 +126,7 @@ slice that adopts them, in the same change that updates this table.
 | `dotmac_kernel.profiles` | consume-pure | Early (E7) | `DeploymentProfileSpec`/registry for release preflight; never branch business logic on profile strings |
 | `dotmac_kernel.assembly` | consume-pure | Early (E7) | `ProductAssemblySpec` as metadata/release validation; does not replace ERP app startup |
 | `dotmac_kernel.providers` | consume-pure | Early (E7) | Provider seam interfaces consumed by profile preflight only |
-| `dotmac_kernel.testing` | consume-pure | Early (E2+) | Pure fakes/clock/licence kit for compatibility tests |
+| `dotmac_kernel.testing` | consume-pure | Early (E2+) | Pure fakes/clock/licence kit for compatibility tests. The a7 wheel defect (eager `harness` → `deps` → `db` import made the subtree DB-bound) is FIXED in 0.1.0a8; DB-free import of the full subtree is asserted by `tests/architecture/test_kernel_compatibility.py::test_every_consume_pure_module_imports_without_db`. `FakeLicenceSigner` works without kernel extras because cryptography is an ERP main dependency |
 | `dotmac_kernel.licensing` | consume-pure (types/verifier); cutover deferred-but-required | E9 (after E8) | Value types + `verify_licence` are DB-free and importable; enforcement cutover replaces the placeholder-key path (`app/licensing/validator.py:32`) through one explicit shadow-compare + cutover. No second enforcement owner meanwhile |
 | `dotmac_kernel.messaging` (behavior: envelope/outcome semantics) | adapt-existing | Early (E3) | Target semantics for the existing ERP outbox (`events.outbox` owner): claim/deliver/settle, fail-closed unknown events, no service-internal commits. Semantics are matched, not imported wholesale |
 | `dotmac_kernel.messaging` (storage/relay/worker: `messaging.models`, `relay`, `worker`, `platform_*`, `inbox`) | defer-db | After E8 ADR | Kernel `outbox_events`/`inbox_records`/`platform_*` tables would stand beside `platform.event_outbox` — a prohibited second outbox until the ADR decides migration/tenancy compatibility |
@@ -326,7 +353,7 @@ No plan-assumption contradictions were found at this pin.
 
 ## E1 acceptance restated against this evidence
 
-Adding the `dotmac-kernel==0.1.0a7` pin alone (E2) cannot:
+Adding the `dotmac-kernel==0.1.0a8` pin alone (E2) cannot:
 
 - **mount routes** — ERP never calls `create_app`/`mount_features`
   (`app_factory`/`features` mounting are prohibited/metadata-only above);

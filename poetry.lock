@@ -1072,6 +1072,35 @@ reference = "v0.1.1"
 resolved_reference = "4714d9411e7512cc00944fd44583bc38812e9839"
 
 [[package]]
+name = "dotmac-kernel"
+version = "0.1.0a8"
+description = "DotMac platform kernel — multi-tenant FastAPI foundation (config, RLS db, identity/tenancy models, security, platform auth, middleware, settings, features registry, audit)"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_kernel-0.1.0a8-py3-none-any.whl", hash = "sha256:34d6ea13ab47378af7e123e342e421127858f3f120290161eab9cb2a39a80d07"},
+    {file = "dotmac_kernel-0.1.0a8.tar.gz", hash = "sha256:6575895d7e0945e3ca9b16f81c6002dcb4e29b067bc66fe8a996119be4ce2c90"},
+]
+
+[package.dependencies]
+argon2-cffi = ">=25.1.0,<26.0.0"
+fastapi = ">=0.111,<0.116"
+jinja2 = ">=3.1,<4.0"
+pydantic = {version = ">=2.7.4,<3.0", extras = ["email"]}
+pydantic-settings = ">=2.2,<3.0"
+sqlalchemy = ">=2.0,<3.0"
+
+[package.extras]
+licensing = ["cryptography (>=42)"]
+testing = ["httpx (>=0.27,<0.28)"]
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
 name = "ecdsa"
 version = "0.19.1"
 description = "ECDSA cryptographic signature library (pure python)"
@@ -3164,6 +3193,7 @@ files = [
 
 [package.dependencies]
 annotated-types = ">=0.4.0"
+email-validator = {version = ">=2.0.0", optional = true, markers = "extra == \"email\""}
 pydantic-core = "2.18.4"
 typing-extensions = ">=4.6.1"
 
@@ -3261,6 +3291,30 @@ files = [
 
 [package.dependencies]
 typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
+
+[[package]]
+name = "pydantic-settings"
+version = "2.14.2"
+description = "Settings management using Pydantic"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "pydantic_settings-2.14.2-py3-none-any.whl", hash = "sha256:a20c97b37910b6550d5ea50fbcc2d4187defe58cd57070b73863d069419c9440"},
+    {file = "pydantic_settings-2.14.2.tar.gz", hash = "sha256:c19dd64b19097f1de80184f0cc7b0272a13ae6e170cbf240a3e27e381ed14a5f"},
+]
+
+[package.dependencies]
+pydantic = ">=2.7.0"
+python-dotenv = ">=0.21.0"
+typing-inspection = ">=0.4.0"
+
+[package.extras]
+aws-secrets-manager = ["boto3 (>=1.35.0)", "types-boto3[secretsmanager]"]
+azure-key-vault = ["azure-identity (>=1.16.0)", "azure-keyvault-secrets (>=4.8.0)"]
+gcp-secret-manager = ["google-cloud-secret-manager (>=2.23.1)"]
+toml = ["tomli (>=2.0.1)"]
+yaml = ["pyyaml (>=6.0.1)"]
 
 [[package]]
 name = "pydyf"
@@ -4184,6 +4238,21 @@ files = [
 ]
 
 [[package]]
+name = "typing-inspection"
+version = "0.4.2"
+description = "Runtime typing introspection tools"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "typing_inspection-0.4.2-py3-none-any.whl", hash = "sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7"},
+    {file = "typing_inspection-0.4.2.tar.gz", hash = "sha256:ba561c48a67c5958007083d386c3295464928b01faa735ab8547c5692e87f464"},
+]
+
+[package.dependencies]
+typing-extensions = ">=4.12.0"
+
+[[package]]
 name = "tzdata"
 version = "2025.3"
 description = "Provider of IANA time zone data"
@@ -4966,4 +5035,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "30b3c0f06c0a29c57b6fe3358269d54e88a7f9eec10f7dcdd272016e1253d9d7"
+content-hash = "dd7bdb2e9eb540ef1ec9dd7b536be8590aef018758687c333ebec05ffe4081d6"
