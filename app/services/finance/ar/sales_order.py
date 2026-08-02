@@ -919,6 +919,7 @@ class SalesOrderService:
             domain=SettingDomain.inventory,
             key="inventory_default_warehouse_id",
             default=None,
+            organization_id=so.organization_id,
         )
         warehouse_id = None
         if raw_warehouse_id:

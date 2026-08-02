@@ -286,7 +286,9 @@ class DomainSettings(ListResponseMixin):
         db.refresh(setting)
 
         # Invalidate cache for this setting
-        invalidate_setting_cache(setting.domain, setting.key)
+        invalidate_setting_cache(
+            setting.domain, setting.key, organization_id=setting.organization_id
+        )
 
         # Audit log
         _log_setting_change(
@@ -401,7 +403,9 @@ class DomainSettings(ListResponseMixin):
         db.refresh(setting)
 
         # Invalidate cache for this setting
-        invalidate_setting_cache(setting.domain, setting.key)
+        invalidate_setting_cache(
+            setting.domain, setting.key, organization_id=setting.organization_id
+        )
 
         # Audit log
         new_value = setting.value_text or setting.value_json
@@ -503,7 +507,9 @@ class DomainSettings(ListResponseMixin):
             db.refresh(setting)
 
             # Invalidate cache for this setting
-            invalidate_setting_cache(self.domain, key)
+            invalidate_setting_cache(
+                self.domain, key, organization_id=setting.organization_id
+            )
 
             # Audit log
             new_value = setting.value_text or setting.value_json
@@ -614,7 +620,9 @@ class DomainSettings(ListResponseMixin):
         db.commit()
 
         # Invalidate cache for this setting
-        invalidate_setting_cache(setting.domain, setting.key)
+        invalidate_setting_cache(
+            setting.domain, setting.key, organization_id=setting.organization_id
+        )
 
         # Audit log
         _log_setting_change(
@@ -871,7 +879,9 @@ def restore_from_history(
         db.refresh(setting)
 
     # Invalidate cache
-    invalidate_setting_cache(domain, setting.key)
+    invalidate_setting_cache(
+        domain, setting.key, organization_id=setting.organization_id
+    )
 
     # Audit log
     _log_setting_change(

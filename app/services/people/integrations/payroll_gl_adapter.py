@@ -551,7 +551,11 @@ class PayrollGLAdapter:
             if diff != 0:
                 rounding_account_id = None
                 rounding_account_id_raw = get_cached_setting(
-                    db, SettingDomain.payroll, "payroll_rounding_account_id", None
+                    db,
+                    SettingDomain.payroll,
+                    "payroll_rounding_account_id",
+                    None,
+                    organization_id=org_id,
                 )
                 if rounding_account_id_raw:
                     try:

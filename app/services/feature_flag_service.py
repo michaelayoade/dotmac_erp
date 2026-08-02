@@ -497,8 +497,10 @@ class FeatureFlagService:
         """Invalidate all cached entries for a flag."""
         _cache_delete(_org_cache_key(org_id, flag_key))
         _cache_delete(_org_cache_key(None, flag_key))  # global key too
-        # Also invalidate the domain settings cache for this key
-        settings_cache.invalidate_setting(_FEATURES_DOMAIN, flag_key)
+        # Also invalidate the domain settings cache for this key, for this org
+        settings_cache.invalidate_setting(
+            _FEATURES_DOMAIN, flag_key, organization_id=org_id
+        )
 
 
 # ---------------------------------------------------------------------------

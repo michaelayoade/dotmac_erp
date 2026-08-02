@@ -76,6 +76,7 @@ class StockReservationService:
                 SettingDomain.inventory,
                 key,
                 default=default,
+                organization_id=organization_id,
             )
             return bool(value)
 
@@ -85,6 +86,7 @@ class StockReservationService:
                 SettingDomain.inventory,
                 key,
                 default=default,
+                organization_id=organization_id,
             )
             try:
                 return int(value)

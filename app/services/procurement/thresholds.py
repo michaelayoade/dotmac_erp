@@ -48,18 +48,21 @@ def _get_thresholds(
         SettingDomain.procurement,
         "procurement_threshold_direct_max",
         default=2_500_000,
+        organization_id=organization_id,
     )
     selective_max = get_cached_setting(
         db,
         SettingDomain.procurement,
         "procurement_threshold_selective_max",
         default=50_000_000,
+        organization_id=organization_id,
     )
     ministerial_max = get_cached_setting(
         db,
         SettingDomain.procurement,
         "procurement_threshold_ministerial_max",
         default=1_000_000_000,
+        organization_id=organization_id,
     )
 
     return [
