@@ -5,7 +5,7 @@ DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 from uuid import UUID
 
@@ -23,26 +23,45 @@ from app.config import settings
 from app.services.finance.money_boundary import to_boundary_money
 
 
-def _reject_float_money(value: object) -> object:
+def _require_wire_money_string(value: object) -> object:
     """Pre-coercion (``mode="before"``) guard for monetary ingress.
 
-    Pydantic v2 coerces ``float`` → ``Decimal`` BEFORE ``mode="after"``
-    validators run, so the E4 boundary would otherwise never see the float
-    it promises to reject. This runs on the RAW ingress value.
+    Pydantic v2 coerces numbers → ``Decimal`` BEFORE ``mode="after"``
+    validators run, so the E4 boundary would otherwise never see the raw
+    wire type it promises to reject. This runs on the RAW ingress value.
 
-    Monetary JSON-number policy (matches the connector's outbound E4 shape
-    ``{"amount": "48375.00"}``): money arrives as a JSON/py string (canonical)
-    or an exact int/Decimal. A ``float`` — whether a bare fractional JSON
-    number parsed by ``model_validate_json`` (pydantic materializes it as a
-    Python ``float`` for before-validators) or a Python ``float`` passed to
-    ``model_validate`` — is refused before any coercion can launder it.
+    Wire policy (matches the connector's outbound E4 shape
+    ``{"amount": "48375.00"}``): external money is a canonical decimal
+    STRING only. EVERY JSON number token — int and float alike (pydantic
+    materializes them as Python ``int``/``float`` for before-validators) —
+    plus booleans and non-finite values (NaN/Infinity) is refused before any
+    coercion can launder it. Internal Python callers may pass ``Decimal``
+    (finite only).
     """
-    if isinstance(value, (bool, float)):
+    if isinstance(value, (bool, int, float)):
         raise ValueError(
             f"refusing {type(value).__name__} {value!r} as money at ingress; "
             'send the amount as a string (e.g. "48375.00")'
         )
-    return value
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise ValueError(f"refusing non-finite value {value!r} as money at ingress")
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = Decimal(value)
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError(
+                f"refusing {value!r} as money at ingress; send a canonical "
+                'decimal string (e.g. "48375.00")'
+            ) from exc
+        if not parsed.is_finite():
+            raise ValueError(f"refusing non-finite value {value!r} as money at ingress")
+        return value
+    raise ValueError(
+        f"refusing {type(value).__name__} as money at ingress; send the "
+        'amount as a string (e.g. "48375.00")'
+    )
 
 
 # ============ Inbound Sync Payloads (CRM → ERP) ============
@@ -806,7 +825,9 @@ class CRMPurchaseInvoiceItemPayload(BaseModel):
 
     # ``amount`` is boundary money; ``quantity``/``unit_price`` are
     # rates/quantities and deliberately keep pydantic's default coercion.
-    _amount_ingress = field_validator("amount", mode="before")(_reject_float_money)
+    _amount_ingress = field_validator("amount", mode="before")(
+        _require_wire_money_string
+    )
 
 
 class CRMPurchaseInvoicePayload(BaseModel):
@@ -853,10 +874,10 @@ class CRMPurchaseInvoicePayload(BaseModel):
     approved_by_email: str | None = Field(None, max_length=255)
     items: list[CRMPurchaseInvoiceItemPayload] = Field(..., min_length=1)
 
-    # Pre-coercion float rejection for the header money facts (see
-    # ``_reject_float_money`` for the JSON-number ingress policy).
+    # Pre-coercion strings-only enforcement for the header money facts (see
+    # ``_require_wire_money_string`` for the wire policy).
     _money_ingress = field_validator("subtotal", "tax_total", "total", mode="before")(
-        _reject_float_money
+        _require_wire_money_string
     )
 
     @model_validator(mode="after")
@@ -864,11 +885,12 @@ class CRMPurchaseInvoicePayload(BaseModel):
         """E4 fail-closed money boundary for the Sub/CRM payables command.
 
         Header totals and line amounts must be exact in the document
-        currency's minor units (typed kernel Money at the boundary; no float,
-        no missing currency, no excess precision). Float rejection happens in
-        the ``mode="before"`` ingress validators above — by the time this
-        runs, pydantic has already coerced to ``Decimal``, so the raw-type
-        check must precede coercion. Line ``quantity`` and ``unit_price`` are
+        currency's minor units (typed kernel Money at the boundary; no
+        missing currency, no excess precision). The strings-only wire policy
+        (every JSON number token rejected) is enforced in the
+        ``mode="before"`` ingress validators above — by the time this runs,
+        pydantic has already coerced to ``Decimal``, so the raw-type check
+        must precede coercion. Line ``quantity`` and ``unit_price`` are
         rates/quantities and deliberately stay plain decimals. ERP-internal
         AP posting/tax precision is unchanged.
         """

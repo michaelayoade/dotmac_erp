@@ -17,8 +17,10 @@ Fail-closed rules (every rejection raises :class:`MoneyBoundaryError`):
 - a missing or invalid currency code is refused — no ambiguous default is
   applied here (callers own their documented defaulting, if any);
 - a well-formed but unprovisioned currency code is refused: minor units
-  resolve ONLY through :data:`SUPPORTED_CURRENCIES`, never through a
-  two-decimal guess for an unknown code;
+  resolve ONLY through :data:`SUPPORTED_CURRENCIES` (or an explicitly
+  injected test :class:`CurrencyRegistry`), never through a two-decimal
+  guess for an unknown code;
+- non-finite values (NaN/Infinity) are refused everywhere;
 - a source amount carrying more precision than the currency's minor units is
   refused at the boundary (no minor unit may be silently lost or invented);
 - mixing currencies is refused;
@@ -26,6 +28,13 @@ Fail-closed rules (every rejection raises :class:`MoneyBoundaryError`):
   ``ExchangeRate`` snapshot is built only from an already-persisted, ERP-owned
   ``core_fx.exchange_rate`` observation row (ERP's ``FXService`` remains the
   only FX owner and the only rate resolver).
+
+Wire contract: external money crosses the wire as a canonical decimal
+STRING (``{"amount": "48375.00"}``) — every JSON number token (int or
+float), boolean and non-finite value is rejected at ingress (the connector
+parsers and pydantic ``mode="before"`` validators). This strings-only rule
+is slated to become a checked-in cross-repository contract when the E4
+(ERP) and S5 (Sub) slices land.
 
 Rounding: :data:`BOUNDARY_ROUNDING` (round-half-up) is the single, centralized
 rounding decision for the touched Sub-facing slice. Derived document-level
@@ -37,6 +46,7 @@ money independently.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, time, timezone
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
@@ -61,6 +71,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 __all__ = [
     "BOUNDARY_ROUNDING",
     "SUPPORTED_CURRENCIES",
+    "CurrencyRegistry",
     "MoneyBoundaryError",
     "boundary_currency",
     "to_boundary_money",
@@ -97,56 +108,82 @@ class MoneyBoundaryError(ValueError):
 # unknown three-letter code to 2 minor units, which would accept fabricated
 # codes (``ZZZ``) and misrepresent three-decimal currencies (``BHD``). Here an
 # unprovisioned code fails closed instead.
+
+
+@dataclass(frozen=True)
+class CurrencyRegistry:
+    """An explicit ``code -> minor_units`` provisioning set.
+
+    The production set is :data:`SUPPORTED_CURRENCIES`. Tests may construct
+    their own instance (e.g. ``CurrencyRegistry({"JPY": 0, "BHD": 3})``) to
+    exercise zero/three-minor-unit contracts WITHOUT provisioning those
+    currencies for production, and pass it via the ``registry`` parameter of
+    the boundary functions.
+    """
+
+    by_code: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "by_code", MappingProxyType(dict(self.by_code)))
+
+    def resolve(self, code: str | None, *, field: str = "currency") -> Currency:
+        """Resolve a mandatory ISO-4217 currency code, failing closed.
+
+        ``None``/empty/malformed codes are rejected, and so is any
+        well-formed code not provisioned in this registry — the boundary
+        never assumes a default currency and never guesses a minor-unit
+        count for an unknown code.
+        """
+        if code is None or not isinstance(code, str) or not code.strip():
+            raise MoneyBoundaryError(
+                f"{field}: a currency code is required at the money boundary"
+            )
+        try:
+            # Shape validation only (3 alpha chars); minor units come from
+            # the registry, never from a default.
+            candidate = Currency(code.strip())
+        except MoneyError as exc:
+            raise MoneyBoundaryError(f"{field}: {exc}") from exc
+        minor_units = self.by_code.get(candidate.code)
+        if minor_units is None:
+            raise MoneyBoundaryError(
+                f"{field}: currency {candidate.code!r} is not provisioned in "
+                "the ERP supported-currency registry; add it (with its "
+                "ISO-4217 minor units) to SUPPORTED_CURRENCIES and "
+                "core_fx.currency before transacting it at the boundary"
+            )
+        return Currency(candidate.code, minor_units)
+
+
+# The production provisioned set: exactly the currencies ERP transacts today.
+# NGN is the functional default (``settings.default_functional_currency_code``)
+# and USD backs FX observations / multi-currency AR.
 #
-# Extension point: to transact a new currency at the boundary, add
-# ``code: minor_units`` below (with the correct ISO-4217 fraction digits —
-# e.g. BHD must be added as 3, never assumed) and provision the matching
-# ``core_fx.currency`` row with the same ``decimal_places``.
-#
-# Provisioning evidence: NGN is the functional default
-# (``settings.default_functional_currency_code``); USD/EUR/GBP are the other
-# locale-derived defaults in ``app/config.py`` and appear in ERP tax seeds
-# and FX observations; JPY is provisioned to keep the zero-minor-unit
-# contract exercised end to end.
-SUPPORTED_CURRENCIES: Mapping[str, int] = MappingProxyType(
+# Extension path (per the E4 review ruling): EUR/GBP (and any further
+# currency) are added ONLY behind checked-in provisioning — the code entry
+# here, the matching ``core_fx.currency`` row with the same
+# ``decimal_places``, and a database consistency test asserting the two
+# agree. A three-decimal currency such as BHD MUST be added as 3, never
+# assumed. Zero/three-minor-unit behavior stays test-covered through a
+# test-scoped :class:`CurrencyRegistry` instance, not by provisioning here.
+SUPPORTED_CURRENCIES: CurrencyRegistry = CurrencyRegistry(
     {
         "NGN": 2,
         "USD": 2,
-        "EUR": 2,
-        "GBP": 2,
-        "JPY": 0,
     }
 )
 
 
-def boundary_currency(code: str | None, *, field: str = "currency") -> Currency:
+def boundary_currency(
+    code: str | None,
+    *,
+    field: str = "currency",
+    registry: CurrencyRegistry | None = None,
+) -> Currency:
     """Resolve a mandatory ISO-4217 currency code against the boundary's
-    supported-currency registry, failing closed.
-
-    ``None``/empty/malformed codes are rejected, and so is any well-formed
-    code not provisioned in :data:`SUPPORTED_CURRENCIES` — the boundary never
-    assumes a default currency and never guesses a minor-unit count for an
-    unknown code.
-    """
-    if code is None or not isinstance(code, str) or not code.strip():
-        raise MoneyBoundaryError(
-            f"{field}: a currency code is required at the money boundary"
-        )
-    try:
-        # Shape validation only (3 alpha chars); minor units come from the
-        # registry below, never from a default.
-        candidate = Currency(code.strip())
-    except MoneyError as exc:
-        raise MoneyBoundaryError(f"{field}: {exc}") from exc
-    minor_units = SUPPORTED_CURRENCIES.get(candidate.code)
-    if minor_units is None:
-        raise MoneyBoundaryError(
-            f"{field}: currency {candidate.code!r} is not provisioned in the "
-            "ERP supported-currency registry; add it (with its ISO-4217 "
-            "minor units) to SUPPORTED_CURRENCIES and core_fx.currency "
-            "before transacting it at the boundary"
-        )
-    return Currency(candidate.code, minor_units)
+    supported-currency registry (:data:`SUPPORTED_CURRENCIES` unless a
+    test-scoped ``registry`` is injected), failing closed."""
+    return (registry or SUPPORTED_CURRENCIES).resolve(code, field=field)
 
 
 def to_boundary_money(
@@ -154,17 +191,22 @@ def to_boundary_money(
     currency_code: str | None,
     *,
     field: str = "amount",
+    registry: CurrencyRegistry | None = None,
 ) -> Money:
     """Build a typed kernel ``Money`` from an ERP ``(Decimal, currency_code)``
     boundary pair, failing closed on every inexact or ambiguous input.
 
-    Accepts ``Decimal``/``int``/``str`` amounts only. The amount must already
-    be exactly representable in the currency's minor units — excess precision
-    is rejected, never rounded (rounding a source FACT would invent or lose a
+    Accepts ``Decimal``/``int``/``str`` amounts only (the WIRE ingress layers
+    — connector parsers and pydantic before-validators — are stricter still:
+    external money must arrive as a canonical decimal string; int/float JSON
+    number tokens are rejected before reaching this adapter). Non-finite
+    values (NaN/Infinity) are refused. The amount must already be exactly
+    representable in the currency's minor units — excess precision is
+    rejected, never rounded (rounding a source FACT would invent or lose a
     minor unit; use :func:`round_to_minor_units` for values ERP itself
     derives).
     """
-    cur = boundary_currency(currency_code, field=field)
+    cur = boundary_currency(currency_code, field=field, registry=registry)
     if amount is None:
         raise MoneyBoundaryError(f"{field}: a monetary amount is required")
     if isinstance(amount, (bool, float)):
@@ -180,6 +222,8 @@ def to_boundary_money(
         exact = Decimal(amount)
     except (InvalidOperation, ValueError) as exc:
         raise MoneyBoundaryError(f"{field}: not a valid amount: {amount!r}") from exc
+    if not exact.is_finite():
+        raise MoneyBoundaryError(f"{field}: non-finite value {amount!r} is not money")
     try:
         money = Money.of(exact, cur, rounding=BOUNDARY_ROUNDING)
     except MoneyError as exc:  # pragma: no cover - guarded above
@@ -222,9 +266,14 @@ def require_same_currency(*moneys: Money, field: str = "amount") -> Currency:
     return first
 
 
-def minor_unit(currency_code: str | None, *, field: str = "currency") -> Decimal:
-    """One minor unit of the currency (``0.01`` for NGN/USD, ``1`` for JPY)."""
-    cur = boundary_currency(currency_code, field=field)
+def minor_unit(
+    currency_code: str | None,
+    *,
+    field: str = "currency",
+    registry: CurrencyRegistry | None = None,
+) -> Decimal:
+    """One minor unit of the currency (``0.01`` for NGN/USD)."""
+    cur = boundary_currency(currency_code, field=field, registry=registry)
     return Decimal(1).scaleb(-cur.minor_units)
 
 
@@ -234,6 +283,7 @@ def round_to_minor_units(
     *,
     rounding: str = BOUNDARY_ROUNDING,
     field: str = "amount",
+    registry: CurrencyRegistry | None = None,
 ) -> Decimal:
     """Round an ERP-DERIVED document value to the currency's minor units.
 
@@ -242,7 +292,7 @@ def round_to_minor_units(
     inclusive-tax extraction); source-provided FACTS go through
     :func:`to_boundary_money`, which rejects excess precision instead.
     """
-    cur = boundary_currency(currency_code, field=field)
+    cur = boundary_currency(currency_code, field=field, registry=registry)
     if isinstance(amount, (bool, float)):
         raise MoneyBoundaryError(
             f"{field}: refusing to round {type(amount).__name__} "

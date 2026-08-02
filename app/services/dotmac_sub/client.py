@@ -550,18 +550,22 @@ def _parse_money_value(
 ) -> Decimal:
     """Strictly parse a PRESENT money fact asserted by Sub.
 
-    float/bool are refused (inexact / not money — the fail-closed claim of the
-    E4 boundary starts here, not after a lossy coercion), and an unparseable
-    amount raises instead of becoming a clean-looking zero.
+    Wire contract: external money is a canonical decimal STRING only
+    (matching the connector's outbound ``{"amount": "48375.00"}`` shape).
+    Every JSON number token — int and float alike — plus booleans and
+    non-finite values (NaN/Infinity) is refused; an unparseable amount
+    raises instead of becoming a clean-looking zero. ``Decimal`` instances
+    are tolerated for internal (non-wire) callers only.
     """
-    if isinstance(value, (bool, float)):
+    if isinstance(value, (bool, int, float)):
         raise DotmacSubParseError(
             f"{record}: refusing {type(value).__name__} {value!r} for money "
-            f"fact {field!r}; Sub must send money as a string",
+            f"fact {field!r}; Sub must send money as a canonical decimal "
+            'string (e.g. "48375.00")',
             record=record,
             updated_at=updated_at,
         )
-    if not isinstance(value, (int, str, Decimal)):
+    if not isinstance(value, (str, Decimal)):
         raise DotmacSubParseError(
             f"{record}: unsupported type {type(value).__name__} for money "
             f"fact {field!r}",
@@ -569,13 +573,20 @@ def _parse_money_value(
             updated_at=updated_at,
         )
     try:
-        return Decimal(str(value))
+        parsed = Decimal(str(value))
     except (InvalidOperation, ValueError, ArithmeticError) as exc:
         raise DotmacSubParseError(
             f"{record}: malformed money fact {field}={value!r}",
             record=record,
             updated_at=updated_at,
         ) from exc
+    if not parsed.is_finite():
+        raise DotmacSubParseError(
+            f"{record}: non-finite money fact {field}={value!r} is not money",
+            record=record,
+            updated_at=updated_at,
+        )
+    return parsed
 
 
 def _required_money(

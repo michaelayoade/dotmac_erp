@@ -107,12 +107,17 @@ class InvoiceSyncMixin:
         updated_since = watermark.isoformat() if watermark else None
         max_ok: datetime | None = None
         min_error: datetime | None = None
+        # An UNPOSITIONED failure (missing/malformed updated_at) cannot park
+        # the cursor at itself, so a later good row would advance the
+        # watermark past it and skip it forever. Freeze: the watermark must
+        # not advance at all for this run.
+        watermark_frozen = False
 
         def _on_parse_error(exc: DotmacSubParseError) -> None:
             # A row asserted unusable money facts (strict client parser).
             # Fail THAT row exactly like a savepoint-failed row — recorded,
             # watermark held at it for retry — while the pull continues.
-            nonlocal min_error
+            nonlocal min_error, watermark_frozen
             result.errors.append(str(exc))
             logger.error("Rejected dotmac_sub invoice row at parse: %s", exc)
             parse_row_updated_at = self._parse_datetime(exc.updated_at)
@@ -122,6 +127,8 @@ class InvoiceSyncMixin:
                     if min_error is None
                     else min(min_error, parse_row_updated_at)
                 )
+            else:
+                watermark_frozen = True
 
         try:
             for inv in self.client.get_invoices(
@@ -169,13 +176,24 @@ class InvoiceSyncMixin:
                             if min_error is None
                             else min(min_error, row_updated_at)
                         )
+                    else:
+                        watermark_frozen = True
             # Advance the cursor only after the pull completed without an API
             # error (inclusive >= means a re-pull of the boundary row is safe).
+            # An unpositioned failure freezes the cursor at its pre-run
+            # position instead — advancing would skip that row permanently.
             if use_watermark:
-                self._advance_sync_watermark(
-                    EntityType.INVOICE,
-                    next_watermark(watermark, max_ok, min_error),
-                )
+                if watermark_frozen:
+                    logger.warning(
+                        "Invoice sync watermark frozen: a failed row had no "
+                        "usable updated_at, so the cursor cannot be parked at "
+                        "it; holding the pre-run position"
+                    )
+                else:
+                    self._advance_sync_watermark(
+                        EntityType.INVOICE,
+                        next_watermark(watermark, max_ok, min_error),
+                    )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "
@@ -196,6 +214,15 @@ class InvoiceSyncMixin:
         skip_unchanged: bool,
     ) -> None:
         external_id = inv.id
+
+        # E4 money boundary FIRST — before the unchanged/status branches —
+        # so every consumed monetary fact is validated on EVERY sync pass
+        # (rejects missing currency, excess minor-unit precision,
+        # unprovisioned currency). A legacy row whose invalid money never
+        # changes must fail its row here, not ride the unchanged-skip
+        # forever. A rejection fails this row's savepoint, never the run.
+        inv.boundary_money()
+
         data_hash = self._compute_hash(_invoice_hash_payload(inv))
         if skip_unchanged and not self._has_changed(
             EntityType.INVOICE, external_id, data_hash
@@ -206,11 +233,6 @@ class InvoiceSyncMixin:
         if inv.is_proforma or (inv.status or "").lower() == "draft":
             result.skipped += 1
             return
-
-        # E4 money boundary: admit only exact, currency-tagged source money
-        # facts (rejects float, missing currency, excess minor-unit precision).
-        # A rejection fails this row's savepoint, never the whole sync run.
-        inv.boundary_money()
 
         local_id = self._get_synced_entity(EntityType.INVOICE, external_id)
         existing: Invoice | None = None

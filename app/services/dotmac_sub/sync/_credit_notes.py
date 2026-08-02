@@ -75,12 +75,17 @@ class CreditNoteSyncMixin:
         updated_since = watermark.isoformat() if watermark else None
         max_ok: datetime | None = None
         min_error: datetime | None = None
+        # An UNPOSITIONED failure (missing/malformed updated_at) cannot park
+        # the cursor at itself, so a later good row would advance the
+        # watermark past it and skip it forever. Freeze: the watermark must
+        # not advance at all for this run.
+        watermark_frozen = False
 
         def _on_parse_error(exc: DotmacSubParseError) -> None:
             # A row asserted unusable money facts (strict client parser).
             # Fail THAT row exactly like a savepoint-failed row — recorded,
             # watermark held at it for retry — while the pull continues.
-            nonlocal min_error
+            nonlocal min_error, watermark_frozen
             result.errors.append(str(exc))
             logger.error("Rejected dotmac_sub credit-note row at parse: %s", exc)
             parse_row_updated_at = self._parse_datetime(exc.updated_at)
@@ -90,6 +95,8 @@ class CreditNoteSyncMixin:
                     if min_error is None
                     else min(min_error, parse_row_updated_at)
                 )
+            else:
+                watermark_frozen = True
 
         try:
             for cn in self.client.get_credit_notes(
@@ -132,11 +139,22 @@ class CreditNoteSyncMixin:
                             if min_error is None
                             else min(min_error, row_updated_at)
                         )
+                    else:
+                        watermark_frozen = True
+            # An unpositioned failure freezes the cursor at its pre-run
+            # position — advancing would skip that row permanently.
             if use_watermark:
-                self._advance_sync_watermark(
-                    EntityType.CREDIT_NOTE,
-                    next_watermark(watermark, max_ok, min_error),
-                )
+                if watermark_frozen:
+                    logger.warning(
+                        "Credit-note sync watermark frozen: a failed row had "
+                        "no usable updated_at, so the cursor cannot be parked "
+                        "at it; holding the pre-run position"
+                    )
+                else:
+                    self._advance_sync_watermark(
+                        EntityType.CREDIT_NOTE,
+                        next_watermark(watermark, max_ok, min_error),
+                    )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "
@@ -157,6 +175,15 @@ class CreditNoteSyncMixin:
         skip_unchanged: bool,
     ) -> None:
         external_id = cn.id
+
+        # E4 money boundary FIRST — before the unchanged/status branches —
+        # so every consumed monetary fact is validated on EVERY sync pass
+        # (rejects missing currency, excess minor-unit precision,
+        # unprovisioned currency). A legacy row whose invalid money never
+        # changes must fail its row here, not ride the unchanged-skip
+        # forever. A rejection fails this row's savepoint, never the run.
+        cn.boundary_money()
+
         data_hash = self._compute_hash(
             {
                 "account_id": cn.account_id,
@@ -194,10 +221,6 @@ class CreditNoteSyncMixin:
             result.skipped += 1
             return
 
-        # E4 money boundary: admit only exact, currency-tagged source money
-        # facts (rejects float, missing currency, excess minor-unit precision).
-        # A rejection fails this row's savepoint, never the whole sync run.
-        cn.boundary_money()
         if source_status == "void":
             local_status = InvoiceStatus.VOID
         elif source_status == "applied":

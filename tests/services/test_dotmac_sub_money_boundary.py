@@ -28,6 +28,7 @@ from app.services.dotmac_sub.client import (
     InvoiceRecord,
     PaymentRecord,
 )
+from app.services.dotmac_sub.sync._credit_notes import CreditNoteSyncMixin
 from app.services.dotmac_sub.sync._invoices import InvoiceSyncMixin
 from app.services.dotmac_sub.sync._payments import PaymentSyncMixin
 from app.services.dotmac_sub.sync._types import SyncResult
@@ -204,6 +205,67 @@ def test_payment_sync_rejects_bad_money_before_any_db_work() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Admission runs on EVERY pass: an UNCHANGED record with invalid money facts
+# fails its row — it cannot ride the unchanged-skip (or a status branch)
+# around the boundary forever
+# ---------------------------------------------------------------------------
+
+
+class _UnchangedInvoiceStub(InvoiceSyncMixin):
+    def __init__(self) -> None:
+        self._compute_hash = lambda payload: "hash"
+        self._has_changed = lambda *args: False  # "unchanged" → would skip
+
+
+def test_unchanged_invoice_with_invalid_money_still_fails_admission() -> None:
+    result = SyncResult(success=True, entity_type="invoices")
+    bad = _invoice(total=Decimal("48375.005"))
+    with pytest.raises(MoneyBoundaryError, match="total.*minor-unit precision"):
+        _UnchangedInvoiceStub()._sync_single_invoice(bad, None, result, True)
+    assert result.skipped == 0  # rejected, not silently skipped
+
+
+def test_unchanged_invoice_with_fake_currency_still_fails_admission() -> None:
+    result = SyncResult(success=True, entity_type="invoices")
+    bad = _invoice(currency="ZZZ")
+    with pytest.raises(MoneyBoundaryError, match="not provisioned"):
+        _UnchangedInvoiceStub()._sync_single_invoice(bad, None, result, True)
+
+
+class _UnchangedCreditNoteStub(CreditNoteSyncMixin):
+    def __init__(self) -> None:
+        self._compute_hash = lambda payload: "hash"
+        self._has_changed = lambda *args: False
+
+
+def test_unchanged_credit_note_with_invalid_money_still_fails_admission() -> None:
+    result = SyncResult(success=True, entity_type="credit_notes")
+    bad = CreditNoteRecord(
+        id="cn-1",
+        account_id="acct-1",
+        invoice_id="inv-1",
+        credit_number="SUB-CN-1",
+        status="applied",
+        currency="NGN",
+        subtotal=Decimal("1000.005"),
+        tax_total=Decimal("75.00"),
+        total=Decimal("1075.00"),
+    )
+    with pytest.raises(MoneyBoundaryError, match="subtotal.*minor-unit precision"):
+        _UnchangedCreditNoteStub()._sync_single_credit_note(bad, None, result, True)
+    assert result.skipped == 0
+
+
+def test_unsettled_payment_with_invalid_money_still_fails_admission() -> None:
+    # A refunded/voided payment's amounts are still consumed (status hash,
+    # reversal path) — admission runs before the settled-status branch.
+    result = SyncResult(success=True, entity_type="payments")
+    bad = _payment(status="refunded", wht_amount=Decimal("7.505"))
+    with pytest.raises(MoneyBoundaryError, match="wht_amount.*minor-unit precision"):
+        _PaymentStub()._sync_single_payment(bad, result, None, True)
+
+
+# ---------------------------------------------------------------------------
 # Sub/CRM payables command schema (vendor invoice)
 # ---------------------------------------------------------------------------
 
@@ -335,16 +397,22 @@ def test_payables_json_ingress_rejects_bare_json_float_line_amount() -> None:
         CRMPurchaseInvoicePayload.model_validate_json(raw)
 
 
-def test_payables_json_ingress_accepts_integer_money() -> None:
-    # JSON integers are exact; they remain acceptable money ingress.
+def test_payables_json_ingress_rejects_integer_money_tokens() -> None:
+    # Wire policy: external money is a canonical decimal STRING only —
+    # EVERY JSON number token is rejected, integers included.
     raw = _payables_json().replace('"subtotal": "1000.00"', '"subtotal": 1000')
-    payload = CRMPurchaseInvoicePayload.model_validate_json(raw)
-    assert payload.subtotal == Decimal("1000")
+    with pytest.raises(ValidationError, match="money at ingress"):
+        CRMPurchaseInvoicePayload.model_validate_json(raw)
+    raw = _payables_json().replace('"amount": "1000.00"', '"amount": 1000')
+    with pytest.raises(ValidationError, match="money at ingress"):
+        CRMPurchaseInvoicePayload.model_validate_json(raw)
 
 
-def test_payables_dict_ingress_rejects_python_float() -> None:
+def test_payables_dict_ingress_rejects_python_float_and_int() -> None:
     with pytest.raises(ValidationError, match="money at ingress"):
         CRMPurchaseInvoicePayload.model_validate(_payables_payload(total=1075.00))
+    with pytest.raises(ValidationError, match="money at ingress"):
+        CRMPurchaseInvoicePayload.model_validate(_payables_payload(subtotal=1000))
     bad_items = [
         {
             "description": "Fibre splice",
@@ -355,6 +423,32 @@ def test_payables_dict_ingress_rejects_python_float() -> None:
     ]
     with pytest.raises(ValidationError, match="money at ingress"):
         CRMPurchaseInvoicePayload.model_validate(_payables_payload(items=bad_items))
+
+
+def test_payables_ingress_rejects_non_finite_values() -> None:
+    # NaN/Infinity as strings parse as Decimals — refused explicitly at the
+    # ingress layer with the typed message, at header and line level.
+    for bad in ("NaN", "Infinity", "-Infinity"):
+        raw = _payables_json().replace('"total": "1075.00"', f'"total": "{bad}"')
+        with pytest.raises(ValidationError, match="non-finite"):
+            CRMPurchaseInvoicePayload.model_validate_json(raw)
+        raw = _payables_json().replace('"amount": "1000.00"', f'"amount": "{bad}"')
+        with pytest.raises(ValidationError, match="non-finite"):
+            CRMPurchaseInvoicePayload.model_validate_json(raw)
+    # As Python floats they are refused by type (floats never enter).
+    with pytest.raises(ValidationError, match="money at ingress"):
+        CRMPurchaseInvoicePayload.model_validate(_payables_payload(total=float("inf")))
+    with pytest.raises(ValidationError, match="non-finite"):
+        CRMPurchaseInvoicePayload.model_validate(
+            _payables_payload(total=Decimal("NaN"))
+        )
+
+
+def test_payables_dict_ingress_still_accepts_internal_decimal() -> None:
+    # Internal Python callers may pass Decimal (finite) — the strings-only
+    # rule is a WIRE rule.
+    payload = CRMPurchaseInvoicePayload.model_validate(_payables_payload())
+    assert payload.total == Decimal("1075.00")
 
 
 # ---------------------------------------------------------------------------
@@ -516,14 +610,35 @@ def test_parse_payment_rejects_missing_currency() -> None:
         _client()._parse_payment(payload)
 
 
-def test_parse_payment_rejects_malformed_and_float_amounts() -> None:
+def test_parse_payment_rejects_malformed_and_number_typed_amounts() -> None:
     with pytest.raises(DotmacSubParseError, match="malformed money fact"):
         _client()._parse_payment(_raw_payment(amount="12,50"))
+    # Wire policy: strings only — float AND int number tokens are refused.
     with pytest.raises(DotmacSubParseError, match="refusing float"):
         _client()._parse_payment(_raw_payment(amount=107.5))
+    with pytest.raises(DotmacSubParseError, match="refusing int"):
+        _client()._parse_payment(_raw_payment(amount=107))
+    with pytest.raises(DotmacSubParseError, match="refusing float"):
+        _client()._parse_payment(_raw_payment(amount=float("inf")))
     # A documented-default field must still parse strictly when present.
     with pytest.raises(DotmacSubParseError, match="malformed money fact"):
         _client()._parse_payment(_raw_payment(refunded_amount="oops"))
+
+
+def test_parse_rejects_non_finite_money_strings() -> None:
+    for bad in ("NaN", "Infinity", "-Infinity"):
+        with pytest.raises(DotmacSubParseError, match="non-finite"):
+            _client()._parse_payment(_raw_payment(amount=bad))
+        with pytest.raises(DotmacSubParseError, match="non-finite"):
+            _client()._parse_invoice(_raw_invoice(total=bad))
+
+
+def test_parse_invoice_rejects_integer_money_tokens() -> None:
+    # Strings-only wire rule applies to the Sub feeds too.
+    with pytest.raises(DotmacSubParseError, match="refusing int"):
+        _client()._parse_invoice(_raw_invoice(subtotal=45000))
+    with pytest.raises(DotmacSubParseError, match="refusing int"):
+        _client()._parse_credit_note(_raw_credit_note(total=1075))
 
 
 def test_parse_payment_rejects_missing_amount() -> None:
@@ -575,13 +690,21 @@ def test_feed_generator_without_collector_raises_typed_error() -> None:
         list(client.get_invoices())
 
 
+def _tolerant_parse_datetime(value: str | None) -> datetime | None:
+    """Mimic the production ``_parse_datetime``: malformed/missing → None."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 class _InvoiceLoopHarness(InvoiceSyncMixin):
     def __init__(self, client: DotmacSubClient) -> None:
         self.client = client
         self.db = MagicMock()
-        self._parse_datetime = lambda value: (
-            datetime.fromisoformat(value) if value else None
-        )
+        self._parse_datetime = _tolerant_parse_datetime
         self._get_sync_watermark = lambda entity_type: None
         self._advance_sync_watermark = MagicMock()
         self._sync_single_invoice = MagicMock()
@@ -602,6 +725,50 @@ def test_invoice_sync_fails_the_row_not_the_run_on_parse_rejection() -> None:
     # Watermark is held at the failed row (min_error), not advanced past it.
     advanced_to = harness._advance_sync_watermark.call_args.args[1]
     assert advanced_to == datetime.fromisoformat("2026-07-01T10:00:00+00:00")
+
+
+@pytest.mark.parametrize("bad_updated_at", [None, "not-a-timestamp"])
+def test_unpositioned_parse_failure_freezes_the_watermark(
+    bad_updated_at: str | None,
+) -> None:
+    """An UNPOSITIONED failure (missing/malformed updated_at) cannot park the
+    cursor at itself — so the cursor must FREEZE at the pre-run position;
+    later good rows still sync but must not advance the watermark past the
+    failed row."""
+    bad = _raw_invoice(total="oops")
+    if bad_updated_at is None:
+        del bad["updated_at"]
+    else:
+        bad["updated_at"] = bad_updated_at
+    good_later = _raw_invoice(id="inv-ok", updated_at="2026-07-02T10:00:00+00:00")
+    harness = _InvoiceLoopHarness(_feed_client([bad, good_later]))
+
+    result = harness.sync_invoices()
+
+    assert result.success is True  # run continues
+    assert len(result.errors) == 1
+    assert harness._sync_single_invoice.call_count == 1  # good row synced
+    # Frozen: the watermark was NOT advanced at all this run.
+    harness._advance_sync_watermark.assert_not_called()
+
+
+def test_unpositioned_savepoint_failure_also_freezes_the_watermark() -> None:
+    """The freeze applies to ANY unpositioned row failure, including one that
+    fails inside its savepoint after a clean parse."""
+    no_position = _raw_invoice(id="inv-nopos")
+    del no_position["updated_at"]
+    good_later = _raw_invoice(id="inv-ok", updated_at="2026-07-02T10:00:00+00:00")
+    harness = _InvoiceLoopHarness(_feed_client([no_position, good_later]))
+    harness._sync_single_invoice = MagicMock(
+        side_effect=[ValueError("posting failed"), None]
+    )
+
+    result = harness.sync_invoices()
+
+    assert result.success is True
+    assert len(result.errors) == 1
+    assert harness._sync_single_invoice.call_count == 2
+    harness._advance_sync_watermark.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -135,6 +135,41 @@ unchanged). What shipped:
   the consume-pure import closure and asserts `app.main` loads nothing
   beyond it (kernel db/messaging/session surfaces still unimported).
 
+**E4 review hardening (2026-08-02, PR #219 review):** the adapter's
+fail-closed claims now hold at the real ingress, superseding two statements
+above:
+
+- **Strict wire parsing:** `DotmacSubClient._parse_invoice` /
+  `_parse_payment` / `_parse_credit_note` no longer default malformed
+  amounts to 0 or a missing currency to ERP's functional currency — money
+  facts raise a typed `DotmacSubParseError` that fails the ONE source row
+  (the feeds' `on_parse_error` collector keeps the pull alive; a failure
+  parks the incremental watermark at the row, and an UNPOSITIONED failure —
+  no usable `updated_at` — freezes the cursor for the run so the row can
+  never be skipped past).
+- **Admission on every pass:** `boundary_money()` runs BEFORE the
+  unchanged-hash and status branches in all three sync mixins, so a legacy
+  row with invalid money facts cannot ride the unchanged-skip forever.
+- **Supplied line amounts are FACTS:** a Sub-supplied line `amount`
+  validates through `to_boundary_money` (excess precision rejected, never
+  rounded); only an ERP-derived quantity×unit_price (when Sub omits the
+  amount) and derived tax splits round. The earlier "line-level amount
+  inputs remain part of the derived rounding path" statement is obsolete.
+- **Minor-unit authority:** `SUPPORTED_CURRENCIES` (an explicit
+  `CurrencyRegistry`) ships **NGN and USD only**; `kernel_currency()`'s
+  2-minor-unit default for unknown codes is unreachable. EUR/GBP arrive
+  later only behind checked-in provisioning plus a database consistency
+  test against `core_fx.currency`; zero/three-minor-unit contracts (JPY,
+  BHD) stay covered via test-scoped registry instances.
+- **Strings-only money wire rule (pending contract artifact):** external
+  money crosses the wire as a canonical decimal STRING
+  (`{"amount": "48375.00"}`); every JSON number token — int and float —
+  plus booleans and non-finite values (NaN/±Infinity) is rejected at
+  ingress (`mode="before"` validators on `CRMPurchaseInvoicePayload`, the
+  strict Sub parsers). Per Michael's directive this rule is slated to
+  become a checked-in cross-repository contract document when the E4 (ERP)
+  and S5 (Sub) slices land — tracked here until that contract exists.
+
 **Authority order (highest wins):**
 
 1. `app/services/sot_relationships.py` — the executable SOT registry

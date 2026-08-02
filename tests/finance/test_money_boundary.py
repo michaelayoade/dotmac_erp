@@ -25,6 +25,7 @@ from app.models.finance.core_fx.exchange_rate import (
 from app.services.finance.money_boundary import (
     BOUNDARY_ROUNDING,
     SUPPORTED_CURRENCIES,
+    CurrencyRegistry,
     MoneyBoundaryError,
     boundary_currency,
     check_settlement_identity,
@@ -38,6 +39,12 @@ from app.services.finance.money_boundary import (
     serialize_money,
     to_boundary_money,
 )
+
+# Test-scoped registry: keeps the zero-minor-unit (JPY) and three-minor-unit
+# (BHD) contracts exercised WITHOUT provisioning those currencies in the
+# production SUPPORTED_CURRENCIES set (which ships NGN and USD only).
+_TEST_REGISTRY = CurrencyRegistry({"NGN": 2, "JPY": 0, "BHD": 3})
+
 
 # ---------------------------------------------------------------------------
 # Exact round-trips (Decimal + currency_code -> Money -> Decimal + code)
@@ -63,8 +70,14 @@ def test_round_trip_is_exact_for_ngn(amount: Decimal) -> None:
 
 
 def test_round_trip_zero_minor_unit_currency() -> None:
-    money = to_boundary_money(Decimal("1500"), "JPY")
+    money = to_boundary_money(Decimal("1500"), "JPY", registry=_TEST_REGISTRY)
     assert from_money(money) == (Decimal("1500"), "JPY")
+
+
+def test_round_trip_three_minor_unit_currency() -> None:
+    # BHD via the test registry (3 minor units) — exact at full precision.
+    money = to_boundary_money(Decimal("1.234"), "BHD", registry=_TEST_REGISTRY)
+    assert from_money(money) == (Decimal("1.234"), "BHD")
 
 
 def test_round_trip_accepts_int_and_str() -> None:
@@ -93,7 +106,18 @@ def test_serialization_never_uses_scientific_notation() -> None:
 def test_serialization_pins_minor_units() -> None:
     # Money quantizes to the currency's minor units — "100" wires as "100.00".
     assert serialize_amount(to_boundary_money(Decimal("100"), "NGN")) == "100.00"
-    assert serialize_amount(to_boundary_money(Decimal("1500"), "JPY")) == "1500"
+    assert (
+        serialize_amount(
+            to_boundary_money(Decimal("1500"), "JPY", registry=_TEST_REGISTRY)
+        )
+        == "1500"
+    )
+    assert (
+        serialize_amount(
+            to_boundary_money(Decimal("1.2"), "BHD", registry=_TEST_REGISTRY)
+        )
+        == "1.200"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +168,9 @@ def test_rejects_unprovisioned_currency_codes() -> None:
 
 def test_rejects_three_decimal_currency_until_provisioned() -> None:
     # BHD legitimately has 3 minor units; accepting it with an assumed 2
-    # would misrepresent it (1.234 BHD would be "excess precision"). It is
-    # rejected outright until provisioned with minor_units=3 in the registry.
+    # would misrepresent it (1.234 BHD would be "excess precision"). The
+    # PRODUCTION registry rejects it outright until provisioned with
+    # minor_units=3 (tests use _TEST_REGISTRY for the 3-minor-unit contract).
     with pytest.raises(MoneyBoundaryError, match="not provisioned"):
         to_boundary_money(Decimal("1.234"), "BHD")
     with pytest.raises(MoneyBoundaryError, match="not provisioned"):
@@ -153,24 +178,50 @@ def test_rejects_three_decimal_currency_until_provisioned() -> None:
 
 
 def test_supported_currency_registry_is_the_minor_unit_authority() -> None:
-    # The explicit provisioned set — extending it is a deliberate code (and
-    # core_fx.currency) change, never an inferred default.
-    assert dict(SUPPORTED_CURRENCIES) == {
-        "NGN": 2,
-        "USD": 2,
-        "EUR": 2,
-        "GBP": 2,
-        "JPY": 0,
-    }
+    # The explicit production provisioned set: NGN and USD ONLY (E4 review
+    # ruling). EUR/GBP arrive later behind checked-in provisioning plus a
+    # core_fx.currency database consistency test; extending the set is a
+    # deliberate code change, never an inferred default.
+    assert dict(SUPPORTED_CURRENCIES.by_code) == {"NGN": 2, "USD": 2}
     assert boundary_currency("ngn").minor_units == 2
-    assert boundary_currency(" JPY ").minor_units == 0
+    assert boundary_currency(" USD ").minor_units == 2
+    # JPY/EUR/GBP are NOT provisioned for production money.
+    for unprovisioned in ("JPY", "EUR", "GBP"):
+        with pytest.raises(MoneyBoundaryError, match="not provisioned"):
+            boundary_currency(unprovisioned)
+
+
+def test_injected_test_registry_never_leaks_into_production_default() -> None:
+    # Passing a registry is per-call; the default path still fails closed.
+    assert to_boundary_money(
+        Decimal("1500"), "JPY", registry=_TEST_REGISTRY
+    ).amount == Decimal("1500")
+    with pytest.raises(MoneyBoundaryError, match="not provisioned"):
+        to_boundary_money(Decimal("1500"), "JPY")
 
 
 def test_rejects_excess_minor_unit_precision() -> None:
     with pytest.raises(MoneyBoundaryError, match="minor-unit precision"):
         to_boundary_money(Decimal("10.005"), "NGN")
     with pytest.raises(MoneyBoundaryError, match="minor-unit precision"):
-        to_boundary_money(Decimal("1500.5"), "JPY")
+        to_boundary_money(Decimal("1500.5"), "JPY", registry=_TEST_REGISTRY)
+    with pytest.raises(MoneyBoundaryError, match="minor-unit precision"):
+        to_boundary_money(Decimal("1.2345"), "BHD", registry=_TEST_REGISTRY)
+
+
+def test_rejects_non_finite_values() -> None:
+    # NaN/Infinity parse as valid Decimals but are not money — refused with
+    # the typed boundary error, never allowed to reach quantization.
+    for bad in ("NaN", "Infinity", "-Infinity"):
+        with pytest.raises(MoneyBoundaryError, match="non-finite"):
+            to_boundary_money(bad, "NGN")
+        with pytest.raises(MoneyBoundaryError, match="non-finite"):
+            to_boundary_money(Decimal(bad), "NGN")
+    # As floats they are refused by type before finiteness even matters.
+    with pytest.raises(MoneyBoundaryError, match="float"):
+        to_boundary_money(float("nan"), "NGN")
+    with pytest.raises(MoneyBoundaryError, match="float"):
+        to_boundary_money(float("inf"), "NGN")
 
 
 def test_accepts_trailing_zero_extra_places() -> None:
@@ -218,7 +269,8 @@ def test_round_to_minor_units_rejects_float() -> None:
 
 def test_minor_unit() -> None:
     assert minor_unit("NGN") == Decimal("0.01")
-    assert minor_unit("JPY") == Decimal("1")
+    assert minor_unit("JPY", registry=_TEST_REGISTRY) == Decimal("1")
+    assert minor_unit("BHD", registry=_TEST_REGISTRY) == Decimal("0.001")
     assert BOUNDARY_ROUNDING == "ROUND_HALF_UP"
 
 

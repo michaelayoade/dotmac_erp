@@ -86,12 +86,17 @@ class PaymentSyncMixin:
         updated_since = watermark.isoformat() if watermark else None
         max_ok: datetime | None = None
         min_error: datetime | None = None
+        # An UNPOSITIONED failure (missing/malformed updated_at) cannot park
+        # the cursor at itself, so a later good row would advance the
+        # watermark past it and skip it forever. Freeze: the watermark must
+        # not advance at all for this run.
+        watermark_frozen = False
 
         def _on_parse_error(exc: DotmacSubParseError) -> None:
             # A row asserted unusable money facts (strict client parser).
             # Fail THAT row exactly like a savepoint-failed row — recorded,
             # watermark held at it for retry — while the pull continues.
-            nonlocal min_error
+            nonlocal min_error, watermark_frozen
             result.errors.append(str(exc))
             logger.error("Rejected dotmac_sub payment row at parse: %s", exc)
             parse_row_updated_at = self._parse_datetime(exc.updated_at)
@@ -101,6 +106,8 @@ class PaymentSyncMixin:
                     if min_error is None
                     else min(min_error, parse_row_updated_at)
                 )
+            else:
+                watermark_frozen = True
 
         try:
             for pay in self.client.get_payments(
@@ -144,11 +151,22 @@ class PaymentSyncMixin:
                             if min_error is None
                             else min(min_error, row_updated_at)
                         )
+                    else:
+                        watermark_frozen = True
+            # An unpositioned failure freezes the cursor at its pre-run
+            # position — advancing would skip that row permanently.
             if use_watermark:
-                self._advance_sync_watermark(
-                    EntityType.PAYMENT,
-                    next_watermark(watermark, max_ok, min_error),
-                )
+                if watermark_frozen:
+                    logger.warning(
+                        "Payment sync watermark frozen: a failed row had no "
+                        "usable updated_at, so the cursor cannot be parked at "
+                        "it; holding the pre-run position"
+                    )
+                else:
+                    self._advance_sync_watermark(
+                        EntityType.PAYMENT,
+                        next_watermark(watermark, max_ok, min_error),
+                    )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "
@@ -170,6 +188,13 @@ class PaymentSyncMixin:
     ) -> None:
         external_id = pay.id
 
+        # E4 money boundary FIRST — before the settled/unchanged branches —
+        # so every consumed monetary fact is validated on EVERY sync pass
+        # (rejects missing currency, excess minor-unit precision,
+        # unprovisioned currency), including refund/void paths that consume
+        # the amounts. A rejection fails this row's savepoint, never the run.
+        pay.boundary_money()
+
         if (pay.status or "").lower() not in _SETTLED_STATUSES:
             # Not settled cash (e.g. refunded / voided). If a prior sync already
             # GL-posted this payment, its receipt journal must be reversed —
@@ -177,11 +202,6 @@ class PaymentSyncMixin:
             # idempotently; a never-posted payment is simply skipped.
             self._handle_unsettled_payment(pay, external_id, result, created_by_user_id)
             return
-
-        # E4 money boundary: admit only exact, currency-tagged settlement money
-        # facts (rejects float, missing currency, excess minor-unit precision).
-        # A rejection fails this row's savepoint, never the whole sync run.
-        pay.boundary_money()
 
         data_hash = self._compute_hash(
             {
