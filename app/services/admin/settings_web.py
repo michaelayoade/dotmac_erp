@@ -323,7 +323,6 @@ class AdminSettingsWebService:
                 if branding and branding.sidebar_style
                 else "dark"
             ),
-            "custom_css": (branding.custom_css or "") if branding else "",
         }
 
         return {
@@ -396,7 +395,6 @@ class AdminSettingsWebService:
                 "border_radius",
                 "button_style",
                 "sidebar_style",
-                "custom_css",
             ]
 
             if branding:

@@ -150,9 +150,12 @@ Required imports from `components/`:
 ```jinja2
 {{ request.state.csrf_form | safe }}   {# CSRF token #}
 {{ data | tojson | safe }}              {# JSON for JS #}
-{{ org_branding.css | safe }}           {# Admin-configured CSS only #}
+{{ org_branding.css | safe }}           {# GENERATED branding CSS only #}
 ```
 Never `| safe` on user content — use `| sanitize_html`.
+`org_branding.css` is generated from validated colour/typography/logo fields.
+Operator-supplied raw CSS is retired fleet-wide (ADR-0006 D8) — do not add a
+raw-CSS field back.
 
 ### CSRF — mandatory on every POST form
 ```html
