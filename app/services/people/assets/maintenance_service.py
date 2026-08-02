@@ -452,9 +452,10 @@ class AssetMaintenanceService:
                 self.db.add(row)
                 pending_part_rows.append(row)
 
-        current_actual_cost = Decimal(str(work_order.actual_cost or 0))
+        # E4 float elimination: the column is exact Decimal money — never float.
+        current_actual_cost = Decimal(work_order.actual_cost or 0)
         updated_actual_cost = current_actual_cost + total_issued_cost
-        work_order.actual_cost = float(updated_actual_cost)
+        work_order.actual_cost = updated_actual_cost
 
         requisition_id: UUID | None = None
         if shortages:
@@ -577,9 +578,10 @@ class AssetMaintenanceService:
         if labor_hours is not None:
             work_order.labor_hours = float(labor_hours)
         if additional_cost:
-            current_actual_cost = Decimal(str(work_order.actual_cost or 0))
+            # E4 float elimination: exact Decimal money end-to-end.
+            current_actual_cost = Decimal(work_order.actual_cost or 0)
             updated_actual_cost = current_actual_cost + additional_cost
-            work_order.actual_cost = float(updated_actual_cost)
+            work_order.actual_cost = updated_actual_cost
         self._set_work_order_status(
             work_order,
             MaintenanceWorkOrderStatus.COMPLETED,

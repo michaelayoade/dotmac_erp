@@ -30,8 +30,10 @@ from dotmac_integration import (
     ReachabilityCircuit,
     exponential_backoff,
 )
+from dotmac_kernel.money import Money
 
 from app.config import settings
+from app.services.finance.money_boundary import to_boundary_money
 from app.metrics import observe_integration_request
 from app.observability import get_request_id
 
@@ -250,6 +252,35 @@ class BillingAccountRecord:
     updated_at: str | None = None
 
 
+@dataclass(frozen=True)
+class DocumentBoundaryMoney:
+    """Typed kernel ``Money`` for a Sub billing document's header money facts.
+
+    Built fail-closed by ``InvoiceRecord.boundary_money`` /
+    ``CreditNoteRecord.boundary_money`` via the E4 Money/FX boundary adapter
+    (`app.services.finance.money_boundary`). ERP internals keep consuming the
+    record's exact ``Decimal`` fields; these values exist so the boundary is
+    validated and typed, not to replace ERP's decimal contracts.
+    """
+
+    subtotal: Money
+    tax_total: Money
+    total: Money
+    balance_due: Money | None = None
+    applied_total: Money | None = None
+
+
+@dataclass(frozen=True)
+class PaymentBoundaryMoney:
+    """Typed kernel ``Money`` for a Sub payment's settlement money facts."""
+
+    amount: Money
+    refunded_amount: Money
+    wht_amount: Money
+    gross_amount: Money | None = None
+    net_amount: Money | None = None
+
+
 @dataclass
 class InvoiceLineRecord:
     """Invoice line item."""
@@ -297,6 +328,35 @@ class InvoiceRecord:
     lines: list[InvoiceLineRecord] = field(default_factory=list)
     allocations: list[AllocationRecord] = field(default_factory=list)
 
+    def boundary_money(self) -> DocumentBoundaryMoney:
+        """Typed, fail-closed boundary money for this invoice's header facts.
+
+        Rejects float/missing-currency/excess-minor-unit-precision via the E4
+        adapter; allocation amounts are validated in the same pass. Line
+        ``quantity``/``unit_price`` stay ERP decimals (rates, not money), and
+        line amounts remain inputs to the centralized derived-value rounding
+        in the sync mixins.
+        """
+        label = f"Sub invoice {self.id}"
+        for alloc in self.allocations:
+            to_boundary_money(
+                alloc.amount,
+                self.currency,
+                field=f"{label} allocation {alloc.id} amount",
+            )
+        return DocumentBoundaryMoney(
+            subtotal=to_boundary_money(
+                self.subtotal, self.currency, field=f"{label} subtotal"
+            ),
+            tax_total=to_boundary_money(
+                self.tax_total, self.currency, field=f"{label} tax_total"
+            ),
+            total=to_boundary_money(self.total, self.currency, field=f"{label} total"),
+            balance_due=to_boundary_money(
+                self.balance_due, self.currency, field=f"{label} balance_due"
+            ),
+        )
+
 
 @dataclass
 class PaymentRecord:
@@ -333,6 +393,46 @@ class PaymentRecord:
     def effective_account_id(self) -> str | None:
         return self.billing_account_id or self.account_id
 
+    def boundary_money(self) -> PaymentBoundaryMoney:
+        """Typed, fail-closed boundary money for this payment's settlement
+        facts (gross/net/WHT evidence, refunds, allocations).
+
+        ``wht_rate`` is a percentage rate, not money — it stays a plain ERP
+        ``Decimal``.
+        """
+        label = f"Sub payment {self.id}"
+        for alloc in self.allocations:
+            to_boundary_money(
+                alloc.amount,
+                self.currency,
+                field=f"{label} allocation {alloc.id} amount",
+            )
+        return PaymentBoundaryMoney(
+            amount=to_boundary_money(
+                self.amount, self.currency, field=f"{label} amount"
+            ),
+            refunded_amount=to_boundary_money(
+                self.refunded_amount, self.currency, field=f"{label} refunded_amount"
+            ),
+            wht_amount=to_boundary_money(
+                self.wht_amount, self.currency, field=f"{label} wht_amount"
+            ),
+            gross_amount=(
+                to_boundary_money(
+                    self.gross_amount, self.currency, field=f"{label} gross_amount"
+                )
+                if self.gross_amount is not None
+                else None
+            ),
+            net_amount=(
+                to_boundary_money(
+                    self.net_amount, self.currency, field=f"{label} net_amount"
+                )
+                if self.net_amount is not None
+                else None
+            ),
+        )
+
 
 @dataclass
 class CreditNoteLineRecord:
@@ -366,6 +466,23 @@ class CreditNoteRecord:
     # Server-tracked last-modified instant (ISO8601); see InvoiceRecord.
     updated_at: str | None = None
     lines: list[CreditNoteLineRecord] = field(default_factory=list)
+
+    def boundary_money(self) -> DocumentBoundaryMoney:
+        """Typed, fail-closed boundary money for this credit note's header
+        facts (see ``InvoiceRecord.boundary_money``)."""
+        label = f"Sub credit note {self.id}"
+        return DocumentBoundaryMoney(
+            subtotal=to_boundary_money(
+                self.subtotal, self.currency, field=f"{label} subtotal"
+            ),
+            tax_total=to_boundary_money(
+                self.tax_total, self.currency, field=f"{label} tax_total"
+            ),
+            total=to_boundary_money(self.total, self.currency, field=f"{label} total"),
+            applied_total=to_boundary_money(
+                self.applied_total, self.currency, field=f"{label} applied_total"
+            ),
+        )
 
 
 @dataclass

@@ -5,6 +5,7 @@ Fixed Asset Maintenance Work Order model.
 import enum
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     DateTime,
@@ -110,13 +111,16 @@ class MaintenanceWorkOrder(Base):
     )
     completion_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    estimated_cost: Mapped[float] = mapped_column(
+    # Money columns are exact decimals (kernel-adoption E4 float elimination);
+    # SQLAlchemy already returned Decimal for Numeric — the float annotations
+    # were a lie. No schema change.
+    estimated_cost: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
         default=0,
         server_default="0",
     )
-    actual_cost: Mapped[float] = mapped_column(
+    actual_cost: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
         default=0,

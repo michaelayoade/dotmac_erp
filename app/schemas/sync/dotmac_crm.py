@@ -9,9 +9,17 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    model_validator,
+)
 
 from app.config import settings
+from app.services.finance.money_boundary import to_boundary_money
 
 # ============ Inbound Sync Payloads (CRM → ERP) ============
 
@@ -816,6 +824,26 @@ class CRMPurchaseInvoicePayload(BaseModel):
     approved_at: datetime | None = None
     approved_by_email: str | None = Field(None, max_length=255)
     items: list[CRMPurchaseInvoiceItemPayload] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_boundary_money(self) -> CRMPurchaseInvoicePayload:
+        """E4 fail-closed money boundary for the Sub/CRM payables command.
+
+        Header totals and line amounts must be exact in the document
+        currency's minor units (typed kernel Money at the boundary; no float,
+        no missing currency, no excess precision). Line ``quantity`` and
+        ``unit_price`` are rates/quantities and deliberately stay plain
+        decimals. ERP-internal AP posting/tax precision is unchanged.
+        """
+        label = f"purchase invoice {self.crm_invoice_id}"
+        to_boundary_money(self.subtotal, self.currency, field=f"{label} subtotal")
+        to_boundary_money(self.tax_total, self.currency, field=f"{label} tax_total")
+        to_boundary_money(self.total, self.currency, field=f"{label} total")
+        for index, item in enumerate(self.items, 1):
+            to_boundary_money(
+                item.amount, self.currency, field=f"{label} line {index} amount"
+            )
+        return self
 
 
 class CRMPurchaseInvoiceResponse(BaseModel):

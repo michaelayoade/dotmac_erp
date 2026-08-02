@@ -170,6 +170,11 @@ class CreditNoteSyncMixin:
         if source_status == "draft":
             result.skipped += 1
             return
+
+        # E4 money boundary: admit only exact, currency-tagged source money
+        # facts (rejects float, missing currency, excess minor-unit precision).
+        # A rejection fails this row's savepoint, never the whole sync run.
+        cn.boundary_money()
         if source_status == "void":
             local_status = InvoiceStatus.VOID
         elif source_status == "applied":

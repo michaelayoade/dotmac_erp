@@ -24,6 +24,10 @@ from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.services.dotmac_sub.client import DotmacSubError, PaymentRecord
+from app.services.finance.money_boundary import (
+    check_settlement_identity,
+    to_boundary_money,
+)
 
 from ._base import next_watermark
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
@@ -151,6 +155,11 @@ class PaymentSyncMixin:
             self._handle_unsettled_payment(pay, external_id, result, created_by_user_id)
             return
 
+        # E4 money boundary: admit only exact, currency-tagged settlement money
+        # facts (rejects float, missing currency, excess minor-unit precision).
+        # A rejection fails this row's savepoint, never the whole sync run.
+        pay.boundary_money()
+
         data_hash = self._compute_hash(
             {
                 "amount": str(pay.amount),
@@ -225,11 +234,20 @@ class PaymentSyncMixin:
         wht_amount = pay.wht_amount or Decimal("0")
         if gross_amount < 0 or net_amount < 0:
             raise ValueError("Sub payment refund exceeds its source settlement amount")
-        if (net_amount + wht_amount - gross_amount).copy_abs() > Decimal("0.01"):
-            raise ValueError(
-                "Sub payment accounting facts do not balance: "
-                f"net {net_amount} + WHT {wht_amount} != gross {gross_amount}"
-            )
+        # WHT evidence identity (net + WHT = gross) via the E4 adapter, with the
+        # pre-existing one-minor-unit sync tolerance for the booking currency.
+        check_settlement_identity(
+            gross=to_boundary_money(
+                gross_amount, currency_code, field=f"Sub payment {pay.id} gross"
+            ),
+            net=to_boundary_money(
+                net_amount, currency_code, field=f"Sub payment {pay.id} net"
+            ),
+            withheld=to_boundary_money(
+                wht_amount, currency_code, field=f"Sub payment {pay.id} WHT"
+            ),
+            field=f"Sub payment {pay.id}",
+        )
         wht_code_id = None
         if wht_amount > Decimal("0"):
             if pay.wht_rate is None:

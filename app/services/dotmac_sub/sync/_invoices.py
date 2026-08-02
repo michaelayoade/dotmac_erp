@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -22,14 +22,13 @@ from app.services.dotmac_sub.client import (
     DotmacSubError,
     InvoiceRecord,
 )
+from app.services.finance.money_boundary import round_to_minor_units
 
 from ._base import next_watermark
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
-
-_CENTS = Decimal("0.01")
 
 
 def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
@@ -187,6 +186,11 @@ class InvoiceSyncMixin:
         if inv.is_proforma or (inv.status or "").lower() == "draft":
             result.skipped += 1
             return
+
+        # E4 money boundary: admit only exact, currency-tagged source money
+        # facts (rejects float, missing currency, excess minor-unit precision).
+        # A rejection fails this row's savepoint, never the whole sync run.
+        inv.boundary_money()
 
         local_id = self._get_synced_entity(EntityType.INVOICE, external_id)
         existing: Invoice | None = None
@@ -370,22 +374,25 @@ class InvoiceSyncMixin:
             doc, "invoice_number", ""
         )
         effective_date = self._parse_date(doc.issued_at) or date.today()
+        currency_code = doc.currency
         projected: list[tuple[Any, Decimal, Decimal, Any]] = []
         for item in lines:
             line_subtotal, line_tax, tax_code = self._source_line_amounts(
-                item, effective_date=effective_date
+                item, currency_code=currency_code, effective_date=effective_date
             )
             projected.append((item, line_subtotal, line_tax, tax_code))
+
+        def _round(value: Decimal) -> Decimal:
+            # Centralized E4 rounding decision (currency minor units, half-up).
+            return round_to_minor_units(value, currency_code)
 
         projected_subtotal = sum((item[1] for item in projected), Decimal("0"))
         projected_tax = sum((item[2] for item in projected), Decimal("0"))
         line_mismatch = bool(lines) and (
-            projected_subtotal.quantize(_CENTS) != doc.subtotal.quantize(_CENTS)
-            or projected_tax.quantize(_CENTS) != doc.tax_total.quantize(_CENTS)
+            _round(projected_subtotal) != _round(doc.subtotal)
+            or _round(projected_tax) != _round(doc.tax_total)
         )
-        if line_mismatch or (doc.subtotal + doc.tax_total).quantize(
-            _CENTS
-        ) != doc.total.quantize(_CENTS):
+        if line_mismatch or _round(doc.subtotal + doc.tax_total) != _round(doc.total):
             raise ValueError(
                 f"Sub {label} {number} tax lines do not reconcile to the "
                 f"source header: lines={projected_subtotal}+{projected_tax}, "
@@ -394,12 +401,17 @@ class InvoiceSyncMixin:
         return projected
 
     def _source_line_amounts(
-        self, item: Any, *, effective_date: date
+        self, item: Any, *, currency_code: str, effective_date: date
     ) -> tuple[Decimal, Decimal, Any]:
-        """Mirror Sub's line tax facts; ERP only resolves the posting TaxCode."""
-        amount = (
-            item.amount if item.amount is not None else item.quantity * item.unit_price
-        ).quantize(_CENTS, rounding=ROUND_HALF_UP)
+        """Mirror Sub's line tax facts; ERP only resolves the posting TaxCode.
+
+        Derived line values round through the E4 adapter's centralized
+        minor-unit rounding (half-up) for the document currency.
+        """
+        amount = round_to_minor_units(
+            item.amount if item.amount is not None else item.quantity * item.unit_price,
+            currency_code,
+        )
         application = (item.tax_application or "exclusive").strip().lower()
         if application == "exempt" or not item.tax_rate_id:
             return amount, Decimal("0"), None
@@ -411,13 +423,13 @@ class InvoiceSyncMixin:
         if ratio <= Decimal("0"):
             return amount, Decimal("0"), None
         if application == "inclusive":
-            tax_amount = (amount - (amount / (Decimal("1") + ratio))).quantize(
-                _CENTS, rounding=ROUND_HALF_UP
+            tax_amount = round_to_minor_units(
+                amount - (amount / (Decimal("1") + ratio)), currency_code
             )
             line_subtotal = amount - tax_amount
         else:
             line_subtotal = amount
-            tax_amount = (amount * ratio).quantize(_CENTS, rounding=ROUND_HALF_UP)
+            tax_amount = round_to_minor_units(amount * ratio, currency_code)
         tax_code = self._resolve_source_sales_tax_code(
             source_tax_rate_id=str(item.tax_rate_id),
             tax_application=application,
