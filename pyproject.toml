@@ -43,6 +43,23 @@ minio = "^7.2.0"
 click = "^8.1.0"
 google-auth = "^2.53.0"
 pymysql = "^1.1.1"
+# Kernel adoption slice E2 (docs/PLATFORM_ADOPTION_LEDGER.md): EXACT pin, no
+# range — the dependency-update gate in
+# tests/architecture/test_kernel_compatibility.py rejects any ^/~/>=/* drift.
+# Consume-pure contracts only; app/ imports are bounded by
+# tests/architecture/test_kernel_import_boundary.py. No extras: [testing]'s
+# only pull (httpx) and [licensing]'s (cryptography) are already ERP main
+# dependencies at compatible versions.
+dotmac-kernel = {version = "0.1.0a8", source = "forgejo"}
+
+# Private Forgejo PyPI index (dotmac-kernel releases). Explicit priority: only
+# dependencies that name this source resolve from it; PyPI stays the default.
+# Credentials are NEVER stored in this repository — poetry reads them from its
+# own auth store under the source name "forgejo".
+[[tool.poetry.source]]
+name = "forgejo"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple/"
+priority = "explicit"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.2.2"
