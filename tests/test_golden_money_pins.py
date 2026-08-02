@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -319,43 +319,13 @@ def world():
         )
     )
 
-    # The reversal path posts at date.today() (InvoiceSyncMixin ->
-    # ReversalService, app/services/dotmac_sub/sync/_invoices.py), so the
-    # world must always contain an OPEN period covering the real current
-    # date — the pinned 2026-07 period alone made every reversal test fail
-    # the moment the calendar left July 2026.
-    today = date.today()
-    if not (date(2026, 7, 1) <= today <= date(2026, 7, 31)):
-        fiscal_year_id = year.fiscal_year_id
-        if today.year != 2026:
-            current_year = FiscalYear(
-                organization_id=org_id,
-                year_code=f"FY{today.year}",
-                year_name=f"FY {today.year}",
-                start_date=date(today.year, 1, 1),
-                end_date=date(today.year, 12, 31),
-                created_at=now,
-            )
-            db.add(current_year)
-            db.flush()
-            fiscal_year_id = current_year.fiscal_year_id
-        month_end = (
-            date(today.year + 1, 1, 1) - timedelta(days=1)
-            if today.month == 12
-            else date(today.year, today.month + 1, 1) - timedelta(days=1)
-        )
-        db.add(
-            FiscalPeriod(
-                organization_id=org_id,
-                fiscal_year_id=fiscal_year_id,
-                period_number=today.month,
-                period_name=f"{today.year}-{today.month:02d}",
-                start_date=date(today.year, today.month, 1),
-                end_date=month_end,
-                status=PeriodStatus.OPEN,
-                created_at=now,
-            )
-        )
+    # NOTE: this world deliberately seeds ONE period. An earlier fix additionally
+    # seeded a period covering the real current date, because the reversal path
+    # posts at `date.today()`; freezing that clock (above) addresses the same
+    # failure at its source, so the extra period is no longer reached — and a
+    # world whose SHAPE varied with the wall clock (one period in July, two
+    # otherwise, plus a fiscal year across a year boundary) is precisely what a
+    # golden-pin fixture exists to avoid.
 
     w.customer = Customer(
         organization_id=org_id,
