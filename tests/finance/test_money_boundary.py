@@ -24,6 +24,7 @@ from app.models.finance.core_fx.exchange_rate import (
 )
 from app.services.finance.money_boundary import (
     BOUNDARY_ROUNDING,
+    SUPPORTED_CURRENCIES,
     MoneyBoundaryError,
     boundary_currency,
     check_settlement_identity,
@@ -129,6 +130,40 @@ def test_rejects_invalid_currency_code() -> None:
         boundary_currency("N1N")
     with pytest.raises(MoneyBoundaryError, match="invalid ISO-4217"):
         boundary_currency("NAIRA")
+
+
+def test_rejects_unprovisioned_currency_codes() -> None:
+    # kernel_currency() silently gives unknown 3-letter codes 2 minor units;
+    # the boundary registry refuses them instead — a fake code must never
+    # become transactable money.
+    with pytest.raises(MoneyBoundaryError, match="not provisioned"):
+        boundary_currency("ZZZ")
+    with pytest.raises(MoneyBoundaryError, match="not provisioned"):
+        to_boundary_money(Decimal("10.00"), "ZZZ")
+
+
+def test_rejects_three_decimal_currency_until_provisioned() -> None:
+    # BHD legitimately has 3 minor units; accepting it with an assumed 2
+    # would misrepresent it (1.234 BHD would be "excess precision"). It is
+    # rejected outright until provisioned with minor_units=3 in the registry.
+    with pytest.raises(MoneyBoundaryError, match="not provisioned"):
+        to_boundary_money(Decimal("1.234"), "BHD")
+    with pytest.raises(MoneyBoundaryError, match="not provisioned"):
+        to_boundary_money(Decimal("1.23"), "BHD")
+
+
+def test_supported_currency_registry_is_the_minor_unit_authority() -> None:
+    # The explicit provisioned set — extending it is a deliberate code (and
+    # core_fx.currency) change, never an inferred default.
+    assert dict(SUPPORTED_CURRENCIES) == {
+        "NGN": 2,
+        "USD": 2,
+        "EUR": 2,
+        "GBP": 2,
+        "JPY": 0,
+    }
+    assert boundary_currency("ngn").minor_units == 2
+    assert boundary_currency(" JPY ").minor_units == 0
 
 
 def test_rejects_excess_minor_unit_precision() -> None:

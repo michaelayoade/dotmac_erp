@@ -231,8 +231,18 @@ def test_reseller_sync_advances_reseller_watermark() -> None:
 
 def test_parse_invoice_reads_updated_at() -> None:
     client = DotmacSubClient(DotmacSubConfig(api_url="x", api_token="t"))
+    # Money facts are mandatory (strict parser) — this pin is about updated_at.
     rec = client._parse_invoice(
-        {"id": "1", "account_id": "a", "updated_at": "2026-06-01T10:00:00+00:00"}
+        {
+            "id": "1",
+            "account_id": "a",
+            "currency": "NGN",
+            "subtotal": "100.00",
+            "tax_total": "0",
+            "total": "100.00",
+            "balance_due": "100.00",
+            "updated_at": "2026-06-01T10:00:00+00:00",
+        }
     )
     assert rec.updated_at == "2026-06-01T10:00:00+00:00"
 

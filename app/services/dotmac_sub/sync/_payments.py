@@ -23,7 +23,11 @@ from app.models.finance.ar.customer_payment import (
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice
 from app.models.finance.ar.payment_allocation import PaymentAllocation
-from app.services.dotmac_sub.client import DotmacSubError, PaymentRecord
+from app.services.dotmac_sub.client import (
+    DotmacSubError,
+    DotmacSubParseError,
+    PaymentRecord,
+)
 from app.services.finance.money_boundary import (
     check_settlement_identity,
     to_boundary_money,
@@ -82,9 +86,28 @@ class PaymentSyncMixin:
         updated_since = watermark.isoformat() if watermark else None
         max_ok: datetime | None = None
         min_error: datetime | None = None
+
+        def _on_parse_error(exc: DotmacSubParseError) -> None:
+            # A row asserted unusable money facts (strict client parser).
+            # Fail THAT row exactly like a savepoint-failed row — recorded,
+            # watermark held at it for retry — while the pull continues.
+            nonlocal min_error
+            result.errors.append(str(exc))
+            logger.error("Rejected dotmac_sub payment row at parse: %s", exc)
+            parse_row_updated_at = self._parse_datetime(exc.updated_at)
+            if parse_row_updated_at is not None:
+                min_error = (
+                    parse_row_updated_at
+                    if min_error is None
+                    else min(min_error, parse_row_updated_at)
+                )
+
         try:
             for pay in self.client.get_payments(
-                account_id=account_id, status=status, updated_since=updated_since
+                account_id=account_id,
+                status=status,
+                updated_since=updated_since,
+                on_parse_error=_on_parse_error,
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"

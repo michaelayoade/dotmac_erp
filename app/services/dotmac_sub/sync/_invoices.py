@@ -20,9 +20,10 @@ from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.services.dotmac_sub.client import (
     CreditNoteRecord,
     DotmacSubError,
+    DotmacSubParseError,
     InvoiceRecord,
 )
-from app.services.finance.money_boundary import round_to_minor_units
+from app.services.finance.money_boundary import round_to_minor_units, to_boundary_money
 
 from ._base import next_watermark
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
@@ -106,9 +107,28 @@ class InvoiceSyncMixin:
         updated_since = watermark.isoformat() if watermark else None
         max_ok: datetime | None = None
         min_error: datetime | None = None
+
+        def _on_parse_error(exc: DotmacSubParseError) -> None:
+            # A row asserted unusable money facts (strict client parser).
+            # Fail THAT row exactly like a savepoint-failed row — recorded,
+            # watermark held at it for retry — while the pull continues.
+            nonlocal min_error
+            result.errors.append(str(exc))
+            logger.error("Rejected dotmac_sub invoice row at parse: %s", exc)
+            parse_row_updated_at = self._parse_datetime(exc.updated_at)
+            if parse_row_updated_at is not None:
+                min_error = (
+                    parse_row_updated_at
+                    if min_error is None
+                    else min(min_error, parse_row_updated_at)
+                )
+
         try:
             for inv in self.client.get_invoices(
-                account_id=account_id, status=status, updated_since=updated_since
+                account_id=account_id,
+                status=status,
+                updated_since=updated_since,
+                on_parse_error=_on_parse_error,
             ):
                 # The global delta must drain completely. A timestamp-only
                 # watermark plus a row cap can loop forever when more than the
@@ -384,15 +404,18 @@ class InvoiceSyncMixin:
 
         def _round(value: Decimal) -> Decimal:
             # Centralized E4 rounding decision (currency minor units, half-up).
+            # ERP-DERIVED aggregates only — source header FACTS are compared
+            # as transmitted, never rounded (a 10.005 fact must fail the row
+            # via the boundary, not become 10.01 here).
             return round_to_minor_units(value, currency_code)
 
         projected_subtotal = sum((item[1] for item in projected), Decimal("0"))
         projected_tax = sum((item[2] for item in projected), Decimal("0"))
         line_mismatch = bool(lines) and (
-            _round(projected_subtotal) != _round(doc.subtotal)
-            or _round(projected_tax) != _round(doc.tax_total)
+            _round(projected_subtotal) != doc.subtotal
+            or _round(projected_tax) != doc.tax_total
         )
-        if line_mismatch or _round(doc.subtotal + doc.tax_total) != _round(doc.total):
+        if line_mismatch or doc.subtotal + doc.tax_total != doc.total:
             raise ValueError(
                 f"Sub {label} {number} tax lines do not reconcile to the "
                 f"source header: lines={projected_subtotal}+{projected_tax}, "
@@ -405,13 +428,24 @@ class InvoiceSyncMixin:
     ) -> tuple[Decimal, Decimal, Any]:
         """Mirror Sub's line tax facts; ERP only resolves the posting TaxCode.
 
-        Derived line values round through the E4 adapter's centralized
-        minor-unit rounding (half-up) for the document currency.
+        A SUPPLIED line amount is a source money FACT: it is validated exact
+        via ``to_boundary_money`` (excess minor-unit precision is REJECTED,
+        never rounded — 10.005 NGN fails the row instead of becoming 10.01).
+        Only when Sub omits the line amount does ERP derive
+        quantity x unit_price itself, and only that ERP-derived value (and
+        the derived tax splits below) may round through the E4 adapter's
+        centralized minor-unit rounding (half-up).
         """
-        amount = round_to_minor_units(
-            item.amount if item.amount is not None else item.quantity * item.unit_price,
-            currency_code,
-        )
+        if item.amount is not None:
+            amount = to_boundary_money(
+                item.amount,
+                currency_code,
+                field=f"Sub line {item.id} amount",
+            ).amount
+        else:
+            amount = round_to_minor_units(
+                item.quantity * item.unit_price, currency_code
+            )
         application = (item.tax_application or "exclusive").strip().lower()
         if application == "exempt" or not item.tax_rate_id:
             return amount, Decimal("0"), None

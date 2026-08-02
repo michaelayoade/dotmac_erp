@@ -14,7 +14,11 @@ from sqlalchemy import select
 
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
-from app.services.dotmac_sub.client import CreditNoteRecord, DotmacSubError
+from app.services.dotmac_sub.client import (
+    CreditNoteRecord,
+    DotmacSubError,
+    DotmacSubParseError,
+)
 
 from ._base import next_watermark
 from ._constants import (
@@ -71,9 +75,28 @@ class CreditNoteSyncMixin:
         updated_since = watermark.isoformat() if watermark else None
         max_ok: datetime | None = None
         min_error: datetime | None = None
+
+        def _on_parse_error(exc: DotmacSubParseError) -> None:
+            # A row asserted unusable money facts (strict client parser).
+            # Fail THAT row exactly like a savepoint-failed row — recorded,
+            # watermark held at it for retry — while the pull continues.
+            nonlocal min_error
+            result.errors.append(str(exc))
+            logger.error("Rejected dotmac_sub credit-note row at parse: %s", exc)
+            parse_row_updated_at = self._parse_datetime(exc.updated_at)
+            if parse_row_updated_at is not None:
+                min_error = (
+                    parse_row_updated_at
+                    if min_error is None
+                    else min(min_error, parse_row_updated_at)
+                )
+
         try:
             for cn in self.client.get_credit_notes(
-                account_id=account_id, status=status, updated_since=updated_since
+                account_id=account_id,
+                status=status,
+                updated_since=updated_since,
+                on_parse_error=_on_parse_error,
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"

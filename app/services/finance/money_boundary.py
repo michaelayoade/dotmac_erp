@@ -16,6 +16,9 @@ Fail-closed rules (every rejection raises :class:`MoneyBoundaryError`):
 - ``float``/``bool`` monetary inputs are refused (inexact / not money);
 - a missing or invalid currency code is refused — no ambiguous default is
   applied here (callers own their documented defaulting, if any);
+- a well-formed but unprovisioned currency code is refused: minor units
+  resolve ONLY through :data:`SUPPORTED_CURRENCIES`, never through a
+  two-decimal guess for an unknown code;
 - a source amount carrying more precision than the currency's minor units is
   refused at the boundary (no minor unit may be silently lost or invented);
 - mixing currencies is refused;
@@ -33,8 +36,10 @@ money independently.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, time, timezone
 from decimal import Decimal, InvalidOperation
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from dotmac_kernel.money import (
@@ -47,9 +52,6 @@ from dotmac_kernel.money import (
 from dotmac_kernel.money import (
     ExchangeRate as KernelExchangeRate,
 )
-from dotmac_kernel.money import (
-    currency as kernel_currency,
-)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.models.finance.core_fx.exchange_rate import (
@@ -58,6 +60,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 __all__ = [
     "BOUNDARY_ROUNDING",
+    "SUPPORTED_CURRENCIES",
     "MoneyBoundaryError",
     "boundary_currency",
     "to_boundary_money",
@@ -82,20 +85,68 @@ class MoneyBoundaryError(ValueError):
     """Fail-closed rejection of a monetary value at an external boundary."""
 
 
-def boundary_currency(code: str | None, *, field: str = "currency") -> Currency:
-    """Resolve a mandatory ISO-4217 currency code, failing closed.
+# ---------------------------------------------------------------------------
+# Supported-currency registry — the boundary's minor-unit authority
+# ---------------------------------------------------------------------------
+# ERP's provisioning surface for currencies is the ``core_fx.currency`` table
+# (``currency_code`` + ``decimal_places``), but this adapter must resolve in
+# session-free contexts (connector record parsing, pydantic command
+# validation), so the boundary carries an explicit static registry of the
+# currencies ERP actually transacts. ``dotmac_kernel.money.currency`` is
+# deliberately NOT used as the minor-unit source: it silently defaults any
+# unknown three-letter code to 2 minor units, which would accept fabricated
+# codes (``ZZZ``) and misrepresent three-decimal currencies (``BHD``). Here an
+# unprovisioned code fails closed instead.
+#
+# Extension point: to transact a new currency at the boundary, add
+# ``code: minor_units`` below (with the correct ISO-4217 fraction digits —
+# e.g. BHD must be added as 3, never assumed) and provision the matching
+# ``core_fx.currency`` row with the same ``decimal_places``.
+#
+# Provisioning evidence: NGN is the functional default
+# (``settings.default_functional_currency_code``); USD/EUR/GBP are the other
+# locale-derived defaults in ``app/config.py`` and appear in ERP tax seeds
+# and FX observations; JPY is provisioned to keep the zero-minor-unit
+# contract exercised end to end.
+SUPPORTED_CURRENCIES: Mapping[str, int] = MappingProxyType(
+    {
+        "NGN": 2,
+        "USD": 2,
+        "EUR": 2,
+        "GBP": 2,
+        "JPY": 0,
+    }
+)
 
-    ``None``/empty/invalid codes are rejected — the boundary never assumes a
-    default currency.
+
+def boundary_currency(code: str | None, *, field: str = "currency") -> Currency:
+    """Resolve a mandatory ISO-4217 currency code against the boundary's
+    supported-currency registry, failing closed.
+
+    ``None``/empty/malformed codes are rejected, and so is any well-formed
+    code not provisioned in :data:`SUPPORTED_CURRENCIES` — the boundary never
+    assumes a default currency and never guesses a minor-unit count for an
+    unknown code.
     """
     if code is None or not isinstance(code, str) or not code.strip():
         raise MoneyBoundaryError(
             f"{field}: a currency code is required at the money boundary"
         )
     try:
-        return kernel_currency(code.strip())
+        # Shape validation only (3 alpha chars); minor units come from the
+        # registry below, never from a default.
+        candidate = Currency(code.strip())
     except MoneyError as exc:
         raise MoneyBoundaryError(f"{field}: {exc}") from exc
+    minor_units = SUPPORTED_CURRENCIES.get(candidate.code)
+    if minor_units is None:
+        raise MoneyBoundaryError(
+            f"{field}: currency {candidate.code!r} is not provisioned in the "
+            "ERP supported-currency registry; add it (with its ISO-4217 "
+            "minor units) to SUPPORTED_CURRENCIES and core_fx.currency "
+            "before transacting it at the boundary"
+        )
+    return Currency(candidate.code, minor_units)
 
 
 def to_boundary_money(
