@@ -11,7 +11,7 @@ healthy invoice and a properly reposted invoice that must NOT be flagged.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -26,15 +26,13 @@ from app.models.finance.gl.journal_entry import (
 )
 from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from scripts.find_stranded_reposts import find_stranded_reposts
-from tests.test_golden_money_pins import _TODAY
-from tests.test_golden_money_pins import _SubSyncHarness, _World
+from tests.test_golden_money_pins import _TODAY, _SubSyncHarness, _World
 
 try:
     from datetime import UTC  # type: ignore
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-_TODAY = date(2026, 7, 15)
 _USER = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
 
 

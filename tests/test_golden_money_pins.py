@@ -125,6 +125,8 @@ class _FrozenToday(date):
     @classmethod
     def today(cls) -> date:
         return _TODAY
+
+
 _USER = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
 
 
