@@ -32,9 +32,12 @@ Fail-closed rules (every rejection raises :class:`MoneyBoundaryError`):
 Wire contract: external money crosses the wire as a canonical decimal
 STRING (``{"amount": "48375.00"}``) — every JSON number token (int or
 float), boolean and non-finite value is rejected at ingress (the connector
-parsers and pydantic ``mode="before"`` validators). This strings-only rule
-is slated to become a checked-in cross-repository contract when the E4
-(ERP) and S5 (Sub) slices land.
+parsers and pydantic ``mode="before"`` validators). Zero has exactly ONE
+canonical spelling and it is positive: every negative-zero form (``"-0"``,
+``"-0.00"``, ``"-0.0000"``) is rejected at ingress, and
+:func:`serialize_amount` normalizes a signed-zero result so it can never emit
+one. This strings-only rule is slated to become a checked-in cross-repository
+contract when the E4 (ERP) and S5 (Sub) slices land.
 
 Rounding: :data:`BOUNDARY_ROUNDING` (round-half-up) is the single, centralized
 rounding decision for the touched Sub-facing slice. Derived document-level
@@ -108,12 +111,18 @@ class MoneyBoundaryError(ValueError):
 #   ``.`` followed by EXACTLY N digits; for N == 0 no ``.`` at all.
 #
 # No whitespace, no ``+``, no exponent, no leading zeros (a single ``0``
-# integer part is the only zero form), no bare trailing/leading dot.
+# integer part is the only zero form), no bare trailing/leading dot, and NO
+# NEGATIVE ZERO — zero has exactly one canonical spelling and it is positive.
 # ``serialize_amount`` alignment: quantized ``Decimal`` under ``format(x,
-# "f")`` yields this exact shape, negatives as a single leading ``-``
-# (including ``-0.00`` for a negative-zero amount, which the grammar
-# accepts).
+# "f")`` yields this exact shape, negatives as a single leading ``-``;
+# ``serialize_amount`` normalizes a negative-zero result to positive zero so
+# what it emits is always accepted back by this grammar.
 _CANONICAL_LEXEME_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?$")
+# ``-0``, ``-0.0``, ``-0.00``, ``-0.0000`` … Decimal treats these as EQUAL to
+# positive zero (``Decimal("-0.00") == Decimal("0.00")`` is True), so equality
+# can never catch them — the sign has to be inspected in the literal text (or
+# via ``Decimal.is_signed()`` for already-parsed values).
+_NEGATIVE_ZERO_RE = re.compile(r"^-0(?:\.0+)?$")
 # Tokens Decimal() would parse but which are never money — called out with a
 # dedicated message rather than the generic canonical-form one.
 _NON_FINITE_TOKEN_RE = re.compile(r"^[+-]?(?:nan|snan|inf|infinity)$", re.IGNORECASE)
@@ -130,13 +139,20 @@ def check_canonical_money_lexeme(text: str, *, field: str = "amount") -> None:
 
     Used where the currency is not yet known (pydantic field-level
     before-validators). Rejects e.g. ``"1e3"``, ``" 100.00 "``, ``"+100.00"``,
-    ``"01.00"``, ``".50"``, ``"100."`` and non-finite tokens.
+    ``"01.00"``, ``".50"``, ``"100."``, every negative-zero spelling
+    (``"-0"``, ``"-0.00"``, ``"-0.0000"``) and non-finite tokens.
     """
     if _NON_FINITE_TOKEN_RE.match(text.strip()):
         raise MoneyBoundaryError(f"{field}: non-finite value {text!r} is not money")
     if not _CANONICAL_LEXEME_RE.match(text):
         raise MoneyBoundaryError(
             f"{field}: non-canonical money string {text!r}; {_CANONICAL_FORM_HINT}"
+        )
+    if _NEGATIVE_ZERO_RE.match(text):
+        raise MoneyBoundaryError(
+            f"{field}: negative zero {text!r} is not a canonical money string; "
+            "zero has exactly ONE spelling at the boundary and it is positive "
+            '(e.g. "0.00") — serialize_amount never emits a signed zero'
         )
 
 
@@ -314,8 +330,20 @@ def from_money(money: Money) -> tuple[Decimal, str]:
 
 
 def serialize_amount(money: Money) -> str:
-    """Exact non-scientific string for a connector payload (``"48375.00"``)."""
-    return format(money.amount, "f")
+    """Exact non-scientific string for a connector payload (``"48375.00"``).
+
+    Zero is emitted as POSITIVE zero only. ``Decimal`` preserves the sign of a
+    negative zero through ``quantize`` (``Decimal("-0.001")`` rounds to
+    ``Decimal("-0.00")``, and ``format(..., "f")`` would render ``"-0.00"``),
+    but the canonical wire grammar admits exactly one spelling of zero — so a
+    signed zero is normalized here rather than emitted and then rejected on
+    the way back in. Equality cannot detect this case
+    (``Decimal("-0.00") == Decimal("0.00")``), so the SIGN is inspected.
+    """
+    amount = money.amount
+    if amount.is_zero() and amount.is_signed():
+        amount = amount.copy_abs()
+    return format(amount, "f")
 
 
 def serialize_money(money: Money) -> dict[str, str]:

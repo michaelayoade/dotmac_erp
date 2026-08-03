@@ -21,6 +21,7 @@ from app.services.dotmac_sub.client import (
     CreditNoteRecord,
     DotmacSubError,
     InvoiceRecord,
+    TaxApplication,
 )
 from app.services.finance.money_boundary import round_to_minor_units, to_boundary_money
 
@@ -42,8 +43,10 @@ def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
         "tax_total": str(inv.tax_total),
         "total": str(inv.total),
         "balance_due": str(inv.balance_due),
-        "issued_at": inv.issued_at,
-        "due_at": inv.due_at,
+        # Typed instants are formatted back to the canonical wire text for the
+        # change hash — the record no longer carries the raw string.
+        "issued_at": inv.issued_at.isoformat() if inv.issued_at else None,
+        "due_at": inv.due_at.isoformat() if inv.due_at else None,
         "memo": inv.memo,
         "is_proforma": inv.is_proforma,
         "lines": [
@@ -54,7 +57,7 @@ def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
                 "unit_price": str(line.unit_price),
                 "amount": str(line.amount),
                 "tax_rate_id": line.tax_rate_id,
-                "tax_application": line.tax_application,
+                "tax_application": line.tax_application.value,
             }
             for line in sorted(inv.lines, key=lambda item: item.id)
         ],
@@ -75,8 +78,6 @@ class InvoiceSyncMixin:
     _get_synced_entity: Any
     _get_existing_invoice: Any
     _get_customer_for_account: Any
-    _parse_date: Any
-    _parse_datetime: Any
     _get_sync_watermark: Any
     _advance_sync_watermark: Any
     _generate_invoice_number: Any
@@ -114,9 +115,7 @@ class InvoiceSyncMixin:
                 account_id=account_id,
                 status=status,
                 updated_since=updated_since,
-                on_parse_error=progress.parse_error_collector(
-                    result, self._parse_datetime
-                ),
+                on_parse_error=progress.parse_error_collector(result),
             ):
                 # The global delta must drain completely. A timestamp-only
                 # watermark plus a row cap can loop forever when more than the
@@ -125,7 +124,7 @@ class InvoiceSyncMixin:
                 if not use_watermark and batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
-                row_updated_at = self._parse_datetime(inv.updated_at)
+                row_updated_at = inv.updated_at
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_invoice(
@@ -217,8 +216,8 @@ class InvoiceSyncMixin:
             )
             return
 
-        invoice_date = self._parse_date(inv.issued_at) or date.today()
-        due_date = self._parse_date(inv.due_at) or invoice_date
+        invoice_date = inv.issued_at.date() if inv.issued_at else date.today()
+        due_date = inv.due_at.date() if inv.due_at else invoice_date
 
         if invoice_date < DOTMAC_SUB_SYNC_MIN_DATE:
             self._record_sync(EntityType.INVOICE, external_id, _PRE_CUTOFF_SENTINEL)
@@ -377,7 +376,7 @@ class InvoiceSyncMixin:
         number = getattr(doc, "credit_number", None) or getattr(
             doc, "invoice_number", ""
         )
-        effective_date = self._parse_date(doc.issued_at) or date.today()
+        effective_date = doc.issued_at.date() if doc.issued_at else date.today()
         currency_code = doc.currency
         projected: list[tuple[Any, Decimal, Decimal, Any]] = []
         for item in lines:
@@ -430,17 +429,17 @@ class InvoiceSyncMixin:
             amount = round_to_minor_units(
                 item.quantity * item.unit_price, currency_code
             )
-        application = (item.tax_application or "exclusive").strip().lower()
-        if application == "exempt" or not item.tax_rate_id:
+        # Admitted as a typed TaxApplication member at parse time (closed set),
+        # so nothing here has to re-normalize or re-validate wire text.
+        application: TaxApplication = item.tax_application
+        if application is TaxApplication.EXEMPT or not item.tax_rate_id:
             return amount, Decimal("0"), None
-        if application not in {"exclusive", "inclusive"}:
-            raise ValueError(f"Unsupported source tax application: {application}")
 
         source_rate = self._get_source_tax_rate(str(item.tax_rate_id))
         ratio = source_rate.rate / Decimal("100")
         if ratio <= Decimal("0"):
             return amount, Decimal("0"), None
-        if application == "inclusive":
+        if application is TaxApplication.INCLUSIVE:
             tax_amount = round_to_minor_units(
                 amount - (amount / (Decimal("1") + ratio)), currency_code
             )
@@ -450,7 +449,7 @@ class InvoiceSyncMixin:
             tax_amount = round_to_minor_units(amount * ratio, currency_code)
         tax_code = self._resolve_source_sales_tax_code(
             source_tax_rate_id=str(item.tax_rate_id),
-            tax_application=application,
+            tax_application=application.value,
             effective_date=effective_date,
         )
         return line_subtotal, tax_amount, tax_code

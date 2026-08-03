@@ -307,40 +307,12 @@ class BaseSyncMixin:
             self.organization_id, SequenceType.CREDIT_NOTE, reference_date
         )
 
-    def _parse_date(self, date_str: str | None) -> date | None:
-        if not date_str:
-            return None
-        try:
-            if "T" in date_str:
-                return datetime.fromisoformat(date_str.replace("Z", "+00:00")).date()
-            return datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            logger.warning("Could not parse date: %s", date_str)
-            return None
-
-    def _parse_datetime(self, value: str | None) -> datetime | None:
-        """Parse an ISO8601 instant into a tz-aware datetime (UTC-normalized).
-
-        ANY non-string input (e.g. an integer epoch) yields ``None`` — the
-        caller treats a row without a usable instant as UNPOSITIONED (cursor
-        freeze), and this helper must never raise mid-run.
-        """
-        if not value or not isinstance(value, str):
-            if value is not None and not isinstance(value, str):
-                logger.warning(
-                    "Non-string datetime value %r (%s); treating as unusable",
-                    value,
-                    type(value).__name__,
-                )
-            return None
-        try:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            logger.warning("Could not parse datetime: %s", value)
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
+    # Wire timestamps are NOT parsed here. ``dotmac_sub.client`` admits every
+    # record field as a typed ``datetime`` (``_parse_wire_instant``), so this
+    # sync layer consumes real instants and there is exactly ONE owner of the
+    # wire-text -> instant decision. A malformed timestamp is a typed row
+    # rejection at parse time, routed through the same collector as a
+    # malformed money fact, not a silent ``None`` discovered down here.
 
     # ---- Incremental-sync high-watermark ----
 

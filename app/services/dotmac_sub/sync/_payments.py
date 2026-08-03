@@ -55,8 +55,6 @@ class PaymentSyncMixin:
     _load_payment_channels: Any
     _get_bank_account_for_channel: Any
     _channel_name: Any
-    _parse_date: Any
-    _parse_datetime: Any
     _get_sync_watermark: Any
     _advance_sync_watermark: Any
     _generate_payment_number: Any
@@ -90,14 +88,12 @@ class PaymentSyncMixin:
                 account_id=account_id,
                 status=status,
                 updated_since=updated_since,
-                on_parse_error=progress.parse_error_collector(
-                    result, self._parse_datetime
-                ),
+                on_parse_error=progress.parse_error_collector(result),
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
-                row_updated_at = self._parse_datetime(pay.updated_at)
+                row_updated_at = pay.updated_at
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_payment(
@@ -174,9 +170,13 @@ class PaymentSyncMixin:
                 "wht_status": pay.wht_status,
                 "wht_record_id": pay.wht_record_id,
                 "wht_certificate_reference": pay.wht_certificate_reference,
-                "wht_resolved_at": pay.wht_resolved_at,
+                # Typed instants formatted back to canonical wire text (the
+                # record no longer carries the raw strings).
+                "wht_resolved_at": (
+                    pay.wht_resolved_at.isoformat() if pay.wht_resolved_at else None
+                ),
                 "status": pay.status,
-                "paid_at": pay.paid_at,
+                "paid_at": pay.paid_at.isoformat() if pay.paid_at else None,
                 "account_id": pay.effective_account_id,
                 "channel": pay.payment_channel_id,
                 "allocations": sorted(
@@ -215,7 +215,7 @@ class PaymentSyncMixin:
             )
             return
 
-        payment_date = self._parse_date(pay.paid_at) or date.today()
+        payment_date = pay.paid_at.date() if pay.paid_at else date.today()
         if payment_date < DOTMAC_SUB_SYNC_MIN_DATE:
             self._record_sync(EntityType.PAYMENT, external_id, _PRE_CUTOFF_SENTINEL)
             result.skipped += 1
@@ -440,7 +440,7 @@ class PaymentSyncMixin:
                 f"ERP WHT {required} account is required for {terminal_status}"
             )
 
-        resolved_at = self._parse_datetime(pay.wht_resolved_at)
+        resolved_at = pay.wht_resolved_at
         if resolved_at is None:
             raise ValueError(
                 "Terminal Sub WHT state is missing its resolution timestamp"

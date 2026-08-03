@@ -170,6 +170,50 @@ above:
   become a checked-in cross-repository contract document when the E4 (ERP)
   and S5 (Sub) slices land — tracked here until that contract exists.
 
+**E4 round-4 hardening (2026-08-03, PR #219 review):** what the boundary
+*admits* is now typed and immutable in depth, not merely frozen at the top
+level:
+
+- **Admitted evidence is immutable IN DEPTH.** A frozen dataclass with a
+  `list` field is only shallowly immutable — the collection can still be
+  appended to or reassigned element-wise. Every collection field on an
+  admitted wire record is a TUPLE (`InvoiceRecord.lines`,
+  `InvoiceRecord.allocations`, `PaymentRecord.allocations`,
+  `CreditNoteRecord.lines`); no admitted record carries a `list`, `dict` or
+  `set`. A "changed" payload stays a NEW record (`dataclasses.replace`).
+- **Zero has exactly ONE canonical spelling and it is positive.** Every
+  negative-zero form (`"-0"`, `"-0.00"`, `"-0.0000"`) is rejected by the
+  canonical grammar at both ingress paths, and `serialize_amount` normalizes
+  a signed-zero result so it can never emit one. `Decimal("-0.00") ==
+  Decimal("0.00")` is True, so this is enforced on the SIGN / literal text,
+  never on equality.
+- **Timestamps are admitted as `datetime`, not wire text.** `updated_at`,
+  `issued_at`, `due_at`, `paid_at`, `wht_resolved_at` and `created_at` parse
+  to tz-aware UTC instants in the client (`_parse_wire_instant`), which is
+  the ONE owner of the wire-text→instant decision (`BaseSyncMixin._parse_date`
+  / `_parse_datetime` are gone). A malformed timestamp is a typed row
+  rejection routed through the SAME collector as a malformed money fact:
+  `updated_at` parses first, so a bad non-position timestamp is POSITIONED
+  (parks the cursor) while a bad `updated_at` is UNPOSITIONED (freezes it) —
+  the round-2/3 cursor semantics are unchanged. Consumers needing the wire
+  text (change hashes, `updated_since`) format it explicitly with
+  `.isoformat()`.
+- **Closed status sets are enums; open ones are documented `str`.**
+  `tax_application` is a typed `TaxApplication` (`exclusive`/`inclusive`/
+  `exempt`) — ERP already failed closed on anything else, and typing it also
+  closes the hole where a bogus application rode through when the line
+  carried no `tax_rate_id`. Invoice/credit-note/payment `status`,
+  `wht_status`, subscriber `status`/`category` and billing-account `status`
+  stay `str` **by decision**, documented in each record's docstring: Sub owns
+  and extends those vocabularies, ERP's mappings carry documented catch-alls,
+  and an unknown member must be DATA, never a failed financial row.
+- **The last two copy-pasted watermark loops are gone.** The reseller and
+  subscriber mixins now use the same `WatermarkProgress` owner (and carry
+  `on_parse_error` collectors, so typing their timestamps cannot let one bad
+  row terminate a feed generator). `WatermarkProgress.parse_error_collector`
+  no longer takes a `parse_datetime` hook — `DotmacSubParseError.updated_at`
+  is already the parsed instant.
+
 **Authority order (highest wins):**
 
 1. `app/services/sot_relationships.py` — the executable SOT registry

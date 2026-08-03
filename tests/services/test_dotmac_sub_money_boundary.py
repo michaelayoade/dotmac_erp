@@ -10,8 +10,8 @@ proof that a rejected row fails ITS savepoint (raises) without any DB work.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import FrozenInstanceError, dataclass, replace
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock
@@ -29,6 +29,7 @@ from app.services.dotmac_sub.client import (
     InvoiceLineRecord,
     InvoiceRecord,
     PaymentRecord,
+    TaxApplication,
 )
 from app.services.dotmac_sub.sync._credit_notes import CreditNoteSyncMixin
 from app.services.dotmac_sub.sync._invoices import InvoiceSyncMixin
@@ -52,15 +53,15 @@ def _invoice(**overrides: object) -> InvoiceRecord:
         "tax_total": Decimal("3375.00"),
         "total": Decimal("48375.00"),
         "balance_due": Decimal("48375.00"),
-        "lines": [
+        "lines": (
             InvoiceLineRecord(
                 id="l1",
                 description="Service",
                 quantity=Decimal("1"),
                 unit_price=Decimal("45000.00"),
                 amount=Decimal("45000.00"),
-            )
-        ],
+            ),
+        ),
     }
     defaults.update(overrides)
     return InvoiceRecord(**defaults)
@@ -111,14 +112,14 @@ def test_invoice_boundary_money_rejects_excess_precision() -> None:
 
 def test_invoice_boundary_money_validates_allocations() -> None:
     bad = _invoice(
-        allocations=[
+        allocations=(
             AllocationRecord(
                 id="a1",
                 payment_id="p1",
                 invoice_id="inv-1",
                 amount=Decimal("10.005"),
-            )
-        ]
+            ),
+        )
     )
     with pytest.raises(MoneyBoundaryError, match="allocation a1"):
         bad.boundary_money()
@@ -567,7 +568,282 @@ def test_parse_invoice_rejects_malformed_amount() -> None:
     # The typed error carries row identity + updated_at so the sync loop can
     # fail the row and hold the watermark at it.
     assert exc_info.value.record == "Sub invoice inv-raw-1"
-    assert exc_info.value.updated_at == "2026-07-01T10:00:00+00:00"
+    # Positioned at the row's PARSED instant (not the raw wire string): the
+    # collector hands it straight to WatermarkProgress.
+    assert exc_info.value.updated_at == datetime(2026, 7, 1, 10, tzinfo=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Admitted evidence is immutable IN DEPTH, not just at its top level
+# ---------------------------------------------------------------------------
+
+
+def test_admitted_collections_are_tuples_not_lists() -> None:
+    """A frozen dataclass with a ``list`` field is only SHALLOWLY immutable.
+
+    Every collection an admitted record carries is a tuple, so the record
+    cannot be edited in place through its collections either.
+    """
+    inv = _client()._parse_invoice(
+        _raw_invoice(
+            payment_allocations=[
+                {
+                    "id": "a1",
+                    "payment_id": "p1",
+                    "invoice_id": "inv-raw-1",
+                    "amount": "10.00",
+                }
+            ]
+        )
+    )
+    assert isinstance(inv.lines, tuple)
+    assert isinstance(inv.allocations, tuple)
+
+    pay = _client()._parse_payment(
+        _raw_payment(
+            allocations=[
+                {
+                    "id": "a1",
+                    "payment_id": "pay-raw-1",
+                    "invoice_id": "inv-1",
+                    "amount": "10.00",
+                }
+            ]
+        )
+    )
+    assert isinstance(pay.allocations, tuple)
+
+    cn = _client()._parse_credit_note(
+        _raw_credit_note(
+            lines=[
+                {
+                    "id": "cl1",
+                    "description": "Refund",
+                    "quantity": "1",
+                    "unit_price": "1000.00",
+                    "amount": "1000.00",
+                }
+            ]
+        )
+    )
+    assert isinstance(cn.lines, tuple)
+
+    # No admitted record may carry a bare mutable container of any kind.
+    for record in (inv, inv.lines[0], inv.allocations[0], pay, cn, cn.lines[0]):
+        for name, value in vars(record).items():
+            assert not isinstance(value, (list, dict, set)), (
+                f"{type(record).__name__}.{name} is a mutable "
+                f"{type(value).__name__}; admitted evidence must be immutable"
+            )
+
+
+def test_admitted_collection_cannot_be_mutated_in_place() -> None:
+    inv = _client()._parse_invoice(_raw_invoice())
+    extra = InvoiceLineRecord(
+        id="l2",
+        description="Smuggled",
+        quantity=Decimal("1"),
+        unit_price=Decimal("1.00"),
+        amount=Decimal("1.00"),
+    )
+    with pytest.raises(AttributeError):
+        inv.lines.append(extra)  # type: ignore[attr-defined]
+    with pytest.raises(TypeError):
+        inv.lines[0] = extra  # type: ignore[index]
+    with pytest.raises(AttributeError):
+        inv.lines.sort()  # type: ignore[attr-defined]
+    with pytest.raises(TypeError):
+        del inv.lines[0]  # type: ignore[attr-defined]
+    # Reassigning the field itself is refused by the frozen dataclass.
+    with pytest.raises(FrozenInstanceError):
+        inv.lines = (extra,)  # type: ignore[misc]
+    assert [line.id for line in inv.lines] == ["l1"]
+
+
+def test_nested_admitted_line_record_is_itself_frozen() -> None:
+    inv = _client()._parse_invoice(_raw_invoice())
+    with pytest.raises(FrozenInstanceError):
+        inv.lines[0].amount = Decimal("1.00")  # type: ignore[misc]
+    assert inv.lines[0].amount == Decimal("45000.00")
+
+
+def test_nested_admitted_allocation_record_is_itself_frozen() -> None:
+    pay = _client()._parse_payment(
+        _raw_payment(
+            allocations=[
+                {
+                    "id": "a1",
+                    "payment_id": "pay-raw-1",
+                    "invoice_id": "inv-1",
+                    "amount": "10.00",
+                }
+            ]
+        )
+    )
+    with pytest.raises(FrozenInstanceError):
+        pay.allocations[0].amount = Decimal("999.00")  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        pay.allocations.append(pay.allocations[0])  # type: ignore[attr-defined]
+    assert pay.allocations[0].amount == Decimal("10.00")
+
+
+def test_a_changed_payload_is_a_new_record_not_an_edit() -> None:
+    """The sanctioned way to represent a Sub-side change."""
+    inv = _client()._parse_invoice(_raw_invoice())
+    changed = replace(inv, lines=(*inv.lines, inv.lines[0]))
+    assert len(inv.lines) == 1  # the admitted record is untouched
+    assert len(changed.lines) == 2
+    assert isinstance(changed.lines, tuple)
+
+
+# ---------------------------------------------------------------------------
+# Admission is TYPED: timestamps are datetimes, closed statuses are enums
+# ---------------------------------------------------------------------------
+
+
+def test_admitted_timestamps_are_datetimes_not_wire_strings() -> None:
+    inv = _client()._parse_invoice(
+        _raw_invoice(
+            issued_at="2026-07-01",  # date-only spelling Sub also emits
+            due_at="2026-07-31T00:00:00Z",
+            paid_at="2026-07-15T08:30:00+00:00",
+        )
+    )
+    assert inv.updated_at == datetime(2026, 7, 1, 10, tzinfo=timezone.utc)
+    assert inv.issued_at == datetime(2026, 7, 1, tzinfo=timezone.utc)
+    assert inv.due_at == datetime(2026, 7, 31, tzinfo=timezone.utc)
+    assert inv.paid_at == datetime(2026, 7, 15, 8, 30, tzinfo=timezone.utc)
+
+    pay = _client()._parse_payment(
+        _raw_payment(paid_at="2026-07-02T09:00:00Z", wht_resolved_at="2026-07-03")
+    )
+    assert pay.paid_at == datetime(2026, 7, 2, 9, tzinfo=timezone.utc)
+    assert pay.wht_resolved_at == datetime(2026, 7, 3, tzinfo=timezone.utc)
+
+    cn = _client()._parse_credit_note(_raw_credit_note(issued_at="2026-07-04"))
+    assert cn.issued_at == datetime(2026, 7, 4, tzinfo=timezone.utc)
+
+    sub = _client()._parse_subscriber(
+        {
+            "id": "sub-1",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-07-01T10:00:00+00:00",
+        }
+    )
+    assert sub.created_at == datetime(2026, 1, 1, tzinfo=timezone.utc)
+    assert sub.updated_at == datetime(2026, 7, 1, 10, tzinfo=timezone.utc)
+
+    res = _client()._parse_reseller(
+        {"id": "r-1", "name": "Wholesale", "updated_at": "2026-07-01T10:00:00+00:00"}
+    )
+    assert res.updated_at == datetime(2026, 7, 1, 10, tzinfo=timezone.utc)
+
+
+def test_naive_wire_instant_is_admitted_as_utc() -> None:
+    inv = _client()._parse_invoice(_raw_invoice(updated_at="2026-07-01T10:00:00"))
+    assert inv.updated_at == datetime(2026, 7, 1, 10, tzinfo=timezone.utc)
+
+
+def test_malformed_non_position_timestamp_is_a_POSITIONED_row_failure() -> None:
+    """``updated_at`` parses first, so a bad ``issued_at`` still knows where
+    it is — it parks the cursor rather than freezing it."""
+    with pytest.raises(DotmacSubParseError, match="issued_at.*ISO8601") as exc_info:
+        _client()._parse_invoice(_raw_invoice(issued_at="not-a-timestamp"))
+    assert exc_info.value.updated_at == datetime(2026, 7, 1, 10, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("bad", ["not-a-timestamp", 1730000000, {"t": 1}])
+def test_malformed_updated_at_is_an_UNPOSITIONED_row_failure(bad: object) -> None:
+    """The cursor-freeze contract (round 2/3) is unchanged by typing."""
+    with pytest.raises(DotmacSubParseError, match="updated_at") as exc_info:
+        _client()._parse_invoice(_raw_invoice(updated_at=bad))
+    assert exc_info.value.updated_at is None
+
+
+def test_closed_tax_application_set_is_admitted_as_a_typed_member() -> None:
+    inv = _client()._parse_invoice(
+        _raw_invoice(
+            lines=[
+                {"id": "l1", "amount": "1.00", "tax_application": "INCLUSIVE"},
+                {"id": "l2", "amount": "1.00", "tax_application": "exempt"},
+                {"id": "l3", "amount": "1.00"},  # absent -> documented default
+            ]
+        )
+    )
+    assert [line.tax_application for line in inv.lines] == [
+        TaxApplication.INCLUSIVE,
+        TaxApplication.EXEMPT,
+        TaxApplication.EXCLUSIVE,
+    ]
+
+
+def test_unknown_tax_application_is_rejected_at_parse() -> None:
+    """Previously a bogus application rode through silently whenever the line
+    carried no ``tax_rate_id``; the closed set now fails the row."""
+    with pytest.raises(DotmacSubParseError, match="unsupported tax_application"):
+        _client()._parse_invoice(
+            _raw_invoice(
+                lines=[{"id": "l1", "amount": "1.00", "tax_application": "reverse"}]
+            )
+        )
+    with pytest.raises(DotmacSubParseError, match="unsupported tax_application"):
+        _client()._parse_credit_note(
+            _raw_credit_note(
+                lines=[{"id": "cl1", "amount": "1.00", "tax_application": "vat-free"}]
+            )
+        )
+
+
+def test_open_status_vocabularies_stay_data_not_errors() -> None:
+    """Documented as ``str`` on the records: Sub owns and extends these, and
+    ERP's mappings have catch-alls. An unknown member must NOT fail a row."""
+    inv = _client()._parse_invoice(_raw_invoice(status="awaiting_dunning_review"))
+    assert inv.status == "awaiting_dunning_review"
+    pay = _client()._parse_payment(
+        _raw_payment(status="chargeback_pending", wht_status="under_appeal")
+    )
+    assert pay.status == "chargeback_pending"
+    assert pay.wht_status == "under_appeal"
+    cn = _client()._parse_credit_note(_raw_credit_note(status="pending_review"))
+    assert cn.status == "pending_review"
+
+
+# ---------------------------------------------------------------------------
+# Negative zero is refused at BOTH ingress paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("literal", ["-0.00", "-0", "-0.0000"])
+def test_sub_parser_rejects_negative_zero_money(literal: str) -> None:
+    with pytest.raises(DotmacSubParseError, match="negative zero"):
+        _client()._parse_invoice(_raw_invoice(balance_due=literal))
+    with pytest.raises(DotmacSubParseError, match="negative zero"):
+        _client()._parse_payment(_raw_payment(wht_amount=literal))
+    with pytest.raises(DotmacSubParseError, match="negative zero"):
+        _client()._parse_credit_note(_raw_credit_note(applied_total=literal))
+
+
+def test_sub_parser_accepts_positive_zero() -> None:
+    inv = _client()._parse_invoice(_raw_invoice(balance_due="0.00"))
+    assert inv.balance_due == Decimal("0.00")
+    assert not inv.balance_due.is_signed()
+
+
+@pytest.mark.parametrize("literal", ["-0.00", "-0", "-0.0000"])
+def test_pydantic_ingress_rejects_negative_zero_money(literal: str) -> None:
+    """The other ingress path: the CRM/Sub payables command schema."""
+    with pytest.raises(ValidationError, match="negative zero"):
+        CRMPurchaseInvoicePayload(**_payables_payload(total=literal))
+    bad_items = [
+        {
+            "description": "Fibre splice",
+            "quantity": Decimal("2"),
+            "unit_price": Decimal("500.00"),
+            "amount": literal,
+        }
+    ]
+    with pytest.raises(ValidationError, match="negative zero"):
+        CRMPurchaseInvoicePayload(**_payables_payload(items=bad_items))
 
 
 def test_parse_invoice_rejects_missing_money_fact_instead_of_zero() -> None:
@@ -739,20 +1015,48 @@ def test_feed_generator_survives_a_bad_row_via_collector() -> None:
     assert seen_errors[0].record == "Sub invoice inv-raw-1"
 
 
+_GOOD_ROW_AT = "2026-07-02T10:00:00+00:00"
+
+
 def test_feed_generator_without_collector_raises_typed_error() -> None:
     client = _feed_client([_raw_invoice(total="oops")])
     with pytest.raises(DotmacSubParseError, match="malformed money fact"):
         list(client.get_invoices())
 
 
-def _tolerant_parse_datetime(value: str | None) -> datetime | None:
-    """Mimic the production ``_parse_datetime``: malformed/missing → None."""
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
+@pytest.mark.parametrize(
+    ("feed", "bad", "good"),
+    [
+        pytest.param(
+            "get_resellers",
+            {"id": "r-bad", "name": "Bad", "updated_at": 1730000000},
+            {"id": "r-ok", "name": "Ok", "updated_at": _GOOD_ROW_AT},
+            id="reseller",
+        ),
+        pytest.param(
+            "get_subscribers",
+            {"id": "s-bad", "updated_at": "not-a-timestamp"},
+            {"id": "s-ok", "updated_at": _GOOD_ROW_AT},
+            id="subscriber",
+        ),
+    ],
+)
+def test_reseller_and_subscriber_feeds_survive_a_bad_row(
+    feed: str, bad: dict, good: dict
+) -> None:
+    """Typing these records' timestamps must NOT let one bad row kill the feed.
+
+    Raising out of a generator terminates it (PEP 255), so the reseller and
+    subscriber pulls carry the same ``on_parse_error`` collector as the
+    money-bearing feeds; the rejection is unpositioned, which freezes the
+    cursor while every good row still syncs.
+    """
+    client = _feed_client([bad, good])
+    seen: list[DotmacSubParseError] = []
+    records = list(getattr(client, feed)(on_parse_error=seen.append))
+    assert [record.id for record in records] == [good["id"]]
+    assert len(seen) == 1
+    assert seen[0].updated_at is None  # unpositioned -> cursor freeze
 
 
 @dataclass(frozen=True)
@@ -806,16 +1110,12 @@ def _loop_harness(case: _EntityCase, client: DotmacSubClient) -> Any:
     harness = case.mixin()
     harness.client = client
     harness.db = MagicMock()
-    harness._parse_datetime = _tolerant_parse_datetime
     harness._get_sync_watermark = lambda entity_type: None
     harness._advance_sync_watermark = MagicMock()
     setattr(harness, case.single_attr, MagicMock())
     harness._reprime_tenant_context = MagicMock()
     harness._load_payment_channels = MagicMock()  # payments only; harmless
     return harness
-
-
-_GOOD_ROW_AT = "2026-07-02T10:00:00+00:00"
 
 
 @pytest.mark.parametrize("case", _ENTITY_CASES)
@@ -886,7 +1186,6 @@ def test_unpositioned_failure_freezes_the_watermark(
 
 class _LineAmountHarness(InvoiceSyncMixin):
     def __init__(self) -> None:
-        self._parse_date = lambda value: None
         self._get_source_tax_rate = MagicMock()
         self._resolve_source_sales_tax_code = MagicMock()
 

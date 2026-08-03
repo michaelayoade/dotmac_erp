@@ -20,8 +20,10 @@ import logging
 import os
 import time
 from collections.abc import Callable, Generator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
+from enum import Enum
 from typing import Any
 
 import httpx
@@ -127,7 +129,9 @@ class DotmacSubParseError(MoneyBoundaryError):
     Carries the source row identity (``record``) and its server ``updated_at``
     so the sync mixins can hold the incremental watermark at the failed row —
     the row is re-pulled (and re-rejected, until Sub corrects it) instead of
-    being silently skipped forever.
+    being silently skipped forever. ``updated_at`` is the PARSED instant, not
+    the raw wire text: ``None`` means the row has no usable position and the
+    cursor must FREEZE for the run (see ``sync/_progress.WatermarkProgress``).
     """
 
     def __init__(
@@ -135,7 +139,7 @@ class DotmacSubParseError(MoneyBoundaryError):
         message: str,
         *,
         record: str,
-        updated_at: str | None = None,
+        updated_at: datetime | None = None,
     ) -> None:
         super().__init__(message)
         self.record = record
@@ -219,9 +223,28 @@ class DotmacSubConfig:
         return {"X-Api-Key": self.api_token}
 
 
+class TaxApplication(str, Enum):
+    """How a Sub billing line's tax relates to its amount — a CLOSED set.
+
+    ERP already fails closed on anything outside these three
+    (``_source_line_amounts`` / ``_resolve_source_sales_tax_code`` raise), so
+    admitting the value as a typed member at parse time is a tightening, not a
+    new policy: it also closes the hole where a bogus application rode through
+    silently when the line happened to carry no ``tax_rate_id``.
+    """
+
+    EXCLUSIVE = "exclusive"
+    INCLUSIVE = "inclusive"
+    EXEMPT = "exempt"
+
+
 @dataclass(frozen=True)
 class ResellerRecord:
-    """Reseller (parent account) from dotmac_sub."""
+    """Reseller (parent account) from dotmac_sub — ADMITTED evidence.
+
+    Timestamps are typed at parse time; every collection field is a tuple, so
+    the record is immutable in depth, not just at its top level.
+    """
 
     id: str
     name: str
@@ -229,12 +252,20 @@ class ResellerRecord:
     contact_email: str | None = None
     contact_phone: str | None = None
     is_active: bool = True
-    updated_at: str | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True)
 class SubscriberRecord:
-    """Subscriber (end customer) from dotmac_sub."""
+    """Subscriber (end customer) from dotmac_sub — ADMITTED evidence.
+
+    ``status`` and ``category`` stay ``str``: Sub's subscriber lifecycle and
+    customer-category vocabularies are product-configurable and grow between
+    Sub releases, and ERP consumes them as DATA (``category`` is membership-
+    tested against ``_COMPANY_CATEGORIES``, ``status`` only feeds the change
+    hash). An unknown member must not fail a customer row, so these are
+    deliberately not enums.
+    """
 
     id: str
     first_name: str | None = None
@@ -257,8 +288,8 @@ class SubscriberRecord:
     region: str | None = None
     postal_code: str | None = None
     country_code: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     @property
     def full_name(self) -> str:
@@ -272,7 +303,12 @@ class SubscriberRecord:
 
 @dataclass(frozen=True)
 class BillingAccountRecord:
-    """Billing account from dotmac_sub (reseller-scoped; invoices key on this)."""
+    """Billing account from dotmac_sub (reseller-scoped; invoices key on this).
+
+    ``status`` stays ``str``: Sub's billing-account state vocabulary is
+    product-configurable, ERP never branches on it (only ``is_active`` is
+    consumed), and an unknown member must not fail account resolution.
+    """
 
     id: str
     reseller_id: str
@@ -282,7 +318,7 @@ class BillingAccountRecord:
     balance: Decimal = Decimal("0")
     is_active: bool = True
     subscriber_id: str | None = None
-    updated_at: str | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -322,6 +358,9 @@ class InvoiceLineRecord:
     (ERP then derives quantity x unit_price itself and may round that derived
     value); when present it is validated exact — never rounded, never
     defaulted to zero.
+
+    ``tax_application`` is a typed :class:`TaxApplication` member — a CLOSED
+    set ERP already fails closed on; an unknown value is rejected at parse.
     """
 
     id: str
@@ -330,7 +369,7 @@ class InvoiceLineRecord:
     unit_price: Decimal
     amount: Decimal | None
     tax_rate_id: str | None = None
-    tax_application: str = "exclusive"
+    tax_application: TaxApplication = TaxApplication.EXCLUSIVE
 
 
 @dataclass(frozen=True)
@@ -345,7 +384,15 @@ class AllocationRecord:
 
 @dataclass(frozen=True)
 class InvoiceRecord:
-    """Invoice from dotmac_sub."""
+    """Invoice from dotmac_sub — ADMITTED evidence, immutable in depth.
+
+    ``status`` stays ``str``. Sub's invoice-status vocabulary is
+    product-configurable and grows across Sub releases, and ERP's
+    ``_map_invoice_status`` deliberately owns a documented CATCH-ALL (anything
+    it does not recognize maps to ``POSTED``). Rejecting an unknown member at
+    parse time would fail otherwise-valid AR rows on a Sub-side vocabulary
+    addition, so the value is treated as DATA, not as an error.
+    """
 
     id: str
     account_id: str
@@ -356,16 +403,17 @@ class InvoiceRecord:
     tax_total: Decimal
     total: Decimal
     balance_due: Decimal
-    issued_at: str | None = None
-    due_at: str | None = None
-    paid_at: str | None = None
+    issued_at: datetime | None = None
+    due_at: datetime | None = None
+    paid_at: datetime | None = None
     memo: str | None = None
     is_proforma: bool = False
-    # Server-tracked last-modified instant (ISO8601). Drives the incremental
-    # sync watermark so we only pull the delta each cycle.
-    updated_at: str | None = None
-    lines: list[InvoiceLineRecord] = field(default_factory=list)
-    allocations: list[AllocationRecord] = field(default_factory=list)
+    # Server-tracked last-modified instant, parsed to a tz-aware UTC datetime.
+    # Drives the incremental sync watermark so we only pull the delta each
+    # cycle; consumers needing the wire text format it back explicitly.
+    updated_at: datetime | None = None
+    lines: tuple[InvoiceLineRecord, ...] = ()
+    allocations: tuple[AllocationRecord, ...] = ()
 
     def boundary_money(self) -> DocumentBoundaryMoney:
         """Typed, fail-closed boundary money for this invoice's header facts.
@@ -399,7 +447,15 @@ class InvoiceRecord:
 
 @dataclass(frozen=True)
 class PaymentRecord:
-    """Payment from dotmac_sub."""
+    """Payment from dotmac_sub — ADMITTED evidence, immutable in depth.
+
+    ``status`` and ``wht_status`` stay ``str``. Both vocabularies are owned by
+    Sub and extended there (new PSP settlement states, new WHT lifecycle
+    steps); ERP membership-tests the handful it acts on
+    (``_SETTLED_STATUSES``, the terminal ``{reclaimed, written_off}`` pair) and
+    treats everything else as "not that case". An unknown member is DATA — it
+    must not fail a cash row — so neither is an enum.
+    """
 
     id: str
     account_id: str | None
@@ -418,15 +474,15 @@ class PaymentRecord:
     wht_status: str | None = None
     wht_record_id: str | None = None
     wht_certificate_reference: str | None = None
-    wht_resolved_at: str | None = None
-    paid_at: str | None = None
+    wht_resolved_at: datetime | None = None
+    paid_at: datetime | None = None
     external_id: str | None = None
     memo: str | None = None
     payment_method_id: str | None = None
     payment_channel_id: str | None = None
-    # Server-tracked last-modified instant (ISO8601); see InvoiceRecord.
-    updated_at: str | None = None
-    allocations: list[AllocationRecord] = field(default_factory=list)
+    # Server-tracked last-modified instant; see InvoiceRecord.
+    updated_at: datetime | None = None
+    allocations: tuple[AllocationRecord, ...] = ()
 
     @property
     def effective_account_id(self) -> str | None:
@@ -475,7 +531,7 @@ class PaymentRecord:
 
 @dataclass(frozen=True)
 class CreditNoteLineRecord:
-    """Credit note line item (``amount`` semantics as
+    """Credit note line item (``amount`` and ``tax_application`` semantics as
     :class:`InvoiceLineRecord`)."""
 
     id: str
@@ -484,12 +540,18 @@ class CreditNoteLineRecord:
     unit_price: Decimal
     amount: Decimal | None
     tax_rate_id: str | None = None
-    tax_application: str = "exclusive"
+    tax_application: TaxApplication = TaxApplication.EXCLUSIVE
 
 
 @dataclass(frozen=True)
 class CreditNoteRecord:
-    """Credit note from dotmac_sub."""
+    """Credit note from dotmac_sub — ADMITTED evidence, immutable in depth.
+
+    ``status`` stays ``str`` for the same reason as
+    :class:`InvoiceRecord`: Sub owns and extends the vocabulary, and the ERP
+    mapping has a documented catch-all (``POSTED``) for members it does not
+    recognize.
+    """
 
     id: str
     account_id: str
@@ -502,10 +564,10 @@ class CreditNoteRecord:
     total: Decimal
     applied_total: Decimal = Decimal("0")
     memo: str | None = None
-    issued_at: str | None = None
-    # Server-tracked last-modified instant (ISO8601); see InvoiceRecord.
-    updated_at: str | None = None
-    lines: list[CreditNoteLineRecord] = field(default_factory=list)
+    issued_at: datetime | None = None
+    # Server-tracked last-modified instant; see InvoiceRecord.
+    updated_at: datetime | None = None
+    lines: tuple[CreditNoteLineRecord, ...] = ()
 
     def boundary_money(self) -> DocumentBoundaryMoney:
         """Typed, fail-closed boundary money for this credit note's header
@@ -567,7 +629,7 @@ def _parse_money_value(
     *,
     record: str,
     field: str,
-    updated_at: str | None,
+    updated_at: datetime | None,
     minor_units: int | None,
 ) -> Decimal:
     """Strictly parse a PRESENT money fact asserted by Sub.
@@ -622,7 +684,7 @@ def _required_money(
     key: str,
     *,
     record: str,
-    updated_at: str | None,
+    updated_at: datetime | None,
     minor_units: int | None,
 ) -> Decimal:
     """A money fact the Sub contract always asserts. Missing/blank is a hard
@@ -645,7 +707,7 @@ def _optional_money(
     key: str,
     *,
     record: str,
-    updated_at: str | None,
+    updated_at: datetime | None,
     minor_units: int | None,
 ) -> Decimal | None:
     """A money fact the Sub contract marks nullable (e.g. ``gross_amount`` /
@@ -665,7 +727,7 @@ def _defaulted_money(
     default: str,
     *,
     record: str,
-    updated_at: str | None,
+    updated_at: datetime | None,
     minor_units: int | None,
 ) -> Decimal:
     """A money fact with a DOCUMENTED absent-field default (deploy-order
@@ -681,27 +743,100 @@ def _defaulted_money(
     )
 
 
-def _wire_updated_at(item: dict[str, Any], *, record: str) -> str | None:
+def _parse_wire_instant(
+    value: Any,
+    *,
+    record: str,
+    field: str,
+    updated_at: datetime | None,
+) -> datetime | None:
+    """Admit a wire timestamp as a tz-aware UTC ``datetime``.
+
+    Absent/blank stays ``None`` (the field is genuinely optional in Sub's
+    contract and downstream consumers own their documented fallback). Anything
+    present must be a parseable ISO8601 STRING: a non-string (e.g. an integer
+    epoch) or an unparseable spelling is a typed :class:`DotmacSubParseError`,
+    so it routes through the SAME row-failure collector as a malformed money
+    fact instead of silently degrading to ``None`` inside a consumer.
+
+    Naive instants are read as UTC — Sub emits UTC and ERP's watermark
+    comparisons must never mix aware and naive values.
+    """
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise DotmacSubParseError(
+            f"{record}: {field} must be an ISO8601 string, got "
+            f"{type(value).__name__} {value!r}",
+            record=record,
+            updated_at=updated_at,
+        )
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise DotmacSubParseError(
+            f"{record}: {field}={value!r} is not a parseable ISO8601 instant",
+            record=record,
+            updated_at=updated_at,
+        ) from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _wire_updated_at(item: dict[str, Any], *, record: str) -> datetime | None:
     """The server-tracked ``updated_at`` watermark instant for a row.
 
-    Must be an ISO8601 STRING (or absent). Any other type (e.g. an integer
-    epoch) is a typed, UNPOSITIONED parse failure — it must route through the
-    row-failure collector (freezing the cursor per the watermark contract),
-    never explode inside ``_parse_datetime`` and kill the whole run.
+    Parsed FIRST so every other rejection on the row can be POSITIONED at this
+    instant. A missing, non-string or unparseable ``updated_at`` is itself an
+    UNPOSITIONED parse failure (``updated_at=None``): it routes through the
+    row-failure collector and FREEZES the cursor per the watermark contract,
+    rather than exploding mid-run or letting a later good row advance the
+    cursor past this one.
     """
-    value = item.get("updated_at")
-    if value is None or isinstance(value, str):
-        return value
-    raise DotmacSubParseError(
-        f"{record}: updated_at must be an ISO8601 string, got "
-        f"{type(value).__name__} {value!r}",
+    return _parse_wire_instant(
+        item.get("updated_at"),
         record=record,
+        field="updated_at",
         updated_at=None,  # unusable position -> cursor freeze semantics
     )
 
 
+def _wire_tax_application(
+    line: dict[str, Any], *, record: str, updated_at: datetime | None
+) -> TaxApplication:
+    """Admit a line's tax application as a typed :class:`TaxApplication`.
+
+    A CLOSED set: an unknown member is a row failure at parse time rather than
+    a value ERP silently treats as "exclusive" (or, when the line carried no
+    ``tax_rate_id``, as untaxed).
+    """
+    value = line.get("tax_application")
+    if value is None or value == "":
+        return TaxApplication.EXCLUSIVE
+    if isinstance(value, TaxApplication):
+        return value
+    if not isinstance(value, str):
+        raise DotmacSubParseError(
+            f"{record}: tax_application must be a string, got "
+            f"{type(value).__name__} {value!r}",
+            record=record,
+            updated_at=updated_at,
+        )
+    try:
+        return TaxApplication(value.strip().lower())
+    except ValueError as exc:
+        allowed = ", ".join(sorted(member.value for member in TaxApplication))
+        raise DotmacSubParseError(
+            f"{record}: unsupported tax_application {value!r}; ERP admits "
+            f"exactly {{{allowed}}}",
+            record=record,
+            updated_at=updated_at,
+        ) from exc
+
+
 def _required_currency(
-    item: dict[str, Any], *, record: str, updated_at: str | None
+    item: dict[str, Any], *, record: str, updated_at: datetime | None
 ) -> str:
     """The mandatory currency tag for a document's money facts.
 
@@ -748,9 +883,17 @@ def _allocations(
     items: list[dict[str, Any]] | None,
     *,
     record: str,
-    updated_at: str | None,
+    updated_at: datetime | None,
     minor_units: int | None,
-) -> list[AllocationRecord]:
+) -> tuple[AllocationRecord, ...]:
+    """Admitted allocations as an immutable TUPLE.
+
+    A frozen dataclass is only shallowly immutable: a ``list`` field on an
+    admitted record can still be appended to, reordered or reassigned
+    element-wise behind the boundary's back. Admitted evidence is a tuple so
+    the record is immutable in depth — a changed payload is a NEW record
+    (``dataclasses.replace``), never an in-place edit.
+    """
     out: list[AllocationRecord] = []
     for a in items or []:
         alloc_id = str(a.get("id", ""))
@@ -769,7 +912,7 @@ def _allocations(
                 ),
             )
         )
-    return out
+    return tuple(out)
 
 
 class DotmacSubClient:
@@ -1094,23 +1237,42 @@ class DotmacSubClient:
         )
         return dict(result) if isinstance(result, dict) else {}
 
+    def _parse_reseller(self, item: dict[str, Any]) -> ResellerRecord:
+        record = f"Sub reseller {item.get('id', '?')}"
+        return ResellerRecord(
+            id=str(item.get("id", "")),
+            name=item.get("name", ""),
+            code=item.get("code"),
+            contact_email=item.get("contact_email"),
+            contact_phone=item.get("contact_phone"),
+            is_active=bool(item.get("is_active", True)),
+            updated_at=_wire_updated_at(item, record=record),
+        )
+
     def get_resellers(
-        self, *, updated_since: str | None = None
+        self,
+        *,
+        updated_since: str | None = None,
+        on_parse_error: Callable[[DotmacSubParseError], None] | None = None,
     ) -> Generator[ResellerRecord, None, None]:
         logger.info("Fetching dotmac_sub resellers")
         params = {"updated_since": updated_since} if updated_since else None
+        # See get_invoices for the on_parse_error row-failure contract: raising
+        # out of this generator would terminate it (PEP 255) and silently drop
+        # the rest of the feed.
         for item in self._sync_paginate("/resellers/sync", params=params):
-            yield ResellerRecord(
-                id=str(item.get("id", "")),
-                name=item.get("name", ""),
-                code=item.get("code"),
-                contact_email=item.get("contact_email"),
-                contact_phone=item.get("contact_phone"),
-                is_active=bool(item.get("is_active", True)),
-                updated_at=item.get("updated_at"),
-            )
+            try:
+                record = self._parse_reseller(item)
+            except DotmacSubParseError as exc:
+                if on_parse_error is None:
+                    raise
+                on_parse_error(exc)
+                continue
+            yield record
 
     def _parse_subscriber(self, item: dict[str, Any]) -> SubscriberRecord:
+        record = f"Sub subscriber {item.get('id', '?')}"
+        updated_at = _wire_updated_at(item, record=record)
         return SubscriberRecord(
             id=str(item.get("id", "")),
             first_name=item.get("first_name"),
@@ -1133,8 +1295,13 @@ class DotmacSubClient:
             region=item.get("region"),
             postal_code=item.get("postal_code"),
             country_code=item.get("country_code"),
-            created_at=item.get("created_at"),
-            updated_at=item.get("updated_at"),
+            created_at=_parse_wire_instant(
+                item.get("created_at"),
+                record=record,
+                field="created_at",
+                updated_at=updated_at,
+            ),
+            updated_at=updated_at,
         )
 
     def get_subscribers(
@@ -1142,6 +1309,7 @@ class DotmacSubClient:
         subscriber_type: str | None = None,
         *,
         updated_since: str | None = None,
+        on_parse_error: Callable[[DotmacSubParseError], None] | None = None,
     ) -> Generator[SubscriberRecord, None, None]:
         params: dict[str, Any] = {}
         if subscriber_type:
@@ -1149,8 +1317,16 @@ class DotmacSubClient:
         if updated_since:
             params["updated_since"] = updated_since
         logger.info("Fetching dotmac_sub subscribers with params: %s", params)
+        # See get_invoices for the on_parse_error row-failure contract.
         for item in self._sync_paginate("/subscribers/sync", params=params):
-            yield self._parse_subscriber(item)
+            try:
+                record = self._parse_subscriber(item)
+            except DotmacSubParseError as exc:
+                if on_parse_error is None:
+                    raise
+                on_parse_error(exc)
+                continue
+            yield record
 
     def get_subscriber(self, subscriber_id: str) -> SubscriberRecord:
         return self._parse_subscriber(
@@ -1158,6 +1334,7 @@ class DotmacSubClient:
         )
 
     def _parse_billing_account(self, item: dict[str, Any]) -> BillingAccountRecord:
+        record = f"Sub billing account {item.get('id', '?')}"
         return BillingAccountRecord(
             id=str(item.get("id", "")),
             reseller_id=str(item.get("reseller_id", "")),
@@ -1166,7 +1343,7 @@ class DotmacSubClient:
             status=item.get("status", ""),
             balance=_dec(item.get("balance")),
             is_active=bool(item.get("is_active", True)),
-            updated_at=item.get("updated_at"),
+            updated_at=_wire_updated_at(item, record=record),
         )
 
     def get_billing_accounts(
@@ -1198,7 +1375,7 @@ class DotmacSubClient:
         updated_at = _wire_updated_at(item, record=record)
         currency = _required_currency(item, record=record, updated_at=updated_at)
         minor_units = _registry_minor_units(currency)
-        lines = [
+        lines = tuple(
             InvoiceLineRecord(
                 id=str(line.get("id", "")),
                 description=line.get("description", ""),
@@ -1212,10 +1389,14 @@ class DotmacSubClient:
                     minor_units=minor_units,
                 ),
                 tax_rate_id=line.get("tax_rate_id"),
-                tax_application=line.get("tax_application", "exclusive"),
+                tax_application=_wire_tax_application(
+                    line,
+                    record=f"{record} line {line.get('id', '?')}",
+                    updated_at=updated_at,
+                ),
             )
             for line in item.get("lines", [])
-        ]
+        )
         return InvoiceRecord(
             id=str(item.get("id", "")),
             account_id=str(item.get("account_id", "")),
@@ -1250,9 +1431,21 @@ class DotmacSubClient:
                 updated_at=updated_at,
                 minor_units=minor_units,
             ),
-            issued_at=item.get("issued_at"),
-            due_at=item.get("due_at"),
-            paid_at=item.get("paid_at"),
+            issued_at=_parse_wire_instant(
+                item.get("issued_at"),
+                record=record,
+                field="issued_at",
+                updated_at=updated_at,
+            ),
+            due_at=_parse_wire_instant(
+                item.get("due_at"), record=record, field="due_at", updated_at=updated_at
+            ),
+            paid_at=_parse_wire_instant(
+                item.get("paid_at"),
+                record=record,
+                field="paid_at",
+                updated_at=updated_at,
+            ),
             memo=item.get("memo"),
             is_proforma=bool(item.get("is_proforma", False)),
             updated_at=updated_at,
@@ -1359,10 +1552,20 @@ class DotmacSubClient:
             wht_status=item.get("wht_status"),
             wht_record_id=item.get("wht_record_id"),
             wht_certificate_reference=item.get("wht_certificate_reference"),
-            wht_resolved_at=item.get("wht_resolved_at"),
+            wht_resolved_at=_parse_wire_instant(
+                item.get("wht_resolved_at"),
+                record=record,
+                field="wht_resolved_at",
+                updated_at=updated_at,
+            ),
             currency=currency,
             status=item.get("status", ""),
-            paid_at=item.get("paid_at"),
+            paid_at=_parse_wire_instant(
+                item.get("paid_at"),
+                record=record,
+                field="paid_at",
+                updated_at=updated_at,
+            ),
             external_id=item.get("external_id"),
             memo=item.get("memo"),
             payment_method_id=item.get("payment_method_id"),
@@ -1408,7 +1611,7 @@ class DotmacSubClient:
         updated_at = _wire_updated_at(item, record=record)
         currency = _required_currency(item, record=record, updated_at=updated_at)
         minor_units = _registry_minor_units(currency)
-        lines = [
+        lines = tuple(
             CreditNoteLineRecord(
                 id=str(line.get("id", "")),
                 description=line.get("description", ""),
@@ -1422,10 +1625,14 @@ class DotmacSubClient:
                     minor_units=minor_units,
                 ),
                 tax_rate_id=line.get("tax_rate_id"),
-                tax_application=line.get("tax_application", "exclusive"),
+                tax_application=_wire_tax_application(
+                    line,
+                    record=f"{record} line {line.get('id', '?')}",
+                    updated_at=updated_at,
+                ),
             )
             for line in item.get("lines", [])
-        ]
+        )
         return CreditNoteRecord(
             id=str(item.get("id", "")),
             account_id=str(item.get("account_id", "")),
@@ -1463,7 +1670,12 @@ class DotmacSubClient:
                 minor_units=minor_units,
             ),
             memo=item.get("memo"),
-            issued_at=item.get("issued_at") or item.get("created_at"),
+            issued_at=_parse_wire_instant(
+                item.get("issued_at") or item.get("created_at"),
+                record=record,
+                field="issued_at",
+                updated_at=updated_at,
+            ),
             updated_at=updated_at,
             lines=lines,
         )

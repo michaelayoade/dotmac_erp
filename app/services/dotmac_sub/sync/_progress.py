@@ -14,6 +14,9 @@ exactly how per-path gaps crept in). Contract:
   advance at all for the run, otherwise a later good row would advance it
   past the failed row and skip it permanently. Good rows still sync.
 
+Positions are ``datetime``s throughout: the client parses ``updated_at`` at
+admission, so neither this tracker nor its callers re-parse wire text.
+
 The tracker also builds the ``on_parse_error`` collector handed to the
 client feeds, so parse-level rejections and savepoint-level row failures
 flow through the same accounting.
@@ -71,17 +74,21 @@ class WatermarkProgress:
         )
 
     def parse_error_collector(
-        self,
-        result: SyncResult,
-        parse_datetime: Callable[[str | None], datetime | None],
+        self, result: SyncResult
     ) -> Callable[[DotmacSubParseError], None]:
         """The ``on_parse_error`` callback for the client feed: record the
-        rejected row as THIS row's failure (run continues)."""
+        rejected row as THIS row's failure (run continues).
+
+        No ``parse_datetime`` hook: since the records the boundary admits
+        carry real ``datetime``s, the parser positions the rejection itself
+        and ``DotmacSubParseError.updated_at`` is already the parsed instant
+        (``None`` = unpositioned = freeze).
+        """
 
         def _collect(exc: DotmacSubParseError) -> None:
             result.errors.append(str(exc))
             logger.error("Rejected dotmac_sub %s row at parse: %s", self.label, exc)
-            self.record_failure(parse_datetime(exc.updated_at))
+            self.record_failure(exc.updated_at)
 
         return _collect
 

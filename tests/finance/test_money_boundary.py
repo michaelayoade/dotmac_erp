@@ -272,6 +272,59 @@ def test_zero_minor_unit_canonical_form_takes_no_fraction() -> None:
     to_boundary_money("1.230", "BHD", registry=_TEST_REGISTRY)  # canonical
 
 
+# --- Negative zero: exactly ONE spelling of zero, and it is positive -------
+
+
+@pytest.mark.parametrize("literal", ["-0", "-0.0", "-0.00", "-0.0000", "-0.000000"])
+def test_grammar_rejects_every_negative_zero_spelling(literal: str) -> None:
+    """Ingress must refuse a signed zero in EVERY form.
+
+    ``Decimal("-0.00") == Decimal("0.00")`` is True, so an equality-based check
+    can never see this: the grammar inspects the literal text.
+    """
+    assert Decimal(literal) == Decimal("0")  # equality is blind to the sign
+    with pytest.raises(MoneyBoundaryError, match="negative zero"):
+        check_canonical_money_lexeme(literal)
+    with pytest.raises(MoneyBoundaryError, match="negative zero"):
+        check_canonical_money_string(
+            literal, minor_units=len(literal.partition(".")[2])
+        )
+
+
+def test_negative_zero_string_is_rejected_at_the_boundary_adapter() -> None:
+    with pytest.raises(MoneyBoundaryError, match="negative zero"):
+        to_boundary_money("-0.00", "NGN")
+    with pytest.raises(MoneyBoundaryError, match="negative zero"):
+        to_boundary_money("-0", "JPY", registry=_TEST_REGISTRY)
+    # Positive zero remains the one accepted spelling.
+    assert to_boundary_money("0.00", "NGN").amount == Decimal("0.00")
+
+
+def test_serialize_amount_never_emits_negative_zero() -> None:
+    """The serializer normalizes a signed zero rather than emitting one.
+
+    Covers both a ``Decimal("-0.00")`` source amount and a ``Money`` that
+    ACQUIRED a negative zero by rounding (``-0.001`` quantizes to
+    ``Decimal("-0.00")``, whose ``format(..., "f")`` is ``"-0.00"``).
+    """
+    ngn = boundary_currency("NGN")
+
+    from_decimal = Money.of(Decimal("-0.00"), ngn)
+    assert from_decimal.amount.is_signed()  # the Money really does carry it
+    assert serialize_amount(from_decimal) == "0.00"
+
+    from_rounding = Money.of(Decimal("-0.001"), ngn, rounding=BOUNDARY_ROUNDING)
+    assert from_rounding.amount.is_signed()
+    assert serialize_amount(from_rounding) == "0.00"
+    assert serialize_money(from_rounding) == {"amount": "0.00", "currency": "NGN"}
+
+    # And what it emits is accepted straight back by the grammar it feeds.
+    check_canonical_money_string(serialize_amount(from_rounding), minor_units=2)
+
+    jpy = boundary_currency("JPY", registry=_TEST_REGISTRY)
+    assert serialize_amount(Money.of(Decimal("-0"), jpy)) == "0"
+
+
 def test_canonical_grammar_matches_serialize_amount_exactly() -> None:
     # Round-trip alignment: whatever serialize_amount emits (negatives
     # included, as a single leading "-") is accepted by the grammar and

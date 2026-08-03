@@ -40,8 +40,6 @@ class CreditNoteSyncMixin:
     _record_sync: Any
     _get_synced_entity: Any
     _get_customer_for_account: Any
-    _parse_date: Any
-    _parse_datetime: Any
     _get_sync_watermark: Any
     _advance_sync_watermark: Any
     _generate_credit_note_number: Any
@@ -79,14 +77,12 @@ class CreditNoteSyncMixin:
                 account_id=account_id,
                 status=status,
                 updated_since=updated_since,
-                on_parse_error=progress.parse_error_collector(
-                    result, self._parse_datetime
-                ),
+                on_parse_error=progress.parse_error_collector(result),
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
-                row_updated_at = self._parse_datetime(cn.updated_at)
+                row_updated_at = cn.updated_at
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_credit_note(
@@ -155,7 +151,9 @@ class CreditNoteSyncMixin:
                 "applied_total": str(cn.applied_total),
                 "status": cn.status,
                 "invoice_id": cn.invoice_id,
-                "issued_at": cn.issued_at,
+                # Typed instant formatted back to canonical wire text (the
+                # record no longer carries the raw string).
+                "issued_at": cn.issued_at.isoformat() if cn.issued_at else None,
                 "memo": cn.memo,
                 "lines": [
                     {
@@ -164,7 +162,7 @@ class CreditNoteSyncMixin:
                         "unit_price": str(line.unit_price),
                         "amount": str(line.amount),
                         "tax_rate_id": line.tax_rate_id,
-                        "tax_application": line.tax_application,
+                        "tax_application": line.tax_application.value,
                     }
                     for line in sorted(cn.lines, key=lambda item: item.id)
                 ],
@@ -207,7 +205,7 @@ class CreditNoteSyncMixin:
         # Use the credit note's real issue date (so it lands in the right fiscal
         # period), and honour the same historical cutoff as invoices/payments so
         # a pre-cutoff credit note isn't imported without its invoice.
-        cn_date = self._parse_date(cn.issued_at) or _date.today()
+        cn_date = cn.issued_at.date() if cn.issued_at else _date.today()
         if cn_date < DOTMAC_SUB_SYNC_MIN_DATE:
             self._record_sync(EntityType.CREDIT_NOTE, external_id, _PRE_CUTOFF_SENTINEL)
             result.skipped += 1

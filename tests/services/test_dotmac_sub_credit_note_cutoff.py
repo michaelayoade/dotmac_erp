@@ -12,7 +12,7 @@ only triggers the skip if the code reads ``issued_at`` rather than today().
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.models.finance.ar.external_sync import EntityType
@@ -36,9 +36,6 @@ class _Harness(CreditNoteSyncMixin):
     def _get_customer_for_account(self, _account):
         return uuid.uuid4()
 
-    def _parse_date(self, value):
-        return date.fromisoformat(value) if value else None
-
     def _record_sync(self, entity_type, external_id, local_id=None, data_hash=None):
         self.recorded.append((entity_type, external_id, local_id))
 
@@ -46,7 +43,7 @@ class _Harness(CreditNoteSyncMixin):
         return None
 
 
-def _credit_note(issued_at: str | None) -> CreditNoteRecord:
+def _credit_note(issued_at: datetime | None) -> CreditNoteRecord:
     return CreditNoteRecord(
         id="cn-1",
         account_id="acc-1",
@@ -67,7 +64,10 @@ def test_pre_cutoff_credit_note_is_skipped_by_its_real_date():
 
     # 2025-06-01 is before DOTMAC_SUB_SYNC_MIN_DATE (2026-01-01).
     harness._sync_single_credit_note(
-        _credit_note("2025-06-01"), None, result, skip_unchanged=True
+        _credit_note(datetime(2025, 6, 1, tzinfo=timezone.utc)),
+        None,
+        result,
+        skip_unchanged=True,
     )
 
     assert result.skipped == 1

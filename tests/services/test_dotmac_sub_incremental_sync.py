@@ -185,19 +185,19 @@ def test_subscriber_sync_advances_customer_watermark() -> None:
     harness.db = MagicMock()
     harness.client = MagicMock()
     harness.client.get_subscribers.return_value = [
-        SubscriberRecord(id="sub-1", updated_at="2026-01-02T12:00:00+00:00")
+        SubscriberRecord(id="sub-1", updated_at=datetime(2026, 1, 2, 12, tzinfo=UTC))
     ]
     harness._get_sync_watermark = MagicMock(return_value=_T0)
     harness._advance_sync_watermark = MagicMock()
-    harness._parse_datetime = BaseSyncMixin._parse_datetime.__get__(harness)
     harness._sync_single_subscriber = MagicMock()
     harness._reprime_tenant_context = MagicMock()
 
     result = harness.sync_subscribers()
 
     assert result.success
-    harness.client.get_subscribers.assert_called_once_with(
-        updated_since=_T0.isoformat()
+    assert harness.client.get_subscribers.call_count == 1
+    assert harness.client.get_subscribers.call_args.kwargs["updated_since"] == (
+        _T0.isoformat()
     )
     harness._advance_sync_watermark.assert_called_once_with(
         EntityType.CUSTOMER,
@@ -211,19 +211,23 @@ def test_reseller_sync_advances_reseller_watermark() -> None:
     harness.client = MagicMock()
     harness.client.get_resellers.return_value = [
         ResellerRecord(
-            id="reseller-1", name="Wholesale", updated_at="2026-01-03T12:00:00+00:00"
+            id="reseller-1",
+            name="Wholesale",
+            updated_at=datetime(2026, 1, 3, 12, tzinfo=UTC),
         )
     ]
     harness._get_sync_watermark = MagicMock(return_value=_T0)
     harness._advance_sync_watermark = MagicMock()
-    harness._parse_datetime = BaseSyncMixin._parse_datetime.__get__(harness)
     harness._sync_single_reseller = MagicMock()
     harness._reprime_tenant_context = MagicMock()
 
     result = harness.sync_resellers()
 
     assert result.success
-    harness.client.get_resellers.assert_called_once_with(updated_since=_T0.isoformat())
+    assert harness.client.get_resellers.call_count == 1
+    assert harness.client.get_resellers.call_args.kwargs["updated_since"] == (
+        _T0.isoformat()
+    )
     harness._advance_sync_watermark.assert_called_once_with(
         EntityType.RESELLER,
         datetime(2026, 1, 3, 12, tzinfo=UTC),
@@ -245,7 +249,8 @@ def test_parse_invoice_reads_updated_at() -> None:
             "updated_at": "2026-06-01T10:00:00+00:00",
         }
     )
-    assert rec.updated_at == "2026-06-01T10:00:00+00:00"
+    # Admitted as a TYPED instant, not the raw wire string.
+    assert rec.updated_at == datetime(2026, 6, 1, 10, tzinfo=UTC)
 
 
 def test_invoice_hash_payload_tracks_line_and_header_changes() -> None:
@@ -266,9 +271,9 @@ def test_invoice_hash_payload_tracks_line_and_header_changes() -> None:
         tax_total=0,
         total=100,
         balance_due=100,
-        due_at="2026-06-30",
+        due_at=datetime(2026, 6, 30, tzinfo=UTC),
         memo="Original",
-        lines=[line],
+        lines=(line,),
     )
     original = _invoice_hash_payload(invoice)
 
@@ -276,7 +281,7 @@ def test_invoice_hash_payload_tracks_line_and_header_changes() -> None:
     # payload is a NEW record, exactly as a re-fetch from Sub would produce —
     # never an in-place edit of an already-admitted record.
     changed_line = replace(line, description="Corrected service")
-    invoice = replace(invoice, memo="Corrected", lines=[changed_line])
+    invoice = replace(invoice, memo="Corrected", lines=(changed_line,))
     changed = _invoice_hash_payload(invoice)
 
     assert changed != original
