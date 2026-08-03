@@ -186,10 +186,11 @@
         {% endcall %}
     </div>
 
+    <div id="results-container" class="space-y-6">
     <div class="card p-6">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Reports</h2>
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Analyze attendance data with detailed reports.</p>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <a href="/people/attendance/reports/summary" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">
                 <div class="flex items-center gap-2">
                     {{ icon_svg("document-report", "h-5 w-5 text-teal-500") }}
@@ -214,10 +215,15 @@
                     Trends Report
                 </div>
             </a>
+            <a href="{{ attendance_export_url }}" download class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">
+                <div class="flex items-center gap-2">
+                    {{ icon_svg("download", "h-5 w-5 text-emerald-500") }}
+                    Export
+                </div>
+            </a>
         </div>
     </div>
 
-    <div id="results-container">
     {% if records %}
     <div class="card overflow-hidden">
         <div class="table-container">

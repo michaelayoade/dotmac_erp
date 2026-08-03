@@ -688,6 +688,7 @@ class AttendanceService:
 
         query = query.options(
             joinedload(Attendance.employee).joinedload(Employee.person),
+            joinedload(Attendance.shift_type),
         ).order_by(Attendance.attendance_date.desc())
 
         # Count total
