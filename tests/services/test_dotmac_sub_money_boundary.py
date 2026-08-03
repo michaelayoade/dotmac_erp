@@ -10,8 +10,10 @@ proof that a rejected row fails ITS savepoint (raises) without any DB work.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -445,10 +447,43 @@ def test_payables_ingress_rejects_non_finite_values() -> None:
 
 
 def test_payables_dict_ingress_still_accepts_internal_decimal() -> None:
-    # Internal Python callers may pass Decimal (finite) — the strings-only
-    # rule is a WIRE rule.
+    # Internal Python callers may pass Decimal (finite, canonical scale) —
+    # the strings-only rule is a WIRE rule.
     payload = CRMPurchaseInvoicePayload.model_validate(_payables_payload())
     assert payload.total == Decimal("1075.00")
+
+
+@pytest.mark.parametrize(
+    "literal", ["1e3", " 100.00 ", "+100.00", "01.00", ".50", "100."]
+)
+def test_payables_ingress_rejects_every_non_canonical_spelling(
+    literal: str,
+) -> None:
+    # Field-level (currency-independent) half of the canonical grammar: the
+    # ONE lexical wire representation, enforced on the raw string before any
+    # coercion — at header and line level.
+    raw = _payables_json().replace('"total": "1075.00"', f'"total": "{literal}"')
+    with pytest.raises(ValidationError, match="non-canonical money string"):
+        CRMPurchaseInvoicePayload.model_validate_json(raw)
+    raw = _payables_json().replace('"amount": "1000.00"', f'"amount": "{literal}"')
+    with pytest.raises(ValidationError, match="non-canonical money string"):
+        CRMPurchaseInvoicePayload.model_validate_json(raw)
+
+
+@pytest.mark.parametrize("literal", ["1075", "1075.0", "1075.000"])
+def test_payables_ingress_requires_exact_minor_unit_digits(literal: str) -> None:
+    # Model-level (currency-aware) half: with the sibling currency known,
+    # every money value must carry EXACTLY the currency's minor-unit digit
+    # count — "1075" and "1075.0" are valid lexemes but not the canonical
+    # NGN form.
+    raw = _payables_json().replace('"total": "1075.00"', f'"total": "{literal}"')
+    with pytest.raises(ValidationError, match="fractional digits"):
+        CRMPurchaseInvoicePayload.model_validate_json(raw)
+    # Internal Decimal callers are held to the same exact scale.
+    with pytest.raises(ValidationError, match="fractional digits"):
+        CRMPurchaseInvoicePayload.model_validate(
+            _payables_payload(total=Decimal(literal))
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -566,16 +601,36 @@ def test_parse_invoice_rejects_malformed_allocation_amount() -> None:
         _client()._parse_invoice(bad)
 
 
-def test_parse_invoice_excess_precision_fails_at_the_boundary_layer() -> None:
-    # "48375.005" is a syntactically valid decimal — parse admits it, and the
-    # E4 boundary (boundary_money) rejects it exactly, never rounds it.
-    inv = _client()._parse_invoice(_raw_invoice(total="48375.005"))
-    assert inv.total == Decimal("48375.005")
-    with pytest.raises(MoneyBoundaryError, match="total.*minor-unit precision"):
-        inv.boundary_money()
+def test_parse_invoice_excess_precision_fails_at_parse_for_provisioned() -> None:
+    # For a provisioned currency the parser applies the currency-aware
+    # canonical grammar: "48375.005" (3 fractional digits for NGN) fails the
+    # ROW at parse — it is never admitted, never rounded. (The boundary
+    # adapter's own excess-precision rejection stays covered by the
+    # boundary_money tests above, which drive it with Decimal facts.)
+    with pytest.raises(DotmacSubParseError, match="fractional digits"):
+        _client()._parse_invoice(_raw_invoice(total="48375.005"))
+
+
+@pytest.mark.parametrize(
+    "literal",
+    ["1e3", " 100.00 ", "+100.00", "01.00", ".50", "100.", "48375", "48375.0"],
+)
+def test_parse_rejects_every_non_canonical_money_spelling(literal: str) -> None:
+    # The ONE lexical wire representation (serialize_amount's fixed
+    # minor-unit form) — every other spelling fails the row at parse, at all
+    # three parsers.
+    with pytest.raises(DotmacSubParseError, match="malformed money fact"):
+        _client()._parse_invoice(_raw_invoice(total=literal))
+    with pytest.raises(DotmacSubParseError, match="malformed money fact"):
+        _client()._parse_payment(_raw_payment(amount=literal))
+    with pytest.raises(DotmacSubParseError, match="malformed money fact"):
+        _client()._parse_credit_note(_raw_credit_note(total=literal))
 
 
 def test_parse_invoice_fake_currency_fails_at_the_boundary_layer() -> None:
+    # An unprovisioned currency gets the currency-independent lexical
+    # grammar at parse (canonical lexeme, unknown minor units) and is then
+    # rejected outright by the registry at admission.
     inv = _client()._parse_invoice(_raw_invoice(currency="ZZZ"))
     with pytest.raises(MoneyBoundaryError, match="not provisioned"):
         inv.boundary_money()
@@ -700,74 +755,127 @@ def _tolerant_parse_datetime(value: str | None) -> datetime | None:
         return None
 
 
-class _InvoiceLoopHarness(InvoiceSyncMixin):
-    def __init__(self, client: DotmacSubClient) -> None:
-        self.client = client
-        self.db = MagicMock()
-        self._parse_datetime = _tolerant_parse_datetime
-        self._get_sync_watermark = lambda entity_type: None
-        self._advance_sync_watermark = MagicMock()
-        self._sync_single_invoice = MagicMock()
-        self._reprime_tenant_context = MagicMock()
+@dataclass(frozen=True)
+class _EntityCase:
+    """One sync path for the shared watermark canary matrix — all three
+    mixins are proven by the SAME test matrix (they share the ONE
+    WatermarkProgress tracker)."""
+
+    mixin: type
+    sync_method: str
+    single_attr: str
+    raw: Any  # Callable[..., dict]
+    bad_money_field: str
 
 
-def test_invoice_sync_fails_the_row_not_the_run_on_parse_rejection() -> None:
-    bad_first = _raw_invoice(total="oops")  # rejected at parse
-    good_second = _raw_invoice(id="inv-ok", updated_at="2026-07-02T10:00:00+00:00")
-    harness = _InvoiceLoopHarness(_feed_client([bad_first, good_second]))
+_ENTITY_CASES = [
+    pytest.param(
+        _EntityCase(
+            InvoiceSyncMixin,
+            "sync_invoices",
+            "_sync_single_invoice",
+            _raw_invoice,
+            "total",
+        ),
+        id="invoice",
+    ),
+    pytest.param(
+        _EntityCase(
+            PaymentSyncMixin,
+            "sync_payments",
+            "_sync_single_payment",
+            _raw_payment,
+            "amount",
+        ),
+        id="payment",
+    ),
+    pytest.param(
+        _EntityCase(
+            CreditNoteSyncMixin,
+            "sync_credit_notes",
+            "_sync_single_credit_note",
+            _raw_credit_note,
+            "total",
+        ),
+        id="credit-note",
+    ),
+]
 
-    result = harness.sync_invoices()
+
+def _loop_harness(case: _EntityCase, client: DotmacSubClient) -> Any:
+    harness = case.mixin()
+    harness.client = client
+    harness.db = MagicMock()
+    harness._parse_datetime = _tolerant_parse_datetime
+    harness._get_sync_watermark = lambda entity_type: None
+    harness._advance_sync_watermark = MagicMock()
+    setattr(harness, case.single_attr, MagicMock())
+    harness._reprime_tenant_context = MagicMock()
+    harness._load_payment_channels = MagicMock()  # payments only; harmless
+    return harness
+
+
+_GOOD_ROW_AT = "2026-07-02T10:00:00+00:00"
+
+
+@pytest.mark.parametrize("case", _ENTITY_CASES)
+def test_positioned_parse_failure_parks_watermark_at_failed_row(
+    case: _EntityCase,
+) -> None:
+    bad = case.raw(**{case.bad_money_field: "oops"})  # rejected at parse
+    good = case.raw(id="row-ok", updated_at=_GOOD_ROW_AT)
+    harness = _loop_harness(case, _feed_client([bad, good]))
+
+    result = getattr(harness, case.sync_method)()
 
     assert result.success is True  # the RUN did not fail
     assert len(result.errors) == 1
-    assert "Sub invoice inv-raw-1" in result.errors[0]
-    assert harness._sync_single_invoice.call_count == 1  # good row synced
-    # Watermark is held at the failed row (min_error), not advanced past it.
+    assert getattr(harness, case.single_attr).call_count == 1  # good row synced
+    # Watermark parks at the failed row (min_error), not advanced past it.
     advanced_to = harness._advance_sync_watermark.call_args.args[1]
-    assert advanced_to == datetime.fromisoformat("2026-07-01T10:00:00+00:00")
+    assert advanced_to == datetime.fromisoformat(bad["updated_at"])
 
 
-@pytest.mark.parametrize("bad_updated_at", [None, "not-a-timestamp"])
-def test_unpositioned_parse_failure_freezes_the_watermark(
-    bad_updated_at: str | None,
+@pytest.mark.parametrize("case", _ENTITY_CASES)
+@pytest.mark.parametrize(
+    "position_kind", ["missing", "malformed", "integer", "savepoint"]
+)
+def test_unpositioned_failure_freezes_the_watermark(
+    case: _EntityCase, position_kind: str
 ) -> None:
-    """An UNPOSITIONED failure (missing/malformed updated_at) cannot park the
-    cursor at itself — so the cursor must FREEZE at the pre-run position;
-    later good rows still sync but must not advance the watermark past the
-    failed row."""
-    bad = _raw_invoice(total="oops")
-    if bad_updated_at is None:
+    """An UNPOSITIONED failure — missing, malformed, or NON-STRING (integer
+    epoch) updated_at, at parse OR inside the savepoint — cannot park the
+    cursor at itself, so the cursor FREEZES at the pre-run position. Later
+    good rows still sync; the watermark must not advance at all."""
+    if position_kind == "savepoint":
+        bad = case.raw(id="row-nopos")  # clean parse, row fails in savepoint
         del bad["updated_at"]
+    elif position_kind == "integer":
+        # A non-string updated_at must be a typed parse failure routed
+        # through the collector — never an AttributeError that kills the run.
+        bad = case.raw(updated_at=1730000000)
     else:
-        bad["updated_at"] = bad_updated_at
-    good_later = _raw_invoice(id="inv-ok", updated_at="2026-07-02T10:00:00+00:00")
-    harness = _InvoiceLoopHarness(_feed_client([bad, good_later]))
+        bad = case.raw(**{case.bad_money_field: "oops"})
+        if position_kind == "missing":
+            del bad["updated_at"]
+        else:  # malformed
+            bad["updated_at"] = "not-a-timestamp"
+    good = case.raw(id="row-ok", updated_at=_GOOD_ROW_AT)
+    harness = _loop_harness(case, _feed_client([bad, good]))
+    if position_kind == "savepoint":
+        setattr(
+            harness,
+            case.single_attr,
+            MagicMock(side_effect=[ValueError("posting failed"), None]),
+        )
 
-    result = harness.sync_invoices()
+    result = getattr(harness, case.sync_method)()
 
     assert result.success is True  # run continues
     assert len(result.errors) == 1
-    assert harness._sync_single_invoice.call_count == 1  # good row synced
+    expected_calls = 2 if position_kind == "savepoint" else 1
+    assert getattr(harness, case.single_attr).call_count == expected_calls
     # Frozen: the watermark was NOT advanced at all this run.
-    harness._advance_sync_watermark.assert_not_called()
-
-
-def test_unpositioned_savepoint_failure_also_freezes_the_watermark() -> None:
-    """The freeze applies to ANY unpositioned row failure, including one that
-    fails inside its savepoint after a clean parse."""
-    no_position = _raw_invoice(id="inv-nopos")
-    del no_position["updated_at"]
-    good_later = _raw_invoice(id="inv-ok", updated_at="2026-07-02T10:00:00+00:00")
-    harness = _InvoiceLoopHarness(_feed_client([no_position, good_later]))
-    harness._sync_single_invoice = MagicMock(
-        side_effect=[ValueError("posting failed"), None]
-    )
-
-    result = harness.sync_invoices()
-
-    assert result.success is True
-    assert len(result.errors) == 1
-    assert harness._sync_single_invoice.call_count == 2
     harness._advance_sync_watermark.assert_not_called()
 
 

@@ -45,6 +45,7 @@ money independently.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, time, timezone
@@ -74,6 +75,8 @@ __all__ = [
     "CurrencyRegistry",
     "MoneyBoundaryError",
     "boundary_currency",
+    "check_canonical_money_lexeme",
+    "check_canonical_money_string",
     "to_boundary_money",
     "from_money",
     "serialize_amount",
@@ -94,6 +97,70 @@ BOUNDARY_ROUNDING: str = DEFAULT_ROUNDING
 
 class MoneyBoundaryError(ValueError):
     """Fail-closed rejection of a monetary value at an external boundary."""
+
+
+# ---------------------------------------------------------------------------
+# Canonical money-string grammar (the ONE lexical wire representation)
+# ---------------------------------------------------------------------------
+# Exactly the fixed-minor-unit form :func:`serialize_amount` emits:
+#
+#   ``-?(0|[1-9][0-9]*)`` then, for a currency with N > 0 minor units,
+#   ``.`` followed by EXACTLY N digits; for N == 0 no ``.`` at all.
+#
+# No whitespace, no ``+``, no exponent, no leading zeros (a single ``0``
+# integer part is the only zero form), no bare trailing/leading dot.
+# ``serialize_amount`` alignment: quantized ``Decimal`` under ``format(x,
+# "f")`` yields this exact shape, negatives as a single leading ``-``
+# (including ``-0.00`` for a negative-zero amount, which the grammar
+# accepts).
+_CANONICAL_LEXEME_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?$")
+# Tokens Decimal() would parse but which are never money — called out with a
+# dedicated message rather than the generic canonical-form one.
+_NON_FINITE_TOKEN_RE = re.compile(r"^[+-]?(?:nan|snan|inf|infinity)$", re.IGNORECASE)
+
+_CANONICAL_FORM_HINT = (
+    "expected the canonical decimal string form serialize_amount emits — "
+    'optional single leading "-", integer part "0" or [1-9] digits (no '
+    'leading zeros, no "+"), no whitespace, no exponent (e.g. "48375.00")'
+)
+
+
+def check_canonical_money_lexeme(text: str, *, field: str = "amount") -> None:
+    """Currency-INDEPENDENT half of the canonical grammar (no digit count).
+
+    Used where the currency is not yet known (pydantic field-level
+    before-validators). Rejects e.g. ``"1e3"``, ``" 100.00 "``, ``"+100.00"``,
+    ``"01.00"``, ``".50"``, ``"100."`` and non-finite tokens.
+    """
+    if _NON_FINITE_TOKEN_RE.match(text.strip()):
+        raise MoneyBoundaryError(f"{field}: non-finite value {text!r} is not money")
+    if not _CANONICAL_LEXEME_RE.match(text):
+        raise MoneyBoundaryError(
+            f"{field}: non-canonical money string {text!r}; {_CANONICAL_FORM_HINT}"
+        )
+
+
+def check_canonical_money_string(
+    text: str, *, minor_units: int, field: str = "amount"
+) -> None:
+    """Full currency-AWARE canonical grammar: the lexeme rules plus exactly
+    ``minor_units`` fractional digits (and no ``.`` at all for a
+    zero-minor-unit currency)."""
+    check_canonical_money_lexeme(text, field=field)
+    _integer_part, dot, fraction = text.partition(".")
+    if minor_units == 0:
+        if dot:
+            raise MoneyBoundaryError(
+                f"{field}: non-canonical money string {text!r}; a "
+                "zero-minor-unit currency takes no fractional part"
+            )
+        return
+    if len(fraction) != minor_units:
+        raise MoneyBoundaryError(
+            f"{field}: non-canonical money string {text!r}; expected exactly "
+            f"{minor_units} fractional digits (the fixed-minor-unit form "
+            'serialize_amount emits, e.g. "48375.00")'
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +285,10 @@ def to_boundary_money(
         raise MoneyBoundaryError(
             f"{field}: unsupported monetary type {type(amount).__name__}"
         )
+    if isinstance(amount, str):
+        # Backstop for the strings-only wire rule: a string amount must be in
+        # the ONE canonical fixed-minor-unit form for this currency.
+        check_canonical_money_string(amount, minor_units=cur.minor_units, field=field)
     try:
         exact = Decimal(amount)
     except (InvalidOperation, ValueError) as exc:

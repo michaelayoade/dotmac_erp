@@ -14,18 +14,14 @@ from sqlalchemy import select
 
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
-from app.services.dotmac_sub.client import (
-    CreditNoteRecord,
-    DotmacSubError,
-    DotmacSubParseError,
-)
+from app.services.dotmac_sub.client import CreditNoteRecord, DotmacSubError
 
-from ._base import next_watermark
 from ._constants import (
     DOTMAC_SUB_SYNC_MIN_DATE,
     SYSTEM_USER_ID,
     _PRE_CUTOFF_SENTINEL,
 )
+from ._progress import WatermarkProgress
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -73,37 +69,19 @@ class CreditNoteSyncMixin:
             self._get_sync_watermark(EntityType.CREDIT_NOTE) if use_watermark else None
         )
         updated_since = watermark.isoformat() if watermark else None
-        max_ok: datetime | None = None
-        min_error: datetime | None = None
-        # An UNPOSITIONED failure (missing/malformed updated_at) cannot park
-        # the cursor at itself, so a later good row would advance the
-        # watermark past it and skip it forever. Freeze: the watermark must
-        # not advance at all for this run.
-        watermark_frozen = False
-
-        def _on_parse_error(exc: DotmacSubParseError) -> None:
-            # A row asserted unusable money facts (strict client parser).
-            # Fail THAT row exactly like a savepoint-failed row — recorded,
-            # watermark held at it for retry — while the pull continues.
-            nonlocal min_error, watermark_frozen
-            result.errors.append(str(exc))
-            logger.error("Rejected dotmac_sub credit-note row at parse: %s", exc)
-            parse_row_updated_at = self._parse_datetime(exc.updated_at)
-            if parse_row_updated_at is not None:
-                min_error = (
-                    parse_row_updated_at
-                    if min_error is None
-                    else min(min_error, parse_row_updated_at)
-                )
-            else:
-                watermark_frozen = True
+        # ONE shared owner for the park-vs-freeze cursor decision (see
+        # _progress.WatermarkProgress); parse rejections and savepoint row
+        # failures flow through the same accounting.
+        progress = WatermarkProgress(watermark, label="credit-note")
 
         try:
             for cn in self.client.get_credit_notes(
                 account_id=account_id,
                 status=status,
                 updated_since=updated_since,
-                on_parse_error=_on_parse_error,
+                on_parse_error=progress.parse_error_collector(
+                    result, self._parse_datetime
+                ),
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
@@ -116,12 +94,7 @@ class CreditNoteSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
-                    if row_updated_at is not None:
-                        max_ok = (
-                            row_updated_at
-                            if max_ok is None
-                            else max(max_ok, row_updated_at)
-                        )
+                    progress.record_success(row_updated_at)
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -133,28 +106,15 @@ class CreditNoteSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Credit note {cn.credit_number}: {e!s}")
                     logger.exception("Error syncing credit note %s", cn.id)
-                    if row_updated_at is not None:
-                        min_error = (
-                            row_updated_at
-                            if min_error is None
-                            else min(min_error, row_updated_at)
-                        )
-                    else:
-                        watermark_frozen = True
-            # An unpositioned failure freezes the cursor at its pre-run
-            # position — advancing would skip that row permanently.
+                    progress.record_failure(row_updated_at)
+            # Advance-or-park, or freeze on an unpositioned failure (see
+            # WatermarkProgress).
             if use_watermark:
-                if watermark_frozen:
-                    logger.warning(
-                        "Credit-note sync watermark frozen: a failed row had "
-                        "no usable updated_at, so the cursor cannot be parked "
-                        "at it; holding the pre-run position"
+                progress.conclude(
+                    lambda cursor: self._advance_sync_watermark(
+                        EntityType.CREDIT_NOTE, cursor
                     )
-                else:
-                    self._advance_sync_watermark(
-                        EntityType.CREDIT_NOTE,
-                        next_watermark(watermark, max_ok, min_error),
-                    )
+                )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "

@@ -21,7 +21,7 @@ import os
 import time
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -33,7 +33,13 @@ from dotmac_integration import (
 from dotmac_kernel.money import Money
 
 from app.config import settings
-from app.services.finance.money_boundary import MoneyBoundaryError, to_boundary_money
+from app.services.finance.money_boundary import (
+    SUPPORTED_CURRENCIES,
+    MoneyBoundaryError,
+    check_canonical_money_lexeme,
+    check_canonical_money_string,
+    to_boundary_money,
+)
 from app.metrics import observe_integration_request
 from app.observability import get_request_id
 
@@ -213,7 +219,7 @@ class DotmacSubConfig:
         return {"X-Api-Key": self.api_token}
 
 
-@dataclass
+@dataclass(frozen=True)
 class ResellerRecord:
     """Reseller (parent account) from dotmac_sub."""
 
@@ -226,7 +232,7 @@ class ResellerRecord:
     updated_at: str | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class SubscriberRecord:
     """Subscriber (end customer) from dotmac_sub."""
 
@@ -264,7 +270,7 @@ class SubscriberRecord:
         return " ".join(parts) or self.legal_name or self.account_number or self.id
 
 
-@dataclass
+@dataclass(frozen=True)
 class BillingAccountRecord:
     """Billing account from dotmac_sub (reseller-scoped; invoices key on this)."""
 
@@ -308,7 +314,7 @@ class PaymentBoundaryMoney:
     net_amount: Money | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class InvoiceLineRecord:
     """Invoice line item.
 
@@ -327,7 +333,7 @@ class InvoiceLineRecord:
     tax_application: str = "exclusive"
 
 
-@dataclass
+@dataclass(frozen=True)
 class AllocationRecord:
     """Payment-to-invoice allocation (inline on invoices and payments)."""
 
@@ -337,7 +343,7 @@ class AllocationRecord:
     amount: Decimal
 
 
-@dataclass
+@dataclass(frozen=True)
 class InvoiceRecord:
     """Invoice from dotmac_sub."""
 
@@ -391,7 +397,7 @@ class InvoiceRecord:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class PaymentRecord:
     """Payment from dotmac_sub."""
 
@@ -467,7 +473,7 @@ class PaymentRecord:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class CreditNoteLineRecord:
     """Credit note line item (``amount`` semantics as
     :class:`InvoiceLineRecord`)."""
@@ -481,7 +487,7 @@ class CreditNoteLineRecord:
     tax_application: str = "exclusive"
 
 
-@dataclass
+@dataclass(frozen=True)
 class CreditNoteRecord:
     """Credit note from dotmac_sub."""
 
@@ -519,7 +525,7 @@ class CreditNoteRecord:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class TaxRateRecord:
     """Tax rate from dotmac_sub."""
 
@@ -545,17 +551,34 @@ def _dec(value: Any, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
+def _registry_minor_units(currency_code: str) -> int | None:
+    """Minor units for a currency when it is provisioned, else ``None``.
+
+    Parsing applies the currency-aware canonical grammar whenever the
+    currency is provisioned; an unprovisioned currency still gets the
+    currency-independent lexical grammar here and is then rejected outright
+    by the boundary registry at admission (``boundary_money()``).
+    """
+    return SUPPORTED_CURRENCIES.by_code.get(currency_code.upper())
+
+
 def _parse_money_value(
-    value: Any, *, record: str, field: str, updated_at: str | None
+    value: Any,
+    *,
+    record: str,
+    field: str,
+    updated_at: str | None,
+    minor_units: int | None,
 ) -> Decimal:
     """Strictly parse a PRESENT money fact asserted by Sub.
 
-    Wire contract: external money is a canonical decimal STRING only
-    (matching the connector's outbound ``{"amount": "48375.00"}`` shape).
-    Every JSON number token — int and float alike — plus booleans and
-    non-finite values (NaN/Infinity) is refused; an unparseable amount
-    raises instead of becoming a clean-looking zero. ``Decimal`` instances
-    are tolerated for internal (non-wire) callers only.
+    Wire contract: external money is a canonical decimal STRING only, in the
+    ONE fixed-minor-unit form ``serialize_amount`` emits (e.g. ``"48375.00"``
+    for NGN). Every JSON number token — int and float alike — plus booleans,
+    non-finite values (NaN/Infinity) and every non-canonical spelling
+    (``"1e3"``, ``" 100.00 "``, ``"+100.00"``, ``"01.00"``, ``".50"``,
+    ``"100."``) is refused; nothing is laundered into a clean-looking zero.
+    ``Decimal`` instances are tolerated for internal (non-wire) callers only.
     """
     if isinstance(value, (bool, int, float)):
         raise DotmacSubParseError(
@@ -565,7 +588,15 @@ def _parse_money_value(
             record=record,
             updated_at=updated_at,
         )
-    if not isinstance(value, (str, Decimal)):
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise DotmacSubParseError(
+                f"{record}: non-finite money fact {field}={value!r} is not money",
+                record=record,
+                updated_at=updated_at,
+            )
+        return value
+    if not isinstance(value, str):
         raise DotmacSubParseError(
             f"{record}: unsupported type {type(value).__name__} for money "
             f"fact {field!r}",
@@ -573,24 +604,26 @@ def _parse_money_value(
             updated_at=updated_at,
         )
     try:
-        parsed = Decimal(str(value))
-    except (InvalidOperation, ValueError, ArithmeticError) as exc:
+        if minor_units is None:
+            check_canonical_money_lexeme(value, field=field)
+        else:
+            check_canonical_money_string(value, minor_units=minor_units, field=field)
+    except MoneyBoundaryError as exc:
         raise DotmacSubParseError(
-            f"{record}: malformed money fact {field}={value!r}",
+            f"{record}: malformed money fact {field}={value!r}: {exc}",
             record=record,
             updated_at=updated_at,
         ) from exc
-    if not parsed.is_finite():
-        raise DotmacSubParseError(
-            f"{record}: non-finite money fact {field}={value!r} is not money",
-            record=record,
-            updated_at=updated_at,
-        )
-    return parsed
+    return Decimal(value)
 
 
 def _required_money(
-    item: dict[str, Any], key: str, *, record: str, updated_at: str | None
+    item: dict[str, Any],
+    key: str,
+    *,
+    record: str,
+    updated_at: str | None,
+    minor_units: int | None,
 ) -> Decimal:
     """A money fact the Sub contract always asserts. Missing/blank is a hard
     row failure — zero is a real accounting assertion Sub must make
@@ -602,11 +635,18 @@ def _required_money(
             record=record,
             updated_at=updated_at,
         )
-    return _parse_money_value(value, record=record, field=key, updated_at=updated_at)
+    return _parse_money_value(
+        value, record=record, field=key, updated_at=updated_at, minor_units=minor_units
+    )
 
 
 def _optional_money(
-    item: dict[str, Any], key: str, *, record: str, updated_at: str | None
+    item: dict[str, Any],
+    key: str,
+    *,
+    record: str,
+    updated_at: str | None,
+    minor_units: int | None,
 ) -> Decimal | None:
     """A money fact the Sub contract marks nullable (e.g. ``gross_amount`` /
     ``net_amount`` before a WHT settlement exists). Absent stays ``None``;
@@ -614,7 +654,9 @@ def _optional_money(
     value = item.get(key)
     if value is None or value == "":
         return None
-    return _parse_money_value(value, record=record, field=key, updated_at=updated_at)
+    return _parse_money_value(
+        value, record=record, field=key, updated_at=updated_at, minor_units=minor_units
+    )
 
 
 def _defaulted_money(
@@ -624,6 +666,7 @@ def _defaulted_money(
     *,
     record: str,
     updated_at: str | None,
+    minor_units: int | None,
 ) -> Decimal:
     """A money fact with a DOCUMENTED absent-field default (deploy-order
     compatibility: ``refunded_amount``/``wht_amount`` default to 0 until Sub
@@ -633,7 +676,28 @@ def _defaulted_money(
     value = item.get(key)
     if value is None or value == "":
         return Decimal(default)
-    return _parse_money_value(value, record=record, field=key, updated_at=updated_at)
+    return _parse_money_value(
+        value, record=record, field=key, updated_at=updated_at, minor_units=minor_units
+    )
+
+
+def _wire_updated_at(item: dict[str, Any], *, record: str) -> str | None:
+    """The server-tracked ``updated_at`` watermark instant for a row.
+
+    Must be an ISO8601 STRING (or absent). Any other type (e.g. an integer
+    epoch) is a typed, UNPOSITIONED parse failure — it must route through the
+    row-failure collector (freezing the cursor per the watermark contract),
+    never explode inside ``_parse_datetime`` and kill the whole run.
+    """
+    value = item.get("updated_at")
+    if value is None or isinstance(value, str):
+        return value
+    raise DotmacSubParseError(
+        f"{record}: updated_at must be an ISO8601 string, got "
+        f"{type(value).__name__} {value!r}",
+        record=record,
+        updated_at=None,  # unusable position -> cursor freeze semantics
+    )
 
 
 def _required_currency(
@@ -681,7 +745,11 @@ def _watermark_params(
 
 
 def _allocations(
-    items: list[dict[str, Any]] | None, *, record: str, updated_at: str | None
+    items: list[dict[str, Any]] | None,
+    *,
+    record: str,
+    updated_at: str | None,
+    minor_units: int | None,
 ) -> list[AllocationRecord]:
     out: list[AllocationRecord] = []
     for a in items or []:
@@ -697,6 +765,7 @@ def _allocations(
                     "amount",
                     record=f"{record} allocation {alloc_id}",
                     updated_at=updated_at,
+                    minor_units=minor_units,
                 ),
             )
         )
@@ -1126,7 +1195,9 @@ class DotmacSubClient:
         are non-money numerics and keep their lenient coercion.
         """
         record = f"Sub invoice {item.get('id', '?')}"
-        updated_at = item.get("updated_at")
+        updated_at = _wire_updated_at(item, record=record)
+        currency = _required_currency(item, record=record, updated_at=updated_at)
+        minor_units = _registry_minor_units(currency)
         lines = [
             InvoiceLineRecord(
                 id=str(line.get("id", "")),
@@ -1138,6 +1209,7 @@ class DotmacSubClient:
                     "amount",
                     record=f"{record} line {line.get('id', '?')}",
                     updated_at=updated_at,
+                    minor_units=minor_units,
                 ),
                 tax_rate_id=line.get("tax_rate_id"),
                 tax_application=line.get("tax_application", "exclusive"),
@@ -1149,16 +1221,34 @@ class DotmacSubClient:
             account_id=str(item.get("account_id", "")),
             invoice_number=item.get("invoice_number"),
             status=item.get("status", ""),
-            currency=_required_currency(item, record=record, updated_at=updated_at),
+            currency=currency,
             subtotal=_required_money(
-                item, "subtotal", record=record, updated_at=updated_at
+                item,
+                "subtotal",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             tax_total=_required_money(
-                item, "tax_total", record=record, updated_at=updated_at
+                item,
+                "tax_total",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
-            total=_required_money(item, "total", record=record, updated_at=updated_at),
+            total=_required_money(
+                item,
+                "total",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
             balance_due=_required_money(
-                item, "balance_due", record=record, updated_at=updated_at
+                item,
+                "balance_due",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             issued_at=item.get("issued_at"),
             due_at=item.get("due_at"),
@@ -1168,7 +1258,10 @@ class DotmacSubClient:
             updated_at=updated_at,
             lines=lines,
             allocations=_allocations(
-                item.get("payment_allocations"), record=record, updated_at=updated_at
+                item.get("payment_allocations"),
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
         )
 
@@ -1216,25 +1309,49 @@ class DotmacSubClient:
         is a percentage rate, not money.
         """
         record = f"Sub payment {item.get('id', '?')}"
-        updated_at = item.get("updated_at")
+        updated_at = _wire_updated_at(item, record=record)
+        currency = _required_currency(item, record=record, updated_at=updated_at)
+        minor_units = _registry_minor_units(currency)
         return PaymentRecord(
             id=str(item.get("id", "")),
             account_id=item.get("account_id"),
             billing_account_id=item.get("billing_account_id"),
             amount=_required_money(
-                item, "amount", record=record, updated_at=updated_at
+                item,
+                "amount",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             refunded_amount=_defaulted_money(
-                item, "refunded_amount", "0", record=record, updated_at=updated_at
+                item,
+                "refunded_amount",
+                "0",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             gross_amount=_optional_money(
-                item, "gross_amount", record=record, updated_at=updated_at
+                item,
+                "gross_amount",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             net_amount=_optional_money(
-                item, "net_amount", record=record, updated_at=updated_at
+                item,
+                "net_amount",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             wht_amount=_defaulted_money(
-                item, "wht_amount", "0", record=record, updated_at=updated_at
+                item,
+                "wht_amount",
+                "0",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             wht_rate=_dec(item.get("wht_rate"))
             if item.get("wht_rate") is not None
@@ -1243,7 +1360,7 @@ class DotmacSubClient:
             wht_record_id=item.get("wht_record_id"),
             wht_certificate_reference=item.get("wht_certificate_reference"),
             wht_resolved_at=item.get("wht_resolved_at"),
-            currency=_required_currency(item, record=record, updated_at=updated_at),
+            currency=currency,
             status=item.get("status", ""),
             paid_at=item.get("paid_at"),
             external_id=item.get("external_id"),
@@ -1252,7 +1369,10 @@ class DotmacSubClient:
             payment_channel_id=item.get("payment_channel_id"),
             updated_at=updated_at,
             allocations=_allocations(
-                item.get("allocations"), record=record, updated_at=updated_at
+                item.get("allocations"),
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
         )
 
@@ -1285,7 +1405,9 @@ class DotmacSubClient:
         rules as :meth:`_parse_invoice`; ``applied_total`` keeps a documented
         absent-field default of 0 — nothing applied yet)."""
         record = f"Sub credit note {item.get('id', '?')}"
-        updated_at = item.get("updated_at")
+        updated_at = _wire_updated_at(item, record=record)
+        currency = _required_currency(item, record=record, updated_at=updated_at)
+        minor_units = _registry_minor_units(currency)
         lines = [
             CreditNoteLineRecord(
                 id=str(line.get("id", "")),
@@ -1297,6 +1419,7 @@ class DotmacSubClient:
                     "amount",
                     record=f"{record} line {line.get('id', '?')}",
                     updated_at=updated_at,
+                    minor_units=minor_units,
                 ),
                 tax_rate_id=line.get("tax_rate_id"),
                 tax_application=line.get("tax_application", "exclusive"),
@@ -1309,16 +1432,35 @@ class DotmacSubClient:
             invoice_id=item.get("invoice_id"),
             credit_number=item.get("credit_number"),
             status=item.get("status", ""),
-            currency=_required_currency(item, record=record, updated_at=updated_at),
+            currency=currency,
             subtotal=_required_money(
-                item, "subtotal", record=record, updated_at=updated_at
+                item,
+                "subtotal",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             tax_total=_required_money(
-                item, "tax_total", record=record, updated_at=updated_at
+                item,
+                "tax_total",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
-            total=_required_money(item, "total", record=record, updated_at=updated_at),
+            total=_required_money(
+                item,
+                "total",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
             applied_total=_defaulted_money(
-                item, "applied_total", "0", record=record, updated_at=updated_at
+                item,
+                "applied_total",
+                "0",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
             ),
             memo=item.get("memo"),
             issued_at=item.get("issued_at") or item.get("created_at"),

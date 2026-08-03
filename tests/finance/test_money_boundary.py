@@ -28,6 +28,8 @@ from app.services.finance.money_boundary import (
     CurrencyRegistry,
     MoneyBoundaryError,
     boundary_currency,
+    check_canonical_money_lexeme,
+    check_canonical_money_string,
     check_settlement_identity,
     convert_with_snapshot,
     from_money,
@@ -232,10 +234,62 @@ def test_accepts_trailing_zero_extra_places() -> None:
 
 
 def test_rejects_unparseable_and_unsupported_types() -> None:
-    with pytest.raises(MoneyBoundaryError, match="not a valid amount"):
+    with pytest.raises(MoneyBoundaryError, match="non-canonical money string"):
         to_boundary_money("not-money", "NGN")
     with pytest.raises(MoneyBoundaryError, match="unsupported monetary type"):
         to_boundary_money([1], "NGN")
+
+
+# ---------------------------------------------------------------------------
+# Canonical money-string grammar (the ONE lexical wire representation)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "literal",
+    ["1e3", " 100.00 ", "+100.00", "01.00", ".50", "100.", "1_000.00", "1,000.00"],
+)
+def test_string_backstop_rejects_non_canonical_lexemes(literal: str) -> None:
+    with pytest.raises(MoneyBoundaryError, match="non-canonical money string"):
+        to_boundary_money(literal, "NGN")
+    with pytest.raises(MoneyBoundaryError, match="non-canonical money string"):
+        check_canonical_money_lexeme(literal)
+
+
+@pytest.mark.parametrize("literal", ["100", "100.0", "100.000"])
+def test_string_backstop_requires_exact_minor_unit_digits(literal: str) -> None:
+    # The currency-aware half: exactly minor_units fractional digits.
+    with pytest.raises(MoneyBoundaryError, match="fractional digits"):
+        to_boundary_money(literal, "NGN")
+
+
+def test_zero_minor_unit_canonical_form_takes_no_fraction() -> None:
+    to_boundary_money("1500", "JPY", registry=_TEST_REGISTRY)  # canonical
+    with pytest.raises(MoneyBoundaryError, match="no fractional part"):
+        to_boundary_money("1500.0", "JPY", registry=_TEST_REGISTRY)
+    with pytest.raises(MoneyBoundaryError, match="fractional digits"):
+        to_boundary_money("1.23", "BHD", registry=_TEST_REGISTRY)
+    to_boundary_money("1.230", "BHD", registry=_TEST_REGISTRY)  # canonical
+
+
+def test_canonical_grammar_matches_serialize_amount_exactly() -> None:
+    # Round-trip alignment: whatever serialize_amount emits (negatives
+    # included, as a single leading "-") is accepted by the grammar and
+    # re-parses to the same value.
+    cases = [
+        (Decimal("48375.00"), "NGN", None),
+        (Decimal("-0.01"), "NGN", None),
+        (Decimal("0"), "NGN", None),
+        (Decimal("-123456789.99"), "NGN", None),
+        (Decimal("1500"), "JPY", _TEST_REGISTRY),
+        (Decimal("-1.234"), "BHD", _TEST_REGISTRY),
+    ]
+    for amount, code, registry in cases:
+        money = to_boundary_money(amount, code, registry=registry)
+        wire = serialize_amount(money)
+        cur = boundary_currency(code, registry=registry)
+        check_canonical_money_string(wire, minor_units=cur.minor_units)
+        assert to_boundary_money(wire, code, registry=registry).amount == money.amount
 
 
 def test_currency_mismatch_fails_closed() -> None:

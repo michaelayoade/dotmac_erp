@@ -166,7 +166,12 @@ def test_parse_invoice_maps_fields_and_inline_allocations() -> None:
                 }
             ],
             "payment_allocations": [
-                {"id": "a1", "payment_id": "p1", "invoice_id": "inv-1", "amount": "50"}
+                {
+                    "id": "a1",
+                    "payment_id": "p1",
+                    "invoice_id": "inv-1",
+                    "amount": "50.00",
+                }
             ],
         }
     )

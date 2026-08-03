@@ -5,7 +5,7 @@ DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
@@ -20,7 +20,12 @@ from pydantic import (
 )
 
 from app.config import settings
-from app.services.finance.money_boundary import to_boundary_money
+from app.services.finance.money_boundary import (
+    MoneyBoundaryError,
+    boundary_currency,
+    check_canonical_money_lexeme,
+    to_boundary_money,
+)
 
 
 def _require_wire_money_string(value: object) -> object:
@@ -32,11 +37,15 @@ def _require_wire_money_string(value: object) -> object:
 
     Wire policy (matches the connector's outbound E4 shape
     ``{"amount": "48375.00"}``): external money is a canonical decimal
-    STRING only. EVERY JSON number token — int and float alike (pydantic
-    materializes them as Python ``int``/``float`` for before-validators) —
-    plus booleans and non-finite values (NaN/Infinity) is refused before any
-    coercion can launder it. Internal Python callers may pass ``Decimal``
-    (finite only).
+    STRING only, in the lexical grammar ``serialize_amount`` emits. EVERY
+    JSON number token — int and float alike (pydantic materializes them as
+    Python ``int``/``float`` for before-validators) — plus booleans,
+    non-finite values (NaN/Infinity) and every non-canonical spelling
+    (``"1e3"``, ``" 100.00 "``, ``"+100.00"``, ``"01.00"``, ``".50"``,
+    ``"100."``) is refused before any coercion can launder it. The
+    currency-AWARE half of the grammar (exact minor-unit digit count) runs
+    in the model-level validator, where the sibling ``currency`` field is
+    available. Internal Python callers may pass ``Decimal`` (finite only).
     """
     if isinstance(value, (bool, int, float)):
         raise ValueError(
@@ -49,14 +58,9 @@ def _require_wire_money_string(value: object) -> object:
         return value
     if isinstance(value, str):
         try:
-            parsed = Decimal(value)
-        except (InvalidOperation, ValueError) as exc:
-            raise ValueError(
-                f"refusing {value!r} as money at ingress; send a canonical "
-                'decimal string (e.g. "48375.00")'
-            ) from exc
-        if not parsed.is_finite():
-            raise ValueError(f"refusing non-finite value {value!r} as money at ingress")
+            check_canonical_money_lexeme(value, field="money at ingress")
+        except MoneyBoundaryError as exc:
+            raise ValueError(str(exc)) from exc
         return value
     raise ValueError(
         f"refusing {type(value).__name__} as money at ingress; send the "
@@ -868,7 +872,10 @@ class CRMPurchaseInvoicePayload(BaseModel):
     currency: str = Field(..., min_length=3, max_length=3)
     tax_rate_percent: Decimal = Field(Decimal("0"), ge=0, le=100)
     subtotal: Decimal = Field(..., ge=0)
-    tax_total: Decimal = Field(Decimal("0"), ge=0)
+    # Default carries the canonical 2-fractional-digit scale (all provisioned
+    # currencies are 2-minor-unit today; the model validator enforces the
+    # exact scale for whatever currency the document declares).
+    tax_total: Decimal = Field(Decimal("0.00"), ge=0)
     total: Decimal = Field(..., gt=0)
     approved_at: datetime | None = None
     approved_by_email: str | None = Field(None, max_length=255)
@@ -887,21 +894,43 @@ class CRMPurchaseInvoicePayload(BaseModel):
         Header totals and line amounts must be exact in the document
         currency's minor units (typed kernel Money at the boundary; no
         missing currency, no excess precision). The strings-only wire policy
-        (every JSON number token rejected) is enforced in the
-        ``mode="before"`` ingress validators above — by the time this runs,
-        pydantic has already coerced to ``Decimal``, so the raw-type check
-        must precede coercion. Line ``quantity`` and ``unit_price`` are
+        (every JSON number token rejected; currency-independent lexical
+        grammar) is enforced in the ``mode="before"`` ingress validators
+        above — by the time this runs, pydantic has already coerced to
+        ``Decimal``, so the raw-type check must precede coercion. HERE, with
+        the sibling ``currency`` available, the currency-AWARE half of the
+        canonical grammar applies: every money value must carry EXACTLY the
+        currency's minor-unit digit count (the fixed-minor-unit form
+        ``serialize_amount`` emits — pydantic's str→Decimal coercion
+        preserves the wire string's scale, so the check holds for wire and
+        internal callers alike). Line ``quantity`` and ``unit_price`` are
         rates/quantities and deliberately stay plain decimals. ERP-internal
         AP posting/tax precision is unchanged.
         """
         label = f"purchase invoice {self.crm_invoice_id}"
-        to_boundary_money(self.subtotal, self.currency, field=f"{label} subtotal")
-        to_boundary_money(self.tax_total, self.currency, field=f"{label} tax_total")
-        to_boundary_money(self.total, self.currency, field=f"{label} total")
+        minor_units = boundary_currency(
+            self.currency, field=f"{label} currency"
+        ).minor_units
+        money_fields: list[tuple[str, Decimal]] = [
+            (f"{label} subtotal", self.subtotal),
+            (f"{label} tax_total", self.tax_total),
+            (f"{label} total", self.total),
+        ]
         for index, item in enumerate(self.items, 1):
-            to_boundary_money(
-                item.amount, self.currency, field=f"{label} line {index} amount"
-            )
+            money_fields.append((f"{label} line {index} amount", item.amount))
+        for field_name, value in money_fields:
+            to_boundary_money(value, self.currency, field=field_name)
+            # A non-finite Decimal reports a str exponent ("n"/"N"/"F"). Those
+            # are already refused by the ingress validators and by
+            # to_boundary_money above; narrowing explicitly (rather than
+            # casting) keeps this fail-closed if that ever regresses.
+            exponent = value.as_tuple().exponent
+            if not isinstance(exponent, int) or -exponent != minor_units:
+                raise MoneyBoundaryError(
+                    f"{field_name}: expected exactly {minor_units} fractional "
+                    f"digits (the canonical fixed-minor-unit form, e.g. "
+                    f'"48375.00"); got {value}'
+                )
         return self
 
 

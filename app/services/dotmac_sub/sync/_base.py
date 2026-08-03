@@ -319,8 +319,19 @@ class BaseSyncMixin:
             return None
 
     def _parse_datetime(self, value: str | None) -> datetime | None:
-        """Parse an ISO8601 instant into a tz-aware datetime (UTC-normalized)."""
-        if not value:
+        """Parse an ISO8601 instant into a tz-aware datetime (UTC-normalized).
+
+        ANY non-string input (e.g. an integer epoch) yields ``None`` — the
+        caller treats a row without a usable instant as UNPOSITIONED (cursor
+        freeze), and this helper must never raise mid-run.
+        """
+        if not value or not isinstance(value, str):
+            if value is not None and not isinstance(value, str):
+                logger.warning(
+                    "Non-string datetime value %r (%s); treating as unusable",
+                    value,
+                    type(value).__name__,
+                )
             return None
         try:
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))

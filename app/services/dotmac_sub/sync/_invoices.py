@@ -20,13 +20,12 @@ from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.services.dotmac_sub.client import (
     CreditNoteRecord,
     DotmacSubError,
-    DotmacSubParseError,
     InvoiceRecord,
 )
 from app.services.finance.money_boundary import round_to_minor_units, to_boundary_money
 
-from ._base import next_watermark
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
+from ._progress import WatermarkProgress
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -105,37 +104,19 @@ class InvoiceSyncMixin:
             self._get_sync_watermark(EntityType.INVOICE) if use_watermark else None
         )
         updated_since = watermark.isoformat() if watermark else None
-        max_ok: datetime | None = None
-        min_error: datetime | None = None
-        # An UNPOSITIONED failure (missing/malformed updated_at) cannot park
-        # the cursor at itself, so a later good row would advance the
-        # watermark past it and skip it forever. Freeze: the watermark must
-        # not advance at all for this run.
-        watermark_frozen = False
-
-        def _on_parse_error(exc: DotmacSubParseError) -> None:
-            # A row asserted unusable money facts (strict client parser).
-            # Fail THAT row exactly like a savepoint-failed row — recorded,
-            # watermark held at it for retry — while the pull continues.
-            nonlocal min_error, watermark_frozen
-            result.errors.append(str(exc))
-            logger.error("Rejected dotmac_sub invoice row at parse: %s", exc)
-            parse_row_updated_at = self._parse_datetime(exc.updated_at)
-            if parse_row_updated_at is not None:
-                min_error = (
-                    parse_row_updated_at
-                    if min_error is None
-                    else min(min_error, parse_row_updated_at)
-                )
-            else:
-                watermark_frozen = True
+        # ONE shared owner for the park-vs-freeze cursor decision (see
+        # _progress.WatermarkProgress); parse rejections and savepoint row
+        # failures flow through the same accounting.
+        progress = WatermarkProgress(watermark, label="invoice")
 
         try:
             for inv in self.client.get_invoices(
                 account_id=account_id,
                 status=status,
                 updated_since=updated_since,
-                on_parse_error=_on_parse_error,
+                on_parse_error=progress.parse_error_collector(
+                    result, self._parse_datetime
+                ),
             ):
                 # The global delta must drain completely. A timestamp-only
                 # watermark plus a row cap can loop forever when more than the
@@ -152,12 +133,7 @@ class InvoiceSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
-                    if row_updated_at is not None:
-                        max_ok = (
-                            row_updated_at
-                            if max_ok is None
-                            else max(max_ok, row_updated_at)
-                        )
+                    progress.record_success(row_updated_at)
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -170,30 +146,16 @@ class InvoiceSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
                     logger.exception("Error syncing invoice %s", inv.id)
-                    if row_updated_at is not None:
-                        min_error = (
-                            row_updated_at
-                            if min_error is None
-                            else min(min_error, row_updated_at)
-                        )
-                    else:
-                        watermark_frozen = True
+                    progress.record_failure(row_updated_at)
             # Advance the cursor only after the pull completed without an API
-            # error (inclusive >= means a re-pull of the boundary row is safe).
-            # An unpositioned failure freezes the cursor at its pre-run
-            # position instead — advancing would skip that row permanently.
+            # error (inclusive >= means a re-pull of the boundary row is
+            # safe); an unpositioned failure freezes it (see WatermarkProgress).
             if use_watermark:
-                if watermark_frozen:
-                    logger.warning(
-                        "Invoice sync watermark frozen: a failed row had no "
-                        "usable updated_at, so the cursor cannot be parked at "
-                        "it; holding the pre-run position"
+                progress.conclude(
+                    lambda cursor: self._advance_sync_watermark(
+                        EntityType.INVOICE, cursor
                     )
-                else:
-                    self._advance_sync_watermark(
-                        EntityType.INVOICE,
-                        next_watermark(watermark, max_ok, min_error),
-                    )
+                )
             self.db.flush()
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "

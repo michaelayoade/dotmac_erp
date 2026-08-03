@@ -15,6 +15,7 @@ high-watermark. These tests cover:
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
@@ -238,7 +239,7 @@ def test_parse_invoice_reads_updated_at() -> None:
             "account_id": "a",
             "currency": "NGN",
             "subtotal": "100.00",
-            "tax_total": "0",
+            "tax_total": "0.00",
             "total": "100.00",
             "balance_due": "100.00",
             "updated_at": "2026-06-01T10:00:00+00:00",
@@ -271,8 +272,11 @@ def test_invoice_hash_payload_tracks_line_and_header_changes() -> None:
     )
     original = _invoice_hash_payload(invoice)
 
-    line.description = "Corrected service"
-    invoice.memo = "Corrected"
+    # Wire records are frozen contracts (typed + immutable): a "changed"
+    # payload is a NEW record, exactly as a re-fetch from Sub would produce —
+    # never an in-place edit of an already-admitted record.
+    changed_line = replace(line, description="Corrected service")
+    invoice = replace(invoice, memo="Corrected", lines=[changed_line])
     changed = _invoice_hash_payload(invoice)
 
     assert changed != original
