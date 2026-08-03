@@ -16,7 +16,7 @@ from sqlalchemy import case, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session_context import allow_cross_org
-from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
+from app.models.domain_settings import DomainSetting, SettingDomain
 from app.services.cache import CacheService, cache_service
 
 logger = logging.getLogger(__name__)
@@ -253,7 +253,7 @@ class SettingsCache:
     Provides:
     - Per-domain TTL configuration
     - Bulk domain caching
-    - Automatic value extraction from settings
+    - Value extraction and spec enforcement shared with ``resolve_value``
     - Scope-correct invalidation helpers
 
     Usage:
@@ -364,20 +364,45 @@ class SettingsCache:
         logger.debug("Settings cache set: %s (ttl=%ds)", cache_key, ttl)
 
     def _extract_value(self, setting: DomainSetting) -> Any:
-        """Extract the actual value from a setting."""
-        if setting.value_json is not None:
-            return setting.value_json
-        if setting.value_text is not None:
-            # Convert based on value_type
-            if setting.value_type == SettingValueType.boolean:
-                return setting.value_text.lower() in ("true", "1", "yes", "on")
-            if setting.value_type == SettingValueType.integer:
-                try:
-                    return int(setting.value_text)
-                except (TypeError, ValueError):
-                    return setting.value_text
-            return setting.value_text
-        return None
+        """
+        Turn a settings row into the value a caller sees.
+
+        Extraction and interpretation are both delegated to
+        ``app.services.settings_spec``, which owns them for the uncached read
+        path (``resolve_value``). Keeping a second copy here meant the two paths
+        disagreed twice over: this one preferred ``value_json`` where
+        ``extract_db_value`` prefers ``value_text`` (so a row carrying both
+        resolved differently depending on who read it), and it applied none of
+        the spec's ``allowed`` / ``min_value`` / ``max_value`` rules or its
+        default fallback (so a cached read could return an out-of-range or
+        wrongly-typed value that ``resolve_value`` would have rejected).
+
+        Keys with no registered spec — the cache is not limited to specced
+        settings — still get the row's own ``value_type`` applied, through the
+        same coercion function rather than a hand-rolled repeat of it.
+
+        The import is local because ``settings_spec`` reaches this module via
+        ``domain_settings``; this is the repo's approved lazy-import pattern for
+        that cycle.
+        """
+        from app.services.settings_spec import (
+            coerce_by_value_type,
+            coerce_resolved_value,
+            extract_db_value,
+            get_spec,
+        )
+
+        raw = extract_db_value(setting)
+
+        spec = get_spec(setting.domain, setting.key)
+        if spec is not None:
+            return coerce_resolved_value(spec, raw)
+
+        value, error = coerce_by_value_type(setting.value_type, raw)
+        # An unspecced row that cannot be coerced keeps its stored form, which
+        # is what this path did before — there is no spec default to fall back
+        # to, and caching None would read back as a cache miss every time.
+        return raw if error else value
 
     def _load_setting_row(
         self,
