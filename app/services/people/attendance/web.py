@@ -6,11 +6,13 @@ Provides view-focused data and operations for attendance web routes.
 
 from __future__ import annotations
 
+import csv
 import logging
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
+from io import StringIO
 from typing import Any, cast
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from uuid import UUID
 
 try:
@@ -19,7 +21,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -94,6 +96,21 @@ class AttendanceWebService:
         return get_form_str(form, key, default)
 
     @staticmethod
+    def _format_attendance_time(value: datetime | None, org_tzinfo: Any) -> str:
+        if not value:
+            return "-"
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(org_tzinfo).strftime("%H:%M")
+
+    @staticmethod
+    def _csv_safe_cell(value: Any) -> str:
+        text = "" if value is None else str(value)
+        if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+            return f"'{text}"
+        return text
+
+    @staticmethod
     def _shift_form_context(shift_type: dict[str, Any] | None = None) -> dict[str, Any]:
         if not shift_type:
             return {}
@@ -166,13 +183,6 @@ class AttendanceWebService:
 
         org_tzinfo = svc.get_org_tzinfo(org_id)
 
-        def _format_time(value: datetime | None) -> str:
-            if not value:
-                return "-"
-            if value.tzinfo is None:
-                value = value.replace(tzinfo=UTC)
-            return value.astimezone(org_tzinfo).strftime("%H:%M")
-
         records = []
         for record in result.items:
             employee = record.employee
@@ -186,8 +196,12 @@ class AttendanceWebService:
                     "status": record.status.value,
                     "check_in": record.check_in,
                     "check_out": record.check_out,
-                    "check_in_display": _format_time(record.check_in),
-                    "check_out_display": _format_time(record.check_out),
+                    "check_in_display": AttendanceWebService._format_attendance_time(
+                        record.check_in, org_tzinfo
+                    ),
+                    "check_out_display": AttendanceWebService._format_attendance_time(
+                        record.check_out, org_tzinfo
+                    ),
                     "working_hours": record.working_hours,
                     "overtime_hours": record.overtime_hours,
                     "shift_name": shift_type.shift_name if shift_type else "-",
@@ -210,6 +224,20 @@ class AttendanceWebService:
             labels={"start_date": "From", "end_date": "To"},
             options={"employee_id": employee_options},
         )
+        export_params = {
+            key: value
+            for key, value in {
+                "status": status,
+                "employee_id": employee_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            }.items()
+            if value
+        }
+        export_query = urlencode(export_params)
+        attendance_export_url = "/people/attendance/records/export"
+        if export_query:
+            attendance_export_url = f"{attendance_export_url}?{export_query}"
 
         context = base_context(request, auth, "Attendance", "attendance", db=db)
         context["request"] = request
@@ -225,6 +253,7 @@ class AttendanceWebService:
                 "end_date": end_date,
                 "employee_id": employee_id,
                 "active_filters": active_filters,
+                "attendance_export_url": attendance_export_url,
                 "page": result.page,
                 "total_pages": result.total_pages,
                 "total": result.total,
@@ -236,6 +265,86 @@ class AttendanceWebService:
         )
         return templates.TemplateResponse(
             request, "people/attendance/records.html", context
+        )
+
+    @staticmethod
+    def export_attendance_csv_response(
+        auth: WebAuthContext,
+        db: Session,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        employee_id: str | None,
+    ) -> Response:
+        """Export all attendance rows matching the current table filters."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = AttendanceService(db)
+
+        status_enum = None
+        if status:
+            try:
+                status_enum = AttendanceStatus(status)
+            except ValueError:
+                status_enum = None
+
+        result = svc.list_attendance(
+            org_id,
+            employee_id=AttendanceWebService._parse_uuid(employee_id),
+            from_date=AttendanceWebService._parse_date(start_date),
+            to_date=AttendanceWebService._parse_date(end_date),
+            status=status_enum,
+            pagination=None,
+        )
+        org_tzinfo = svc.get_org_tzinfo(org_id)
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            [
+                "Date",
+                "Employee",
+                "Employee Code",
+                "Shift",
+                "Check In",
+                "Check Out",
+                "Hours",
+                "Overtime",
+                "Status",
+            ]
+        )
+        for record in result.items:
+            employee = record.employee
+            shift_type = record.shift_type
+            status_value = record.status.value if record.status else ""
+            writer.writerow(
+                [
+                    record.attendance_date.isoformat(),
+                    AttendanceWebService._csv_safe_cell(
+                        employee.full_name if employee else "-"
+                    ),
+                    AttendanceWebService._csv_safe_cell(
+                        employee.employee_code if employee else "-"
+                    ),
+                    AttendanceWebService._csv_safe_cell(
+                        shift_type.shift_name if shift_type else "-"
+                    ),
+                    AttendanceWebService._format_attendance_time(
+                        record.check_in, org_tzinfo
+                    ),
+                    AttendanceWebService._format_attendance_time(
+                        record.check_out, org_tzinfo
+                    ),
+                    record.working_hours if record.working_hours is not None else "",
+                    record.overtime_hours if record.overtime_hours is not None else "",
+                    status_value,
+                ]
+            )
+
+        filename = f"attendance_records_{svc.get_org_today(org_id):%Y%m%d}.csv"
+        return Response(
+            buffer.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
     @staticmethod
