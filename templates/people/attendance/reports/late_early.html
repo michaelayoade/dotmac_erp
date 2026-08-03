@@ -44,7 +44,7 @@
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>
-                            {{ dept.name }}
+                            {{ dept.department_name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -52,10 +52,9 @@
     </div>
     {% endcall %}
 
+    <div id="results-container" class="space-y-6">
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div id="results-container">
-
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
@@ -67,9 +66,6 @@
                 </div>
             </div>
         </div>
-        </div>
-
-
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/30">
@@ -205,6 +201,7 @@
             </div>
         </div>
         {% endif %}
+    </div>
     </div>
 
     <!-- Quick Links -->

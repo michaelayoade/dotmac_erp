@@ -947,6 +947,19 @@ class AttendanceWebService:
             DepartmentFilters(is_active=True),
             PaginationParams(limit=200),
         ).items
+        department_options = {
+            str(department.department_id): department.department_name
+            for department in departments
+        }
+        active_filters = build_active_filters(
+            params={
+                "department_id": department_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={"department_id": department_options},
+        )
 
         context = base_context(request, auth, "Late/Early Report", "attendance", db=db)
         context.update(
@@ -956,6 +969,7 @@ class AttendanceWebService:
                 "start_date": start_date or report["start_date"].isoformat(),
                 "end_date": end_date or report["end_date"].isoformat(),
                 "department_id": department_id,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(
