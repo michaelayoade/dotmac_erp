@@ -256,6 +256,21 @@ class AttendanceService:
             dt = dt.replace(tzinfo=tzinfo)
         return dt
 
+    @classmethod
+    def _calculate_late_entry(
+        cls,
+        check_in: datetime,
+        attendance_date: date,
+        shift: ShiftType,
+    ) -> tuple[bool, int]:
+        shift_start = cls._combine_date_time(
+            attendance_date, shift.start_time, check_in.tzinfo
+        )
+        grace_end = shift_start + timedelta(minutes=shift.late_entry_grace_period)
+        if check_in <= grace_end:
+            return False, 0
+        return True, math.ceil((check_in - grace_end).total_seconds() / 60)
+
     @staticmethod
     def _attendance_percentage(
         present_count: int | float | Decimal,
@@ -591,6 +606,54 @@ class AttendanceService:
         assignment.is_active = False
         self.db.flush()
 
+    def get_employee_shift(
+        self,
+        org_id: UUID,
+        employee_id: UUID,
+        attendance_date: date,
+    ) -> ShiftType | None:
+        """Resolve the employee's effective shift for an attendance date.
+
+        A dated shift assignment takes precedence over the employee's default
+        shift. Both lookups are tenant-scoped so self-service check-ins can use
+        this method without requiring the client to know the shift ID.
+        """
+        assigned_shift = self.db.scalar(
+            select(ShiftType)
+            .join(
+                ShiftAssignment,
+                ShiftAssignment.shift_type_id == ShiftType.shift_type_id,
+            )
+            .where(
+                ShiftAssignment.organization_id == org_id,
+                ShiftAssignment.employee_id == employee_id,
+                ShiftAssignment.is_active.is_(True),
+                ShiftAssignment.start_date <= attendance_date,
+                or_(
+                    ShiftAssignment.end_date.is_(None),
+                    ShiftAssignment.end_date >= attendance_date,
+                ),
+                ShiftType.organization_id == org_id,
+            )
+            .order_by(
+                ShiftAssignment.start_date.desc(),
+                ShiftAssignment.created_at.desc(),
+            )
+            .limit(1)
+        )
+        if assigned_shift:
+            return assigned_shift
+
+        return self.db.scalar(
+            select(ShiftType)
+            .join(Employee, Employee.default_shift_type_id == ShiftType.shift_type_id)
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == employee_id,
+                ShiftType.organization_id == org_id,
+            )
+        )
+
     # =========================================================================
     # Attendance Records
     # =========================================================================
@@ -625,6 +688,7 @@ class AttendanceService:
 
         query = query.options(
             joinedload(Attendance.employee).joinedload(Employee.person),
+            joinedload(Attendance.shift_type),
         ).order_by(Attendance.attendance_date.desc())
 
         # Count total
@@ -683,6 +747,7 @@ class AttendanceService:
         check_out: datetime | None = None,
         working_hours: Decimal | None = None,
         late_entry: bool = False,
+        late_entry_minutes: int = 0,
         early_exit: bool = False,
         remarks: str | None = None,
         marked_by: str = "MANUAL",
@@ -717,6 +782,7 @@ class AttendanceService:
             check_out=check_out,
             working_hours=working_hours or Decimal("0"),
             late_entry=late_entry,
+            late_entry_minutes=late_entry_minutes,
             early_exit=early_exit,
             remarks=remarks,
             marked_by=marked_by,
@@ -761,18 +827,31 @@ class AttendanceService:
             action_label="check in",
         )
 
-        # Determine if late entry
+        # Resolve the shift here so every check-in adapter applies the same
+        # lateness policy, including self-service clients that do not send a
+        # shift ID.
+        resolved_shift_id = shift_type_id or (
+            existing.shift_type_id if existing else None
+        )
+        shift = (
+            self.get_shift_type(org_id, resolved_shift_id)
+            if resolved_shift_id
+            else self.get_employee_shift(org_id, employee_id, today)
+        )
+
         late_entry = False
-        if shift_type_id:
-            shift = self.get_shift_type(org_id, shift_type_id)
-            tzinfo = now.tzinfo
-            shift_start = self._combine_date_time(today, shift.start_time, tzinfo)
-            grace_end = shift_start + timedelta(minutes=shift.late_entry_grace_period)
-            late_entry = now > grace_end
+        late_entry_minutes = 0
+        if shift:
+            resolved_shift_id = shift.shift_type_id
+            late_entry, late_entry_minutes = self._calculate_late_entry(
+                now, today, shift
+            )
 
         if existing:
             existing.check_in = now
+            existing.shift_type_id = resolved_shift_id
             existing.late_entry = late_entry
+            existing.late_entry_minutes = late_entry_minutes
             existing.status = AttendanceStatus.PRESENT
             if notes:
                 existing.remarks = notes
@@ -784,9 +863,10 @@ class AttendanceService:
             employee_id=employee_id,
             attendance_date=today,
             status=AttendanceStatus.PRESENT,
-            shift_type_id=shift_type_id,
+            shift_type_id=resolved_shift_id,
             check_in=now,
             late_entry=late_entry,
+            late_entry_minutes=late_entry_minutes,
             remarks=notes,
         )
 
@@ -873,18 +953,24 @@ class AttendanceService:
             now = check_in_time
         else:
             now = self._now_like(attendance.check_in)
-        late_entry = False
-        if attendance.shift_type_id:
-            shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            tzinfo = now.tzinfo
-            shift_start = self._combine_date_time(
-                attendance.attendance_date, shift.start_time, tzinfo
+        shift = (
+            self.get_shift_type(org_id, attendance.shift_type_id)
+            if attendance.shift_type_id
+            else self.get_employee_shift(
+                org_id, attendance.employee_id, attendance.attendance_date
             )
-            grace_end = shift_start + timedelta(minutes=shift.late_entry_grace_period)
-            late_entry = now > grace_end
+        )
+        late_entry = False
+        late_entry_minutes = 0
+        if shift:
+            attendance.shift_type_id = shift.shift_type_id
+            late_entry, late_entry_minutes = self._calculate_late_entry(
+                now, attendance.attendance_date, shift
+            )
 
         attendance.check_in = now
         attendance.late_entry = late_entry
+        attendance.late_entry_minutes = late_entry_minutes
         attendance.status = AttendanceStatus.PRESENT
         if notes:
             attendance.remarks = notes

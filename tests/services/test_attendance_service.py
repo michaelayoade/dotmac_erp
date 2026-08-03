@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -130,3 +130,73 @@ def test_trends_report_excludes_leave_days_from_monthly_and_average_percentages(
     assert report["months"][0]["on_leave"] == 1
     assert report["months"][0]["attendance_percentage"] == Decimal("77.8")
     assert report["average_attendance_percentage"] == Decimal("77.8")
+
+
+def test_check_in_resolves_employee_shift_and_marks_late_arrival() -> None:
+    service, db = _make_service()
+    shift_id = uuid.UUID("00000000-0000-0000-0000-000000000003")
+    shift = SimpleNamespace(
+        shift_type_id=shift_id,
+        start_time=time(8, 0),
+        late_entry_grace_period=15,
+    )
+    service.get_attendance_by_date = MagicMock(  # type: ignore[method-assign]
+        side_effect=[None, None]
+    )
+    service.get_employee_shift = MagicMock(  # type: ignore[method-assign]
+        return_value=shift
+    )
+    service._validate_geofence = MagicMock()  # type: ignore[method-assign]
+    service._normalize_in_org_tz = (  # type: ignore[method-assign]
+        lambda _org_id, value: value
+    )
+
+    attendance = service.check_in(
+        ORG_ID,
+        EMPLOYEE_ID,
+        check_in_time=datetime(2026, 8, 3, 8, 16, tzinfo=UTC),
+    )
+
+    service.get_employee_shift.assert_called_once_with(
+        ORG_ID, EMPLOYEE_ID, date(2026, 8, 3)
+    )
+    assert attendance.shift_type_id == shift_id
+    assert attendance.late_entry is True
+    assert attendance.late_entry_minutes == 1
+    db.add.assert_called_once_with(attendance)
+
+
+def test_check_in_by_attendance_id_resolves_missing_shift() -> None:
+    service, db = _make_service()
+    attendance_id = uuid.UUID("00000000-0000-0000-0000-000000000004")
+    shift_id = uuid.UUID("00000000-0000-0000-0000-000000000003")
+    attendance = SimpleNamespace(
+        attendance_id=attendance_id,
+        employee_id=EMPLOYEE_ID,
+        attendance_date=date(2026, 8, 3),
+        shift_type_id=None,
+        check_in=None,
+        late_entry=False,
+        late_entry_minutes=0,
+        status=AttendanceStatus.ABSENT,
+        remarks=None,
+    )
+    shift = SimpleNamespace(
+        shift_type_id=shift_id,
+        start_time=time(8, 0),
+        late_entry_grace_period=10,
+    )
+    service.get_attendance = MagicMock(return_value=attendance)  # type: ignore[method-assign]
+    service.get_employee_shift = MagicMock(return_value=shift)  # type: ignore[method-assign]
+
+    result = service.check_in_by_attendance_id(
+        ORG_ID,
+        attendance_id,
+        check_in_time=datetime(2026, 8, 3, 8, 25, tzinfo=UTC),
+    )
+
+    assert result.shift_type_id == shift_id
+    assert result.late_entry is True
+    assert result.late_entry_minutes == 15
+    assert result.status == AttendanceStatus.PRESENT
+    db.flush.assert_called_once()

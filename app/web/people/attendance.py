@@ -7,7 +7,7 @@ Attendance list and shift type configuration pages.
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.services.people.attendance.web import attendance_web_service
@@ -43,6 +43,26 @@ def attendance_overview(
         page=page,
         success=success,
         error=error,
+    )
+
+
+@router.get("/records/export", response_class=Response)
+def export_attendance_records(
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    employee_id: str | None = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Download attendance records matching the current table filters."""
+    return attendance_web_service.export_attendance_csv_response(
+        auth=auth,
+        db=db,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+        employee_id=employee_id,
     )
 
 
