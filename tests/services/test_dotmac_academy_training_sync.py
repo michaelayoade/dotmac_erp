@@ -11,6 +11,8 @@ from sqlalchemy import select
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.employee_extended import EmployeeCertification
 from app.models.person import Person
+from app.config import settings
+from app.services.dotmac_academy.events import dispatch
 from app.services.dotmac_academy.training_sync import record_course_completion
 
 ORG = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -91,7 +93,7 @@ def test_records_certification_for_matching_employee(db_session):
     )
     assert cert is not None
     assert cert.certification_name == "Fiber Splicing"
-    assert cert.issuing_authority == "Dotmac Fiber Academy"
+    assert cert.issuing_authority == settings.dotmac_academy_issuing_authority
     assert cert.credential_id == "cert-abc"
     assert cert.is_verified is True
 
@@ -155,3 +157,68 @@ def test_ignored_when_not_passed(db_session):
     )
     assert result["status"] == "ignored"
     assert result["reason"] == "not passed"
+
+
+# ---------------------------------------------------------------------------
+# Versioned dispatch
+# ---------------------------------------------------------------------------
+
+
+def test_dispatch_routes_a_versioned_course_completed(db_session):
+    emp = _employee(db_session, "disp1@dotmac.ng")
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload=_payload("disp1@dotmac.ng", version=1),
+    )
+    assert result["status"] == "recorded"
+    assert emp.employee_id is not None
+
+
+def test_dispatch_defaults_to_v1_when_version_absent(db_session):
+    """The academy sent no version before 2026-08; those payloads still route."""
+    _employee(db_session, "disp2@dotmac.ng")
+    payload = _payload("disp2@dotmac.ng")
+    payload.pop("version", None)
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload=payload,
+    )
+    assert result["status"] == "recorded"
+
+
+def test_dispatch_reports_an_unknown_version_rather_than_absorbing_it(db_session):
+    _employee(db_session, "disp3@dotmac.ng")
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload=_payload("disp3@dotmac.ng", version=99),
+    )
+    assert result["status"] == "unsupported"
+    assert "version 99" in result["reason"]
+
+
+def test_dispatch_reports_an_unknown_event(db_session):
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="learner_enrolled",
+        payload={"version": 1},
+    )
+    assert result["status"] == "unsupported"
+    assert "learner_enrolled" in result["reason"]
+
+
+def test_dispatch_reports_an_unreadable_version(db_session):
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload={"version": "not-a-number"},
+    )
+    assert result["status"] == "unsupported"
+    assert "unreadable version" in result["reason"]
