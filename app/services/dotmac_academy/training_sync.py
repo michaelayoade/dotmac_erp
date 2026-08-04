@@ -23,7 +23,16 @@ from app.models.person import Person
 
 logger = logging.getLogger(__name__)
 
-ISSUING_AUTHORITY = "Dotmac Fiber Academy"
+
+def _issuing_authority() -> str:
+    """Credential branding, read at call time so a rename is a config change.
+
+    Was hardcoded to "Dotmac Fiber Academy" and stamped onto every certification
+    — stale since the academy rebranded to Dotmac Academy.
+    """
+    from app.config import settings
+
+    return settings.dotmac_academy_issuing_authority
 
 
 def _parse_date(value: Any) -> date:
@@ -91,7 +100,7 @@ def record_course_completion(
         organization_id=organization_id,
         employee_id=employee.employee_id,
         certification_name=course_title,
-        issuing_authority=ISSUING_AUTHORITY,
+        issuing_authority=_issuing_authority(),
         credential_id=certificate_ref,
         issue_date=issue_date,
         is_verified=True,

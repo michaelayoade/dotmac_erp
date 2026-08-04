@@ -24,7 +24,14 @@ from app.db.session_context import prime_tenant_context
 
 logger = logging.getLogger(__name__)
 
-webhook_router = APIRouter(prefix="/dotmac-academy", tags=["dotmac-academy-webhooks"])
+webhook_router = APIRouter(
+    prefix=settings.dotmac_academy_webhook_prefix,
+    tags=["dotmac-academy-webhooks"],
+)
+
+# Handler outcomes that mean "nothing was written". These must NOT be answered
+# with 2xx: the sender treats a 2xx as delivery and stops retrying.
+_NOT_RECORDED = frozenset({"ignored", "unsupported"})
 
 
 def get_db():  # type: ignore[no-untyped-def]
@@ -101,17 +108,15 @@ async def dotmac_academy_webhook(
     organization_id = UUID(settings.default_organization_id)
     prime_tenant_context(db, organization_id)
 
-    from app.services.dotmac_academy.training_sync import record_course_completion
+    from app.services.dotmac_academy.events import dispatch
 
     logger.info("Processing dotmac_academy webhook: %s", event_type)
-    if event_type != "course_completed":
-        return WebhookResponse(
-            status="ignored", message=f"Unhandled event: {event_type}"
-        )
-
     try:
-        result = record_course_completion(
-            db, organization_id=organization_id, payload=payload
+        result = dispatch(
+            db,
+            organization_id=organization_id,
+            event_type=event_type,
+            payload=payload,
         )
     except Exception as e:  # noqa: BLE001
         # 503 so the academy retries a transient failure rather than us swallowing
@@ -121,4 +126,16 @@ async def dotmac_academy_webhook(
             status_code=503, detail=f"Webhook processing failed: {e}"
         ) from e
 
-    return WebhookResponse(status=result.get("status", "ok"), message=str(result))
+    status = str(result.get("status", "ok"))
+    if status in _NOT_RECORDED:
+        # A 200 here is a lie the sender cannot detect: the academy stamped the
+        # completion as delivered and never retried it, so HR silently never
+        # received it. 422 says "understood, refused" — the payload is
+        # well-formed but names nobody we can file a certification against, and
+        # retrying unchanged will not help.
+        logger.warning(
+            "dotmac_academy: event not recorded (%s): %s", status, result.get("reason")
+        )
+        raise HTTPException(status_code=422, detail=result)
+
+    return WebhookResponse(status=status, message=str(result))

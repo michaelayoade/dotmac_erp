@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.23.2")
+    app_version: str = os.getenv("APP_VERSION", "1.23.3")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -225,6 +225,14 @@ class Settings:
     # dotmac_academy -> ERP training-completion webhook (records EmployeeCertification).
     dotmac_academy_webhook_secret: str | None = (
         os.getenv("DOTMAC_ACADEMY_WEBHOOK_SECRET") or None
+    )
+    # Route prefix and credential branding were hardcoded; both are deployment
+    # facts, not code facts. The default preserves the existing public path.
+    dotmac_academy_webhook_prefix: str = os.getenv(
+        "DOTMAC_ACADEMY_WEBHOOK_PREFIX", "/dotmac-academy"
+    )
+    dotmac_academy_issuing_authority: str = os.getenv(
+        "DOTMAC_ACADEMY_ISSUING_AUTHORITY", "Dotmac Academy"
     )
     # Staff sync (ERP -> dotmac_sub staff accounts). Disabled unless enabled
     # explicitly; the API key must carry rbac:assign + rbac:roles:read.

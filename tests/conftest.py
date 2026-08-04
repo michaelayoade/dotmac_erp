@@ -320,6 +320,10 @@ class MockSettings:
     app_version = "test"
     # CRM webhook secret
     crm_webhook_secret = None
+    # dotmac_academy inbound webhook
+    dotmac_academy_webhook_secret = None
+    dotmac_academy_webhook_prefix = "/dotmac-academy"
+    dotmac_academy_issuing_authority = "Dotmac Academy"
     # OpenID Connect settings
     oidc_enabled = False
     oidc_issuer = None
