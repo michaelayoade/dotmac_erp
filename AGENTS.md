@@ -34,3 +34,12 @@ These are the repo-level instructions Codex should follow for this workspace.
 - `UI_CONVENTIONS.md` and `CONSISTENCY_CHECKLIST.md` for UI consistency checks.
 
 Follow those files as the authoritative guidance when implementing changes or reviewing code.
+
+## Cross-repository engineering governance
+
+- `.dotmac/standards-profile.json` declares each enrolled authority and fully
+  typed contract surface against one exact accepted Governance commit.
+- The `Dotmac engineering standards` CI job must execute that same immutable
+  revision and be required on protected `main`.
+- Mutable tags/branches, copied rules, candidate mode, or a missing required
+  check are not substitutes for the Governance-owned enforcement path.
