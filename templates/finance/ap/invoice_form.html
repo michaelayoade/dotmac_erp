@@ -1111,9 +1111,9 @@ function invoiceForm() {
             receipt_reference: '',
             auto_create_inventory_receipt: {{ 'true' if invoice and invoice.auto_create_inventory_receipt else 'false' }},
             inventory_receipt_mode: '{{ invoice.inventory_receipt_mode.value if invoice and invoice.inventory_receipt_mode else ("AUTO_RECEIVE" if invoice and invoice.auto_create_inventory_receipt else "NONE") }}',
-            wht_code_id: '',
+            wht_code_id: '{{ invoice.withholding_tax_code_id if invoice and invoice.withholding_tax_code_id else "" }}',
         },
-        whtAmount: 0,
+        whtAmount: {{ invoice.withholding_tax_amount if invoice and invoice.withholding_tax_amount else 0 }},
         whtCodes: {{ wht_codes | tojson | safe if wht_codes is defined else '[]' }},
         functionalCurrency: '{{ default_currency_code }}',
         paymentTermsDays: selectedSupplier?.payment_terms_days || 30,
@@ -1482,6 +1482,7 @@ function invoiceForm() {
             } else {
                 line.tax_amount = 0;
             }
+            this.calculateWht();
         },
 
         async saveAsDraft() {

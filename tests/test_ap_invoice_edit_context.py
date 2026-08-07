@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -16,6 +17,19 @@ class _ScalarResult:
 
     def all(self):
         return self._rows
+
+
+def test_invoice_edit_template_restores_withholding_tax_state():
+    template = (
+        Path(__file__).resolve().parents[1]
+        / "templates"
+        / "finance"
+        / "ap"
+        / "invoice_form.html"
+    ).read_text()
+
+    assert "invoice.withholding_tax_code_id" in template
+    assert "invoice.withholding_tax_amount" in template
 
 
 def test_invoice_edit_context_includes_invoice_type(monkeypatch):
@@ -38,6 +52,8 @@ def test_invoice_edit_context_includes_invoice_type(monkeypatch):
         exchange_rate=Decimal("1"),
         auto_create_inventory_receipt=False,
         inventory_receipt_mode=None,
+        withholding_tax_amount=Decimal("50.00"),
+        withholding_tax_code_id=uuid4(),
     )
     db = SimpleNamespace(
         get=lambda model, pk: invoice,
@@ -77,4 +93,9 @@ def test_invoice_edit_context_includes_invoice_type(monkeypatch):
     assert captured["template_name"] == "finance/ap/invoice_form.html"
     assert (
         captured["context"]["invoice"]["invoice_type"] == SupplierInvoiceType.STANDARD
+    )
+    assert captured["context"]["invoice"]["withholding_tax_amount"] == Decimal("50.00")
+    assert (
+        captured["context"]["invoice"]["withholding_tax_code_id"]
+        == invoice.withholding_tax_code_id
     )

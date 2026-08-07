@@ -17,7 +17,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID
 
@@ -265,6 +265,7 @@ class PaymentBatchService(ListResponseMixin):
         allocations_by_supplier: dict[UUID, list[PaymentAllocationInput]] = defaultdict(
             list
         )
+        wht_by_supplier: dict[UUID, Decimal] = defaultdict(Decimal)
         payment_items: list[BatchPaymentItem] = []
 
         for invoice_id in deduped_invoice_ids:
@@ -316,13 +317,23 @@ class PaymentBatchService(ListResponseMixin):
                     amount=pay_amount,
                 )
             )
-
-        # Aggregate WHT per supplier from per-invoice WHT amounts
-        wht_by_supplier: dict[UUID, Decimal] = defaultdict(Decimal)
-        if invoice_wht_amounts:
-            for inv_id, wht in invoice_wht_amounts.items():
-                if inv_id in invoice_map and wht > Decimal("0"):
-                    wht_by_supplier[invoice_map[inv_id].supplier_id] += wht
+            explicit_wht = (invoice_wht_amounts or {}).get(invoice.invoice_id)
+            if explicit_wht is not None:
+                invoice_payment_wht = max(explicit_wht, Decimal("0"))
+            else:
+                planned_wht = max(
+                    getattr(invoice, "withholding_tax_amount", None) or Decimal("0"),
+                    Decimal("0"),
+                )
+                invoice_payment_wht = (
+                    (planned_wht * pay_amount / invoice.total_amount).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+                    if planned_wht > Decimal("0")
+                    and invoice.total_amount > Decimal("0")
+                    else Decimal("0")
+                )
+            wht_by_supplier[invoice.supplier_id] += invoice_payment_wht
 
         for supplier_id, allocations in allocations_by_supplier.items():
             gross = sum((allocation.amount for allocation in allocations), Decimal("0"))

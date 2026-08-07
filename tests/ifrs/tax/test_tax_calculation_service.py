@@ -6,6 +6,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+from fastapi import HTTPException
+
+from app.models.finance.tax.tax_code import TaxType
 from app.services.finance.tax.tax_calculation import TaxCalculationService
 
 
@@ -75,6 +79,8 @@ def test_calculate_wht_treats_rate_one_as_100_percent():
         effective_from=txn_date,
         effective_to=None,
         tax_rate=Decimal("1.00"),
+        tax_type=TaxType.WITHHOLDING,
+        tax_code="WHT-100",
     )
 
     wht_amount, net_received = TaxCalculationService.calculate_wht(
@@ -87,3 +93,29 @@ def test_calculate_wht_treats_rate_one_as_100_percent():
 
     assert wht_amount == Decimal("100.00")
     assert net_received == Decimal("0.00")
+
+
+def test_calculate_wht_rejects_non_withholding_tax_code():
+    db = MagicMock()
+    org_id = uuid4()
+    tax_code_id = uuid4()
+    txn_date = date.today()
+    db.get.return_value = SimpleNamespace(
+        tax_code_id=tax_code_id,
+        organization_id=org_id,
+        is_active=True,
+        effective_from=txn_date,
+        effective_to=None,
+        tax_rate=Decimal("0.075"),
+        tax_type=TaxType.VAT,
+        tax_code="VAT-7.5",
+    )
+
+    with pytest.raises(HTTPException, match="not a withholding tax code"):
+        TaxCalculationService.calculate_wht(
+            db=db,
+            organization_id=org_id,
+            base_amount=Decimal("100.00"),
+            wht_code_id=tax_code_id,
+            transaction_date=txn_date,
+        )

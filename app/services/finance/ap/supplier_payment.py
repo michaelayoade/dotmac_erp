@@ -17,7 +17,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from unittest.mock import Mock
 from uuid import UUID
@@ -298,38 +298,102 @@ class SupplierPaymentService(ListResponseMixin):
         if not supplier.is_active:
             raise ValidationError("Supplier is not active")
 
-        # Resolve WHT amount (support legacy field)
+        # Validate gross allocations first and derive any invoice-planned WHT.
+        # Invoice WHT is informational until settlement; this payment service
+        # is the sole writer of the realized WHT liability.
+        allocation_total = sum(
+            (allocation.amount for allocation in input.allocations), Decimal("0")
+        )
+        if (
+            input.gross_amount is None
+            and input.wht_amount == Decimal("0")
+            and input.withholding_tax_amount in (None, Decimal("0"))
+            and allocation_total > input.amount
+        ):
+            raise ValidationError("Allocation total exceeds gross payment amount")
+        planned_wht_amount = Decimal("0")
+        planned_wht_code_ids: set[UUID] = set()
+        for alloc in input.allocations:
+            invoice = db.get(SupplierInvoice, coerce_uuid(alloc.invoice_id))
+            if not invoice or invoice.organization_id != org_id:
+                raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
+            if invoice.supplier_id != supplier_id:
+                raise ValidationError(
+                    f"Invoice {invoice.invoice_number} belongs to different supplier"
+                )
+            if invoice.status not in [
+                SupplierInvoiceStatus.POSTED,
+                SupplierInvoiceStatus.PARTIALLY_PAID,
+            ]:
+                raise ValidationError(
+                    f"Invoice {invoice.invoice_number} is not payable"
+                )
+            if alloc.amount > invoice.balance_due:
+                raise ValidationError(
+                    f"Allocation exceeds balance due on {invoice.invoice_number}"
+                )
+
+            invoice_wht = max(
+                getattr(invoice, "withholding_tax_amount", None) or Decimal("0"),
+                Decimal("0"),
+            )
+            invoice_total = invoice.total_amount or Decimal("0")
+            invoice_wht_code_id = getattr(invoice, "withholding_tax_code_id", None)
+            if invoice_wht > 0 and invoice_wht_code_id and invoice_total > 0:
+                planned_wht_code_ids.add(invoice_wht_code_id)
+                planned_wht_amount += (
+                    invoice_wht * alloc.amount / invoice_total
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        if len(planned_wht_code_ids) > 1:
+            raise ValidationError(
+                "Selected invoices use different WHT codes; create separate payments"
+            )
+        planned_wht_code_id = next(iter(planned_wht_code_ids), None)
+
+        # Resolve WHT amount (support legacy field). If omitted, carry the
+        # proportional amount selected on the allocated invoices into payment.
         wht_amount = input.wht_amount
         if input.withholding_tax_amount is not None and wht_amount == Decimal("0"):
             wht_amount = input.withholding_tax_amount
+        wht_code_id = input.wht_code_id
+        if wht_amount == Decimal("0") and planned_wht_amount > Decimal("0"):
+            wht_amount = planned_wht_amount
+            if wht_code_id is None:
+                wht_code_id = planned_wht_code_id
 
-        # Determine gross amount
-        # If gross_amount provided, validate: gross = net + wht
-        # If not provided, calculate: gross = amount + wht_amount
+        # Determine gross and net amounts. Allocations always settle gross AP;
+        # the payment amount is the cash sent after WHT.
+        net_amount = input.amount
         gross_amount = input.gross_amount
         if gross_amount is None:
-            gross_amount = input.amount + wht_amount
+            if (
+                allocation_total > Decimal("0")
+                and wht_amount > Decimal("0")
+                and abs(input.amount - allocation_total) <= Decimal("0.01")
+            ):
+                gross_amount = allocation_total
+                net_amount = gross_amount - wht_amount
+            else:
+                gross_amount = input.amount + wht_amount
         else:
-            # Validate the amounts match (with small tolerance for rounding)
             expected_net = gross_amount - wht_amount
             if abs(expected_net - input.amount) > Decimal("0.01"):
                 raise ValidationError(
                     f"Amount mismatch: gross ({gross_amount}) - WHT ({wht_amount}) != net ({input.amount})"
                 )
 
-        wht_code_id: UUID | None = None
-
-        # WHT code is required if WHT amount is non-zero
-        if wht_amount > Decimal("0") and not input.wht_code_id:
-            # Try to get default WHT code from supplier
-            if supplier.withholding_tax_applicable and supplier.withholding_tax_code_id:
+        if wht_amount > Decimal("0") and not wht_code_id:
+            if planned_wht_code_id:
+                wht_code_id = planned_wht_code_id
+            elif (
+                supplier.withholding_tax_applicable and supplier.withholding_tax_code_id
+            ):
                 wht_code_id = supplier.withholding_tax_code_id
             else:
                 raise ValidationError(
                     "WHT tax code is required when withholding tax amount is specified"
                 )
-        else:
-            wht_code_id = input.wht_code_id
 
         if wht_code_id:
             wht_code = db.get(TaxCode, coerce_uuid(wht_code_id))
@@ -339,32 +403,8 @@ class SupplierPaymentService(ListResponseMixin):
                 raise ValidationError("Selected tax code is not a WITHHOLDING tax code")
             wht_code_id = wht_code.tax_code_id
 
-        # Validate allocations total - should match GROSS amount (invoice amount before WHT)
-        if input.allocations:
-            allocation_total = sum(a.amount for a in input.allocations)
-            if allocation_total > gross_amount:
-                raise ValidationError("Allocation total exceeds gross payment amount")
-
-            # Validate invoices exist and are payable
-            for alloc in input.allocations:
-                invoice = db.get(SupplierInvoice, coerce_uuid(alloc.invoice_id))
-                if not invoice or invoice.organization_id != org_id:
-                    raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
-                if invoice.supplier_id != supplier_id:
-                    raise ValidationError(
-                        f"Invoice {invoice.invoice_number} belongs to different supplier"
-                    )
-                if invoice.status not in [
-                    SupplierInvoiceStatus.POSTED,
-                    SupplierInvoiceStatus.PARTIALLY_PAID,
-                ]:
-                    raise ValidationError(
-                        f"Invoice {invoice.invoice_number} is not payable"
-                    )
-                if alloc.amount > invoice.balance_due:
-                    raise ValidationError(
-                        f"Allocation exceeds balance due on {invoice.invoice_number}"
-                    )
+        if input.allocations and allocation_total > gross_amount:
+            raise ValidationError("Allocation total exceeds gross payment amount")
 
         # Generate payment number
         payment_number = SequenceService.get_next_number(
@@ -373,7 +413,7 @@ class SupplierPaymentService(ListResponseMixin):
 
         # Calculate functional currency amount
         exchange_rate = input.exchange_rate or Decimal("1.0")
-        functional_amount = input.amount * exchange_rate
+        functional_amount = net_amount * exchange_rate
 
         # Create payment
         payment = SupplierPayment(
@@ -383,7 +423,7 @@ class SupplierPaymentService(ListResponseMixin):
             payment_date=input.payment_date,
             payment_method=input.payment_method,
             currency_code=input.currency_code,
-            amount=input.amount,  # Net amount paid to bank
+            amount=net_amount,  # Net amount paid to bank
             exchange_rate=exchange_rate,
             functional_currency_amount=functional_amount,
             bank_account_id=input.bank_account_id,

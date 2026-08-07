@@ -139,6 +139,7 @@
 
                 <!-- WHT Details (shown when hasWht is true) -->
                 <div x-show="hasWht" x-collapse class="mt-4 space-y-4">
+                    <div x-show="whtConflict" x-cloak class="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/20 dark:text-rose-300" x-text="whtConflict"></div>
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label class="form-label">WHT Code <span class="text-red-500">*</span></label>
@@ -382,11 +383,12 @@ function paymentForm() {
         currencyCode: '{{ invoice.currency_code if invoice else default_currency_code }}',
 
         // WHT fields
-        hasWht: false,
-        whtCodeId: '',
+        hasWht: Boolean(invoiceData && invoiceData.withholding_tax_code_id),
+        whtCodeId: invoiceData ? (invoiceData.withholding_tax_code_id || '') : '',
         whtRate: 0,
-        whtAmount: 0,
+        whtAmount: invoiceData ? (invoiceData.withholding_tax_amount_raw || 0) : 0,
         whtBase: invoiceData ? (invoiceData.subtotal_raw || 0) : 0,  // Pre-VAT base for WHT
+        whtConflict: '',
 
         // Amount fields
         grossAmount: invoiceData ? (invoiceData.balance_raw || 0) : 0,
@@ -425,6 +427,7 @@ function paymentForm() {
                    this.bankAccountId &&
                    this.grossAmount > 0 &&
                    this.selectedInvoices.length > 0 &&
+                   !this.whtConflict &&
                    (!this.hasWht || this.whtCodeId);
         },
 
@@ -552,8 +555,54 @@ function paymentForm() {
             this.calculateAmounts();
         },
 
+        plannedWhtForAllocations() {
+            const plannedRows = this.selectedInvoices
+                .map((invoiceId) => {
+                    const invoice = openInvoices.find((item) => item.invoice_id === invoiceId);
+                    const allocation = this.allocationAmounts[invoiceId] || 0;
+                    if (!invoice || allocation <= 0 || !invoice.withholding_tax_code_id || invoice.withholding_tax_amount_raw <= 0) {
+                        return null;
+                    }
+                    const invoiceTotal = invoice.total_amount_raw || invoice.balance_raw || 0;
+                    if (invoiceTotal <= 0) return null;
+                    const ratio = Math.min(allocation / invoiceTotal, 1);
+                    return {
+                        codeId: invoice.withholding_tax_code_id,
+                        base: (invoice.subtotal_raw || 0) * ratio,
+                        amount: invoice.withholding_tax_amount_raw * ratio,
+                    };
+                })
+                .filter(Boolean);
+
+            if (plannedRows.length === 0) return null;
+            const codeIds = [...new Set(plannedRows.map((row) => row.codeId))];
+            if (codeIds.length > 1) return { conflict: true };
+            return {
+                conflict: false,
+                codeId: codeIds[0],
+                base: plannedRows.reduce((sum, row) => sum + row.base, 0),
+                amount: plannedRows.reduce((sum, row) => sum + row.amount, 0),
+            };
+        },
+
         calculateAmounts() {
-            if (this.hasWht && this.whtCodeId && whtCodes[this.whtCodeId]) {
+            const plannedWht = this.plannedWhtForAllocations();
+            this.whtConflict = '';
+            if (plannedWht && plannedWht.conflict) {
+                this.hasWht = true;
+                this.whtAmount = 0;
+                this.whtBase = 0;
+                this.netAmount = this.grossAmount;
+                this.whtConflict = 'Selected invoices use different WHT codes. Create separate payments for each WHT code.';
+                return;
+            }
+            if (plannedWht) {
+                this.hasWht = true;
+                this.whtCodeId = plannedWht.codeId;
+                this.whtRate = whtCodes[this.whtCodeId]?.rate || 0;
+                this.whtBase = Math.round(plannedWht.base * 100) / 100;
+                this.whtAmount = Math.round(plannedWht.amount * 100) / 100;
+            } else if (this.hasWht && this.whtCodeId && whtCodes[this.whtCodeId]) {
                 this.whtRate = whtCodes[this.whtCodeId].rate;
                 // WHT is calculated on the net amount (pre-VAT subtotal), not gross
                 this.whtBase = this.invoiceSubtotal > 0

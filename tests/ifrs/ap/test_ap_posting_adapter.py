@@ -21,6 +21,7 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceType,
 )
 from app.models.finance.ap.supplier_payment import APPaymentStatus
+from app.models.finance.tax.tax_code import TaxType
 from app.services.finance.ap.ap_posting_adapter import APPostingAdapter, APPostingResult
 from app.services.finance.ap.posting.helpers import create_tax_transactions
 
@@ -50,6 +51,8 @@ class MockSupplierInvoice:
         correlation_id: uuid.UUID = None,
         stamp_duty_amount: Decimal = Decimal("0"),
         stamp_duty_code_id: uuid.UUID = None,
+        withholding_tax_amount: Decimal = Decimal("0"),
+        withholding_tax_code_id: uuid.UUID = None,
     ):
         self.invoice_id = invoice_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -69,6 +72,8 @@ class MockSupplierInvoice:
         self.correlation_id = correlation_id or uuid.uuid4()
         self.stamp_duty_amount = stamp_duty_amount
         self.stamp_duty_code_id = stamp_duty_code_id
+        self.withholding_tax_amount = withholding_tax_amount
+        self.withholding_tax_code_id = withholding_tax_code_id
 
 
 class MockSupplierInvoiceLine:
@@ -465,6 +470,57 @@ class TestPostInvoice:
         assert result.success is True
         assert result.journal_entry_id == journal.journal_entry_id
         assert "successfully" in result.message.lower()
+
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
+    def test_post_invoice_keeps_wht_out_of_gl_until_payment(
+        self,
+        mock_ledger_service,
+        mock_journal_service,
+        mock_db,
+        organization_id,
+        user_id,
+        mock_supplier,
+    ):
+        """Invoice WHT is planned; AP remains gross until settlement."""
+        invoice = MockSupplierInvoice(
+            organization_id=organization_id,
+            supplier_id=mock_supplier.supplier_id,
+            total_amount=Decimal("1075.00"),
+            functional_currency_amount=Decimal("1075.00"),
+            withholding_tax_amount=Decimal("50.00"),
+            withholding_tax_code_id=uuid.uuid4(),
+        )
+        line = MockSupplierInvoiceLine(
+            invoice_id=invoice.invoice_id,
+            line_amount=Decimal("1075.00"),
+        )
+
+        def get_side_effect(_model, record_id):
+            if record_id == invoice.invoice_id:
+                return invoice
+            if record_id == mock_supplier.supplier_id:
+                return mock_supplier
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+        mock_db.scalars.return_value.all.return_value = [line]
+        mock_journal_service.create_journal.return_value = MockJournal()
+        mock_ledger_service.post_journal_entry.return_value = MockPostingResult()
+
+        result = APPostingAdapter.post_invoice(
+            db=mock_db,
+            organization_id=organization_id,
+            invoice_id=invoice.invoice_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is True
+        journal_input = mock_journal_service.create_journal.call_args.args[2]
+        assert len(journal_input.lines) == 2
+        assert journal_input.lines[-1].account_id == invoice.ap_control_account_id
+        assert journal_input.lines[-1].credit_amount == Decimal("1075.00")
 
     @patch("app.services.finance.posting.base.JournalService")
     @patch("app.services.finance.posting.base.LedgerPostingService")
@@ -1066,6 +1122,66 @@ class TestPostPayment:
         assert len(journal_input.lines) == 2
         assert journal_input.lines[0].debit_amount == mock_payment.payment_amount
         assert journal_input.lines[1].credit_amount == mock_payment.payment_amount
+
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
+    def test_post_payment_is_single_wht_accounting_writer(
+        self,
+        mock_ledger_service,
+        mock_journal_service,
+        mock_db,
+        organization_id,
+        user_id,
+        mock_supplier,
+    ):
+        """Payment clears gross AP and splits bank from WHT payable once."""
+        wht_account_id = uuid.uuid4()
+        wht_code_id = uuid.uuid4()
+        payment = MockSupplierPayment(
+            organization_id=organization_id,
+            supplier_id=mock_supplier.supplier_id,
+            amount=Decimal("1025.00"),
+            gross_amount=Decimal("1075.00"),
+            withholding_tax_amount=Decimal("50.00"),
+            withholding_tax_code_id=wht_code_id,
+        )
+        wht_code = MagicMock(
+            organization_id=organization_id,
+            tax_type=TaxType.WITHHOLDING,
+            tax_collected_account_id=wht_account_id,
+        )
+
+        def get_side_effect(model, record_id):
+            if record_id == payment.payment_id:
+                return payment
+            if record_id == mock_supplier.supplier_id:
+                return mock_supplier
+            if record_id == wht_code_id:
+                return wht_code
+            if model.__name__ == "Account" and record_id == payment.bank_account_id:
+                return MagicMock(organization_id=organization_id)
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+        mock_db.scalars.return_value.all.return_value = []
+        mock_journal_service.create_journal.return_value = MockJournal()
+        mock_ledger_service.post_journal_entry.return_value = MockPostingResult()
+
+        result = APPostingAdapter.post_payment(
+            db=mock_db,
+            organization_id=organization_id,
+            payment_id=payment.payment_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is True
+        journal_input = mock_journal_service.create_journal.call_args.args[2]
+        assert len(journal_input.lines) == 3
+        assert journal_input.lines[0].debit_amount == Decimal("1075.00")
+        assert journal_input.lines[1].credit_amount == Decimal("1025.00")
+        assert journal_input.lines[2].account_id == wht_account_id
+        assert journal_input.lines[2].credit_amount == Decimal("50.00")
 
     @patch("app.services.finance.posting.base.JournalService")
     @patch("app.services.finance.posting.base.LedgerPostingService")

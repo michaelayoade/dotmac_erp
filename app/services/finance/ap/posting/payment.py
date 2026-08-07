@@ -175,8 +175,9 @@ def post_payment(
     Post a supplier payment to the general ledger.
 
     Creates a journal entry with:
-    - Debit: AP Control account
-    - Credit: Bank/Cash account
+    - Debit: AP Control account for the gross supplier liability
+    - Credit: Bank/Cash account for the net cash paid
+    - Credit: WHT payable for withholding tax retained, when applicable
 
     Args:
         db: Database session

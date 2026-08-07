@@ -7,7 +7,7 @@ Provides view-focused data and operations for AP payment and aging web routes.
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from html import escape
 from typing import Any
 from uuid import UUID
@@ -59,6 +59,16 @@ from app.services.finance.common.attachment import AttachmentInput, attachment_s
 from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+
+def _remaining_invoice_wht(invoice: SupplierInvoice) -> Decimal:
+    """Return planned WHT proportional to the invoice's gross balance."""
+    planned_wht = max(invoice.withholding_tax_amount or Decimal("0"), Decimal("0"))
+    if planned_wht == Decimal("0") or invoice.total_amount <= Decimal("0"):
+        return Decimal("0")
+    return (planned_wht * invoice.balance_due / invoice.total_amount).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
 
 
 class PaymentWebService:
@@ -307,8 +317,15 @@ class PaymentWebService:
                 ),
                 "balance": format_currency(balance, invoice.currency_code),
                 "balance_raw": float(balance),  # For JS calculations
+                "total_amount_raw": float(invoice.total_amount),
                 "subtotal_raw": float(invoice.subtotal),  # Pre-VAT WHT base
                 "tax_amount_raw": float(invoice.tax_amount),  # VAT component
+                "withholding_tax_amount_raw": float(
+                    getattr(invoice, "withholding_tax_amount", None) or Decimal("0")
+                ),
+                "withholding_tax_code_id": str(invoice.withholding_tax_code_id)
+                if getattr(invoice, "withholding_tax_code_id", None)
+                else None,
                 "currency_code": invoice.currency_code,
             }
             open_invoices.append(view)
@@ -1098,6 +1115,8 @@ class PaymentWebService:
                 "supplier_name": sup.trading_name or sup.legal_name,
                 "due_date": inv.due_date,
                 "amount": inv.balance_due,
+                "withholding_tax_amount": _remaining_invoice_wht(inv),
+                "withholding_tax_code_id": inv.withholding_tax_code_id,
                 "currency_code": inv.currency_code,
                 "status": inv.status.value if inv.status else "",
             }
