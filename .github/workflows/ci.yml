@@ -171,6 +171,31 @@ jobs:
         env:
           SKIP: semgrep  # semgrep needs poetry; covered by Security Scan job
 
+  # This repo's detect-private-key hook is currently clean — no exclude list,
+  # and pre-commit does run in CI. This job exists because that state is one
+  # line away from the failure that hit dotmac_sub and dotmac_crm: a live
+  # OpenVPN server key was committed there, detect-private-key caught it, and
+  # the file was added to the hook's `exclude:` instead of the key being
+  # removed. It stayed public for five months.
+  #
+  # Two off switches apply to the job above — an `exclude:` in
+  # .pre-commit-config.yaml, and the SKIP env var already in use on the line
+  # above for semgrep. Both are edits a hurried change can make without
+  # anyone reading them as "disable the secret guard".
+  #
+  # So this check is separate and keys on content, not paths: a PEM header
+  # with no encoded body (fixtures, form hints, docs) passes; real key
+  # material fails. There is no allowlist to add a path to.
+  secret-scan:
+    name: Private Key Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan tracked files for private key material
+        run: bash scripts/ci/scan_private_keys.sh
+
   # ---------------------------------------------------------------------------
   # Docker Build & Health Check
   # Builds the multi-stage image (Node CSS + Python) and verifies the container
