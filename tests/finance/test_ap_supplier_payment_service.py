@@ -152,6 +152,73 @@ def test_create_payment_allocation_checks():
         )
 
 
+def test_create_payment_inherits_planned_invoice_wht():
+    db = MagicMock()
+    org_id = uuid4()
+    supplier = _make_supplier(org_id, active=True, with_wht=False)
+    invoice_id = uuid4()
+    wht_code_id = uuid4()
+    invoice = SimpleNamespace(
+        invoice_id=invoice_id,
+        invoice_number="SINV-WHT",
+        organization_id=org_id,
+        supplier_id=supplier.supplier_id,
+        status=SupplierInvoiceStatus.POSTED,
+        total_amount=Decimal("1075.00"),
+        balance_due=Decimal("1075.00"),
+        withholding_tax_amount=Decimal("50.00"),
+        withholding_tax_code_id=wht_code_id,
+    )
+    wht_code = SimpleNamespace(
+        tax_code_id=wht_code_id,
+        organization_id=org_id,
+        tax_type=TaxType.WITHHOLDING,
+    )
+
+    def get_record(model, record_id):
+        if record_id == supplier.supplier_id:
+            return supplier
+        if record_id == invoice_id:
+            return invoice
+        if model.__name__ == "TaxCode" and record_id == wht_code_id:
+            return wht_code
+        return None
+
+    db.get.side_effect = get_record
+
+    with (
+        patch(
+            "app.services.finance.ap.supplier_payment.SequenceService.get_next_number",
+            return_value="PAY-WHT-001",
+        ),
+        patch("app.services.finance.ap.supplier_payment.fire_audit_event"),
+    ):
+        payment = SupplierPaymentService.create_payment(
+            db,
+            org_id,
+            SupplierPaymentInput(
+                supplier_id=supplier.supplier_id,
+                payment_date=date.today(),
+                payment_method=APPaymentMethod.BANK_TRANSFER,
+                currency_code="NGN",
+                amount=Decimal("1075.00"),
+                bank_account_id=uuid4(),
+                allocations=[
+                    PaymentAllocationInput(
+                        invoice_id=invoice_id,
+                        amount=Decimal("1075.00"),
+                    )
+                ],
+            ),
+            created_by_user_id=uuid4(),
+        )
+
+    assert payment.gross_amount == Decimal("1075.00")
+    assert payment.amount == Decimal("1025.00")
+    assert payment.withholding_tax_amount == Decimal("50.00")
+    assert payment.withholding_tax_code_id == wht_code_id
+
+
 def test_approve_and_post_payment():
     db = MagicMock()
     org_id = uuid4()

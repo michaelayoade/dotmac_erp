@@ -21,6 +21,16 @@
     totalGross: 0,
     totalWht: 0,
     get totalNet() { return this.totalGross - this.totalWht; },
+    updateRowWht(amountInput, plannedWht, balance) {
+        const row = amountInput.closest("tr");
+        const whtInput = row?.querySelector("[data-field=wht]");
+        if (whtInput) {
+            const amount = parseFloat(amountInput.value || 0);
+            const ratio = balance > 0 ? Math.min(amount / balance, 1) : 0;
+            whtInput.value = (plannedWht * ratio).toFixed(2);
+        }
+        this.recalcTotals();
+    },
     recalcTotals() {
         let gross = 0, wht = 0, count = 0;
         this.$root.querySelectorAll("tbody tr").forEach(row => {
@@ -179,13 +189,13 @@
                                        data-field="amount"
                                        value="{{ "{:.2f}".format(invoice.amount) if invoice.amount else '0.00' }}"
                                        class="form-input w-28 text-right font-mono tabular-nums text-sm"
-                                       @change="recalcTotals()">
+                                       @input="updateRowWht($el, {{ invoice.withholding_tax_amount or 0 }}, {{ invoice.amount or 0 }})">
                             </td>
                             <td class="text-right hidden sm:table-cell">
                                 <input aria-label="WHT amount for invoice {{ invoice.invoice_number }}" type="number" step="0.01" min="0"
                                        name="wht_{{ invoice.invoice_id }}"
                                        data-field="wht"
-                                       value="0.00"
+                                       value="{{ '{:.2f}'.format(invoice.withholding_tax_amount) if invoice.withholding_tax_amount else '0.00' }}"
                                        class="form-input w-24 text-right font-mono tabular-nums text-sm"
                                        @change="recalcTotals()">
                             </td>

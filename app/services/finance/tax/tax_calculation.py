@@ -16,7 +16,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.tax.tax_code import TaxCode
+from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -405,6 +405,12 @@ class TaxCalculationService:
         """
         org_id = coerce_uuid(organization_id)
         tax_code = cls.get_effective_tax_code(db, org_id, wht_code_id, transaction_date)
+
+        if tax_code.tax_type != TaxType.WITHHOLDING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tax code '{tax_code.tax_code}' is not a withholding tax code",
+            )
 
         # WHT is calculated as a percentage of the base.
         wht_amount = (base_amount * tax_code.tax_rate).quantize(

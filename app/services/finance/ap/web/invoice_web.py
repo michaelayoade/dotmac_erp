@@ -1109,6 +1109,8 @@ class InvoiceWebService:
             ],
             "auto_create_inventory_receipt": invoice.auto_create_inventory_receipt,
             "inventory_receipt_mode": invoice.inventory_receipt_mode,
+            "withholding_tax_amount": invoice.withholding_tax_amount,
+            "withholding_tax_code_id": invoice.withholding_tax_code_id,
         }
 
         return templates.TemplateResponse(

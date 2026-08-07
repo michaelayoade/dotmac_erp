@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+from app.models.finance.tax.tax_code import TaxType
 from app.services.finance.tax.tax_calculation import TaxCalculationService
 
 
@@ -28,6 +29,7 @@ class TestWHTCalculation:
             effective_from=txn_date,
             effective_to=None,
             organization_id=org_id,
+            tax_type=TaxType.WITHHOLDING,
         )
 
         subtotal = Decimal("100000")

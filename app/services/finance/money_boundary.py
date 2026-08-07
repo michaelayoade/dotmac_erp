@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timezone
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from dotmac_kernel.money import (
     DEFAULT_ROUNDING,
@@ -398,7 +398,7 @@ def round_to_minor_units(
             f"{amount!r} as money; use Decimal"
         )
     try:
-        return Money.of(Decimal(amount), cur, rounding=rounding).amount
+        return cast(Decimal, Money.of(Decimal(amount), cur, rounding=rounding).amount)
     except (MoneyError, InvalidOperation, ValueError) as exc:
         raise MoneyBoundaryError(f"{field}: not a valid amount: {amount!r}") from exc
 

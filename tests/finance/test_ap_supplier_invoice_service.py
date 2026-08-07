@@ -323,6 +323,87 @@ def test_update_invoice_requires_draft():
         )
 
 
+def test_update_invoice_recalculates_selected_withholding_tax():
+    db = MagicMock()
+    org_id = uuid4()
+    invoice_id = uuid4()
+    supplier_id = uuid4()
+    wht_code_id = uuid4()
+    invoice = SimpleNamespace(
+        invoice_id=invoice_id,
+        organization_id=org_id,
+        supplier_id=supplier_id,
+        status=SupplierInvoiceStatus.DRAFT,
+    )
+    supplier = _make_supplier(org_id)
+    supplier.supplier_id = supplier_id
+
+    def get_record(_model, record_id):
+        if record_id == invoice_id:
+            return invoice
+        if record_id == supplier_id:
+            return supplier
+        return None
+
+    db.get.side_effect = get_record
+    db.scalars.return_value.all.return_value = []
+
+    invoice_input = SupplierInvoiceInput(
+        supplier_id=supplier_id,
+        invoice_type=SupplierInvoiceType.STANDARD,
+        invoice_date=date.today(),
+        received_date=date.today(),
+        due_date=date.today(),
+        currency_code="NGN",
+        wht_code_id=wht_code_id,
+        lines=[
+            InvoiceLineInput(
+                description="Professional services",
+                quantity=Decimal("2"),
+                unit_price=Decimal("500"),
+            )
+        ],
+    )
+
+    with (
+        patch.object(
+            SupplierInvoiceService,
+            "_require_org_match",
+            return_value=None,
+        ),
+        patch.object(
+            SupplierInvoiceService,
+            "_require_po_line_org",
+            return_value=None,
+        ),
+        patch.object(
+            SupplierInvoiceService,
+            "_require_gr_line_org",
+            return_value=None,
+        ),
+        patch(
+            "app.services.finance.ap.supplier_invoice.TaxCalculationService.calculate_wht",
+            return_value=(Decimal("50.00"), Decimal("950.00")),
+        ) as calculate_wht,
+    ):
+        result = SupplierInvoiceService.update_invoice(
+            db,
+            org_id,
+            invoice_id,
+            invoice_input,
+        )
+
+    assert result.withholding_tax_code_id == wht_code_id
+    assert result.withholding_tax_amount == Decimal("50.00")
+    calculate_wht.assert_called_once_with(
+        db,
+        org_id,
+        Decimal("1000"),
+        wht_code_id,
+        invoice_input.invoice_date,
+    )
+
+
 def test_build_input_from_payload_includes_purpose():
     db = MagicMock()
     org_id = uuid4()

@@ -782,10 +782,29 @@ class SupplierInvoiceService(ListResponseMixin):
                 "a supplier credit."
             )
 
+        supplier = db.get(Supplier, invoice.supplier_id)
+        if not supplier or supplier.organization_id != org_id:
+            raise NotFoundError("Supplier not found")
+
+        # Keep the invoice-level WHT snapshot in sync when a draft invoice is
+        # edited.  Creation already applies the explicit selection (or the
+        # supplier default), but the update path previously ignored both the
+        # submitted code and the recalculated amount.
+        wht_amount = Decimal("0")
+        wht_code_id = input.wht_code_id
+        if not wht_code_id and getattr(supplier, "withholding_tax_applicable", False):
+            wht_code_id = getattr(supplier, "withholding_tax_code_id", None)
+        if wht_code_id:
+            wht_amount, _net = TaxCalculationService.calculate_wht(
+                db, org_id, subtotal, wht_code_id, input.invoice_date
+            )
+
         if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
             total_amount = -abs(total_amount)
             subtotal = -abs(subtotal)
             tax_total = -abs(tax_total)
+            if wht_amount:
+                wht_amount = -abs(wht_amount)
 
         exchange_rate = input.exchange_rate or Decimal("1.0")
         functional_amount = total_amount * exchange_rate
@@ -809,12 +828,10 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.inventory_receipt_mode = input.inventory_receipt_mode
         invoice.is_intercompany = input.is_intercompany
         invoice.intercompany_org_id = input.intercompany_org_id
+        invoice.withholding_tax_amount = wht_amount
+        invoice.withholding_tax_code_id = wht_code_id
 
         # Re-create lines
-        supplier = db.get(Supplier, invoice.supplier_id)
-        if not supplier or supplier.organization_id != org_id:
-            raise NotFoundError("Supplier not found")
-
         for line in input.lines:
             SupplierInvoiceService._require_org_match(
                 db, org_id, Account, line.expense_account_id, "Expense account"

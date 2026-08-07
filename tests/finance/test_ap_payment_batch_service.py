@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from app.models.finance.ap.payment_batch import APBatchStatus
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 from app.models.finance.ap.supplier_payment import APPaymentStatus
+from app.models.finance.tax.tax_code import TaxType
 from app.services.finance.ap.payment_batch import (
     BatchPaymentItem,
     PaymentBatchInput,
@@ -307,6 +308,86 @@ def test_create_batch_from_invoice_ids_groups_and_links_payments():
         payment.payment_batch_id == batch.batch_id for payment in created_payments
     )
     db.flush.assert_called()
+
+
+def test_create_batch_from_invoice_ids_inherits_planned_wht():
+    db = MagicMock()
+    org_id = uuid4()
+    user_id = uuid4()
+    supplier_id = uuid4()
+    bank_id = uuid4()
+    wht_code_id = uuid4()
+    invoice = SimpleNamespace(
+        invoice_id=uuid4(),
+        organization_id=org_id,
+        supplier_id=supplier_id,
+        invoice_number="INV-WHT",
+        status=SupplierInvoiceStatus.POSTED,
+        currency_code="NGN",
+        total_amount=Decimal("1075.00"),
+        balance_due=Decimal("1075.00"),
+        withholding_tax_amount=Decimal("50.00"),
+        withholding_tax_code_id=wht_code_id,
+    )
+    wht_code = SimpleNamespace(
+        tax_code_id=wht_code_id,
+        organization_id=org_id,
+        tax_type=TaxType.WITHHOLDING,
+    )
+
+    def get_record(model, record_id):
+        if record_id == bank_id:
+            return SimpleNamespace(organization_id=org_id, currency_code="NGN")
+        if model.__name__ == "TaxCode" and record_id == wht_code_id:
+            return wht_code
+        return None
+
+    db.get.side_effect = get_record
+    invoice_result = MagicMock()
+    invoice_result.all.return_value = [invoice]
+    inflight_result = MagicMock()
+    inflight_result.all.return_value = []
+    db.scalars.side_effect = [invoice_result, inflight_result]
+
+    captured_inputs = []
+
+    def _fake_create_payment(
+        db, organization_id, input, created_by_user_id, auto_commit
+    ):
+        captured_inputs.append(input)
+        return SimpleNamespace(
+            payment_id=uuid4(),
+            supplier_id=input.supplier_id,
+            amount=input.amount,
+            payment_batch_id=None,
+        )
+
+    with (
+        patch(
+            "app.services.finance.ap.supplier_payment.supplier_payment_service.create_payment",
+            side_effect=_fake_create_payment,
+        ),
+        patch(
+            "app.services.finance.ap.payment_batch.SequenceService.get_next_number",
+            return_value="001",
+        ),
+    ):
+        batch = PaymentBatchService.create_batch_from_invoice_ids(
+            db=db,
+            organization_id=org_id,
+            batch_date=date.today(),
+            payment_method="BANK_TRANSFER",
+            bank_account_id=bank_id,
+            invoice_ids=[invoice.invoice_id],
+            created_by_user_id=user_id,
+        )
+
+    payment_input = captured_inputs[0]
+    assert payment_input.gross_amount == Decimal("1075.00")
+    assert payment_input.amount == Decimal("1025.00")
+    assert payment_input.wht_amount == Decimal("50.00")
+    assert payment_input.allocations[0].amount == Decimal("1075.00")
+    assert batch.total_amount == Decimal("1025.00")
 
 
 def test_create_batch_from_invoice_ids_rejects_non_payable_invoice():

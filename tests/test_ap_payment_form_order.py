@@ -57,6 +57,8 @@ def test_payment_form_context_exposes_subtotal_for_wht_base(monkeypatch):
         tax_amount=Decimal("75.00"),
         total_amount=Decimal("1075.00"),
         amount_paid=Decimal("0.00"),
+        withholding_tax_amount=Decimal("50.00"),
+        withholding_tax_code_id=uuid4(),
         currency_code="NGN",
     )
     supplier = SimpleNamespace(
@@ -93,3 +95,7 @@ def test_payment_form_context_exposes_subtotal_for_wht_base(monkeypatch):
     assert context["invoice"]["subtotal_raw"] == 1000.0
     assert context["invoice"]["tax_amount_raw"] == 75.0
     assert context["invoice"]["balance_raw"] == 1075.0
+    assert context["invoice"]["withholding_tax_amount_raw"] == 50.0
+    assert context["invoice"]["withholding_tax_code_id"] == str(
+        invoice.withholding_tax_code_id
+    )

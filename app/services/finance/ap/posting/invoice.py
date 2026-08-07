@@ -4,8 +4,11 @@ AP Invoice Posting - Post supplier invoices to GL.
 Transforms supplier invoices into journal entries with:
 - Debit: Expense/Asset/Inventory accounts (from invoice lines)
 - Debit: Stamp duty expense account (if stamp_duty_amount > 0)
-- Credit: WHT payable account (if withholding_tax_amount > 0)
-- Credit: AP Control account (net of WHT, plus stamp duty)
+- Credit: AP Control account (gross invoice obligation, plus stamp duty)
+
+Invoice-level WHT is a planned settlement deduction for display and payment
+preparation.  The supplier payment posting is the sole accounting writer for
+WHT payable because that is when the amount is actually withheld.
 """
 
 import logging
@@ -308,61 +311,12 @@ def post_invoice(
                 )
             )
 
-    # ── WHT credit line ────────────────────────────────────────────
-    wht_amount = getattr(invoice, "withholding_tax_amount", None) or Decimal("0")
-    withholding_tax_code_id = getattr(invoice, "withholding_tax_code_id", None)
-    if wht_amount > Decimal("0") and withholding_tax_code_id:
-        wht_code = db.get(TaxCode, withholding_tax_code_id)
-        if not wht_code or wht_code.organization_id != org_id:
-            return APPostingResult(success=False, message="WHT tax code not found")
-        if wht_code.tax_type != TaxType.WITHHOLDING:
-            return APPostingResult(
-                success=False,
-                message="Selected WHT code is not a WITHHOLDING tax code",
-            )
-        # WHT payable = tax_collected_account_id (amount owed to tax authority)
-        wht_account_id = wht_code.tax_collected_account_id
-        if not wht_account_id:
-            return APPostingResult(
-                success=False,
-                message="WHT payable account is not configured on the WHT tax code",
-            )
-        wht_functional = wht_amount * exchange_rate
-        if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
-            # Credit note reverses WHT: debit WHT payable
-            journal_lines.append(
-                JournalLineInput(
-                    account_id=wht_account_id,
-                    debit_amount=abs(wht_amount),
-                    credit_amount=Decimal("0"),
-                    debit_amount_functional=abs(wht_functional),
-                    credit_amount_functional=Decimal("0"),
-                    description=f"AP Credit Note WHT reversal: {invoice.invoice_number}",
-                )
-            )
-        else:
-            # Standard invoice: credit WHT payable (we owe tax authority)
-            journal_lines.append(
-                JournalLineInput(
-                    account_id=wht_account_id,
-                    debit_amount=Decimal("0"),
-                    credit_amount=wht_amount,
-                    debit_amount_functional=Decimal("0"),
-                    credit_amount_functional=wht_functional,
-                    description=f"AP Invoice WHT withheld: {invoice.invoice_number}",
-                )
-            )
-
     # ── AP Control credit line ─────────────────────────────────────
-    # AP control = total_amount + stamp_duty - WHT
-    # (stamp duty increases the obligation; WHT reduces what we owe the supplier)
-    ap_amount = invoice.total_amount + stamp_duty_amount - wht_amount
+    # AP remains gross until settlement. Supplier payment posting debits the
+    # gross AP balance and splits the credit between bank and WHT payable.
+    ap_amount = invoice.total_amount + stamp_duty_amount
     total_functional = invoice.functional_currency_amount
-    ap_functional = (
-        total_functional
-        + (stamp_duty_amount * exchange_rate)
-        - (wht_amount * exchange_rate)
-    )
+    ap_functional = total_functional + (stamp_duty_amount * exchange_rate)
 
     if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
         # Credit note: debit AP (reduce liability)
