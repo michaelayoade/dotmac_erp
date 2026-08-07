@@ -155,6 +155,13 @@ def _record_setting_history(
         setting_id=setting.id,
         domain=setting.domain.value,
         key=setting.key,
+        # The owning organization is part of a setting's identity, exactly like
+        # domain and key, and is denormalized here for the same reason: the row
+        # must stay identifiable after the setting itself is gone. Leaving it
+        # NULL made every history row look platform-wide, which is what let
+        # ``restore_from_history`` recreate an organization's setting as a
+        # global row (and made the API's ownership check a no-op).
+        organization_id=setting.organization_id,
         action=action,
         # Old values
         old_value_type=old_value_type,
@@ -286,7 +293,9 @@ class DomainSettings(ListResponseMixin):
         db.refresh(setting)
 
         # Invalidate cache for this setting
-        invalidate_setting_cache(setting.domain, setting.key)
+        invalidate_setting_cache(
+            setting.domain, setting.key, organization_id=setting.organization_id
+        )
 
         # Audit log
         _log_setting_change(
@@ -401,7 +410,9 @@ class DomainSettings(ListResponseMixin):
         db.refresh(setting)
 
         # Invalidate cache for this setting
-        invalidate_setting_cache(setting.domain, setting.key)
+        invalidate_setting_cache(
+            setting.domain, setting.key, organization_id=setting.organization_id
+        )
 
         # Audit log
         new_value = setting.value_text or setting.value_json
@@ -503,7 +514,9 @@ class DomainSettings(ListResponseMixin):
             db.refresh(setting)
 
             # Invalidate cache for this setting
-            invalidate_setting_cache(self.domain, key)
+            invalidate_setting_cache(
+                self.domain, key, organization_id=setting.organization_id
+            )
 
             # Audit log
             new_value = setting.value_text or setting.value_json
@@ -614,7 +627,9 @@ class DomainSettings(ListResponseMixin):
         db.commit()
 
         # Invalidate cache for this setting
-        invalidate_setting_cache(setting.domain, setting.key)
+        invalidate_setting_cache(
+            setting.domain, setting.key, organization_id=setting.organization_id
+        )
 
         # Audit log
         _log_setting_change(
@@ -727,6 +742,28 @@ def get_history_entry(db: Session, history_id: str) -> DomainSettingHistory | No
     return db.get(DomainSettingHistory, coerce_uuid(history_id))
 
 
+def _restore_target_organization(
+    db: Session, history: DomainSettingHistory
+) -> UUID | None:
+    """
+    Which organization does this history entry's setting belong to?
+
+    Normally the history row says so directly. History written before
+    ``_record_setting_history`` recorded the organization carries NULL, which is
+    indistinguishable from a genuine platform-wide setting — so for those rows
+    the linked setting is consulted instead. That link survives a soft delete
+    (``is_active = False``); only a hard-deleted setting leaves no way back, and
+    such an entry restores to the platform scope as before.
+    """
+    if history.organization_id is not None:
+        return history.organization_id
+    if history.setting_id is None:
+        return None
+    with allow_cross_org(db):
+        origin = db.get(DomainSetting, history.setting_id)
+    return origin.organization_id if origin is not None else None
+
+
 def restore_from_history(
     db: Session,
     history_id: str,
@@ -765,13 +802,27 @@ def restore_from_history(
             detail=f"Invalid domain in history: {history.domain}",
         ) from exc
 
-    # Find existing setting
-    setting = db.scalar(
-        select(DomainSetting).where(
-            DomainSetting.domain == domain,
-            DomainSetting.key == history.key,
-        )
+    target_org_id = _restore_target_organization(db, history)
+
+    # Find the existing setting *in the scope the history entry belongs to*.
+    #
+    # The restore route runs on an RLS-bypass session, so without the explicit
+    # organization predicate this lookup returned whichever organization's row
+    # for (domain, key) the database happened to hand back first — restoring
+    # one tenant's history could overwrite another tenant's live setting.
+    # ``allow_cross_org`` is used for the same reason as in ``get_by_key``: the
+    # ORM listener would otherwise drop the NULL-org platform row (and raise on
+    # an unprimed session), so the predicate below is the scoping authority.
+    stmt = select(DomainSetting).where(
+        DomainSetting.domain == domain,
+        DomainSetting.key == history.key,
     )
+    if target_org_id is None:
+        stmt = stmt.where(DomainSetting.organization_id.is_(None))
+    else:
+        stmt = stmt.where(DomainSetting.organization_id == target_org_id)
+    with allow_cross_org(db):
+        setting = db.scalar(stmt)
 
     # Determine what values to restore based on action type
     if history.action == SettingChangeAction.DELETE:
@@ -841,18 +892,35 @@ def restore_from_history(
         db.commit()
         db.refresh(setting)
     else:
-        # Create new setting (re-creating after deletion)
-        setting = DomainSetting(
-            domain=domain,
-            key=history.key,
-            value_type=SettingValueType(restore_value_type)
+        # Create new setting (re-creating after deletion), in the organization
+        # the history entry belongs to. Omitting organization_id here recreated
+        # a deleted org-specific setting as a platform-wide row, which every
+        # other organization then inherited as its fallback.
+        create_kwargs: dict[str, Any] = {
+            "domain": domain,
+            "key": history.key,
+            "organization_id": target_org_id,
+            "scope": (
+                SettingScope.GLOBAL
+                if target_org_id is None
+                else SettingScope.ORG_SPECIFIC
+            ),
+            "value_type": SettingValueType(restore_value_type)
             if restore_value_type
             else SettingValueType.string,
-            value_text=restore_value_text,
-            value_json=restore_value_json,
-            is_secret=restore_is_secret if restore_is_secret is not None else False,
-            is_active=restore_is_active,
-        )
+            "is_secret": restore_is_secret if restore_is_secret is not None else False,
+            "is_active": restore_is_active,
+        }
+        # Same JSON-NULL workaround as ``DomainSettings.create``: SQLAlchemy
+        # serializes a Python None into JSON 'null' for a JSON column, which the
+        # ck_domain_settings_value_storage CHECK constraint rejects. Omitting the
+        # key entirely lets the column fall back to SQL NULL. Passing them
+        # unconditionally made this branch fail on every non-JSON setting.
+        if restore_value_text is not None:
+            create_kwargs["value_text"] = restore_value_text
+        if restore_value_json is not None:
+            create_kwargs["value_json"] = restore_value_json
+        setting = DomainSetting(**create_kwargs)
         db.add(setting)
         db.flush()
 
@@ -871,7 +939,9 @@ def restore_from_history(
         db.refresh(setting)
 
     # Invalidate cache
-    invalidate_setting_cache(domain, setting.key)
+    invalidate_setting_cache(
+        domain, setting.key, organization_id=setting.organization_id
+    )
 
     # Audit log
     _log_setting_change(

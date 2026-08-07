@@ -98,12 +98,13 @@ class InventoryReorderService:
         return None
 
     @staticmethod
-    def _resolve_approach_threshold(db: Session) -> Decimal:
+    def _resolve_approach_threshold(db: Session, organization_id: UUID) -> Decimal:
         raw_value = get_setting_value(
             db,
             SettingDomain.inventory,
             APPROACH_THRESHOLD_SETTING,
             int(DEFAULT_APPROACH_THRESHOLD_PERCENT),
+            organization_id=organization_id,
         )
         try:
             threshold = Decimal(str(raw_value))
@@ -131,7 +132,7 @@ class InventoryReorderService:
     ) -> ReorderDashboardData:
         """Build the organization-wide reorder dashboard with batch stock queries."""
         org_id = coerce_uuid(organization_id)
-        approach_threshold = self._resolve_approach_threshold(db)
+        approach_threshold = self._resolve_approach_threshold(db, org_id)
 
         rows = db.execute(
             select(Item, ItemCategory)

@@ -25,14 +25,24 @@ def render_payslip_email(db: Session, slip: SalarySlip) -> tuple[str, str, str]:
     first_name = (employee.first_name if employee else None) or employee_name.split()[0]
     period_str = slip.start_date.strftime("%B %Y")
 
-    header_html = get_setting_value(db, SettingDomain.email, "email_header_html", "")
-    footer_html = get_setting_value(db, SettingDomain.email, "email_footer_html", "")
-    header_text = get_setting_value(db, SettingDomain.email, "email_header_text", "")
-    footer_text = get_setting_value(db, SettingDomain.email, "email_footer_text", "")
-
-    org_id = None
-    if employee and employee.organization_id:
+    # The slip's own organization is the authority here; the employee row is a
+    # weaker source (it may be unloaded, and it must never widen the scope).
+    org_id = slip.organization_id
+    if org_id is None and employee and employee.organization_id:
         org_id = employee.organization_id
+
+    header_html = get_setting_value(
+        db, SettingDomain.email, "email_header_html", "", organization_id=org_id
+    )
+    footer_html = get_setting_value(
+        db, SettingDomain.email, "email_footer_html", "", organization_id=org_id
+    )
+    header_text = get_setting_value(
+        db, SettingDomain.email, "email_header_text", "", organization_id=org_id
+    )
+    footer_text = get_setting_value(
+        db, SettingDomain.email, "email_footer_text", "", organization_id=org_id
+    )
 
     context = {
         "employee_name": employee_name,

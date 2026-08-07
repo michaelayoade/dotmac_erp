@@ -173,7 +173,7 @@ def test_invalid_approach_threshold_falls_back_to_default(raw_value: object) -> 
         return_value=raw_value,
     ):
         assert (
-            InventoryReorderService._resolve_approach_threshold(db)
+            InventoryReorderService._resolve_approach_threshold(db, uuid.uuid4())
             == DEFAULT_APPROACH_THRESHOLD_PERCENT
         )
 

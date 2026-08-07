@@ -1046,7 +1046,11 @@ class PayrollService:
         self.db.flush()
 
         if get_cached_setting(
-            self.db, SettingDomain.payroll, "auto_post_gl_on_approval", True
+            self.db,
+            SettingDomain.payroll,
+            "auto_post_gl_on_approval",
+            True,
+            organization_id=org_id,
         ):
             posting_result = self.handoff_payroll_to_books(
                 org_id,

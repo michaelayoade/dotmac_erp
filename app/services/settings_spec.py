@@ -1112,6 +1112,35 @@ def resolve_value(
 
     raw = extract_db_value(setting)
 
+    return coerce_resolved_value(spec, raw, strict=strict)
+
+
+def coerce_resolved_value(
+    spec: SettingSpec, raw: object | None, *, strict: bool = False
+) -> object | None:
+    """
+    Apply a spec's rules to a raw value read out of ``domain_settings``.
+
+    This is everything :func:`resolve_value` does once the stored value is in
+    hand: the declared ``value_type``, the ``allowed`` membership check, the
+    ``min_value``/``max_value`` bounds, and the fall back to ``spec.default``
+    when the stored value fails any of them.
+
+    It lives on its own because the cached read path in
+    ``app.services.settings_cache`` must apply exactly the same rules. Two
+    implementations meant one key could answer with an out-of-range or
+    wrongly-typed value or the spec default depending on which path served the
+    request; there is now one implementation and no such divergence.
+
+    Args:
+        spec: The registered spec that governs this key
+        raw: The value extracted from the row, or None when there is no row
+        strict: Raise ``ValueError`` instead of falling back to the default.
+            Use during startup validation.
+    """
+    domain = spec.domain
+    key = spec.key
+
     # For required settings with no value and no default, fail in strict mode
     if raw is None and spec.required and spec.default is None:
         if strict:
@@ -1192,9 +1221,22 @@ def extract_db_value(setting) -> object | None:
 
 
 def coerce_value(spec: SettingSpec, raw: object) -> tuple[object | None, str | None]:
+    return coerce_by_value_type(spec.value_type, raw)
+
+
+def coerce_by_value_type(
+    value_type: SettingValueType, raw: object
+) -> tuple[object | None, str | None]:
+    """
+    Coerce a raw stored value to its declared type, returning ``(value, error)``.
+
+    Split out from :func:`coerce_value` so a caller holding a row's own
+    ``value_type`` — the cached read path, for a key with no registered spec —
+    coerces through the same code rather than a second, hand-rolled copy.
+    """
     if raw is None:
         return None, None
-    if spec.value_type == SettingValueType.boolean:
+    if value_type == SettingValueType.boolean:
         if isinstance(raw, bool):
             return raw, None
         if isinstance(raw, str):
@@ -1204,7 +1246,7 @@ def coerce_value(spec: SettingSpec, raw: object) -> tuple[object | None, str | N
             if normalized in {"0", "false", "no", "off"}:
                 return False, None
         return None, "Value must be boolean"
-    if spec.value_type == SettingValueType.integer:
+    if value_type == SettingValueType.integer:
         if isinstance(raw, int):
             return raw, None
         if isinstance(raw, str):
@@ -1213,7 +1255,7 @@ def coerce_value(spec: SettingSpec, raw: object) -> tuple[object | None, str | N
             except ValueError:
                 return None, "Value must be an integer"
         return None, "Value must be an integer"
-    if spec.value_type == SettingValueType.string:
+    if value_type == SettingValueType.string:
         if isinstance(raw, str):
             return raw, None
         return str(raw), None

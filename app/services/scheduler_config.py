@@ -6,6 +6,7 @@ from celery.schedules import crontab
 from sqlalchemy import select
 
 from app.db import SessionLocal
+from app.db.session_context import allow_cross_org
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.scheduler import ScheduledTask, ScheduleType
 
@@ -40,33 +41,65 @@ def _env_bool(name: str, default: bool = True) -> bool:
     return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
-def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
-    try:
-        setting = db.scalars(
-            select(DomainSetting)
-            .where(DomainSetting.domain == domain)
-            .where(DomainSetting.key == key)
-            .where(DomainSetting.is_active.is_(True))
-        ).first()
-    except Exception:
-        setting = db.scalar(
-            select(DomainSetting).where(
-                DomainSetting.domain == domain,
-                DomainSetting.key == key,
-                DomainSetting.is_active.is_(True),
-            )
-        )
+def _get_setting_value(db, domain: SettingDomain, key: str) -> object | None:
+    """
+    Read a PLATFORM-WIDE setting row for Celery bootstrap.
+
+    This is a third read path alongside ``settings_spec.resolve_value`` and
+    ``settings_cache``, and deliberately so: it runs while the Celery app is
+    being configured, before any request or task has a tenant, and it must not
+    depend on the Redis cache whose own URL it is here to discover. What it must
+    not be is a *differently behaved* path, so:
+
+    - Scope is explicit. The broker, result backend, timezone and beat intervals
+      are process-wide configuration, so only the platform row
+      (``organization_id IS NULL``) is eligible. Without that predicate this
+      returned whichever tenant's row came back first, and one tenant's setting
+      could reconfigure the whole worker fleet.
+    - ``allow_cross_org`` is what lets the platform row be read at all: the
+      session is unprimed (there is no tenant), so the ORM org-filter listener
+      would otherwise raise ``MissingOrgContextError`` — swallowed by the caller's
+      broad ``except``, silently disabling every database-configured scheduler
+      setting. The predicate above is the scoping authority.
+    - The stored value is interpreted by its registered spec, the same
+      ``coerce_resolved_value`` the other two paths use, so a value the settings
+      screen would reject (``beat_max_loop_interval = 0``, below the spec's
+      minimum of 1) cannot reach Celery from here either.
+    """
+    from app.services.settings_spec import coerce_resolved_value, get_spec
+
+    stmt = (
+        select(DomainSetting)
+        .where(DomainSetting.domain == domain)
+        .where(DomainSetting.key == key)
+        .where(DomainSetting.is_active.is_(True))
+        .where(DomainSetting.organization_id.is_(None))
+    )
+    with allow_cross_org(db):
+        try:
+            setting = db.scalars(stmt).first()
+        except Exception:
+            setting = db.scalar(stmt)
     if not setting:
         return None
+
+    raw: object | None = None
     value_text = getattr(setting, "value_text", None)
     if value_text is not None and not _is_mock_like(value_text):
         text = str(value_text)
         if text:
-            return text
-    value_json = getattr(setting, "value_json", None)
-    if value_json is not None and not _is_mock_like(value_json):
-        return str(value_json)
-    return None
+            raw = text
+    if raw is None:
+        value_json = getattr(setting, "value_json", None)
+        if value_json is not None and not _is_mock_like(value_json):
+            raw = str(value_json)
+    if raw is None:
+        return None
+
+    spec = get_spec(domain, key)
+    if spec is None:
+        return raw
+    return coerce_resolved_value(spec, raw)
 
 
 def _effective_int(
@@ -79,7 +112,7 @@ def _effective_int(
     if value is None:
         return default
     try:
-        return int(value)
+        return int(str(value))
     except ValueError:
         return default
 

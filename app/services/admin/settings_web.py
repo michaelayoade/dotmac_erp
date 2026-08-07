@@ -271,10 +271,18 @@ class AdminSettingsWebService:
                 logger.exception("Ignored exception")
 
         email_logo_url = get_cached_setting(
-            db, SettingDomain.email, "email_logo_url", ""
+            db,
+            SettingDomain.email,
+            "email_logo_url",
+            "",
+            organization_id=organization_id,
         )
         report_logo_url = get_cached_setting(
-            db, SettingDomain.reporting, "report_logo_url", ""
+            db,
+            SettingDomain.reporting,
+            "report_logo_url",
+            "",
+            organization_id=organization_id,
         )
 
         # Import enums for UI controls

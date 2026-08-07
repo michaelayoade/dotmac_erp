@@ -506,7 +506,7 @@ class InventoryTransactionService(ListResponseMixin):
                         )
                     )
 
-        if InventoryTransactionService._is_real_time_valuation_enabled(db):
+        if InventoryTransactionService._is_real_time_valuation_enabled(db, org_id):
             InventoryTransactionService._post_inventory_transaction(
                 db,
                 organization_id=org_id,
@@ -886,7 +886,7 @@ class InventoryTransactionService(ListResponseMixin):
                         itm_id,
                     )
 
-        if InventoryTransactionService._is_real_time_valuation_enabled(db):
+        if InventoryTransactionService._is_real_time_valuation_enabled(db, org_id):
             InventoryTransactionService._post_inventory_transaction(
                 db,
                 organization_id=org_id,
@@ -1214,7 +1214,7 @@ class InventoryTransactionService(ListResponseMixin):
 
         db.flush()
 
-        if InventoryTransactionService._is_real_time_valuation_enabled(db):
+        if InventoryTransactionService._is_real_time_valuation_enabled(db, org_id):
             InventoryTransactionService._post_inventory_transaction(
                 db,
                 organization_id=org_id,
@@ -1227,14 +1227,15 @@ class InventoryTransactionService(ListResponseMixin):
         return transaction
 
     @staticmethod
-    def _is_real_time_valuation_enabled(db: Session) -> bool:
-        """Return whether inventory valuation mode is set to real_time."""
+    def _is_real_time_valuation_enabled(db: Session, organization_id: UUID) -> bool:
+        """Return whether inventory valuation mode is set to real_time for an org."""
         try:
             mode = settings_cache.get_setting_value(
                 db,
                 SettingDomain.inventory,
                 "inventory_valuation_mode",
                 default="manual",
+                organization_id=organization_id,
             )
         except Exception:
             logger.exception(
