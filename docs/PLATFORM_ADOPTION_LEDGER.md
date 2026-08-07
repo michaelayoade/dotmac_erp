@@ -8,9 +8,39 @@ No code, schema, dependency, or runtime change is authorized by this document.
 **Evidence pins:**
 
 - `dotmac_erp` `origin/main` at `96928fa1774612ecd5cd28db1ab04b8e45425df4`.
-- `dotmac-kernel==0.1.0a8` (source of record:
+- `dotmac-kernel==0.1.0a13` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
   The dependency **is installed** at this exact pin since slice E2 (below).
+  Moved from `0.1.0a8` on 2026-08-07 — see "Pin history" below.
+
+## Pin history
+
+**2026-08-07 — `0.1.0a8` → `0.1.0a13`.** The kernel release carrying the
+white-label foundation: the module registry and manifest declarations, D1's
+per-module Postgres namespaces and migration lineages, tenant-entitlement
+enforcement (`require_capability`), typed feature flags, and the platform
+administration surface. (a13 is a single release covering five development
+iterations; a9–a12 were published, a14–a17 never existed as artifacts.)
+
+The upgrade changed **nothing in ERP but the pin, the lock entry, and this
+ledger.** ERP consumes the kernel as CONTRACTS, not as a runtime: it has its own
+`require_permission` and `_write_audit_event`, and `test_app_import_loads_no_
+kernel_module` pins that the booted app loads no kernel module at all. The two
+a9–a13 changes that enforce at runtime — `write_audit_event` rejecting
+undeclared audit actions, and `require_permission` failing the boot on an
+undeclared code — are kernel-side guards on kernel-side call paths ERP does not
+use.
+
+Compatibility held on every assertion E2 pins: bare-string `capabilities=(...)`
+still resolves (a13 retyped the field as `str | CapabilitySpec` and coerces
+strings), `ProductAssemblySpec`'s new fields all default, the consume-pure list
+is a SUBSET check so a13's added modules (`cache`, `flags`) do not disturb it,
+and `import dotmac_kernel` stays DB-free. No transitive dependency moved.
+
+**Not delivered by this bump:** ERP declares no `ModuleManifest`, so D1's
+namespace and migration-lineage rules govern nothing here yet. They become
+relevant when ERP extracts stateful modules — its schema-bearing tables are much
+of why D1 exists — and that is adoption work with its own slice.
 
 **E2 status (2026-08-02): landed at pin `0.1.0a8` — install unblocked.** The
 first E2 attempt targeted `0.1.0a7` and was blocked: the a7 wheel's floors
