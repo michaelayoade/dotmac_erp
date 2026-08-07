@@ -23,16 +23,18 @@ def _payload() -> CRMPurchaseInvoicePayload:
         vendor_name="Fiber Vendor",
         vendor_code="FIBER",
         currency="NGN",
-        subtotal=Decimal("1000"),
-        tax_total=Decimal("0"),
-        total=Decimal("1000"),
+        # Canonical fixed-minor-unit scale (2 fractional digits for NGN) —
+        # the payables schema enforces the exact minor-unit digit count.
+        subtotal=Decimal("1000.00"),
+        tax_total=Decimal("0.00"),
+        total=Decimal("1000.00"),
         items=[
             CRMPurchaseInvoiceItemPayload(
                 item_type="service",
                 description="Fiber installation",
                 quantity=Decimal("1"),
                 unit_price=Decimal("1000"),
-                amount=Decimal("1000"),
+                amount=Decimal("1000.00"),
             )
         ],
     )

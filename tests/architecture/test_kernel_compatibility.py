@@ -401,8 +401,18 @@ def test_fake_licence_signer_works_via_erps_own_cryptography(
 # ---------------------------------------------------------------------------
 
 
-def test_app_import_loads_no_kernel_module(tmp_path: Path) -> None:
-    """Importing ``app.main`` pulls in zero ``dotmac_kernel`` modules.
+def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> None:
+    """Importing ``app.main`` loads no kernel module beyond the pure-contract
+    closure of the E1 consume-pure surface.
+
+    E2 pinned this at "zero kernel modules". E4 is the first slice where app/
+    legitimately imports the kernel (``dotmac_kernel.money`` in the Money/FX
+    boundary adapter), and importing any ``dotmac_kernel.<module>`` also runs
+    the kernel package ``__init__`` (its DB-free top-level re-export surface).
+    The canary therefore snapshots the closure loaded by importing the
+    consume-pure surface alone, then asserts ``app.main`` adds NOTHING beyond
+    it — importing ``dotmac_kernel.db``, ``.messaging``, ``.deps`` or any
+    other deferred/prohibited module still fails loudly.
 
     Runs in a fresh subprocess (mirroring the import bootstrap of
     ``scripts/update_openapi_contract.py``: same env pins, ``tests.conftest``
@@ -425,12 +435,24 @@ def test_app_import_loads_no_kernel_module(tmp_path: Path) -> None:
             "os.environ['DATABASE_URL'] = ("
             "'postgresql+psycopg://postgres:postgres@127.0.0.1:9/"
             "dotmac_erp_test?connect_timeout=1')",
+            # Snapshot the pure-contract closure: the E4 boundary adapter's
+            # import (money) plus the package __init__ it necessarily runs.
+            "import dotmac_kernel.money  # noqa: F401",
+            "allowed = {n for n in sys.modules",
+            f"           if n == {KERNEL_PACKAGE!r}",
+            f"           or n.startswith({KERNEL_PACKAGE + '.'!r})}}",
+            "assert not any(n.split('.')[1:2] == ['db'] for n in allowed), (",
+            "    'the kernel package __init__ itself became DB-bound: '",
+            "    + repr(sorted(allowed)))",
             "import tests.conftest  # noqa: F401 — app.db/app.rls doubles",
             "import app.main  # noqa: F401",
             "leaked = sorted(n for n in sys.modules",
-            f"                if n == {KERNEL_PACKAGE!r}",
-            f"                or n.startswith({KERNEL_PACKAGE + '.'!r}))",
-            "assert leaked == [], f'app.main loaded kernel modules {leaked}'",
+            f"                if (n == {KERNEL_PACKAGE!r}",
+            f"                    or n.startswith({KERNEL_PACKAGE + '.'!r}))",
+            "                and n not in allowed)",
+            "assert leaked == [], (",
+            "    f'app.main loaded kernel modules beyond the pure-contract '",
+            "    f'closure: {leaked}')",
             "print('ok')",
         ]
     )
@@ -443,9 +465,9 @@ def test_app_import_loads_no_kernel_module(tmp_path: Path) -> None:
         timeout=300,
     )
     assert result.returncode == 0, (
-        "importing app.main must load zero dotmac_kernel modules — E2 adds "
-        "only the dependency pin; app/ must not import dotmac_kernel in "
-        f"this slice:\n{result.stderr}"
+        "importing app.main must load no dotmac_kernel module beyond the "
+        "pure-contract closure — E4 allows the consume-pure surface only; "
+        f"kernel db/messaging/session surfaces stay unimported:\n{result.stderr}"
     )
     assert result.stdout.strip() == "ok"
 

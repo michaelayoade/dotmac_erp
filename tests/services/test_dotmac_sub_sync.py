@@ -16,6 +16,7 @@ customer has ``parent_customer_id IS NULL``.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -166,7 +167,12 @@ def test_parse_invoice_maps_fields_and_inline_allocations() -> None:
                 }
             ],
             "payment_allocations": [
-                {"id": "a1", "payment_id": "p1", "invoice_id": "inv-1", "amount": "50"}
+                {
+                    "id": "a1",
+                    "payment_id": "p1",
+                    "invoice_id": "inv-1",
+                    "amount": "50.00",
+                }
             ],
         }
     )
@@ -233,7 +239,7 @@ def test_parse_payment_reads_proof_backed_wht_contract() -> None:
     assert payment.wht_rate == Decimal("7.5")
     assert payment.wht_status == "certified"
     assert payment.wht_certificate_reference == "CERT-42"
-    assert payment.wht_resolved_at == "2026-07-03T09:00:00+00:00"
+    assert payment.wht_resolved_at == datetime(2026, 7, 3, 9, tzinfo=timezone.utc)
 
 
 def test_subscriber_full_name_prefers_display_then_company_then_parts() -> None:

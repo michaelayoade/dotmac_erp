@@ -69,6 +69,151 @@ resolved every blocker:
 Every E2 canary now RUNS — the skip machinery of the blocked attempt is
 deleted; a missing or wrong-version kernel is a hard failure.
 
+**E4 status (2026-08-02): exact Money/FX boundary adapter landed.** First
+slice in which `app/` imports the kernel (`dotmac_kernel.money`, consume-pure
+per the classification table below; the E1 import-boundary guard passes
+unchanged). What shipped:
+
+- **Adapter (one module):** `app/services/finance/money_boundary.py` —
+  kernel `Money`/`Currency` ⇄ ERP `(Decimal, currency_code)` conversion
+  (`to_boundary_money`/`from_money`), byte-exact connector serialization
+  (`serialize_money`/`serialize_amount`), the slice's single centralized
+  rounding decision (`BOUNDARY_ROUNDING` = half-up via
+  `round_to_minor_units`), fail-closed validators (float/bool, missing or
+  invalid currency, currency mismatch, excess minor-unit precision — a source
+  FACT with more precision than the currency's minor units is rejected, never
+  rounded), the WHT settlement identity (`check_settlement_identity`,
+  net + WHT = gross, pre-existing one-minor-unit tolerance preserved), and
+  FX ONLY from an immutable ERP-owned observation:
+  `rate_snapshot_from_observation` builds a kernel `ExchangeRate` snapshot
+  (pair, rate, effective time, `erp:core_fx:<source>[:<rate-type>]`,
+  observation row id) from a persisted `core_fx.exchange_rate` row and
+  refuses unpersisted/synthetic rows — `FXService` + `core_fx` remain the
+  only FX owner; no posting path performs a live rate lookup.
+- **Schemas converted (typed Money at the boundary):** the dotmac_sub
+  connector records `InvoiceRecord`, `CreditNoteRecord`, `PaymentRecord`
+  (`app/services/dotmac_sub/client.py`) each expose fail-closed
+  `boundary_money()` (headers, WHT evidence, allocation amounts), enforced
+  per-row inside the sync savepoints (`_invoices.py`, `_credit_notes.py`,
+  `_payments.py` — a bad row fails ITS savepoint, never the run); the
+  Sub/CRM payables command `CRMPurchaseInvoicePayload`
+  (`app/schemas/sync/dotmac_crm.py`) validates header totals and line
+  amounts through the adapter at parse time. The `_CENTS`/`ROUND_HALF_UP`
+  scattering in `_invoices.py` and the flat `0.01` WHT tolerance in
+  `_payments.py` were replaced by the adapter's currency-aware equivalents
+  (behavior-identical for 2-minor-unit currencies; all live data is NGN).
+- **Deliberately still Decimal-internal (boundary 6):** `Numeric(20,6)`
+  posting/functional amounts, `Numeric(20,10)` FX rates, tax ratios,
+  quantities, unit prices (line `quantity`/`unit_price` and
+  `tax_rate_percent`/`wht_rate` are rates, not money), posted-line
+  snapshots, `_functional_amount`'s 6-decimal functional conversion, and
+  account mappings. Line-level `amount` inputs remain part of the derived
+  rounding path (they may legitimately arrive as quantity×unit_price
+  products), now centralized through `round_to_minor_units`. Outbound
+  Decimal fields (e.g. `SubPurchaseInvoiceStatusResponse`) already serialize
+  as exact JSON strings under pydantic v2 (verified); re-quantizing that
+  existing wire contract to minor units was deliberately NOT done.
+- **No money at the material-support boundary:** `CRMMaterialRequestPayload`
+  carries quantities/serials only — valuation is ERP-internal at issue
+  (moving-average cost). Nothing to convert; recorded here as the E4
+  finding for that flow.
+- **Float eliminations (finding 7 absorbed):**
+  `app/models/fixed_assets/maintenance_work_order.py`
+  `estimated_cost`/`actual_cost` are now `Mapped[Decimal]` (columns were
+  already `Numeric(20,6)`; no schema change) and the two
+  `float(updated_actual_cost)` writes in
+  `app/services/people/assets/maintenance_service.py` are exact Decimal.
+  The Sub-facing sync slice itself had no float money fields (verified:
+  remaining floats there are HTTP timeouts/durations). `labor_hours` stays
+  float (hours, not money).
+- **Proof:** `tests/test_golden_money_pins.py` unchanged and green (row
+  shapes identical); adapter unit tests in
+  `tests/finance/test_money_boundary.py`; boundary/golden-serialization
+  tests in `tests/services/test_dotmac_sub_money_boundary.py`. The E2
+  app-unchanged canary evolved:
+  `test_app_import_loads_only_pure_contract_kernel_modules` now snapshots
+  the consume-pure import closure and asserts `app.main` loads nothing
+  beyond it (kernel db/messaging/session surfaces still unimported).
+
+**E4 review hardening (2026-08-02, PR #219 review):** the adapter's
+fail-closed claims now hold at the real ingress, superseding two statements
+above:
+
+- **Strict wire parsing:** `DotmacSubClient._parse_invoice` /
+  `_parse_payment` / `_parse_credit_note` no longer default malformed
+  amounts to 0 or a missing currency to ERP's functional currency — money
+  facts raise a typed `DotmacSubParseError` that fails the ONE source row
+  (the feeds' `on_parse_error` collector keeps the pull alive; a failure
+  parks the incremental watermark at the row, and an UNPOSITIONED failure —
+  no usable `updated_at` — freezes the cursor for the run so the row can
+  never be skipped past).
+- **Admission on every pass:** `boundary_money()` runs BEFORE the
+  unchanged-hash and status branches in all three sync mixins, so a legacy
+  row with invalid money facts cannot ride the unchanged-skip forever.
+- **Supplied line amounts are FACTS:** a Sub-supplied line `amount`
+  validates through `to_boundary_money` (excess precision rejected, never
+  rounded); only an ERP-derived quantity×unit_price (when Sub omits the
+  amount) and derived tax splits round. The earlier "line-level amount
+  inputs remain part of the derived rounding path" statement is obsolete.
+- **Minor-unit authority:** `SUPPORTED_CURRENCIES` (an explicit
+  `CurrencyRegistry`) ships **NGN and USD only**; `kernel_currency()`'s
+  2-minor-unit default for unknown codes is unreachable. EUR/GBP arrive
+  later only behind checked-in provisioning plus a database consistency
+  test against `core_fx.currency`; zero/three-minor-unit contracts (JPY,
+  BHD) stay covered via test-scoped registry instances.
+- **Strings-only money wire rule (pending contract artifact):** external
+  money crosses the wire as a canonical decimal STRING
+  (`{"amount": "48375.00"}`); every JSON number token — int and float —
+  plus booleans and non-finite values (NaN/±Infinity) is rejected at
+  ingress (`mode="before"` validators on `CRMPurchaseInvoicePayload`, the
+  strict Sub parsers). Per Michael's directive this rule is slated to
+  become a checked-in cross-repository contract document when the E4 (ERP)
+  and S5 (Sub) slices land — tracked here until that contract exists.
+
+**E4 round-4 hardening (2026-08-03, PR #219 review):** what the boundary
+*admits* is now typed and immutable in depth, not merely frozen at the top
+level:
+
+- **Admitted evidence is immutable IN DEPTH.** A frozen dataclass with a
+  `list` field is only shallowly immutable — the collection can still be
+  appended to or reassigned element-wise. Every collection field on an
+  admitted wire record is a TUPLE (`InvoiceRecord.lines`,
+  `InvoiceRecord.allocations`, `PaymentRecord.allocations`,
+  `CreditNoteRecord.lines`); no admitted record carries a `list`, `dict` or
+  `set`. A "changed" payload stays a NEW record (`dataclasses.replace`).
+- **Zero has exactly ONE canonical spelling and it is positive.** Every
+  negative-zero form (`"-0"`, `"-0.00"`, `"-0.0000"`) is rejected by the
+  canonical grammar at both ingress paths, and `serialize_amount` normalizes
+  a signed-zero result so it can never emit one. `Decimal("-0.00") ==
+  Decimal("0.00")` is True, so this is enforced on the SIGN / literal text,
+  never on equality.
+- **Timestamps are admitted as `datetime`, not wire text.** `updated_at`,
+  `issued_at`, `due_at`, `paid_at`, `wht_resolved_at` and `created_at` parse
+  to tz-aware UTC instants in the client (`_parse_wire_instant`), which is
+  the ONE owner of the wire-text→instant decision (`BaseSyncMixin._parse_date`
+  / `_parse_datetime` are gone). A malformed timestamp is a typed row
+  rejection routed through the SAME collector as a malformed money fact:
+  `updated_at` parses first, so a bad non-position timestamp is POSITIONED
+  (parks the cursor) while a bad `updated_at` is UNPOSITIONED (freezes it) —
+  the round-2/3 cursor semantics are unchanged. Consumers needing the wire
+  text (change hashes, `updated_since`) format it explicitly with
+  `.isoformat()`.
+- **Closed status sets are enums; open ones are documented `str`.**
+  `tax_application` is a typed `TaxApplication` (`exclusive`/`inclusive`/
+  `exempt`) — ERP already failed closed on anything else, and typing it also
+  closes the hole where a bogus application rode through when the line
+  carried no `tax_rate_id`. Invoice/credit-note/payment `status`,
+  `wht_status`, subscriber `status`/`category` and billing-account `status`
+  stay `str` **by decision**, documented in each record's docstring: Sub owns
+  and extends those vocabularies, ERP's mappings carry documented catch-alls,
+  and an unknown member must be DATA, never a failed financial row.
+- **The last two copy-pasted watermark loops are gone.** The reseller and
+  subscriber mixins now use the same `WatermarkProgress` owner (and carry
+  `on_parse_error` collectors, so typing their timestamps cannot let one bad
+  row terminate a feed generator). `WatermarkProgress.parse_error_collector`
+  no longer takes a `parse_datetime` hook — `DotmacSubParseError.updated_at`
+  is already the parsed instant.
+
 **Authority order (highest wins):**
 
 1. `app/services/sot_relationships.py` — the executable SOT registry
@@ -115,8 +260,10 @@ global-not-org-scoped RBAC tables (finding 2), licensing placeholder key
 writers (finding 5 — E6 prerequisite), plural approval engines (finding 6),
 float annotations on money columns in
 `app/models/fixed_assets/maintenance_work_order.py` (finding 7 — verified at
-lines 113/119: `estimated_cost`/`actual_cost` are `Mapped[float]`; E4 absorbs
-the touched slice).
+the E1 pin: `estimated_cost`/`actual_cost` were `Mapped[float]`; **RESOLVED
+in E4** — annotations are now `Mapped[Decimal]` and the `float(...)` writes in
+`app/services/people/assets/maintenance_service.py` are exact Decimal; see the
+E4 status above).
 
 ## Non-negotiable adoption boundaries (from the accepted plan)
 

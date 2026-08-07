@@ -24,9 +24,13 @@ from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.services.dotmac_sub.client import DotmacSubError, PaymentRecord
+from app.services.finance.money_boundary import (
+    check_settlement_identity,
+    to_boundary_money,
+)
 
-from ._base import next_watermark
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
+from ._progress import WatermarkProgress
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -51,8 +55,6 @@ class PaymentSyncMixin:
     _load_payment_channels: Any
     _get_bank_account_for_channel: Any
     _channel_name: Any
-    _parse_date: Any
-    _parse_datetime: Any
     _get_sync_watermark: Any
     _advance_sync_watermark: Any
     _generate_payment_number: Any
@@ -76,16 +78,22 @@ class PaymentSyncMixin:
             self._get_sync_watermark(EntityType.PAYMENT) if use_watermark else None
         )
         updated_since = watermark.isoformat() if watermark else None
-        max_ok: datetime | None = None
-        min_error: datetime | None = None
+        # ONE shared owner for the park-vs-freeze cursor decision (see
+        # _progress.WatermarkProgress); parse rejections and savepoint row
+        # failures flow through the same accounting.
+        progress = WatermarkProgress(watermark, label="payment")
+
         try:
             for pay in self.client.get_payments(
-                account_id=account_id, status=status, updated_since=updated_since
+                account_id=account_id,
+                status=status,
+                updated_since=updated_since,
+                on_parse_error=progress.parse_error_collector(result),
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
-                row_updated_at = self._parse_datetime(pay.updated_at)
+                row_updated_at = pay.updated_at
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_payment(
@@ -93,12 +101,7 @@ class PaymentSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
-                    if row_updated_at is not None:
-                        max_ok = (
-                            row_updated_at
-                            if max_ok is None
-                            else max(max_ok, row_updated_at)
-                        )
+                    progress.record_success(row_updated_at)
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -111,16 +114,14 @@ class PaymentSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Payment {pay.id}: {e!s}")
                     logger.exception("Error syncing payment %s", pay.id)
-                    if row_updated_at is not None:
-                        min_error = (
-                            row_updated_at
-                            if min_error is None
-                            else min(min_error, row_updated_at)
-                        )
+                    progress.record_failure(row_updated_at)
+            # Advance-or-park, or freeze on an unpositioned failure (see
+            # WatermarkProgress).
             if use_watermark:
-                self._advance_sync_watermark(
-                    EntityType.PAYMENT,
-                    next_watermark(watermark, max_ok, min_error),
+                progress.conclude(
+                    lambda cursor: self._advance_sync_watermark(
+                        EntityType.PAYMENT, cursor
+                    )
                 )
             self.db.flush()
             result.message = (
@@ -143,6 +144,13 @@ class PaymentSyncMixin:
     ) -> None:
         external_id = pay.id
 
+        # E4 money boundary FIRST — before the settled/unchanged branches —
+        # so every consumed monetary fact is validated on EVERY sync pass
+        # (rejects missing currency, excess minor-unit precision,
+        # unprovisioned currency), including refund/void paths that consume
+        # the amounts. A rejection fails this row's savepoint, never the run.
+        pay.boundary_money()
+
         if (pay.status or "").lower() not in _SETTLED_STATUSES:
             # Not settled cash (e.g. refunded / voided). If a prior sync already
             # GL-posted this payment, its receipt journal must be reversed —
@@ -162,9 +170,13 @@ class PaymentSyncMixin:
                 "wht_status": pay.wht_status,
                 "wht_record_id": pay.wht_record_id,
                 "wht_certificate_reference": pay.wht_certificate_reference,
-                "wht_resolved_at": pay.wht_resolved_at,
+                # Typed instants formatted back to canonical wire text (the
+                # record no longer carries the raw strings).
+                "wht_resolved_at": (
+                    pay.wht_resolved_at.isoformat() if pay.wht_resolved_at else None
+                ),
                 "status": pay.status,
-                "paid_at": pay.paid_at,
+                "paid_at": pay.paid_at.isoformat() if pay.paid_at else None,
                 "account_id": pay.effective_account_id,
                 "channel": pay.payment_channel_id,
                 "allocations": sorted(
@@ -203,7 +215,7 @@ class PaymentSyncMixin:
             )
             return
 
-        payment_date = self._parse_date(pay.paid_at) or date.today()
+        payment_date = pay.paid_at.date() if pay.paid_at else date.today()
         if payment_date < DOTMAC_SUB_SYNC_MIN_DATE:
             self._record_sync(EntityType.PAYMENT, external_id, _PRE_CUTOFF_SENTINEL)
             result.skipped += 1
@@ -225,11 +237,20 @@ class PaymentSyncMixin:
         wht_amount = pay.wht_amount or Decimal("0")
         if gross_amount < 0 or net_amount < 0:
             raise ValueError("Sub payment refund exceeds its source settlement amount")
-        if (net_amount + wht_amount - gross_amount).copy_abs() > Decimal("0.01"):
-            raise ValueError(
-                "Sub payment accounting facts do not balance: "
-                f"net {net_amount} + WHT {wht_amount} != gross {gross_amount}"
-            )
+        # WHT evidence identity (net + WHT = gross) via the E4 adapter, with the
+        # pre-existing one-minor-unit sync tolerance for the booking currency.
+        check_settlement_identity(
+            gross=to_boundary_money(
+                gross_amount, currency_code, field=f"Sub payment {pay.id} gross"
+            ),
+            net=to_boundary_money(
+                net_amount, currency_code, field=f"Sub payment {pay.id} net"
+            ),
+            withheld=to_boundary_money(
+                wht_amount, currency_code, field=f"Sub payment {pay.id} WHT"
+            ),
+            field=f"Sub payment {pay.id}",
+        )
         wht_code_id = None
         if wht_amount > Decimal("0"):
             if pay.wht_rate is None:
@@ -419,7 +440,7 @@ class PaymentSyncMixin:
                 f"ERP WHT {required} account is required for {terminal_status}"
             )
 
-        resolved_at = self._parse_datetime(pay.wht_resolved_at)
+        resolved_at = pay.wht_resolved_at
         if resolved_at is None:
             raise ValueError(
                 "Terminal Sub WHT state is missing its resolution timestamp"

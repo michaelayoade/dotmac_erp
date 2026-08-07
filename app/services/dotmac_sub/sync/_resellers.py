@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -11,7 +10,7 @@ from app.models.finance.ar.customer import Customer, CustomerType
 from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import DotmacSubError, ResellerRecord
 
-from ._base import next_watermark
+from ._progress import WatermarkProgress
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -34,7 +33,6 @@ class ResellerSyncMixin:
     _get_synced_entity: Any
     _reprime_tenant_context: Any
     _customer_code: Any
-    _parse_datetime: Any
     _get_sync_watermark: Any
     _advance_sync_watermark: Any
 
@@ -47,11 +45,16 @@ class ResellerSyncMixin:
         processed = 0
         watermark = self._get_sync_watermark(EntityType.RESELLER)
         updated_since = watermark.isoformat() if watermark else None
-        max_ok: datetime | None = None
-        min_error: datetime | None = None
+        # ONE shared owner for the park-vs-freeze cursor decision (see
+        # _progress.WatermarkProgress); parse rejections and savepoint row
+        # failures flow through the same accounting on every entity path.
+        progress = WatermarkProgress(watermark, label="reseller")
         try:
-            for reseller in self.client.get_resellers(updated_since=updated_since):
-                row_updated_at = self._parse_datetime(reseller.updated_at)
+            for reseller in self.client.get_resellers(
+                updated_since=updated_since,
+                on_parse_error=progress.parse_error_collector(result),
+            ):
+                row_updated_at = reseller.updated_at
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_reseller(
@@ -59,12 +62,7 @@ class ResellerSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
-                    if row_updated_at is not None:
-                        max_ok = (
-                            row_updated_at
-                            if max_ok is None
-                            else max(max_ok, row_updated_at)
-                        )
+                    progress.record_success(row_updated_at)
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -76,15 +74,9 @@ class ResellerSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Reseller {reseller.id}: {e!s}")
                     logger.exception("Error syncing reseller %s", reseller.id)
-                    if row_updated_at is not None:
-                        min_error = (
-                            row_updated_at
-                            if min_error is None
-                            else min(min_error, row_updated_at)
-                        )
-            self._advance_sync_watermark(
-                EntityType.RESELLER,
-                next_watermark(watermark, max_ok, min_error),
+                    progress.record_failure(row_updated_at)
+            progress.conclude(
+                lambda cursor: self._advance_sync_watermark(EntityType.RESELLER, cursor)
             )
             self.db.flush()
             result.message = (

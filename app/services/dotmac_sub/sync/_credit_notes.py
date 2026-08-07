@@ -16,12 +16,12 @@ from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.services.dotmac_sub.client import CreditNoteRecord, DotmacSubError
 
-from ._base import next_watermark
 from ._constants import (
     DOTMAC_SUB_SYNC_MIN_DATE,
     SYSTEM_USER_ID,
     _PRE_CUTOFF_SENTINEL,
 )
+from ._progress import WatermarkProgress
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
@@ -40,8 +40,6 @@ class CreditNoteSyncMixin:
     _record_sync: Any
     _get_synced_entity: Any
     _get_customer_for_account: Any
-    _parse_date: Any
-    _parse_datetime: Any
     _get_sync_watermark: Any
     _advance_sync_watermark: Any
     _generate_credit_note_number: Any
@@ -69,16 +67,22 @@ class CreditNoteSyncMixin:
             self._get_sync_watermark(EntityType.CREDIT_NOTE) if use_watermark else None
         )
         updated_since = watermark.isoformat() if watermark else None
-        max_ok: datetime | None = None
-        min_error: datetime | None = None
+        # ONE shared owner for the park-vs-freeze cursor decision (see
+        # _progress.WatermarkProgress); parse rejections and savepoint row
+        # failures flow through the same accounting.
+        progress = WatermarkProgress(watermark, label="credit-note")
+
         try:
             for cn in self.client.get_credit_notes(
-                account_id=account_id, status=status, updated_since=updated_since
+                account_id=account_id,
+                status=status,
+                updated_since=updated_since,
+                on_parse_error=progress.parse_error_collector(result),
             ):
                 if batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
-                row_updated_at = self._parse_datetime(cn.updated_at)
+                row_updated_at = cn.updated_at
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_credit_note(
@@ -86,12 +90,7 @@ class CreditNoteSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
-                    if row_updated_at is not None:
-                        max_ok = (
-                            row_updated_at
-                            if max_ok is None
-                            else max(max_ok, row_updated_at)
-                        )
+                    progress.record_success(row_updated_at)
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -103,16 +102,14 @@ class CreditNoteSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Credit note {cn.credit_number}: {e!s}")
                     logger.exception("Error syncing credit note %s", cn.id)
-                    if row_updated_at is not None:
-                        min_error = (
-                            row_updated_at
-                            if min_error is None
-                            else min(min_error, row_updated_at)
-                        )
+                    progress.record_failure(row_updated_at)
+            # Advance-or-park, or freeze on an unpositioned failure (see
+            # WatermarkProgress).
             if use_watermark:
-                self._advance_sync_watermark(
-                    EntityType.CREDIT_NOTE,
-                    next_watermark(watermark, max_ok, min_error),
+                progress.conclude(
+                    lambda cursor: self._advance_sync_watermark(
+                        EntityType.CREDIT_NOTE, cursor
+                    )
                 )
             self.db.flush()
             result.message = (
@@ -134,6 +131,15 @@ class CreditNoteSyncMixin:
         skip_unchanged: bool,
     ) -> None:
         external_id = cn.id
+
+        # E4 money boundary FIRST — before the unchanged/status branches —
+        # so every consumed monetary fact is validated on EVERY sync pass
+        # (rejects missing currency, excess minor-unit precision,
+        # unprovisioned currency). A legacy row whose invalid money never
+        # changes must fail its row here, not ride the unchanged-skip
+        # forever. A rejection fails this row's savepoint, never the run.
+        cn.boundary_money()
+
         data_hash = self._compute_hash(
             {
                 "account_id": cn.account_id,
@@ -145,7 +151,9 @@ class CreditNoteSyncMixin:
                 "applied_total": str(cn.applied_total),
                 "status": cn.status,
                 "invoice_id": cn.invoice_id,
-                "issued_at": cn.issued_at,
+                # Typed instant formatted back to canonical wire text (the
+                # record no longer carries the raw string).
+                "issued_at": cn.issued_at.isoformat() if cn.issued_at else None,
                 "memo": cn.memo,
                 "lines": [
                     {
@@ -154,7 +162,7 @@ class CreditNoteSyncMixin:
                         "unit_price": str(line.unit_price),
                         "amount": str(line.amount),
                         "tax_rate_id": line.tax_rate_id,
-                        "tax_application": line.tax_application,
+                        "tax_application": line.tax_application.value,
                     }
                     for line in sorted(cn.lines, key=lambda item: item.id)
                 ],
@@ -170,6 +178,7 @@ class CreditNoteSyncMixin:
         if source_status == "draft":
             result.skipped += 1
             return
+
         if source_status == "void":
             local_status = InvoiceStatus.VOID
         elif source_status == "applied":
@@ -196,7 +205,7 @@ class CreditNoteSyncMixin:
         # Use the credit note's real issue date (so it lands in the right fiscal
         # period), and honour the same historical cutoff as invoices/payments so
         # a pre-cutoff credit note isn't imported without its invoice.
-        cn_date = self._parse_date(cn.issued_at) or _date.today()
+        cn_date = cn.issued_at.date() if cn.issued_at else _date.today()
         if cn_date < DOTMAC_SUB_SYNC_MIN_DATE:
             self._record_sync(EntityType.CREDIT_NOTE, external_id, _PRE_CUTOFF_SENTINEL)
             result.skipped += 1

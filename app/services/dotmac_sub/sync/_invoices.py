@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -21,15 +21,15 @@ from app.services.dotmac_sub.client import (
     CreditNoteRecord,
     DotmacSubError,
     InvoiceRecord,
+    TaxApplication,
 )
+from app.services.finance.money_boundary import round_to_minor_units, to_boundary_money
 
-from ._base import next_watermark
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
+from ._progress import WatermarkProgress
 from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
-
-_CENTS = Decimal("0.01")
 
 
 def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
@@ -43,8 +43,10 @@ def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
         "tax_total": str(inv.tax_total),
         "total": str(inv.total),
         "balance_due": str(inv.balance_due),
-        "issued_at": inv.issued_at,
-        "due_at": inv.due_at,
+        # Typed instants are formatted back to the canonical wire text for the
+        # change hash — the record no longer carries the raw string.
+        "issued_at": inv.issued_at.isoformat() if inv.issued_at else None,
+        "due_at": inv.due_at.isoformat() if inv.due_at else None,
         "memo": inv.memo,
         "is_proforma": inv.is_proforma,
         "lines": [
@@ -55,7 +57,7 @@ def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
                 "unit_price": str(line.unit_price),
                 "amount": str(line.amount),
                 "tax_rate_id": line.tax_rate_id,
-                "tax_application": line.tax_application,
+                "tax_application": line.tax_application.value,
             }
             for line in sorted(inv.lines, key=lambda item: item.id)
         ],
@@ -76,8 +78,6 @@ class InvoiceSyncMixin:
     _get_synced_entity: Any
     _get_existing_invoice: Any
     _get_customer_for_account: Any
-    _parse_date: Any
-    _parse_datetime: Any
     _get_sync_watermark: Any
     _advance_sync_watermark: Any
     _generate_invoice_number: Any
@@ -105,11 +105,17 @@ class InvoiceSyncMixin:
             self._get_sync_watermark(EntityType.INVOICE) if use_watermark else None
         )
         updated_since = watermark.isoformat() if watermark else None
-        max_ok: datetime | None = None
-        min_error: datetime | None = None
+        # ONE shared owner for the park-vs-freeze cursor decision (see
+        # _progress.WatermarkProgress); parse rejections and savepoint row
+        # failures flow through the same accounting.
+        progress = WatermarkProgress(watermark, label="invoice")
+
         try:
             for inv in self.client.get_invoices(
-                account_id=account_id, status=status, updated_since=updated_since
+                account_id=account_id,
+                status=status,
+                updated_since=updated_since,
+                on_parse_error=progress.parse_error_collector(result),
             ):
                 # The global delta must drain completely. A timestamp-only
                 # watermark plus a row cap can loop forever when more than the
@@ -118,7 +124,7 @@ class InvoiceSyncMixin:
                 if not use_watermark and batch_size and processed >= batch_size:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
-                row_updated_at = self._parse_datetime(inv.updated_at)
+                row_updated_at = inv.updated_at
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_invoice(
@@ -126,12 +132,7 @@ class InvoiceSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
-                    if row_updated_at is not None:
-                        max_ok = (
-                            row_updated_at
-                            if max_ok is None
-                            else max(max_ok, row_updated_at)
-                        )
+                    progress.record_success(row_updated_at)
                     if processed % 500 == 0:
                         self.db.commit()
                         self._reprime_tenant_context()
@@ -144,18 +145,15 @@ class InvoiceSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
                     logger.exception("Error syncing invoice %s", inv.id)
-                    if row_updated_at is not None:
-                        min_error = (
-                            row_updated_at
-                            if min_error is None
-                            else min(min_error, row_updated_at)
-                        )
+                    progress.record_failure(row_updated_at)
             # Advance the cursor only after the pull completed without an API
-            # error (inclusive >= means a re-pull of the boundary row is safe).
+            # error (inclusive >= means a re-pull of the boundary row is
+            # safe); an unpositioned failure freezes it (see WatermarkProgress).
             if use_watermark:
-                self._advance_sync_watermark(
-                    EntityType.INVOICE,
-                    next_watermark(watermark, max_ok, min_error),
+                progress.conclude(
+                    lambda cursor: self._advance_sync_watermark(
+                        EntityType.INVOICE, cursor
+                    )
                 )
             self.db.flush()
             result.message = (
@@ -177,6 +175,15 @@ class InvoiceSyncMixin:
         skip_unchanged: bool,
     ) -> None:
         external_id = inv.id
+
+        # E4 money boundary FIRST — before the unchanged/status branches —
+        # so every consumed monetary fact is validated on EVERY sync pass
+        # (rejects missing currency, excess minor-unit precision,
+        # unprovisioned currency). A legacy row whose invalid money never
+        # changes must fail its row here, not ride the unchanged-skip
+        # forever. A rejection fails this row's savepoint, never the run.
+        inv.boundary_money()
+
         data_hash = self._compute_hash(_invoice_hash_payload(inv))
         if skip_unchanged and not self._has_changed(
             EntityType.INVOICE, external_id, data_hash
@@ -209,8 +216,8 @@ class InvoiceSyncMixin:
             )
             return
 
-        invoice_date = self._parse_date(inv.issued_at) or date.today()
-        due_date = self._parse_date(inv.due_at) or invoice_date
+        invoice_date = inv.issued_at.date() if inv.issued_at else date.today()
+        due_date = inv.due_at.date() if inv.due_at else invoice_date
 
         if invoice_date < DOTMAC_SUB_SYNC_MIN_DATE:
             self._record_sync(EntityType.INVOICE, external_id, _PRE_CUTOFF_SENTINEL)
@@ -369,23 +376,29 @@ class InvoiceSyncMixin:
         number = getattr(doc, "credit_number", None) or getattr(
             doc, "invoice_number", ""
         )
-        effective_date = self._parse_date(doc.issued_at) or date.today()
+        effective_date = doc.issued_at.date() if doc.issued_at else date.today()
+        currency_code = doc.currency
         projected: list[tuple[Any, Decimal, Decimal, Any]] = []
         for item in lines:
             line_subtotal, line_tax, tax_code = self._source_line_amounts(
-                item, effective_date=effective_date
+                item, currency_code=currency_code, effective_date=effective_date
             )
             projected.append((item, line_subtotal, line_tax, tax_code))
+
+        def _round(value: Decimal) -> Decimal:
+            # Centralized E4 rounding decision (currency minor units, half-up).
+            # ERP-DERIVED aggregates only — source header FACTS are compared
+            # as transmitted, never rounded (a 10.005 fact must fail the row
+            # via the boundary, not become 10.01 here).
+            return round_to_minor_units(value, currency_code)
 
         projected_subtotal = sum((item[1] for item in projected), Decimal("0"))
         projected_tax = sum((item[2] for item in projected), Decimal("0"))
         line_mismatch = bool(lines) and (
-            projected_subtotal.quantize(_CENTS) != doc.subtotal.quantize(_CENTS)
-            or projected_tax.quantize(_CENTS) != doc.tax_total.quantize(_CENTS)
+            _round(projected_subtotal) != doc.subtotal
+            or _round(projected_tax) != doc.tax_total
         )
-        if line_mismatch or (doc.subtotal + doc.tax_total).quantize(
-            _CENTS
-        ) != doc.total.quantize(_CENTS):
+        if line_mismatch or doc.subtotal + doc.tax_total != doc.total:
             raise ValueError(
                 f"Sub {label} {number} tax lines do not reconcile to the "
                 f"source header: lines={projected_subtotal}+{projected_tax}, "
@@ -394,33 +407,49 @@ class InvoiceSyncMixin:
         return projected
 
     def _source_line_amounts(
-        self, item: Any, *, effective_date: date
+        self, item: Any, *, currency_code: str, effective_date: date
     ) -> tuple[Decimal, Decimal, Any]:
-        """Mirror Sub's line tax facts; ERP only resolves the posting TaxCode."""
-        amount = (
-            item.amount if item.amount is not None else item.quantity * item.unit_price
-        ).quantize(_CENTS, rounding=ROUND_HALF_UP)
-        application = (item.tax_application or "exclusive").strip().lower()
-        if application == "exempt" or not item.tax_rate_id:
+        """Mirror Sub's line tax facts; ERP only resolves the posting TaxCode.
+
+        A SUPPLIED line amount is a source money FACT: it is validated exact
+        via ``to_boundary_money`` (excess minor-unit precision is REJECTED,
+        never rounded — 10.005 NGN fails the row instead of becoming 10.01).
+        Only when Sub omits the line amount does ERP derive
+        quantity x unit_price itself, and only that ERP-derived value (and
+        the derived tax splits below) may round through the E4 adapter's
+        centralized minor-unit rounding (half-up).
+        """
+        if item.amount is not None:
+            amount = to_boundary_money(
+                item.amount,
+                currency_code,
+                field=f"Sub line {item.id} amount",
+            ).amount
+        else:
+            amount = round_to_minor_units(
+                item.quantity * item.unit_price, currency_code
+            )
+        # Admitted as a typed TaxApplication member at parse time (closed set),
+        # so nothing here has to re-normalize or re-validate wire text.
+        application: TaxApplication = item.tax_application
+        if application is TaxApplication.EXEMPT or not item.tax_rate_id:
             return amount, Decimal("0"), None
-        if application not in {"exclusive", "inclusive"}:
-            raise ValueError(f"Unsupported source tax application: {application}")
 
         source_rate = self._get_source_tax_rate(str(item.tax_rate_id))
         ratio = source_rate.rate / Decimal("100")
         if ratio <= Decimal("0"):
             return amount, Decimal("0"), None
-        if application == "inclusive":
-            tax_amount = (amount - (amount / (Decimal("1") + ratio))).quantize(
-                _CENTS, rounding=ROUND_HALF_UP
+        if application is TaxApplication.INCLUSIVE:
+            tax_amount = round_to_minor_units(
+                amount - (amount / (Decimal("1") + ratio)), currency_code
             )
             line_subtotal = amount - tax_amount
         else:
             line_subtotal = amount
-            tax_amount = (amount * ratio).quantize(_CENTS, rounding=ROUND_HALF_UP)
+            tax_amount = round_to_minor_units(amount * ratio, currency_code)
         tax_code = self._resolve_source_sales_tax_code(
             source_tax_rate_id=str(item.tax_rate_id),
-            tax_application=application,
+            tax_application=application.value,
             effective_date=effective_date,
         )
         return line_subtotal, tax_amount, tax_code

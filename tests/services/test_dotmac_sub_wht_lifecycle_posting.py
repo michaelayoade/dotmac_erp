@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -20,12 +20,12 @@ class _Harness(PaymentSyncMixin):
         self.db = db
         self.organization_id = organization_id
 
-    @staticmethod
-    def _parse_datetime(value: str | None) -> datetime | None:
-        return datetime.fromisoformat(value) if value else None
 
-
-def _source(status: str, *, resolved_at: str | None = "2026-07-03T09:00:00+00:00"):
+def _source(
+    status: str,
+    *,
+    resolved_at: datetime | None = datetime(2026, 7, 3, 9, tzinfo=timezone.utc),
+):
     return PaymentRecord(
         id="sub-payment-1",
         account_id="sub-account-1",
