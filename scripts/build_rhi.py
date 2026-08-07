@@ -20,20 +20,14 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_PACKAGE_TREES = (
-    "app.licensing",
-)
+DEFAULT_PACKAGE_TREES = ("app.licensing",)
 FULL_PACKAGE_TREES = (
     "app.services",
     "app.models",
     "app.licensing",
 )
-SINGLE_MODULES = (
-    "app.errors",
-)
-CONFLICTS = (
-    ("app/services/audit.py", "app/services/audit"),
-)
+SINGLE_MODULES = ("app.errors",)
+CONFLICTS = (("app/services/audit.py", "app/services/audit"),)
 
 
 def dotted_to_path(root: Path, dotted_name: str) -> Path:
@@ -82,11 +76,7 @@ def discover_python_files(
 
     app_root = app_dir.resolve()
     return sorted(
-        {
-            file.resolve()
-            for file in files
-            if file.resolve().is_relative_to(app_root)
-        }
+        {file.resolve() for file in files if file.resolve().is_relative_to(app_root)}
     )
 
 
@@ -117,7 +107,9 @@ def compile_file(py_file: Path, project_root: Path) -> Path:
     else:
         matches = extension_outputs(py_file)
         if not matches:
-            raise RuntimeError(f"Nuitka reported success but no .so exists for {rel_file}")
+            raise RuntimeError(
+                f"Nuitka reported success but no .so exists for {rel_file}"
+            )
         so_file = matches[-1]
 
     print(f"  -> {so_file.relative_to(project_root)}")
@@ -163,7 +155,9 @@ def main() -> None:
 
     project_root = Path(args.project_root).resolve()
     app_dir = (project_root / args.app_dir).resolve()
-    package_trees = FULL_PACKAGE_TREES if args.full_services_models else DEFAULT_PACKAGE_TREES
+    package_trees = (
+        FULL_PACKAGE_TREES if args.full_services_models else DEFAULT_PACKAGE_TREES
+    )
 
     print("DotMac ERP RHI Nuitka build")
     print(f"Project root: {project_root}")
