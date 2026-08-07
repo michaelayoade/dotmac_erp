@@ -222,12 +222,19 @@ class OrganizationBranding(Base):
     )
 
     # ─────────────────────────────────────────────────────────────────
-    # Advanced Customization
+    # Retired: operator-supplied raw CSS (ADR-0006 D8)
     # ─────────────────────────────────────────────────────────────────
+    # No application code reads or writes this any more: it is not accepted by
+    # the API or the admin form, and it is never emitted into a page. The column
+    # stays mapped only because it still exists on the table — previously stored
+    # values are kept so an operator can export them and map them onto the
+    # branding fields above. Drop the column in a migration once that is done.
     custom_css: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
-        comment="Custom CSS injected after generated styles",
+        comment=(
+            "RETIRED (ADR-0006 D8): never written or rendered; kept for export only"
+        ),
     )
 
     # ─────────────────────────────────────────────────────────────────

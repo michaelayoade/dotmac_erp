@@ -323,7 +323,6 @@ class AdminSettingsWebService:
                 if branding and branding.sidebar_style
                 else "dark"
             ),
-            "custom_css": (branding.custom_css or "") if branding else "",
         }
 
         return {
@@ -354,6 +353,19 @@ class AdminSettingsWebService:
         data: dict[str, Any],
     ) -> tuple[bool, str | None]:
         """Update branding settings."""
+        # Raw CSS is retired fleet-wide (ADR-0006 D8). This form path bypasses
+        # the BrandingCreate/BrandingUpdate schemas — their `extra="forbid"`
+        # never sees it — so it must reject the field itself. Rejecting, rather
+        # than dropping the key, is the point: a silent ignore plus a success
+        # redirect tells the operator their CSS was saved when it was not.
+        if str(data.get("custom_css") or "").strip():
+            return False, (
+                "Custom CSS is no longer accepted. Raw CSS can hide or rewrite "
+                "legal text, overlay controls, and leak field contents, so "
+                "branding is now set through the colour, typography and logo "
+                "fields. Remove the custom CSS and save again."
+            )
+
         org = db.get(Organization, organization_id)
         if not org:
             return False, "Organization not found"
@@ -396,7 +408,6 @@ class AdminSettingsWebService:
                 "border_radius",
                 "button_style",
                 "sidebar_style",
-                "custom_css",
             ]
 
             if branding:

@@ -20,7 +20,11 @@ except (ValueError, TypeError, ArithmeticError) as e:
 Jinja2 auto-escapes by default. `| safe` is only allowed for:
 - `{{ request.state.csrf_form | safe }}` — CSRF input
 - `{{ data | tojson | safe }}` — JSON for JavaScript
-- `{{ org_branding.css | safe }}` — Admin-configured CSS
+- `{{ org_branding.css | safe }}` — branding CSS **generated** from validated
+  colour/typography/logo fields. Never operator-supplied raw CSS: that is
+  retired fleet-wide (ADR-0006 D8), because CSS alone can hide or rewrite legal
+  text, overlay controls same-origin, and exfiltrate field contents via
+  attribute selectors. Do not reintroduce a raw-CSS field.
 
 For user content: `{{ ticket.description | sanitize_html }}`
 For newlines: `{{ comment.text | nl2br }}`

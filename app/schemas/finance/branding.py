@@ -157,12 +157,6 @@ class BrandingBase(BaseModel):
         description="Sidebar theme preset",
     )
 
-    # Advanced
-    custom_css: str | None = Field(
-        None,
-        description="Custom CSS injected after generated styles",
-    )
-
     # Validators for color fields
     @field_validator(
         "primary_color",
@@ -182,7 +176,15 @@ class BrandingBase(BaseModel):
 
 
 class BrandingCreate(BrandingBase):
-    """Schema for creating organization branding."""
+    """Schema for creating organization branding.
+
+    `extra="forbid"`: an unknown field is a 422, not a silent no-op. This is
+    what makes the removal of `custom_css` visible — a client still sending
+    tenant-supplied raw CSS (retired fleet-wide, ADR-0006 D8) is told its value
+    was not stored instead of believing it was.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     organization_id: UUID = Field(
         ...,
@@ -191,7 +193,10 @@ class BrandingCreate(BrandingBase):
 
 
 class BrandingUpdate(BrandingBase):
-    """Schema for updating organization branding."""
+    """Schema for updating organization branding. See `BrandingCreate` for why
+    unknown fields are rejected rather than ignored."""
+
+    model_config = ConfigDict(extra="forbid")
 
     is_active: bool | None = None
 

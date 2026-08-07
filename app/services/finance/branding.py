@@ -243,12 +243,13 @@ class CSSGenerator:
         if branding.sidebar_style:
             lines.extend(self._generate_sidebar_styles())
 
-        # Custom CSS injection
-        if branding.custom_css:
-            lines.append("")
-            lines.append("/* Custom CSS */")
-            lines.append(branding.custom_css)
-
+        # Everything emitted here is generated from validated branding fields.
+        # Operator-supplied raw CSS is not accepted anywhere (ADR-0006 D8) — it
+        # can hide or rewrite legal text, overlay controls same-origin, and
+        # exfiltrate field contents via attribute selectors, and those are CSS's
+        # intended semantics, so no sanitiser removes them. This output is
+        # rendered `| safe` on the login page and the unauthenticated careers
+        # portal; keep it generated.
         return "\n".join(lines)
 
     def _generate_button_styles(self) -> list[str]:
@@ -450,7 +451,6 @@ class BrandingService:
             border_radius=data.border_radius,
             button_style=data.button_style,
             sidebar_style=data.sidebar_style,
-            custom_css=data.custom_css,
             created_by_id=user_id,
         )
         self.db.add(branding)

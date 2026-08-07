@@ -439,39 +439,6 @@
                     </div>
                 </div>
 
-                <!-- ── Advanced Section ── -->
-                <div class="card" :class="{ 'section-collapsed': !sections.advanced }">
-                    <button type="button" @click="sections.advanced = !sections.advanced"
-                            class="w-full p-6 flex items-center justify-between text-left">
-                        <div class="flex items-center gap-3">
-                            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Advanced</h2>
-                                <p class="text-sm text-slate-500 dark:text-slate-400">Custom CSS for power users</p>
-                            </div>
-                        </div>
-                        <svg class="h-5 w-5 text-slate-400 transition-transform" :class="{ 'rotate-180': sections.advanced }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                        </svg>
-                    </button>
-                    <div class="section-content">
-                        <div class="px-6 pb-6 border-t border-slate-100 dark:border-slate-800 pt-4">
-                            <label class="form-label">Custom CSS</label>
-                            <textarea aria-label="Custom CSS" name="custom_css"
-                                      x-model="config.custom_css"
-                                      rows="8"
-                                      placeholder=":root {&#10;  --teal: #0d9488;&#10;  --gold: #d97706;&#10;}"
-                                      class="form-input font-mono text-sm"
-                                      spellcheck="false"></textarea>
-                            <span class="form-hint">Injected after all generated styles. Use CSS variables to override design tokens.</span>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- ── Form Actions ── -->
                 <div class="flex gap-3 justify-end py-2">
                     <a href="/admin/settings/hub" class="btn btn-secondary">Cancel</a>
@@ -602,7 +569,6 @@ function brandingEditor(initial) {
             colors: true,
             typography: false,
             style: false,
-            advanced: false,
         },
 
         previewDark: false,
@@ -744,7 +710,6 @@ function brandingEditor(initial) {
                 border_radius: 'rounded',
                 button_style: 'gradient',
                 sidebar_style: 'dark',
-                custom_css: '',
             };
             this.generatePalette('primary');
             this.generatePalette('accent');
