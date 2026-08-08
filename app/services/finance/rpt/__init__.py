@@ -78,3 +78,8 @@ __all__ = [
     "ScheduleExecution",
     "report_scheduler_service",
 ]
+
+# Setting domain(s) this module owns — report presentation — format, page size, watermark.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS: tuple[str, ...] = ("reporting",)

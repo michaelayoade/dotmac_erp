@@ -197,3 +197,8 @@ __all__ = [
     "AuditEvents",
     "audit_events",
 ]
+
+# Setting domain(s) this module owns — the audit trail's retention and capture policy.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS: tuple[str, ...] = ("audit",)

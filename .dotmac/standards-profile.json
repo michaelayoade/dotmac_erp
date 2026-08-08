@@ -24,8 +24,12 @@
       "owner_component": "material-support-service",
       "owner_implementation": "app/services/inventory/material_support.py",
       "decision_interface": "app.services.inventory.material_support.MaterialSupportService",
-      "canonical_writer_paths": ["app/services/inventory/material_support.py"],
-      "adapter_paths": ["app/api/sync/dotmac_sub.py"],
+      "canonical_writer_paths": [
+        "app/services/inventory/material_support.py"
+      ],
+      "adapter_paths": [
+        "app/api/sync/dotmac_sub.py"
+      ],
       "drift_test_paths": [
         "tests/services/test_material_support_service.py",
         "tests/sync/test_dotmac_sub_route_aliases.py"
@@ -35,7 +39,18 @@
   "typed_contract_surfaces": [
     {
       "surface_id": "sub-material-support-contract",
-      "paths": ["app/services/inventory/material_support.py"],
+      "paths": [
+        "app/services/inventory/material_support.py"
+      ],
+      "require_public_annotations": true,
+      "forbid_any": true,
+      "require_immutable_records": true
+    },
+    {
+      "surface_id": "setting-domain-registry-contract",
+      "paths": [
+        "app/services/setting_domains.py"
+      ],
       "require_public_annotations": true,
       "forbid_any": true,
       "require_immutable_records": true

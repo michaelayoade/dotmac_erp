@@ -22,3 +22,8 @@ __all__ = [
     "determine_procurement_method",
     "validate_procurement_method",
 ]
+
+# Setting domain(s) this module owns — purchasing and supplier policy.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS: tuple[str, ...] = ("procurement",)

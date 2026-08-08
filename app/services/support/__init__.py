@@ -54,3 +54,8 @@ __all__ = [
     "SLAService",
     "sla_service",
 ]
+
+# Setting domain(s) this module owns — support desk behaviour.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS: tuple[str, ...] = ("support",)

@@ -1,5 +1,6 @@
 import enum
 import uuid
+from typing import TYPE_CHECKING
 from datetime import datetime, timezone
 
 try:
@@ -21,7 +22,13 @@ from sqlalchemy import (
 )
 from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
+from sqlalchemy.engine import Connection
+from sqlalchemy.engine.interfaces import Dialect
+from sqlalchemy.types import TypeDecorator
+
+if TYPE_CHECKING:  # pragma: no cover
+    from pydantic_core import CoreSchema
+from sqlalchemy.orm import Mapped, Mapper, mapped_column, object_session, relationship
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import Base
@@ -34,28 +41,137 @@ class SettingValueType(enum.Enum):
     json = "json"
 
 
-class SettingDomain(enum.Enum):
-    auth = "auth"
-    audit = "audit"
-    scheduler = "scheduler"
-    automation = "automation"
-    email = "email"
-    features = "features"
-    reporting = "reporting"
-    payments = "payments"
-    operations = "operations"
-    support = "support"
-    inventory = "inventory"
-    projects = "projects"
-    fleet = "fleet"
-    procurement = "procurement"
-    settings = "settings"
-    payroll = "payroll"
-    banking = "banking"
-    coach = "coach"
-    notifications = "notifications"
-    expense = "expense"
-    gl = "gl"
+class SettingDomain(str):
+    """A setting domain — an OPEN, registered string, not a closed enum.
+
+    ERP had 21 enum members and a PostgreSQL ``settingdomain`` type, so adding a
+    domain meant an ``ALTER TYPE ... ADD VALUE`` migration — see
+    ``alembic/versions/20260224_add_settingdomain_banking.py``, whose entire
+    content is adding one member. A vocabulary whose members belong to modules
+    is declared by those modules and validated by a registry; the layer that
+    stores it never enumerates them (Governance ADR 0007).
+
+    **The attributes below are accessors, not authority.** They exist because
+    ~331 call sites read ``SettingDomain.payments``, and they are asserted equal
+    to the declared set by ``tests/architecture/test_setting_domains.py`` so they
+    cannot drift into a second, quieter list. What makes a domain REAL is a
+    module declaring it in its ``SETTING_DOMAINS`` tuple — see
+    ``app.services.setting_domains``. ``operations`` is absent from both: it had
+    no ``SettingSpec`` and no reference anywhere.
+
+    A ``str`` subclass, so a domain compares equal to its plain-string form in a
+    query and ``.value`` keeps reading as it did under the enum.
+    """
+
+    __slots__ = ()
+
+    auth: "SettingDomain"
+    audit: "SettingDomain"
+    scheduler: "SettingDomain"
+    automation: "SettingDomain"
+    email: "SettingDomain"
+    features: "SettingDomain"
+    reporting: "SettingDomain"
+    payments: "SettingDomain"
+    support: "SettingDomain"
+    inventory: "SettingDomain"
+    projects: "SettingDomain"
+    fleet: "SettingDomain"
+    procurement: "SettingDomain"
+    settings: "SettingDomain"
+    payroll: "SettingDomain"
+    banking: "SettingDomain"
+    coach: "SettingDomain"
+    notifications: "SettingDomain"
+    expense: "SettingDomain"
+    gl: "SettingDomain"
+
+    @property
+    def value(self) -> str:
+        """Enum compatibility: call sites read ``domain.value`` throughout."""
+        return str(self)
+
+    def __repr__(self) -> str:
+        return f"SettingDomain({str(self)!r})"
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source: object, _handler: object
+    ) -> "CoreSchema":
+        """Present as a plain string to Pydantic.
+
+        Pydantic handles an `enum.Enum` natively but cannot infer a schema for a
+        bare `str` subclass, and this type appears as a field on the settings
+        API schemas — without this, importing them raises
+        `PydanticSchemaGenerationError` and every settings endpoint dies at
+        import.
+
+        Deliberately PERMISSIVE: it validates "is a string", not "is declared".
+        Two reasons. Validating against the registry here would make this module
+        import `app.services.setting_domains`, which imports this module — a
+        cycle. And a response carrying a legacy value (`operations`) must still
+        serialise; the registry gates WRITES and untrusted parses, which is
+        where a rejection is meaningful.
+
+        The visible consequence is intended: OpenAPI now describes `domain` as a
+        string rather than a closed enum list, because it no longer is one.
+        """
+        from pydantic_core import core_schema
+
+        return core_schema.no_info_after_validator_function(
+            cls, core_schema.str_schema()
+        )
+
+
+for _name in (
+    "auth",
+    "audit",
+    "scheduler",
+    "automation",
+    "email",
+    "features",
+    "reporting",
+    "payments",
+    "support",
+    "inventory",
+    "projects",
+    "fleet",
+    "procurement",
+    "settings",
+    "payroll",
+    "banking",
+    "coach",
+    "notifications",
+    "expense",
+    "gl",
+):
+    setattr(SettingDomain, _name, SettingDomain(_name))
+del _name
+
+
+class SettingDomainType(TypeDecorator):
+    """Stores a domain as ``VARCHAR(120)`` and loads it back as ``SettingDomain``.
+
+    Without this a loaded row yields a plain ``str``, and every
+    ``setting.domain.value`` in the codebase breaks. Storing is by value, so a
+    caller may bind either a ``SettingDomain`` or a bare string.
+
+    Deliberately NOT ``Enum``: a database enum re-imposes exactly the closed list
+    this change removes, and costs an ``ALTER TYPE`` per new domain.
+    """
+
+    impl = String(120)
+    cache_ok = True
+
+    def process_bind_param(
+        self, value: "SettingDomain | str | None", dialect: Dialect
+    ) -> str | None:
+        return None if value is None else str(value)
+
+    def process_result_value(
+        self, value: str | None, dialect: Dialect
+    ) -> "SettingDomain | None":
+        return None if value is None else SettingDomain(value)
 
 
 class SettingChangeAction(enum.Enum):
@@ -91,7 +207,7 @@ class DomainSetting(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    domain: Mapped[SettingDomain] = mapped_column(Enum(SettingDomain), nullable=False)
+    domain: Mapped[SettingDomain] = mapped_column(SettingDomainType, nullable=False)
     key: Mapped[str] = mapped_column(String(120), nullable=False)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -240,6 +356,26 @@ def _decrypt_secret_on_load(target: "DomainSetting", context) -> None:
     set_committed_value(target, "value_text", plaintext)
 
 
+def _require_declared_domain(
+    _mapper: Mapper, _connection: Connection, target: "DomainSetting"
+) -> None:
+    """Reject a write naming a domain no installed module declares.
+
+    At the ORM boundary rather than in ``DomainSettings``, because there are
+    eight direct ``DomainSetting(...)`` constructors across six modules and only
+    two of them are in that service — a service-level check would miss six. It
+    sits beside the encryption listener above for exactly the same reason.
+
+    Imported lazily: ``app.services.setting_domains`` imports this module for
+    ``SettingDomain``, so a module-scope import would be circular.
+    """
+    from app.services.setting_domains import registry
+
+    registry().require(target.domain)
+
+
+event.listen(DomainSetting, "before_insert", _require_declared_domain)
+event.listen(DomainSetting, "before_update", _require_declared_domain)
 event.listen(DomainSetting, "before_insert", _encrypt_secret_before_write)
 event.listen(DomainSetting, "before_update", _encrypt_secret_before_write)
 event.listen(DomainSetting, "load", _decrypt_secret_on_load)

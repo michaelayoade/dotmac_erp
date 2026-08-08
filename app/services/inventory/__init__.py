@@ -172,3 +172,8 @@ __all__ = [
     "AssemblyInput",
     "AssemblyResult",
 ]
+
+# Setting domain(s) this module owns — stock control and reorder policy.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS: tuple[str, ...] = ("inventory",)

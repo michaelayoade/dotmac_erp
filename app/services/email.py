@@ -552,3 +552,9 @@ def queue_email(
         module=module_value,
         organization_id=str(organization_id) if organization_id else None,
     )
+
+
+# Setting domain(s) this module owns — outbound mail transport and templates.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS: tuple[str, ...] = ("email",)

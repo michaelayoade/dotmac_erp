@@ -139,3 +139,9 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
         raise AttributeError(name)
     module = __import__(f"{__name__}.{module_name}", fromlist=[name])
     return getattr(module, name)
+
+
+# Setting domain(s) this module owns — expense routing and approval.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS: tuple[str, ...] = ("expense",)
