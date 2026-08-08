@@ -51,13 +51,14 @@ class SettingDomain(str):
     is declared by those modules and validated by a registry; the layer that
     stores it never enumerates them (Governance ADR 0007).
 
-    **The attributes below are accessors, not authority.** They exist because
-    ~331 call sites read ``SettingDomain.payments``, and they are asserted equal
-    to the declared set by ``tests/architecture/test_setting_domains.py`` so they
-    cannot drift into a second, quieter list. What makes a domain REAL is a
-    module declaring it in its ``SETTING_DOMAINS`` tuple — see
-    ``app.services.setting_domains``. ``operations`` is absent from both: it had
-    no ``SettingSpec`` and no reference anywhere.
+    **The attributes below are LEGACY accessors, not authority, and they are
+    temporary.** They exist only because ~331 existing call sites read
+    ``SettingDomain.payments``; they are a SUBSET of the declared domains, never
+    the definition of them. A new domain is declared by its owning module and
+    needs no edit here — ``tests/architecture/test_setting_domains.py`` proves
+    exactly that. ``operations`` is absent from both: it had no ``SettingSpec``
+    and no reference anywhere. The accessors retire as callers move to
+    module-owned constants.
 
     A ``str`` subclass, so a domain compares equal to its plain-string form in a
     query and ``.value`` keeps reading as it did under the enum.
@@ -270,8 +271,11 @@ class DomainSettingHistory(Base):
         index=True,
     )
 
-    # Setting identification (denormalized for queries after setting deletion)
-    domain: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Setting identification (denormalized for queries after setting deletion).
+    # Width tracks `DomainSetting.domain` deliberately: a domain the live column
+    # accepts must also be recordable here, or a valid write succeeds and then
+    # fails the moment its change is recorded.
+    domain: Mapped[str] = mapped_column(String(120), nullable=False)
     key: Mapped[str] = mapped_column(String(120), nullable=False)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

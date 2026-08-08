@@ -141,7 +141,9 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
     return getattr(module, name)
 
 
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
 # Setting domain(s) this module owns — expense routing and approval.
 # Validated by `app.services.setting_domains` at startup and at every write;
 # see that module for why ownership lives here rather than in a central list.
-SETTING_DOMAINS: tuple[str, ...] = ("expense",)
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("expense",))

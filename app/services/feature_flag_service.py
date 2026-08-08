@@ -578,10 +578,12 @@ def require_feature_web(feature_key: str, db: Session, org_id: UUID) -> None:
         )
 
 
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
 # Setting domain(s) this module owns — feature-flag state, written by FeatureFlagService.toggle().
 # Validated by `app.services.setting_domains` at startup and at every write;
 # see that module for why ownership lives here rather than in a central list.
-SETTING_DOMAINS: tuple[str, ...] = ("features",)
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("features",))
 
 # Declared even though `features` has no `SettingSpec`: `toggle()` writes
 # `domain_settings` rows under it directly, and the settings APIs expose them.

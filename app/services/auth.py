@@ -560,7 +560,9 @@ mfa_methods = MFAMethods()
 sessions = Sessions()
 api_keys = ApiKeys()
 
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
 # Setting domain(s) this module owns — authentication, sessions, API keys and TOTP.
 # Validated by `app.services.setting_domains` at startup and at every write;
 # see that module for why ownership lives here rather than in a central list.
-SETTING_DOMAINS: tuple[str, ...] = ("auth",)
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("auth",))

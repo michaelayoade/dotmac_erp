@@ -114,7 +114,9 @@ def enqueue_task(task_name: str, args: list | None, kwargs: dict | None) -> dict
     return {"queued": True, "task_id": str(async_result.id)}
 
 
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
 # Setting domain(s) this module owns — scheduled-job cadence and windows.
 # Validated by `app.services.setting_domains` at startup and at every write;
 # see that module for why ownership lives here rather than in a central list.
-SETTING_DOMAINS: tuple[str, ...] = ("scheduler",)
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("scheduler",))

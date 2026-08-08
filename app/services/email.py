@@ -554,7 +554,9 @@ def queue_email(
     )
 
 
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
 # Setting domain(s) this module owns — outbound mail transport and templates.
 # Validated by `app.services.setting_domains` at startup and at every write;
 # see that module for why ownership lives here rather than in a central list.
-SETTING_DOMAINS: tuple[str, ...] = ("email",)
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("email",))

@@ -87,20 +87,24 @@ def test_the_loaded_type_round_trips_to_setting_domain() -> None:
 # ── Ownership ───────────────────────────────────────────────────────────────
 
 
-def test_every_owner_declares_something() -> None:
+def test_every_owner_declares_at_least_one_domain() -> None:
+    """Not `len(domains) == len(owners)` — that would forbid a module owning two
+    domains, which is legitimate and which the registry supports."""
     active = registry()
-    assert len(active.domains()) == len(SETTING_DOMAIN_OWNERS)
+    assert {active.owner(d) for d in active.domains()} == set(SETTING_DOMAIN_OWNERS)
 
 
-def test_duplicate_ownership_fails_at_construction(tmp_path) -> None:
+def test_duplicate_ownership_fails_at_construction() -> None:
     """A domain with two owners has no owner. Construction IS validation."""
     import sys
     import types
 
+    from app.services.setting_domain_declaration import ModuleSettingDomains
+
     first = types.ModuleType("_probe_owner_a")
-    first.SETTING_DOMAINS = ("shared",)
+    first.SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("shared",))
     second = types.ModuleType("_probe_owner_b")
-    second.SETTING_DOMAINS = ("shared",)
+    second.SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("shared",))
     sys.modules["_probe_owner_a"] = first
     sys.modules["_probe_owner_b"] = second
     try:
@@ -145,15 +149,99 @@ def test_operations_is_undeclared() -> None:
         active.require("operations")
 
 
-def test_the_accessors_are_exactly_the_declared_domains() -> None:
-    """The class attributes are convenience, not authority. Asserting the two
-    sets are equal is what stops them becoming a second, quieter list."""
-    accessors = {
+def _accessors() -> set[str]:
+    return {
         name
         for name in vars(SettingDomain)
-        if not name.startswith("_") and isinstance(getattr(SettingDomain, name), SettingDomain)
+        if not name.startswith("_")
+        and isinstance(getattr(SettingDomain, name), SettingDomain)
     }
-    assert accessors == {str(d) for d in registry().domains()}
+
+
+def test_the_legacy_accessors_are_a_subset_of_the_declared_domains() -> None:
+    """A SUBSET, not an equality. Equality would mean every new declaration also
+    had to edit the host type — the central list this change exists to remove."""
+    assert _accessors() <= {str(d) for d in registry().domains()}
+
+
+def test_a_new_domain_needs_no_edit_to_the_host_type() -> None:
+    """The property that proves the accessors are not authority."""
+    import sys
+    import types
+
+    from app.services.setting_domain_declaration import ModuleSettingDomains
+
+    owner = types.ModuleType("_probe_no_host_edit")
+    owner.SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("telemetry",))
+    sys.modules["_probe_no_host_edit"] = owner
+    try:
+        probe = SettingDomainRegistry.from_owners(
+            [*SETTING_DOMAIN_OWNERS, "_probe_no_host_edit"]
+        )
+        assert probe.require("telemetry") == "telemetry"
+        assert "telemetry" not in _accessors()
+    finally:
+        del sys.modules["_probe_no_host_edit"]
+
+
+def test_a_module_may_own_more_than_one_domain() -> None:
+    import sys
+    import types
+
+    from app.services.setting_domain_declaration import ModuleSettingDomains
+
+    owner = types.ModuleType("_probe_multi")
+    owner.SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("alpha", "beta"))
+    sys.modules["_probe_multi"] = owner
+    try:
+        probe = SettingDomainRegistry.from_owners(["_probe_multi"])
+        assert {str(d) for d in probe.domains()} == {"alpha", "beta"}
+        assert probe.owner("alpha") == probe.owner("beta") == "_probe_multi"
+    finally:
+        del sys.modules["_probe_multi"]
+
+
+def test_the_history_column_is_as_wide_as_the_live_column() -> None:
+    """A domain the live column accepts must be recordable in history."""
+    from app.models.domain_settings import DomainSettingHistory
+
+    live = DomainSetting.__table__.c.domain.type.impl.length
+    history = DomainSettingHistory.__table__.c.domain.type.length
+    assert history == live == 120
+
+
+def test_the_live_write_path_accepts_a_newly_declared_domain(db_session) -> None:
+    """Through the ORM listener, not a detached registry: the listener calls
+    `registry()`, so a registry that is built but never installed proves only
+    that an object in isolation says yes."""
+    import sys
+    import types
+
+    from app.services.setting_domain_declaration import ModuleSettingDomains
+    from app.services.setting_domains import install_registry, reset_registry
+
+    owner = types.ModuleType("_probe_live_write")
+    owner.SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("telemetry",))
+    sys.modules["_probe_live_write"] = owner
+    try:
+        install_registry(
+            SettingDomainRegistry.from_owners(
+                [*SETTING_DOMAIN_OWNERS, "_probe_live_write"]
+            )
+        )
+        db_session.add(
+            DomainSetting(
+                domain=SettingDomain("telemetry"),
+                key="sample_rate",
+                value_type="string",
+                value_text="0.1",
+            )
+        )
+        db_session.flush()  # the listener runs here
+        db_session.rollback()
+    finally:
+        reset_registry()
+        del sys.modules["_probe_live_write"]
 
 
 # ── The write boundary ──────────────────────────────────────────────────────

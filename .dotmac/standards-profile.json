@@ -49,7 +49,8 @@
     {
       "surface_id": "setting-domain-registry-contract",
       "paths": [
-        "app/services/setting_domains.py"
+        "app/services/setting_domains.py",
+        "app/services/setting_domain_declaration.py"
       ],
       "require_public_annotations": true,
       "forbid_any": true,

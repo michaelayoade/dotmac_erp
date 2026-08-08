@@ -39,10 +39,27 @@ _ENUM_TYPE = "settingdomain"
 
 # The domains the enum carried. Only used by `downgrade`, which must recreate it.
 _LEGACY_MEMBERS = (
-    "auth", "audit", "scheduler", "automation", "email", "features", "reporting",
-    "payments", "operations", "support", "inventory", "projects", "fleet",
-    "procurement", "settings", "payroll", "banking", "coach", "notifications",
-    "expense", "gl",
+    "auth",
+    "audit",
+    "scheduler",
+    "automation",
+    "email",
+    "features",
+    "reporting",
+    "payments",
+    "operations",
+    "support",
+    "inventory",
+    "projects",
+    "fleet",
+    "procurement",
+    "settings",
+    "payroll",
+    "banking",
+    "coach",
+    "notifications",
+    "expense",
+    "gl",
 )
 
 
@@ -84,6 +101,16 @@ def upgrade() -> None:
         )
     )
 
+    # The history column is already text, but at VARCHAR(50) — narrower than the
+    # live column now is. Left alone, a domain of 51-120 characters would store
+    # successfully and then fail the moment its change was recorded.
+    op.execute(
+        sa.text(
+            "ALTER TABLE public.domain_setting_history "
+            "ALTER COLUMN domain TYPE VARCHAR(120)"
+        )
+    )
+
     if connection.dialect.name != "postgresql":
         return
 
@@ -111,6 +138,12 @@ def downgrade() -> None:
 
     op.execute(
         sa.text(f"DELETE FROM public.domain_settings WHERE domain NOT IN ({members})")
+    )
+    op.execute(
+        sa.text(
+            "ALTER TABLE public.domain_setting_history "
+            "ALTER COLUMN domain TYPE VARCHAR(50)"
+        )
     )
     if connection.dialect.name == "postgresql":
         op.execute(sa.text(f"CREATE TYPE public.{_ENUM_TYPE} AS ENUM ({members})"))

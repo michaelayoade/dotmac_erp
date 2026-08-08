@@ -114,7 +114,9 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
     return getattr(module, name)
 
 
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
 # Setting domain(s) this module owns — bank integrations and reconciliation.
 # Validated by `app.services.setting_domains` at startup and at every write;
 # see that module for why ownership lives here rather than in a central list.
-SETTING_DOMAINS: tuple[str, ...] = ("banking",)
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("banking",))

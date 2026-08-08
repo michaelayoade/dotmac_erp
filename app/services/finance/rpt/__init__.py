@@ -79,7 +79,9 @@ __all__ = [
     "report_scheduler_service",
 ]
 
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
 # Setting domain(s) this module owns — report presentation — format, page size, watermark.
 # Validated by `app.services.setting_domains` at startup and at every write;
 # see that module for why ownership lives here rather than in a central list.
-SETTING_DOMAINS: tuple[str, ...] = ("reporting",)
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("reporting",))

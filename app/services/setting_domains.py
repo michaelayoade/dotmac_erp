@@ -49,6 +49,7 @@ from importlib import import_module
 from types import MappingProxyType
 
 from app.models.domain_settings import SettingDomain
+from app.services.setting_domain_declaration import ModuleSettingDomains
 
 # The modules that OWN setting domains. Each declares a `SETTING_DOMAINS` tuple;
 # this list says which modules are installed, never which domains exist — that
@@ -127,7 +128,10 @@ class SettingDomainRegistry:
         owner_by_domain: dict[str, str] = {}
         for owner in owners:
             module = import_module(owner)
-            declared: tuple[str, ...] = getattr(module, "SETTING_DOMAINS", ())
+            declaration: ModuleSettingDomains | None = getattr(
+                module, "SETTING_DOMAINS", None
+            )
+            declared = declaration.setting_domains if declaration else ()
             if not declared:
                 raise SettingDomainError(
                     f"{owner!r} is listed as a setting-domain owner but declares "
@@ -182,9 +186,20 @@ def registry() -> SettingDomainRegistry:
 
 
 def reset_registry() -> None:
-    """Drop the memo. For tests that install a different owner set."""
+    """Drop the memo, so the next call rebuilds from the installed owner set."""
     global _registry
     _registry = None
+
+
+def install_registry(replacement: SettingDomainRegistry) -> None:
+    """Make `replacement` the process registry.
+
+    Exists so a test can prove the LIVE write path — the ORM listener reads
+    `registry()`, so a test that builds a registry and never installs it proves
+    only that a detached object works, not that a write is accepted.
+    """
+    global _registry
+    _registry = replacement
 
 
 def validate_registry() -> list[str]:
@@ -217,6 +232,7 @@ __all__ = [
     "SettingDomainError",
     "SettingDomainRegistry",
     "UndeclaredSettingDomainError",
+    "install_registry",
     "registry",
     "reset_registry",
     "validate_registry",
