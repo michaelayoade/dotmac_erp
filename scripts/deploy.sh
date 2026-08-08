@@ -46,6 +46,45 @@ export COMPOSE_PROJECT_NAME="$DEPLOY_COMPOSE_PROJECT_NAME"
 cd "$PROJECT_DIR"
 PREV_SHA="$(git rev-parse HEAD)"
 
+# .env carries two values that merely RESTATE facts owned by the deployed
+# commit: ERP_IMAGE_TAG (the immutable image) and APP_VERSION (pyproject's
+# version, which docker-compose.yml already defaults to). Nothing kept them in
+# step, so both drifted — and .env wins over the compose default, so the drift
+# is what actually runs:
+#
+#   - ERP_IMAGE_TAG sat 5 weeks behind the running image, so a bare
+#     `docker compose up -d` by anyone not using this script would have
+#     silently DOWNGRADED production.
+#   - APP_VERSION sat two releases behind, so the app misreported its own
+#     version — which is how a deploy gap got mis-sized from a stale note.
+#
+# This script pins ERP_IMAGE_TAG for its own compose calls via `export`, which
+# is why the drift stayed invisible to the deploy path. Making the deploy the
+# single writer of both keys is what stops it recurring.
+ENV_FILE="$PROJECT_DIR/.env"
+ENV_BACKUP="${ENV_FILE}.deploy-bak"
+env_synced=0
+
+# Set key=value in .env, replacing the first existing occurrence or appending.
+# Writes via a temp file so an interrupted deploy cannot leave a half-written
+# .env, and preserves the original mode (it is 0600 and holds secrets).
+set_env_var() {
+    local key="$1" value="$2" tmp
+    [[ -f "$ENV_FILE" ]] || return 0
+    tmp="$(mktemp "${ENV_FILE}.XXXXXX")"
+    chmod --reference="$ENV_FILE" "$tmp" 2>/dev/null || chmod 600 "$tmp"
+    if grep -qE "^${key}=" "$ENV_FILE"; then
+        awk -v k="$key" -v v="$value" '
+            $0 ~ "^" k "=" && !seen { print k "=" v; seen = 1; next }
+            { print }
+        ' "$ENV_FILE" > "$tmp"
+    else
+        cat "$ENV_FILE" > "$tmp"
+        printf '%s=%s\n' "$key" "$value" >> "$tmp"
+    fi
+    mv "$tmp" "$ENV_FILE"
+}
+
 # Image tag the app container is currently running — restored on rollback so a
 # failed deploy reverts to the exact previously-running image, not just :latest.
 PREV_IMAGE_TAG="$(docker inspect --format '{{.Config.Image}}' dotmac_erp_app 2>/dev/null | sed 's/.*://')"
@@ -60,6 +99,15 @@ rollback() {
     echo "!! Rolling back code to ${PREV_SHA:0:12} and image to ${PREV_IMAGE_TAG}..."
     git reset --hard "$PREV_SHA" || true
     export ERP_IMAGE_TAG="$PREV_IMAGE_TAG"
+    # Undo the .env pins written for the failed deploy, then point
+    # ERP_IMAGE_TAG at the image actually being restored. Restoring the backup
+    # alone would reinstate whatever drift was there before, which is the very
+    # landmine this change exists to remove.
+    if [[ "$env_synced" == "1" && -f "$ENV_BACKUP" ]]; then
+        cp -a "$ENV_BACKUP" "$ENV_FILE"
+        set_env_var ERP_IMAGE_TAG "$PREV_IMAGE_TAG"
+        echo "!! Reverted .env pins to the restored image (${PREV_IMAGE_TAG})."
+    fi
     docker compose up -d app worker beat || { docker stop dotmac_erp_app || true; docker start dotmac_erp_app || true; }
     echo "!! Rolled back. NOTE: DB migrations were NOT reverted — restore from the"
     echo "!! pre-migration backup if the new revisions are not backward-compatible."
@@ -80,6 +128,23 @@ if [[ "${1:-}" != "--quick" ]]; then
     NEW_IMAGE_TAG="sha-$(git rev-parse --short=7 HEAD)"
     export ERP_IMAGE_TAG="$NEW_IMAGE_TAG"
     echo "  Pinning image tag: ${ERP_IMAGE_TAG} (rollback target: ${PREV_IMAGE_TAG})"
+
+    # Persist both pins into .env from the freshly-pulled commit. This runs
+    # BEFORE migrate/recreate deliberately: APP_VERSION only reaches the app
+    # container if .env is correct at `docker compose up` time, so writing it
+    # after the health gate would leave the running container reporting the
+    # previous release until the *next* deploy.
+    if [[ -f "$ENV_FILE" ]]; then
+        cp -a "$ENV_FILE" "$ENV_BACKUP"
+        env_synced=1
+        NEW_APP_VERSION="$(awk -F'"' '/^version = "/ { print $2; exit }' pyproject.toml)"
+        set_env_var ERP_IMAGE_TAG "$NEW_IMAGE_TAG"
+        if [[ -n "$NEW_APP_VERSION" ]]; then
+            set_env_var APP_VERSION "$NEW_APP_VERSION"
+        fi
+        echo "  .env synced: ERP_IMAGE_TAG=${NEW_IMAGE_TAG} APP_VERSION=${NEW_APP_VERSION:-<unchanged>}"
+    fi
+
     docker compose pull app worker beat
     echo ""
 fi
