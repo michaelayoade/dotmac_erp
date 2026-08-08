@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services.setting_domains import registry
 from app.models.audit import AuditActorType
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.models.finance.core_org.organization import Organization
@@ -110,7 +111,7 @@ def _parse_domain(value: str | None) -> SettingDomain | None:
     if not value:
         return None
     try:
-        return SettingDomain(value)
+        return registry().require(value)
     except ValueError:
         return None
 

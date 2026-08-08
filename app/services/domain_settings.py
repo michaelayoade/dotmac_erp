@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services.setting_domains import registry
 from app.db.session_context import allow_cross_org
 from app.models.domain_settings import (
     DomainSetting,
@@ -795,7 +796,7 @@ def restore_from_history(
 
     # Get or create the setting
     try:
-        domain = SettingDomain(history.domain)
+        domain = registry().require(history.domain)
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
