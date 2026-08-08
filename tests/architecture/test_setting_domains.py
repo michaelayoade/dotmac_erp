@@ -53,6 +53,15 @@ def test_value_still_reads_like_the_enum_did() -> None:
     assert SettingDomain("fleet") == "fleet"
 
 
+def test_domains_compare_by_equality_not_identity() -> None:
+    """Pins the one semantic that differs from the enum, so nobody re-adds an
+    `is` comparison expecting singletons. Construction is open by design, so
+    interning would mean an unbounded cache keyed on untrusted input."""
+    assert SettingDomain("gl") == SettingDomain.gl
+    assert SettingDomain("gl") == "gl"
+    assert SettingDomain("gl") is not SettingDomain("gl")
+
+
 def test_the_column_stores_a_string_not_a_database_enum() -> None:
     column = DomainSetting.__table__.c.domain
     assert isinstance(column.type, SettingDomainType)

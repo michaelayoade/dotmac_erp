@@ -62,6 +62,13 @@ class SettingDomain(str):
 
     A ``str`` subclass, so a domain compares equal to its plain-string form in a
     query and ``.value`` keeps reading as it did under the enum.
+
+    **One semantic differs from the enum: instances are NOT singletons.** Enum
+    members were interned, so ``SettingDomain("gl") is SettingDomain.gl`` held
+    by accident of that; here each construction is a distinct object. Compare
+    domains with ``==``, never ``is``. Interning would restore identity but
+    would also mean an unbounded cache keyed on untrusted input, since
+    construction is deliberately open.
     """
 
     __slots__ = ()
