@@ -4,8 +4,11 @@ from typing import cast
 
 from fastapi import HTTPException
 
+from uuid import UUID
+
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.services import domain_settings as settings_service
+from app.services.domain_settings import AMBIENT, _Ambient
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -1078,7 +1081,12 @@ def list_specs(domain: SettingDomain) -> list[SettingSpec]:
 
 
 def resolve_value(
-    db, domain: SettingDomain, key: str, strict: bool = False
+    db,
+    domain: SettingDomain,
+    key: str,
+    strict: bool = False,
+    *,
+    organization_id: "UUID | None | _Ambient" = AMBIENT,
 ) -> object | None:
     """
     Resolve a setting value from database, falling back to spec defaults.
@@ -1089,6 +1097,13 @@ def resolve_value(
         key: Setting key
         strict: If True, raise ValueError for required settings that are missing
                 or have no default. Use strict=True during startup validation.
+        organization_id: Whose value to read. Keyword-only. A UUID reads that
+                organization's row falling back to the global one; an explicit
+                ``None`` reads the global row and only that. Omitting it uses
+                the session's ambient context and logs the call site — that
+                fallback is being removed, because a read with no scope
+                silently returned the most recently updated row of ANY
+                organization.
 
     Returns:
         Resolved setting value, or None if not found and no default
@@ -1106,7 +1121,7 @@ def resolve_value(
     setting = None
     if service:
         try:
-            setting = service.get_by_key(db, key)
+            setting = service.get_by_key(db, key, organization_id=organization_id)
         except HTTPException:
             setting = None
 

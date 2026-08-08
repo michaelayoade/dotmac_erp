@@ -1,6 +1,7 @@
 import builtins
 import logging
 from contextlib import nullcontext
+from types import FrameType
 from typing import Any
 from uuid import UUID
 
@@ -32,6 +33,74 @@ from app.services.response import (
 from app.services.settings_cache import invalidate_setting_cache
 
 logger = logging.getLogger(__name__)
+
+
+class _Ambient:
+    """Marker for "no scope was stated" — distinct from an explicit `None`.
+
+    A settings read has three possible intents and only two were expressible:
+
+    * a UUID — this organization's value, falling back to the global row;
+    * `None` — the GLOBAL value, deliberately;
+    * ambient — the caller said nothing, so the session's context is used.
+
+    They were conflated, so "I want the global row" and "I forgot to say" were
+    the same call. This makes the third one nameable, which is what lets it be
+    counted now and removed later. `settings_cache` already draws the same
+    line — `_require_organization` refuses `None` outright, from the cache
+    scope fix — and the resolver is catching up to its own codebase.
+    """
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "<ambient scope>"
+
+
+AMBIENT = _Ambient()
+
+# Call sites already reported, so a hot path logs once rather than per request.
+_reported_ambient_sites: set[tuple[str, int]] = set()
+
+
+def _resolve_scope(
+    db: Session, organization_id: "UUID | None | _Ambient"
+) -> UUID | None:
+    """Return the organization to scope a read to, warning if it was implied.
+
+    Ambient scoping is why `get_by_key` could return the most recently updated
+    row of ANY organization: with nothing in `db.info`, the query dropped its
+    org predicate entirely and ran under `allow_cross_org`. That is masked
+    while a deployment has one organization and stops being masked on the day
+    it does not.
+    """
+    if not isinstance(organization_id, _Ambient):
+        return organization_id
+    import sys
+
+    # Walk out of the settings layer to the CALLER that failed to state a
+    # scope. Reporting the nearest frame names `resolve_value` every time —
+    # true, useless, and it collapses every caller into one entry. The
+    # migration needs the business call site, not the plumbing.
+    # Annotated because `sys._getframe` is typed non-optional while `f_back`
+    # is not, so the walk below would not type-check otherwise.
+    frame: FrameType | None = sys._getframe(1)
+    while frame is not None and frame.f_code.co_filename.endswith(
+        ("/domain_settings.py", "/settings_spec.py", "/settings_cache.py")
+    ):
+        frame = frame.f_back
+    if frame is None:  # pragma: no cover - only if called from nowhere
+        return db.info.get("organization_id")
+    site = (frame.f_code.co_filename, frame.f_lineno)
+    if site not in _reported_ambient_sites:
+        _reported_ambient_sites.add(site)
+        logger.warning(
+            "Settings read with ambient organization scope at %s:%d — pass "
+            "organization_id= explicitly (None means the global row). This "
+            "falls back to session context today and will be required.",
+            frame.f_code.co_filename,
+            frame.f_lineno,
+        )
+    return db.info.get("organization_id")
+
 
 # Structured logger for settings audit trail
 settings_audit_logger = logging.getLogger("dotmac.settings.audit")
@@ -429,16 +498,31 @@ class DomainSettings(ListResponseMixin):
 
         return setting
 
-    def get_by_key(self, db: Session, key: str) -> DomainSetting:
+    def get_by_key(
+        self,
+        db: Session,
+        key: str,
+        *,
+        organization_id: "UUID | None | _Ambient" = AMBIENT,
+    ) -> DomainSetting:
+        """Read one setting. `organization_id` is keyword-only on purpose.
+
+        `AMBIENT` (the default, for now) uses the session's context and warns.
+        An explicit `None` means the GLOBAL row and nothing else — stating "I
+        have no organization" rather than failing to state anything.
+        """
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        org_id = db.info.get("organization_id")
+        org_id = _resolve_scope(db, organization_id)
         stmt = select(DomainSetting).where(
             DomainSetting.domain == self.domain,
             DomainSetting.key == key,
             DomainSetting.is_active.is_(True),
         )
-        if org_id:
+        if organization_id is None:
+            # Deliberately global: no org rows, so no cross-org row can win.
+            stmt = stmt.where(DomainSetting.organization_id.is_(None))
+        elif org_id:
             stmt = stmt.where(
                 or_(
                     DomainSetting.organization_id == org_id,
