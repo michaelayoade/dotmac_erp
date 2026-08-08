@@ -134,6 +134,7 @@ backups/
 .seabone/metrics/
 .seabone/prompts/
 .worktrees/
+worktrees/
 .agent-run.sh
 .codex
 
