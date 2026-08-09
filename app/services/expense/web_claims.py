@@ -1052,7 +1052,12 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                     corrections.append(correction)
 
         route_to_ap = bool(
-            resolve_value(db, SettingDomain.expense, "expense_route_to_ap")
+            resolve_value(
+                db,
+                SettingDomain.expense,
+                "expense_route_to_ap",
+                organization_id=coerce_uuid(auth.organization_id),
+            )
         )
         svc = ExpenseService(db)
 

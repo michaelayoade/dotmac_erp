@@ -116,10 +116,18 @@ def _validate_enum(value: Any, enum_cls: type, label: str) -> Any:
         raise HTTPException(status_code=400, detail=f"Invalid {label}") from exc
 
 
-def _ensure_person(db: Session, person_id: str) -> None:
+def _ensure_person(db: Session, person_id: str) -> Person:
+    """Validate the person exists and RETURN it.
+
+    The return is what lets a caller scope a settings read: a credential's
+    defaults belong to the organization of the person who owns it, and that is
+    the only organization in scope here — `create` is a static method with no
+    session context of its own to borrow from.
+    """
     person = db.get(Person, coerce_uuid(person_id))
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
+    return person
 
 
 def _validate_local_credentials(
@@ -135,12 +143,15 @@ def _validate_local_credentials(
 class UserCredentials(ListResponseMixin):
     @staticmethod
     def create(db: Session, payload: UserCredentialCreate) -> UserCredential:
-        _ensure_person(db, str(payload.person_id))
+        person = _ensure_person(db, str(payload.person_id))
         data = payload.model_dump()
         fields_set = payload.model_fields_set
         if "provider" not in fields_set:
             default_provider = settings_spec.resolve_value(
-                db, SettingDomain.auth, "default_auth_provider"
+                db,
+                SettingDomain.auth,
+                "default_auth_provider",
+                organization_id=person.organization_id,
             )
             if default_provider:
                 data["provider"] = _validate_enum(

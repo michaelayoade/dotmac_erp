@@ -109,7 +109,10 @@ class CustomFieldsService:
         _validate_select_options(input_data.field_type, input_data.field_options)
 
         resolved = resolve_value(
-            db, SettingDomain.automation, "custom_fields_max_per_entity"
+            db,
+            SettingDomain.automation,
+            "custom_fields_max_per_entity",
+            organization_id=organization_id,
         )
         limit = int(str(resolved)) if resolved is not None else _DEFAULT_MAX_PER_ENTITY
         active_count = (
