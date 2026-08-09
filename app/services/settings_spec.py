@@ -89,6 +89,17 @@ SETTINGS_SPECS: list[SettingSpec] = [
     ),
     SettingSpec(
         domain=SettingDomain.auth,
+        key="password_reset_ttl_minutes",
+        env_var="PASSWORD_RESET_TTL_MINUTES",
+        value_type=SettingValueType.integer,
+        # 60 because that is what `auth_flow._password_reset_ttl_minutes`
+        # returns today. The key was read but never declared, so it resolved to
+        # nothing and only the env var and this literal were ever live.
+        default=60,
+        min_value=1,
+    ),
+    SettingSpec(
+        domain=SettingDomain.auth,
         key="refresh_cookie_secure",
         env_var="REFRESH_COOKIE_SECURE",
         value_type=SettingValueType.boolean,
