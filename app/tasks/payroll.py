@@ -19,6 +19,7 @@ from celery import shared_task
 
 from app.config import settings
 from app.db.session_context import cross_org_session, session_for_org
+from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
 
@@ -27,63 +28,6 @@ def _last_day_of_month(d: date) -> date:
     """Get last day of the month for given date."""
     _, last_day = monthrange(d.year, d.month)
     return date(d.year, d.month, last_day)
-
-
-def _get_org_setting(db, org_id, domain, key, default=None):
-    """
-    Get organization-specific setting with fallback to global.
-
-    Checks for org-specific setting first, then falls back to global (org_id=NULL),
-    then to the provided default.
-
-    Args:
-        db: Database session
-        org_id: Organization UUID
-        domain: SettingDomain enum
-        key: Setting key string
-        default: Default value if not found
-
-    Returns:
-        Setting value or default
-    """
-    from sqlalchemy import or_, select
-
-    from app.models.domain_settings import DomainSetting, SettingValueType
-
-    # Query for org-specific or global setting
-    stmt = (
-        select(DomainSetting)
-        .where(
-            DomainSetting.domain == domain,
-            DomainSetting.key == key,
-            DomainSetting.is_active == True,
-            or_(
-                DomainSetting.organization_id == org_id,
-                DomainSetting.organization_id.is_(None),
-            ),
-        )
-        # Prefer org-specific over global
-        .order_by(DomainSetting.organization_id.desc().nullslast())
-        .limit(1)
-    )
-
-    setting = db.scalar(stmt)
-    if not setting:
-        return default
-
-    # Extract value based on type
-    if setting.value_json is not None:
-        return setting.value_json
-    if setting.value_text is not None:
-        if setting.value_type == SettingValueType.boolean:
-            return setting.value_text.lower() in ("true", "1", "yes", "on")
-        if setting.value_type == SettingValueType.integer:
-            try:
-                return int(setting.value_text)
-            except (TypeError, ValueError):
-                return setting.value_text
-        return setting.value_text
-    return default
 
 
 def _first_day_of_month(d: date) -> date:
@@ -478,24 +422,22 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
                 org_legal_name = org.legal_name or "Unknown"
 
                 # Check if auto-generation is enabled for this org
-                enabled = _get_org_setting(
+                enabled = resolve_value(
                     db,
-                    org_id,
                     SettingDomain.payroll,
                     "auto_generate_enabled",
-                    default=False,
+                    organization_id=org_id,
                 )
 
                 if not enabled:
                     continue
 
                 # Check if today is the right day (N days before month end)
-                days_before = _get_org_setting(
+                days_before = resolve_value(
                     db,
-                    org_id,
                     SettingDomain.payroll,
                     "auto_generate_days_before",
-                    default=5,
+                    organization_id=org_id,
                 )
 
                 if days_until_end != days_before:
@@ -678,13 +620,12 @@ def _notify_draft_ready(
 
     # Send email to configured recipients
     try:
-        email_recipients = _get_org_setting(
-            db,
-            org.organization_id,
-            SettingDomain.payroll,
-            "auto_generate_notify_emails",
-            default=[],
-        )
+        email_recipients = resolve_value(
+                    db,
+                    SettingDomain.payroll,
+                    "auto_generate_notify_emails",
+                    organization_id=org.organization_id,
+                )
 
         if email_recipients and isinstance(email_recipients, list):
             org_name = org.trading_name or org.legal_name or "Organization"
