@@ -32,7 +32,8 @@ from app.models.auth import (
 from app.models.auth import (
     Session as AuthSession,
 )
-from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.domain_settings import SettingDomain
+from app.services.settings_spec import resolve_value
 from app.models.finance.audit.audit_log import AuditAction
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
@@ -89,21 +90,32 @@ def _truncate_user_agent(value: str | None, max_len: int = 512) -> str | None:
 
 
 def _setting_value(db: Session | None, key: str) -> str | None:
+    """Read an auth setting through the resolver, as a string.
+
+    The previous query filtered on domain and key ONLY — no organization
+    predicate and no ordering — so with more than one organization it returned
+    an arbitrary row. Going through `resolve_value` gains the session's
+    organization scope, the spec's coercion and constraint checks, and the
+    degrade-to-default rule, all of which were reimplemented per caller here.
+
+    Scope stays ambient deliberately. Auth settings are WRITTEN with the
+    session's organization attached (`DomainSettings.upsert_by_key` sets
+    `scope = ORG_SPECIFIC`), so reading them as global-only would miss every
+    setting configured through the admin UI. This code has no organization of
+    its own to state — it runs on login, before one is established — so the
+    session's context is the honest answer, and it is strictly better than the
+    unscoped query it replaces.
+
+    Returns a string so every caller's existing coercion keeps working
+    unchanged: `str(True)` lowercases to "true" for the boolean readers, and
+    `int("60")` is unaffected for the integer ones.
+    """
     if db is None:
         return None
-    setting = db.scalar(
-        select(DomainSetting)
-        .where(DomainSetting.domain == SettingDomain.auth)
-        .where(DomainSetting.key == key)
-        .where(DomainSetting.is_active.is_(True))
-    )
-    if not setting:
+    value = resolve_value(db, SettingDomain.auth, key)
+    if value is None:
         return None
-    if setting.value_text:
-        return setting.value_text
-    if setting.value_json is not None:
-        return str(setting.value_json)
-    return None
+    return str(value)
 
 
 def _jwt_secret(db: Session | None) -> str:
