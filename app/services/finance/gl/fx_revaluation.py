@@ -146,7 +146,11 @@ class FXRevaluationService:
                 ),
             )
 
-        return UUID(gain_raw), UUID(loss_raw)
+        # `resolve_value` returns `object`: it cannot know the type, and the
+        # caller must narrow. Both specs declare `value_type=string` and both
+        # values are proven non-empty above, so `str()` is the narrowing rather
+        # than a conversion.
+        return UUID(str(gain_raw)), UUID(str(loss_raw))
 
     def _discover_ar_open_invoices(
         self,

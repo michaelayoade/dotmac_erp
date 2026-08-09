@@ -621,11 +621,11 @@ def _notify_draft_ready(
     # Send email to configured recipients
     try:
         email_recipients = resolve_value(
-                    db,
-                    SettingDomain.payroll,
-                    "auto_generate_notify_emails",
-                    organization_id=org.organization_id,
-                )
+            db,
+            SettingDomain.payroll,
+            "auto_generate_notify_emails",
+            organization_id=org.organization_id,
+        )
 
         if email_recipients and isinstance(email_recipients, list):
             org_name = org.trading_name or org.legal_name or "Organization"
