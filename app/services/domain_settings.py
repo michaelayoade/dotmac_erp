@@ -504,6 +504,7 @@ class DomainSettings(ListResponseMixin):
         key: str,
         *,
         organization_id: "UUID | None | _Ambient" = AMBIENT,
+        inherit: bool = True,
     ) -> DomainSetting:
         """Read one setting. `organization_id` is keyword-only on purpose.
 
@@ -522,6 +523,12 @@ class DomainSettings(ListResponseMixin):
         if organization_id is None:
             # Deliberately global: no org rows, so no cross-org row can win.
             stmt = stmt.where(DomainSetting.organization_id.is_(None))
+        elif org_id and not inherit:
+            # This organization's row and nothing else. For a value that
+            # IDENTIFIES something the organization owns — a ledger account, a
+            # bank account, a warehouse — a global row is not a valid answer,
+            # and using one means posting to another organization's books.
+            stmt = stmt.where(DomainSetting.organization_id == org_id)
         elif org_id:
             stmt = stmt.where(
                 or_(
@@ -744,6 +751,7 @@ projects_settings = DomainSettings(SettingDomain.projects)
 fleet_settings = DomainSettings(SettingDomain.fleet)
 procurement_settings = DomainSettings(SettingDomain.procurement)
 settings_settings = DomainSettings(SettingDomain.settings)
+gl_settings = DomainSettings(SettingDomain.gl)
 payroll_settings = DomainSettings(SettingDomain.payroll)
 banking_settings = DomainSettings(SettingDomain.banking)
 coach_settings = DomainSettings(SettingDomain.coach)
