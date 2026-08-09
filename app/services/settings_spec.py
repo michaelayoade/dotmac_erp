@@ -26,6 +26,19 @@ class SettingSpec(ListResponseMixin):
     min_value: int | None = None
     max_value: int | None = None
     is_secret: bool = False
+    # Whether a less-specific scope's value is a valid answer for this setting.
+    # True for nearly everything — a threshold or toggle set globally is a real
+    # answer for an organization that has not overridden it.
+    #
+    # False for a value that IDENTIFIES something owned by one organization: a
+    # ledger account, a bank account, a warehouse. A fallback claims a
+    # less-specific value answers the question, and for those it does not —
+    # there is no "default GL account", and inheriting one means posting to
+    # another organization's books.
+    #
+    # Mirrors `dotmac_kernel.settings_resolver.SettingSpec.inherits` (ADR-0012)
+    # so the kernel cutover is a swap rather than a redesign.
+    inherits: bool = True
     label: str | None = None
     description: str | None = None
 
@@ -1024,6 +1037,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var=None,
         value_type=SettingValueType.string,
         default="",
+        inherits=False,
         label="FX Gain Account",
         description=(
             "GL account that receives credit-side FX gains during period-end "
@@ -1037,6 +1051,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var=None,
         value_type=SettingValueType.string,
         default="",
+        inherits=False,
         label="FX Loss Account",
         description=(
             "GL account that receives debit-side FX losses during period-end "
@@ -1061,6 +1076,7 @@ DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.fleet: settings_service.fleet_settings,
     SettingDomain.procurement: settings_service.procurement_settings,
     SettingDomain.settings: settings_service.settings_settings,
+    SettingDomain.gl: settings_service.gl_settings,
     SettingDomain.payroll: settings_service.payroll_settings,
     SettingDomain.banking: settings_service.banking_settings,
     SettingDomain.coach: settings_service.coach_settings,
@@ -1121,7 +1137,9 @@ def resolve_value(
     setting = None
     if service:
         try:
-            setting = service.get_by_key(db, key, organization_id=organization_id)
+            setting = service.get_by_key(
+                db, key, organization_id=organization_id, inherit=spec.inherits
+            )
         except HTTPException:
             setting = None
 
