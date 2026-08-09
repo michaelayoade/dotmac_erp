@@ -65,7 +65,11 @@ SETTINGS_SPECS: list[SettingSpec] = [
         key="jwt_access_ttl_minutes",
         env_var="JWT_ACCESS_TTL_MINUTES",
         value_type=SettingValueType.integer,
-        default=15,
+        # 60 because that is what runs. 15 is tighter and is a genuine
+        # security/UX tradeoff (users re-authenticate four times as often),
+        # so it is a decision to take deliberately rather than inherit from a
+        # spec value that never took effect. Left as a candidate improvement.
+        default=60,
         min_value=1,
     ),
     SettingSpec(
@@ -88,14 +92,20 @@ SETTINGS_SPECS: list[SettingSpec] = [
         key="refresh_cookie_secure",
         env_var="REFRESH_COOKIE_SECURE",
         value_type=SettingValueType.boolean,
-        default=False,
+        # True because that is what runs: `auth_flow._refresh_cookie_secure`
+        # falls back to True "for production safety". The spec said False, so
+        # the admin screen showed one answer while the app used another.
+        default=True,
     ),
     SettingSpec(
         domain=SettingDomain.auth,
         key="refresh_cookie_samesite",
         env_var="REFRESH_COOKIE_SAMESITE",
         value_type=SettingValueType.string,
-        default="lax",
+        # "strict" because that is what runs. The spec said "lax", which is
+        # WEAKER — resolving through the spec would have loosened CSRF
+        # protection on every deployment with no stored row.
+        default="strict",
         allowed={"lax", "strict", "none"},
     ),
     SettingSpec(
@@ -110,7 +120,11 @@ SETTINGS_SPECS: list[SettingSpec] = [
         key="refresh_cookie_path",
         env_var="REFRESH_COOKIE_PATH",
         value_type=SettingValueType.string,
-        default="/auth",
+        # "/" because that is what runs. "/auth" is tighter and may well be the
+        # intent, but narrowing a cookie's path INVALIDATES existing sessions
+        # for every other path — a deliberate change with user-visible effect,
+        # not a reconciliation. Left as a candidate improvement.
+        default="/",
     ),
     SettingSpec(
         domain=SettingDomain.auth,
