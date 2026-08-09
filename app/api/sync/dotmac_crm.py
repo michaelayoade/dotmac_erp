@@ -14,43 +14,23 @@ import binascii
 import hashlib
 import io
 import logging
-from datetime import datetime, timedelta, timezone
-
-try:
-    from datetime import UTC  # type: ignore
-except ImportError:  # pragma: no cover
-    UTC = timezone.utc
-
-# Only refresh ApiKey.last_used_at (a write + commit) at most this often per key.
-# Doing it on every call adds a row UPDATE + transaction to hot read paths (e.g.
-# per-project expense-totals) and contends on a single key.
-_LAST_USED_THROTTLE = timedelta(minutes=5)
-
-
-def _last_used_is_stale(last_used: datetime | None, now: datetime) -> bool:
-    """True when last_used_at is unset or older than the throttle window."""
-    if last_used is None:
-        return True
-    try:
-        return (now - last_used) >= _LAST_USED_THROTTLE
-    except TypeError:
-        # Defensive: a naive stored value — refresh it (and normalise going fwd).
-        return True
-
-
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings as app_settings
 from app.api.deps import get_db_with_org
-from app.db import SessionLocal
-from app.db.session_context import allow_cross_org, prime_session
-from app.models.auth import ApiKey
-from app.models.person import Person
+from app.api.service_principal import (
+    _LAST_USED_THROTTLE as _LAST_USED_THROTTLE,
+    _last_used_is_stale as _last_used_is_stale,
+    get_db_with_service_org,
+    require_any_service_scope,
+    require_service_auth,
+    require_service_scope,
+)
 from app.rls import set_current_organization_sync
 from app.schemas.sync.dotmac_crm import (
     BulkSyncRequest,
@@ -90,9 +70,7 @@ from app.schemas.sync.dotmac_crm import (
     SyncError,
     WorkforceEmployeeListResponse,
 )
-from app.services.auth import hash_api_key
 from app.services.auth_dependencies import require_tenant_auth
-from app.services.common import coerce_uuid
 from app.services.finance.rpt.ncc_financials import ncc_financials_context
 from app.services.people.hr.ncc_staff_report import NccStaffReportService
 from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
@@ -105,185 +83,12 @@ router = APIRouter(prefix="/sync/crm", tags=["crm-sync"])
 _MAX_ERROR_LEN = 200
 
 
-def _get_db():
-    """Database session dependency."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def _sanitize_error(e: Exception) -> str:
     """Truncate error message to avoid leaking internal details."""
     msg = str(e)
     if len(msg) > _MAX_ERROR_LEN:
         return msg[:_MAX_ERROR_LEN] + "..."
     return msg
-
-
-# ============ Service Account Authentication ============
-
-
-def require_service_auth(
-    x_api_key: str = Header(..., description="CRM service API key"),
-    db: Session = Depends(_get_db),
-) -> dict:
-    """
-    Authenticate service-to-service calls from DotMac CRM.
-
-    Validates the API key, sets RLS context, and returns the organization context.
-
-    Returns:
-        dict with organization_id and service info
-    """
-    now = datetime.now(UTC)
-
-    # Find API key by hash
-    stmt = select(ApiKey).where(
-        ApiKey.key_hash == hash_api_key(x_api_key),
-        ApiKey.is_active.is_(True),
-        ApiKey.revoked_at.is_(None),
-    )
-    api_key = db.scalar(stmt)
-
-    if not api_key:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
-    # Check expiration
-    if api_key.expires_at and api_key.expires_at <= now:
-        raise HTTPException(status_code=401, detail="API key expired")
-
-    # Get organization from associated person
-    if not api_key.person_id:
-        raise HTTPException(
-            status_code=403,
-            detail="API key not associated with a user",
-        )
-
-    if app_settings.default_organization_id:
-        set_current_organization_sync(
-            db,
-            coerce_uuid(app_settings.default_organization_id),
-        )
-
-    # Resolving the API key's person is a cross-tenant bootstrap: the person must
-    # be loaded to discover their organization before org context can be primed.
-    # Without this, org-filter enforcement rejects the lookup (no primed org yet).
-    with allow_cross_org(db):
-        person = db.get(Person, api_key.person_id)
-    if not person or not person.organization_id:
-        raise HTTPException(
-            status_code=403,
-            detail="User has no organization access",
-        )
-
-    # Copy scalar identity values before commit. SQLAlchemy expires ORM objects
-    # on commit; reloading ``person`` after switching tenant/RLS context can raise
-    # ObjectDeletedError even though authentication succeeded.
-    person_org_id = person.organization_id
-    person_id = person.id
-    api_key_id = api_key.id
-    service_label = api_key.label
-    api_key_scopes = list(api_key.scopes) if api_key.scopes else []
-
-    # Set RLS context for data isolation
-    set_current_organization_sync(db, person_org_id)
-
-    # Update last used — throttled to once per window (see _LAST_USED_THROTTLE)
-    # so hot read paths don't each incur a row UPDATE + commit. This session
-    # (``_get_db``) closes without committing and the route handler runs on a
-    # separate session, so when we do write it we commit here or it is lost.
-    if _last_used_is_stale(api_key.last_used_at, now):
-        api_key.last_used_at = now
-        db.commit()
-
-    logger.info(
-        "CRM service authenticated: org=%s, key=%s",
-        person_org_id,
-        service_label or api_key_id,
-    )
-
-    return {
-        "organization_id": person_org_id,
-        "person_id": person_id,
-        "api_key_id": api_key_id,
-        "service_label": service_label,
-        "scopes": api_key_scopes,
-    }
-
-
-def require_service_scope(scope: str):
-    """Dependency factory enforcing that the authenticated service key carries
-    ``scope``. An unscoped key (empty scopes) is grandfathered to full access,
-    so this is safe to add to endpoints without breaking existing keys — new,
-    scoped keys are restricted to exactly what they're granted.
-    """
-
-    def _dep(auth: dict = Depends(require_service_auth)) -> dict:
-        scopes = auth.get("scopes") or []
-        if scopes and scope not in scopes:
-            raise HTTPException(
-                status_code=403,
-                detail=f"API key missing required scope: {scope}",
-            )
-        return auth
-
-    return _dep
-
-
-def require_any_service_scope(*required: str):
-    """Dependency factory enforcing that the key carries at least one of
-    ``required``. Same grandfathering as ``require_service_scope``: an
-    unscoped key (empty scopes) keeps full access.
-    """
-
-    def _dep(auth: dict = Depends(require_service_auth)) -> dict:
-        scopes = auth.get("scopes") or []
-        if scopes and not any(scope in scopes for scope in required):
-            raise HTTPException(
-                status_code=403,
-                detail=f"API key missing required scope: one of {', '.join(required)}",
-            )
-        return auth
-
-    return _dep
-
-
-def get_db_with_service_org(
-    auth: dict = Depends(require_service_auth),
-):
-    """Tenant-primed DB session for service-to-service CRM sync routes.
-
-    Parallel to ``app.api.deps.get_db_with_org`` (which derives the org
-    from JWT-based ``require_tenant_auth``); this variant derives it from
-    the API-key based ``require_service_auth`` used by the CRM service.
-
-    Yields a fresh session with *both* tenant layers set: the SQLAlchemy
-    ORM listener (``session.info``) and the PostgreSQL GUC
-    (``app.current_organization_id``). Without this, RLS-protected
-    queries inside route handlers (and the services they call) silently
-    return zero rows even though authentication succeeded — same bug
-    class as the Celery ``session_for_org`` migration.
-
-    Auto-commits on successful yield, rolls back on exception — matches
-    the contract of ``get_db_with_org``.
-    """
-    organization_id = auth["organization_id"]
-    if not isinstance(organization_id, UUID):
-        organization_id = UUID(str(organization_id))
-
-    db = SessionLocal()
-    try:
-        prime_session(db, organization_id)
-        set_current_organization_sync(db, organization_id)
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 # ============ Sync Endpoints (CRM → ERP) ============

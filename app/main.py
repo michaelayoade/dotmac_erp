@@ -67,6 +67,7 @@ from app.api.settings import router as settings_router
 from app.api.support import router as support_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
 from app.api.sync.dotmac_sub import router as sub_sync_router
+from app.api.sync.sub_attendance import router as sub_attendance_router
 from app.api.workflow_tasks import router as workflow_tasks_router
 from app.config import settings
 from app.db import SessionLocal
@@ -740,6 +741,7 @@ if is_module_enabled("people"):
     app.include_router(people_web_router)
     app.include_router(payroll_alias_web_router)
     app.include_router(onboarding_portal_router)
+    _include_api_router(sub_attendance_router)
 
 # ---------------------------------------------------------------------------
 # Finance module
