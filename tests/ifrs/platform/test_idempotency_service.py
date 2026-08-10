@@ -407,6 +407,16 @@ class TestRequestHashConflicts:
     it expected to already exist. Comparing a real hash against that sentinel
     made every later retry of a legitimate request 409 forever."""
 
+    @pytest.fixture
+    def service(self):
+        """Return the pre-imported IdempotencyService class.
+
+        `organization_id` and `mock_db_session` come from the package conftest,
+        but `service` is class-scoped in `TestIdempotencyService` and so is not
+        visible here.
+        """
+        return IdempotencyService
+
     def test_an_unknown_stored_hash_replays_instead_of_conflicting(
         self, service, mock_db_session, organization_id
     ):
