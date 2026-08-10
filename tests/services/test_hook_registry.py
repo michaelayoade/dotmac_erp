@@ -1,5 +1,8 @@
 """Tests for hook registry dispatch."""
 
+import hashlib
+import hmac
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -215,6 +218,55 @@ class TestHookRegistry:
         assert post_kwargs["headers"] == {}
         assert post_kwargs["json"]["event"] == "sales.order.confirmed"
         assert post_kwargs["json"]["payload"]["so_number"] == "SO-1001"
+
+    @patch("app.services.hooks.registry._validate_webhook_target")
+    @patch("httpx.Client")
+    def test_execute_webhook_handler_signs_sub_material_payload(
+        self, mock_client_cls, mock_validate, monkeypatch
+    ):
+        monkeypatch.setenv("ERP_SUB_WEBHOOK_SECRET", "shared-secret")
+        mock_validate.return_value = (True, None)
+        payload = {
+            "omni_id": str(uuid4()),
+            "request_id": str(uuid4()),
+            "new_status": "ISSUED",
+            "updated_at": "2026-08-10T12:00:00+00:00",
+            "items": [],
+        }
+        event = HookEvent(
+            event_name="sub.material_request.status_changed",
+            organization_id=uuid4(),
+            entity_type="MaterialRequest",
+            entity_id=uuid4(),
+            actor_user_id=None,
+            payload=payload,
+        )
+        response = MagicMock(status_code=202, text="accepted")
+        response.raise_for_status.return_value = None
+        client = MagicMock()
+        client.post.return_value = response
+        mock_client_cls.return_value.__enter__.return_value = client
+        hook = _hook(
+            handler_type=HookHandlerType.WEBHOOK,
+            handler_config={
+                "url": "https://selfcare.dotmac.io/webhooks/erp-material/binding",
+                "method": "POST",
+                "payload_only": True,
+                "signing_secret_env": "ERP_SUB_WEBHOOK_SECRET",
+            },
+        )
+
+        _execute_hook_handler(MagicMock(), hook, event)
+
+        kwargs = client.post.call_args.kwargs
+        expected = (
+            "sha256="
+            + hmac.new(b"shared-secret", kwargs["content"], hashlib.sha256).hexdigest()
+        )
+        assert kwargs["headers"]["X-Dotmac-Signature"] == expected
+        assert kwargs["headers"]["X-Dotmac-Delivery"]
+        assert b'"omni_id"' in kwargs["content"]
+        assert b'"payload"' not in kwargs["content"]
 
     @patch("app.services.hooks.registry._validate_webhook_target")
     @patch("httpx.Client")

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -33,6 +37,7 @@ from app.models.finance.platform.service_hook_execution import (
 from app.services.feature_flags import FEATURE_SERVICE_HOOKS, is_feature_enabled
 
 logger = logging.getLogger(__name__)
+_ALLOWED_SIGNING_ENV_NAMES = frozenset({"ERP_SUB_WEBHOOK_SECRET"})
 
 
 @dataclass(frozen=True)
@@ -382,19 +387,57 @@ def _execute_hook_handler(
         method = str(hook.handler_config.get("method", "POST")).upper()
         timeout_s = float(hook.handler_config.get("timeout_seconds", 15))
         headers = dict(hook.handler_config.get("headers", {}))
-        body = {
-            "event": event.event_name,
-            "organization_id": str(event.organization_id),
-            "entity_type": event.entity_type,
-            "entity_id": str(event.entity_id),
-            "payload": event.payload,
-        }
+        body = (
+            event.payload
+            if hook.handler_config.get("payload_only") is True
+            else {
+                "event": event.event_name,
+                "organization_id": str(event.organization_id),
+                "entity_type": event.entity_type,
+                "entity_id": str(event.entity_id),
+                "payload": event.payload,
+            }
+        )
+        encoded_body = json.dumps(body, separators=(",", ":"), default=str).encode(
+            "utf-8"
+        )
+        signing_secret_env = str(
+            hook.handler_config.get("signing_secret_env") or ""
+        ).strip()
+        if signing_secret_env:
+            if signing_secret_env not in _ALLOWED_SIGNING_ENV_NAMES:
+                raise ValueError("Unsupported webhook signing secret reference")
+            signing_secret = os.getenv(signing_secret_env, "")
+            if not signing_secret:
+                raise ValueError("ERP Sub webhook signing secret is unavailable")
+            headers["X-Dotmac-Signature"] = (
+                "sha256="
+                + hmac.new(
+                    signing_secret.encode("utf-8"), encoded_body, hashlib.sha256
+                ).hexdigest()
+            )
+            delivery_seed = (
+                f"{event.event_name}:{event.entity_id}:"
+                f"{event.payload.get('new_status')}:{event.payload.get('updated_at')}"
+            )
+            headers["X-Dotmac-Delivery"] = hashlib.sha256(
+                delivery_seed.encode("utf-8")
+            ).hexdigest()
+            headers.setdefault("Content-Type", "application/json")
 
         with httpx.Client(timeout=timeout_s, follow_redirects=False) as client:
             if method == "POST":
-                response = client.post(url, json=body, headers=headers)
+                response = (
+                    client.post(url, content=encoded_body, headers=headers)
+                    if signing_secret_env
+                    else client.post(url, json=body, headers=headers)
+                )
             elif method == "PUT":
-                response = client.put(url, json=body, headers=headers)
+                response = (
+                    client.put(url, content=encoded_body, headers=headers)
+                    if signing_secret_env
+                    else client.put(url, json=body, headers=headers)
+                )
             else:
                 raise ValueError(f"Unsupported webhook method: {method}")
 
