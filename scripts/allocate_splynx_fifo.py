@@ -1,23 +1,36 @@
 #!/usr/bin/env python
 """
-FIFO Auto-Allocation: Link unallocated Splynx payments to invoices.
+FIFO Auto-Allocation: link unallocated Splynx payments to invoices.
 
-Uses First-In-First-Out ordering — oldest payment covers oldest unpaid
-invoice, splitting across multiple invoices as needed.  This is Tier-B
-allocation, complementing the exact 1:1 matching in Tier-A.
+Oldest payment covers oldest unpaid invoice, splitting across invoices as
+needed. Tier-B allocation, complementing the exact 1:1 matching in Tier-A
+(`allocate_exact_match_payments.py`).
 
-Only creates ar.payment_allocation records.  Does NOT modify
-invoice.amount_paid or invoice.status (Splynx sync owns those fields).
+Only creates `ar.payment_allocation` records. Does NOT modify
+`invoice.amount_paid` or `invoice.status` — the Splynx sync owns those.
 
-Idempotent: re-running produces zero additional changes because
-remaining balances already reflect previously committed allocations.
+Idempotent: re-running produces zero additional changes, because remaining
+balances already reflect previously committed allocations.
+
+**This is now a thin CLI adapter.** The allocation decision has always lived
+in `app.services.finance.ar.fifo_allocation_service`; what lived here was the
+choice of ORGANIZATION, and it chose badly:
+
+    SELECT DISTINCT organization_id FROM ar.customer_payment
+    WHERE splynx_id IS NOT NULL LIMIT 1
+
+That inferred the tenant from data and took whatever an unordered scan
+returned first, justified by a comment that all Splynx data belongs to one
+org. A second organization with Splynx payments would have been skipped
+silently, and which one ran depended on the query plan. `--org-id` is now
+required; the scheduled path (`app.tasks.ar_allocation
+.allocate_splynx_payments_fifo`) iterates every organization that has any.
 
 Usage:
-  # Dry run (default) — shows what would be allocated, no DB changes
-  docker exec dotmac_erp_app python scripts/allocate_splynx_fifo.py
-
-  # Execute — creates allocations and commits
-  docker exec dotmac_erp_app python scripts/allocate_splynx_fifo.py --commit
+  docker exec dotmac_erp_app python scripts/allocate_splynx_fifo.py \
+      --org-id <uuid>            # dry run
+  docker exec dotmac_erp_app python scripts/allocate_splynx_fifo.py \
+      --org-id <uuid> --commit
 """
 
 from __future__ import annotations
@@ -25,104 +38,91 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import SessionLocal
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
+from app.db.session_context import cross_org_session, session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation
+from app.services.finance.ar.allocation_backlog import (
+    organizations_with_splynx_payments,
 )
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="FIFO auto-allocate Splynx payments to invoices"
     )
-    parser.add_argument(
-        "--commit",
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--org-id", type=uuid.UUID, help="Organization to run against")
+    group.add_argument(
+        "--list-orgs",
         action="store_true",
-        help="Commit changes (default is dry run)",
+        help="List organizations that have Splynx payments, and exit",
+    )
+    parser.add_argument(
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Recorded as who ran this, on the BatchOperation record",
+    )
+    parser.add_argument(
+        "--commit", action="store_true", help="Apply (default is a dry run)"
     )
     args = parser.parse_args()
 
-    dry_run = not args.commit
-    mode = "DRY RUN" if dry_run else "COMMIT"
-    logger.info("=== FIFO Splynx Payment Allocation (%s) ===", mode)
+    if args.list_orgs:
+        with cross_org_session() as db:
+            for org_id in organizations_with_splynx_payments(db):
+                logger.info("%s", org_id)
+        return
 
-    with SessionLocal() as db:
-        # Import inside to avoid circular imports at module level
-        # Discover the single org (all Splynx data belongs to one org)
-        from sqlalchemy import text
+    from app.services.finance.ar.fifo_allocation_service import FIFOAllocationService
 
-        from app.services.finance.ar.fifo_allocation_service import (
-            FIFOAllocationService,
+    mode = "COMMIT" if args.commit else "DRY RUN"
+    logger.info("=== FIFO Splynx allocation (%s) — org %s ===", mode, args.org_id)
+
+    with (
+        session_for_org(args.org_id) as db,
+        batch_operation(
+            db,
+            organization_id=args.org_id,
+            operation_type=BatchOperationType.BULK_UPDATE,
+            operation_name="allocate_splynx_fifo",
+            started_by_id=args.actor_id,
+            description=f"Manual CLI run ({mode})",
+            source_file=__file__,
+        ) as tally,
+    ):
+        result = FIFOAllocationService(db).allocate_for_org(
+            args.org_id, dry_run=not args.commit
         )
+        tally.created = result.allocations_created
+        tally.failed = len(result.errors)
 
-        org_row = db.execute(
-            text("""
-                SELECT DISTINCT organization_id
-                FROM ar.customer_payment
-                WHERE splynx_id IS NOT NULL
-                LIMIT 1
-            """)
-        ).fetchone()
-
-        if org_row is None:
-            logger.info("No Splynx payments found. Nothing to do.")
-            return
-
-        org_id = org_row[0]
-        logger.info("Organization: %s", org_id)
-
-        service = FIFOAllocationService(db)
-        result = service.allocate_for_org(org_id, dry_run=dry_run)
-
-        # Print summary
-        logger.info("")
-        logger.info("=== Summary ===")
-        logger.info("  Customers processed:  %d", result.customers_processed)
-        logger.info("  Allocations created:  %d", result.allocations_created)
-        logger.info(
-            "  Total allocated:      %s NGN",
-            f"{result.total_allocated:,.2f}",
-        )
-        logger.info("  Prepayment customers: %d", len(result.prepayment_customers))
-        logger.info("  Errors:               %d", len(result.errors))
-
-        if result.prepayment_customers:
-            logger.info("")
-            logger.info(
-                "--- Customers with remaining payment balance (prepayments) ---"
-            )
-            for cust_id, name, excess in sorted(
-                result.prepayment_customers, key=lambda x: x[2], reverse=True
-            ):
-                logger.info("  %-40s %s NGN", name, f"{excess:>14,.2f}")
-            total_excess = sum(e for _, _, e in result.prepayment_customers)
-            logger.info(
-                "  %-40s %s NGN",
-                "TOTAL PREPAYMENTS",
-                f"{total_excess:>14,.2f}",
-            )
-
-        if result.errors:
-            logger.info("")
-            logger.info("--- Errors ---")
-            for err in result.errors:
-                logger.error("  %s", err)
-
-        if dry_run:
-            db.rollback()
-            logger.info("")
-            logger.info("Dry run complete. Re-run with --commit to apply changes.")
-        else:
-            db.commit()
-            logger.info("")
-            logger.info("Committed %d allocations.", result.allocations_created)
+    logger.info(
+        "customers=%d allocations=%d total=%s prepayments=%d errors=%d",
+        result.customers_processed,
+        result.allocations_created,
+        result.total_allocated,
+        len(result.prepayment_customers),
+        len(result.errors),
+    )
+    for cust_id, name, excess in sorted(
+        result.prepayment_customers, key=lambda x: x[2], reverse=True
+    )[:20]:
+        logger.info("  prepayment  %-40s %s", name, excess)
+    for err in result.errors[:20]:
+        logger.error("  %s", err)
+    if not args.commit:
+        logger.info("DRY RUN — re-run with --commit to apply.")
 
 
 if __name__ == "__main__":
