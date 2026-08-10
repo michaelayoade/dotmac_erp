@@ -8,6 +8,10 @@ from app.tasks.analytics import (
     refresh_workforce_metrics,
 )
 from app.tasks.ap_posting import post_unposted_ap_invoices
+from app.tasks.gl_posting import (
+    post_approved_journal_backlog,
+    post_expense_claim_backlog,
+)
 from app.tasks.audit import log_audit_event
 from app.tasks.audit_integrity import verify_audit_hash_chain
 from app.tasks.automation import (
@@ -162,6 +166,8 @@ __all__ = [
     "process_pms_dispute_deadline_reminders",
     # Audit tasks
     "post_unposted_ap_invoices",
+    "post_approved_journal_backlog",
+    "post_expense_claim_backlog",
     "log_audit_event",
     "verify_audit_hash_chain",
     # dotmac_sub sync tasks
