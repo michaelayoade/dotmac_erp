@@ -25,7 +25,22 @@ Always open sessions through the canonical context managers in
   orgs, then process each under its own `session_for_org`).
 
 `scripts/check_session_context.py` enforces this: CI, pre-commit, and the
-PostToolUse hook all fail on a raw `SessionLocal()` in `app/tasks/`.
+PostToolUse hook all fail on a raw `SessionLocal()` in `app/tasks/`,
+`app/tools/` or `scripts/` — every entry point outside the request lifecycle.
+
+`scripts/` came under the guard late and carries a backlog, so it has a
+ratchet: `scripts/session_context_legacy.txt` lists each grandfathered file
+with its exact number of raw sessions. The count must not move in either
+direction without editing that file, so a legacy script can be retired but
+never extended, and every fix is recorded. Removing a line is the goal —
+archive the script to `scripts/archive/` if it has already run, move the
+decision into a service invoked from `app/tasks/` if it recurs, or open the
+session through the canonical helpers if it must still be run by hand.
+
+That list is **not** an approval, and is not interchangeable with the
+per-line `# session-context: allow` marker, which means "reviewed and correct
+here". For a batch script an unprimed session is not fail-closed but
+fail-*silent*: zero rows, exit 0, "job succeeded".
 
 ## Task Pattern (single org)
 

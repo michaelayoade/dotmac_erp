@@ -612,7 +612,12 @@ class SettingsWebService:
         settings = {}
 
         for spec in specs:
-            value = resolve_value(db, SettingDomain.automation, spec.key)
+            value = resolve_value(
+                db,
+                SettingDomain.automation,
+                spec.key,
+                organization_id=organization_id,
+            )
             settings[spec.key] = {
                 "value": value,
                 "default": spec.default,
@@ -707,7 +712,12 @@ class SettingsWebService:
         settings = {}
 
         for spec in specs:
-            value = resolve_value(db, SettingDomain.reporting, spec.key)
+            value = resolve_value(
+                db,
+                SettingDomain.reporting,
+                spec.key,
+                organization_id=organization_id,
+            )
             settings[spec.key] = {
                 "value": value,
                 "default": spec.default,
@@ -754,7 +764,12 @@ class SettingsWebService:
         settings = {}
 
         for spec in specs:
-            value = resolve_value(db, SettingDomain.payroll, spec.key)
+            value = resolve_value(
+                db,
+                SettingDomain.payroll,
+                spec.key,
+                organization_id=organization_id,
+            )
             settings[spec.key] = {
                 "value": value if not spec.is_secret else "",
                 "default": spec.default,

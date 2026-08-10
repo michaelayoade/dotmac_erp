@@ -4458,6 +4458,17 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/sub/attendance/today": {
+   "params": [
+    "header:X-Selfcare-Subject!",
+    "header:x-api-key!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "30bd3bafbc2e",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/sync/sub/expense-categories": {
    "params": [
     "header:x-api-key!"
@@ -8894,6 +8905,32 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/sync/sub/attendance/check-in": {
+   "params": [
+    "header:Idempotency-Key",
+    "header:X-Request-ID",
+    "header:X-Selfcare-Subject!",
+    "header:x-api-key!"
+   ],
+   "request": "0caae5de4163",
+   "responses": {
+    "200": "30bd3bafbc2e",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/sync/sub/attendance/check-out": {
+   "params": [
+    "header:Idempotency-Key",
+    "header:X-Request-ID",
+    "header:X-Selfcare-Subject!",
+    "header:x-api-key!"
+   ],
+   "request": "0caae5de4163",
+   "responses": {
+    "200": "30bd3bafbc2e",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/sync/sub/bulk": {
    "params": [
     "header:x-api-key!"
@@ -9634,8 +9671,8 @@
   "DocumentRead": "2cfac2c30008",
   "DocumentType": "05fca615091c",
   "DocumentUpdate": "768cc3611e9c",
-  "DomainSettingRead": "0a78f06487ff",
-  "DomainSettingUpdate": "6e4e007f0b88",
+  "DomainSettingRead": "12b17dd329b2",
+  "DomainSettingUpdate": "8612ead70c8f",
   "DynamicApplicationSubmitRequest": "5e01493f9ef9",
   "EligibleApprover": "f8c2dfe67e7f",
   "EliminationEntryCreate": "6bcf8084475d",
@@ -10016,6 +10053,9 @@
   "ScheduledTaskCreate": "ff326f7be251",
   "ScheduledTaskRead": "207f4c94b1f9",
   "ScheduledTaskUpdate": "0f822fc22bbf",
+  "SelfcareAttendanceLocation": "316603452d98",
+  "SelfcareAttendanceRead": "3a7bdf961f6e",
+  "SelfcareAttendanceState": "ccb3b5b18bc5",
   "ServiceHookBulkDelete": "c0e8bf2978a3",
   "ServiceHookBulkResult": "8180e72809f3",
   "ServiceHookBulkToggle": "98a0ba70bf9e",
@@ -10033,13 +10073,12 @@
   "SessionRevokeResponse": "6f65989aa4a7",
   "SessionStatus": "da0d2e5253e5",
   "SessionUpdate": "5e12b7a39934",
-  "SettingDomain": "c4e846c8dcac",
   "SettingHistoryListResponse": "cb3ba2674787",
   "SettingHistoryRead": "c05a6913c059",
   "SettingValueType": "6e0b30116466",
-  "SettingsExportRequest": "e7fbd24a80ee",
+  "SettingsExportRequest": "abe9dc28dcab",
   "SettingsExportResponse": "a2df5763994b",
-  "SettingsImportRequest": "641238b3c4ef",
+  "SettingsImportRequest": "f4351848f714",
   "SettingsImportResponse": "7350cad7aeb7",
   "SettingsImportResultItem": "2f215b56579a",
   "ShiftTypeBrief": "428167c69d59",

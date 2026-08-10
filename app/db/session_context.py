@@ -35,19 +35,23 @@ A note on ``SET LOCAL`` and commits
 ------------------------------------
 
 ``SET LOCAL app.current_organization_id = ...`` is **transaction-scoped**
-— it is reset at COMMIT and ROLLBACK. A session that commits in the
-middle of its work loses its RLS GUC and silently starts returning zero
-rows on the next query. The strongest pattern is therefore one tenant
-session per org, commit once at the end:
+— it is reset at COMMIT and ROLLBACK. A session that committed in the
+middle of its work therefore lost its RLS GUC and silently started
+returning zero rows, while ``session.info`` kept the ORM-listener layer
+looking primed: it read as scoped and behaved as unscoped.
+
+``session_for_org`` and ``cross_org_session`` now re-arm their GUC on
+SQLAlchemy's ``after_begin``, which fires as each new transaction opens.
+Commit-and-continue inside a block is therefore safe, and the call site is
+no longer the contract owner for it.
+
+One tenant session per org remains the better shape, but for the other
+reason — identity-map contamination across tenants:
 
     for org_id in org_ids:
         with session_for_org(org_id) as db:
             service.run()
             db.commit()
-
-Avoid commit-and-continue within a single ``session_for_org`` block. If
-truly necessary, re-prime explicitly after each commit (call site
-becomes the contract owner — the helpers can't catch this for you).
 """
 
 from __future__ import annotations
@@ -56,10 +60,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from uuid import UUID
 
+from sqlalchemy import event
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.rls import (
     bypass_rls_sync,
+    enable_rls_bypass_on_connection,
+    set_current_organization_on_connection,
     set_current_organization_sync,
 )
 
@@ -174,28 +182,50 @@ def session_for_org(organization_id: UUID) -> Iterator[Session]:
                 return {"ok": True}
 
     For tasks that span multiple organizations, open one session per org
-    in the loop — this avoids ``SET LOCAL`` being cleared on commit and
-    prevents identity-map contamination across tenants::
+    in the loop — this prevents identity-map contamination across tenants::
 
         for org_id in org_ids:
             with session_for_org(org_id) as db:
                 Service(db).run()
                 db.commit()
+
+    That guidance used to carry a second reason: ``SET LOCAL`` is
+    transaction-scoped, so a commit inside the block silently un-set the GUC
+    while ``session.info`` kept layer 1 looking primed. That reason is gone —
+    the context is now re-armed on every transaction — so committing inside
+    the block is safe. Per-org sessions are still right, but for the
+    identity-map reason alone.
     """
     # Local import: SessionLocal is at module top-level of app.db; importing
     # it here avoids a circular dependency at import time.
     from app.db import SessionLocal
 
     session = SessionLocal()
+
+    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
+        # Layer 2 is set with SET LOCAL, which dies with the transaction that
+        # set it. A commit inside the caller's block would therefore drop the
+        # GUC while `session.info` still made layer 1 look primed — an
+        # asymmetry that reads as "scoped" and behaves as "unscoped".
+        # Re-arming on every new transaction removes the hazard here, rather
+        # than constraining every caller to commit exactly once forever.
+        #
+        # Emitted on the CONNECTION, not the Session: `after_begin` fires while
+        # the Session is still provisioning its connection, and going through
+        # the Session there raises InvalidRequestError.
+        set_current_organization_on_connection(connection, organization_id)
+
     try:
         # Layer 1: ORM listener — filters ORM queries based on session.info
         prime_session(session, organization_id)
         # Layer 2: PostgreSQL GUC — filters DB-RLS-policy-protected tables.
-        # SET LOCAL is transaction-scoped, so a commit inside the with-block
-        # will silently un-set this. Per-org sessions sidestep that.
-        set_current_organization_sync(session, organization_id)
+        # `after_begin` fires before the statement that opened the transaction
+        # runs, so the GUC is in place for the caller's very first query and
+        # for every query after every commit.
+        event.listen(session, "after_begin", _arm)
         yield session
     finally:
+        event.remove(session, "after_begin", _arm)
         session.close()
 
 
@@ -220,12 +250,23 @@ def cross_org_session() -> Iterator[Session]:
     from app.db import SessionLocal
 
     session = SessionLocal()
+
+    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
+        # Same hazard as session_for_org: SET LOCAL app.bypass_rls dies with
+        # the transaction, so a commit mid-block would silently restore RLS
+        # with no organization set — every later read returning zero rows
+        # while `allow_cross_org` still claimed the bypass was active.
+        # On the CONNECTION for the same reason as above.
+        enable_rls_bypass_on_connection(connection)
+
     try:
         # ORM listener bypass — session.info marker the listener checks.
         session.info["allow_cross_org"] = True
-        # PostgreSQL RLS bypass — SET LOCAL app.bypass_rls = 'true'.
+        # PostgreSQL RLS bypass, re-armed on every transaction.
+        event.listen(session, "after_begin", _arm)
         with bypass_rls_sync(session):
             yield session
     finally:
+        event.remove(session, "after_begin", _arm)
         session.info["allow_cross_org"] = False
         session.close()

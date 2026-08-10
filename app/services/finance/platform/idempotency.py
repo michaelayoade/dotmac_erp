@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from fastapi import HTTPException
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -37,6 +37,86 @@ class IdempotencyService(ListResponseMixin):
     """
 
     DEFAULT_TTL_HOURS: int = 24
+
+    #: HTTP status stored by `reserve` to mark a key as claimed-but-unfinished.
+    RESERVATION_STATUS: int = 202
+
+    #: How long an unfinished reservation may block retries before another
+    #: attempt may take it over. `reserve` writes its placeholder BEFORE the
+    #: side effect runs, so a request that dies in between leaves a `202
+    #: "Request in progress"` row that every retry replays. Without a lease that
+    #: row blocks the operation for the full `DEFAULT_TTL_HOURS` (24h) and the
+    #: work can never be re-driven — there is no other recovery path. The lease
+    #: is deliberately far shorter than the TTL: a *completed* response should
+    #: be replayable all day, an *unfinished* claim should not.
+    RESERVATION_LEASE_MINUTES: int = 15
+
+    @staticmethod
+    def is_stale_reservation(
+        record: IdempotencyRecord,
+        *,
+        lease_minutes: int | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        """Whether `record` is an unfinished reservation whose lease has lapsed.
+
+        Only ever true for a row still carrying the placeholder written by
+        `reserve` — once `update_response` records a real outcome the row is a
+        completed response and is replayed for its full TTL.
+        """
+        if record.response_status != IdempotencyService.RESERVATION_STATUS:
+            return False
+        lease = timedelta(
+            minutes=lease_minutes
+            if lease_minutes is not None
+            else IdempotencyService.RESERVATION_LEASE_MINUTES
+        )
+        created_at = record.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        return created_at < (now or datetime.now(UTC)) - lease
+
+    @staticmethod
+    def take_over_reservation(
+        db: Session,
+        record: IdempotencyRecord,
+        *,
+        lease_minutes: int | None = None,
+    ) -> bool:
+        """Try to take over a lapsed reservation. True means THIS caller owns it.
+
+        A single conditional UPDATE, so concurrent retries resolve in the
+        database rather than in Python: exactly one gets `rowcount == 1` and
+        re-executes; the others keep replaying the in-progress placeholder until
+        the winner records a real outcome.
+        """
+        lease = timedelta(
+            minutes=lease_minutes
+            if lease_minutes is not None
+            else IdempotencyService.RESERVATION_LEASE_MINUTES
+        )
+        now = datetime.now(UTC)
+        result = db.execute(
+            update(IdempotencyRecord)
+            .where(
+                IdempotencyRecord.record_id == record.record_id,
+                IdempotencyRecord.response_status
+                == IdempotencyService.RESERVATION_STATUS,
+                IdempotencyRecord.created_at < now - lease,
+            )
+            .values(created_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        db.commit()
+        db.expire(record)
+        won = cast("CursorResult[Any]", result).rowcount == 1
+        if won:
+            logger.warning(
+                "Taking over a lapsed idempotency reservation: key=%s endpoint=%s",
+                record.idempotency_key,
+                record.endpoint,
+            )
+        return won
 
     @staticmethod
     def check(
@@ -88,8 +168,13 @@ class IdempotencyService(ListResponseMixin):
             db.commit()
             return None
 
-        # Check if request hash matches
-        if record.request_hash != request_hash:
+        # Check if request hash matches. An EMPTY stored hash means "unknown",
+        # not "different": `update_response` writes `request_hash=""` when it
+        # has to create a record it expected to already exist, and comparing a
+        # real hash against that sentinel made every later retry of a legitimate
+        # request 409 forever — the key was permanently poisoned. An unknown
+        # hash cannot contradict anything, so it replays.
+        if record.request_hash and record.request_hash != request_hash:
             raise HTTPException(
                 status_code=409,
                 detail="Idempotency key already used with different request body",
@@ -229,6 +314,7 @@ class IdempotencyService(ListResponseMixin):
         organization_id: UUID,
         idempotency_key: str,
         endpoint: str,
+        request_hash: str,
     ) -> tuple[int, dict[str, Any] | None] | None:
         """
         Retrieve cached response for replay.
@@ -238,9 +324,21 @@ class IdempotencyService(ListResponseMixin):
             organization_id: Organization scope
             idempotency_key: Client-provided idempotency key
             endpoint: API endpoint path
+            request_hash: SHA256 hash of the request body
 
         Returns:
             Tuple of (status_code, response_body) if found, None otherwise
+
+        Raises:
+            HTTPException(409): If key exists but request_hash differs
+
+        Note:
+            `request_hash` became REQUIRED here. This read path skipped the
+            comparison `check` performs, so it would happily hand one request's
+            recorded response to a DIFFERENT request presenting the same key —
+            the conflict rule existed on one read path and not the other. It has
+            no production caller today; the parameter is required so it cannot
+            be adopted in the unsafe shape.
         """
         org_id = coerce_uuid(organization_id)
         now = datetime.now(UTC)
@@ -255,6 +353,13 @@ class IdempotencyService(ListResponseMixin):
 
         if record is None:
             return None
+
+        # Same "empty means unknown" rule as `check` — see the comment there.
+        if record.request_hash and record.request_hash != request_hash:
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key already used with different request body",
+            )
 
         return (record.response_status, record.response_body)
 

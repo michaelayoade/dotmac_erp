@@ -41,6 +41,7 @@ from app.services.finance.ar.input_utils import (
     require_uuid,
     resolve_currency_code,
 )
+from app.services.finance.ar.payment_status import apply_payment_status
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
@@ -515,10 +516,7 @@ class CustomerPaymentService(ListResponseMixin):
             invoice = db.get(Invoice, alloc.invoice_id)
             if invoice:
                 invoice.amount_paid += alloc.allocated_amount
-                if invoice.amount_paid >= invoice.total_amount:
-                    invoice.status = InvoiceStatus.PAID
-                else:
-                    invoice.status = InvoiceStatus.PARTIALLY_PAID
+                apply_payment_status(invoice)
 
         db.flush()
 
@@ -626,13 +624,7 @@ class CustomerPaymentService(ListResponseMixin):
                 invoice = db.get(Invoice, alloc.invoice_id)
                 if invoice:
                     invoice.amount_paid -= alloc.allocated_amount
-                    if invoice.amount_paid <= Decimal("0"):
-                        if invoice.due_date and invoice.due_date < date.today():
-                            invoice.status = InvoiceStatus.OVERDUE
-                        else:
-                            invoice.status = InvoiceStatus.POSTED
-                    else:
-                        invoice.status = InvoiceStatus.PARTIALLY_PAID
+                    apply_payment_status(invoice)
 
         # Create GL reversal journal if payment was cleared and has a journal
         if was_cleared and payment.journal_entry_id:
@@ -718,13 +710,7 @@ class CustomerPaymentService(ListResponseMixin):
                 invoice = db.get(Invoice, alloc.invoice_id)
                 if invoice:
                     invoice.amount_paid -= alloc.allocated_amount
-                    if invoice.amount_paid <= Decimal("0"):
-                        if invoice.due_date and invoice.due_date < date.today():
-                            invoice.status = InvoiceStatus.OVERDUE
-                        else:
-                            invoice.status = InvoiceStatus.POSTED
-                    else:
-                        invoice.status = InvoiceStatus.PARTIALLY_PAID
+                    apply_payment_status(invoice)
 
         # Create GL reversal journal if payment was cleared and has a journal
         if was_cleared and payment.journal_entry_id:

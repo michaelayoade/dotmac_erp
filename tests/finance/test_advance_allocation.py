@@ -39,6 +39,9 @@ def _make_invoice(
         amount_paid=Decimal(paid),
         balance_due=Decimal(total) - Decimal(paid),
         status=status,
+        # The status rule reads due_date to tell POSTED from OVERDUE when an
+        # invoice ends up uncovered, so the fixture has to model the field.
+        due_date=None,
     )
 
 

@@ -21,6 +21,7 @@ from app.services.finance.automation.workflow import (
     webhook_allowlist_configured,
 )
 from app.services.secrets import is_openbao_ref, resolve_openbao_ref
+from app.services.setting_domains import validate_registry as validate_setting_domains
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +313,12 @@ def validate_startup(db: Session | None = None, exit_on_failure: bool = True) ->
 
     # Check the dotmac_sub webhook org-attribution mode (audit D2)
     all_errors.extend(validate_webhook_org_resolution_mode())
+
+    # Every registered SettingSpec names a domain some installed module declares.
+    # A typo here used to be invisible — the setting simply never resolved and
+    # its default stood in silently — so it belongs in the startup gate rather
+    # than in whatever request first reads it.
+    all_errors.extend(validate_setting_domains())
 
     # Non-fatal security warning for potentially unsafe webhook automation config.
     warn_unconfigured_webhook_allowlist(db)

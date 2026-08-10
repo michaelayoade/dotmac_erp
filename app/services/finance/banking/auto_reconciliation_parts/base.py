@@ -120,8 +120,21 @@ class AutoMatchDefaults:
     """Runtime configuration loaded from DomainSettings (banking domain)."""
 
     pass_payment_intents_enabled: bool = True
-    pass_splynx_by_ref_enabled: bool = True
-    pass_splynx_date_amount_enabled: bool = True
+    # Splynx is retired. These two passes matched CustomerPayments carrying a
+    # `splynx_id`; turning them off removes `receivable_payment_synced` from
+    # the policy's enabled providers, so both Splynx strategies short-circuit
+    # on their own `allows_*` checks and do nothing.
+    #
+    # Nothing is deleted yet, deliberately: this is the reversible half of the
+    # retirement. Set either back to True to restore the old behaviour while
+    # the change is being verified. The code goes in a later stage, once it
+    # has been confirmed that no Splynx-era payment lost a match it needed.
+    #
+    # Historical Splynx payments stay matchable — `_load_ar_payments` no
+    # longer excludes them (it used to filter `splynx_id IS NULL`), so they
+    # fall to the general AR pass instead of becoming invisible.
+    pass_splynx_by_ref_enabled: bool = False
+    pass_splynx_date_amount_enabled: bool = False
     pass_ap_payments_enabled: bool = True
     pass_ar_payments_enabled: bool = True
     pass_bank_fees_enabled: bool = False

@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.services.setting_domains import registry
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.schemas.settings import DomainSettingUpdate
 from app.services import settings_spec
@@ -437,7 +438,7 @@ def export_settings(
     from datetime import datetime
 
     if domains is None:
-        domains = list(SettingDomain)
+        domains = list(registry().domains())
 
     result: dict[str, Any] = {
         "version": "1.0",
@@ -525,7 +526,7 @@ def import_settings(
     for domain_str, domain_settings in settings_data.items():
         # Parse domain
         try:
-            domain = SettingDomain(domain_str)
+            domain = registry().require(domain_str)
         except ValueError:
             result["errors"].append(
                 {

@@ -50,7 +50,7 @@ pymysql = "^1.1.1"
 # tests/architecture/test_kernel_import_boundary.py. No extras: [testing]'s
 # only pull (httpx) and [licensing]'s (cryptography) are already ERP main
 # dependencies at compatible versions.
-dotmac-kernel = {version = "0.1.0a13", source = "forgejo"}
+dotmac-kernel = {version = "0.1.0a24", source = "forgejo"}
 
 # Private Forgejo PyPI index (dotmac-kernel releases). Explicit priority: only
 # dependencies that name this source resolve from it; PyPI stays the default.

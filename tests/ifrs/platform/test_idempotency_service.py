@@ -262,6 +262,7 @@ class TestIdempotencyService:
                 organization_id=organization_id,
                 idempotency_key="cached-key",
                 endpoint="/api/v1/invoices",
+                request_hash="abc123",
             )
 
         assert result is not None
@@ -280,6 +281,7 @@ class TestIdempotencyService:
                 organization_id=organization_id,
                 idempotency_key="missing-key",
                 endpoint="/api/v1/invoices",
+                request_hash="abc123",
             )
 
         assert result is None
@@ -348,3 +350,145 @@ class TestIdempotencyService:
             )
 
         assert len(result) == 2
+
+
+class TestReservationLease:
+    """`reserve` writes its `202 "Request in progress"` placeholder BEFORE the
+    side effect. A request that died in between left a row that every retry
+    replayed for the full 24h TTL, with no lease, no stale detector and no way
+    to re-drive the work. A lapsed reservation is now takeable."""
+
+    def test_a_fresh_reservation_is_not_stale(self):
+        record = MockIdempotencyRecord(
+            response_status=202,
+            response_body={"detail": "Request in progress"},
+            created_at=datetime.now(UTC),
+        )
+        assert IdempotencyService.is_stale_reservation(record) is False
+
+    def test_a_lapsed_reservation_is_stale(self):
+        record = MockIdempotencyRecord(
+            response_status=202,
+            response_body={"detail": "Request in progress"},
+            created_at=datetime.now(UTC) - timedelta(hours=2),
+        )
+        assert IdempotencyService.is_stale_reservation(record) is True
+
+    def test_a_completed_response_is_never_stale(self):
+        """A recorded OUTCOME stays replayable for its whole TTL — only an
+        unfinished claim is subject to the lease."""
+        record = MockIdempotencyRecord(
+            response_status=201,
+            response_body={"id": "created"},
+            created_at=datetime.now(UTC) - timedelta(hours=23),
+        )
+        assert IdempotencyService.is_stale_reservation(record) is False
+
+    def test_the_lease_is_far_shorter_than_the_record_ttl(self):
+        """If the lease ever reached the TTL the stuck-placeholder failure would
+        be back: the row would block retries for as long as it survives."""
+        assert (
+            IdempotencyService.RESERVATION_LEASE_MINUTES
+            < IdempotencyService.DEFAULT_TTL_HOURS * 60
+        )
+
+    def test_naive_created_at_is_treated_as_utc(self):
+        """SQLite hands back naive datetimes; comparing one against an aware
+        `now` would raise rather than answer."""
+        record = MockIdempotencyRecord(
+            response_status=202,
+            created_at=(datetime.now(UTC) - timedelta(hours=2)).replace(tzinfo=None),
+        )
+        assert IdempotencyService.is_stale_reservation(record) is True
+
+
+class TestRequestHashConflicts:
+    """`update_response` writes `request_hash=""` when it has to create a record
+    it expected to already exist. Comparing a real hash against that sentinel
+    made every later retry of a legitimate request 409 forever."""
+
+    @pytest.fixture
+    def service(self):
+        """Return the pre-imported IdempotencyService class.
+
+        `organization_id` and `mock_db_session` come from the package conftest,
+        but `service` is class-scoped in `TestIdempotencyService` and so is not
+        visible here.
+        """
+        return IdempotencyService
+
+    def test_an_unknown_stored_hash_replays_instead_of_conflicting(
+        self, service, mock_db_session, organization_id
+    ):
+        poisoned = MockIdempotencyRecord(
+            organization_id=organization_id,
+            idempotency_key="k",
+            endpoint="/api/v1/invoices",
+            request_hash="",  # the sentinel written by update_response
+            response_status=200,
+            response_body={"data": "test"},
+            expires_at=datetime.now(UTC) + timedelta(hours=12),
+        )
+        mock_db_session.scalars.return_value.first.return_value = poisoned
+
+        with patch_idempotency_service():
+            result = service.check(
+                mock_db_session,
+                organization_id=organization_id,
+                idempotency_key="k",
+                endpoint="/api/v1/invoices",
+                request_hash="a-real-hash",
+            )
+
+        assert result is poisoned
+
+    def test_a_genuinely_different_hash_still_conflicts(
+        self, service, mock_db_session, organization_id
+    ):
+        """The fix must not weaken the real conflict rule."""
+        record = MockIdempotencyRecord(
+            organization_id=organization_id,
+            idempotency_key="k",
+            endpoint="/api/v1/invoices",
+            request_hash="hash-of-request-one",
+            response_status=200,
+            expires_at=datetime.now(UTC) + timedelta(hours=12),
+        )
+        mock_db_session.scalars.return_value.first.return_value = record
+
+        with patch_idempotency_service(), pytest.raises(HTTPException) as exc:
+            service.check(
+                mock_db_session,
+                organization_id=organization_id,
+                idempotency_key="k",
+                endpoint="/api/v1/invoices",
+                request_hash="hash-of-request-two",
+            )
+        assert exc.value.status_code == 409
+
+    def test_get_cached_response_now_enforces_the_hash_too(
+        self, service, mock_db_session, organization_id
+    ):
+        """This read path skipped the comparison `check` performs, so it would
+        hand one request's recorded response to a DIFFERENT request presenting
+        the same key."""
+        record = MockIdempotencyRecord(
+            organization_id=organization_id,
+            idempotency_key="k",
+            endpoint="/api/v1/invoices",
+            request_hash="hash-of-request-one",
+            response_status=200,
+            response_body={"data": "test"},
+            expires_at=datetime.now(UTC) + timedelta(hours=12),
+        )
+        mock_db_session.scalars.return_value.first.return_value = record
+
+        with patch_idempotency_service(), pytest.raises(HTTPException) as exc:
+            service.get_cached_response(
+                mock_db_session,
+                organization_id=organization_id,
+                idempotency_key="k",
+                endpoint="/api/v1/invoices",
+                request_hash="hash-of-request-two",
+            )
+        assert exc.value.status_code == 409

@@ -6,8 +6,9 @@ from datetime import date as date_type
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services.setting_domains import registry
 from app.config import settings
-from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
+from app.models.domain_settings import DomainSetting, SettingValueType
 from app.models.finance.core_org.organization import Organization
 from app.models.person import Person
 from app.services.common import coerce_uuid
@@ -611,7 +612,7 @@ class AdminOrganizationSettingsMixin:
             "search": search_value,
             "status_filter": status or "",
             "domain_filter": domain_value.value if domain_value else "",
-            "domains": [value.value for value in SettingDomain],
+            "domains": [d.value for d in registry().domains()],
             "stats": {
                 "active": active_count,
                 "inactive": inactive_count,
@@ -641,7 +642,7 @@ class AdminOrganizationSettingsMixin:
                 }
         return {
             "setting_data": setting_data,
-            "domains": [value.value for value in SettingDomain],
+            "domains": [d.value for d in registry().domains()],
             "value_types": [value.value for value in SettingValueType],
         }
 
@@ -656,7 +657,7 @@ class AdminOrganizationSettingsMixin:
         is_active: bool = True,
     ) -> tuple[DomainSetting | None, str | None]:
         try:
-            domain_enum = SettingDomain(domain)
+            domain_enum = registry().require(domain)
         except ValueError:
             return None, f"Invalid domain: {domain}"
         try:
@@ -724,7 +725,7 @@ class AdminOrganizationSettingsMixin:
         if not setting:
             return None, "Setting not found"
         try:
-            domain_enum = SettingDomain(domain)
+            domain_enum = registry().require(domain)
         except ValueError:
             return None, f"Invalid domain: {domain}"
         try:

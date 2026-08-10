@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services.setting_domains import registry
 from app.config import settings
 from app.models.audit import AuditActorType, AuditEvent
 from app.models.auth import AuthProvider, SessionStatus, UserCredential
@@ -155,7 +156,7 @@ def _parse_domain(value: str | None) -> SettingDomain | None:
     if not value:
         return None
     try:
-        return SettingDomain(value)
+        return registry().require(value)
     except ValueError:
         return None
 
@@ -2550,7 +2551,7 @@ class AdminWebService:
             "search": search_value,
             "status_filter": status or "",
             "domain_filter": domain_value.value if domain_value else "",
-            "domain_options": [value.value for value in SettingDomain],
+            "domain_options": [d.value for d in registry().domains()],
             "stats": {
                 "active": active_count,
                 "inactive": inactive_count,
@@ -2590,7 +2591,7 @@ class AdminWebService:
 
         return {
             "setting_data": setting_data,
-            "domains": [d.value for d in SettingDomain],
+            "domains": [d.value for d in registry().domains()],
             "value_types": [vt.value for vt in SettingValueType],
         }
 
@@ -2607,7 +2608,7 @@ class AdminWebService:
         """Create a new setting. Returns (setting, error)."""
         # Validate domain
         try:
-            domain_enum = SettingDomain(domain)
+            domain_enum = registry().require(domain)
         except ValueError:
             return None, f"Invalid domain: {domain}"
 
@@ -2688,7 +2689,7 @@ class AdminWebService:
 
         # Validate domain
         try:
-            domain_enum = SettingDomain(domain)
+            domain_enum = registry().require(domain)
         except ValueError:
             return None, f"Invalid domain: {domain}"
 

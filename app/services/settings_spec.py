@@ -4,8 +4,11 @@ from typing import cast
 
 from fastapi import HTTPException
 
+from uuid import UUID
+
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.services import domain_settings as settings_service
+from app.services.domain_settings import AMBIENT, _Ambient
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -23,6 +26,19 @@ class SettingSpec(ListResponseMixin):
     min_value: int | None = None
     max_value: int | None = None
     is_secret: bool = False
+    # Whether a less-specific scope's value is a valid answer for this setting.
+    # True for nearly everything — a threshold or toggle set globally is a real
+    # answer for an organization that has not overridden it.
+    #
+    # False for a value that IDENTIFIES something owned by one organization: a
+    # ledger account, a bank account, a warehouse. A fallback claims a
+    # less-specific value answers the question, and for those it does not —
+    # there is no "default GL account", and inheriting one means posting to
+    # another organization's books.
+    #
+    # Mirrors `dotmac_kernel.settings_resolver.SettingSpec.inherits` (ADR-0012)
+    # so the kernel cutover is a swap rather than a redesign.
+    inherits: bool = True
     label: str | None = None
     description: str | None = None
 
@@ -49,7 +65,11 @@ SETTINGS_SPECS: list[SettingSpec] = [
         key="jwt_access_ttl_minutes",
         env_var="JWT_ACCESS_TTL_MINUTES",
         value_type=SettingValueType.integer,
-        default=15,
+        # 60 because that is what runs. 15 is tighter and is a genuine
+        # security/UX tradeoff (users re-authenticate four times as often),
+        # so it is a decision to take deliberately rather than inherit from a
+        # spec value that never took effect. Left as a candidate improvement.
+        default=60,
         min_value=1,
     ),
     SettingSpec(
@@ -69,17 +89,34 @@ SETTINGS_SPECS: list[SettingSpec] = [
     ),
     SettingSpec(
         domain=SettingDomain.auth,
+        key="password_reset_ttl_minutes",
+        env_var="PASSWORD_RESET_TTL_MINUTES",
+        value_type=SettingValueType.integer,
+        # 60 because that is what `auth_flow._password_reset_ttl_minutes`
+        # returns today. The key was read but never declared, so it resolved to
+        # nothing and only the env var and this literal were ever live.
+        default=60,
+        min_value=1,
+    ),
+    SettingSpec(
+        domain=SettingDomain.auth,
         key="refresh_cookie_secure",
         env_var="REFRESH_COOKIE_SECURE",
         value_type=SettingValueType.boolean,
-        default=False,
+        # True because that is what runs: `auth_flow._refresh_cookie_secure`
+        # falls back to True "for production safety". The spec said False, so
+        # the admin screen showed one answer while the app used another.
+        default=True,
     ),
     SettingSpec(
         domain=SettingDomain.auth,
         key="refresh_cookie_samesite",
         env_var="REFRESH_COOKIE_SAMESITE",
         value_type=SettingValueType.string,
-        default="lax",
+        # "strict" because that is what runs. The spec said "lax", which is
+        # WEAKER — resolving through the spec would have loosened CSRF
+        # protection on every deployment with no stored row.
+        default="strict",
         allowed={"lax", "strict", "none"},
     ),
     SettingSpec(
@@ -94,7 +131,11 @@ SETTINGS_SPECS: list[SettingSpec] = [
         key="refresh_cookie_path",
         env_var="REFRESH_COOKIE_PATH",
         value_type=SettingValueType.string,
-        default="/auth",
+        # "/" because that is what runs. "/auth" is tighter and may well be the
+        # intent, but narrowing a cookie's path INVALIDATES existing sessions
+        # for every other path — a deliberate change with user-visible effect,
+        # not a reconciliation. Left as a candidate improvement.
+        default="/",
     ),
     SettingSpec(
         domain=SettingDomain.auth,
@@ -1021,6 +1062,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var=None,
         value_type=SettingValueType.string,
         default="",
+        inherits=False,
         label="FX Gain Account",
         description=(
             "GL account that receives credit-side FX gains during period-end "
@@ -1034,6 +1076,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var=None,
         value_type=SettingValueType.string,
         default="",
+        inherits=False,
         label="FX Loss Account",
         description=(
             "GL account that receives debit-side FX losses during period-end "
@@ -1058,6 +1101,7 @@ DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.fleet: settings_service.fleet_settings,
     SettingDomain.procurement: settings_service.procurement_settings,
     SettingDomain.settings: settings_service.settings_settings,
+    SettingDomain.gl: settings_service.gl_settings,
     SettingDomain.payroll: settings_service.payroll_settings,
     SettingDomain.banking: settings_service.banking_settings,
     SettingDomain.coach: settings_service.coach_settings,
@@ -1078,7 +1122,12 @@ def list_specs(domain: SettingDomain) -> list[SettingSpec]:
 
 
 def resolve_value(
-    db, domain: SettingDomain, key: str, strict: bool = False
+    db,
+    domain: SettingDomain,
+    key: str,
+    strict: bool = False,
+    *,
+    organization_id: "UUID | None | _Ambient" = AMBIENT,
 ) -> object | None:
     """
     Resolve a setting value from database, falling back to spec defaults.
@@ -1089,6 +1138,13 @@ def resolve_value(
         key: Setting key
         strict: If True, raise ValueError for required settings that are missing
                 or have no default. Use strict=True during startup validation.
+        organization_id: Whose value to read. Keyword-only. A UUID reads that
+                organization's row falling back to the global one; an explicit
+                ``None`` reads the global row and only that. Omitting it uses
+                the session's ambient context and logs the call site — that
+                fallback is being removed, because a read with no scope
+                silently returned the most recently updated row of ANY
+                organization.
 
     Returns:
         Resolved setting value, or None if not found and no default
@@ -1106,7 +1162,9 @@ def resolve_value(
     setting = None
     if service:
         try:
-            setting = service.get_by_key(db, key)
+            setting = service.get_by_key(
+                db, key, organization_id=organization_id, inherit=spec.inherits
+            )
         except HTTPException:
             setting = None
 

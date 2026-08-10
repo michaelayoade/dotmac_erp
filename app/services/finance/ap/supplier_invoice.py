@@ -61,6 +61,7 @@ from app.services.finance.tax.tax_calculation import (
     TaxCalculationService,
 )
 from app.services.response import ListResponseMixin
+from app.services.finance.ap.payment_status import apply_payment_status
 
 logger = logging.getLogger(__name__)
 
@@ -1558,10 +1559,7 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice.amount_paid += payment_amount
 
-        if invoice.amount_paid >= invoice.total_amount:
-            invoice.status = SupplierInvoiceStatus.PAID
-        else:
-            invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
+        apply_payment_status(invoice)
 
         SupplierInvoiceService._flush_with_legacy_mock_commit(db)
 

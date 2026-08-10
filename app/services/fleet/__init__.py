@@ -21,3 +21,10 @@ __all__ = [
     "ReservationService",
     "AssignmentService",
 ]
+
+from app.services.setting_domain_declaration import ModuleSettingDomains  # noqa: E402
+
+# Setting domain(s) this module owns — vehicle and fleet operations.
+# Validated by `app.services.setting_domains` at startup and at every write;
+# see that module for why ownership lives here rather than in a central list.
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=("fleet",))

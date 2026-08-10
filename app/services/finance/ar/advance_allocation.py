@@ -23,11 +23,17 @@ from sqlalchemy.orm import Session
 from app.models.finance.ar.customer_payment import CustomerPayment, PaymentStatus
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.payment_allocation import PaymentAllocation
+from app.services.finance.ar.payment_status import (
+    PAYMENT_DUST,
+    apply_payment_status,
+)
 
 logger = logging.getLogger(__name__)
 
-# Sub-cent rounding dust — ignore balances below this.
-DUST_THRESHOLD = Decimal("0.01")
+# Sub-cent rounding dust — ignore balances below this. Aliased to the shared
+# threshold so "too small to allocate" and "small enough to count as paid"
+# cannot drift apart; they were already the same number, declared twice.
+DUST_THRESHOLD = PAYMENT_DUST
 
 
 @dataclass
@@ -105,11 +111,7 @@ class AdvanceAllocationService:
             )
 
         # Update invoice status based on new balance
-        if invoice.amount_paid >= invoice.total_amount:
-            invoice.status = InvoiceStatus.PAID
-            result.invoice_fully_paid = True
-        elif invoice.amount_paid > Decimal("0"):
-            invoice.status = InvoiceStatus.PARTIALLY_PAID
+        result.invoice_fully_paid = apply_payment_status(invoice) is InvoiceStatus.PAID
 
         self.db.flush()
 
