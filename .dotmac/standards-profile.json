@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "profile_id": "dotmac-erp-engineering-standards",
   "repository": {
     "canonical_url": "https://github.com/michaelayoade/dotmac_erp",
@@ -8,7 +8,7 @@
   "governance_model": {
     "kind": "pinned",
     "canonical_url": "https://github.com/michaelayoade/dotmac_governance",
-    "revision": "1f5f1372238ef37eff71154694d5620008de0959",
+    "revision": "b1dfd824bde6f9644ad5c805a71714b5093ced7f",
     "source": "docs/adr/0006-cross-repository-engineering-conformance.md",
     "status": "accepted"
   },
@@ -55,6 +55,24 @@
       "require_public_annotations": true,
       "forbid_any": true,
       "require_immutable_records": true
+    }
+  ],
+  "module_declared_vocabularies": [
+    {
+      "vocabulary_id": "setting-domains",
+      "subject": "Setting domains are declared by the module that owns the settings and validated at the domain_settings write boundary.",
+      "member_type": "SettingDomain",
+      "member_type_path": "app/models/domain_settings.py",
+      "registry_interface": "app.services.setting_domains.registry",
+      "registry_implementation": "app/services/setting_domains.py",
+      "declaration_field": "setting_domains",
+      "declaration_paths": [
+        "app/services/setting_domain_declaration.py"
+      ],
+      "storage_column": "domain",
+      "storage_paths": [
+        "app/models/domain_settings.py"
+      ]
     }
   ]
 }
