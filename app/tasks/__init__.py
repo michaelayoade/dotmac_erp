@@ -8,7 +8,10 @@ from app.tasks.analytics import (
     refresh_workforce_metrics,
 )
 from app.tasks.ap_posting import post_unposted_ap_invoices
-from app.tasks.ar_allocation import allocate_splynx_payments_fifo
+from app.tasks.ar_allocation import (
+    allocate_exact_match_payments,
+    allocate_splynx_payments_fifo,
+)
 from app.tasks.gl_posting import (
     post_approved_journal_backlog,
     post_expense_claim_backlog,
@@ -168,6 +171,7 @@ __all__ = [
     # Audit tasks
     "post_unposted_ap_invoices",
     "allocate_splynx_payments_fifo",
+    "allocate_exact_match_payments",
     "post_approved_journal_backlog",
     "post_expense_claim_backlog",
     "log_audit_event",

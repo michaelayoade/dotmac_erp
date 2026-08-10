@@ -8,10 +8,11 @@ and which one ran depended on the query plan.
 
 from __future__ import annotations
 
-import ast
 import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
+
+from tests._helpers.source_introspection import mentions_in_code
 
 from app.services.finance.ar.allocation_backlog import (
     organizations_with_splynx_payments,
@@ -59,31 +60,11 @@ def test_results_are_uuids_not_raw_rows():
 
 
 def test_the_script_no_longer_infers_the_organization_from_data():
-    """No `LIMIT 1` org discovery left in executable code. Checked against
-    string literals excluding docstrings — the script's own docstring quotes
-    the old query to explain what changed."""
-    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
-    docstrings = set()
-    for node in ast.walk(tree):
-        if isinstance(
-            node, ast.Module | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
-        ):
-            first = node.body[0] if node.body else None
-            if (
-                isinstance(first, ast.Expr)
-                and isinstance(first.value, ast.Constant)
-                and isinstance(first.value.value, str)
-            ):
-                docstrings.add(id(first.value))
-    executable = [
-        n.value
-        for n in ast.walk(tree)
-        if isinstance(n, ast.Constant)
-        and isinstance(n.value, str)
-        and id(n) not in docstrings
-    ]
-    assert not [s for s in executable if "LIMIT 1" in s.upper()]
-    assert not [s for s in executable if "SELECT DISTINCT" in s.upper()]
+    """No `LIMIT 1` org discovery left in executable code. The script's own
+    docstring quotes the old query to explain what changed, so this asserts on
+    executable strings only."""
+    assert mentions_in_code(SCRIPT, "LIMIT 1") == []
+    assert mentions_in_code(SCRIPT, "SELECT DISTINCT") == []
 
 
 def test_the_script_requires_an_explicit_organization():
