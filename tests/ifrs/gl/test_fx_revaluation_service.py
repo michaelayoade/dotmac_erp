@@ -40,9 +40,14 @@ class TestSettingDomainGL:
         assert SettingDomain.gl.value == "gl"
 
     def test_gl_domain_round_trips_from_value(self) -> None:
-        # Confirm we can resolve the enum member from its string value, the
-        # same way the settings spec / loaders do at runtime.
-        assert SettingDomain("gl") is SettingDomain.gl
+        # Confirm we can resolve the domain from its string value, the same way
+        # the settings spec / loaders do at runtime.
+        #
+        # `==`, not `is`. Enum members were singletons, so identity happened to
+        # hold; `SettingDomain` is now an open value type and each construction
+        # is a distinct object. Equality is what this test actually means, and
+        # it is what every caller relies on.
+        assert SettingDomain("gl") == SettingDomain.gl
 
 
 class TestFXAccountSettingSpecs:

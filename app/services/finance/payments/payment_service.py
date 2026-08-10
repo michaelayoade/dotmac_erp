@@ -1411,7 +1411,10 @@ class PaymentService:
         """
         # Get fee expense account from settings
         fee_account_id = resolve_value(
-            self.db, SettingDomain.payments, "paystack_transfer_fee_account_id"
+            self.db,
+            SettingDomain.payments,
+            "paystack_transfer_fee_account_id",
+            organization_id=self.organization_id,
         )
 
         if not fee_account_id:

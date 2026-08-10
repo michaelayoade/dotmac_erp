@@ -102,6 +102,23 @@ class PatchedJSONB(Text):
 
     cache_ok = True
 
+    def __init__(self, *args, none_as_null: bool = False, **kwargs):
+        """Accept the real `JSONB`'s keyword arguments and ignore them.
+
+        The shim stands in for `postgresql.JSONB`, so it has to tolerate what
+        that type accepts. `dotmac_kernel.settings_models` constructs
+        `JSONB(none_as_null=True)`, and a `Text` subclass that only accepts
+        `Text`'s arguments raises at IMPORT time — before any test runs, and
+        with a message (`String.__init__() got an unexpected keyword argument`)
+        that points nowhere near this file.
+
+        `none_as_null` needs no behaviour here: `bind_processor` below already
+        maps Python `None` to SQL NULL rather than the JSON text `null`, which
+        is what the flag asks for.
+        """
+        self.none_as_null = none_as_null
+        super().__init__(*args, **kwargs)
+
     def bind_processor(self, dialect):
         def process(value):
             if value is None:

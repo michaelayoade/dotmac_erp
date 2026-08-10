@@ -22,7 +22,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
-from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.domain_settings import SettingDomain
+from app.services.settings_spec import resolve_value
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
@@ -110,34 +111,21 @@ class FXRevaluationService:
     def _read_fx_account_ids(self, organization_id: UUID) -> tuple[UUID, UUID]:
         """Read fx_gain_account_id and fx_loss_account_id from DomainSetting.
 
-        Queries the org-specific DomainSetting row directly, filtered by
-        organization_id. FX gain/loss accounts post real money to the GL,
-        so this is security-critical: an unset org-specific row must mean
-        "unconfigured" — we DO NOT fall back to a global row, otherwise
-        every tenant would silently share the same accounts.
-
-        Raises HTTPException(400) with admin-actionable detail when either
-        is unset — refuse to post to a wrong account silently.
+        Resolved through `resolve_value`; both specs declare `inherits=False`
+        so no global row can answer for an organization's ledger account.
         """
-        gain_setting = self.db.scalar(
-            select(DomainSetting).where(
-                DomainSetting.domain == SettingDomain.gl,
-                DomainSetting.key == "fx_gain_account_id",
-                DomainSetting.organization_id == organization_id,
-                DomainSetting.is_active.is_(True),
-            )
+        gain_raw = resolve_value(
+            self.db,
+            SettingDomain.gl,
+            "fx_gain_account_id",
+            organization_id=organization_id,
         )
-        loss_setting = self.db.scalar(
-            select(DomainSetting).where(
-                DomainSetting.domain == SettingDomain.gl,
-                DomainSetting.key == "fx_loss_account_id",
-                DomainSetting.organization_id == organization_id,
-                DomainSetting.is_active.is_(True),
-            )
+        loss_raw = resolve_value(
+            self.db,
+            SettingDomain.gl,
+            "fx_loss_account_id",
+            organization_id=organization_id,
         )
-
-        gain_raw = gain_setting.value_text if gain_setting is not None else None
-        loss_raw = loss_setting.value_text if loss_setting is not None else None
 
         if not gain_raw:
             raise HTTPException(
@@ -158,7 +146,11 @@ class FXRevaluationService:
                 ),
             )
 
-        return UUID(gain_raw), UUID(loss_raw)
+        # `resolve_value` returns `object`: it cannot know the type, and the
+        # caller must narrow. Both specs declare `value_type=string` and both
+        # values are proven non-empty above, so `str()` is the narrowing rather
+        # than a conversion.
+        return UUID(str(gain_raw)), UUID(str(loss_raw))
 
     def _discover_ar_open_invoices(
         self,

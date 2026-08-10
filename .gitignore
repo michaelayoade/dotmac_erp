@@ -37,6 +37,8 @@ env/
 .env
 .env.local
 .env.*.local
+# Pre-deploy copy of .env written by scripts/deploy.sh (holds the same secrets).
+.env.deploy-bak
 
 # Testing
 .pytest_cache/
@@ -132,6 +134,7 @@ backups/
 .seabone/metrics/
 .seabone/prompts/
 .worktrees/
+worktrees/
 .agent-run.sh
 .codex
 
