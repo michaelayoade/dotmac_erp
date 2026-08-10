@@ -27,7 +27,6 @@ scripts/audit_payroll_deductions.py 1
 scripts/backfill_gl_postings.py 1
 scripts/backfill_inventory_gl_postings.py 1
 scripts/bulk_import.py 1
-scripts/close_fiscal_periods.py 1
 scripts/create_org.py 1
 scripts/create_unallocated_payroll_cc.py 1
 scripts/fix_display_names.py 1
