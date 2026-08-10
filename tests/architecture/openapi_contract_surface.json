@@ -4458,6 +4458,17 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/sub/attendance/today": {
+   "params": [
+    "header:X-Selfcare-Subject!",
+    "header:x-api-key!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "30bd3bafbc2e",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/sync/sub/expense-categories": {
    "params": [
     "header:x-api-key!"
@@ -8894,6 +8905,32 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/sync/sub/attendance/check-in": {
+   "params": [
+    "header:Idempotency-Key",
+    "header:X-Request-ID",
+    "header:X-Selfcare-Subject!",
+    "header:x-api-key!"
+   ],
+   "request": "0caae5de4163",
+   "responses": {
+    "200": "30bd3bafbc2e",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/sync/sub/attendance/check-out": {
+   "params": [
+    "header:Idempotency-Key",
+    "header:X-Request-ID",
+    "header:X-Selfcare-Subject!",
+    "header:x-api-key!"
+   ],
+   "request": "0caae5de4163",
+   "responses": {
+    "200": "30bd3bafbc2e",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/sync/sub/bulk": {
    "params": [
     "header:x-api-key!"
@@ -10016,6 +10053,9 @@
   "ScheduledTaskCreate": "ff326f7be251",
   "ScheduledTaskRead": "207f4c94b1f9",
   "ScheduledTaskUpdate": "0f822fc22bbf",
+  "SelfcareAttendanceLocation": "316603452d98",
+  "SelfcareAttendanceRead": "3a7bdf961f6e",
+  "SelfcareAttendanceState": "ccb3b5b18bc5",
   "ServiceHookBulkDelete": "c0e8bf2978a3",
   "ServiceHookBulkResult": "8180e72809f3",
   "ServiceHookBulkToggle": "98a0ba70bf9e",
