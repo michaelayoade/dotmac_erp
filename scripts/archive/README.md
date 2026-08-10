@@ -1,0 +1,65 @@
+# Retired one-off scripts
+
+Everything here **has already run**. It is kept for provenance — so a future
+question about how a balance, a VAT return or a set of journals came to look
+the way it does has an answer — and is not intended to be run again.
+
+Nothing in this directory is executed by the application, a task, a cron, CI
+or a deploy. `scripts/check_session_context.py` skips it for exactly that
+reason: an archived script is a record, not an entry point, so the
+tenant-context priming rules that govern live entry points do not apply.
+
+## Why these were moved
+
+`scripts/` had been excluded from semgrep, pre-commit and ruff on the premise
+that it holds "one-off maintenance scripts". The premise was true of files
+like these and false of the tree as a whole, and 100 scripts opening unscoped
+database sessions accumulated behind the exemption. Separating the genuine
+one-offs from the operational scripts is what makes the exemption honest
+again — and it removed the larger part of the unscoped surface without
+changing a line of logic.
+
+A script was moved here only if all four held:
+
+1. its name describes a past event (a date, `fix_`, `backfill_`, `dedup_`,
+   `cleanup_`, a numbered `phase`, a named period like `jan_2026`);
+2. it was committed once and never revisited;
+3. nothing outside this set refers to it — no Makefile target, runbook, CI
+   job, doc or other script; and
+4. it depends on nothing that stayed behind.
+
+Repair verbs (`rebuild_`, `repair_`, `resync_`, `reopen_`, `remediate_`,
+`reclassify_`) were deliberately **not** archived. Whether such a script is
+finished or still part of the operational routine is operational knowledge,
+not something a naming convention can settle, so they stay live and stay on
+the ratchet.
+
+## Import paths here are stale, deliberately
+
+Archived code was moved, not rewritten. `clean_sweep/` still does
+`from scripts.clean_sweep.config import ...`, which no longer resolves now
+that the package lives under `scripts/archive/`. That is left alone on
+purpose: these files are evidence of what ran, and editing them to keep them
+runnable would both falsify that record and undercut the point of retiring
+them. If one ever genuinely needs to run again, that is a decision to make
+explicitly — move it back out, fix its imports, and give it a scoped session.
+
+## Adding to this directory
+
+`git mv` the script here once it has served its purpose, and delete its line
+from `scripts/session_context_legacy.txt`. The guard requires both: an entry
+that is no longer scanned fails the build until it is removed, so retirement
+is recorded rather than assumed.
+
+## A note on what this directory reveals
+
+Several files here are repeat visits to one problem — `fix_paystack_consolidation_v2`,
+`match_jan_2026_phase2` beside `match_jan_2026_remaining`, `match_2025_remaining_ngn`
+beside `match_2025_unmatched_ngn`, four separate `fix_source_*` passes. A `v2`
+means the first repair did not hold; a `_remaining` means a pass was partial
+and someone finished it by hand.
+
+That pattern is not an argument for better scripts or for running them on a
+schedule. It says the matching and reconciliation logic is not idempotent and
+does not repair its own drift, which is what a reconciler is for. Treat this
+directory as a defect list for that work, not as a library to copy from.
