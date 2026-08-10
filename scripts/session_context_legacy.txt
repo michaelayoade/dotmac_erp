@@ -23,7 +23,6 @@
 #
 # Format: <path> <number-of-raw-SessionLocal()-calls>
 scripts/add_missing_contract_staff.py 1
-scripts/allocate_exact_match_payments.py 1
 scripts/audit_payroll_deductions.py 1
 scripts/backfill_gl_postings.py 1
 scripts/backfill_inventory_gl_postings.py 1
