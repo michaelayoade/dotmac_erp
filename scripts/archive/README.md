@@ -28,11 +28,23 @@ A script was moved here only if all four held:
    job, doc or other script; and
 4. it depends on nothing that stayed behind.
 
-Repair verbs (`rebuild_`, `repair_`, `resync_`, `reopen_`, `remediate_`,
-`reclassify_`) were deliberately **not** archived. Whether such a script is
-finished or still part of the operational routine is operational knowledge,
-not something a naming convention can settle, so they stay live and stay on
-the ratchet.
+A second wave then retired the **repair verbs** (`rebuild_`, `repair_`,
+`resync_`, `reopen_`, `remediate_`, `reclassify_`, `void_`, `review_`,
+`match_`). Those deliberately failed criterion 1 the first time round:
+whether such a script is finished or still part of the operational routine is
+operational knowledge, not something a naming convention can settle. Michael
+ruled on 2026-08-10 that all fifteen were spent, which also unblocked
+`finish_interbank_matching` and `fix_splynx_credit_note_signs` — each had
+been held back only because it depended on, or was referenced by, one of
+them.
+
+`migration/2026-04-30_backfill_deferred_vat.py` is still live: it is cited by
+`docs/deferred_vat_rollout_runbook_2026-04-29.md` and its release note, so
+criterion 3 genuinely fails.
+
+That the repair verbs needed a human ruling is the point, not a wrinkle. A
+naming convention can recognise a spent one-off; only the person running the
+month-end close knows whether a `rebuild_` script is still part of it.
 
 ## Import paths here are stale, deliberately
 
