@@ -41,6 +41,7 @@ from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import NotFoundError, ValidationError, coerce_uuid
+from app.services.finance.ap.payment_status import apply_payment_status
 from app.services.finance.ap.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -626,10 +627,7 @@ class SupplierPaymentService(ListResponseMixin):
             invoice = db.get(SupplierInvoice, alloc.invoice_id)
             if invoice:
                 invoice.amount_paid += alloc.allocated_amount
-                if invoice.amount_paid >= invoice.total_amount:
-                    invoice.status = SupplierInvoiceStatus.PAID
-                else:
-                    invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
+                apply_payment_status(invoice)
 
         try:
             from app.services.finance.automation.event_dispatcher import (
@@ -799,10 +797,7 @@ class SupplierPaymentService(ListResponseMixin):
                 invoice = db.get(SupplierInvoice, alloc.invoice_id)
                 if invoice:
                     invoice.amount_paid -= alloc.allocated_amount
-                    if invoice.amount_paid <= Decimal("0"):
-                        invoice.status = SupplierInvoiceStatus.POSTED
-                    else:
-                        invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
+                    apply_payment_status(invoice)
 
         if was_sent and payment.journal_entry_id:
             try:
