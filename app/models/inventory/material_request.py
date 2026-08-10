@@ -156,6 +156,9 @@ class MaterialRequest(Base):
         index=True,
         comment="DotMac CRM material request ID (omni_id for idempotency)",
     )
+    source_system: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="erp", server_default=text("'erp'")
+    )
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

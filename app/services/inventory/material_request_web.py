@@ -1096,9 +1096,12 @@ class MaterialRequestWebService:
         if not request.items:
             raise ValueError("Cannot submit request without items")
 
-        old_status = request.status.value
+        old_status = request.status
         request.status = MaterialRequestStatus.SUBMITTED
         request.updated_by_id = user_id
+        MaterialRequestWebService._emit_sub_outcome(
+            db, organization_id, request, old_status, request.status, user_id
+        )
 
         # Fire workflow automation event
         try:
@@ -1112,7 +1115,7 @@ class MaterialRequestWebService:
                 entity_type="MATERIAL_REQUEST",
                 entity_id=request.request_id,
                 event="ON_STATUS_CHANGE",
-                old_values={"status": old_status},
+                old_values={"status": old_status.value},
                 new_values={
                     "status": MaterialRequestStatus.SUBMITTED.value,
                     "request_number": request.request_number,
@@ -1156,9 +1159,13 @@ class MaterialRequestWebService:
         if not reason:
             raise ValueError("Cancellation reason is required")
 
+        old_status = request.status
         request.status = MaterialRequestStatus.CANCELLED
         request.cancel_reason = reason
         request.updated_by_id = user_id
+        MaterialRequestWebService._emit_sub_outcome(
+            db, organization_id, request, old_status, request.status, user_id
+        )
 
         return request
 
@@ -1234,8 +1241,12 @@ class MaterialRequestWebService:
 
         # For PURCHASE type: just mark as ordered, no stock movement
         if request.request_type == MaterialRequestType.PURCHASE:
+            old_status = request.status
             request.status = MaterialRequestStatus.ORDERED
             request.updated_by_id = user_id
+            MaterialRequestWebService._emit_sub_outcome(
+                db, organization_id, request, old_status, request.status, user_id
+            )
             return request
 
         # For ISSUE and TRANSFER types: create inventory transactions
@@ -1362,12 +1373,16 @@ class MaterialRequestWebService:
             raise ValueError("All items failed to process: " + "; ".join(errors))
 
         # Set final status based on type
+        old_status = request.status
         if request.request_type == MaterialRequestType.TRANSFER:
             request.status = MaterialRequestStatus.TRANSFERRED
         else:
             request.status = MaterialRequestStatus.ISSUED
 
         request.updated_by_id = user_id
+        MaterialRequestWebService._emit_sub_outcome(
+            db, organization_id, request, old_status, request.status, user_id
+        )
 
         if errors:
             logger.warning(
@@ -1378,6 +1393,27 @@ class MaterialRequestWebService:
             )
 
         return request
+
+    @staticmethod
+    def _emit_sub_outcome(
+        db: Session,
+        organization_id: UUID,
+        request: MaterialRequest,
+        old_status: MaterialRequestStatus,
+        new_status: MaterialRequestStatus,
+        actor_user_id: UUID | None,
+    ) -> None:
+        if request.source_system != "sub":
+            return
+        from app.services.sync.crm.procurement import _ProcurementMixin
+
+        _ProcurementMixin(db)._emit_crm_material_request_status_changed(
+            org_id=organization_id,
+            request=request,
+            old_status=old_status,
+            new_status=new_status,
+            actor_person_id=actor_user_id,
+        )
 
     @staticmethod
     def dashboard_context(db: Session, organization_id: str) -> dict:

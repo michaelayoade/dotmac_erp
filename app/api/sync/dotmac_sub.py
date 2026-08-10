@@ -105,7 +105,19 @@ def _require_sub_flow_scope(auth: dict, *accepted: str) -> dict:
 
 
 def require_sub_material_scope(auth: dict = Depends(require_service_auth)) -> dict:
-    return _require_sub_flow_scope(auth, "sub:material:write", "crm:material:write")
+    return _require_sub_flow_scope(auth, "sub:material:write")
+
+
+def require_sub_material_read_scope(
+    auth: dict = Depends(require_service_auth),
+) -> dict:
+    return _require_sub_flow_scope(auth, "sub:material:read")
+
+
+def require_sub_inventory_read_scope(
+    auth: dict = Depends(require_service_auth),
+) -> dict:
+    return _require_sub_flow_scope(auth, "sub:inventory:read")
 
 
 def require_sub_expense_scope(auth: dict = Depends(require_service_auth)) -> dict:
@@ -223,6 +235,7 @@ def create_sub_material_request(
 @router.get(
     "/material-requests/{omni_id}",
     response_model=CRMMaterialRequestStatusRead,
+    dependencies=[Depends(require_sub_material_read_scope)],
 )
 def get_sub_material_request_status(
     omni_id: str,
@@ -291,18 +304,21 @@ router.add_api_route(
     list_inventory,
     methods=["GET"],
     response_model=InventoryListResponse,
+    dependencies=[Depends(require_sub_inventory_read_scope)],
     name="list_sub_inventory",
 )
 router.add_api_route(
     "/inventory/meta/categories",
     list_inventory_categories,
     methods=["GET"],
+    dependencies=[Depends(require_sub_inventory_read_scope)],
     name="list_sub_inventory_categories",
 )
 router.add_api_route(
     "/inventory/meta/warehouses",
     list_warehouses,
     methods=["GET"],
+    dependencies=[Depends(require_sub_inventory_read_scope)],
     name="list_sub_inventory_warehouses",
 )
 router.add_api_route(
@@ -310,6 +326,7 @@ router.add_api_route(
     list_available_inventory_serials,
     methods=["GET"],
     response_model=CRMAvailableSerialListResponse,
+    dependencies=[Depends(require_sub_inventory_read_scope)],
     name="list_sub_available_inventory_serials",
 )
 router.add_api_route(
@@ -317,5 +334,6 @@ router.add_api_route(
     get_inventory_item,
     methods=["GET"],
     response_model=InventoryItemDetail,
+    dependencies=[Depends(require_sub_inventory_read_scope)],
     name="get_sub_inventory_item",
 )
