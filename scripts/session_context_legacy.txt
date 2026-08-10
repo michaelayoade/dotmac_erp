@@ -55,7 +55,6 @@ scripts/settings_sync.py 1
 scripts/settings_validate.py 1
 scripts/setup_e2e_user.py 2
 scripts/sync_customers_to_paystack.py 1
-scripts/sync_salary_assignments.py 1
 scripts/sync_splynx.py 1
 scripts/update_org_name.py 1
 scripts/update_user_credentials.py 1

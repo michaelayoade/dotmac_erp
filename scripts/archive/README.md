@@ -42,6 +42,15 @@ them.
 `docs/deferred_vat_rollout_runbook_2026-04-29.md` and its release note, so
 criterion 3 genuinely fails.
 
+A third wave retired `sync_salary_assignments.py` while converting the
+recurring scripts. Its NAME says `sync_`, which is why it was first
+classified as a recurring operation — but its docstring says "January 2026",
+it reads `EXCEL_PATH = Path("/root/.dotmac/jan paye (2) (1).xlsx")`, and it
+takes no path argument. An absolute path into one person's home directory,
+pointing at a file whose name records that it was downloaded twice, is not a
+recurring operation however it is named. Building a scheduled task around it
+would have been the wrong answer to the right question.
+
 That the repair verbs needed a human ruling is the point, not a wrinkle. A
 naming convention can recognise a spent one-off; only the person running the
 month-end close knows whether a `rebuild_` script is still part of it.
