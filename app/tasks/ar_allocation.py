@@ -1,10 +1,10 @@
 """AR allocation task — the scheduled adapter over exact-match allocation.
 
-Tier-A only. The Tier-B FIFO allocator was Splynx-specific and retired with
-that integration: `FIFOAllocationService` exists because Splynx owned
-`invoice.amount_paid` and `invoice.status`, so it deliberately created
-allocation records without touching them. Once Splynx is not the owner, that
-premise inverts and the allocator is wrong rather than merely unused.
+Tier-A only. The Tier-B FIFO allocator was Splynx-specific and was deleted
+with that integration: it existed because Splynx owned `invoice.amount_paid`
+and `invoice.status`, so it created allocation records without touching them.
+Once Splynx is not the owner that premise inverts, which made it wrong to
+keep rather than merely unused.
 
 Defaults to `dry_run=True`. Allocation moves money against invoices; a
 scheduled job should not begin doing that unattended because it was deployed.

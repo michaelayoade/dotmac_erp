@@ -7,11 +7,12 @@ customer whose total is within `AMOUNT_TOLERANCE` of the payment. A payment
 matching two invoices is left alone, because guessing which one it settles is
 how misallocations happen.
 
-Payments it cannot match unambiguously are left alone. There used to be a
-Tier-B FIFO pass (`FIFOAllocationService`) that took the remainder, but that
-was Splynx-specific and retired with the integration — it deliberately did
-NOT touch `invoice.amount_paid` or `invoice.status` because Splynx owned
-them, and once Splynx is not the owner that premise inverts.
+Payments it cannot match unambiguously are left alone. A Tier-B FIFO pass
+used to take the remainder, but it was Splynx-specific and was deleted with
+that integration: it deliberately did NOT touch `invoice.amount_paid` or
+`invoice.status`, because Splynx owned them. Once Splynx is not the owner
+that premise inverts, so the code was wrong to keep rather than merely
+unused.
 
 ## The two defects this extraction fixes
 
