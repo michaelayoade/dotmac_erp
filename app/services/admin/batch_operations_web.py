@@ -65,9 +65,18 @@ class BatchOperationsWebService:
             "status_tone": _STATUS_TONE,
         }
 
-    def _require_admin(
+    def _authorized_scope(
         self, request: Request, auth: WebAuthContext | None
-    ) -> RedirectResponse | None:
+    ) -> uuid.UUID | RedirectResponse:
+        """The organization to scope every query to, or a redirect to login.
+
+        Returns the scope rather than just a pass/fail, so a caller cannot
+        reach a query without one. `auth.organization_id` is `UUID | None`,
+        and passing None into a scoped read would produce an UNSCOPED read —
+        precisely the fail-silent shape this screen exists to make visible.
+        An authenticated admin with no organization is a broken session, so
+        it fails loudly instead of listing every tenant's runs.
+        """
         if not auth or not auth.is_authenticated:
             next_path = request.url.path
             if request.url.query:
@@ -78,18 +87,20 @@ class BatchOperationsWebService:
             )
         if not auth.is_admin:
             raise HTTPException(status_code=403, detail="Admin access required")
-        return None
+        if auth.organization_id is None:
+            raise HTTPException(
+                status_code=409, detail="Session carries no organization"
+            )
+        return auth.organization_id
 
     def list_response(
         self, request: Request, db: Session, auth: WebAuthContext | None
     ) -> HTMLResponse | RedirectResponse:
-        guard = self._require_admin(request, auth)
-        if guard is not None:
-            return guard
+        scope = self._authorized_scope(request, auth)
+        if isinstance(scope, RedirectResponse):
+            return scope
 
-        runs = batch_operation_service.recent(
-            db, organization_id=auth.organization_id, limit=100
-        )
+        runs = batch_operation_service.recent(db, organization_id=scope, limit=100)
         context = self._base_context(request, auth, "Batch Operations", db)
         context["runs"] = runs
         context["counts"] = {
@@ -106,12 +117,12 @@ class BatchOperationsWebService:
         auth: WebAuthContext | None,
         operation_id: uuid.UUID,
     ) -> HTMLResponse | RedirectResponse:
-        guard = self._require_admin(request, auth)
-        if guard is not None:
-            return guard
+        scope = self._authorized_scope(request, auth)
+        if isinstance(scope, RedirectResponse):
+            return scope
 
         run = batch_operation_service.get(
-            db, organization_id=auth.organization_id, operation_id=operation_id
+            db, organization_id=scope, operation_id=operation_id
         )
         if run is None:
             # Scoped lookup: another tenant's run is indistinguishable from a
