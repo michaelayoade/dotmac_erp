@@ -42,6 +42,7 @@ from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import Item
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import NotFoundError, ValidationError, coerce_uuid
+from app.services.finance.ar.payment_status import apply_payment_status
 from app.services.finance.ar.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -1492,10 +1493,7 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice.amount_paid += payment_amount
 
-        if invoice.amount_paid >= invoice.total_amount:
-            invoice.status = InvoiceStatus.PAID
-        else:
-            invoice.status = InvoiceStatus.PARTIALLY_PAID
+        apply_payment_status(invoice)
 
         db.flush()
         return invoice
