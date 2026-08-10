@@ -16,6 +16,7 @@ from app.tasks.gl_posting import (
     post_approved_journal_backlog,
     post_expense_claim_backlog,
 )
+from app.tasks.ar_reconciliation import reconcile_invoice_amount_paid
 from app.tasks.audit import log_audit_event
 from app.tasks.audit_integrity import verify_audit_hash_chain
 from app.tasks.automation import (
@@ -174,6 +175,7 @@ __all__ = [
     "allocate_exact_match_payments",
     "post_approved_journal_backlog",
     "post_expense_claim_backlog",
+    "reconcile_invoice_amount_paid",
     "log_audit_event",
     "verify_audit_hash_chain",
     # dotmac_sub sync tasks

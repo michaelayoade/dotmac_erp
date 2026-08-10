@@ -43,7 +43,6 @@ scripts/migration/2026-04-30_backfill_deferred_vat.py 1
 scripts/post_and_match_paystack_opex_expense_reimbursements.py 1
 scripts/post_jan_2026_ap_invoices.py 3
 scripts/post_stranded_bank_fees.py 2
-scripts/reconcile_invoice_amount_paid.py 1
 scripts/reconcile_jan_2026_dryrun.py 1
 scripts/reconcile_jan_2026_splynx.py 1
 scripts/relink_ticket_projects.py 2
