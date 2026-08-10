@@ -1,40 +1,36 @@
-"""Post stranded APPROVED bank-fee journals from the March 2026 Mono import.
+#!/usr/bin/env python
+"""
+Post APPROVED journals a source module left stranded before the ledger.
 
-The Mono import migration created 429 ``BANKING`` / ``BANK_FEE`` journals
-in FY2025 with status ``APPROVED`` but never advanced them to ``POSTED``.
-Until they are posted:
+**This is now a thin CLI adapter.** The decision lives in
+`app.services.finance.gl.stranded_fee_posting`, and the scheduled path is
+`app.tasks.gl_posting.post_stranded_source_journals`.
 
-  * GL account ``6080 Finance Cost`` is understated by their total
-    (~NGN 7,765 across Jan–Sep 2025).
-  * Bank reconciliations for ``Paystack OPEX`` and ``Zenith USD`` will not
-    tie to the bank statements (the fees were deducted by the bank).
-  * The ``gl.posted_ledger_line`` table is missing the corresponding
-    rows, so trial balance and bank-balance queries skip them silently.
+A journal is *stranded* when its source module created and approved it but
+posting never completed — it sits APPROVED with no ledger batch behind it.
 
-This script drives ``LedgerPostingService.post_journal_entry`` — the same
-single-writer used by normal AP/AR flows — so every artifact a real post
-creates (``posting_batch`` row, ``posted_ledger_line`` rows, balance
-invalidations, outbox event, hook event) is created identically.
+Three things the extraction fixed:
 
-Idempotency is per journal. The key is
-``backfill-stranded-bank-fees-{journal_number}``. The posting service
-detects an existing POSTED batch with the same key and returns success
-without re-posting, so re-runs are safe.
+* **A hardcoded fiscal year.** `TARGET_YEAR_CODE = "FY2025"` at module level
+  made a one-year repair look like a general tool. Year, source module and
+  document type are all parameters now — the mechanism is "post stranded
+  journals from a source", and bank fees were one instance of it.
+* **No organization filter.** The query filtered year, status, module and
+  document type, never tenant, and the script opened a raw `SessionLocal()`
+  per journal so nothing at any layer bounded it.
+* **Replays were detected by substring** — `if "Already posted" in msg`.
+  `PostingResult.idempotent_replay` now carries that as a flag set where the
+  condition is known, so rewording the message cannot silently reclassify
+  every replay as a fresh posting.
 
-Per-journal commit. A failure on one journal does not roll back the
-others — re-run with ``--execute`` to retry only the ones that failed
-(idempotency makes re-runs cheap).
+Each journal is posted in its own transaction, so one bad entry does not roll
+back the ones before it.
 
-Usage::
-
-    # Dry run (default) — list what would be posted, no DB writes
-    python scripts/post_stranded_bank_fees.py
-
-    # Execute — post the journals (per-journal commit)
-    python scripts/post_stranded_bank_fees.py --execute
-
-    # Smoke-test against a single journal first
-    python scripts/post_stranded_bank_fees.py --execute --limit 1
+Usage:
+  docker exec dotmac_erp_app python scripts/post_stranded_bank_fees.py \
+      --org-id <uuid> --year FY2025                    # dry run
+  docker exec dotmac_erp_app python scripts/post_stranded_bank_fees.py \
+      --org-id <uuid> --year FY2025 --execute --limit 1
 """
 
 from __future__ import annotations
@@ -42,203 +38,120 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import uuid
+from pathlib import Path
 
-sys.path.insert(0, ".")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
-
-from app.db import SessionLocal  # noqa: E402
-from app.models.finance.gl.fiscal_period import FiscalPeriod  # noqa: E402
-from app.models.finance.gl.fiscal_year import FiscalYear  # noqa: E402
-from app.models.finance.gl.journal_entry import (  # noqa: E402
-    JournalEntry,
-    JournalStatus,
+from app.db.session_context import session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation
+from app.services.finance.gl.stranded_fee_posting import (
+    StrandedPostingResult,
+    find_stranded_journals,
+    post_one,
 )
-from app.services.finance.gl.ledger_posting import (  # noqa: E402
-    LedgerPostingService,
-    PostingRequest,
-)
-
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 logger = logging.getLogger("post_stranded_bank_fees")
-
-# Quiet the framework loggers so script output is readable.
 for noisy in ("sqlalchemy.engine", "app.services.finance.gl.ledger_posting"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
-
-SOURCE_MODULE = "BANKING"
-SOURCE_DOC_TYPE = "BANK_FEE"
-TARGET_YEAR_CODE = "FY2025"
-IDEMPOTENCY_PREFIX = "backfill-stranded-bank-fees"
-
-
-def fetch_stranded_journals(
-    db: Session,
-    limit: int | None = None,
-) -> list[JournalEntry]:
-    stmt = (
-        select(JournalEntry)
-        .join(
-            FiscalPeriod,
-            FiscalPeriod.fiscal_period_id == JournalEntry.fiscal_period_id,
-        )
-        .join(
-            FiscalYear,
-            FiscalYear.fiscal_year_id == FiscalPeriod.fiscal_year_id,
-        )
-        .where(
-            FiscalYear.year_code == TARGET_YEAR_CODE,
-            JournalEntry.status == JournalStatus.APPROVED,
-            JournalEntry.source_module == SOURCE_MODULE,
-            JournalEntry.source_document_type == SOURCE_DOC_TYPE,
-        )
-        .order_by(JournalEntry.posting_date, JournalEntry.journal_number)
-    )
-    if limit:
-        stmt = stmt.limit(limit)
-    return list(db.scalars(stmt).all())
-
-
-def post_one(db: Session, journal: JournalEntry) -> tuple[bool, str]:
-    """Post a single journal via the standard service. Returns (success, message)."""
-    request = PostingRequest(
-        organization_id=journal.organization_id,
-        journal_entry_id=journal.journal_entry_id,
-        posting_date=journal.posting_date,
-        idempotency_key=f"{IDEMPOTENCY_PREFIX}-{journal.journal_number}",
-        source_module=SOURCE_MODULE,
-        # Leaving entries=[] tells the service to load lines from journal_entry_line.
-        posted_by_user_id=journal.approved_by_user_id or journal.created_by_user_id,
-        correlation_id=f"{IDEMPOTENCY_PREFIX}-{journal.journal_number}",
-    )
-    try:
-        result = LedgerPostingService.post_journal_entry(db, request)
-        return bool(result.success), result.message or "ok"
-    except Exception as e:  # noqa: BLE001 — per-journal failure handled below
-        return False, f"{type(e).__name__}: {e}"
-
-
-def dry_run_report(journals: list[JournalEntry]) -> None:
-    total_debit = sum(j.total_debit_functional for j in journals)
-    logger.info(
-        "[DRY RUN] would post %d journals (total functional debit %s)",
-        len(journals),
-        total_debit,
-    )
-    sample = journals[:10]
-    for j in sample:
-        desc = (j.description or "")[:60]
-        logger.info(
-            "  %s | %s | DR %s | %s",
-            j.journal_number,
-            j.posting_date,
-            j.total_debit_functional,
-            desc,
-        )
-    if len(journals) > len(sample):
-        logger.info(
-            "  ... and %d more (use --execute to post all)", len(journals) - len(sample)
-        )
-
-
-def execute(journals: list[JournalEntry]) -> int:
-    """Post each journal in its own transaction. Returns process exit code."""
-    succeeded = 0
-    skipped = 0  # Already posted (idempotent replay)
-    failures: list[tuple[str, str]] = []
-
-    total = len(journals)
-    for i, journal in enumerate(journals, start=1):
-        # Each journal in its own session/transaction so failures don't taint others.
-        with SessionLocal() as db:
-            ok, msg = post_one(db, journal)
-            if ok:
-                if "Already posted" in msg:
-                    skipped += 1
-                    db.rollback()
-                else:
-                    db.commit()
-                    succeeded += 1
-            else:
-                db.rollback()
-                failures.append((journal.journal_number, msg))
-                logger.error("FAIL %s: %s", journal.journal_number, msg)
-
-        if i % 50 == 0 or i == total:
-            logger.info(
-                "Progress: %d/%d (posted=%d, idempotent_skip=%d, failed=%d)",
-                i,
-                total,
-                succeeded,
-                skipped,
-                len(failures),
-            )
-
-    logger.info(
-        "Done. posted=%d, idempotent_skip=%d, failed=%d, total=%d",
-        succeeded,
-        skipped,
-        len(failures),
-        total,
-    )
-    if failures:
-        logger.error("=== Failures ===")
-        for jn, msg in failures[:20]:
-            logger.error("  %s: %s", jn, msg)
-        if len(failures) > 20:
-            logger.error("  ... and %d more", len(failures) - 20)
-        return 1
-    return 0
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Post stranded APPROVED FY2025 BANK_FEE journals via "
-            "LedgerPostingService. Dry-run by default."
-        ),
+        description="Post APPROVED journals stranded before the ledger"
     )
     parser.add_argument(
-        "--execute",
-        action="store_true",
-        help="Actually post the journals. Without this flag, the script is a dry run.",
+        "--org-id",
+        required=True,
+        type=uuid.UUID,
+        help="Organization to run against (no default: this is multi-tenant)",
     )
+    parser.add_argument("--year", required=True, help="Fiscal year code, e.g. FY2025")
+    parser.add_argument("--source-module", default="BANKING")
+    parser.add_argument("--source-doc-type", default="BANK_FEE")
     parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Limit to N journals (useful for smoke-testing).",
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Recorded as who ran this, on the BatchOperation record",
+    )
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--execute", action="store_true", help="Post (default is a dry run)"
     )
     args = parser.parse_args()
 
-    with SessionLocal() as db:
-        journals = fetch_stranded_journals(db, limit=args.limit)
-
+    mode = "EXECUTE" if args.execute else "DRY RUN"
     logger.info(
-        "Found %d stranded APPROVED %s/%s journals in %s",
-        len(journals),
-        SOURCE_MODULE,
-        SOURCE_DOC_TYPE,
-        TARGET_YEAR_CODE,
+        "=== Post stranded %s/%s journals (%s) — org %s, %s ===",
+        args.source_module,
+        args.source_doc_type,
+        mode,
+        args.org_id,
+        args.year,
     )
 
-    if not journals:
-        logger.info("Nothing to do.")
-        return 0
+    result = StrandedPostingResult()
 
-    if not args.execute:
-        dry_run_report(journals)
-        logger.info("Re-run with --execute to post.")
-        return 0
+    with (
+        session_for_org(args.org_id) as db,
+        batch_operation(
+            db,
+            organization_id=args.org_id,
+            operation_type=BatchOperationType.MIGRATION,
+            operation_name="post_stranded_source_journals",
+            started_by_id=args.actor_id,
+            description=f"{args.source_module}/{args.source_doc_type} {args.year} ({mode})",
+            source_file=__file__,
+        ) as tally,
+    ):
+        journals = find_stranded_journals(
+            db,
+            organization_id=args.org_id,
+            year_code=args.year,
+            source_module=args.source_module,
+            source_document_type=args.source_doc_type,
+            limit=args.limit,
+        )
+        result.found = len(journals)
+        logger.info("Found %d stranded journal(s)", result.found)
 
-    return execute(journals)
+        if args.execute:
+            for journal in journals:
+                ok, replay, msg = post_one(
+                    db, journal, source_module=args.source_module
+                )
+                if ok and replay:
+                    result.already_posted += 1
+                elif ok:
+                    result.posted += 1
+                else:
+                    result.failures.append((journal.journal_number, msg))
+                    logger.error("FAIL %s: %s", journal.journal_number, msg)
+
+        tally.created = result.posted
+        tally.skipped = result.already_posted + (
+            result.found if not args.execute else 0
+        )
+        tally.failed = len(result.failures)
+
+    logger.info(
+        "found=%d posted=%d already_posted=%d failed=%d",
+        result.found,
+        result.posted,
+        result.already_posted,
+        len(result.failures),
+    )
+    if not args.execute and result.found:
+        logger.info("DRY RUN — re-run with --execute to post.")
+    return 1 if result.failures else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

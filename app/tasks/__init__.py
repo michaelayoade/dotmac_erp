@@ -15,6 +15,7 @@ from app.tasks.ar_allocation import (
 from app.tasks.gl_posting import (
     post_approved_journal_backlog,
     post_expense_claim_backlog,
+    post_stranded_source_journals,
 )
 from app.tasks.ar_reconciliation import reconcile_invoice_amount_paid
 from app.tasks.audit import log_audit_event
@@ -175,6 +176,7 @@ __all__ = [
     "allocate_exact_match_payments",
     "post_approved_journal_backlog",
     "post_expense_claim_backlog",
+    "post_stranded_source_journals",
     "reconcile_invoice_amount_paid",
     "log_audit_event",
     "verify_audit_hash_chain",
