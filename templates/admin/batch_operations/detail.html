@@ -1,0 +1,81 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import status_badge, icon_svg, stats_card %}
+
+{% block page_title %}{{ run.operation_name }}{% endblock %}
+{% block page_subtitle %}{{ run.operation_type.value | replace('_', ' ') | title }} run{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <nav class="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
+        <a href="/admin/batch-operations" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">Batch Operations</a>
+        {{ icon_svg("chevron-right", "h-4 w-4 text-slate-400") }}
+        <span class="text-slate-900 dark:text-white font-medium" aria-current="page">{{ run.operation_name }}</span>
+    </nav>
+
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Created", run.records_created, icon="plus", color="emerald") }}
+        {{ stats_card("Updated", run.records_updated, icon="edit", color="blue") }}
+        {{ stats_card("Skipped", run.records_skipped, icon="minus", color="slate") }}
+        {{ stats_card("Failed", run.records_failed, icon="warning", color="rose" if run.records_failed else "slate") }}
+    </div>
+
+    {% if run.error_message %}
+    <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-900/20">
+        <div class="flex items-start gap-3">
+            {{ icon_svg("warning", "h-5 w-5 flex-shrink-0 text-rose-600 dark:text-rose-400") }}
+            <div class="min-w-0">
+                <p class="text-sm font-medium text-rose-800 dark:text-rose-200">This run failed</p>
+                <pre class="mt-2 overflow-x-auto whitespace-pre-wrap break-words text-xs text-rose-700 dark:text-rose-300">{{ run.error_message }}</pre>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <dl class="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Status</dt>
+                <dd class="mt-1">{{ status_badge(run.status.value | upper, 'sm') }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Started</dt>
+                <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ run.started_at.strftime('%d %b %Y, %H:%M:%S') if run.started_at else '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Completed</dt>
+                <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ run.completed_at.strftime('%d %b %Y, %H:%M:%S') if run.completed_at else '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Started by</dt>
+                <dd class="mt-1 font-mono text-xs text-slate-900 dark:text-white">{{ run.started_by_id }}</dd>
+            </div>
+            {% if run.description %}
+            <div class="sm:col-span-2">
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</dt>
+                <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ run.description }}</dd>
+            </div>
+            {% endif %}
+            {% if run.source_file %}
+            <div class="sm:col-span-2">
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Source file</dt>
+                <dd class="mt-1 font-mono text-xs text-slate-900 dark:text-white">{{ run.source_file }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    {% if run.created_entity_ids %}
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Records touched</h2>
+        <dl class="mt-4 space-y-3">
+            {% for entity_type, ids in run.created_entity_ids.items() %}
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ entity_type | replace('_', ' ') | title }} ({{ ids | length }})</dt>
+                <dd class="mt-1 overflow-x-auto font-mono text-xs text-slate-600 dark:text-slate-300">{{ ids | join(', ') }}</dd>
+            </div>
+            {% endfor %}
+        </dl>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

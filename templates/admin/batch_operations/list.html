@@ -1,0 +1,58 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import status_badge, icon_svg, stats_card %}
+
+{% block page_title %}Batch Operations{% endblock %}
+{% block page_subtitle %}Every import, sync, migration and script run recorded against this organization{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {{ stats_card("Recorded runs", counts.total, icon="clipboard-list", color="blue") }}
+        {{ stats_card("Running", counts.running, icon="refresh", color="amber" if counts.running else "slate") }}
+        {{ stats_card("Failed", counts.failed, icon="warning", color="rose" if counts.failed else "slate") }}
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Operation</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col" class="text-right">Created</th>
+                        <th scope="col" class="text-right">Updated</th>
+                        <th scope="col" class="text-right">Skipped</th>
+                        <th scope="col" class="text-right">Failed</th>
+                        <th scope="col" class="hidden sm:table-cell">Started</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                    <tr class="group">
+                        <td class="font-medium text-slate-900 dark:text-white">
+                            <a href="/admin/batch-operations/{{ run.id }}" class="hover:underline">{{ run.operation_name }}</a>
+                        </td>
+                        <td class="text-slate-500 text-sm">{{ run.operation_type.value | replace('_', ' ') | title }}</td>
+                        <td class="text-center">{{ status_badge(run.status.value | upper, 'sm') }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.records_created }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.records_updated }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ run.records_skipped }}</td>
+                        <td class="text-right font-mono tabular-nums {{ 'text-rose-600 dark:text-rose-400' if run.records_failed else '' }}">{{ run.records_failed }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ run.started_at.strftime('%d %b %Y, %H:%M') if run.started_at else '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No batch operations recorded yet. Runs appear here once a task, an
+                            admin action or a script records one.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
