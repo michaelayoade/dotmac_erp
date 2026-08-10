@@ -67,7 +67,20 @@ _CATALOG_SQL = text(
         (
             SELECT count(*) FROM pg_policies p
             WHERE p.schemaname = n.nspname AND p.tablename = c.relname
-        )                                           AS policy_count
+        )                                           AS policy_count,
+        -- Whether ANY policy expression mentions the scope column. A child
+        -- table legitimately carries no scope column of its own and inherits
+        -- isolation through an EXISTS join to its scoped parent, so the
+        -- presence of the column is the wrong question to ask of it — what
+        -- matters is whether the POLICY reaches organization scope at all.
+        EXISTS (
+            SELECT 1 FROM pg_policies p
+            WHERE p.schemaname = n.nspname AND p.tablename = c.relname
+              AND (
+                COALESCE(p.qual, '') LIKE :scope_pattern
+                OR COALESCE(p.with_check, '') LIKE :scope_pattern
+              )
+        )                                           AS policy_mentions_scope
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind = 'r'
@@ -86,6 +99,7 @@ class Table:
     rls_forced: bool
     has_scope_column: bool
     policy_count: int
+    policy_mentions_scope: bool
 
     @property
     def qualified(self) -> str:
@@ -93,12 +107,22 @@ class Table:
 
     @property
     def verdict(self) -> str:
-        """One of: protected, unforced, unpolicied, unprotected, global, orphan-policy.
+        """protected | unforced | unpolicied | unprotected | inherited |
+        orphan-policy | global.
 
-        `unforced` is called out separately because it is the quiet one: RLS is
-        on, policies exist, every test passes — and the table owner bypasses all
-        of it. Without FORCE, isolation holds for everyone except the role most
-        likely to be running a migration or a repair script.
+        `unforced` is the quiet one: RLS is on, policies exist, every test
+        passes — and the table owner bypasses all of it. Without FORCE,
+        isolation holds for everyone except the role most likely to be running a
+        migration or a repair script.
+
+        `inherited` is a table with NO scope column whose policy nevertheless
+        reaches organization scope, i.e. a child joined through to its scoped
+        parent. That is correct design, not a gap — the kernel uses the same
+        shape for `PartyPerson`/`PartyOrganization`, which carry no `tenant_id`
+        and inherit isolation via an EXISTS join. Only a policy that never
+        mentions the scope column at all is an `orphan-policy`, and even then it
+        may be scoping by something deliberate; it means "look at this", not
+        "this is broken".
         """
         if self.has_scope_column:
             if not self.rls_enabled:
@@ -108,7 +132,9 @@ class Table:
             if not self.rls_forced:
                 return "unforced"
             return "protected"
-        return "orphan-policy" if self.rls_enabled else "global"
+        if not self.rls_enabled:
+            return "global"
+        return "inherited" if self.policy_mentions_scope else "orphan-policy"
 
 
 @dataclass
@@ -148,12 +174,16 @@ class Report:
             found = self.of(verdict)
             if found:
                 lines.append(f"    {verdict:<23} {len(found)}  ({blurb})")
+        lines.append(
+            f"  inherited                 {len(self.of('inherited'))}  "
+            f"(no {SCOPE_COLUMN}; policy joins through to a scoped parent)"
+        )
         lines.append(f"  global (no {SCOPE_COLUMN})   {len(self.of('global'))}")
         orphans = self.of("orphan-policy")
         if orphans:
             lines.append(
                 f"  orphan-policy             {len(orphans)}  "
-                f"(RLS on a table with no {SCOPE_COLUMN})"
+                f"(RLS on, but no policy mentions {SCOPE_COLUMN} — worth a look)"
             )
         for verdict in ("unprotected", "unpolicied", "unforced", "orphan-policy"):
             found = self.of(verdict)
@@ -174,7 +204,11 @@ def collect(database_url: str) -> Report:
         with engine.connect() as conn:
             rows = conn.execute(
                 _CATALOG_SQL,
-                {"scope_column": SCOPE_COLUMN, "system_schemas": list(SYSTEM_SCHEMAS)},
+                {
+                    "scope_column": SCOPE_COLUMN,
+                    "scope_pattern": f"%{SCOPE_COLUMN}%",
+                    "system_schemas": list(SYSTEM_SCHEMAS),
+                },
             ).all()
     finally:
         engine.dispose()
@@ -187,6 +221,7 @@ def collect(database_url: str) -> Report:
                 rls_forced=bool(r.rls_forced),
                 has_scope_column=bool(r.has_scope_column),
                 policy_count=int(r.policy_count),
+                policy_mentions_scope=bool(r.policy_mentions_scope),
             )
             for r in rows
         ]
