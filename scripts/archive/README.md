@@ -84,3 +84,25 @@ That pattern is not an argument for better scripts or for running them on a
 schedule. It says the matching and reconciliation logic is not idempotent and
 does not repair its own drift, which is what a reconciler is for. Treat this
 directory as a defect list for that work, not as a library to copy from.
+
+## Splynx and ERPNext (2026-08-10)
+
+Michael ruled that both integrations are retired. Six scripts moved here in
+one wave: `sync_splynx`, `allocate_splynx_fifo`, `match_zenith_splynx`,
+`reconcile_jan_2026_splynx`, `match_erpnext_banking_links` and
+`relink_ticket_projects`.
+
+Two scripts that MENTION them stayed live, because a mention is not a
+dependency: `allocate_exact_match_payments` only cross-referenced the FIFO
+script in its docstring, and `post_and_match_paystack_opex_expense_reimbursements`
+is a Paystack operation that happens to describe historical ERPNext-synced
+claims.
+
+`app/services/finance/ar/fifo_allocation_service.py` is now unreferenced by
+any script, task or service. It is deliberately NOT deleted here — removing
+application code is a separate decision from retiring the scripts that drove
+it — but note that retirement does more than orphan it. Its docstring records
+the design premise: it creates allocation records *without* modifying
+`invoice.amount_paid` or `invoice.status`, "because Splynx sync owns those
+fields". Once Splynx is not the owner, that premise inverts and the service
+is wrong rather than merely unused.

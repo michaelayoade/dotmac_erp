@@ -6,7 +6,7 @@ Finds CLEARED payments with no allocation records where the same customer has
 exactly ONE open invoice whose total matches the payment amount. Only
 unambiguous matches are processed — a payment matching two invoices is left
 alone, because guessing which one it settles is how misallocations happen.
-Tier-B (`allocate_splynx_fifo.py`) handles the remainder.
+Payments it cannot match unambiguously are left for a human.
 
 **This is now a thin CLI adapter.** The decision lives in
 `app.services.finance.ar.exact_match_allocation`, and the scheduled path is

@@ -1,15 +1,13 @@
-"""AR allocation-backlog task — the scheduled adapter over the FIFO service.
+"""AR allocation task — the scheduled adapter over exact-match allocation.
 
-`FIFOAllocationService.allocate_for_org` already owned the allocation
-decision; what lived in the script was the choice of organization, and it
-chose badly (`LIMIT 1` over a data scan). This iterates every organization
-that actually has Splynx payments, one scoped session each, recording a
-`BatchOperation` per organization so a partial run is visible rather than
-inferred.
+Tier-A only. The Tier-B FIFO allocator was Splynx-specific and retired with
+that integration: `FIFOAllocationService` exists because Splynx owned
+`invoice.amount_paid` and `invoice.status`, so it deliberately created
+allocation records without touching them. Once Splynx is not the owner, that
+premise inverts and the allocator is wrong rather than merely unused.
 
 Defaults to `dry_run=True`. Allocation moves money against invoices; a
-scheduled job should not start doing that unattended because it was
-deployed.
+scheduled job should not begin doing that unattended because it was deployed.
 """
 
 from __future__ import annotations
@@ -18,65 +16,17 @@ import logging
 import uuid
 
 from celery import shared_task
+from sqlalchemy import select
 
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.batch_operation import BatchOperationType
+from app.models.finance.core_org.organization import Organization
 from app.services.batch_operation import batch_operation
-from app.services.finance.ar.allocation_backlog import (
-    organizations_with_splynx_payments,
-)
 from app.services.finance.ar.exact_match_allocation import allocate_exact_matches
 
 logger = logging.getLogger(__name__)
 
 SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
-
-
-@shared_task
-def allocate_splynx_payments_fifo(
-    organization_id: str | None = None, dry_run: bool = True
-) -> dict:
-    """FIFO-allocate unallocated Splynx payments against open invoices."""
-    from app.services.finance.ar.fifo_allocation_service import FIFOAllocationService
-
-    if organization_id is not None:
-        org_ids = [uuid.UUID(str(organization_id))]
-    else:
-        # Asking a question ABOUT tenants, so it cannot be asked from inside
-        # one. The old script asked it with LIMIT 1 and took whatever came
-        # back first.
-        with cross_org_session() as db:
-            org_ids = organizations_with_splynx_payments(db)
-        logger.info("%d organization(s) have Splynx payments", len(org_ids))
-
-    summary: dict[str, dict] = {}
-    for org_id in org_ids:
-        with (
-            session_for_org(org_id) as db,
-            batch_operation(
-                db,
-                organization_id=org_id,
-                operation_type=BatchOperationType.BULK_UPDATE,
-                operation_name="allocate_splynx_fifo",
-                started_by_id=SYSTEM_ACTOR_ID,
-                description=(
-                    "FIFO-allocate unallocated Splynx payments"
-                    + (" (dry run)" if dry_run else "")
-                ),
-            ) as tally,
-        ):
-            result = FIFOAllocationService(db).allocate_for_org(org_id, dry_run=dry_run)
-            tally.created = result.allocations_created
-            tally.failed = len(result.errors)
-
-        summary[str(org_id)] = {
-            "customers_processed": result.customers_processed,
-            "allocations_created": result.allocations_created,
-            "total_allocated": str(result.total_allocated),
-            "prepayment_customers": len(result.prepayment_customers),
-            "errors": result.errors,
-        }
-    return summary
 
 
 @shared_task
@@ -95,7 +45,7 @@ def allocate_exact_match_payments(
         org_ids = [uuid.UUID(str(organization_id))]
     else:
         with cross_org_session() as db:
-            org_ids = organizations_with_splynx_payments(db)
+            org_ids = list(db.scalars(select(Organization.organization_id)).all())
 
     summary: dict[str, dict] = {}
     for org_id in org_ids:
