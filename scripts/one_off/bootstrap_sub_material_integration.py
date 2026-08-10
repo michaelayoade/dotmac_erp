@@ -48,7 +48,7 @@ def main() -> int:
 
     from sqlalchemy import select
 
-    from app.db import SessionLocal
+    from app.db.session_context import session_for_org
     from app.models.auth import ApiKey
     from app.models.finance.platform.service_hook import (
         HookExecutionMode,
@@ -61,7 +61,7 @@ def main() -> int:
     from app.services.feature_flags import FEATURE_SERVICE_HOOKS
 
     raw_key: str | None = None
-    with SessionLocal() as db:
+    with session_for_org(args.organization_id) as db:
         FeatureFlagService(db).toggle(
             args.organization_id,
             FEATURE_SERVICE_HOOKS,
