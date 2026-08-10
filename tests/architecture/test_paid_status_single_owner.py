@@ -33,25 +33,34 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+import pytest
 
-# The module that owns the decision. It assigns to a local `resolved`, so it
-# would not match anyway — listed so the intent is explicit rather than
-# accidental.
-OWNER = "app/services/finance/ar/payment_status.py"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 PAYMENT_DERIVED = {"PAID", "PARTIALLY_PAID"}
 
-# Scoped to AR's InvoiceStatus on purpose. `SupplierInvoiceStatus.PAID`,
-# `ExpenseClaimStatus.PAID`, `PayrollStatus.PAID` and friends are different
-# enums in different domains, each with its own lifecycle. Whether they carry
-# the same duplication is a separate question and a separate owner; sweeping
-# them in here would assert a rule this module does not define.
-ENUM = "InvoiceStatus"
+# Each enum that expresses payment COVERAGE, and the one module allowed to
+# stamp it. Both owners assign to a local `resolved`, so neither would match
+# anyway — they are listed so the exemption is explicit rather than accidental.
+#
+# These two are the only enums here on purpose. `ExpenseClaimStatus.PAID`,
+# `SalarySlipStatus.PAID`, `TaxPeriodStatus.PAID`, `CommitmentStatus.PAID` and
+# the lease `PaymentStatus.PAID` have **no PARTIALLY_PAID member**: they are
+# binary lifecycle transitions (approved -> paid), not a computation over
+# amount_paid against a total. Sweeping them in would assert a rule that does
+# not apply to them.
+OWNERS = {
+    "InvoiceStatus": "app/services/finance/ar/payment_status.py",
+    "SupplierInvoiceStatus": "app/services/finance/ap/payment_status.py",
+}
 
 
-def _stamps_payment_status(path: Path) -> list[int]:
-    """Line numbers where a payment-derived status is written to an attribute."""
+def _stamps_payment_status(path: Path, enum: str | None = None) -> list[int]:
+    """Line numbers where a payment-derived status is written to an attribute.
+
+    `enum` restricts the scan to one vocabulary; None means any owned enum.
+    """
+    wanted = {enum} if enum is not None else set(OWNERS)
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except (SyntaxError, UnicodeDecodeError):
@@ -62,10 +71,10 @@ def _stamps_payment_status(path: Path) -> list[int]:
         if not isinstance(node, ast.Assign):
             continue
         value = node.value
-        # `InvoiceStatus.PAID` — an attribute access on that exact name.
+        # `<Enum>.PAID` — an attribute access on one of the owned names.
         if not isinstance(value, ast.Attribute) or value.attr not in PAYMENT_DERIVED:
             continue
-        if not isinstance(value.value, ast.Name) or value.value.id != ENUM:
+        if not isinstance(value.value, ast.Name) or value.value.id not in wanted:
             continue
         for target in node.targets:
             if isinstance(target, ast.Attribute) and target.attr == "status":
@@ -81,22 +90,24 @@ def _scanned_files():
             yield path
 
 
-def test_only_the_owner_stamps_a_payment_derived_status():
+@pytest.mark.parametrize("enum,owner", sorted(OWNERS.items()))
+def test_only_the_owner_stamps_a_payment_derived_status(enum, owner):
     offenders: list[str] = []
     for path in _scanned_files():
         relative = path.relative_to(REPO_ROOT).as_posix()
-        if relative == OWNER:
+        if relative == owner:
             continue
-        for lineno in _stamps_payment_status(path):
+        for lineno in _stamps_payment_status(path, enum):
             offenders.append(f"{relative}:{lineno}")
 
+    module = owner.removesuffix(".py").replace("/", ".")
     assert offenders == [], (
-        "these sites decide invoice paid-status themselves:\n  "
+        f"these sites decide {enum} coverage themselves:\n  "
         + "\n  ".join(sorted(offenders))
-        + "\n\nUse app.services.finance.ar.payment_status.apply_payment_status()"
+        + f"\n\nUse {module}.apply_payment_status()"
         "\n(or resolve_payment_status() when you have values rather than a model)."
         "\nA second rule here is how the tolerance and the nothing-paid answer"
-        "\ndrifted apart across eight sites in the first place."
+        "\ndrifted apart across eleven sites in the first place."
     )
 
 
@@ -125,10 +136,41 @@ def test_the_detector_ignores_local_derivation(tmp_path):
     assert _stamps_payment_status(probe) == []
 
 
-def test_the_owner_module_exists_where_the_message_says():
-    """The failure message names a module; a rename must not leave it lying."""
-    assert (REPO_ROOT / OWNER).is_file()
-    from app.services.finance.ar.payment_status import (  # noqa: F401
-        apply_payment_status,
-        resolve_payment_status,
+def test_the_detector_covers_ap_too(tmp_path):
+    """AP carried the identical defect and gets its own owner, so the scan must
+    key on both vocabularies rather than AR's alone."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus\n"
+        "def f(invoice):\n"
+        "    invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID\n"
     )
+    assert _stamps_payment_status(probe, "SupplierInvoiceStatus") == [3]
+    assert _stamps_payment_status(probe) == [3]
+    # ...and AR's scan must not claim AP's site.
+    assert _stamps_payment_status(probe, "InvoiceStatus") == []
+
+
+def test_binary_lifecycle_enums_are_not_swept_in(tmp_path):
+    """`ExpenseClaimStatus`, `SalarySlipStatus`, `TaxPeriodStatus` and friends
+    have no PARTIALLY_PAID member — they are approved->paid transitions, not a
+    computation over coverage, and this rule does not govern them."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "def f(claim, slip):\n"
+        "    claim.status = ExpenseClaimStatus.PAID\n"
+        "    slip.status = SalarySlipStatus.PAID\n"
+    )
+    assert _stamps_payment_status(probe) == []
+
+
+@pytest.mark.parametrize("enum,owner", sorted(OWNERS.items()))
+def test_each_owner_module_exists_and_exports_the_named_functions(enum, owner):
+    """The failure message names a module and two functions; a rename must not
+    leave that message pointing at nothing."""
+    import importlib
+
+    assert (REPO_ROOT / owner).is_file(), f"{enum}'s owner {owner} is missing"
+    module = importlib.import_module(owner.removesuffix(".py").replace("/", "."))
+    assert callable(module.apply_payment_status)
+    assert callable(module.resolve_payment_status)
