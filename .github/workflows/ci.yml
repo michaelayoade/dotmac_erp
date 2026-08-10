@@ -362,6 +362,14 @@ jobs:
       - name: Run Alembic migrations
         run: poetry run alembic upgrade heads
 
+      # Reported, not enforced. RLS is applied by point-in-time sweeps over
+      # information_schema, so coverage cannot be derived from source — this is
+      # the only place the number can be obtained. It prints unconditionally so
+      # the figure lands in the log on green runs too; the assertions that DO
+      # gate live in tests/integration/test_rls_coverage.py.
+      - name: RLS coverage report
+        run: poetry run python scripts/architecture/rls_coverage_audit.py
+
       - name: Run integration tests
         # -o addopts= clears pytest.ini's "-m not integration" filter
         # confcutdir prevents loading tests/conftest.py which monkey-patches
