@@ -295,7 +295,7 @@ class AutoReconciliationPaymentService:
             )
         return list(db.scalars(pmt_query).all())
 
-    # ── AP / non-Splynx AR payment loaders (passes 4 & 5) ───────
+    # ── AP / AR payment loaders (passes 4 & 5) ──────────────────
     def _load_ap_payments(
         self,
         db: Session,
@@ -327,7 +327,7 @@ class AutoReconciliationPaymentService:
             )
         return list(db.scalars(pmt_query).all())
 
-    def _load_non_splynx_ar_payments(
+    def _load_ar_payments(
         self,
         db: Session,
         organization_id: UUID,
@@ -337,7 +337,7 @@ class AutoReconciliationPaymentService:
     ) -> list[CustomerPayment]:
         """Load eligible non-Splynx AR payments for the statement's bank account.
 
-        Filters: ``splynx_id IS NULL``, status CLEARED, has GL journal,
+        Filters: status CLEARED, has GL journal,
         has correlation_id, and matching bank_account_id + date range.
         This catches AR receipts recorded directly in the app (not via
         Paystack or Splynx).
@@ -349,7 +349,6 @@ class AutoReconciliationPaymentService:
         pmt_query = select(CustomerPayment).where(
             CustomerPayment.organization_id == organization_id,
             CustomerPayment.bank_account_id == statement.bank_account_id,
-            CustomerPayment.splynx_id.is_(None),
             CustomerPayment.status == PaymentStatus.CLEARED,
             CustomerPayment.journal_entry_id.isnot(None),
             CustomerPayment.correlation_id.isnot(None),
@@ -802,7 +801,7 @@ class AutoReconciliationPaymentService:
                     )
                     result.errors.append(f"Line {line.line_number}: {e}")
 
-    # ── Pass 5: Non-Splynx AR customer payment matching ─────────
+    # ── Pass 5: AR customer payment matching ────────────────────
     def _match_ar_payments(
         self,
         db: Session,

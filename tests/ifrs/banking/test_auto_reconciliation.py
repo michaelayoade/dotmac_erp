@@ -49,6 +49,14 @@ def _mock_policy_resolve(request: pytest.FixtureRequest) -> object:
         if request.node.get_closest_marker("enable_auto_journal_rules"):
             legacy_config.pass_bank_fees_enabled = True
             legacy_config.pass_settlements_enabled = True
+        if request.node.get_closest_marker("enable_splynx_passes"):
+            # Splynx is retired and both passes default to OFF (stage 1 of the
+            # retirement). The code is still present and still reachable by
+            # flipping these, which is what makes the rollback real — so the
+            # tests that cover it opt in explicitly rather than being deleted.
+            # When stage 2 removes the code, these tests go with it.
+            legacy_config.pass_splynx_by_ref_enabled = True
+            legacy_config.pass_splynx_date_amount_enabled = True
         return build_policy_from_config(legacy_config)
 
     with patch(
@@ -987,6 +995,7 @@ class TestPaymentIntentMatching:
 # ── Tests: Splynx CustomerPayment matching (pass 2) ──────────────────
 
 
+@pytest.mark.enable_splynx_passes
 class TestSplynxPaymentMatching:
     """Tests for pass 2 — Splynx CustomerPayment matching."""
 
@@ -1232,6 +1241,7 @@ class TestSplynxPaymentMatching:
 # ── Tests: Mixed pass 1 + pass 2 ─────────────────────────────────────
 
 
+@pytest.mark.enable_splynx_passes
 class TestMixedMatching:
     """Tests for both passes running together."""
 
@@ -1402,6 +1412,7 @@ class TestExtractPaystackRef:
         assert ref == "69871fd7d9178"
 
 
+@pytest.mark.enable_splynx_passes
 class TestPaystackRefMatching:
     """Tests for pass 2 matching via Paystack ref in description."""
 
