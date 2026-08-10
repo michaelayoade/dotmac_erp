@@ -87,6 +87,7 @@ from app.startup import log_startup_info, validate_startup
 from app.telemetry import setup_otel
 from app.templates import templates
 from app.web.admin import router as admin_web_router
+from app.web.admin_batch_operations import router as admin_batch_operations_router
 from app.web.admin_crm_sync import router as admin_crm_sync_router
 from app.web.admin_sla_policies import router as admin_sla_policies_web_router
 from app.web.auth import router as auth_web_router
@@ -718,6 +719,7 @@ app.include_router(help_web_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
 app.include_router(admin_sla_policies_web_router)
+app.include_router(admin_batch_operations_router)
 app.include_router(profile_web_router)
 app.include_router(notifications_web_router)
 app.include_router(workflow_tasks_web_router)
