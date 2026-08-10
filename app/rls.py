@@ -29,6 +29,7 @@ from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 # Pattern for validating UUID strings - only allows hex digits and hyphens
@@ -209,6 +210,35 @@ def set_current_organization_sync(
     validated = _validate_uuid_string(org_id_str)
     # SET LOCAL sets a GUC string param — no ::uuid cast (it's not a SQL value)
     db.execute(text(f"SET LOCAL app.current_organization_id = '{validated}'"))
+
+
+def set_current_organization_on_connection(
+    connection: Connection,
+    organization_id: uuid.UUID,
+) -> None:
+    """Set the tenant GUC directly on a Connection.
+
+    Needed by the ``after_begin`` re-arming in
+    ``app.db.session_context``: that event fires while the Session is still
+    provisioning its connection, so issuing the statement through the Session
+    raises ``InvalidRequestError`` ("concurrent operations are not
+    permitted"). The Connection handed to the handler is the one the new
+    transaction runs on, which is exactly where the GUC belongs.
+    """
+    if connection.dialect.name != "postgresql":
+        # SQLite (the unit-test lane) has no GUCs and rejects SET LOCAL
+        # outright. Guarding here rather than at the call site keeps the
+        # arming path a straight call, and mirrors prime_tenant_context.
+        return
+    validated = _validate_uuid_string(str(organization_id))
+    connection.execute(text(f"SET LOCAL app.current_organization_id = '{validated}'"))
+
+
+def enable_rls_bypass_on_connection(connection: Connection) -> None:
+    """Set the RLS bypass GUC directly on a Connection. See above for why."""
+    if connection.dialect.name != "postgresql":
+        return
+    connection.execute(text("SET LOCAL app.bypass_rls = 'true'"))
 
 
 def clear_organization_context_sync(db: Session) -> None:

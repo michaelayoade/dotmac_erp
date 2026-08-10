@@ -287,6 +287,12 @@ async def _noop_tenant_context(db, organization_id):
 # Assign mock functions to the module
 mock_rls_module.set_current_organization_sync = _noop_set_org_sync
 mock_rls_module.clear_organization_context_sync = _noop_clear_org_sync
+# Connection-level variants, used by session_context's `after_begin` re-arming.
+# The real ones already no-op on a non-PostgreSQL dialect; they are listed here
+# because this stub replaces app.rls wholesale, so anything session_context
+# imports must exist on it too.
+mock_rls_module.set_current_organization_on_connection = _noop_set_org_sync
+mock_rls_module.enable_rls_bypass_on_connection = _noop_enable_bypass_sync
 mock_rls_module.enable_rls_bypass_sync = _noop_enable_bypass_sync
 mock_rls_module.disable_rls_bypass_sync = _noop_disable_bypass_sync
 mock_rls_module.bypass_rls_sync = _noop_bypass_rls_sync
