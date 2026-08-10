@@ -1,14 +1,34 @@
+#!/usr/bin/env python
 """
-Post 123 journal entries stuck in APPROVED status.
+Post APPROVED journal entries that never reached POSTED.
 
-Background:
-These journals were created by various import/sync processes (AR invoices,
-Paystack bank transfers, expense reimbursements) but were never posted to the
-GL. They are all in OPEN fiscal periods, so posting should succeed.
+**This is now a thin CLI adapter, not the owner.** The decision lives in
+`app.services.finance.gl.posting_backlog`, and the scheduled path is
+`app.tasks.gl_posting.post_approved_journal_backlog`. Prefer the task; this
+exists for a break-glass run against one organization.
+
+The two rules this script used to own now live in the service and are
+testable: journals whose debits and credits differ by less than the imbalance
+tolerance are postable, and only OPEN/REOPENED periods (or journals with no
+period at all) accept a posting. Unbalanced entries and closed periods are
+SKIPPED — an unbalanced journal is a data defect to investigate, and a closed
+period is a decision to respect, not one a backlog job may reverse.
+
+What changed:
+
+* `--org-id` is required. This carried `ORG_ID = UUID("0000...0001")` at
+  module level, so a multi-tenant system had a maintenance tool that could
+  only ever serve one tenant.
+* The session comes from `session_for_org`, which primes the ORM listener AND
+  the PostgreSQL RLS GUC.
+* The run is recorded as a `BatchOperation`, visible at
+  /admin/batch-operations.
 
 Usage:
-    python scripts/post_approved_journals.py --dry-run
-    python scripts/post_approved_journals.py --execute
+  docker exec dotmac_erp_app python scripts/post_approved_journals.py \
+      --org-id <uuid>            # dry run
+  docker exec dotmac_erp_app python scripts/post_approved_journals.py \
+      --org-id <uuid> --commit
 """
 
 from __future__ import annotations
@@ -16,179 +36,81 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from uuid import UUID
+import uuid
+from pathlib import Path
 
-from sqlalchemy import text
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-sys.path.insert(0, ".")
+from app.db.session_context import session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation
+from app.services.finance.gl.posting_backlog import post_approved_journals
 
-from app.db import SessionLocal  # noqa: E402
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger("post_approved_journals")
-
-ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
-SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
-
-
-def get_approved_journals(db: object) -> list[dict]:
-    """Get all APPROVED journal entries with balance info."""
-    rows = db.execute(
-        text("""
-            SELECT je.journal_entry_id, je.journal_number, je.entry_date,
-                   je.description, je.source_module, je.source_document_type,
-                   fp.period_name, fp.status AS period_status,
-                   SUM(jel.debit_amount) AS total_debit,
-                   SUM(jel.credit_amount) AS total_credit,
-                   ABS(SUM(jel.debit_amount) - SUM(jel.credit_amount)) AS imbalance
-            FROM gl.journal_entry je
-            JOIN gl.journal_entry_line jel ON jel.journal_entry_id = je.journal_entry_id
-            LEFT JOIN gl.fiscal_period fp ON fp.fiscal_period_id = je.fiscal_period_id
-            WHERE je.organization_id = :org_id
-              AND je.status = 'APPROVED'
-            GROUP BY je.journal_entry_id, je.journal_number, je.entry_date,
-                     je.description, je.source_module, je.source_document_type,
-                     fp.period_name, fp.status
-            ORDER BY je.entry_date
-        """),
-        {"org_id": str(ORG_ID)},
-    ).all()
-    return [
-        {
-            "journal_entry_id": str(r[0]),
-            "journal_number": r[1],
-            "entry_date": r[2],
-            "description": (r[3] or "")[:60],
-            "source_module": r[4],
-            "source_document_type": r[5],
-            "period_name": r[6],
-            "period_status": r[7],
-            "total_debit": r[8],
-            "total_credit": r[9],
-            "imbalance": float(r[10]),
-        }
-        for r in rows
-    ]
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Post APPROVED journal entries to GL.")
-    parser.add_argument("--dry-run", action="store_true", help="Report only")
-    parser.add_argument("--execute", action="store_true", help="Post journals")
+    parser = argparse.ArgumentParser(
+        description="Post APPROVED journal entries that never reached POSTED"
+    )
+    parser.add_argument(
+        "--org-id",
+        required=True,
+        type=uuid.UUID,
+        help="Organization to run against (no default: this is multi-tenant)",
+    )
+    parser.add_argument(
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Recorded as who ran this, on the BatchOperation record",
+    )
+    parser.add_argument(
+        "--commit", action="store_true", help="Actually post (default is a dry run)"
+    )
     args = parser.parse_args()
 
-    if not args.dry_run and not args.execute:
-        parser.error("Specify --dry-run or --execute")
+    mode = "EXECUTE" if args.commit else "DRY RUN"
+    logger.info("=== Post approved journals (%s) — org %s ===", mode, args.org_id)
 
-    with SessionLocal() as db:
-        journals = get_approved_journals(db)
-
-        logger.info("=" * 60)
-        logger.info("POST APPROVED JOURNAL ENTRIES")
-        logger.info("=" * 60)
-        logger.info("  Found %d APPROVED journals", len(journals))
-
-        if not journals:
-            logger.info("  Nothing to post.")
-            return
-
-        # Categorize
-        balanced = [j for j in journals if j["imbalance"] < 0.01]
-        unbalanced = [j for j in journals if j["imbalance"] >= 0.01]
-        closed_period = [
-            j for j in balanced if j["period_status"] not in ("OPEN", "REOPENED", None)
-        ]
-
-        # Group by source
-        by_source: dict[str, int] = {}
-        for j in journals:
-            key = f"{j['source_module']}/{j['source_document_type'] or '(none)'}"
-            by_source[key] = by_source.get(key, 0) + 1
-
-        logger.info("")
-        logger.info("  By source:")
-        for src, count in sorted(by_source.items(), key=lambda x: -x[1]):
-            logger.info("    %-40s %d", src, count)
-        logger.info("")
-        logger.info("  Balanced (postable):    %d", len(balanced) - len(closed_period))
-        logger.info("  In closed period:       %d", len(closed_period))
-        logger.info("  Unbalanced (skipped):   %d", len(unbalanced))
-
-        if unbalanced:
-            logger.info("")
-            logger.info("  Unbalanced journals (will be skipped):")
-            for j in unbalanced:
-                logger.info(
-                    "    %s  date=%s  imbalance=%.2f  %s",
-                    j["journal_number"],
-                    j["entry_date"],
-                    j["imbalance"],
-                    j["description"],
-                )
-
-        if closed_period:
-            logger.info("")
-            logger.info("  Journals in closed periods (will be skipped):")
-            for j in closed_period:
-                logger.info(
-                    "    %s  period=%s (%s)",
-                    j["journal_number"],
-                    j["period_name"],
-                    j["period_status"],
-                )
-
-        logger.info("=" * 60)
-
-        if args.dry_run:
-            logger.info("DRY RUN — no changes made.")
-            return
-
-        # Import JournalService inside execute block to avoid import issues
-        from app.services.finance.gl.journal import JournalService
-
-        posted = 0
-        skipped = 0
-        errors: list[str] = []
-
-        postable = [
-            j for j in balanced if j["period_status"] in ("OPEN", "REOPENED", None)
-        ]
-
-        for j in postable:
-            try:
-                JournalService.post_journal(
-                    db=db,
-                    organization_id=ORG_ID,
-                    journal_entry_id=UUID(j["journal_entry_id"]),
-                    posted_by_user_id=SYSTEM_USER_ID,
-                )
-                posted += 1
-                if posted % 20 == 0:
-                    logger.info("  Posted %d / %d ...", posted, len(postable))
-                    db.flush()
-            except Exception as e:
-                err_msg = f"{j['journal_number']}: {e}"
-                errors.append(err_msg)
-                logger.warning("  FAILED: %s", err_msg)
-                skipped += 1
-
-        db.commit()
-
-        logger.info("")
-        logger.info("RESULTS:")
-        logger.info("  Posted:   %d", posted)
-        logger.info(
-            "  Skipped:  %d (unbalanced or closed period)",
-            len(unbalanced) + len(closed_period),
+    with (
+        session_for_org(args.org_id) as db,
+        batch_operation(
+            db,
+            organization_id=args.org_id,
+            operation_type=BatchOperationType.SCRIPT,
+            operation_name="post_approved_journals",
+            started_by_id=args.actor_id,
+            description=f"Manual CLI run ({mode})",
+            source_file=__file__,
+        ) as tally,
+    ):
+        result = post_approved_journals(
+            db,
+            organization_id=args.org_id,
+            posted_by_user_id=args.actor_id,
+            dry_run=not args.commit,
         )
-        logger.info("  Errors:   %d", len(errors))
-        if errors:
-            for err in errors[:10]:
-                logger.info("    %s", err)
+        tally.created = result.posted
+        tally.skipped = result.unbalanced + result.closed_period
+        tally.failed = len(result.errors)
+
+    logger.info(
+        "found=%d postable=%d posted=%d unbalanced=%d closed_period=%d errors=%d",
+        result.found,
+        result.postable,
+        result.posted,
+        result.unbalanced,
+        result.closed_period,
+        len(result.errors),
+    )
+    for err in result.errors[:20]:
+        logger.warning("  %s", err)
+    if not args.commit and result.postable:
+        logger.info("DRY RUN — re-run with --commit to post these journals.")
 
 
 if __name__ == "__main__":

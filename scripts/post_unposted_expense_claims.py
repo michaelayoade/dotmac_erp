@@ -1,21 +1,31 @@
 #!/usr/bin/env python
 """
-Post approved/paid expense claims that are missing GL journal entries.
+Post expense claims that never reached the general ledger.
 
-Finds expense claims in APPROVED or PAID status with journal_entry_id IS NULL
-and calls the posting adapter to create GL entries.
+**This is now a thin CLI adapter, not the owner.** The decision lives in
+`app.services.expense.posting_backlog`, and the scheduled path is
+`app.tasks.gl_posting.post_expense_claim_backlog`. Prefer the task; this
+exists for a break-glass run against one organization.
 
-Requires the code fix in expense_posting_adapter.py (category relationship
-loading) to be deployed first — otherwise these would also mispost to 6099.
+Idempotent: claims that already have a journal entry are not selected, and
+each posting carries a stable idempotency key.
 
-Idempotent: claims with existing journal_entry_id are skipped.
+What changed:
+
+* `--org-id` is required. This carried `ORG_ID = UUID("0000...0001")` at
+  module level — a multi-tenant system with a single-tenant maintenance tool.
+* The RLS context is no longer set by string interpolation. This ran
+  ``SET app.current_organization_id = '{ORG_ID}'`` through an f-string, which
+  built SQL by formatting and primed one isolation layer of two;
+  `session_for_org` sets both.
+* The run is recorded as a `BatchOperation`, visible at
+  /admin/batch-operations.
 
 Usage:
-  # Dry run (default) — shows what would be posted
-  docker exec dotmac_erp_app python scripts/post_unposted_expense_claims.py
-
-  # Execute — creates GL journal entries and commits
-  docker exec dotmac_erp_app python scripts/post_unposted_expense_claims.py --commit
+  docker exec dotmac_erp_app python scripts/post_unposted_expense_claims.py \
+      --org-id <uuid>            # dry run
+  docker exec dotmac_erp_app python scripts/post_unposted_expense_claims.py \
+      --org-id <uuid> --commit
 """
 
 from __future__ import annotations
@@ -23,158 +33,80 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from decimal import Decimal
+import uuid
 from pathlib import Path
-from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import select, text
-from sqlalchemy.orm import selectinload
+from app.db.session_context import session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation
+from app.services.expense.posting_backlog import post_unposted_claims
 
-from app.db import SessionLocal
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
-SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
-
-
-def run(*, commit: bool = False) -> dict[str, int]:
-    """Post unposted expense claims."""
-    results: dict[str, int] = {
-        "claims_found": 0,
-        "claims_posted": 0,
-        "claims_skipped": 0,
-        "errors": 0,
-        "total_amount": 0,
-    }
-
-    with SessionLocal() as db:
-        # Set RLS context
-        db.execute(text(f"SET app.current_organization_id = '{ORG_ID}'"))
-
-        from app.models.expense.expense_claim import (
-            ExpenseClaim,
-            ExpenseClaimItem,
-            ExpenseClaimStatus,
-        )
-
-        # Find unposted claims
-        stmt = (
-            select(ExpenseClaim)
-            .where(
-                ExpenseClaim.organization_id == ORG_ID,
-                ExpenseClaim.status.in_(
-                    [
-                        ExpenseClaimStatus.APPROVED,
-                        ExpenseClaimStatus.PAID,
-                    ]
-                ),
-                ExpenseClaim.journal_entry_id.is_(None),
-                ExpenseClaim.total_approved_amount > Decimal("0"),
-            )
-            .options(
-                selectinload(ExpenseClaim.items).selectinload(ExpenseClaimItem.category)
-            )
-            .order_by(ExpenseClaim.claim_date)
-        )
-        claims = list(db.scalars(stmt).all())
-        results["claims_found"] = len(claims)
-        logger.info("Found %d unposted expense claims", len(claims))
-
-        if not claims:
-            logger.info("Nothing to post")
-            return results
-
-        total_amount = Decimal("0")
-        for claim in claims:
-            total_amount += claim.total_approved_amount or Decimal("0")
-            logger.info(
-                "  %s | %s | %s | ₦%s",
-                claim.claim_number,
-                claim.claim_date,
-                claim.status.value,
-                f"{claim.total_approved_amount:,.2f}",
-            )
-
-        results["total_amount"] = int(total_amount)
-
-        if not commit:
-            logger.info(
-                "DRY RUN — %d claims totalling ₦%s would be posted. "
-                "Run with --commit to execute.",
-                len(claims),
-                f"{total_amount:,.2f}",
-            )
-            return results
-
-        from app.services.expense.expense_posting_adapter import (
-            ExpensePostingAdapter,
-        )
-
-        for claim in claims:
-            try:
-                user_id = claim.created_by_id or claim.approver_id or SYSTEM_USER_ID
-                result = ExpensePostingAdapter.post_expense_claim(
-                    db=db,
-                    organization_id=ORG_ID,
-                    claim_id=claim.claim_id,
-                    posting_date=claim.claim_date,
-                    posted_by_user_id=user_id,
-                    auto_post=True,
-                    idempotency_key=f"backfill-exp-{claim.claim_id}",
-                )
-                if result.success and result.journal_entry_id:
-                    claim.journal_entry_id = result.journal_entry_id
-                    results["claims_posted"] += 1
-                    logger.info(
-                        "Posted %s → journal %s",
-                        claim.claim_number,
-                        result.journal_entry_id,
-                    )
-                elif result.success:
-                    results["claims_skipped"] += 1
-                    logger.info(
-                        "Skipped %s: %s",
-                        claim.claim_number,
-                        result.message,
-                    )
-                else:
-                    results["errors"] += 1
-                    logger.warning(
-                        "Failed %s: %s",
-                        claim.claim_number,
-                        result.message,
-                    )
-            except Exception as exc:
-                results["errors"] += 1
-                logger.exception("Error posting %s: %s", claim.claim_number, exc)
-
-        if results["claims_posted"] > 0:
-            db.commit()
-            logger.info("Committed %d GL postings", results["claims_posted"])
-
-    return results
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Post unposted approved/paid expense claims to GL"
+        description="Post expense claims missing their GL journal entry"
     )
     parser.add_argument(
-        "--commit",
-        action="store_true",
-        help="Actually post to GL (default: dry run)",
+        "--org-id",
+        required=True,
+        type=uuid.UUID,
+        help="Organization to run against (no default: this is multi-tenant)",
+    )
+    parser.add_argument(
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Fallback actor when a claim has no creator or approver",
+    )
+    parser.add_argument(
+        "--commit", action="store_true", help="Actually post (default is a dry run)"
     )
     args = parser.parse_args()
 
-    results = run(commit=args.commit)
-    logger.info("Results: %s", results)
+    mode = "EXECUTE" if args.commit else "DRY RUN"
+    logger.info("=== Post unposted expense claims (%s) — org %s ===", mode, args.org_id)
+
+    with (
+        session_for_org(args.org_id) as db,
+        batch_operation(
+            db,
+            organization_id=args.org_id,
+            operation_type=BatchOperationType.SCRIPT,
+            operation_name="post_unposted_expense_claims",
+            started_by_id=args.actor_id,
+            description=f"Manual CLI run ({mode})",
+            source_file=__file__,
+        ) as tally,
+    ):
+        result = post_unposted_claims(
+            db,
+            organization_id=args.org_id,
+            fallback_user_id=args.actor_id,
+            dry_run=not args.commit,
+        )
+        tally.created = result.posted
+        tally.skipped = result.skipped + (result.found if not args.commit else 0)
+        tally.failed = len(result.errors)
+
+    logger.info(
+        "found=%d posted=%d skipped=%d errors=%d total=%s",
+        result.found,
+        result.posted,
+        result.skipped,
+        len(result.errors),
+        result.total_amount,
+    )
+    for err in result.errors[:20]:
+        logger.warning("  %s", err)
+    if not args.commit and result.found:
+        logger.info("DRY RUN — re-run with --commit to post these claims.")
 
 
 if __name__ == "__main__":
