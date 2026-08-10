@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -32,6 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import text
 
 from app.db import SessionLocal
+from app.models.finance.ar.invoice import InvoiceStatus
+from app.services.finance.ar.payment_status import PAYMENT_DUST, resolve_payment_status
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,23 +42,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DUST = Decimal("0.01")
-
-
-def determine_status(
-    total_amount: Decimal, amount_paid: Decimal, current_status: str
-) -> str:
-    """Determine the correct invoice status based on payment coverage."""
-    if current_status in ("VOID", "DRAFT", "APPROVED"):
-        return current_status
-
-    balance = total_amount - amount_paid
-    if balance <= DUST:
-        return "PAID"
-    elif amount_paid > DUST:
-        return "PARTIALLY_PAID"
-    else:
-        return current_status
+# The reconciler does not own the paid-status rule; the AR service does. This
+# script's own `determine_status` used to be one of six competing versions —
+# it was the only one with a dust tolerance AND the only one guarding DRAFT
+# and APPROVED, so a hand-run reconcile could disagree with the very payment
+# path that produced the rows.
+DUST = PAYMENT_DUST
 
 
 def main() -> None:
@@ -102,7 +94,8 @@ def main() -> None:
                     i.total_amount,
                     i.amount_paid   AS current_amount_paid,
                     i.status        AS current_status,
-                    alloc.alloc_sum AS allocation_total
+                    alloc.alloc_sum AS allocation_total,
+                    i.due_date      AS due_date
                 FROM ar.invoice i
                 JOIN LATERAL (
                     SELECT COALESCE(SUM(pa.allocated_amount), 0) AS alloc_sum
@@ -128,6 +121,9 @@ def main() -> None:
         updated = 0
         status_changes: dict[str, int] = {}
         total_correction = Decimal("0")
+        # One clock for the whole run: an invoice due today must not resolve
+        # differently depending on where in the batch it happened to fall.
+        today = date.today()
 
         for row in rows:
             invoice_id = row[0]
@@ -136,10 +132,17 @@ def main() -> None:
             current_paid = Decimal(str(row[3]))
             current_status = str(row[4])
             alloc_total = Decimal(str(row[5]))
+            due_date = row[6]
 
             new_amount_paid = alloc_total
             correction = new_amount_paid - current_paid
-            new_status = determine_status(total_amount, new_amount_paid, current_status)
+            new_status = resolve_payment_status(
+                total_amount=total_amount,
+                amount_paid=new_amount_paid,
+                current_status=InvoiceStatus(current_status),
+                due_date=due_date,
+                today=today,
+            ).value
 
             if correction > DUST or new_status != current_status:
                 total_correction += correction
