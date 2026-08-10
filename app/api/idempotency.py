@@ -51,6 +51,15 @@ def check_or_reserve_idempotency(
 ) -> IdempotencyReplay | None:
     """
     Check for an existing idempotency record, or reserve a new one.
+
+    Returns a replay when the key already carries an outcome, or `None` when the
+    caller now owns the operation and must execute it.
+
+    A reservation whose lease has lapsed is taken over here rather than replayed
+    forever. `reserve` writes its `202 "Request in progress"` placeholder BEFORE
+    the side effect runs, so a request that died in between left a row that
+    every retry replayed for the full 24h TTL — no lease, no stale detector, and
+    no way to re-drive the work.
     """
     record = IdempotencyService.check(
         db=db,
@@ -61,6 +70,12 @@ def check_or_reserve_idempotency(
     )
 
     if record is not None:
+        if IdempotencyService.is_stale_reservation(
+            record
+        ) and IdempotencyService.take_over_reservation(db, record):
+            # We won the take-over: execute for real. Losers fall through and
+            # keep replaying the placeholder until the winner records an outcome.
+            return None
         return IdempotencyReplay(
             status_code=record.response_status,
             body=record.response_body,
