@@ -44,10 +44,14 @@ repos:
         exclude: (tests/|alembic/|scripts/)
 
       - id: session-context
-        name: session-context (no raw SessionLocal() in tasks)
+        name: session-context (no raw SessionLocal() at non-HTTP entry points)
         language: system
         entry: python3 scripts/check_session_context.py
-        files: ^app/tasks/.*\.py$
+        # Every entry point that runs outside the request lifecycle. scripts/
+        # holds a ratchet of grandfathered offenders (see
+        # scripts/session_context_legacy.txt); archive/ is retired one-offs.
+        files: ^(app/tasks|app/tools|scripts)/.*\.py$
+        exclude: ^scripts/archive/
 
       - id: template-a11y
         name: template a11y (no new unlabeled controls / nameless icons)

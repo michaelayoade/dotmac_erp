@@ -1,0 +1,124 @@
+# Legacy unscoped sessions under scripts/ — a RATCHET, not an approval.
+#
+# Every line is a script that opens a raw `SessionLocal()`, so it primes
+# neither tenant layer: no ORM listener, no RLS GUC. For a batch script that
+# is not fail-closed, it is fail-SILENT — zero rows, exit 0, "job succeeded".
+#
+# This list is deliberately NOT the `# session-context: allow` marker. That
+# marker means "reviewed and correct". This file means "known-wrong,
+# grandfathered, must shrink". Do not migrate an entry to the marker to make
+# the build pass.
+#
+# The guard fails if a file here stops matching its count — in EITHER
+# direction. Fixing one, archiving one, or deleting one requires editing this
+# file, so progress is recorded rather than assumed.
+#
+# Removing a line is the goal. There are three legitimate ways:
+#   1. It is a one-off that has already run -> `git mv` it to scripts/archive/
+#      (archive/ is out of scan scope, so the entry becomes stale and must go).
+#   2. It is a recurring operation -> move the decision into a service and
+#      invoke it from app/tasks/, which already uses session_for_org.
+#   3. It genuinely still needs to run by hand -> open the session via
+#      `session_for_org(org_id)` or `cross_org_session()`.
+#
+# Format: <path> <number-of-raw-SessionLocal()-calls>
+scripts/add_missing_contract_staff.py 1
+scripts/allocate_exact_match_payments.py 1
+scripts/allocate_splynx_fifo.py 1
+scripts/audit_payroll_deductions.py 1
+scripts/backfill_2025_tax_returns.py 1
+scripts/backfill_ap_invoice_line_vat.py 1
+scripts/backfill_employee_tax_profiles.py 1
+scripts/backfill_employment_contracts.py 1
+scripts/backfill_gl_postings.py 1
+scripts/backfill_inventory_gl_postings.py 1
+scripts/backfill_splynx_tax.py 1
+scripts/backfill_tax_transactions.py 1
+scripts/bulk_import.py 1
+scripts/clean_slate_resync.py 1
+scripts/clean_sweep/phase1_delete.py 1
+scripts/clean_sweep/phase2_accounts.py 1
+scripts/clean_sweep/phase3_import_gl.py 1
+scripts/clean_sweep/phase4_import_source_docs.py 5
+scripts/clean_sweep/phase5_import_banking.py 2
+scripts/clean_sweep/phase6_rebuild_verify.py 3
+scripts/cleanup_chart_of_accounts.py 1
+scripts/cleanup_control_accounts.py 1
+scripts/cleanup_stale_journals.py 1
+scripts/close_fiscal_periods.py 1
+scripts/create_org.py 1
+scripts/create_unallocated_payroll_cc.py 1
+scripts/dedup_ar_transactions.py 1
+scripts/dedup_customers.py 1
+scripts/finish_interbank_matching.py 1
+scripts/fix_abnormal_balances.py 1
+scripts/fix_ap_subledger_gap.py 1
+scripts/fix_display_names.py 1
+scripts/fix_duplicate_ar_journals.py 1
+scripts/fix_paystack_consolidation_v2.py 1
+scripts/fix_source_merge_coa.py 1
+scripts/fix_source_paystack.py 1
+scripts/fix_source_pension_ob.py 1
+scripts/fix_source_revenue_reclass.py 1
+scripts/fix_splynx_credit_note_signs.py 1
+scripts/fix_splynx_double_vat.py 1
+scripts/fix_trade_receivables_revenue.py 1
+scripts/fix_unbalanced_fcy_journals.py 1
+scripts/import_dotmac_tb.py 1
+scripts/import_tb_audit.py 1
+scripts/import_uba_statements.py 1
+scripts/import_zenith_statements.py 1
+scripts/link_gl_bank_accounts.py 1
+scripts/link_reseller_parent_child.py 1
+scripts/match_2025_remaining_ngn.py 1
+scripts/match_2025_unmatched_ngn.py 1
+scripts/match_erpnext_banking_links.py 1
+scripts/match_erpnext_internal_transfer_links.py 1
+scripts/match_interbank_transfers.py 1
+scripts/match_jan_2026_phase2.py 1
+scripts/match_jan_2026_remaining.py 1
+scripts/match_zenith_splynx.py 1
+scripts/merge_shadow_accounts.py 1
+scripts/migration/2026-04-29_backfill_2025_vat_from_tax_subledger.py 1
+scripts/migration/2026-04-30_backfill_deferred_vat.py 1
+scripts/migration/2026-06-04_parent_multisite_customers.py 1
+scripts/paystack_probe_unmatched_statement_refs.py 1
+scripts/post_and_match_paystack_opex_expense_reimbursements.py 1
+scripts/post_approved_journals.py 1
+scripts/post_jan_2026_ap_invoices.py 3
+scripts/post_stranded_bank_fees.py 2
+scripts/post_unposted_ap_invoices.py 1
+scripts/post_unposted_expense_claims.py 1
+scripts/rebuild_inventory_wac_ledger.py 2
+scripts/rebuild_stale_balances.py 1
+scripts/reclassify_expense_accounts.py 1
+scripts/reclassify_expense_payable.py 1
+scripts/reclassify_vat_to_2120.py 1
+scripts/reconcile_invoice_amount_paid.py 1
+scripts/reconcile_jan_2026_dryrun.py 1
+scripts/reconcile_jan_2026_splynx.py 1
+scripts/reconstruct_inventory_valuation.py 1
+scripts/relink_ticket_projects.py 2
+scripts/remediate_splynx_credit_note_gl.py 1
+scripts/reopen_all_periods.py 1
+scripts/reopen_post_reclose_test_period.py 1
+scripts/repair_splynx_payment_relationships.py 1
+scripts/repoint_control_journal_lines.py 1
+scripts/resync_purchase_invoices.py 1
+scripts/review_2025_vat_history.py 1
+scripts/seed_admin.py 1
+scripts/seed_demo_banking.py 1
+scripts/seed_demo_transactions.py 1
+scripts/seed_e2e_data.py 1
+scripts/seed_nigeria.py 1
+scripts/seed_payroll_from_excel.py 1
+scripts/seed_rbac.py 1
+scripts/settings_sync.py 1
+scripts/settings_validate.py 1
+scripts/setup_e2e_user.py 2
+scripts/sync_customers_to_paystack.py 1
+scripts/sync_salary_assignments.py 1
+scripts/sync_splynx.py 1
+scripts/update_org_name.py 1
+scripts/update_user_credentials.py 1
+scripts/void_splynx_duplicate_payments.py 1
