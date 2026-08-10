@@ -99,6 +99,15 @@ from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
 
 logger = logging.getLogger(__name__)
 
+
+def require_crm_material_sync_retired() -> None:
+    """Fail closed after material/item authority moves from CRM to Sub."""
+    raise HTTPException(
+        status_code=410,
+        detail="CRM item and material-request sync is retired; use /sync/sub",
+    )
+
+
 router = APIRouter(prefix="/sync/crm", tags=["crm-sync"])
 
 # Maximum error detail length to avoid leaking internals
@@ -464,10 +473,11 @@ def handle_webhook(
             service.sync_ticket(org_id, payload)
         elif entity_type == "work_order" and isinstance(payload, CRMWorkOrderPayload):
             service.sync_work_order(org_id, payload)
-        elif entity_type in {"item", "inventory_item"} and isinstance(
-            payload, CRMInventoryItemPayload
-        ):
-            service.upsert_inventory_item(org_id, payload)
+        elif entity_type in {"item", "inventory_item"}:
+            raise HTTPException(
+                status_code=410,
+                detail="CRM inventory-item writes are retired; ERP owns item facts",
+            )
         else:
             raise HTTPException(
                 status_code=400,
@@ -552,6 +562,7 @@ def list_crm_work_orders(
     "/inventory-items",
     response_model=CRMInventoryItemResponse,
     status_code=201,
+    dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def upsert_inventory_item(
     payload: CRMInventoryItemPayload,
@@ -609,7 +620,10 @@ def get_expense_totals(
 # ============ Inventory Sync Endpoints (ERP → CRM) ============
 
 
-@router.get("/inventory/meta/categories")
+@router.get(
+    "/inventory/meta/categories",
+    dependencies=[Depends(require_crm_material_sync_retired)],
+)
 def list_inventory_categories(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
@@ -624,7 +638,10 @@ def list_inventory_categories(
     return service.get_categories(org_id)
 
 
-@router.get("/inventory/meta/warehouses")
+@router.get(
+    "/inventory/meta/warehouses",
+    dependencies=[Depends(require_crm_material_sync_retired)],
+)
 def list_warehouses(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
@@ -642,6 +659,7 @@ def list_warehouses(
 @router.get(
     "/inventory/serials/available",
     response_model=CRMAvailableSerialListResponse,
+    dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def list_available_inventory_serials(
     auth: dict = Depends(require_service_auth),
@@ -671,7 +689,11 @@ def list_available_inventory_serials(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("/inventory/{item_id}", response_model=InventoryItemDetail)
+@router.get(
+    "/inventory/{item_id}",
+    response_model=InventoryItemDetail,
+    dependencies=[Depends(require_crm_material_sync_retired)],
+)
 def get_inventory_item(
     item_id: UUID,
     auth: dict = Depends(require_service_auth),
@@ -692,7 +714,11 @@ def get_inventory_item(
     return item_detail
 
 
-@router.get("/inventory", response_model=InventoryListResponse)
+@router.get(
+    "/inventory",
+    response_model=InventoryListResponse,
+    dependencies=[Depends(require_crm_material_sync_retired)],
+)
 def list_inventory(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
@@ -840,7 +866,7 @@ def list_people_contacts(
     "/material-requests",
     response_model=CRMMaterialRequestResponse,
     status_code=201,
-    dependencies=[Depends(require_service_scope("crm:material:write"))],
+    dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def create_material_request(
     payload: CRMMaterialRequestPayload,
@@ -892,6 +918,7 @@ def create_material_request(
 @router.get(
     "/material-requests/{omni_id}",
     response_model=CRMMaterialRequestStatusRead,
+    dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def get_material_request_status(
     omni_id: str,

@@ -70,6 +70,7 @@ class _ProcurementMixin(_CRMSyncBase):
         org_id: UUID,
         data: CRMMaterialRequestPayload,
         created_by_person_id: UUID | None = None,
+        source_system: str = "crm",
     ) -> CRMMaterialRequestResponse:
         """
         Create a material request from CRM.
@@ -308,6 +309,7 @@ class _ProcurementMixin(_CRMSyncBase):
             ticket_id=ticket_id,
             remarks=data.remarks,
             crm_id=data.omni_id,
+            source_system=source_system,
             created_by_id=actor_person_id,
         )
         self.db.add(mr)
@@ -921,16 +923,16 @@ class _ProcurementMixin(_CRMSyncBase):
         actor_person_id: UUID | None,
     ) -> None:
         """Emit a service-hook event for CRM material request status propagation."""
-        if not request.crm_id:
+        if not request.crm_id or request.source_system != "sub":
             return
 
         from app.services.hooks import emit_hook_event
-        from app.services.hooks.events import CRM_MATERIAL_REQUEST_STATUS_CHANGED
+        from app.services.hooks.events import SUB_MATERIAL_REQUEST_STATUS_CHANGED
 
         try:
             emit_hook_event(
                 self.db,
-                event_name=CRM_MATERIAL_REQUEST_STATUS_CHANGED,
+                event_name=SUB_MATERIAL_REQUEST_STATUS_CHANGED,
                 organization_id=org_id,
                 entity_type="MaterialRequest",
                 entity_id=request.request_id,

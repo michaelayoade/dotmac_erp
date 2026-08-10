@@ -12,7 +12,7 @@ def _payload() -> CRMMaterialRequestPayload:
     return CRMMaterialRequestPayload(
         omni_id=str(uuid4()),
         request_type="ISSUE",
-        status="issued",
+        status="submitted",
         requested_by_email="field@example.com",
         schedule_date="2026-07-19",
         items=[
@@ -34,7 +34,7 @@ def test_accept_sub_request_reports_create_and_replay() -> None:
     response = CRMMaterialRequestResponse(
         request_id=uuid4(),
         request_number="MR-0001",
-        status="issued",
+        status="submitted",
         omni_id=payload.omni_id,
     )
     service = MaterialSupportService(db)
@@ -59,7 +59,7 @@ def test_accept_sub_request_reports_create_and_replay() -> None:
     assert created.replayed is False
     assert replayed.replayed is True
     assert create.call_count == 2
-    create.assert_called_with(org_id, payload, actor_id)
+    create.assert_called_with(org_id, payload, actor_id, source_system="sub")
 
 
 def test_get_sub_outcome_uses_source_request_identity() -> None:

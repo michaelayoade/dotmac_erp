@@ -22,6 +22,7 @@ INVENTORY_TRANSACTION_POSTED = "inventory.transaction.posted"
 INVENTORY_STOCK_RESERVED = "inventory.stock.reserved"
 INVENTORY_STOCK_RELEASED = "inventory.stock.released"
 CRM_MATERIAL_REQUEST_STATUS_CHANGED = "crm.material_request.status_changed"
+SUB_MATERIAL_REQUEST_STATUS_CHANGED = "sub.material_request.status_changed"
 
 # Banking
 BANK_RECONCILIATION_COMPLETED = "bank.reconciliation.completed"

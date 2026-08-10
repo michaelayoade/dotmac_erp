@@ -18,7 +18,7 @@ stock is fulfilled.
 | Decision or state | Owner | Canonical record/service |
 |---|---|---|
 | Service work order and customer outcome | Dotmac Sub | `WorkOrder` and `operations.work_order_commands` |
-| Material need, operational approval, and service dependency | Dotmac Sub | `FieldMaterialRequest` and `operations.material_dependencies` |
+| Material need, contextual submission, and service dependency | Dotmac Sub | `FieldMaterialRequest` and `operations.material_dependencies` |
 | Request delivery, retries, and reconciliation | Dotmac Sub | `field_erp_sync_events` and `integration.erp_material_support` |
 | Material support intake and outcome contract | Dotmac ERP | `inventory.material_support` |
 | Warehouse, stock, serial, fiscal-period, and issue decision | Dotmac ERP | ERP inventory models and inventory transaction/posting services |
@@ -29,14 +29,14 @@ allocate an ERP serial, or decide that ERP stock has been issued.
 
 ## Request contract
 
-After a Sub material request is approved, Sub writes an outbox event in the
+When an ERP-channel material request is submitted, Sub writes an outbox event in the
 same database transaction. The current compatibility payload uses:
 
 | Field | Meaning |
 |---|---|
 | `omni_id` | Immutable Sub `FieldMaterialRequest.id`; the legacy name is temporary |
 | `request_type` | `ISSUE` |
-| `status` | Requested ERP action, currently `issued` |
+| `status` | Requested ERP state, `submitted`; it never asks ERP to issue automatically |
 | `requested_by_email` | Staff identity used to resolve the ERP employee |
 | `schedule_date` | Date the operational need was approved |
 | `ticket_crm_id` | Compatibility reference only; it conveys no CRM authority |
@@ -70,7 +70,7 @@ projection independently. A changed ERP request identifier fails closed.
 
 ## Reliability and repair
 
-1. Approval and outbox enqueue are atomic after cutover.
+1. Submission and outbox enqueue are atomic after cutover; there is no separate Sub approval.
 2. Delivery uses the stable key `mr-{sub_request_id}-approve-v1`.
 3. The Sub outbox retries transient failures and dead-letters exhausted or
    permanent failures.
