@@ -144,12 +144,23 @@ class TestSessionForOrg:
         with session_for_org(org_id) as db:
             assert db.info["organization_id"] == org_id
 
-    def test_calls_both_layers(self):
-        """Contract: session_for_org composes prime_session AND
-        set_current_organization_sync. Future refactors must not drop
-        one — both layers are required for full tenant isolation.
+    def test_sets_both_layers(self):
+        """Contract: session_for_org composes BOTH tenant layers. Future
+        refactors must not drop one — both are required for full isolation.
+
+        The contract is unchanged; the mechanism for layer 2 is not. It used
+        to be one eager `set_current_organization_sync` at entry, which
+        `SET LOCAL` then discarded at the first commit. Layer 2 is now armed
+        by an `after_begin` listener, so it is present for the first statement
+        and re-armed after every commit.
+
+        So this asserts the layer is set *when a transaction begins* — the
+        property that matters — rather than that a particular function was
+        called at a particular moment.
         """
         from unittest.mock import patch
+
+        from sqlalchemy import text
 
         from app.db.session_context import session_for_org
 
@@ -157,12 +168,40 @@ class TestSessionForOrg:
         with (
             patch("app.db.session_context.prime_session") as mock_prime,
             patch(
-                "app.db.session_context.set_current_organization_sync"
-            ) as mock_set_guc,
+                "app.db.session_context.set_current_organization_on_connection"
+            ) as mock_arm,
         ):
             with session_for_org(org_id) as db:
+                # Layer 1 is still eager — session.info needs no transaction.
                 mock_prime.assert_called_once_with(db, org_id)
-                mock_set_guc.assert_called_once_with(db, org_id)
+                # Layer 2 is armed lazily, as the first transaction opens.
+                mock_arm.assert_not_called()
+                db.execute(text("SELECT 1"))
+                assert mock_arm.call_count == 1
+                assert mock_arm.call_args[0][1] == org_id
+
+    def test_layer_two_is_re_armed_after_a_commit(self):
+        """The defect this replaced: `SET LOCAL` is transaction-scoped, so a
+        commit inside the block dropped the GUC while `session.info` kept
+        layer 1 looking primed — it read as scoped and behaved as unscoped."""
+        from unittest.mock import patch
+
+        from sqlalchemy import text
+
+        from app.db.session_context import session_for_org
+
+        org_id = uuid4()
+        with patch(
+            "app.db.session_context.set_current_organization_on_connection"
+        ) as mock_arm:
+            with session_for_org(org_id) as db:
+                db.execute(text("SELECT 1"))
+                db.commit()
+                db.execute(text("SELECT 1"))
+
+        assert mock_arm.call_count == 2, (
+            "layer 2 must be re-armed for the transaction that follows a commit"
+        )
 
     def test_closes_session_on_exit(self):
         """The factory must close the session even on exception so DB
