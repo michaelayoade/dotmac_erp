@@ -90,7 +90,7 @@ class CustomerReceiptProvider(CandidateProvider):
         cached = ctx.provider_cache.get(self.provider_key)
         if cached is not None:
             return cached
-        loaded = service._load_non_splynx_ar_payments(
+        loaded = service._load_ar_payments(
             ctx.db,
             ctx.organization_id,
             ctx.statement,

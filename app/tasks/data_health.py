@@ -32,6 +32,7 @@ from sqlalchemy.engine import CursorResult
 
 from app.db.session_context import cross_org_session, session_for_org
 from app.services.common import coerce_uuid
+from app.services.finance.ar.payment_status import PAYMENT_DUST, apply_payment_status
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +240,7 @@ def reconcile_invoice_statuses(
 
         stmt = select(Invoice).where(
             Invoice.status == InvoiceStatus.PAID,
-            (Invoice.total_amount - Invoice.amount_paid) > Decimal("0.01"),
+            (Invoice.total_amount - Invoice.amount_paid) > PAYMENT_DUST,
         )
         if org_id is not None:
             stmt = stmt.where(Invoice.organization_id == org_id)
@@ -248,22 +249,20 @@ def reconcile_invoice_statuses(
         for inv in false_paid:
             try:
                 outstanding = inv.total_amount - inv.amount_paid
-                if inv.amount_paid > 0:
-                    inv.status = InvoiceStatus.PARTIALLY_PAID
+                resolved = apply_payment_status(inv)
+                if resolved is InvoiceStatus.PARTIALLY_PAID:
                     fixed_to_partially_paid += 1
-                    logger.info(
-                        "Invoice %s: PAID -> PARTIALLY_PAID (outstanding=%s)",
-                        inv.invoice_number,
-                        outstanding,
-                    )
                 else:
-                    inv.status = InvoiceStatus.POSTED
+                    # An unpaid invoice: POSTED, or OVERDUE past its due date.
+                    # The old loop could only produce POSTED, so a repaired
+                    # invoice that was already late lost its overdue signal.
                     fixed_to_posted += 1
-                    logger.info(
-                        "Invoice %s: PAID -> POSTED (outstanding=%s)",
-                        inv.invoice_number,
-                        outstanding,
-                    )
+                logger.info(
+                    "Invoice %s: PAID -> %s (outstanding=%s)",
+                    inv.invoice_number,
+                    resolved.value,
+                    outstanding,
+                )
             except Exception as e:
                 logger.exception("Failed to fix invoice %s", inv.invoice_id)
                 errors.append(str(e))
@@ -711,10 +710,7 @@ def reconcile_payment_allocations(
 
                         # Update invoice amount_paid and status
                         inv.amount_paid = inv.amount_paid + alloc_amount
-                        if inv.amount_paid >= inv.total_amount - Decimal("0.01"):
-                            inv.status = InvoiceStatus.PAID
-                        else:
-                            inv.status = InvoiceStatus.PARTIALLY_PAID
+                        apply_payment_status(inv)
 
                         allocations_created += 1
 

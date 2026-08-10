@@ -150,6 +150,7 @@ def test_check_in_resolves_employee_shift_and_marks_late_arrival() -> None:
     service._normalize_in_org_tz = (  # type: ignore[method-assign]
         lambda _org_id, value: value
     )
+    service._validate_geofence = MagicMock()  # type: ignore[method-assign]
 
     attendance = service.check_in(
         ORG_ID,
@@ -200,3 +201,40 @@ def test_check_in_by_attendance_id_resolves_missing_shift() -> None:
     assert result.late_entry_minutes == 15
     assert result.status == AttendanceStatus.PRESENT
     db.flush.assert_called_once()
+
+
+def test_duplicate_checkout_preserves_original_checkout_and_hours() -> None:
+    service, db = _make_service()
+    original_checkout = datetime(2026, 8, 3, 17, 0, tzinfo=UTC)
+    attendance = SimpleNamespace(
+        check_in=datetime(2026, 8, 3, 8, 0, tzinfo=UTC),
+        check_out=original_checkout,
+        working_hours=Decimal("9.0"),
+        shift_type_id=None,
+        early_exit=False,
+        remarks=None,
+    )
+    service.get_attendance_by_date = MagicMock(  # type: ignore[method-assign]
+        return_value=attendance
+    )
+    service._normalize_in_org_tz = (  # type: ignore[method-assign]
+        lambda _org_id, value: value
+    )
+    service._validate_geofence = MagicMock()  # type: ignore[method-assign]
+
+    result = service.check_out(
+        ORG_ID,
+        EMPLOYEE_ID,
+        check_out_time=datetime(2026, 8, 3, 17, 15, tzinfo=UTC),
+    )
+
+    service.get_attendance_by_date.assert_called_once_with(
+        ORG_ID,
+        EMPLOYEE_ID,
+        date(2026, 8, 3),
+        for_update=True,
+    )
+    assert result.check_out == original_checkout
+    assert result.working_hours == Decimal("9.0")
+    service._validate_geofence.assert_not_called()
+    db.flush.assert_not_called()

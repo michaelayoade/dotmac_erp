@@ -291,6 +291,13 @@
                         <span x-show="!sidebarCollapsed" x-transition>System Health</span>
                     </a>
 
+                    <!-- Batch Operations -->
+                    <a href="/admin/batch-operations"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'batch-operations' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
+                        {{ icon_svg("clipboard-list", "h-5 w-5 flex-shrink-0") }}
+                        <span x-show="!sidebarCollapsed" x-transition>Batch Operations</span>
+                    </a>
+
                     <!-- License -->
                     <a href="/admin/license"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'license' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">

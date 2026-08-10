@@ -92,6 +92,12 @@ class PostingResult:
     total_credit: Decimal = Decimal("0")
     message: str = ""
     correlation_id: str | None = None
+    # True when the request matched an already-posted batch and nothing new
+    # was written. Callers that report "posted" vs "already done" must read
+    # THIS, not the message: `message` is prose for humans, and a caller that
+    # substring-matches it silently reclassifies every replay as a fresh
+    # posting the moment the wording changes.
+    idempotent_replay: bool = False
 
     @property
     def posting_batch_id(self) -> UUID | None:
@@ -186,6 +192,7 @@ class LedgerPostingService(ListResponseMixin):
                         posted_lines=existing_batch.posted_entries,
                         message="Already posted (idempotent replay)",
                         correlation_id=existing_batch.correlation_id,
+                        idempotent_replay=True,
                     )
             elif existing_batch.status == BatchStatus.FAILED:
                 # Failed previously - retry in the same batch record (idempotency_key is unique)
