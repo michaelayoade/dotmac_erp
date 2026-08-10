@@ -18,6 +18,7 @@ from app.tasks.gl_posting import (
     post_stranded_source_journals,
 )
 from app.tasks.ar_reconciliation import reconcile_invoice_amount_paid
+from app.tasks.payments_sync import sync_customers_to_paystack
 from app.tasks.audit import log_audit_event
 from app.tasks.audit_integrity import verify_audit_hash_chain
 from app.tasks.automation import (
@@ -178,6 +179,7 @@ __all__ = [
     "post_expense_claim_backlog",
     "post_stranded_source_journals",
     "reconcile_invoice_amount_paid",
+    "sync_customers_to_paystack",
     "log_audit_event",
     "verify_audit_hash_chain",
     # dotmac_sub sync tasks
