@@ -23,13 +23,10 @@
 #
 # Format: <path> <number-of-raw-SessionLocal()-calls>
 scripts/add_missing_contract_staff.py 1
-scripts/allocate_exact_match_payments.py 1
-scripts/allocate_splynx_fifo.py 1
 scripts/audit_payroll_deductions.py 1
 scripts/backfill_gl_postings.py 1
 scripts/backfill_inventory_gl_postings.py 1
 scripts/bulk_import.py 1
-scripts/close_fiscal_periods.py 1
 scripts/create_org.py 1
 scripts/create_unallocated_payroll_cc.py 1
 scripts/fix_display_names.py 1
@@ -39,16 +36,10 @@ scripts/import_tb_audit.py 1
 scripts/import_uba_statements.py 1
 scripts/import_zenith_statements.py 1
 scripts/link_gl_bank_accounts.py 1
-scripts/match_erpnext_banking_links.py 1
-scripts/match_zenith_splynx.py 1
 scripts/migration/2026-04-30_backfill_deferred_vat.py 1
 scripts/post_and_match_paystack_opex_expense_reimbursements.py 1
 scripts/post_jan_2026_ap_invoices.py 3
-scripts/post_stranded_bank_fees.py 2
-scripts/reconcile_invoice_amount_paid.py 1
 scripts/reconcile_jan_2026_dryrun.py 1
-scripts/reconcile_jan_2026_splynx.py 1
-scripts/relink_ticket_projects.py 2
 scripts/seed_admin.py 1
 scripts/seed_demo_banking.py 1
 scripts/seed_demo_transactions.py 1
@@ -59,8 +50,5 @@ scripts/seed_rbac.py 1
 scripts/settings_sync.py 1
 scripts/settings_validate.py 1
 scripts/setup_e2e_user.py 2
-scripts/sync_customers_to_paystack.py 1
-scripts/sync_salary_assignments.py 1
-scripts/sync_splynx.py 1
 scripts/update_org_name.py 1
 scripts/update_user_credentials.py 1

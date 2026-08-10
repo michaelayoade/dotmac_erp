@@ -7,11 +7,16 @@ balanced, and which fiscal periods accept a posting.
 
 from __future__ import annotations
 
-import ast
 import uuid
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+from tests._helpers.source_introspection import (
+    calls_named,
+    mentions_in_code,
+    module_level_assignments,
+)
 
 from app.services.finance.gl.posting_backlog import (
     IMBALANCE_TOLERANCE,
@@ -163,41 +168,8 @@ def test_result_defaults_are_zero():
 # --------------------------------------------------------------------------
 
 
-def _executable_strings(path: Path) -> list[str]:
-    """String literals excluding docstrings — the script's own docstring
-    describes the defects it used to have."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    docstrings = set()
-    for node in ast.walk(tree):
-        if isinstance(
-            node, ast.Module | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
-        ):
-            first = node.body[0] if node.body else None
-            if (
-                isinstance(first, ast.Expr)
-                and isinstance(first.value, ast.Constant)
-                and isinstance(first.value.value, str)
-            ):
-                docstrings.add(id(first.value))
-    return [
-        n.value
-        for n in ast.walk(tree)
-        if isinstance(n, ast.Constant)
-        and isinstance(n.value, str)
-        and id(n) not in docstrings
-    ]
-
-
 def test_the_script_no_longer_hardcodes_an_organization():
-    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
-    names = {
-        t.id
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        for t in node.targets
-        if isinstance(t, ast.Name)
-    }
-    assert "ORG_ID" not in names
+    assert "ORG_ID" not in module_level_assignments(SCRIPT)
 
 
 def test_the_script_requires_an_org_id_and_records_a_batch_operation():
@@ -209,12 +181,5 @@ def test_the_script_requires_an_org_id_and_records_a_batch_operation():
 
 def test_the_script_issues_no_raw_sql():
     """Selection moved into the service; the CLI only parses and delegates."""
-    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
-    assert [
-        n.lineno
-        for n in ast.walk(tree)
-        if isinstance(n, ast.Call)
-        and isinstance(n.func, ast.Name)
-        and n.func.id == "text"
-    ] == []
-    assert not [s for s in _executable_strings(SCRIPT) if "SELECT " in s.upper()]
+    assert calls_named(SCRIPT, "text") == []
+    assert mentions_in_code(SCRIPT, "SELECT ") == []

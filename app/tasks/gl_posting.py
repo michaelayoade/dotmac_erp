@@ -24,6 +24,11 @@ from app.models.finance.core_org.organization import Organization
 from app.services.batch_operation import batch_operation
 from app.services.expense.posting_backlog import post_unposted_claims
 from app.services.finance.gl.posting_backlog import post_approved_journals
+from app.services.finance.gl.stranded_fee_posting import (
+    StrandedPostingResult,
+    find_stranded_journals,
+    post_one,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,5 +125,73 @@ def post_expense_claim_backlog(
             "skipped": result.skipped,
             "errors": result.errors,
             "total_amount": str(result.total_amount),
+        }
+    return summary
+
+
+@shared_task
+def post_stranded_source_journals(
+    organization_id: str | None = None,
+    year_code: str = "",
+    source_module: str = "BANKING",
+    source_document_type: str = "BANK_FEE",
+    limit: int | None = None,
+    dry_run: bool = True,
+) -> dict:
+    """Post APPROVED journals a source module left stranded before the ledger.
+
+    `year_code` is required in practice — it was a module constant
+    (`TARGET_YEAR_CODE = "FY2025"`) in the script this replaces, which made a
+    one-year repair look like a general tool. An empty value is rejected
+    rather than defaulted, because guessing a fiscal year is worse than
+    asking for one.
+    """
+    if not year_code:
+        raise ValueError("year_code is required (e.g. 'FY2025')")
+
+    summary: dict[str, dict] = {}
+    for org_id in _organization_ids(organization_id):
+        result = StrandedPostingResult()
+        with (
+            session_for_org(org_id) as db,
+            batch_operation(
+                db,
+                organization_id=org_id,
+                operation_type=BatchOperationType.MIGRATION,
+                operation_name="post_stranded_source_journals",
+                started_by_id=SYSTEM_ACTOR_ID,
+                description=(
+                    f"{source_module}/{source_document_type} {year_code}"
+                    + (" (dry run)" if dry_run else "")
+                ),
+            ) as tally,
+        ):
+            journals = find_stranded_journals(
+                db,
+                organization_id=org_id,
+                year_code=year_code,
+                source_module=source_module,
+                source_document_type=source_document_type,
+                limit=limit,
+            )
+            result.found = len(journals)
+            if not dry_run:
+                for journal in journals:
+                    ok, replay, msg = post_one(db, journal, source_module=source_module)
+                    if ok and replay:
+                        result.already_posted += 1
+                    elif ok:
+                        result.posted += 1
+                    else:
+                        result.failures.append((journal.journal_number, msg))
+            tally.created = result.posted
+            tally.skipped = result.already_posted + (result.found if dry_run else 0)
+            tally.failed = len(result.failures)
+
+        summary[str(org_id)] = {
+            "found": result.found,
+            "posted": result.posted,
+            "already_posted": result.already_posted,
+            "failures": result.failures,
         }
     return summary
