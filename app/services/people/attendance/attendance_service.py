@@ -325,7 +325,7 @@ class AttendanceService:
         if not location.geofence_enabled:
             return
         if latitude is None or longitude is None:
-            raise ValidationError("You are currently outside the check-in radius.")
+            raise ValidationError(f"Location is required to {action_label}.")
 
         # Use polygon if configured, otherwise fall back to circle
         if location.geofence_polygon:
@@ -725,15 +725,18 @@ class AttendanceService:
         org_id: UUID,
         employee_id: UUID,
         attendance_date: date,
+        *,
+        for_update: bool = False,
     ) -> Attendance | None:
         """Get attendance for an employee on a specific date."""
-        return self.db.scalar(
-            select(Attendance).where(
-                Attendance.organization_id == org_id,
-                Attendance.employee_id == employee_id,
-                Attendance.attendance_date == attendance_date,
-            )
+        query = select(Attendance).where(
+            Attendance.organization_id == org_id,
+            Attendance.employee_id == employee_id,
+            Attendance.attendance_date == attendance_date,
         )
+        if for_update:
+            query = query.with_for_update()
+        return self.db.scalar(query)
 
     def create_attendance(
         self,
@@ -803,6 +806,7 @@ class AttendanceService:
         notes: str | None = None,
         latitude: float | None = None,
         longitude: float | None = None,
+        marked_by: str = "MANUAL",
     ) -> Attendance:
         """Record employee check-in."""
         now = (
@@ -855,6 +859,7 @@ class AttendanceService:
             existing.status = AttendanceStatus.PRESENT
             if notes:
                 existing.remarks = notes
+            existing.marked_by = marked_by
             self.db.flush()
             return existing
 
@@ -868,6 +873,7 @@ class AttendanceService:
             late_entry=late_entry,
             late_entry_minutes=late_entry_minutes,
             remarks=notes,
+            marked_by=marked_by,
         )
 
     def check_out(
@@ -888,12 +894,20 @@ class AttendanceService:
         )
         today = now.date()
 
-        attendance = self.get_attendance_by_date(org_id, employee_id, today)
+        attendance = self.get_attendance_by_date(
+            org_id, employee_id, today, for_update=True
+        )
         if not attendance:
             raise AttendanceServiceError(f"No check-in found for {today}")
 
         if not attendance.check_in:
             raise AttendanceServiceError("Cannot check out without checking in first")
+
+        # A completed daily punch is immutable. This lock-and-return guard makes
+        # retries and concurrent duplicate checkout requests safe without
+        # changing the original checkout time or recalculating worked hours.
+        if attendance.check_out:
+            return attendance
 
         self._validate_geofence(
             org_id,
