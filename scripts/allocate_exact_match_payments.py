@@ -39,8 +39,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.invoice import Invoice
 from app.models.finance.ar.payment_allocation import PaymentAllocation
+from app.services.finance.ar.payment_status import apply_payment_status
 
 logging.basicConfig(
     level=logging.INFO,
@@ -186,12 +187,9 @@ def allocate_payment_to_invoice(
     )
     db.add(allocation)
 
-    # Update invoice
+    # Update invoice — the status rule is owned by the AR service, not here.
     invoice.amount_paid = invoice.amount_paid + allocated_amount
-    if invoice.amount_paid >= invoice.total_amount:
-        invoice.status = InvoiceStatus.PAID
-    else:
-        invoice.status = InvoiceStatus.PARTIALLY_PAID
+    apply_payment_status(invoice)
 
     db.flush()
     return True

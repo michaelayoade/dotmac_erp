@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
+
+from app.models.finance.ar.invoice import InvoiceStatus
 
 # ── Notification cleanup ─────────────────────────────────────
 
@@ -118,6 +120,8 @@ class TestReconcileInvoiceStatuses:
         mock_inv.amount_paid = Decimal("500.00")
         mock_inv.invoice_number = "INV-001"
         mock_inv.invoice_id = uuid.uuid4()
+        mock_inv.status = InvoiceStatus.PAID
+        mock_inv.due_date = None
 
         mock_db = MagicMock()
         mock_db.scalars.return_value.all.return_value = [mock_inv]
@@ -140,6 +144,8 @@ class TestReconcileInvoiceStatuses:
         mock_inv.amount_paid = Decimal("0")
         mock_inv.invoice_number = "INV-002"
         mock_inv.invoice_id = uuid.uuid4()
+        mock_inv.status = InvoiceStatus.PAID
+        mock_inv.due_date = None
 
         mock_db = MagicMock()
         mock_db.scalars.return_value.all.return_value = [mock_inv]
@@ -152,6 +158,36 @@ class TestReconcileInvoiceStatuses:
 
         assert result["fixed_to_posted"] == 1
         assert result["fixed_to_partially_paid"] == 0
+        assert mock_inv.status is InvoiceStatus.POSTED
+
+    def test_fixes_false_paid_past_due_to_overdue(self) -> None:
+        """An unpaid invoice past its due date is OVERDUE, not POSTED.
+
+        New behaviour: the repair loop could previously only produce POSTED,
+        so an invoice it corrected silently lost its overdue signal — and
+        nothing downstream would chase it.
+        """
+        from app.tasks.data_health import reconcile_invoice_statuses
+
+        mock_inv = MagicMock()
+        mock_inv.total_amount = Decimal("1000.00")
+        mock_inv.amount_paid = Decimal("0")
+        mock_inv.invoice_number = "INV-003"
+        mock_inv.invoice_id = uuid.uuid4()
+        mock_inv.status = InvoiceStatus.PAID
+        mock_inv.due_date = date.today() - timedelta(days=30)
+
+        mock_db = MagicMock()
+        mock_db.scalars.return_value.all.return_value = [mock_inv]
+
+        with patch("app.tasks.data_health.cross_org_session") as mock_session:
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = reconcile_invoice_statuses()
+
+        assert mock_inv.status is InvoiceStatus.OVERDUE
+        assert result["fixed_to_posted"] == 1
 
 
 # ── Stale draft cleanup ─────────────────────────────────────
