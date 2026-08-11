@@ -195,6 +195,7 @@ def _sync_scheduler_connection(
             select(DomainSetting).where(
                 DomainSetting.domain == SettingDomain.scheduler,
                 DomainSetting.key == key,
+                DomainSetting.organization_id.is_(None),
             )
         )
     if existing:

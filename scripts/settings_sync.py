@@ -49,7 +49,8 @@ def main():
     updated = 0
     skipped = 0
     errors: list[str] = []
-    with session_for_org(UUID(args.org_id)) as db:
+    organization_id = UUID(args.org_id)
+    with session_for_org(organization_id) as db:
         for spec in SETTINGS_SPECS:
             if not spec.env_var:
                 skipped += 1
@@ -89,7 +90,9 @@ def main():
             if not service:
                 errors.append(f"{spec.domain.value}.{spec.key}: no domain service")
                 continue
-            service.upsert_by_key(db, spec.key, payload)
+            service.upsert_by_key(
+                db, spec.key, payload, organization_id=organization_id
+            )
             updated += 1
 
     if errors:
