@@ -47,26 +47,6 @@ SYSTEM_RULES: list[dict[str, Any]] = [
         "description": "Match Paystack-initiated transfers by paystack_reference",
     },
     {
-        "name": "Splynx Payment by Reference",
-        "source_doc_type": "CUSTOMER_PAYMENT",
-        "priority": 20,
-        "match_credit": True,
-        "match_debit": False,
-        "conditions": [
-            {"field": "DESCRIPTION", "operator": "REGEX", "value": r"[0-9a-f]{12,14}"}
-        ],
-        "description": "Match Splynx payments by Paystack transaction ID in description",
-    },
-    {
-        "name": "Date + Amount Fallback",
-        "source_doc_type": "CUSTOMER_PAYMENT",
-        "priority": 30,
-        "match_credit": True,
-        "match_debit": False,
-        "conditions": [],
-        "description": "Match remaining Splynx payments by exact date and amount",
-    },
-    {
         "name": "AP Supplier Payments",
         "source_doc_type": "SUPPLIER_PAYMENT",
         "priority": 40,
@@ -82,7 +62,7 @@ SYSTEM_RULES: list[dict[str, Any]] = [
         "match_credit": True,
         "match_debit": False,
         "conditions": [],
-        "description": "Match non-Splynx customer receipts by reference or date+amount",
+        "description": "Match customer receipts by reference or date+amount",
     },
     {
         "name": "Bank Fees",
