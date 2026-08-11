@@ -1,5 +1,7 @@
 from decimal import Decimal
 from types import SimpleNamespace
+
+from tests._helpers.document_stubs import invoice_stub
 from unittest.mock import Mock
 from uuid import uuid4
 
@@ -47,7 +49,7 @@ def test_payment_form_context_exposes_subtotal_for_wht_base(monkeypatch):
     """The payment form needs pre-VAT subtotal so WHT is not calculated on gross."""
     supplier_id = uuid4()
     invoice_id = uuid4()
-    invoice = SimpleNamespace(
+    invoice = invoice_stub(
         invoice_id=invoice_id,
         invoice_number="SINV-001",
         supplier_id=supplier_id,
