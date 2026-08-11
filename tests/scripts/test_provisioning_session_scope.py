@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import UUID
 
+import pytest
+
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.services.settings_spec import SettingSpec
 
@@ -171,6 +173,108 @@ def test_settings_sync_dry_run_redacts_plaintext_secrets(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert plaintext not in output
     assert "JWT_SECRET=<redacted>" in output
+
+
+def test_seed_rbac_splits_global_catalog_from_tenant_admin_assignment(monkeypatch):
+    from scripts import seed_rbac
+
+    org_id = UUID("00000000-0000-0000-0000-000000000042")
+    admin_role_id = UUID("00000000-0000-0000-0000-000000000043")
+    person_id = UUID("00000000-0000-0000-0000-000000000044")
+    person = SimpleNamespace(id=person_id)
+    cross_db = MagicMock()
+    org_db = MagicMock()
+    events: list[str] = []
+
+    monkeypatch.setattr(
+        seed_rbac,
+        "parse_args",
+        lambda: SimpleNamespace(
+            admin_email="admin@example.com",
+            admin_person_id=None,
+            org_id=str(org_id),
+            dry_run=False,
+        ),
+    )
+    monkeypatch.setattr(seed_rbac, "load_dotenv", lambda: None)
+
+    @contextmanager
+    def cross_org_session():
+        events.append("catalog-session")
+        yield cross_db
+
+    @contextmanager
+    def session_for_org(target_org_id):
+        events.append(f"tenant-session:{target_org_id}")
+        yield org_db
+
+    monkeypatch.setattr(seed_rbac, "cross_org_session", cross_org_session)
+    monkeypatch.setattr(seed_rbac, "session_for_org", session_for_org)
+    seed_catalog = MagicMock(return_value=admin_role_id)
+    resolve_person = MagicMock(return_value=person)
+    ensure_person_role = MagicMock()
+    monkeypatch.setattr(seed_rbac, "_seed_catalog", seed_catalog)
+    monkeypatch.setattr(seed_rbac, "_resolve_admin_person", resolve_person)
+    monkeypatch.setattr(seed_rbac, "_ensure_person_role", ensure_person_role)
+
+    seed_rbac.main()
+
+    assert events == ["catalog-session", f"tenant-session:{org_id}"]
+    seed_catalog.assert_called_once_with(cross_db)
+    cross_db.commit.assert_called_once_with()
+    resolve_person.assert_called_once_with(
+        org_db,
+        organization_id=org_id,
+        person_id=None,
+        email="admin@example.com",
+    )
+    ensure_person_role.assert_called_once_with(org_db, person_id, admin_role_id)
+    org_db.commit.assert_called_once_with()
+
+
+def test_seed_rbac_requires_org_before_admin_assignment(monkeypatch):
+    from scripts import seed_rbac
+
+    cross_org_session = MagicMock()
+    monkeypatch.setattr(
+        seed_rbac,
+        "parse_args",
+        lambda: SimpleNamespace(
+            admin_email="admin@example.com",
+            admin_person_id=None,
+            org_id=None,
+            dry_run=False,
+        ),
+    )
+    monkeypatch.setattr(seed_rbac, "load_dotenv", lambda: None)
+    monkeypatch.setattr(seed_rbac, "cross_org_session", cross_org_session)
+
+    with pytest.raises(SystemExit, match="--org-id is required"):
+        seed_rbac.main()
+
+    cross_org_session.assert_not_called()
+
+
+def test_seed_rbac_admin_lookup_explicitly_predicates_organization():
+    from scripts import seed_rbac
+
+    org_id = UUID("00000000-0000-0000-0000-000000000042")
+    person_id = UUID("00000000-0000-0000-0000-000000000044")
+    db = MagicMock()
+    person = SimpleNamespace(id=person_id)
+    db.scalar.side_effect = [None, person]
+
+    result = seed_rbac._resolve_admin_person(
+        db,
+        organization_id=org_id,
+        person_id=str(person_id),
+        email="admin@example.com",
+    )
+
+    assert result is person
+    statements = [str(call.args[0]) for call in db.scalar.call_args_list]
+    assert len(statements) == 2
+    assert all("people.organization_id" in statement for statement in statements)
 
 
 def test_settings_validation_keeps_organization_overrides_distinct(monkeypatch):

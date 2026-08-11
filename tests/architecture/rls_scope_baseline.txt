@@ -14,4 +14,3 @@ scripts/import_dotmac_tb.py
 scripts/import_tb_audit.py
 scripts/link_gl_bank_accounts.py
 scripts/seed_payroll_from_excel.py
-scripts/seed_rbac.py

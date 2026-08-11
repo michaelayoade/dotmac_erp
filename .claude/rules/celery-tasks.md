@@ -122,10 +122,10 @@ def process_all_orgs() -> dict:
     return results
 ```
 
-`SET LOCAL` is transaction-scoped — a commit *inside* a `session_for_org`
-block silently un-sets the RLS GUC. Prefer one session per org, commit once.
-If you must commit-and-continue, re-prime explicitly (the call site owns that
-contract).
+`SET LOCAL` is transaction-scoped, so the context managers re-arm the RLS GUC
+on every SQLAlchemy `after_begin`. Commit-and-continue is therefore scoped
+correctly. Prefer one session per org to avoid identity-map contamination, and
+still commit once when the workflow does not require intermediate commits.
 
 ## Key Rules
 
@@ -136,21 +136,27 @@ contract).
 4. **Return statistics** - Always return a dict with counts/errors for monitoring
 5. **Log at start/end** - Log when starting and when complete with counts
 6. **Catch exceptions per item** - Don't let one failure stop the batch
-7. **Commit at end** - One commit after all processing, not per item; avoid
-   commit-and-continue inside a tenant session
+7. **Commit at end when practical** - This keeps the unit of work clear; the
+   session helpers preserve tenant context if a workflow must commit-and-continue
 
 ## Notification Tasks Pattern
 
 ```python
+from uuid import UUID
+
+from app.db.session_context import session_for_org
+
+
 @shared_task
-def process_overdue_notifications() -> dict:
+def process_overdue_notifications(org_id: str) -> dict:
     """Send notifications for overdue items."""
     from app.services.finance.reminder_service import ReminderService
     from app.services.notification import NotificationService
 
     results = {"notifications_sent": 0, "errors": []}
+    organization_id = UUID(org_id)
 
-    with SessionLocal() as db:
+    with session_for_org(organization_id) as db:
         reminder_service = ReminderService(db)
         notification_service = NotificationService()
 
@@ -164,7 +170,7 @@ def process_overdue_notifications() -> dict:
                 for recipient_id in recipients:
                     notification_service.create(
                         db,
-                        organization_id=item.organization_id,
+                        organization_id=organization_id,
                         recipient_id=recipient_id,
                         entity_type=EntityType.SYSTEM,
                         entity_id=item.id,
