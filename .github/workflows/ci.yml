@@ -362,6 +362,23 @@ jobs:
       - name: Run Alembic migrations
         run: poetry run alembic upgrade heads
 
+      # RLS is applied by point-in-time sweeps over information_schema, so
+      # coverage cannot be derived from source — this is the only place the
+      # number can be obtained. Prints unconditionally so the figure lands in
+      # the log on green runs too.
+      #
+      # --enforce --baseline is a RATCHET, not a target: it fails only on a gap
+      # that is not already recorded in docs/rls-coverage-baseline.json. A new
+      # organization-scoped table without RLS fails here; the 224 pre-existing
+      # ones do not, because failing 224 times on day one gets a gate switched
+      # off rather than tables fixed. Fixing a table means deleting its line
+      # from the baseline, and the audit prints which entries are now protected
+      # so a fix cannot silently regress.
+      - name: RLS coverage ratchet
+        run: |
+          poetry run python scripts/architecture/rls_coverage_audit.py \
+            --enforce --baseline docs/rls-coverage-baseline.json
+
       - name: Run integration tests
         # -o addopts= clears pytest.ini's "-m not integration" filter
         # confcutdir prevents loading tests/conftest.py which monkey-patches
