@@ -640,6 +640,7 @@ def client(db_session):
     from app.api.scheduler import router as scheduler_router
     from app.api.service_hooks import router as service_hooks_router
     from app.api.settings import router as settings_router
+    from app.db.session_context import allow_cross_org
     from app.errors import register_error_handlers
     from app.services.auth_dependencies import (
         _get_db as auth_deps_get_db,
@@ -663,6 +664,14 @@ def client(db_session):
         session = Session()
         try:
             yield session
+        finally:
+            session.close()
+
+    def override_get_db_admin():
+        session = Session()
+        try:
+            with allow_cross_org(session):
+                yield session
         finally:
             session.close()
 
@@ -694,8 +703,8 @@ def client(db_session):
     # persons, rbac, settings to get_db_admin_bypass; auth bootstrap
     # routes use get_db_auth_bypass; wave-1/2/3 modules use
     # get_db_with_org.
-    app.dependency_overrides[get_db_admin_bypass] = override_get_db
-    app.dependency_overrides[get_db_auth_bypass] = override_get_db
+    app.dependency_overrides[get_db_admin_bypass] = override_get_db_admin
+    app.dependency_overrides[get_db_auth_bypass] = override_get_db_admin
     app.dependency_overrides[get_db_with_org] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 

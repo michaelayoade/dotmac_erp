@@ -168,6 +168,6 @@ def test_a_real_service_call_refuses_rather_than_reading_across_tenants():
     db.info = {}  # unscoped
 
     with pytest.raises(SettingsScopeRequired):
-        service.set_value(db, key="anything", value_type=MagicMock())
+        service.ensure_by_key(db, key="anything", value_type=MagicMock())
 
     db.scalar.assert_not_called()
