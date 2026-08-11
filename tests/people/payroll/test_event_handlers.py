@@ -579,6 +579,11 @@ class MockSlip:
         self.paid_at = None
         self.paid_by_id = None
         self.payment_reference = None
+        # A slip without a net pay is not a slip. Paying one now RECORDS the
+        # amount (ADR-0016 expand), so a double that omits these is not a
+        # smaller slip, it is an impossible one.
+        self.net_pay = Decimal("100000.00")
+        self.amount_paid = Decimal("0")
 
 
 class MockEntry:
