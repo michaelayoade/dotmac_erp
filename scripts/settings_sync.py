@@ -1,9 +1,10 @@
 import argparse
 import os
+from uuid import UUID
 
 from dotenv import load_dotenv
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.schemas.settings import DomainSettingUpdate
 from app.services.secrets import is_openbao_ref
 from app.services.settings_spec import (
@@ -25,6 +26,18 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Sync settings from env to DB (one-way)."
     )
+    parser.add_argument(
+        "--org-id",
+        required=True,
+        help=(
+            "Organization whose settings to sync. Required, and deliberately "
+            "has no default: `domain_settings` rows are organization-scoped, "
+            "and this script used to run unscoped — which the service then "
+            "silently escalated to a cross-organization bypass, so the upsert "
+            "matched on (domain, key) alone and updated whichever "
+            "organization's row came back first."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-plaintext", action="store_true")
     return parser.parse_args()
@@ -33,11 +46,10 @@ def parse_args():
 def main():
     load_dotenv()
     args = parse_args()
-    db = SessionLocal()
     updated = 0
     skipped = 0
     errors: list[str] = []
-    try:
+    with session_for_org(UUID(args.org_id)) as db:
         for spec in SETTINGS_SPECS:
             if not spec.env_var:
                 skipped += 1
@@ -79,8 +91,6 @@ def main():
                 continue
             service.upsert_by_key(db, spec.key, payload)
             updated += 1
-    finally:
-        db.close()
 
     if errors:
         print("Settings sync failed:")

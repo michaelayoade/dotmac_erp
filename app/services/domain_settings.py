@@ -35,6 +35,43 @@ from app.services.settings_cache import invalidate_setting_cache
 logger = logging.getLogger(__name__)
 
 
+class SettingsScopeRequired(RuntimeError):
+    """A settings operation was handed a session with no tenant scope.
+
+    `DomainSetting` is organization-scoped, so an unscoped session cannot
+    answer "which organization's row" — and this used to resolve that by
+    granting `allow_cross_org` automatically. That made the fallback for
+    "the caller forgot to scope this" into "see and write every tenant's
+    rows": the lookup then matched on (domain, key) alone and returned
+    whichever organization's row the index yielded first.
+
+    Invisible on a single-tenant database, and a cross-tenant write the
+    moment there are two. Missing scope now refuses instead.
+
+    Request paths are unaffected — the session-context middleware primes
+    `db.info["organization_id"]` before a route ever reaches a service. This
+    only fires for batch entry points, which is exactly where the hazard
+    was.
+    """
+
+
+def _scoped_or_refuse(db: Session, operation: str):
+    """Return a no-op context if the session is scoped; otherwise refuse.
+
+    Deliberately NOT `allow_cross_org(db)` on the else branch. Genuinely
+    cross-tenant work states so at the call site by opening a
+    `cross_org_session()` — which sets `allow_cross_org` in `db.info` and so
+    passes this check honestly.
+    """
+    if db.info.get("organization_id") or db.info.get("allow_cross_org"):
+        return nullcontext()
+    raise SettingsScopeRequired(
+        f"{operation} needs a tenant-scoped session. Open it with "
+        "`session_for_org(organization_id)`, or with `cross_org_session()` if "
+        "the operation genuinely spans every organization."
+    )
+
+
 class _Ambient:
     """Marker for "no scope was stated" — distinct from an explicit `None`.
 
@@ -410,11 +447,7 @@ class DomainSettings(ListResponseMixin):
             {"created_at": DomainSetting.created_at, "key": DomainSetting.key},
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        tenant_context = (
-            nullcontext()
-            if db.info.get("organization_id") or db.info.get("allow_cross_org")
-            else allow_cross_org(db)
-        )
+        tenant_context = _scoped_or_refuse(db, "DomainSettingService.list")
         with tenant_context:
             return list(db.scalars(stmt))
 
@@ -559,11 +592,7 @@ class DomainSettings(ListResponseMixin):
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        tenant_context = (
-            nullcontext()
-            if db.info.get("organization_id") or db.info.get("allow_cross_org")
-            else allow_cross_org(db)
-        )
+        tenant_context = _scoped_or_refuse(db, "DomainSettingService.upsert_by_key")
         with tenant_context:
             setting = db.scalar(
                 select(DomainSetting).where(
@@ -652,11 +681,7 @@ class DomainSettings(ListResponseMixin):
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        tenant_context = (
-            nullcontext()
-            if db.info.get("organization_id") or db.info.get("allow_cross_org")
-            else allow_cross_org(db)
-        )
+        tenant_context = _scoped_or_refuse(db, "DomainSettingService.set_value")
         with tenant_context:
             existing = db.scalar(
                 select(DomainSetting).where(
