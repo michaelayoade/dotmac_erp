@@ -1,5 +1,6 @@
 """Capture full-page screenshots of all static GET routes in dotmac_erp."""
 
+import os
 import builtins
 import re
 import sys
@@ -16,10 +17,14 @@ def print(*args, **kw):
 
 from playwright.sync_api import sync_playwright
 
-BASE_URL = "http://160.119.127.195:8003"
-USERNAME = "admin"
-PASSWORD = "admin123"
-OUTPUT_DIR = Path("/home/dotmac/projects/dotmac_erp/docs/screenshots")
+# Target and login come from the environment. These were committed
+# literals — including a working admin password and the host to use it on —
+# until 2026-08-11. No default for the password: a screenshot run that
+# silently authenticates as nobody produces a directory of login pages.
+BASE_URL = os.environ.get("SCREENSHOT_BASE_URL", "http://localhost:8000")
+USERNAME = os.environ.get("SCREENSHOT_USERNAME", "admin")
+PASSWORD = os.environ["SCREENSHOT_PASSWORD"]
+OUTPUT_DIR = Path(os.environ.get("SCREENSHOT_OUTPUT_DIR", "docs/screenshots"))
 VIEWPORT = {"width": 1440, "height": 900}
 TIMEOUT = 45000  # 45s per page
 
