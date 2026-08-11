@@ -90,7 +90,7 @@ class APDueAnalyzer:
         today = date.today()
         due_7 = today + timedelta(days=7)
 
-        balance_due = SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+        balance_due = SupplierInvoice.balance_due  # generated column, ADR-0016
         ratio = balance_due / func.nullif(SupplierInvoice.total_amount, 0)
         balance_due_fc = SupplierInvoice.functional_currency_amount * func.coalesce(
             ratio, 0
@@ -139,7 +139,7 @@ class APDueAnalyzer:
         today = date.today()
         due_7 = today + timedelta(days=7)
 
-        balance_due = SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+        balance_due = SupplierInvoice.balance_due  # generated column, ADR-0016
         ratio = balance_due / func.nullif(SupplierInvoice.total_amount, 0)
         balance_due_fc = SupplierInvoice.functional_currency_amount * func.coalesce(
             ratio, 0
