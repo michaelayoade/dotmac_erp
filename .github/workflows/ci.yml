@@ -310,8 +310,7 @@ jobs:
   # Integration Tests — PostgreSQL
   # Runs tests/integration/ against a real PostgreSQL 16 service container.
   # Validates Alembic migrations and PostgreSQL-specific features.
-  # Blocking: PostgreSQL-specific migrations, RLS, locking, and generated
-  # columns are part of the product contract and must stay green.
+  # Blocking: PostgreSQL-specific behavior is part of the product contract.
   # ---------------------------------------------------------------------------
   integration-test:
     name: Integration Tests (PostgreSQL)
