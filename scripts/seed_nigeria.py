@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session, session_for_org
 from app.models.finance.core_org.organization import Organization
 from app.services.finance.tax.seed import seed_nigeria_tax_data
 
@@ -59,25 +59,35 @@ def resolve_orgs(db, args: argparse.Namespace) -> list[Organization]:
 def main() -> None:
     load_dotenv()
     args = parse_args()
-    db = SessionLocal()
-    try:
-        orgs = resolve_orgs(db, args)
-        if not orgs:
-            raise SystemExit("No organizations matched for Nigeria seed data.")
+    # Selecting which organizations to seed is cross-org work; seeding each
+    # one is not. Resolve under the bypass, then drop into that organization's
+    # own scope to write — the pattern `cross_org_session` documents.
+    with cross_org_session() as cross_db:
+        targets = [
+            (org.organization_id, org.organization_code)
+            for org in resolve_orgs(cross_db, args)
+        ]
+    if not targets:
+        raise SystemExit("No organizations matched for Nigeria seed data.")
 
-        for org in orgs:
-            summary = seed_nigeria_tax_data(db, org.organization_id)
+    for org_id, org_code in targets:
+        with session_for_org(org_id) as db:
+            summary = seed_nigeria_tax_data(db, org_id)
+            # `seed_nigeria_tax_data` neither commits nor flushes, and this
+            # script only ever closed the session. So every run built the whole
+            # Nigeria tax configuration in memory, printed the summary below as
+            # though it had landed, and discarded it. The seed has never
+            # actually persisted; this commit is the fix.
+            db.commit()
             print(
                 "Seeded Nigeria data for org "
-                f"{org.organization_code} ({org.organization_id}): "
+                f"{org_code} ({org_id}): "
                 f"currency={summary.currency_created}, "
                 f"categories={summary.categories_created}, "
                 f"accounts={summary.accounts_created}, "
                 f"jurisdictions={summary.jurisdictions_created}, "
                 f"tax_codes={summary.tax_codes_created}"
             )
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":

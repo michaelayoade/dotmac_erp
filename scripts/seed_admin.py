@@ -22,7 +22,7 @@ from uuid import UUID
 
 from dotenv import load_dotenv
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.auth import AuthProvider, UserCredential
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
@@ -147,60 +147,60 @@ def setup_rbac(db) -> Role:
 def main():
     load_dotenv()
     args = parse_args()
-    db = SessionLocal()
+    # Per-org: --org-id names exactly one organization, and every row this
+    # writes belongs to it.
+    org_id = UUID(args.org_id)
+    with session_for_org(org_id) as db:
+        try:
+            # Step 1: Create or get Person
+            person = db.query(Person).filter(Person.email == args.email).first()
+            if not person:
+                person = Person(
+                    organization_id=org_id,
+                    first_name=args.first_name,
+                    last_name=args.last_name,
+                    email=args.email,
+                )
+                db.add(person)
+                db.flush()
+                print(f"Created person: {person.email}")
+            else:
+                print(f"Person exists: {person.email}")
 
-    try:
-        # Step 1: Create or get Person
-        person = db.query(Person).filter(Person.email == args.email).first()
-        if not person:
-            person = Person(
-                organization_id=UUID(args.org_id),
-                first_name=args.first_name,
-                last_name=args.last_name,
-                email=args.email,
+            # Step 2: Create UserCredential if not exists
+            credential = (
+                db.query(UserCredential)
+                .filter(UserCredential.person_id == person.id)
+                .filter(UserCredential.provider == AuthProvider.local)
+                .first()
             )
-            db.add(person)
-            db.flush()
-            print(f"Created person: {person.email}")
-        else:
-            print(f"Person exists: {person.email}")
+            if not credential:
+                credential = UserCredential(
+                    person_id=person.id,
+                    provider=AuthProvider.local,
+                    username=args.username,
+                    password_hash=hash_password(args.password),
+                    must_change_password=args.force_reset,
+                )
+                db.add(credential)
+                db.flush()
+                print(f"Created credential: {args.username}")
+            else:
+                print(f"Credential exists: {credential.username}")
 
-        # Step 2: Create UserCredential if not exists
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.person_id == person.id)
-            .filter(UserCredential.provider == AuthProvider.local)
-            .first()
-        )
-        if not credential:
-            credential = UserCredential(
-                person_id=person.id,
-                provider=AuthProvider.local,
-                username=args.username,
-                password_hash=hash_password(args.password),
-                must_change_password=args.force_reset,
-            )
-            db.add(credential)
-            db.flush()
-            print(f"Created credential: {args.username}")
-        else:
-            print(f"Credential exists: {credential.username}")
+            # Step 3: Setup RBAC and assign admin role
+            if not args.skip_rbac:
+                admin_role = setup_rbac(db)
+                ensure_person_role(db, person.id, admin_role.id)
+                print(f"Assigned admin role to: {person.email}")
 
-        # Step 3: Setup RBAC and assign admin role
-        if not args.skip_rbac:
-            admin_role = setup_rbac(db)
-            ensure_person_role(db, person.id, admin_role.id)
-            print(f"Assigned admin role to: {person.email}")
+            db.commit()
+            print("\n✓ Admin user ready with full permissions")
 
-        db.commit()
-        print("\n✓ Admin user ready with full permissions")
-
-    except Exception as e:
-        db.rollback()
-        print(f"Error: {e}")
-        raise
-    finally:
-        db.close()
+        except Exception as e:
+            db.rollback()
+            print(f"Error: {e}")
+            raise
 
 
 if __name__ == "__main__":
