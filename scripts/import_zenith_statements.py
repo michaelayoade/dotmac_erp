@@ -14,12 +14,10 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 from dataclasses import dataclass
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
-from uuid import UUID
 
 import openpyxl
 from sqlalchemy import select
@@ -27,22 +25,29 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.models.finance.banking.bank_account import (
     BankAccount,
-    BankAccountStatus,
-    BankAccountType,
 )
-from app.models.finance.banking.bank_statement import (
-    StatementLineType,
-)
-from app.models.finance.gl.account import Account
 from app.services.finance.banking.bank_statement import (
     BankStatementService,
-    StatementLineInput,
+)
+from app.services.finance.banking.statement_import import (
+    AccountProfile,
+    BankProfile,
+    ensure_bank_account,
+    to_statement_lines,
+)
+from app.services.finance.banking.statement_parsing import (
+    extract_account_number,
+    parse_date,
+    parse_decimal,
+    parse_period,
 )
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+BANK = BankProfile(bank_name="Zenith Bank", bank_code="057")
 
 # Path to statement files
 STATEMENT_DIR = Path("/root/.dotmac/zenith statement")
@@ -104,76 +109,6 @@ class ParsedStatement:
     total_credit: Decimal
     transactions: list[dict]
     source_file: str
-
-
-def parse_date(value) -> date | None:
-    """Parse date from various formats."""
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        value = value.strip()
-        if not value:
-            return None
-        # Try different date formats
-        for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y"]:
-            try:
-                return datetime.strptime(value, fmt).date()
-            except ValueError:
-                continue
-    return None
-
-
-def parse_period(period_str: str) -> tuple[date | None, date | None]:
-    """Parse period string like '01/01/2022 TO 30/09/2024'."""
-    if not period_str:
-        return None, None
-
-    # Clean up the string
-    period_str = str(period_str).strip()
-
-    # Try different separators
-    for sep in [" TO ", " to ", "-"]:
-        if sep in period_str:
-            parts = period_str.split(sep)
-            if len(parts) == 2:
-                start = parse_date(parts[0].strip())
-                end = parse_date(parts[1].strip())
-                if start and end:
-                    return start, end
-
-    return None, None
-
-
-def parse_decimal(value) -> Decimal | None:
-    """Parse decimal from various formats."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return Decimal(str(value))
-    if isinstance(value, Decimal):
-        return value
-    if isinstance(value, str):
-        # Clean up the string
-        value = value.strip().replace(",", "").replace(" ", "")
-        if not value or value == "-":
-            return None
-        try:
-            return Decimal(value)
-        except InvalidOperation:
-            return None
-    return None
-
-
-def extract_account_number(value: str) -> str | None:
-    """Extract account number from strings like 'CA         1011649523'."""
-    if not value:
-        return None
-    match = re.search(r"(\d{10})", str(value))
-    return match.group(1) if match else None
 
 
 def parse_old_format_statement(filepath: Path) -> ParsedStatement | None:
@@ -365,97 +300,6 @@ def parse_new_format_statement(filepath: Path) -> ParsedStatement | None:
         return None
 
 
-def ensure_bank_account(
-    db,
-    org_id: UUID,
-    account_number: str,
-    config: dict,
-) -> BankAccount:
-    """Ensure bank account exists, create if not."""
-
-    # Check if account exists
-    existing = db.execute(
-        select(BankAccount).where(
-            BankAccount.organization_id == org_id,
-            BankAccount.account_number == account_number,
-        )
-    ).scalar_one_or_none()
-
-    if existing:
-        logger.info(f"Found existing bank account: {account_number}")
-        return existing
-
-    # Find GL account (Zenith Bank = 1200)
-    gl_account = db.execute(
-        select(Account).where(
-            Account.organization_id == org_id,
-            Account.account_code == "1200",
-        )
-    ).scalar_one_or_none()
-
-    if not gl_account:
-        raise ValueError("GL Account 1200 (Zenith Bank) not found")
-
-    # Create new bank account
-    account = BankAccount(
-        organization_id=org_id,
-        bank_name="Zenith Bank",
-        bank_code="057",
-        account_name=config["name"],
-        account_number=account_number,
-        account_type=BankAccountType.checking,
-        currency_code=config["currency"],
-        gl_account_id=gl_account.account_id,
-        status=BankAccountStatus.active,
-    )
-    db.add(account)
-    db.flush()
-
-    logger.info(f"Created new bank account: {account_number} - {config['name']}")
-    return account
-
-
-def convert_to_statement_lines(
-    transactions: list[dict],
-    start_line: int = 1,
-) -> list[StatementLineInput]:
-    """Convert parsed transactions to StatementLineInput objects."""
-    lines = []
-
-    for i, txn in enumerate(transactions):
-        amount = txn["debit"] or txn["credit"] or Decimal("0")
-        txn_type = StatementLineType.debit if txn["debit"] else StatementLineType.credit
-
-        # Convert raw_data to JSON-serializable format
-        raw_data = {
-            "date_posted": txn["date_posted"].isoformat()
-            if txn.get("date_posted")
-            else None,
-            "value_date": txn["value_date"].isoformat()
-            if txn.get("value_date")
-            else None,
-            "description": txn.get("description"),
-            "debit": str(txn["debit"]) if txn.get("debit") else None,
-            "credit": str(txn["credit"]) if txn.get("credit") else None,
-            "balance": str(txn["balance"]) if txn.get("balance") else None,
-        }
-
-        lines.append(
-            StatementLineInput(
-                line_number=start_line + i,
-                transaction_date=txn["date_posted"],
-                value_date=txn["value_date"],
-                transaction_type=txn_type,
-                amount=amount,
-                description=txn["description"],
-                running_balance=txn.get("balance"),
-                raw_data=raw_data,
-            )
-        )
-
-    return lines
-
-
 def import_statements(dry_run: bool = False):
     """Main import function."""
 
@@ -492,7 +336,17 @@ def import_statements(dry_run: bool = False):
             logger.info("-" * 40)
 
             # Ensure bank account exists
-            bank_account = ensure_bank_account(db, org_id, account_number, config)
+            bank_account = ensure_bank_account(
+                db,
+                organization_id=org_id,
+                bank=BANK,
+                account=AccountProfile(
+                    account_number=account_number,
+                    account_name=config["name"],
+                    currency_code=config["currency"],
+                    gl_account_code=config["gl_account_code"],
+                ),
+            )
 
             # Parse all statement files for this account
             all_transactions = []
@@ -570,7 +424,7 @@ def import_statements(dry_run: bool = False):
                 continue
 
             # Convert to statement lines
-            lines = convert_to_statement_lines(unique_transactions)
+            lines = to_statement_lines(unique_transactions)
 
             # Import using BankStatementService
             service = BankStatementService()
