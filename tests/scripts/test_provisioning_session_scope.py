@@ -97,6 +97,49 @@ def test_seed_nigeria_resolves_cross_org_then_commits_per_org(monkeypatch):
     cross_db.commit.assert_not_called()
 
 
+def test_settings_sync_upserts_inside_the_requested_tenant_session(monkeypatch):
+    from scripts import settings_sync
+
+    org_id = UUID("00000000-0000-0000-0000-000000000042")
+    db = MagicMock()
+    service = MagicMock()
+    captured_org_ids: list[UUID] = []
+    spec = SettingSpec(
+        domain=SettingDomain.auth,
+        key="jwt_algorithm",
+        env_var="JWT_ALGORITHM",
+        value_type=SettingValueType.string,
+        default="HS256",
+    )
+
+    monkeypatch.setattr(
+        settings_sync,
+        "parse_args",
+        lambda: SimpleNamespace(
+            org_id=str(org_id), dry_run=False, allow_plaintext=False
+        ),
+    )
+    monkeypatch.setattr(settings_sync, "load_dotenv", lambda: None)
+    monkeypatch.setattr(settings_sync, "SETTINGS_SPECS", [spec])
+    monkeypatch.setattr(
+        settings_sync, "DOMAIN_SETTINGS_SERVICE", {SettingDomain.auth: service}
+    )
+    monkeypatch.setenv("JWT_ALGORITHM", "HS512")
+
+    def session_for_org(target_org_id):
+        captured_org_ids.append(target_org_id)
+        return _session(db)
+
+    monkeypatch.setattr(settings_sync, "session_for_org", session_for_org)
+
+    settings_sync.main()
+
+    assert captured_org_ids == [org_id]
+    service.upsert_by_key.assert_called_once()
+    assert service.upsert_by_key.call_args.args[:2] == (db, "jwt_algorithm")
+    assert service.upsert_by_key.call_args.kwargs == {"organization_id": org_id}
+
+
 def test_settings_validation_keeps_organization_overrides_distinct(monkeypatch):
     from scripts import settings_validate
 

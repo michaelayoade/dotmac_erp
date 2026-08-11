@@ -2,6 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.schemas.settings import DomainSettingUpdate
+from app.db.session_context import allow_cross_org
 from app.services import settings_api
 from app.services.response import ListResponseMixin
 
@@ -10,6 +11,13 @@ class _ListResponseStub(ListResponseMixin):
     @staticmethod
     def list(_db, *args, **kwargs):
         return [{"id": "one"}, {"id": "two"}]
+
+
+@pytest.fixture(autouse=True)
+def _global_settings_scope(db_session):
+    """These service tests intentionally exercise global settings rows."""
+    with allow_cross_org(db_session):
+        yield
 
 
 def test_list_response_mixin_requires_limit_offset(db_session):

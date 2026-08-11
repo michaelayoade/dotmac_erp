@@ -25,4 +25,3 @@ scripts/post_jan_2026_ap_invoices.py
 scripts/reconcile_jan_2026_dryrun.py
 scripts/seed_payroll_from_excel.py
 scripts/seed_rbac.py
-scripts/settings_sync.py

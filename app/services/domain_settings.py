@@ -1,6 +1,5 @@
 import builtins
 import logging
-from contextlib import nullcontext
 from types import FrameType
 from typing import Any
 from uuid import UUID
@@ -35,6 +34,25 @@ from app.services.settings_cache import invalidate_setting_cache
 logger = logging.getLogger(__name__)
 
 
+class SettingsScopeRequired(RuntimeError):
+    """A settings operation was handed no exact row scope.
+
+    `DomainSetting` is organization-scoped, so an unscoped session cannot
+    answer "which organization's row" — and this used to resolve that by
+    granting `allow_cross_org` automatically. That made the fallback for
+    "the caller forgot to scope this" into "see and write every tenant's
+    rows": the lookup then matched on (domain, key) alone and returned
+    whichever organization's row the index yielded first.
+
+    Invisible on a single-tenant database, and a cross-tenant write the
+    moment there are two. Missing scope now refuses instead. A caller must
+    either use a tenant-scoped session or state `organization_id=None` for
+    the platform-global row. An explicit cross-org infrastructure context
+    also selects the platform-global row; it never means "whichever tenant
+    row happens to be returned first".
+    """
+
+
 class _Ambient:
     """Marker for "no scope was stated" — distinct from an explicit `None`.
 
@@ -56,6 +74,49 @@ class _Ambient:
 
 
 AMBIENT = _Ambient()
+
+
+def _resolve_operation_scope(
+    db: Session,
+    organization_id: "UUID | None | _Ambient",
+    operation: str,
+) -> UUID | None:
+    """Resolve a list/write operation to one exact organization scope.
+
+    Unlike reads with inheritance, these operations must never omit the
+    organization predicate. `None` means only the platform-global row. An
+    ambient tenant session means only that tenant. Cross-org infrastructure
+    contexts are used by global seeders and likewise mean only the global
+    row for this service; there is no valid "upsert every tenant" row.
+    """
+    if not isinstance(organization_id, _Ambient):
+        if organization_id is not None:
+            scoped_org = db.info.get("organization_id")
+            if scoped_org is None or UUID(str(scoped_org)) != organization_id:
+                raise SettingsScopeRequired(
+                    f"{operation} was given organization_id={organization_id}, "
+                    "but the session is not scoped to that organization. Open "
+                    "it with `session_for_org(organization_id)`."
+                )
+        return organization_id
+
+    scoped_org = db.info.get("organization_id")
+    if scoped_org:
+        return UUID(str(scoped_org))
+    if db.info.get("allow_cross_org"):
+        return None
+    raise SettingsScopeRequired(
+        f"{operation} needs an exact settings scope. Open a tenant session "
+        "with `session_for_org(organization_id)`, or pass "
+        "`organization_id=None` for the platform-global row."
+    )
+
+
+def _organization_predicate(organization_id: UUID | None):
+    if organization_id is None:
+        return DomainSetting.organization_id.is_(None)
+    return DomainSetting.organization_id == organization_id
+
 
 # Call sites already reported, so a hot path logs once rather than per request.
 _reported_ambient_sites: set[tuple[str, int]] = set()
@@ -319,10 +380,19 @@ class DomainSettings(ListResponseMixin):
         change_reason: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        *,
+        organization_id: "UUID | None | _Ambient" = AMBIENT,
     ) -> DomainSetting:
         data = payload.model_dump()
         data["domain"] = self._resolve_domain(payload.domain)
-        if (
+        if not isinstance(organization_id, _Ambient):
+            data["organization_id"] = organization_id
+            data["scope"] = (
+                SettingScope.GLOBAL
+                if organization_id is None
+                else SettingScope.ORG_SPECIFIC
+            )
+        elif (
             not data.get("organization_id")
             and not db.info.get("allow_cross_org")
             and db.info.get("organization_id")
@@ -394,7 +464,12 @@ class DomainSettings(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
+        *,
+        organization_id: "UUID | None | _Ambient" = AMBIENT,
     ) -> list[DomainSetting]:
+        org_id = _resolve_operation_scope(
+            db, organization_id, "DomainSettingService.list"
+        )
         stmt = select(DomainSetting)
         effective_domain = self.domain or domain
         if effective_domain:
@@ -410,12 +485,8 @@ class DomainSettings(ListResponseMixin):
             {"created_at": DomainSetting.created_at, "key": DomainSetting.key},
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        tenant_context = (
-            nullcontext()
-            if db.info.get("organization_id") or db.info.get("allow_cross_org")
-            else allow_cross_org(db)
-        )
-        with tenant_context:
+        stmt = stmt.where(_organization_predicate(org_id))
+        with allow_cross_org(db):
             return list(db.scalars(stmt))
 
     def update(
@@ -556,19 +627,20 @@ class DomainSettings(ListResponseMixin):
         change_reason: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        *,
+        organization_id: "UUID | None | _Ambient" = AMBIENT,
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        tenant_context = (
-            nullcontext()
-            if db.info.get("organization_id") or db.info.get("allow_cross_org")
-            else allow_cross_org(db)
+        org_id = _resolve_operation_scope(
+            db, organization_id, "DomainSettingService.upsert_by_key"
         )
-        with tenant_context:
+        with allow_cross_org(db):
             setting = db.scalar(
                 select(DomainSetting).where(
                     DomainSetting.domain == self.domain,
                     DomainSetting.key == key,
+                    _organization_predicate(org_id),
                 )
             )
         if setting:
@@ -639,6 +711,7 @@ class DomainSettings(ListResponseMixin):
             change_reason=change_reason,
             ip_address=ip_address,
             user_agent=user_agent,
+            organization_id=org_id,
         )
 
     def ensure_by_key(
@@ -649,33 +722,34 @@ class DomainSettings(ListResponseMixin):
         value_text: str | None = None,
         value_json: dict[str, Any] | builtins.list[Any] | bool | int | None = None,
         is_secret: bool = False,
+        *,
+        organization_id: "UUID | None | _Ambient" = AMBIENT,
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        tenant_context = (
-            nullcontext()
-            if db.info.get("organization_id") or db.info.get("allow_cross_org")
-            else allow_cross_org(db)
+        org_id = _resolve_operation_scope(
+            db, organization_id, "DomainSettingService.ensure_by_key"
         )
-        with tenant_context:
+        with allow_cross_org(db):
             existing = db.scalar(
                 select(DomainSetting).where(
                     DomainSetting.domain == self.domain,
                     DomainSetting.key == key,
+                    _organization_predicate(org_id),
                 )
             )
-            if existing:
-                return existing
-            payload = DomainSettingCreate(
-                domain=self.domain,
-                key=key,
-                value_type=value_type,
-                value_text=value_text,
-                value_json=value_json,
-                is_secret=is_secret,
-                is_active=True,
-            )
-            return self.create(db, payload)
+        if existing:
+            return existing
+        payload = DomainSettingCreate(
+            domain=self.domain,
+            key=key,
+            value_type=value_type,
+            value_text=value_text,
+            value_json=value_json,
+            is_secret=is_secret,
+            is_active=True,
+        )
+        return self.create(db, payload, organization_id=org_id)
 
     def delete(
         self,

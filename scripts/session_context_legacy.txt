@@ -24,11 +24,6 @@
 # Two provisioning entries are BLOCKED rather than untouched, so that a
 # later pass does not mistake them for work nobody started:
 #
-#   settings_sync.py  — writes org-scoped DomainSetting rows, but
-#     `DomainSettingService.upsert_by_key` silently escalates an unscoped
-#     session to a cross-org bypass instead of refusing. Scoping the script
-#     without fixing that only hides the escalation. Fix the service first.
-#
 #   seed_rbac.py      — seeds the GLOBAL Role/Permission catalogue (correct
 #     unscoped) and also reads org-scoped Person rows in the same session.
 #     Splitting it needs a ruling on which organization's people it means.
@@ -53,4 +48,3 @@ scripts/post_jan_2026_ap_invoices.py 3
 scripts/reconcile_jan_2026_dryrun.py 1
 scripts/seed_payroll_from_excel.py 1
 scripts/seed_rbac.py 1
-scripts/settings_sync.py 1
