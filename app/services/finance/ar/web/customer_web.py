@@ -150,9 +150,7 @@ class CustomerWebService:
         balances = db.execute(
             select(
                 Invoice.customer_id,
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                ).label("balance"),
+                func.coalesce(func.sum(Invoice.balance_due), 0).label("balance"),
             )
             .where(
                 Invoice.organization_id == org_id,
@@ -195,10 +193,7 @@ class CustomerWebService:
                 Invoice.status.in_(open_statuses),
             )
             .group_by(Invoice.customer_id)
-            .having(
-                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-                > 0
-            )
+            .having(func.coalesce(func.sum(Invoice.balance_due), 0) > 0)
             .subquery()
         )
         with_balance_count = (
@@ -458,7 +453,7 @@ class CustomerWebService:
         balance = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid),
+                    func.sum(Invoice.balance_due),
                     0,
                 )
             ).where(
@@ -485,7 +480,7 @@ class CustomerWebService:
         all_invoices_query = all_invoices_query.all()
         invoices_view: list[dict] = []
         for inv in all_invoices_query:
-            balance_due = inv.total_amount - inv.amount_paid
+            balance_due = inv.balance_due
             invoices_view.append(
                 {
                     "invoice_id": inv.invoice_id,
@@ -636,7 +631,7 @@ class CustomerWebService:
                     select(
                         Invoice.customer_id,
                         func.coalesce(
-                            func.sum(Invoice.total_amount - Invoice.amount_paid),
+                            func.sum(Invoice.balance_due),
                             0,
                         ).label("balance"),
                     )

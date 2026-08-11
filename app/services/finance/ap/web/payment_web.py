@@ -303,7 +303,7 @@ class PaymentWebService:
         selected_invoice = None
         selected_supplier = None
         for invoice, supplier in rows:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             view = {
                 "invoice_id": str(invoice.invoice_id),
                 "invoice_number": invoice.invoice_number,
@@ -1092,8 +1092,7 @@ class PaymentWebService:
                         SupplierInvoiceStatus.PARTIALLY_PAID,
                     ]
                 ),
-                (SupplierInvoice.total_amount - SupplierInvoice.amount_paid)
-                > Decimal("0"),
+                (SupplierInvoice.balance_due) > Decimal("0"),
             )
         )
         if supplier_id:

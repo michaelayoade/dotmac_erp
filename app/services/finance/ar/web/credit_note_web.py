@@ -272,7 +272,7 @@ class CreditNoteWebService:
         )
 
         for invoice, customer in db.execute(invoices_query).all():
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             view = {
                 "invoice_id": invoice.invoice_id,
                 "invoice_number": invoice.invoice_number,

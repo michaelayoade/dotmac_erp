@@ -240,7 +240,7 @@ def reconcile_invoice_statuses(
 
         stmt = select(Invoice).where(
             Invoice.status == InvoiceStatus.PAID,
-            (Invoice.total_amount - Invoice.amount_paid) > PAYMENT_DUST,
+            (Invoice.balance_due) > PAYMENT_DUST,
         )
         if org_id is not None:
             stmt = stmt.where(Invoice.organization_id == org_id)
@@ -248,7 +248,7 @@ def reconcile_invoice_statuses(
 
         for inv in false_paid:
             try:
-                outstanding = inv.total_amount - inv.amount_paid
+                outstanding = inv.balance_due
                 resolved = apply_payment_status(inv)
                 if resolved is InvoiceStatus.PARTIALLY_PAID:
                     fixed_to_partially_paid += 1
@@ -674,7 +674,7 @@ def reconcile_payment_allocations(
                                 InvoiceStatus.OVERDUE,
                             ]
                         ),
-                        (Invoice.total_amount - Invoice.amount_paid) > Decimal("0.01"),
+                        (Invoice.balance_due) > Decimal("0.01"),
                     )
                     .order_by(Invoice.due_date, Invoice.created_at)
                 )
@@ -689,6 +689,9 @@ def reconcile_payment_allocations(
                     if remaining <= Decimal("0.01"):
                         break
 
+                    # NOT `balance_due`: the generated column holds what the last SELECT
+                    # returned, and this loop writes `amount_paid` as it goes. The
+                    # subtraction must stay live or the second allocation over-applies.
                     balance_due = inv.total_amount - inv.amount_paid
                     alloc_amount = min(remaining, balance_due)
                     payment_allocs.append((inv, alloc_amount))
@@ -985,7 +988,7 @@ def run_data_health_check(
         # 2. False-PAID invoices
         false_paid_stmt = select(func.count(Invoice.invoice_id)).where(
             Invoice.status == InvoiceStatus.PAID,
-            (Invoice.total_amount - Invoice.amount_paid) > Decimal("0.01"),
+            (Invoice.balance_due) > Decimal("0.01"),
         )
         if org_id is not None:
             false_paid_stmt = false_paid_stmt.where(Invoice.organization_id == org_id)

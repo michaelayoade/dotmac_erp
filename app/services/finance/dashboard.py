@@ -504,7 +504,7 @@ class DashboardService:
         )
         ar_subledger_stmt = select(
             func.coalesce(
-                func.sum(Invoice.total_amount - Invoice.amount_paid),
+                func.sum(Invoice.balance_due),
                 0,
             )
         ).where(
@@ -521,7 +521,7 @@ class DashboardService:
         )
         ap_subledger_stmt = select(
             func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
+                func.sum(SupplierInvoice.balance_due),
                 0,
             )
         ).where(
@@ -1251,7 +1251,7 @@ class DashboardService:
             InvoiceStatus.PARTIALLY_PAID.value,
         ]
 
-        outstanding_expr = Invoice.total_amount - Invoice.amount_paid
+        outstanding_expr = Invoice.balance_due
         # In PostgreSQL, (date - date) returns an integer number of days.
         # Cast explicitly to Integer so SQLAlchemy comparisons use plain
         # integer operators instead of date_part(), which fails on int.
