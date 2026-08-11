@@ -320,11 +320,8 @@ jobs:
     # all of them reported and none of them gated: the suite could fail and the
     # merge went green anyway. A ratchet that cannot fail a build is an alarm
     # with the wire cut.
-    #
-    # Removed on evidence, not principle: the last ten runs on `dev` show seven
-    # Integration results and all seven passed, including ac8f8536 which brought
-    # the RLS tests in. If it turns out flaky, fix the flake — restoring this
-    # flag silences the isolation tests along with it.
+    # If this job becomes flaky, fix or narrowly quarantine the unstable test;
+    # restoring this flag would silence every PostgreSQL check together.
     services:
       postgres:
         image: postgres:16
