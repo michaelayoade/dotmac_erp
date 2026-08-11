@@ -1,4 +1,12 @@
+import pytest
+
 from app.models.domain_settings import DomainSetting, SettingDomain
+
+
+@pytest.fixture()
+def auth_headers(admin_headers):
+    """Global settings management is restricted to the system admin surface."""
+    return admin_headers
 
 
 class TestAuthSettingsAPI:
