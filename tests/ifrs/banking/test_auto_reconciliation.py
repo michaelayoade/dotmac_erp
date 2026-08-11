@@ -231,6 +231,57 @@ def setup_db_get(
     mock_db.get.side_effect = get_side_effect
 
 
+def _selected_entity_name(statement: object) -> str:
+    """The mapped class a SELECT targets, e.g. 'CustomerPayment'.
+
+    `select(BankAccount.bank_account_id)` reports `BankAccount` just as
+    `select(BankAccount)` does, so column-level selects dispatch correctly.
+    """
+    for description in getattr(statement, "column_descriptions", []) or []:
+        entity = description.get("entity")
+        if entity is not None:
+            return entity.__name__
+    return ""
+
+
+def scalars_by_entity(mock_db: MagicMock, **queues: list) -> None:
+    """Answer `db.scalars()` from PER-ENTITY queues instead of one flat list.
+
+    The old shape was a single ordered list: each mock answered whichever
+    query happened to arrive in its slot. That coupled every test to the
+    engine's internal query order across ALL entities — remove one
+    `CustomerPayment` load and every later `BankAccount` and
+    `BankStatementLine` answer shifted by one, so the failures surfaced in
+    unrelated tests. Retiring a single Splynx preload broke six settlement
+    tests that way.
+
+    Ordering within one entity is real and worth keeping: the settlement pass
+    genuinely selects `BankAccount` three times and means something different
+    each time. Ordering ACROSS entities was never meaningful — it was an
+    artefact of how the mock was written.
+
+    So each entity gets its own queue, consumed in order. A query the engine
+    stops making no longer disturbs any other entity's answers. An exhausted
+    queue yields an empty result, which is what a real database would do.
+
+        scalars_by_entity(
+            mock_db,
+            BankStatementLine=[unmatched_lines, deposit_lines],
+            BankAccount=[[], [dest_id], [dest_bank]],
+        )
+    """
+    remaining = {name: list(items) for name, items in queues.items()}
+
+    def _scalars(statement: object, *args: object, **kwargs: object) -> MagicMock:
+        queue = remaining.get(_selected_entity_name(statement))
+        items = queue.pop(0) if queue else []
+        result = MagicMock()
+        result.all.return_value = items
+        return result
+
+    mock_db.scalars.side_effect = _scalars
+
+
 def setup_db_scalars(
     mock_db: MagicMock,
     unmatched_lines: list,
@@ -240,35 +291,21 @@ def setup_db_scalars(
     ap_payments: list | None = None,
     ar_payments: list | None = None,
 ) -> None:
-    """Configure mock_db.scalars() for sequential calls.
+    """Configure `mock_db.scalars()` for the common single-query-per-entity case.
 
-    Call order:
-    1. Fallback bank GL account IDs (for extra_gl_account_ids)
-    2. Unmatched statement lines
-    3. Splynx CustomerPayments (always loaded, shared by passes 2 & 3)
-    4. PaymentIntents for pass 1
-    5. AP SupplierPayments for pass 4
-    6. Non-Splynx AR CustomerPayments for pass 5
-
-    Provide *splynx_payments*, *ap_payments*, *ar_payments* to control what
-    each pass receives.  Defaults to empty list (no payments).
+    `splynx_payments` and `ar_payments` share the `CustomerPayment` queue:
+    the two loads differ only by a WHERE clause, and discriminating on that
+    would rebuild the same brittleness one level down. No test passes both,
+    and once Splynx is retired there is only one such query.
     """
-    items_list = [
-        extra_gl_account_ids or [],  # 1. fallback GL accounts
-        unmatched_lines,  # 2. unmatched lines
-        splynx_payments or [],  # 3. Splynx payments
-        intents,  # 4. PaymentIntents
-        ap_payments or [],  # 5. AP payments
-        ar_payments or [],  # 6. non-Splynx AR payments
-    ]
-
-    scalars_results = []
-    for items in items_list:
-        mock_result = MagicMock()
-        mock_result.all.return_value = items
-        scalars_results.append(mock_result)
-
-    mock_db.scalars.side_effect = scalars_results
+    scalars_by_entity(
+        mock_db,
+        BankAccount=[extra_gl_account_ids or []],
+        BankStatementLine=[unmatched_lines],
+        PaymentIntent=[intents],
+        SupplierPayment=[ap_payments or []],
+        CustomerPayment=[ar_payments or splynx_payments or []],
+    )
 
 
 def setup_db_execute_journal(
@@ -2301,36 +2338,25 @@ class TestSettlementMatching:
 
         mock_db.get.side_effect = get_side_effect
 
-        # scalars() call order in auto_match_statement():
-        # 1. fallback GL account IDs
-        # 2. unmatched lines
-        # 3. splynx payments (empty)
-        # 4. intents (empty)
-        # 5. AP payments (empty)
-        # 6. non-Splynx AR payments (empty)
-        # Then in _match_settlements():
-        # 7. other_bank_ids
-        # 8. deposit_lines (from other bank statements)
-        # 9. target_accounts (BankAccount objects)
-        scalars_calls = [
-            [],  # 1. fallback GL accounts
-            settlement_lines,  # 2. unmatched lines
-            [],  # 3. splynx payments
-            [],  # 4. intents
-            [],  # 5. AP payments
-            [],  # 6. non-Splynx AR payments
-            [dest_bank.bank_account_id],  # 7. other bank account IDs
-            deposit_lines,  # 8. deposit lines from other banks
-            [dest_bank],  # 9. target BankAccount objects
-        ]
-
-        scalars_results = []
-        for items in scalars_calls:
-            mock_result = MagicMock()
-            mock_result.all.return_value = items
-            scalars_results.append(mock_result)
-
-        mock_db.scalars.side_effect = scalars_results
+        # Per-entity queues. Order matters WITHIN an entity — the settlement
+        # pass selects BankAccount three times and means something different
+        # each time — but no longer across entities, so a change to the
+        # payment passes cannot shift these answers.
+        scalars_by_entity(
+            mock_db,
+            BankAccount=[
+                [],  # fallback GL accounts (auto_match_statement)
+                [dest_bank.bank_account_id],  # other bank ids (_match_settlements)
+                [dest_bank],  # target accounts (_match_settlements)
+            ],
+            BankStatementLine=[
+                settlement_lines,  # unmatched lines on this statement
+                deposit_lines,  # deposits on the other banks
+            ],
+            PaymentIntent=[[]],
+            SupplierPayment=[[]],
+            CustomerPayment=[[]],
+        )
 
     def test_happy_path_settlement_matched(
         self,
