@@ -35,6 +35,7 @@ from uuid import uuid4
 import pytest
 
 from app.services.domain_settings import SettingsScopeRequired, _scoped_or_refuse
+from app.services.settings_seed import seed_audit_settings
 
 
 def _session(**info):
@@ -86,6 +87,20 @@ def test_an_explicit_cross_org_session_passes():
     being granted the same power by omission."""
     with _scoped_or_refuse(_session(allow_cross_org=True), "op"):
         pass
+
+
+def test_global_settings_seed_states_and_restores_its_scope(monkeypatch):
+    """Infrastructure seeders declare their intentional global-row access."""
+    ensure_by_key = MagicMock()
+    monkeypatch.setattr(
+        "app.services.settings_seed.audit_settings.ensure_by_key", ensure_by_key
+    )
+    db = _session()
+
+    seed_audit_settings(db)
+
+    assert ensure_by_key.call_count == 5
+    assert db.info.get("allow_cross_org") is False
 
 
 # --------------------------------------------------------------------------
@@ -146,9 +161,9 @@ def test_a_real_service_call_refuses_rather_than_reading_across_tenants():
     would proceed to `db.scalar` and this would fail differently, which is
     the point."""
     from app.models.domain_settings import SettingDomain
-    from app.services.domain_settings import DomainSettingService
+    from app.services.domain_settings import DomainSettings
 
-    service = DomainSettingService(domain=SettingDomain.auth)
+    service = DomainSettings(domain=SettingDomain.auth)
     db = MagicMock()
     db.info = {}  # unscoped
 
