@@ -114,7 +114,7 @@ class CashFlowAnalyzer:
         cutoff_90d = date.today() - timedelta(days=90)
 
         # --- AR outstanding (balance_due > 0) ---
-        ar_balance = Invoice.total_amount - Invoice.amount_paid
+        ar_balance = Invoice.balance_due
         ar_stmt = (
             select(func.coalesce(func.sum(ar_balance), 0))
             .where(
@@ -139,7 +139,7 @@ class CashFlowAnalyzer:
         revenue_90d = Decimal(str(self.db.scalar(rev_stmt) or "0"))
 
         # --- AP outstanding ---
-        ap_balance = SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+        ap_balance = SupplierInvoice.balance_due
         ap_stmt = (
             select(func.coalesce(func.sum(ap_balance), 0))
             .where(

@@ -166,13 +166,13 @@ class InvoiceWebService:
 
         total_outstanding = db.scalar(
             outstanding_filter.with_only_columns(
-                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+                func.coalesce(func.sum(Invoice.balance_due), 0)
             )
         ) or Decimal("0")
 
         past_due = db.scalar(
             outstanding_filter.where(Invoice.due_date < today).with_only_columns(
-                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+                func.coalesce(func.sum(Invoice.balance_due), 0)
             )
         ) or Decimal("0")
 
@@ -181,9 +181,7 @@ class InvoiceWebService:
             outstanding_filter.where(
                 Invoice.due_date >= today,
                 Invoice.due_date <= due_this_week_end,
-            ).with_only_columns(
-                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-            )
+            ).with_only_columns(func.coalesce(func.sum(Invoice.balance_due), 0))
         ) or Decimal("0")
 
         month_start = date(today.year, today.month, 1)
@@ -196,14 +194,12 @@ class InvoiceWebService:
             outstanding_filter.where(
                 Invoice.due_date >= month_start,
                 Invoice.due_date <= month_end,
-            ).with_only_columns(
-                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-            )
+            ).with_only_columns(func.coalesce(func.sum(Invoice.balance_due), 0))
         ) or Decimal("0")
 
         invoices_view = []
         for invoice, customer in invoices:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             invoices_view.append(
                 {
                     "invoice_id": invoice.invoice_id,

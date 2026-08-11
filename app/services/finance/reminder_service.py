@@ -701,7 +701,7 @@ class FinanceReminderService:
     ) -> int:
         """Send AR collection reminder to staff for overdue invoice."""
         days_overdue = (date.today() - invoice.due_date).days
-        balance_due = invoice.total_amount - invoice.amount_paid
+        balance_due = invoice.balance_due
 
         if days_overdue >= self.config.ar_critical_days:
             title = "Critical: Invoice 90+ Days Overdue"
