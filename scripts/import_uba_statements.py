@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import io
 import logging
+import os
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -44,15 +45,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Path to statement files
-STATEMENT_DIR = Path("/root/.dotmac/zenith statement/uba/Uba statement 2022-2025")
+# Where the statement workbooks are read from. Overridable, with no
+# environment-specific path baked in.
+STATEMENT_DIR = Path(
+    os.environ.get("UBA_STATEMENT_DIR", "~/.dotmac/statements/uba")
+).expanduser()
 
-# Account configuration
+
+def _statement_password(account_number: str) -> str:
+    """The workbook password for one UBA account, from the environment.
+
+    These were committed literals until 2026-08-11. They are bank-issued
+    passwords for the statement workbooks, and no default is provided on
+    purpose: a script that silently falls back to "no password" would report
+    a parse failure rather than a missing credential, which is the harder
+    thing to diagnose.
+
+    Set `UBA_STATEMENT_PASSWORD_<account-number>` in the environment, sourced
+    from OpenBao rather than typed. Deliberately NOT derived in code from the
+    account number — that is UBA's scheme to change, not ours to hardcode.
+    """
+    variable = f"UBA_STATEMENT_PASSWORD_{account_number}"
+    password = os.environ.get(variable)
+    if not password:
+        raise SystemExit(
+            f"{variable} is not set — the workbook for account {account_number} "
+            "cannot be opened. Load it from OpenBao into the environment; it is "
+            "deliberately not stored in this file."
+        )
+    return password
+
+
+# Account configuration. Passwords are NOT here — see `_statement_password`.
 ACCOUNT_CONFIG = {
     "1018904696": {
         "name": "UBA 96 (Main)",
         "currency": "NGN",
-        "password": "89046",
         "gl_account_code": "1202",  # UBA GL account
         "files": [
             "101xxxxx96.xlsx",
@@ -62,7 +90,6 @@ ACCOUNT_CONFIG = {
     "3004154294": {
         "name": "UBA USD",
         "currency": "USD",
-        "password": "41542",
         "gl_account_code": "1202",  # UBA GL account
         "files": [
             "300xxxxx94.xlsx",
@@ -418,7 +445,9 @@ def import_statements(dry_run: bool = False):
                     logger.warning(f"  File not found: {filename}")
                     continue
 
-                parsed = parse_uba_statement(filepath, config["password"])
+                parsed = parse_uba_statement(
+                    filepath, _statement_password(account_number)
+                )
 
                 if parsed:
                     all_transactions.extend(parsed.transactions)

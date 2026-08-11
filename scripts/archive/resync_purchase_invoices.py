@@ -19,6 +19,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import argparse
 import logging
 import sys
@@ -126,13 +127,19 @@ class ERPNextInvoice:
 
 
 def get_mariadb_connection() -> pymysql.Connection:
-    """Connect to ERPNext MariaDB dump (erpnext_db container, port 3307)."""
+    """Connect to the ERPNext MariaDB dump container.
+
+    ARCHIVED, and ERPNext is retired — kept for provenance only. The
+    credentials were committed literals until 2026-08-11; they addressed a
+    local throwaway dump container, but a literal is a literal. Everything is
+    now environment-supplied with no default.
+    """
     return pymysql.connect(
-        host="127.0.0.1",
-        port=3307,
-        user="root",
-        password="root",
-        database="erpnext",
+        host=os.environ.get("ERPNEXT_DUMP_HOST", "127.0.0.1"),
+        port=int(os.environ.get("ERPNEXT_DUMP_PORT", "3307")),
+        user=os.environ["ERPNEXT_DUMP_USER"],
+        password=os.environ["ERPNEXT_DUMP_PASSWORD"],
+        database=os.environ.get("ERPNEXT_DUMP_DATABASE", "erpnext"),
         cursorclass=pymysql.cursors.DictCursor,
     )
 
