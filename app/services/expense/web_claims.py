@@ -53,6 +53,25 @@ from app.services.settings_spec import resolve_value
 logger = logging.getLogger(__name__)
 
 
+def _current_employee_id(db, org_id, auth) -> UUID | None:
+    """The employee record for the signed-in person, if there is one.
+
+    Both the detail page and the withdrawal handler need it and each had its
+    own copy of this query. `None` is a real answer — an admin acting on a
+    claim may have no employee record at all — and is passed through as `None`
+    rather than as a nil-UUID sentinel.
+    """
+    if not auth.person_id:
+        return None
+    employee = db.scalars(
+        select(Employee).where(
+            Employee.organization_id == org_id,
+            Employee.person_id == auth.person_id,
+        )
+    ).first()
+    return employee.employee_id if employee else None
+
+
 def _web_facade():
     return import_module("app.services.expense.web")
 
@@ -658,20 +677,18 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 db, auth.person_id, "expense:claims:delete", org_id
             )
         can_delete = can_delete and claim.status == ExpenseClaimStatus.DRAFT
-        current_employee = None
-        if auth.person_id:
-            current_employee = db.scalars(
-                select(Employee).where(
-                    Employee.organization_id == org_id,
-                    Employee.person_id == auth.person_id,
-                )
-            ).first()
-        can_withdraw_approval = claim.status == ExpenseClaimStatus.APPROVED and (
-            auth.is_admin
-            or (
-                current_employee is not None
-                and current_employee.employee_id == claim.approver_id
+        # Whether withdrawal is OFFERED is asked, never re-derived. The service
+        # owns the rule; this page previously carried its own copy of all four
+        # conditions, which is how a button gets shown for an action that is
+        # then refused — or hidden for one that was allowed.
+        can_withdraw_approval = (
+            ExpenseService(db).withdrawal_refusal(
+                org_id,
+                claim,
+                approver_id=_current_employee_id(db, org_id, auth),
+                allow_admin_override=auth.is_admin,
             )
+            is None
         )
         can_act = (can_approve or can_reject) and claim.status in {
             ExpenseClaimStatus.SUBMITTED,
@@ -685,37 +702,12 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 db, auth.person_id, "expense:claims:reimburse", org_id
             )
 
-        has_active_payment = False
-        if claim.status == ExpenseClaimStatus.APPROVED:
-            from app.models.finance.payments.payment_intent import (
-                PaymentIntent,
-                PaymentIntentStatus,
-            )
-
-            active_statuses = [
-                PaymentIntentStatus.PENDING,
-                PaymentIntentStatus.PROCESSING,
-            ]
-            has_active_payment = (
-                db.scalars(
-                    select(PaymentIntent).where(
-                        PaymentIntent.organization_id == org_id,
-                        PaymentIntent.source_type == "EXPENSE_CLAIM",
-                        PaymentIntent.source_id == claim_uuid,
-                        PaymentIntent.status.in_(active_statuses),
-                    )
-                ).first()
-                is not None
-            )
-        can_withdraw_approval = can_withdraw_approval and not has_active_payment
-        can_withdraw_approval = can_withdraw_approval and not any(
-            (
-                claim.payment_reference,
-                claim.supplier_invoice_id,
-                claim.journal_entry_id,
-                claim.reimbursement_journal_id,
-                claim.paid_on,
-            )
+        # This query predates the withdrawal feature, which then grew a second
+        # copy of it. Both now ask the service, so "is a payment in flight?"
+        # has one answer — the same one the withdrawal rule is enforced on.
+        has_active_payment = (
+            claim.status == ExpenseClaimStatus.APPROVED
+            and ExpenseService(db).has_payment_in_flight(org_id, claim_uuid)
         )
 
         categories = []
@@ -1238,13 +1230,8 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         actor_id = coerce_uuid(auth.person_id) if auth.person_id else None
-        approver = db.scalars(
-            select(Employee).where(
-                Employee.organization_id == org_id,
-                Employee.person_id == auth.person_id,
-            )
-        ).first()
-        if approver is None and not auth.is_admin:
+        approver_id = _current_employee_id(db, org_id, auth)
+        if approver_id is None and not auth.is_admin:
             return RedirectResponse(
                 f"/expense/claims/{claim_id}?error=permission", status_code=303
             )
@@ -1252,7 +1239,11 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             claim = ExpenseService(db).withdraw_approval(
                 org_id,
                 coerce_uuid(claim_id),
-                approver_id=approver.employee_id if approver else UUID(int=0),
+                # `None` rather than a nil-UUID sentinel: the service treats
+                # "no employee record" as its own case, and a magic value
+                # crossing the boundary would have to be recognised on the
+                # other side to mean anything.
+                approver_id=approver_id,
                 reason=(reason or "").strip(),
                 actor_id=actor_id,
                 allow_admin_override=auth.is_admin,
