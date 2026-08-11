@@ -10,6 +10,7 @@ from decimal import Decimal
 from importlib import import_module
 from typing import Any, cast
 from urllib.parse import quote, urlencode
+from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import (
@@ -657,6 +658,21 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 db, auth.person_id, "expense:claims:delete", org_id
             )
         can_delete = can_delete and claim.status == ExpenseClaimStatus.DRAFT
+        current_employee = None
+        if auth.person_id:
+            current_employee = db.scalars(
+                select(Employee).where(
+                    Employee.organization_id == org_id,
+                    Employee.person_id == auth.person_id,
+                )
+            ).first()
+        can_withdraw_approval = claim.status == ExpenseClaimStatus.APPROVED and (
+            auth.is_admin
+            or (
+                current_employee is not None
+                and current_employee.employee_id == claim.approver_id
+            )
+        )
         can_act = (can_approve or can_reject) and claim.status in {
             ExpenseClaimStatus.SUBMITTED,
             ExpenseClaimStatus.PENDING_APPROVAL,
@@ -691,6 +707,16 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 ).first()
                 is not None
             )
+        can_withdraw_approval = can_withdraw_approval and not has_active_payment
+        can_withdraw_approval = can_withdraw_approval and not any(
+            (
+                claim.payment_reference,
+                claim.supplier_invoice_id,
+                claim.journal_entry_id,
+                claim.reimbursement_journal_id,
+                claim.paid_on,
+            )
+        )
 
         categories = []
         if can_act and can_approve:
@@ -729,6 +755,7 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "can_approve": can_approve,
                 "can_reject": can_reject,
                 "can_delete": can_delete,
+                "can_withdraw_approval": can_withdraw_approval,
                 "can_reimburse_expense": can_reimburse_expense
                 and claim.status == ExpenseClaimStatus.APPROVED,
                 "has_active_payment": has_active_payment,
@@ -1203,6 +1230,57 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
 
         return RedirectResponse(
             f"/expense/claims/{claim_id}?action=rejected", status_code=303
+        )
+
+    @staticmethod
+    def withdraw_approval_response(
+        claim_id: str, reason: str | None, auth, db
+    ) -> RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        actor_id = coerce_uuid(auth.person_id) if auth.person_id else None
+        approver = db.scalars(
+            select(Employee).where(
+                Employee.organization_id == org_id,
+                Employee.person_id == auth.person_id,
+            )
+        ).first()
+        if approver is None and not auth.is_admin:
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=permission", status_code=303
+            )
+        try:
+            claim = ExpenseService(db).withdraw_approval(
+                org_id,
+                coerce_uuid(claim_id),
+                approver_id=approver.employee_id if approver else UUID(int=0),
+                reason=(reason or "").strip(),
+                actor_id=actor_id,
+                allow_admin_override=auth.is_admin,
+            )
+            if claim.status != ExpenseClaimStatus.APPROVAL_WITHDRAWN:
+                db.rollback()
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=withdraw_in_progress",
+                    status_code=303,
+                )
+            db.flush()
+        except (ExpenseClaimStatusError, ExpenseServiceError, ValueError) as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error_message={quote(str(exc))}",
+                status_code=303,
+            )
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Expense claim approval withdrawal failed",
+                extra={"claim_id": claim_id},
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=withdraw_failed", status_code=303
+            )
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=approval_withdrawn", status_code=303
         )
 
     @staticmethod

@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6" x-data='{ reviewMode: false }'>
+<div class="space-y-6" x-data='{ reviewMode: false, withdrawModal: false }'>
     {% if error %}
     <div class="card p-4 border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
         {{ error }}
@@ -26,6 +26,10 @@
     {% elif action == "rejected" %}
     <div class="card p-4 border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
         Claim rejected.
+    </div>
+    {% elif action == "approval_withdrawn" %}
+    <div class="card p-4 border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        Approval withdrawn. This claim is no longer eligible for payment.
     </div>
     {% elif action == "comment_added" %}
     <div class="card p-4 border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
@@ -56,6 +60,11 @@
                 <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-primary">
                     Proceed to Payment
                 </a>
+                {% endif %}
+                {% if can_withdraw_approval %}
+                <button type="button" class="btn btn-danger-outline" @click="withdrawModal = true">
+                    Withdraw Approval
+                </button>
                 {% endif %}
                 {% if can_submit %}
                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/submit">
@@ -125,6 +134,42 @@
         </div>
         {% endif %}
     </div>
+
+    {% if can_withdraw_approval %}
+    <div x-show="withdrawModal" x-cloak role="dialog" aria-modal="true"
+         aria-labelledby="withdraw-approval-title"
+         @keydown.escape.window="withdrawModal = false"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-slate-900/50" @click="withdrawModal = false"></div>
+        <div class="relative card w-full max-w-lg p-6"
+             x-transition:enter="duration-200 ease-out"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:leave="duration-150 ease-in"
+             x-transition:leave-end="opacity-0 scale-95">
+            <h3 id="withdraw-approval-title" class="text-lg font-semibold text-slate-900 dark:text-white">
+                Withdraw approval?
+            </h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                This expense will no longer be eligible for payment. Its approval history will be preserved.
+            </p>
+            <form method="post" action="/expense/claims/{{ claim.claim_id }}/withdraw-approval" class="mt-5 space-y-4">
+                {{ request.state.csrf_form | safe }}
+                <div>
+                    <label for="withdrawal-reason" class="form-label">
+                        Reason <span class="text-rose-500">*</span>
+                    </label>
+                    <textarea id="withdrawal-reason" name="reason" class="form-input min-h-24 w-full"
+                              maxlength="1000" required
+                              placeholder="Explain why payment should no longer proceed"></textarea>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" class="btn btn-secondary" @click="withdrawModal = false">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Withdraw Approval</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
     {# ── Read-only items table (shown when NOT in review mode) ── #}
     <div class="card overflow-hidden" x-show="!reviewMode">
