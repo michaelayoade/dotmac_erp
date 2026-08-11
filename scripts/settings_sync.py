@@ -81,8 +81,10 @@ def main():
                 is_active=True,
             )
             if args.dry_run:
+                display_value = "<redacted>" if spec.is_secret else env_raw
                 print(
-                    f"dry-run: {spec.domain.value}.{spec.key} <= {spec.env_var}={env_raw}"
+                    f"dry-run: {spec.domain.value}.{spec.key} "
+                    f"<= {spec.env_var}={display_value}"
                 )
                 updated += 1
                 continue

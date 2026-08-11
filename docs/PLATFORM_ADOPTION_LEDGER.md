@@ -265,6 +265,42 @@ in E4** — annotations are now `Mapped[Decimal]` and the `float(...)` writes in
 `app/services/people/assets/maintenance_service.py` are exact Decimal; see the
 E4 status above).
 
+### Tenant-administration containment (2026-08-11)
+
+The People JSON API is tenant-owned: its session is primed from the authenticated
+organization, every service query includes `Person.organization_id`, and create
+ownership is derived from authentication rather than request data. A caller gets
+404 for a person belonging to another organization, including get, update, and
+delete operations.
+
+The RBAC tables remain global pending the explicit identity/RBAC ownership
+decision in E8. Until that decision lands, the global RBAC API is a system-admin
+surface: `rbac:manage` on a tenant token is insufficient, and every endpoint
+requires the explicit `require_admin_bypass` principal. This is containment, not
+closure of finding 2; the absence of an organization key on the RBAC tables is
+still recorded debt.
+
+The same containment applies to global authentication records and platform
+settings: tenant permission claims such as `auth:manage` or `settings:manage`
+cannot authorize an RLS-bypass session. Those JSON APIs require the explicit
+system-admin principal. Because JWT role claims are login-time snapshots,
+`require_admin_bypass` revalidates the caller's live, active `admin` assignment
+on every request; a removed assignment stops authorizing cross-tenant access
+without waiting for token expiry. Tenant-scoped settings history retains its
+organization ownership checks.
+
+Licensing development mode is opt-in. An omitted `DOTMAC_DEV_MODE` now enters
+normal fail-closed enforcement, while tests and development environments set
+the bypass explicitly. This closes the silent-default half of finding 3; the
+placeholder verification key and the E9 owner cutover remain open and must not
+be guessed in this containment change.
+
+No settings migration that adds `tenant_id` beside `organization_id` is approved
+by this ledger. Boundary 2 remains authoritative until an explicit ADR changes
+it. Any later settings-only rename or shadow phase must update this ledger in the
+same change and must include writer migration, drift detection, PostgreSQL
+migration tests, and a rollback/retirement plan.
+
 ## Non-negotiable adoption boundaries (from the accepted plan)
 
 1. ERP stays authoritative for accounting, inventory, procurement, workforce,

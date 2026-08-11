@@ -426,6 +426,7 @@ os.environ["JWT_SECRET"] = "test-secret"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["TOTP_ENCRYPTION_KEY"] = "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="
 os.environ["TOTP_ISSUER"] = "StarterTemplate"
+os.environ["DOTMAC_DEV_MODE"] = "true"
 os.environ.setdefault("PYTEST_CURRENT_TEST", "1")
 
 # Now import the models - they'll use our mocked db module
@@ -632,6 +633,7 @@ def client(db_session):
     from fastapi import APIRouter, Depends, FastAPI
 
     from app.api.audit import router as audit_router
+    from app.api.auth import router as auth_admin_router
     from app.api.auth_flow import router as auth_flow_router
     from app.api.deps import get_db_admin_bypass, get_db_auth_bypass, get_db_with_org
     from app.api.people.discipline import router as discipline_router
@@ -682,6 +684,7 @@ def client(db_session):
     # Build a minimal app for API tests to avoid costly full app import.
     app = FastAPI()
     register_error_handlers(app)
+    _include_api_router(auth_admin_router)
     _include_api_router(auth_flow_router)
     _include_api_router(audit_router)
     _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])

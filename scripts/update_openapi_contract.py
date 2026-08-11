@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 def _set_test_env() -> None:
     """Pin the module-flag defaults the test environment sees
-    (ENABLED_MODULES unset -> all modules; DOTMAC_DEV_MODE unset -> dev-mode
+    (ENABLED_MODULES unset -> all modules; DOTMAC_DEV_MODE=true -> dev-mode
     licensing -> every module licensed) and keep any real database out of
     reach. The JWT/TOTP values below mirror tests/conftest.py."""
     os.environ["JWT_SECRET"] = "test-secret"
@@ -28,7 +28,7 @@ def _set_test_env() -> None:
     os.environ["TOTP_ISSUER"] = "StarterTemplate"
     os.environ.setdefault("PYTEST_CURRENT_TEST", "1")
     os.environ.pop("ENABLED_MODULES", None)
-    os.environ.pop("DOTMAC_DEV_MODE", None)
+    os.environ["DOTMAC_DEV_MODE"] = "true"
     # Dead-port DATABASE_URL: anything that reads it fails fast (logged,
     # non-fatal) instead of touching a real database.
     os.environ["DATABASE_URL"] = (

@@ -18,7 +18,7 @@ from app.schemas.rbac import (
 )
 from app.services import rbac as rbac_service
 from app.api.deps import get_db_admin_bypass
-from app.services.auth_dependencies import require_permission
+from app.services.auth_dependencies import require_admin_bypass
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])
 
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/rbac", tags=["rbac"])
 @router.post("/roles", response_model=RoleRead, status_code=status.HTTP_201_CREATED)
 def create_role(
     payload: RoleCreate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.create(db, payload)
@@ -35,7 +35,7 @@ def create_role(
 @router.get("/roles/{role_id}", response_model=RoleRead)
 def get_role(
     role_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.get(db, role_id)
@@ -48,7 +48,7 @@ def list_roles(
     order_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.list_response(
@@ -60,7 +60,7 @@ def list_roles(
 def update_role(
     role_id: str,
     payload: RoleUpdate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.update(db, role_id, payload)
@@ -69,7 +69,7 @@ def update_role(
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_role(
     role_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.roles.delete(db, role_id)
@@ -80,7 +80,7 @@ def delete_role(
 )
 def create_permission(
     payload: PermissionCreate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.create(db, payload)
@@ -89,7 +89,7 @@ def create_permission(
 @router.get("/permissions/{permission_id}", response_model=PermissionRead)
 def get_permission(
     permission_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.get(db, permission_id)
@@ -102,7 +102,7 @@ def list_permissions(
     order_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.list_response(
@@ -114,7 +114,7 @@ def list_permissions(
 def update_permission(
     permission_id: str,
     payload: PermissionUpdate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.update(db, permission_id, payload)
@@ -123,7 +123,7 @@ def update_permission(
 @router.delete("/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_permission(
     permission_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.permissions.delete(db, permission_id)
@@ -136,7 +136,7 @@ def delete_permission(
 )
 def create_role_permission(
     payload: RolePermissionCreate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.create(db, payload)
@@ -145,7 +145,7 @@ def create_role_permission(
 @router.get("/role-permissions/{link_id}", response_model=RolePermissionRead)
 def get_role_permission(
     link_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.get(db, link_id)
@@ -159,7 +159,7 @@ def list_role_permissions(
     order_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.list_response(
@@ -171,7 +171,7 @@ def list_role_permissions(
 def update_role_permission(
     link_id: str,
     payload: RolePermissionUpdate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.update(db, link_id, payload)
@@ -180,7 +180,7 @@ def update_role_permission(
 @router.delete("/role-permissions/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_role_permission(
     link_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.role_permissions.delete(db, link_id)
@@ -191,7 +191,7 @@ def delete_role_permission(
 )
 def create_person_role(
     payload: PersonRoleCreate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.create(db, payload)
@@ -200,7 +200,7 @@ def create_person_role(
 @router.get("/person-roles/{link_id}", response_model=PersonRoleRead)
 def get_person_role(
     link_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.get(db, link_id)
@@ -214,7 +214,7 @@ def list_person_roles(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.list_response(
@@ -226,7 +226,7 @@ def list_person_roles(
 def update_person_role(
     link_id: str,
     payload: PersonRoleUpdate,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.update(db, link_id, payload)
@@ -235,7 +235,7 @@ def update_person_role(
 @router.delete("/person-roles/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_person_role(
     link_id: str,
-    auth: dict = Depends(require_permission("rbac:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.person_roles.delete(db, link_id)

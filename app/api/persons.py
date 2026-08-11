@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app.schemas.common import ListResponse
 from app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from app.services import person as person_service
-from app.api.deps import get_db_admin_bypass
-from app.services.auth_dependencies import require_permission
+from app.api.deps import get_db_with_org
+from app.services.auth_dependencies import require_tenant_permission
 
 router = APIRouter(prefix="/people", tags=["people"])
 
@@ -15,19 +15,27 @@ router = APIRouter(prefix="/people", tags=["people"])
 @router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
 def create_person(
     payload: PersonCreate,
-    auth: dict = Depends(require_permission("people:write")),
-    db: Session = Depends(get_db_admin_bypass),
+    auth: dict = Depends(require_tenant_permission("people:write")),
+    db: Session = Depends(get_db_with_org),
 ):
-    return person_service.people.create(db, payload)
+    return person_service.people.create(
+        db,
+        UUID(auth["organization_id"]),
+        payload,
+    )
 
 
 @router.get("/{person_id}", response_model=PersonRead)
 def get_person(
     person_id: UUID,
-    auth: dict = Depends(require_permission("people:read")),
-    db: Session = Depends(get_db_admin_bypass),
+    auth: dict = Depends(require_tenant_permission("people:read")),
+    db: Session = Depends(get_db_with_org),
 ):
-    return person_service.people.get(db, str(person_id))
+    return person_service.people.get(
+        db,
+        UUID(auth["organization_id"]),
+        str(person_id),
+    )
 
 
 @router.get("", response_model=ListResponse[PersonRead])
@@ -39,11 +47,19 @@ def list_people(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("people:read")),
-    db: Session = Depends(get_db_admin_bypass),
+    auth: dict = Depends(require_tenant_permission("people:read")),
+    db: Session = Depends(get_db_with_org),
 ):
     return person_service.people.list_response(
-        db, email, person_status, is_active, order_by, order_dir, limit, offset
+        db,
+        UUID(auth["organization_id"]),
+        email,
+        person_status,
+        is_active,
+        order_by,
+        order_dir,
+        limit,
+        offset,
     )
 
 
@@ -51,16 +67,25 @@ def list_people(
 def update_person(
     person_id: UUID,
     payload: PersonUpdate,
-    auth: dict = Depends(require_permission("people:write")),
-    db: Session = Depends(get_db_admin_bypass),
+    auth: dict = Depends(require_tenant_permission("people:write")),
+    db: Session = Depends(get_db_with_org),
 ):
-    return person_service.people.update(db, str(person_id), payload)
+    return person_service.people.update(
+        db,
+        UUID(auth["organization_id"]),
+        str(person_id),
+        payload,
+    )
 
 
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_person(
     person_id: UUID,
-    auth: dict = Depends(require_permission("people:write")),
-    db: Session = Depends(get_db_admin_bypass),
+    auth: dict = Depends(require_tenant_permission("people:write")),
+    db: Session = Depends(get_db_with_org),
 ):
-    person_service.people.delete(db, str(person_id))
+    person_service.people.delete(
+        db,
+        UUID(auth["organization_id"]),
+        str(person_id),
+    )

@@ -3,7 +3,9 @@
 import uuid
 
 import pytest
+from fastapi import HTTPException
 
+from app.models.finance.core_org.organization import Organization
 from app.schemas.person import PersonCreate, PersonUpdate
 from app.services import person as person_service
 
@@ -23,8 +25,8 @@ def test_create_person(db):
     email = _unique_email()
     person = person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="John",
             last_name="Doe",
             email=email,
@@ -41,14 +43,14 @@ def test_get_person_by_id(db):
     """Test getting a person by ID."""
     person = person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="Jane",
             last_name="Smith",
             email=_unique_email(),
         ),
     )
-    fetched = person_service.people.get(db, str(person.id))
+    fetched = person_service.people.get(db, TEST_ORG_ID, str(person.id))
     assert fetched is not None
     assert fetched.id == person.id
     assert fetched.first_name == "Jane"
@@ -59,8 +61,8 @@ def test_list_people_filter_by_email(db):
     email = _unique_email()
     person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="Alice",
             last_name="Test",
             email=email,
@@ -68,8 +70,8 @@ def test_list_people_filter_by_email(db):
     )
     person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="Bob",
             last_name="Other",
             email=_unique_email(),
@@ -78,6 +80,7 @@ def test_list_people_filter_by_email(db):
 
     results = person_service.people.list(
         db,
+        TEST_ORG_ID,
         email=email,
         status=None,
         is_active=None,
@@ -95,8 +98,8 @@ def test_list_people_filter_by_status(db):
     email1 = _unique_email()
     person1 = person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="Active",
             last_name="User",
             email=email1,
@@ -105,8 +108,8 @@ def test_list_people_filter_by_status(db):
     email2 = _unique_email()
     person2 = person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="Inactive",
             last_name="User",
             email=email2,
@@ -115,6 +118,7 @@ def test_list_people_filter_by_status(db):
     # Update second person to inactive
     person_service.people.update(
         db,
+        TEST_ORG_ID,
         str(person2.id),
         PersonUpdate(status="inactive"),
     )
@@ -122,6 +126,7 @@ def test_list_people_filter_by_status(db):
     # Query for person1 specifically with active status filter
     active_results = person_service.people.list(
         db,
+        TEST_ORG_ID,
         email=email1,
         status="active",
         is_active=None,
@@ -136,6 +141,7 @@ def test_list_people_filter_by_status(db):
     # Verify person2 is not returned when filtering for active
     inactive_as_active = person_service.people.list(
         db,
+        TEST_ORG_ID,
         email=email2,
         status="active",
         is_active=None,
@@ -151,17 +157,18 @@ def test_list_people_active_only(db):
     """Test listing only active people."""
     person = person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="ToDelete",
             last_name="User",
             email=_unique_email(),
         ),
     )
-    person_service.people.delete(db, str(person.id))
+    person_service.people.delete(db, TEST_ORG_ID, str(person.id))
 
     results = person_service.people.list(
         db,
+        TEST_ORG_ID,
         email=None,
         status=None,
         is_active=True,
@@ -178,8 +185,8 @@ def test_update_person(db):
     """Test updating a person."""
     person = person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="Original",
             last_name="Name",
             email=_unique_email(),
@@ -187,6 +194,7 @@ def test_update_person(db):
     )
     updated = person_service.people.update(
         db,
+        TEST_ORG_ID,
         str(person.id),
         PersonUpdate(first_name="Updated", last_name="Person"),
     )
@@ -198,22 +206,19 @@ def test_delete_person(db):
     """Test deleting a person."""
     person = person_service.people.create(
         db,
+        TEST_ORG_ID,
         PersonCreate(
-            organization_id=TEST_ORG_ID,
             first_name="ToDelete",
             last_name="User",
             email=_unique_email(),
         ),
     )
     person_id = person.id
-    person_service.people.delete(db, str(person_id))
+    person_service.people.delete(db, TEST_ORG_ID, str(person_id))
 
     # Verify person is deleted
-    import pytest
-    from fastapi import HTTPException
-
     with pytest.raises(HTTPException) as exc_info:
-        person_service.people.get(db, str(person_id))
+        person_service.people.get(db, TEST_ORG_ID, str(person_id))
     assert exc_info.value.status_code == 404
 
 
@@ -223,8 +228,8 @@ def test_list_people_pagination(db):
     for i in range(5):
         person_service.people.create(
             db,
+            TEST_ORG_ID,
             PersonCreate(
-                organization_id=TEST_ORG_ID,
                 first_name=f"Person{i}",
                 last_name="Test",
                 email=_unique_email(),
@@ -233,6 +238,7 @@ def test_list_people_pagination(db):
 
     page1 = person_service.people.list(
         db,
+        TEST_ORG_ID,
         email=None,
         status=None,
         is_active=None,
@@ -243,6 +249,7 @@ def test_list_people_pagination(db):
     )
     page2 = person_service.people.list(
         db,
+        TEST_ORG_ID,
         email=None,
         status=None,
         is_active=None,
@@ -258,3 +265,76 @@ def test_list_people_pagination(db):
     page1_ids = {p.id for p in page1}
     page2_ids = {p.id for p in page2}
     assert page1_ids.isdisjoint(page2_ids)
+
+
+def test_person_crud_cannot_cross_organizations(db, organization):
+    """Service predicates remain safe even when the session itself bypasses RLS."""
+    organization_id = uuid.UUID(str(organization.organization_id))
+    other_organization = Organization(
+        organization_code=f"T2-{uuid.uuid4().hex[:8].upper()}",
+        legal_name="Other Organization",
+        functional_currency_code="USD",
+        presentation_currency_code="USD",
+        fiscal_year_end_month=12,
+        fiscal_year_end_day=31,
+        is_active=True,
+    )
+    db.add(other_organization)
+    db.flush()
+    other_organization_id = uuid.UUID(str(other_organization.organization_id))
+
+    visible = person_service.people.create(
+        db,
+        organization_id,
+        PersonCreate(
+            first_name="Visible",
+            last_name="Person",
+            email=_unique_email(),
+        ),
+    )
+    hidden = person_service.people.create(
+        db,
+        other_organization_id,
+        PersonCreate(
+            first_name="Hidden",
+            last_name="Person",
+            email=_unique_email(),
+        ),
+    )
+
+    listed_ids = {
+        person.id
+        for person in person_service.people.list(
+            db,
+            organization_id,
+            email=None,
+            status=None,
+            is_active=None,
+            order_by="created_at",
+            order_dir="asc",
+            limit=100,
+            offset=0,
+        )
+    }
+    assert visible.id in listed_ids
+    assert hidden.id not in listed_ids
+
+    with pytest.raises(HTTPException) as get_error:
+        person_service.people.get(db, organization_id, str(hidden.id))
+    assert get_error.value.status_code == 404
+
+    with pytest.raises(HTTPException) as update_error:
+        person_service.people.update(
+            db,
+            organization_id,
+            str(hidden.id),
+            PersonUpdate(first_name="Compromised"),
+        )
+    assert update_error.value.status_code == 404
+
+    with pytest.raises(HTTPException) as delete_error:
+        person_service.people.delete(db, organization_id, str(hidden.id))
+    assert delete_error.value.status_code == 404
+
+    db.refresh(hidden)
+    assert hidden.first_name == "Hidden"
