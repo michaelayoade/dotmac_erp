@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Update organization name to Dotmac Technologies."""
+"""ARCHIVED — one-off rename, already applied.
+
+Renamed every organization to the hardcoded string "Dotmac Technologies".
+That was correct exactly once, on a single-tenant database. It is kept for
+provenance only: re-running it today would rename EVERY organization in the
+fleet, which is why it is here and not in scripts/.
+
+A real rename tool would take --org-id and --name and scope its session.
+Write that instead of reviving this.
+"""
 
 import os
 import sys

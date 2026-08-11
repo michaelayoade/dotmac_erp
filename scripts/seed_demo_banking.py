@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.auth import UserCredential
 from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.banking.bank_statement import (
@@ -65,8 +65,10 @@ def _acct(db, org_id, code):
 
 def main() -> int:
     results = {"journals": 0, "statement_lines": 0, "errors": []}
-    with SessionLocal() as db:
-        org_id = DEFAULT_ORG_ID
+    # One known organization, so this is per-org work: scope the session
+    # to it rather than running the whole seed unscoped.
+    org_id = DEFAULT_ORG_ID
+    with session_for_org(org_id) as db:
         cred = db.scalar(
             select(UserCredential).where(UserCredential.username == "e2e_testuser")
         )
