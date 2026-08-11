@@ -119,10 +119,8 @@ class AutoReconciliationCoreService:
 
         Runs seven passes in sequence:
         1. PaymentIntent (Paystack-initiated transfers)
-        2. Splynx CustomerPayment by reference (Paystack ref from description)
-        3. Date + amount greedy matching (Splynx fallback)
         4. AP supplier payments (by reference, then date + amount)
-        5. Non-Splynx AR customer payments (by reference, then date + amount)
+        3. AR customer payments (by reference, then date + amount)
         6. Bank fees (creates GL journals for Paystack fee lines)
         7. Settlements (cross-bank transfer matching, 0–5 day window)
 

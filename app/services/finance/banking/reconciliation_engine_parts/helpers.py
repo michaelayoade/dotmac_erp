@@ -111,7 +111,10 @@ class ReconciliationEngineHelpers:
         if source_type == "PAYMENT_INTENT":
             return str(source_doc.intent_id)
         if source_type == "CUSTOMER_PAYMENT":
-            # Splynx payments use a special prefix
+            # Splynx is retired, but this stays: journals posted for
+            # Splynx-era payments were correlated as `splynx-pmt-{id}`, and
+            # that is how those existing rows are still found. `splynx_id`
+            # survives as a historical identifier, not as an integration.
             if getattr(source_doc, "splynx_id", None):
                 return f"splynx-pmt-{source_doc.splynx_id}"
             return str(source_doc.payment_id)

@@ -297,8 +297,9 @@ class TestSystemRules:
     """Verify system rule seed data is well-formed."""
 
     def test_system_rules_count(self) -> None:
-        """There should be 7 system rules matching the 7 passes."""
-        assert len(SYSTEM_RULES) == 7
+        """One seeded rule per pass. Was 7; the two Splynx passes retired with
+        that integration, so it is 5."""
+        assert len(SYSTEM_RULES) == 5
 
     def test_system_rules_have_unique_names(self) -> None:
         names = [r["name"] for r in SYSTEM_RULES]

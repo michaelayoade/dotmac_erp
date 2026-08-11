@@ -19,7 +19,9 @@ from app.services.finance.banking.reconciliation_policy import (
 DEFAULT_ENABLED_PROVIDER_KEYS = frozenset(
     {
         "gateway_payment_intent",
-        "receivable_payment_synced",
+        # "receivable_payment_synced" was the Splynx provider — retired.
+        # Existing policy rows may still list it; an unknown key in the
+        # enabled set is inert, so they are left alone rather than migrated.
         "payable_payment",
         "receivable_payment",
         "bank_fee",
