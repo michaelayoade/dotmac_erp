@@ -71,7 +71,6 @@ def main() -> int:
     # to it rather than running the whole seed unscoped.
     org_id = DEFAULT_ORG_ID
     with session_for_org(org_id) as db:
-
         cred = db.scalar(
             select(UserCredential).where(UserCredential.username == "e2e_testuser")
         )
