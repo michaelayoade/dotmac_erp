@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
+
+from tests._helpers.document_stubs import invoice_stub
 from uuid import uuid4
 
 from app.models.finance.ar.customer import CustomerType
@@ -117,7 +119,7 @@ def test_invoice_detail_view_overdue_flag(monkeypatch):
     )
 
     today = date.today()
-    invoice = SimpleNamespace(
+    invoice = invoice_stub(
         invoice_id=uuid4(),
         invoice_number="INV-001",
         invoice_type=SimpleNamespace(value="STANDARD"),

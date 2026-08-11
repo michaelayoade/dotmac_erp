@@ -305,7 +305,7 @@ def _compute_receivable(invoice: Invoice) -> Decimal:
 
 def invoice_detail_view(invoice: Invoice, customer: Customer | None) -> dict:
     """Transform invoice to detail view."""
-    balance = invoice.total_amount - invoice.amount_paid
+    balance = invoice.balance_due
     today = date.today()
     discount_amount = getattr(invoice, "discount_amount", None)
     withholding_tax_amount = getattr(invoice, "withholding_tax_amount", Decimal("0"))
@@ -536,9 +536,7 @@ def calculate_customer_balance_trends(
         balances = db.execute(
             select(
                 Invoice.customer_id,
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                ).label("balance"),
+                func.coalesce(func.sum(Invoice.balance_due), 0).label("balance"),
             )
             .where(
                 Invoice.organization_id == organization_id,

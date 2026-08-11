@@ -175,6 +175,9 @@ def allocate_candidate(db: Session, candidate: MatchCandidate) -> bool:
     if invoice is None:
         raise ValueError(f"Invoice {candidate.invoice_id} not found")
 
+    # NOT `balance_due`: the generated column holds what the last SELECT
+    # returned, and this loop writes `amount_paid` as it goes. The
+    # subtraction must stay live or the second allocation over-applies.
     live_outstanding = invoice.total_amount - invoice.amount_paid
     if live_outstanding <= 0:
         logger.info(

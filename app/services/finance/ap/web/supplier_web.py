@@ -245,9 +245,7 @@ class SupplierWebService:
             select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 ).label("balance"),
             )
@@ -306,9 +304,7 @@ class SupplierWebService:
         total_payables_raw = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 )
             ).where(
@@ -427,9 +423,7 @@ class SupplierWebService:
         balance = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 )
             ).where(
@@ -452,7 +446,7 @@ class SupplierWebService:
         ).all()
         invoices_view: list[dict] = []
         for inv in all_invoices_query:
-            balance_due = inv.total_amount - inv.amount_paid
+            balance_due = inv.balance_due
             invoices_view.append(
                 {
                     "invoice_id": inv.invoice_id,
