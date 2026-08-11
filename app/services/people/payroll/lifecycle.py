@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -39,6 +40,7 @@ from app.services.common import coerce_uuid
 
 if TYPE_CHECKING:
     pass
+from app.services.people.payroll.disbursement import record_disbursement
 from app.services.people.payroll.events import (
     PayrollEventDispatcher,
     RunApproved,
@@ -492,11 +494,18 @@ class PayrollLifecycle:
         slip_id: UUID,
         paid_by_id: UUID,
         payment_reference: str | None = None,
+        amount_paid: Decimal | None = None,
     ) -> TransitionResult:
         """
         Mark a salary slip as paid.
 
         Transition: POSTED → PAID
+
+        `amount_paid` is the sum that actually moved. Omitted, the slip records
+        its full `net_pay` — the claim this transition has always made
+        implicitly. `app.services.people.payroll.disbursement` owns that write
+        for both this method and `PayrollService.payout_payroll_entry`, so the
+        two cannot answer it differently.
         """
         slip = self._get_slip(organization_id, slip_id)
         user_id = coerce_uuid(paid_by_id)
@@ -508,6 +517,7 @@ class PayrollLifecycle:
         # Set payment tracking fields
         slip.paid_at = datetime.now(UTC)
         slip.paid_by_id = user_id
+        record_disbursement(slip, amount_paid)
         if payment_reference:
             slip.payment_reference = payment_reference
 
@@ -957,7 +967,6 @@ class PayrollLifecycle:
             )
 
         # Enforce single currency/exchange rate per run
-        from decimal import Decimal
 
         currency_codes = {s.currency_code for s in slips}
         exchange_rates = {s.exchange_rate or Decimal("1.0") for s in slips}
