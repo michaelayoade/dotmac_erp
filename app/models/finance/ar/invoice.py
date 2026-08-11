@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Computed,
     Boolean,
     Date,
     DateTime,
@@ -155,7 +156,20 @@ class Invoice(Base, VersionedMixin, TrackedMixin):
     amount_paid: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=0
     )
-    # balance_due is computed: total_amount - amount_paid
+    # `balance_due` is derived by the DATABASE, never written here — see
+    # ADR-0016. It was a Python @property, which meant it could not be queried,
+    # so services hand-wrote `total_amount - amount_paid` as SQL instead. One
+    # definition now serves the ORM and SQL alike.
+    #
+    # Note the one semantic difference from the old property: a generated
+    # column has no value until the row is flushed, so `balance_due` is None on
+    # an unflushed instance. SQLAlchemy refetches it after every flush,
+    # including updates to the operands.
+    balance_due: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6),
+        Computed("total_amount - amount_paid", persisted=True),
+        nullable=False,
+    )
     functional_currency_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -329,10 +343,6 @@ class Invoice(Base, VersionedMixin, TrackedMixin):
         back_populates="invoice",
         cascade="all, delete-orphan",
     )
-
-    @property
-    def balance_due(self) -> Decimal:
-        return self.total_amount - self.amount_paid
 
 
 # Forward reference
