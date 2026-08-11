@@ -18,7 +18,6 @@ from app.services.finance.banking.auto_reconciliation_parts.base import (
     StatementLineType,
     SupplierPayment,
     UUID,
-    _PAYSTACK_REF_RE,
     logger,
     select,
 )
@@ -262,39 +261,6 @@ class AutoReconciliationPaymentService:
                     )
                     result.errors.append(f"Line {line.line_number}: {e}")
 
-    # ── Splynx payment loader (shared by passes 2 & 3) ─────────────
-    def _load_splynx_payments(
-        self,
-        db: Session,
-        organization_id: UUID,
-        statement: BankStatement,
-        *,
-        config: AutoMatchDefaults | None = None,
-    ) -> list[CustomerPayment]:
-        """Load eligible Splynx payments for the statement's bank account.
-
-        Filters: ``splynx_id IS NOT NULL``, status CLEARED, has GL journal,
-        has correlation_id, and matching bank_account_id + date range.
-        """
-        from datetime import timedelta
-
-        buffer_days = config.date_buffer_days if config else 7
-        date_buffer = timedelta(days=buffer_days)
-        pmt_query = select(CustomerPayment).where(
-            CustomerPayment.organization_id == organization_id,
-            CustomerPayment.bank_account_id == statement.bank_account_id,
-            CustomerPayment.splynx_id.isnot(None),
-            CustomerPayment.status == PaymentStatus.CLEARED,
-            CustomerPayment.journal_entry_id.isnot(None),
-            CustomerPayment.correlation_id.isnot(None),
-        )
-        if statement.period_start and statement.period_end:
-            pmt_query = pmt_query.where(
-                CustomerPayment.payment_date >= statement.period_start - date_buffer,
-                CustomerPayment.payment_date <= statement.period_end + date_buffer,
-            )
-        return list(db.scalars(pmt_query).all())
-
     # ── AP / AR payment loaders (passes 4 & 5) ──────────────────
     def _load_ap_payments(
         self,
@@ -335,12 +301,12 @@ class AutoReconciliationPaymentService:
         *,
         config: AutoMatchDefaults | None = None,
     ) -> list[CustomerPayment]:
-        """Load eligible non-Splynx AR payments for the statement's bank account.
+        """Load eligible AR payments for the statement's bank account.
 
         Filters: status CLEARED, has GL journal,
         has correlation_id, and matching bank_account_id + date range.
         This catches AR receipts recorded directly in the app (not via
-        Paystack or Splynx).
+        Paystack).
         """
         from datetime import timedelta
 
@@ -359,242 +325,6 @@ class AutoReconciliationPaymentService:
                 CustomerPayment.payment_date <= statement.period_end + date_buffer,
             )
         return list(db.scalars(pmt_query).all())
-
-    # ── Pass 2: Splynx CustomerPayment by reference ──────────────
-    @staticmethod
-    def _extract_paystack_ref(description: str | None) -> str | None:
-        """Extract Paystack transaction ID from a payment description.
-
-        Paystack refs are 12-14 lowercase hex characters, e.g.
-        ``69871fd7d9178``.  Returns lowercase for case-insensitive matching.
-        """
-        if not description:
-            return None
-        match = _PAYSTACK_REF_RE.search(description)
-        return match.group(0).lower() if match else None
-
-    def _match_splynx_payments(
-        self,
-        db: Session,
-        organization_id: UUID,
-        bank_account: BankAccount,
-        payments: list[CustomerPayment],
-        unmatched_lines: list[BankStatementLine],
-        matched_line_ids: set[UUID],
-        matched_payment_ids: set[UUID],
-        result: AutoMatchResult,
-        *,
-        extra_gl_account_ids: set[UUID] | None = None,
-        config: AutoMatchDefaults | None = None,
-    ) -> None:
-        """Match lines against Splynx-originated CustomerPayments by reference.
-
-        Builds two lookup dicts:
-        1. Paystack ref extracted from ``description`` (primary)
-        2. Splynx receipt number from ``reference`` (fallback)
-        """
-        # Build lookup: paystack_ref_from_description -> payment
-        ref_to_payment: dict[str, CustomerPayment] = {}
-        for pmt in payments:
-            paystack_ref = self._extract_paystack_ref(pmt.description)
-            if paystack_ref:
-                ref_to_payment[paystack_ref] = pmt
-
-        # Also add Splynx receipt numbers as fallback keys
-        for pmt in payments:
-            if pmt.reference and pmt.reference not in ref_to_payment:
-                ref_to_payment[pmt.reference] = pmt
-
-        if not ref_to_payment:
-            return
-
-        for line in unmatched_lines:
-            if line.line_id in matched_line_ids:
-                continue
-            try:
-                payment = self._find_ref_in_line(line, ref_to_payment)  # type: ignore[attr-defined]
-                if not payment:
-                    continue
-
-                tolerance = config.amount_tolerance if config else None
-                if not self._amounts_match(  # type: ignore[attr-defined]
-                    line.amount, payment.amount, tolerance=tolerance
-                ):
-                    logger.debug(
-                        "Splynx ref in line %s but amount mismatch: "
-                        "line=%s, payment=%s",
-                        line.line_id,
-                        line.amount,
-                        payment.amount,
-                    )
-                    continue
-
-                # Query already filters correlation_id IS NOT NULL,
-                # but guard for mypy:
-                if not payment.correlation_id:
-                    continue
-
-                journal_line = self._find_journal_line(  # type: ignore[attr-defined]
-                    db,
-                    organization_id,
-                    payment.correlation_id,
-                    bank_account.gl_account_id,
-                    extra_gl_account_ids=extra_gl_account_ids,
-                )
-                if not journal_line:
-                    logger.debug(
-                        "No GL journal for Splynx payment %s (ref: %s)",
-                        payment.splynx_id,
-                        payment.reference,
-                    )
-                    continue
-
-                self._perform_match(  # type: ignore[attr-defined]
-                    db,
-                    organization_id,
-                    line,
-                    journal_line,
-                    source_type="CUSTOMER_PAYMENT",
-                    source_id=payment.payment_id,
-                )
-                self._log_match(  # type: ignore[attr-defined]
-                    db,
-                    organization_id,
-                    line=line,
-                    source_type="CUSTOMER_PAYMENT",
-                    source_id=payment.payment_id,
-                    journal_line_id=journal_line.line_id,
-                    confidence=95,
-                    explanation=f"Splynx payment {payment.splynx_id} (reference match)",
-                )
-                matched_line_ids.add(line.line_id)
-                matched_payment_ids.add(payment.payment_id)
-                result.matched += 1
-                logger.info(
-                    "Auto-matched line %s to GL %s via Splynx payment %s (ref)",
-                    line.line_id,
-                    journal_line.line_id,
-                    payment.splynx_id,
-                )
-            except Exception as e:
-                logger.exception(
-                    "Error matching line %s via Splynx payment: %s",
-                    line.line_id,
-                    e,
-                )
-                result.errors.append(f"Line {line.line_number}: {e}")
-
-    # ── Pass 3: Date + amount fallback matching ──────────────────
-    def _match_by_date_amount(
-        self,
-        db: Session,
-        organization_id: UUID,
-        bank_account: BankAccount,
-        payments: list[CustomerPayment],
-        unmatched_lines: list[BankStatementLine],
-        matched_line_ids: set[UUID],
-        matched_payment_ids: set[UUID],
-        result: AutoMatchResult,
-        *,
-        extra_gl_account_ids: set[UUID] | None = None,
-    ) -> None:
-        """Match remaining lines by date + amount (greedy pairing).
-
-        Groups both payments and statement lines by ``(date, amount_cents)``.
-        For each group, pairs as many as possible — ``min(N_payments, N_lines)``
-        — because every pair shares the same date and exact amount, so any
-        pairing within the group is equally valid.
-        """
-        from datetime import date
-
-        # Index payments by (date, amount_cents)
-        _DateAmountKey = tuple[date, int]
-        pmt_index: dict[_DateAmountKey, list[CustomerPayment]] = {}
-        for pmt in payments:
-            if pmt.payment_id in matched_payment_ids:
-                continue
-            if not pmt.correlation_id:
-                continue
-            amount_cents = int(round(pmt.amount * 100))
-            key: _DateAmountKey = (pmt.payment_date, amount_cents)
-            pmt_index.setdefault(key, []).append(pmt)
-
-        # Index lines by (date, amount_cents)
-        line_index: dict[_DateAmountKey, list[BankStatementLine]] = {}
-        for line in unmatched_lines:
-            if line.line_id in matched_line_ids:
-                continue
-            amount_cents = int(round(line.amount * 100))
-            key = (line.transaction_date, amount_cents)
-            line_index.setdefault(key, []).append(line)
-
-        # Greedy pairing: match min(payments, lines) for each (date, amount)
-        for key, pmts in pmt_index.items():
-            lines = line_index.get(key, [])
-            available_lines = [ln for ln in lines if ln.line_id not in matched_line_ids]
-            if not available_lines:
-                continue
-
-            pairs = min(len(pmts), len(available_lines))
-            for i in range(pairs):
-                pmt = pmts[i]
-                line = available_lines[i]
-
-                if pmt.payment_id in matched_payment_ids:
-                    continue
-                if line.line_id in matched_line_ids:
-                    continue
-
-                try:
-                    journal_line = self._find_journal_line(  # type: ignore[attr-defined]
-                        db,
-                        organization_id,
-                        pmt.correlation_id,  # type: ignore[arg-type]
-                        bank_account.gl_account_id,
-                        extra_gl_account_ids=extra_gl_account_ids,
-                    )
-                    if not journal_line:
-                        logger.debug(
-                            "No GL journal for Splynx payment %s (date+amount)",
-                            pmt.splynx_id,
-                        )
-                        continue
-
-                    self._perform_match(  # type: ignore[attr-defined]
-                        db,
-                        organization_id,
-                        line,
-                        journal_line,
-                        source_type="CUSTOMER_PAYMENT",
-                        source_id=pmt.payment_id,
-                    )
-                    self._log_match(  # type: ignore[attr-defined]
-                        db,
-                        organization_id,
-                        line=line,
-                        source_type="CUSTOMER_PAYMENT",
-                        source_id=pmt.payment_id,
-                        journal_line_id=journal_line.line_id,
-                        confidence=80,
-                        explanation=f"Splynx payment {pmt.splynx_id} (date+amount fallback)",
-                    )
-                    matched_line_ids.add(line.line_id)
-                    matched_payment_ids.add(pmt.payment_id)
-                    result.matched += 1
-                    logger.info(
-                        "Auto-matched line %s to GL %s via Splynx payment %s "
-                        "(date+amount)",
-                        line.line_id,
-                        journal_line.line_id,
-                        pmt.splynx_id,
-                    )
-                except Exception as e:
-                    logger.exception(
-                        "Error matching line %s via date+amount: %s",
-                        line.line_id,
-                        e,
-                    )
-                    result.errors.append(f"Line {line.line_number}: {e}")
 
     # ── Pass 4: AP supplier payment matching ──────────────────────
     def _match_ap_payments(
@@ -816,7 +546,7 @@ class AutoReconciliationPaymentService:
         extra_gl_account_ids: set[UUID] | None = None,
         config: AutoMatchDefaults | None = None,
     ) -> None:
-        """Match credit bank lines against non-Splynx AR customer payments.
+        """Match credit bank lines against AR customer payments.
 
         Two-phase matching:
         A. **Reference** — builds lookup from ``payment_number`` and

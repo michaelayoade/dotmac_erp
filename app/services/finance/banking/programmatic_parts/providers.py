@@ -44,25 +44,6 @@ class PaymentIntentProvider(CandidateProvider):
 
 
 @dataclass(frozen=True)
-class SplynxCustomerPaymentProvider(CandidateProvider):
-    provider_key: str = "receivable_payment_synced"
-    source_type: str = "customer_payment"
-
-    def load(self, service: Any, ctx: ReconciliationRunContext) -> list[Any]:
-        cached = ctx.provider_cache.get(self.provider_key)
-        if cached is not None:
-            return cached
-        loaded = service._load_splynx_payments(
-            ctx.db,
-            ctx.organization_id,
-            ctx.statement,
-            config=ctx.config,
-        )
-        ctx.provider_cache[self.provider_key] = loaded
-        return cast(list[Any], loaded)
-
-
-@dataclass(frozen=True)
 class SupplierPaymentProvider(CandidateProvider):
     provider_key: str = "payable_payment"
     source_type: str = "supplier_payment"

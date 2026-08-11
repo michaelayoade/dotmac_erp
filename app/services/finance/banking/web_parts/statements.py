@@ -2241,7 +2241,7 @@ class BankingStatementWebService:
         """Run auto-match on a specific statement's unmatched lines.
 
         Delegates to ``AutoReconciliationService.auto_match_statement()``
-        for deterministic PaymentIntent + Splynx payment matching.
+        for deterministic PaymentIntent + AR/AP payment matching.
         """
         from app.services.finance.banking.auto_reconciliation import (
             AutoReconciliationService,

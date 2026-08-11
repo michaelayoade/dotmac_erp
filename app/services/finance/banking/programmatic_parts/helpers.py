@@ -85,32 +85,6 @@ def _payment_intent_ref_lookup(
     return ref_to_intent
 
 
-def _splynx_ref_lookup(service: Any, payments: list[Any]) -> dict[str, Any]:
-    ref_to_payment: dict[str, Any] = {}
-    ambiguous_refs: set[str] = set()
-    for payment in payments:
-        paystack_ref = service._extract_paystack_ref(payment.description)
-        if paystack_ref:
-            if (
-                paystack_ref in ref_to_payment
-                and ref_to_payment[paystack_ref] is not payment
-            ):
-                ambiguous_refs.add(paystack_ref)
-            else:
-                ref_to_payment[paystack_ref] = payment
-    for payment in payments:
-        ref = getattr(payment, "reference", None)
-        if not ref:
-            continue
-        if ref in ref_to_payment and ref_to_payment[ref] is not payment:
-            ambiguous_refs.add(ref)
-        else:
-            ref_to_payment[ref] = payment
-    for ref in ambiguous_refs:
-        ref_to_payment.pop(ref, None)
-    return ref_to_payment
-
-
 def _perform_match(
     service: Any,
     ctx: ReconciliationRunContext,

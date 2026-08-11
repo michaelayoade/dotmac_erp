@@ -7,8 +7,6 @@ from typing import Protocol
 
 class AutoMatchDefaultsLike(Protocol):
     pass_payment_intents_enabled: bool
-    pass_splynx_by_ref_enabled: bool
-    pass_splynx_date_amount_enabled: bool
     pass_ap_payments_enabled: bool
     pass_ar_payments_enabled: bool
     pass_bank_fees_enabled: bool
@@ -54,14 +52,6 @@ def build_policy_from_config(config: AutoMatchDefaultsLike) -> ReconciliationPol
         enabled_sources.add("payment_intent")
         enabled_providers.add("gateway_payment_intent")
         enabled_strategies.add("exact_external_reference")
-    if config.pass_splynx_by_ref_enabled:
-        enabled_sources.add("customer_payment")
-        enabled_providers.add("receivable_payment_synced")
-        enabled_strategies.add("exact_synced_receivable_reference")
-    if config.pass_splynx_date_amount_enabled:
-        enabled_sources.add("customer_payment")
-        enabled_providers.add("receivable_payment_synced")
-        enabled_strategies.add("unique_date_amount")
     if config.pass_ap_payments_enabled:
         enabled_sources.add("supplier_payment")
         enabled_providers.add("payable_payment")
