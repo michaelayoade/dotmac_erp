@@ -72,13 +72,15 @@ GRANDFATHERED = {
         "it reading PAID. Needs expand (amount_paid + balance_due) first."
     ),
     "app/models/expense/expense_claim.py::ExpenseClaimStatus": (
-        "No `amount_paid`; MARK_PAID is an action, not a computation. Expand "
-        "first. Note this enum exists TWICE — see the people/exp entry."
+        "THE OWNER. Expense claims belong to the expense domain (ruled "
+        "2026-08-11). No `amount_paid`; MARK_PAID is an action, not a "
+        "computation. Expand adds the columns here."
     ),
     "app/models/people/exp/expense_claim.py::ExpenseClaimStatus": (
-        "The second copy of the expense-claim status enum. Which module owns "
-        "expense claims is a prior question to this one, and answering it is "
-        "not in ADR-0016's scope."
+        "A DUPLICATE of the owning enum above, not a second document type. "
+        "Retires with the people/exp copy rather than gaining coverage "
+        "columns of its own — expanding both would create exactly the second "
+        "writer this ADR exists to remove."
     ),
     "app/models/finance/lease/lease_payment_schedule.py::PaymentStatus": (
         "No `amount_paid`, though it carries `total_payment` plus a "
