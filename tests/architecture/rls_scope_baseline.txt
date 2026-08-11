@@ -12,8 +12,6 @@ scripts/bulk_import.py
 scripts/fix_display_names.py
 scripts/import_dotmac_tb.py
 scripts/import_tb_audit.py
-scripts/import_uba_statements.py
-scripts/import_zenith_statements.py
 scripts/link_gl_bank_accounts.py
 scripts/seed_payroll_from_excel.py
 scripts/seed_rbac.py

@@ -176,3 +176,45 @@ def test_complete_writes_tracked_entities_onto_the_record():
     BatchOperationService.complete(db, record, tally)
     assert record.created_entity_ids == {"invoice": [str(entity)]}
     assert record.status is BatchOperationStatus.COMPLETED
+
+
+# --------------------------------------------------------------------------
+# Identifying the input, not just naming it
+# --------------------------------------------------------------------------
+
+
+def test_the_checksum_and_metadata_reach_the_record():
+    """`source_file` says which files a run CLAIMED to read; `source_checksum`
+    says what it actually read. Both columns shipped in January 2026 with no
+    writer — these are the arguments that make them real."""
+    db = _db()
+    record = BatchOperationService.start(
+        db,
+        organization_id=ORG,
+        operation_type=BatchOperationType.IMPORT,
+        operation_name="import_uba_statements",
+        started_by_id=ACTOR,
+        source_file="/statements/uba",
+        source_checksum="deadbeef" * 8,
+        metadata={"bank": "033", "files": {"a.xlsx": "abc"}},
+    )
+    assert record.source_checksum == "deadbeef" * 8
+    assert record.metadata_ == {"bank": "033", "files": {"a.xlsx": "abc"}}
+
+
+def test_the_checksum_survives_the_context_manager():
+    """The passthrough that matters: importers call `batch_operation`, not
+    `start` directly, so an argument dropped in the wrapper would be silently
+    lost rather than rejected."""
+    db = _db()
+    with batch_operation(
+        db,
+        organization_id=ORG,
+        operation_type=BatchOperationType.IMPORT,
+        operation_name="import_zenith_statements",
+        started_by_id=ACTOR,
+        source_checksum="c0ffee" * 8,
+    ):
+        pass
+    record = db.add.call_args[0][0]
+    assert record.source_checksum == "c0ffee" * 8
