@@ -34,8 +34,6 @@ scripts/bulk_import.py 1
 scripts/fix_display_names.py 1
 scripts/import_dotmac_tb.py 1
 scripts/import_tb_audit.py 1
-scripts/import_uba_statements.py 1
-scripts/import_zenith_statements.py 1
 scripts/link_gl_bank_accounts.py 1
 scripts/migration/2026-04-30_backfill_deferred_vat.py 1
 scripts/seed_payroll_from_excel.py 1
