@@ -1,0 +1,28 @@
+# Scripts that open a SessionLocal without ever setting an organization
+# scope or an explicit RLS bypass.
+#
+# This list is a RATCHET: it may shrink, never grow. See
+# tests/architecture/test_script_rls_scope.py for why an entry here is a
+# silent failure rather than a crash.
+#
+# Regenerate deliberately (only when burning entries down):
+#   python -m tests.architecture.test_script_rls_scope --update
+scripts/add_missing_contract_staff.py
+scripts/audit_payroll_deductions.py
+scripts/backfill_gl_postings.py
+scripts/backfill_inventory_gl_postings.py
+scripts/bulk_import.py
+scripts/create_unallocated_payroll_cc.py
+scripts/fix_display_names.py
+scripts/fix_duplicate_ar_journals.py
+scripts/import_dotmac_tb.py
+scripts/import_tb_audit.py
+scripts/import_uba_statements.py
+scripts/import_zenith_statements.py
+scripts/link_gl_bank_accounts.py
+scripts/post_and_match_paystack_opex_expense_reimbursements.py
+scripts/post_jan_2026_ap_invoices.py
+scripts/reconcile_jan_2026_dryrun.py
+scripts/seed_payroll_from_excel.py
+scripts/seed_rbac.py
+scripts/settings_sync.py
