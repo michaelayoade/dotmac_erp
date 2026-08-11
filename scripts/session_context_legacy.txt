@@ -21,8 +21,8 @@
 #   3. It genuinely still needs to run by hand -> open the session via
 #      `session_for_org(org_id)` or `cross_org_session()`.
 #
-# Two provisioning entries are BLOCKED rather than untouched, so that a
-# later pass does not mistake them for work nobody started:
+# One provisioning entry remains BLOCKED rather than untouched, so that a
+# later pass does not mistake it for work nobody started:
 #
 #   seed_rbac.py      — seeds the GLOBAL Role/Permission catalogue (correct
 #     unscoped) and also reads org-scoped Person rows in the same session.
@@ -30,21 +30,13 @@
 #
 # Format: <path> <number-of-raw-SessionLocal()-calls>
 scripts/add_missing_contract_staff.py 1
-scripts/audit_payroll_deductions.py 1
-scripts/backfill_gl_postings.py 1
-scripts/backfill_inventory_gl_postings.py 1
 scripts/bulk_import.py 1
-scripts/create_unallocated_payroll_cc.py 1
 scripts/fix_display_names.py 1
-scripts/fix_duplicate_ar_journals.py 1
 scripts/import_dotmac_tb.py 1
 scripts/import_tb_audit.py 1
 scripts/import_uba_statements.py 1
 scripts/import_zenith_statements.py 1
 scripts/link_gl_bank_accounts.py 1
 scripts/migration/2026-04-30_backfill_deferred_vat.py 1
-scripts/post_and_match_paystack_opex_expense_reimbursements.py 1
-scripts/post_jan_2026_ap_invoices.py 3
-scripts/reconcile_jan_2026_dryrun.py 1
 scripts/seed_payroll_from_excel.py 1
 scripts/seed_rbac.py 1

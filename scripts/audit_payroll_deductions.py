@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import case, func, select
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.people.payroll.payroll_entry import PayrollEntry
 from app.models.people.payroll.salary_slip import (
     SalarySlip,
@@ -46,7 +46,7 @@ def _hr_section(title: str) -> None:
 
 
 def run(*, organization_id: UUID, since: date | None) -> int:
-    with SessionLocal() as db:
+    with session_for_org(organization_id) as db:
         # Build the slip filter once.
         scope = [SalarySlip.organization_id == organization_id]
         if since:

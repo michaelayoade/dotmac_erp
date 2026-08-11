@@ -34,10 +34,10 @@ from uuid import UUID
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.finance.core_org.business_unit import BusinessUnit, BusinessUnitType
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -48,13 +48,6 @@ CC_CODE = "UNALLOC-PAY"
 CC_NAME = "Unallocated Payroll"
 BU_CODE = "DEFAULT-BU"
 BU_NAME = "Default"
-
-
-def _set_org_context(db: Session, organization_id: UUID) -> None:
-    """Set RLS context. Safe inline f-string: organization_id is a UUID,
-    not a user-supplied string — Python type guarantees no injection.
-    """
-    db.execute(text(f"SET LOCAL app.current_organization_id = '{organization_id}'"))
 
 
 def _get_or_create_business_unit(
@@ -120,9 +113,7 @@ def _get_or_create_cost_center(
 
 def run(*, organization_id: UUID, execute: bool) -> int:
     dry_run = not execute
-    with SessionLocal() as db:
-        _set_org_context(db, organization_id)
-
+    with session_for_org(organization_id) as db:
         print("Step 1: business_unit")
         bu = _get_or_create_business_unit(db, organization_id, dry_run=dry_run)
         bu_id = bu.business_unit_id if bu else None

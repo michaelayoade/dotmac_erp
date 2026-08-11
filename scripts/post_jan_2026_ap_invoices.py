@@ -31,7 +31,7 @@ sys.path.insert(0, ".")
 
 from sqlalchemy import select, text  # noqa: E402
 
-from app.db import SessionLocal  # noqa: E402
+from app.db.session_context import session_for_org  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,7 +82,7 @@ def post_draft_invoices(*, execute: bool) -> dict[str, int | list[str]]:
     }
     errors: list[str] = []
 
-    with SessionLocal() as db:
+    with session_for_org(ORG_ID) as db:
         # Find DRAFT AP invoices for January 2026
         stmt = (
             select(SupplierInvoice)
@@ -202,7 +202,7 @@ def create_tax_returns(*, execute: bool) -> None:
     logger.info("TASK 2: Create Tax Returns (January 2026)")
     logger.info("=" * 60)
 
-    with SessionLocal() as db:
+    with session_for_org(ORG_ID) as db:
         # Show current tax transaction summary
         # Note: get_return_summary uses gl.fiscal_period_id, not tax.period_id
         summary = TaxTransactionService.get_return_summary(
@@ -307,7 +307,7 @@ def analyze_overlap() -> None:
     logger.info("TASK 3: Overlap Analysis — Bank Journals vs AP Invoices")
     logger.info("=" * 60)
 
-    with SessionLocal() as db:
+    with session_for_org(ORG_ID) as db:
         # Count reconciliation journals for Jan 2026
         # These are 2-line journals (DR expense payable / CR bank)
         recon_count = db.execute(

@@ -24,10 +24,10 @@ one of them exits 0.
 
 ## Why a ratchet rather than a gate
 
-Twenty-nine scripts are in this state today. Failing the build on all of them
-would make the check red from the first run, and a permanently red check is one
-nobody reads. So `rls_scope_baseline.txt` records today's list and this test
-fails only on movement:
+The scripts listed in the baseline are in this state today. Failing the build
+on all of them would make the check red from the first run, and a permanently
+red check is one nobody reads. So `rls_scope_baseline.txt` records today's
+list and this test fails only on movement:
 
   * a script that scopes nothing and is **not** in the baseline — a new one, or
     a regression;
