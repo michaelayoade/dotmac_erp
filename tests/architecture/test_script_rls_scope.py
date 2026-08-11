@@ -157,5 +157,7 @@ if __name__ == "__main__":  # `python -m tests.architecture.test_script_rls_scop
         raise SystemExit("pass --update to rewrite the baseline")
     header = BASELINE.read_text(encoding="utf-8").split("\n")
     keep = [line for line in header if line.startswith("#")]
-    BASELINE.write_text("\n".join(keep + find_unscoped_scripts()) + "\n", encoding="utf-8")
+    BASELINE.write_text(
+        "\n".join(keep + find_unscoped_scripts()) + "\n", encoding="utf-8"
+    )
     print(f"recorded {len(find_unscoped_scripts())} unscoped script(s)")
