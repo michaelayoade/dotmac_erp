@@ -29,7 +29,7 @@ _DATE_FORMATS = ("%d-%b-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y")
 # ORDER IS LOAD-BEARING. UBA writes '01-Jan-2022 - 31-Dec-2023' (spaced
 # dash); Zenith writes '01/01/2022-30/09/2024' (bare dash). The spaced form
 # must be tried FIRST: splitting a UBA period on a bare '-' shatters it into
-# five pieces rather than two. The `len(parts) == 2` check below is the
+# six pieces rather than two. The `len(parts) == 2` check below is the
 # backstop that makes a wrong split fail closed instead of parsing garbage.
 _PERIOD_SEPARATORS = (" - ", " TO ", " to ", "-")
 

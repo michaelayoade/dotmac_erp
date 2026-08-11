@@ -60,7 +60,9 @@ def test_the_spaced_dash_is_tried_before_the_bare_one():
     saves it — this asserts the outcome either way, so a reordering that
     removes the guard is caught."""
     period = "01-Jan-2022 - 31-Dec-2023"
-    assert len(period.split("-")) == 5, "premise: a bare split shatters this"
+    # The premise, stated as the property that matters rather than an exact
+    # count: a bare '-' does not yield the two halves the parser needs.
+    assert len(period.split("-")) != 2, "premise: a bare split does not give two halves"
     assert parse_period(period) == (date(2022, 1, 1), date(2023, 12, 31))
 
 
