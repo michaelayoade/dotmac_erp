@@ -22,14 +22,33 @@ if nothing walks it back. That is what this test is for. The point is not
 that every finding was severe; it is that three separate reviewers read
 these files and none of them was looking.
 
-## Why a literal and not an entropy heuristic
+## This repository already had a secret scanner
 
-A secret scanner that guesses at entropy fires on hashes, UUIDs and base64
-fixtures, gets muted, and then catches nothing. This checks something
-narrower and decidable instead: a credential-named KEYWORD assigned a
+`detect-secrets` runs as a pre-commit hook, and it FOUND three of the four:
+`capture_all_pages.py`, `retry_failed_pages.py` and
+`resync_purchase_invoices.py` were each flagged `Secret Keyword` — and each
+was then written into `.secrets.baseline`, which suppressed them. It missed
+the UBA passwords entirely, because `"89046"` is a five-digit numeric string
+with no entropy to notice.
+
+So the tool worked, and the finding was acknowledged and muted. That is the
+failure mode this test is designed around: a scanner whose output is a
+mutable allowlist decays into 121 unexplained suppressions, and the next
+real finding lands in it without comment.
+
+## Why a literal check and not an entropy heuristic
+
+An entropy scanner fires on hashes, UUIDs and base64 fixtures, gets muted,
+and then catches nothing — which is the history above. This checks something
+narrower and decidable instead: a credential-named binding assigned a
 literal string. `password="root"` fails; `password=args.password`,
 `os.environ["X"]` and a type annotation all pass, because none of them puts
 a value in the file.
+
+There is deliberately NO baseline and no allowlist. The two exemptions are
+categorical and proven by test (`_is_self_naming`), not a list of paths that
+can be appended to. Per ADR-0018: an exemption must state its reason, and a
+baseline entry states nothing.
 """
 
 from __future__ import annotations
