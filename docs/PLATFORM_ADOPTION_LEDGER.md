@@ -283,8 +283,11 @@ still recorded debt.
 The same containment applies to global authentication records and platform
 settings: tenant permission claims such as `auth:manage` or `settings:manage`
 cannot authorize an RLS-bypass session. Those JSON APIs require the explicit
-system-admin principal. Tenant-scoped settings history retains its organization
-ownership checks.
+system-admin principal. Because JWT role claims are login-time snapshots,
+`require_admin_bypass` revalidates the caller's live, active `admin` assignment
+on every request; a removed assignment stops authorizing cross-tenant access
+without waiting for token expiry. Tenant-scoped settings history retains its
+organization ownership checks.
 
 Licensing development mode is opt-in. An omitted `DOTMAC_DEV_MODE` now enters
 normal fail-closed enforcement, while tests and development environments set
