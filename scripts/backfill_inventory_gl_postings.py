@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 sys.path.insert(0, ".")
 
-from app.db import SessionLocal  # noqa: E402
+from app.db.session_context import cross_org_session, session_for_org  # noqa: E402
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus  # noqa: E402
 from app.models.finance.gl.fiscal_year import FiscalYear  # noqa: E402
 from app.models.inventory.inventory_transaction import (  # noqa: E402
@@ -368,7 +368,8 @@ def main() -> None:
     org_id = UUID(args.org_id) if args.org_id else None
     txn_type = TransactionType(args.transaction_type) if args.transaction_type else None
 
-    with SessionLocal() as db:
+    session_scope = session_for_org(org_id) if org_id else cross_org_session()
+    with session_scope as db:
         logger.info("=" * 60)
         logger.info("INVENTORY GL BACKFILL REPORT")
         logger.info("=" * 60)

@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session
 # Bootstrap the app to get DB access
 sys.path.insert(0, ".")
 
-from app.db import SessionLocal  # noqa: E402
+from app.db.session_context import cross_org_session, session_for_org  # noqa: E402
 from app.models.expense.expense_claim import (  # noqa: E402
     ExpenseClaim,
     ExpenseClaimStatus,
@@ -721,7 +721,8 @@ def main() -> None:
 
     org_id = UUID(args.org_id) if args.org_id else None
 
-    with SessionLocal() as db:
+    session_scope = session_for_org(org_id) if org_id else cross_org_session()
+    with session_scope as db:
         # Always show the report first
         logger.info("=" * 60)
         logger.info("GL POSTING BACKFILL REPORT")
