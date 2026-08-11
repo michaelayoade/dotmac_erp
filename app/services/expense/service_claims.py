@@ -1174,6 +1174,105 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 )
             raise
 
+    def withdraw_approval(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        *,
+        approver_id: UUID,
+        reason: str,
+        actor_id: UUID | None = None,
+        allow_admin_override: bool = False,
+    ) -> ExpenseClaim:
+        """Withdraw approval from an approved claim that has no financial activity."""
+        from app.models.finance.payments.payment_intent import (
+            PaymentIntent,
+            PaymentIntentStatus,
+        )
+
+        claim = self.get_claim(org_id, claim_id)
+        if claim.status == ExpenseClaimStatus.APPROVAL_WITHDRAWN:
+            return claim
+        if claim.status != ExpenseClaimStatus.APPROVED:
+            raise ExpenseClaimStatusError(
+                claim.status.value, ExpenseClaimStatus.APPROVAL_WITHDRAWN.value
+            )
+        reason = reason.strip()
+        if not reason:
+            raise ValueError("A reason is required to withdraw approval.")
+        if len(reason) > 1000:
+            raise ValueError("The withdrawal reason cannot exceed 1000 characters.")
+        if claim.approver_id != approver_id and not allow_admin_override:
+            raise ExpenseServiceError(
+                "Only the approver who approved this claim can withdraw approval."
+            )
+        if any(
+            (
+                claim.payment_reference,
+                claim.supplier_invoice_id,
+                claim.journal_entry_id,
+                claim.reimbursement_journal_id,
+                claim.paid_on,
+            )
+        ):
+            raise ExpenseServiceError(
+                "Approval cannot be withdrawn after payment or accounting activity exists."
+            )
+        active_payment = self.db.scalar(
+            select(PaymentIntent.intent_id).where(
+                PaymentIntent.organization_id == org_id,
+                PaymentIntent.source_type == "EXPENSE_CLAIM",
+                PaymentIntent.source_id == claim_id,
+                PaymentIntent.status.in_(
+                    [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+                ),
+            )
+        )
+        if active_payment is not None:
+            raise ExpenseServiceError(
+                "Approval cannot be withdrawn while payment is pending or processing."
+            )
+        if not self._begin_action(
+            org_id, claim_id, ExpenseClaimActionType.WITHDRAW_APPROVAL
+        ):
+            return claim
+
+        try:
+            old_status = claim.status.value
+            claim.status = ExpenseClaimStatus.APPROVAL_WITHDRAWN
+            claim.rejection_reason = reason
+            self._stamp_status_change(claim, actor_id)
+            self.db.flush()
+            fire_audit_event(
+                db=self.db,
+                organization_id=org_id,
+                table_schema="expense",
+                table_name="expense_claim",
+                record_id=str(claim.claim_id),
+                action=AuditAction.UPDATE,
+                old_values={"status": old_status},
+                new_values={
+                    "status": ExpenseClaimStatus.APPROVAL_WITHDRAWN.value,
+                    "withdrawal_reason": reason,
+                },
+            )
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.WITHDRAW_APPROVAL,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            logger.info("Withdrew approval for expense claim %s", claim_id)
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.WITHDRAW_APPROVAL,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
+
     def _notify_claim_rejected(
         self, claim: ExpenseClaim, org_id: UUID, approver, reason: str
     ) -> None:

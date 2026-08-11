@@ -48,6 +48,7 @@ class ExpenseClaimStatus(str, enum.Enum):
     SUBMITTED = "SUBMITTED"
     PENDING_APPROVAL = "PENDING_APPROVAL"
     APPROVED = "APPROVED"
+    APPROVAL_WITHDRAWN = "APPROVAL_WITHDRAWN"
     REJECTED = "REJECTED"
     PAID = "PAID"
     CANCELLED = "CANCELLED"
@@ -65,7 +66,9 @@ class ExpenseClaimStatus(str, enum.Enum):
     @classmethod
     def terminal(cls) -> frozenset["ExpenseClaimStatus"]:
         """Statuses where the claim is fully settled or cancelled."""
-        return frozenset({cls.PAID, cls.REJECTED, cls.CANCELLED})
+        return frozenset(
+            {cls.PAID, cls.REJECTED, cls.CANCELLED, cls.APPROVAL_WITHDRAWN}
+        )
 
 
 class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):
