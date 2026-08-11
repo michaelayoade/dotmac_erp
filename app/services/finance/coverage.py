@@ -32,6 +32,13 @@ parity test over the boundary values rather than by hope
 (`tests/integration/test_coverage_parity.py`, which runs on PostgreSQL because
 that is where the SQL half actually executes).
 
+They take their balance from different places, on purpose. `coverage_case` uses
+the stage-1 `balance_due` GENERATED column, which the database computes as part
+of the same query. `coverage_of` subtracts live, because on a loaded instance
+that column holds whatever the last SELECT returned and does NOT track a Python
+assignment to `amount_paid` — so an allocation loop reading it would classify
+against a stale balance.
+
 ## The tolerance is configuration, not a constant
 
 Sub-cent rounding dust is a real quantity, and modules independently choosing
@@ -125,26 +132,37 @@ def coverage_of(
 
 
 def coverage_case(
-    total_amount: ColumnElement[Decimal],
+    balance_due: ColumnElement[Decimal],
     amount_paid: ColumnElement[Decimal],
     *,
     dust: Decimal = PAYMENT_DUST_DEFAULT,
 ) -> Case:
     """The SQL twin of `coverage_of`, for filtering and grouping in a query.
 
-    Pass the model's columns (or its `balance_due` operands):
-
         stmt = select(Invoice).where(
-            coverage_case(Invoice.total_amount, Invoice.amount_paid, dust=dust)
+            coverage_case(Invoice.balance_due, Invoice.amount_paid, dust=dust)
             == PaymentCoverage.PARTIAL.value
         )
 
+    Takes `balance_due` — the stage-1 GENERATED column — rather than the two
+    operands, so the subtraction has exactly one definition and this expression
+    cannot drift from it. The first draft took `total_amount, amount_paid` and
+    recomputed the difference; `test_balance_due_is_not_rewritten` rejected it,
+    correctly.
+
+    Note the asymmetry with `coverage_of`, which is deliberate. In SQL the
+    column is authoritative, because the database computes it as part of the
+    same query. In Python it is whatever the last SELECT returned and does NOT
+    track an in-flight assignment to `amount_paid`, so `coverage_of` subtracts
+    live. Same rule, different correct source, for the reason recorded in that
+    test's `_LIVE_SUBTRACTION_REQUIRED`.
+
     The branch ORDER mirrors `coverage_of` exactly, and must keep mirroring it:
-    the branches overlap (a balance of zero satisfies both `<= dust` and, were
-    it reordered, other arms), so this is one rule expressed twice and the
-    parity test is what keeps the two honest.
+    the branches overlap (a balance of zero satisfies more than one arm), so
+    this is one rule expressed twice and the parity test is what keeps the two
+    honest.
     """
-    balance = total_amount - amount_paid
+    balance = balance_due
     return case(
         (balance < literal(-dust), literal(PaymentCoverage.OVERPAID.value)),
         (balance <= literal(dust), literal(PaymentCoverage.PAID.value)),

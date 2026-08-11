@@ -70,6 +70,14 @@ _NO_MODEL_IN_SCOPE = {
     "app/services/finance/ar/payment_status.py": 1,
     "app/services/finance/ap/payment_status.py": 1,
     "app/services/sync/sub_purchase_invoice_status.py": 1,
+    # `coverage_of` takes two Decimals and returns a `PaymentCoverage`. Its SQL
+    # twin `coverage_case` in the same file DOES take `balance_due` — this test
+    # rejected the first draft, which recomputed the difference there, and was
+    # right to. The asymmetry is the stage-1 staleness rule: in a query the
+    # database computes the column now, but on a loaded instance it holds
+    # whatever the last SELECT returned, so the pure function must subtract
+    # live or an allocation loop classifies against a stale balance.
+    "app/services/finance/coverage.py": 1,
 }
 
 _ALLOWED: dict[str, int] = {

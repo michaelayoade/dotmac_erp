@@ -64,9 +64,16 @@ def test_sql_agrees_with_python(db: Session, total: str, paid: str, dust: str) -
     in_python = coverage_of(
         total_amount=total_amount, amount_paid=amount_paid, dust=tolerance
     )
+    # `coverage_case` takes `balance_due` — the generated column — so the
+    # subtraction has one definition. Here that column's value is supplied
+    # directly, which is also what makes this test independent of any model.
     in_sql = db.scalar(
         select(
-            coverage_case(literal(total_amount), literal(amount_paid), dust=tolerance)
+            coverage_case(
+                literal(total_amount - amount_paid),
+                literal(amount_paid),
+                dust=tolerance,
+            )
         )
     )
 
