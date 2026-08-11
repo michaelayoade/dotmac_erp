@@ -5,7 +5,7 @@ Import UBA Bank Statements from Excel files.
 Handles password-protected UBA statement files.
 
 Usage:
-    poetry run python scripts/import_uba_statements.py [--dry-run]
+    poetry run python scripts/import_uba_statements.py --org-id <uuid> [--dry-run]
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ import argparse
 import io
 import logging
 import os
+import sys
+import uuid
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -21,12 +23,10 @@ from pathlib import Path
 
 import msoffcrypto
 import openpyxl
-from sqlalchemy import select
 
-from app.db import SessionLocal
-from app.models.finance.banking.bank_account import (
-    BankAccount,
-)
+from app.db.session_context import session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation, file_manifest_digest
 from app.services.finance.banking.bank_statement import (
     BankStatementService,
 )
@@ -34,6 +34,7 @@ from app.services.finance.banking.statement_import import (
     AccountProfile,
     BankProfile,
     ensure_bank_account,
+    find_bank_account,
     to_statement_lines,
 )
 from app.services.finance.banking.statement_parsing import (
@@ -49,6 +50,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BANK = BankProfile(bank_name="United Bank for Africa", bank_code="033")
+
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 # Where the statement workbooks are read from. Overridable, with no
 # environment-specific path baked in.
@@ -236,27 +239,43 @@ def parse_uba_statement(
         return None
 
 
-def import_statements(dry_run: bool = False):
-    """Main import function."""
+def _configured_files() -> list[Path]:
+    """Every statement file this run will read, in configuration order."""
+    return [
+        STATEMENT_DIR / filename
+        for config in ACCOUNT_CONFIG.values()
+        for filename in config["files"]
+    ]
 
+
+def import_statements(
+    *, organization_id: uuid.UUID, actor_id: uuid.UUID, dry_run: bool = False
+) -> int:
+    """Import every configured UBA account. Returns the number of failures."""
+
+    mode = "DRY RUN" if dry_run else "EXECUTE"
     logger.info("=" * 60)
-    logger.info("UBA Bank Statement Import")
+    logger.info("UBA Bank Statement Import (%s) — org %s", mode, organization_id)
     logger.info("=" * 60)
 
-    if dry_run:
-        logger.info("DRY RUN MODE - No changes will be made")
+    checksum, per_file = file_manifest_digest(_configured_files())
+    logger.info("Input manifest: %d file(s), digest %s", len(per_file), checksum[:12])
 
-    with SessionLocal() as db:
-        # Get organization ID from existing bank account
-        existing = db.execute(select(BankAccount).limit(1)).scalars().first()
-
-        if not existing:
-            logger.error("No existing bank account found to determine org ID")
-            return
-
-        org_id = existing.organization_id
-        logger.info(f"Organization ID: {org_id}")
-
+    with (
+        session_for_org(organization_id) as db,
+        batch_operation(
+            db,
+            organization_id=organization_id,
+            operation_type=BatchOperationType.IMPORT,
+            operation_name="import_uba_statements",
+            started_by_id=actor_id,
+            description=f"UBA statement import ({mode})",
+            source_file=str(STATEMENT_DIR),
+            source_checksum=checksum,
+            metadata={"bank": BANK.bank_code, "files": per_file},
+        ) as tally,
+    ):
+        org_id = organization_id
         total_imported = 0
         total_skipped = 0
 
@@ -279,12 +298,9 @@ def import_statements(dry_run: bool = False):
                     ),
                 )
             else:
-                bank_account = db.execute(
-                    select(BankAccount).where(
-                        BankAccount.organization_id == org_id,
-                        BankAccount.account_number == account_number,
-                    )
-                ).scalar_one_or_none()
+                bank_account = find_bank_account(
+                    db, organization_id=org_id, account_number=account_number
+                )
 
             # Parse all statement files for this account
             all_transactions = []
@@ -359,10 +375,12 @@ def import_statements(dry_run: bool = False):
 
             if dry_run:
                 logger.info("  [DRY RUN] Would import statement")
+                tally.skipped += len(unique_transactions)
                 continue
 
             if not bank_account:
                 logger.error("  Bank account not found")
+                tally.failed += 1
                 continue
 
             # Convert to statement lines
@@ -395,8 +413,12 @@ def import_statements(dry_run: bool = False):
 
                 total_imported += result.lines_imported
                 total_skipped += result.lines_skipped
+                tally.created += result.lines_imported
+                tally.skipped += result.lines_skipped
+                tally.track("bank_statement", result.statement.bank_statement_id)
 
                 if result.errors:
+                    tally.failed += len(result.errors)
                     for err in result.errors[:5]:
                         logger.warning(f"    Error: {err}")
 
@@ -405,26 +427,59 @@ def import_statements(dry_run: bool = False):
                         logger.info(f"    Warning: {warn}")
 
             except Exception as e:
-                logger.error(f"  Failed to import: {e}")
-                import traceback
+                # One unreadable account must not abandon the others, but the
+                # run is NOT a success: the failure count reaches the batch
+                # record and the exit status, so "Import Complete" stops being
+                # printed over a partial import.
+                logger.error(f"  Failed to import: {e}", exc_info=True)
+                tally.failed += 1
 
-                traceback.print_exc()
-
+        # NOTE: `batch_operation` commits when it marks the run COMPLETED, so a
+        # dry run is safe only because the body writes nothing — the
+        # `ensure_bank_account` call above is guarded and `import_statement` is
+        # never reached. Do not add an unguarded write below this line expecting
+        # the old "skip the commit and let the session roll back" behaviour;
+        # that behaviour is gone.
         if not dry_run:
             db.commit()
-            logger.info("")
-            logger.info("=" * 60)
-            logger.info(
-                f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped"
-            )
-            logger.info("=" * 60)
+
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info(
+            "Import %s: %d imported, %d skipped, %d failed",
+            "complete" if not tally.failed else "FINISHED WITH FAILURES",
+            total_imported,
+            total_skipped,
+            tally.failed,
+        )
+        logger.info("=" * 60)
+        return tally.failed
 
 
-if __name__ == "__main__":
+def main() -> int:
     parser = argparse.ArgumentParser(description="Import UBA bank statements")
+    parser.add_argument(
+        "--org-id",
+        required=True,
+        type=uuid.UUID,
+        help="Organization to import into (no default: this is multi-tenant)",
+    )
+    parser.add_argument(
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Recorded as who ran this, on the BatchOperation record",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Parse only, don't import"
     )
     args = parser.parse_args()
 
-    import_statements(dry_run=args.dry_run)
+    failures = import_statements(
+        organization_id=args.org_id, actor_id=args.actor_id, dry_run=args.dry_run
+    )
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

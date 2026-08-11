@@ -38,15 +38,28 @@ not be conditional on the success of the thing it describes.
 that historically executed with no tenant scope at all (see
 `scripts/check_session_context.py`), so the owner asks for it explicitly
 rather than reading ambient state.
+
+## Identifying the input, not just naming it
+
+`source_file` is a label — it says which files a run claimed to read. For a
+recurring import (a monthly bank statement, a payroll workbook) the operational
+question is different and sharper: *is this the same content we already
+imported?* A filename cannot answer that. `source_checksum` can, and
+`file_manifest_digest()` computes it over the actual bytes, so re-running the
+same statement is a visible fact in the UI rather than a duplicate hunt through
+statement lines afterwards.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -58,6 +71,37 @@ from app.models.batch_operation import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def file_digest(path: Path) -> str:
+    """SHA256 of one file's bytes, read in chunks."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def file_manifest_digest(paths: Sequence[Path]) -> tuple[str, dict[str, str]]:
+    """One digest identifying a whole set of input files, plus the per-file map.
+
+    Returns `(manifest_digest, {name: sha256})`. The manifest digest is taken
+    over the SORTED `name:sha256` lines, so it identifies the same set of
+    content regardless of the order the caller happened to list the files in —
+    two runs over the same statements agree even if a glob returned them
+    differently.
+
+    The per-file map goes in the record's `metadata_`, because when a digest
+    stops matching, "which file changed" is the next question and the answer
+    should already be recorded.
+
+    Missing files are omitted rather than raising: the caller decides whether a
+    missing input is fatal, and a run over a partial set must still be
+    identifiable as exactly that.
+    """
+    per_file = {path.name: file_digest(path) for path in paths if path.is_file()}
+    manifest = "\n".join(f"{name}:{per_file[name]}" for name in sorted(per_file))
+    return hashlib.sha256(manifest.encode("utf-8")).hexdigest(), per_file
 
 
 @dataclass
@@ -87,6 +131,8 @@ class BatchOperationService:
         started_by_id: uuid.UUID,
         description: str | None = None,
         source_file: str | None = None,
+        source_checksum: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> BatchOperation:
         """Record a run as RUNNING and commit it, so it survives a later failure."""
         record = BatchOperation(
@@ -96,6 +142,8 @@ class BatchOperationService:
             started_by_id=started_by_id,
             description=description,
             source_file=source_file,
+            source_checksum=source_checksum,
+            metadata_=metadata,
             status=BatchOperationStatus.RUNNING,
         )
         db.add(record)
@@ -176,6 +224,8 @@ def batch_operation(
     started_by_id: uuid.UUID,
     description: str | None = None,
     source_file: str | None = None,
+    source_checksum: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> Iterator[BatchTally]:
     """Run a batch operation, recording it whether it succeeds or not.
 
@@ -201,6 +251,8 @@ def batch_operation(
         started_by_id=started_by_id,
         description=description,
         source_file=source_file,
+        source_checksum=source_checksum,
+        metadata=metadata,
     )
     tally = BatchTally()
     try:

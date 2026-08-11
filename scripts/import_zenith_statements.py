@@ -7,25 +7,26 @@ This script handles both Zenith statement formats:
 - "BOP_CBA_003_Report" (newer format, Oct 2024-Dec 2025)
 
 Usage:
-    poetry run python scripts/import_zenith_statements.py [--dry-run]
+    poetry run python scripts/import_zenith_statements.py --org-id <uuid> [--dry-run]
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
+import sys
+import uuid
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import openpyxl
-from sqlalchemy import select
 
-from app.db import SessionLocal
-from app.models.finance.banking.bank_account import (
-    BankAccount,
-)
+from app.db.session_context import session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation, file_manifest_digest
 from app.services.finance.banking.bank_statement import (
     BankStatementService,
 )
@@ -33,6 +34,7 @@ from app.services.finance.banking.statement_import import (
     AccountProfile,
     BankProfile,
     ensure_bank_account,
+    find_bank_account,
     to_statement_lines,
 )
 from app.services.finance.banking.statement_parsing import (
@@ -49,8 +51,19 @@ logger = logging.getLogger(__name__)
 
 BANK = BankProfile(bank_name="Zenith Bank", bank_code="057")
 
-# Path to statement files
-STATEMENT_DIR = Path("/root/.dotmac/zenith statement")
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+# Zenith's control account in the chart of accounts. UBA is 1202; these two are
+# the pair `finish_interbank_matching` matches on (DR 1200 / CR 1202).
+ZENITH_GL_ACCOUNT_CODE = "1200"
+
+# Where the statement workbooks are read from. This was `/root/.dotmac/zenith
+# statement` — an absolute, root-owned path no non-root run could read, and the
+# kind of environment-specific literal `AGENTS.md` § "Everything by config"
+# exists to keep out. Same knob shape as the UBA importer.
+STATEMENT_DIR = Path(
+    os.environ.get("ZENITH_STATEMENT_DIR", "~/.dotmac/statements/zenith")
+).expanduser()
 
 # Account mapping: account_number -> (name, currency, file_pairs)
 # file_pairs = [(old_format_file, new_format_file), ...]
@@ -300,33 +313,43 @@ def parse_new_format_statement(filepath: Path) -> ParsedStatement | None:
         return None
 
 
-def import_statements(dry_run: bool = False):
-    """Main import function."""
+def _configured_files() -> list[Path]:
+    """Every statement file this run will read, in configuration order."""
+    return [
+        STATEMENT_DIR / filename
+        for config in ACCOUNT_CONFIG.values()
+        for filename in config["files"]
+    ]
 
+
+def import_statements(
+    *, organization_id: uuid.UUID, actor_id: uuid.UUID, dry_run: bool = False
+) -> int:
+    """Import every configured Zenith account. Returns the number of failures."""
+
+    mode = "DRY RUN" if dry_run else "EXECUTE"
     logger.info("=" * 60)
-    logger.info("Zenith Bank Statement Import")
+    logger.info("Zenith Bank Statement Import (%s) — org %s", mode, organization_id)
     logger.info("=" * 60)
 
-    if dry_run:
-        logger.info("DRY RUN MODE - No changes will be made")
+    checksum, per_file = file_manifest_digest(_configured_files())
+    logger.info("Input manifest: %d file(s), digest %s", len(per_file), checksum[:12])
 
-    with SessionLocal() as db:
-        # Get organization ID from existing account
-        existing = (
-            db.execute(
-                select(BankAccount).where(BankAccount.bank_name.ilike("%zenith%"))
-            )
-            .scalars()
-            .first()
-        )
-
-        if not existing:
-            logger.error("No existing Zenith bank account found to determine org ID")
-            return
-
-        org_id = existing.organization_id
-        logger.info(f"Organization ID: {org_id}")
-
+    with (
+        session_for_org(organization_id) as db,
+        batch_operation(
+            db,
+            organization_id=organization_id,
+            operation_type=BatchOperationType.IMPORT,
+            operation_name="import_zenith_statements",
+            started_by_id=actor_id,
+            description=f"Zenith statement import ({mode})",
+            source_file=str(STATEMENT_DIR),
+            source_checksum=checksum,
+            metadata={"bank": BANK.bank_code, "files": per_file},
+        ) as tally,
+    ):
+        org_id = organization_id
         total_imported = 0
         total_skipped = 0
 
@@ -335,18 +358,29 @@ def import_statements(dry_run: bool = False):
             logger.info(f"Processing account: {account_number} ({config['name']})")
             logger.info("-" * 40)
 
-            # Ensure bank account exists
-            bank_account = ensure_bank_account(
-                db,
-                organization_id=org_id,
-                bank=BANK,
-                account=AccountProfile(
-                    account_number=account_number,
-                    account_name=config["name"],
-                    currency_code=config["currency"],
-                    gl_account_code=config["gl_account_code"],
-                ),
-            )
+            # Creating the bank account is a WRITE, so a dry run must not do it.
+            # This call used to be unguarded and was harmless only by accident:
+            # dry runs skipped the final `db.commit()` and the session closed
+            # with a rollback. `batch_operation` commits when it completes the
+            # run, so that accident is gone and the guard is now load-bearing.
+            if dry_run:
+                bank_account = find_bank_account(
+                    db, organization_id=org_id, account_number=account_number
+                )
+            else:
+                bank_account = ensure_bank_account(
+                    db,
+                    organization_id=org_id,
+                    bank=BANK,
+                    account=AccountProfile(
+                        account_number=account_number,
+                        # The registered name at the bank, not the internal
+                        # label in `name` — this is what appears on the account.
+                        account_name=config["account_name"],
+                        currency_code=config["currency"],
+                        gl_account_code=ZENITH_GL_ACCOUNT_CODE,
+                    ),
+                )
 
             # Parse all statement files for this account
             all_transactions = []
@@ -421,6 +455,12 @@ def import_statements(dry_run: bool = False):
 
             if dry_run:
                 logger.info("  [DRY RUN] Would import statement")
+                tally.skipped += len(unique_transactions)
+                continue
+
+            if not bank_account:
+                logger.error("  Bank account not found")
+                tally.failed += 1
                 continue
 
             # Convert to statement lines
@@ -453,8 +493,12 @@ def import_statements(dry_run: bool = False):
 
                 total_imported += result.lines_imported
                 total_skipped += result.lines_skipped
+                tally.created += result.lines_imported
+                tally.skipped += result.lines_skipped
+                tally.track("bank_statement", result.statement.bank_statement_id)
 
                 if result.errors:
+                    tally.failed += len(result.errors)
                     for err in result.errors[:5]:
                         logger.warning(f"    Error: {err}")
 
@@ -463,26 +507,55 @@ def import_statements(dry_run: bool = False):
                         logger.info(f"    Warning: {warn}")
 
             except Exception as e:
-                logger.error(f"  Failed to import: {e}")
-                import traceback
+                # One unreadable account must not abandon the others, but the
+                # run is NOT a success: the failure count reaches the batch
+                # record and the exit status.
+                logger.error(f"  Failed to import: {e}", exc_info=True)
+                tally.failed += 1
 
-                traceback.print_exc()
-
+        # NOTE: `batch_operation` commits when it marks the run COMPLETED, so a
+        # dry run is safe only because the body writes nothing. That is why
+        # `ensure_bank_account` above is guarded — see the comment there.
         if not dry_run:
             db.commit()
-            logger.info("")
-            logger.info("=" * 60)
-            logger.info(
-                f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped"
-            )
-            logger.info("=" * 60)
+
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info(
+            "Import %s: %d imported, %d skipped, %d failed",
+            "complete" if not tally.failed else "FINISHED WITH FAILURES",
+            total_imported,
+            total_skipped,
+            tally.failed,
+        )
+        logger.info("=" * 60)
+        return tally.failed
 
 
-if __name__ == "__main__":
+def main() -> int:
     parser = argparse.ArgumentParser(description="Import Zenith bank statements")
+    parser.add_argument(
+        "--org-id",
+        required=True,
+        type=uuid.UUID,
+        help="Organization to import into (no default: this is multi-tenant)",
+    )
+    parser.add_argument(
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Recorded as who ran this, on the BatchOperation record",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Parse only, don't import"
     )
     args = parser.parse_args()
 
-    import_statements(dry_run=args.dry_run)
+    failures = import_statements(
+        organization_id=args.org_id, actor_id=args.actor_id, dry_run=args.dry_run
+    )
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

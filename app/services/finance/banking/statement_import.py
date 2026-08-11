@@ -72,6 +72,22 @@ class GLAccountNotFound(LookupError):
     """
 
 
+def find_bank_account(
+    db: Session, *, organization_id: UUID, account_number: str
+) -> BankAccount | None:
+    """Look the account up without creating it.
+
+    The read half of `ensure_bank_account`, separate because a dry run needs
+    exactly this and must not take the create branch.
+    """
+    return db.execute(
+        select(BankAccount).where(
+            BankAccount.organization_id == organization_id,
+            BankAccount.account_number == account_number,
+        )
+    ).scalar_one_or_none()
+
+
 def ensure_bank_account(
     db: Session,
     *,
@@ -85,12 +101,9 @@ def ensure_bank_account(
     inferred it with `select(BankAccount).limit(1)` — correct with one
     organization, and silently the wrong tenant with two.
     """
-    existing = db.execute(
-        select(BankAccount).where(
-            BankAccount.organization_id == organization_id,
-            BankAccount.account_number == account.account_number,
-        )
-    ).scalar_one_or_none()
+    existing = find_bank_account(
+        db, organization_id=organization_id, account_number=account.account_number
+    )
 
     if existing:
         logger.info("Found existing bank account: %s", account.account_number)
