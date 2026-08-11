@@ -21,13 +21,24 @@
 #   3. It genuinely still needs to run by hand -> open the session via
 #      `session_for_org(org_id)` or `cross_org_session()`.
 #
+# Two provisioning entries are BLOCKED rather than untouched, so that a
+# later pass does not mistake them for work nobody started:
+#
+#   settings_sync.py  — writes org-scoped DomainSetting rows, but
+#     `DomainSettingService.upsert_by_key` silently escalates an unscoped
+#     session to a cross-org bypass instead of refusing. Scoping the script
+#     without fixing that only hides the escalation. Fix the service first.
+#
+#   seed_rbac.py      — seeds the GLOBAL Role/Permission catalogue (correct
+#     unscoped) and also reads org-scoped Person rows in the same session.
+#     Splitting it needs a ruling on which organization's people it means.
+#
 # Format: <path> <number-of-raw-SessionLocal()-calls>
 scripts/add_missing_contract_staff.py 1
 scripts/audit_payroll_deductions.py 1
 scripts/backfill_gl_postings.py 1
 scripts/backfill_inventory_gl_postings.py 1
 scripts/bulk_import.py 1
-scripts/create_org.py 1
 scripts/create_unallocated_payroll_cc.py 1
 scripts/fix_display_names.py 1
 scripts/fix_duplicate_ar_journals.py 1
@@ -40,15 +51,6 @@ scripts/migration/2026-04-30_backfill_deferred_vat.py 1
 scripts/post_and_match_paystack_opex_expense_reimbursements.py 1
 scripts/post_jan_2026_ap_invoices.py 3
 scripts/reconcile_jan_2026_dryrun.py 1
-scripts/seed_admin.py 1
-scripts/seed_demo_banking.py 1
-scripts/seed_demo_transactions.py 1
-scripts/seed_e2e_data.py 1
-scripts/seed_nigeria.py 1
 scripts/seed_payroll_from_excel.py 1
 scripts/seed_rbac.py 1
 scripts/settings_sync.py 1
-scripts/settings_validate.py 1
-scripts/setup_e2e_user.py 2
-scripts/update_org_name.py 1
-scripts/update_user_credentials.py 1

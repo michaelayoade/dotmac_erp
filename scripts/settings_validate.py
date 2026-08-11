@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session
 from app.models.domain_settings import DomainSetting
 from app.services.secrets import is_openbao_ref
 from app.services.settings_spec import SETTINGS_SPECS, coerce_value, extract_db_value
@@ -17,8 +17,16 @@ def _env_value(name: str) -> str | None:
 
 def main():
     load_dotenv()
-    db = SessionLocal()
-    try:
+    # Cross-org: compares env against DomainSetting rows from every
+    # organization.
+    #
+    # NOTE: `DomainSetting` IS organization-scoped, so keying the map by
+    # (domain, key) alone collapses different organizations' values into
+    # one entry and the last row read wins. Correct on a single-tenant
+    # database, wrong the moment there are two. Scoping the session is
+    # what this change fixes; the per-org report shape is not, and is
+    # tracked separately.
+    with cross_org_session() as db:
         rows = db.query(DomainSetting).filter(DomainSetting.is_active.is_(True)).all()
         db_map = {(row.domain, row.key): row for row in rows}
         errors: list[str] = []
@@ -78,8 +86,6 @@ def main():
                     errors.append(
                         f"{spec.domain.value}.{spec.key}: value must be an integer"
                     )
-    finally:
-        db.close()
 
     if errors:
         print("Settings validation failed:")
