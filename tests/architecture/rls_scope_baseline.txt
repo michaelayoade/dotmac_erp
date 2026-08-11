@@ -12,7 +12,6 @@ scripts/audit_payroll_deductions.py
 scripts/backfill_gl_postings.py
 scripts/backfill_inventory_gl_postings.py
 scripts/bulk_import.py
-scripts/create_org.py
 scripts/create_unallocated_payroll_cc.py
 scripts/fix_display_names.py
 scripts/fix_duplicate_ar_journals.py
@@ -24,15 +23,6 @@ scripts/link_gl_bank_accounts.py
 scripts/post_and_match_paystack_opex_expense_reimbursements.py
 scripts/post_jan_2026_ap_invoices.py
 scripts/reconcile_jan_2026_dryrun.py
-scripts/seed_admin.py
-scripts/seed_demo_banking.py
-scripts/seed_demo_transactions.py
-scripts/seed_e2e_data.py
-scripts/seed_nigeria.py
 scripts/seed_payroll_from_excel.py
 scripts/seed_rbac.py
 scripts/settings_sync.py
-scripts/settings_validate.py
-scripts/setup_e2e_user.py
-scripts/update_org_name.py
-scripts/update_user_credentials.py

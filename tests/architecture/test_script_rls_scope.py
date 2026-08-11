@@ -152,7 +152,9 @@ def test_baseline_entries_still_exist() -> None:
     )
 
 
-if __name__ == "__main__":  # `python -m tests.architecture.test_script_rls_scope --update`
+if (
+    __name__ == "__main__"
+):  # `python -m tests.architecture.test_script_rls_scope --update`
     if "--update" not in sys.argv:
         raise SystemExit("pass --update to rewrite the baseline")
     header = BASELINE.read_text(encoding="utf-8").split("\n")
@@ -160,4 +162,7 @@ if __name__ == "__main__":  # `python -m tests.architecture.test_script_rls_scop
     BASELINE.write_text(
         "\n".join(keep + find_unscoped_scripts()) + "\n", encoding="utf-8"
     )
-    print(f"recorded {len(find_unscoped_scripts())} unscoped script(s)")
+    # T201: this is the `--update` CLI path, not a test — a maintainer running
+    # it needs to see the count. tests/** does not carry the T20 exemption that
+    # scripts/** and tools/** do, and widening it would admit prints to every test.
+    print(f"recorded {len(find_unscoped_scripts())} unscoped script(s)")  # noqa: T201
