@@ -113,7 +113,7 @@ def bulk_sync(
     Bulk sync projects, tickets, and work orders from DotMac CRM.
 
     Idempotent - safe to retry. Uses CRM entity IDs for deduplication.
-    Processes in order: projects -> tickets -> work orders (respects dependencies).
+    Processes in order: projects -> tickets -> project tasks -> work orders.
     Payload lists are capped at 500 items each.
     """
     org_id = auth["organization_id"]
@@ -167,6 +167,25 @@ def bulk_sync(
                 )
             )
 
+    # Sync project tasks after their projects and optional tickets exist.
+    project_tasks_synced = 0
+    for project_task in payload.project_tasks:
+        savepoint = db.begin_nested()
+        try:
+            service.sync_project_task(org_id, project_task)
+            savepoint.commit()
+            project_tasks_synced += 1
+        except Exception as e:
+            savepoint.rollback()
+            logger.exception("Failed to sync project task %s", project_task.source_id)
+            errors.append(
+                SyncError(
+                    entity_type="project_task",
+                    crm_id=project_task.source_id,
+                    error=_sanitize_error(e),
+                )
+            )
+
     # Sync work orders last (references projects/tickets)
     work_orders_synced = 0
     for wo in payload.work_orders:
@@ -187,8 +206,10 @@ def bulk_sync(
             )
 
     logger.info(
-        "CRM bulk sync complete: %d projects, %d tickets, %d work_orders, %d errors",
+        "CRM bulk sync complete: %d projects, %d project_tasks, %d tickets, "
+        "%d work_orders, %d errors",
         projects_synced,
+        project_tasks_synced,
         tickets_synced,
         work_orders_synced,
         len(errors),
@@ -197,6 +218,7 @@ def bulk_sync(
     db.commit()
     return BulkSyncResponse(
         projects_synced=projects_synced,
+        project_tasks_synced=project_tasks_synced,
         tickets_synced=tickets_synced,
         work_orders_synced=work_orders_synced,
         errors=errors,

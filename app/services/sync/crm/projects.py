@@ -38,6 +38,7 @@ from app.models.sync.dotmac_crm_sync import (
 from app.models.sync.sync_entity import SyncEntity, SyncStatus
 from app.schemas.sync.dotmac_crm import (
     CRMProjectPayload,
+    CRMProjectTaskPayload,
     CRMProjectRead,
     CRMTicketActivityEntry,
     CRMTicketCommentItem,
@@ -85,6 +86,85 @@ _RECONCILE_ENTITY_TYPES = {
 
 
 class _ProjectSyncMixin(_CRMSyncBase):
+    _SUB_PROJECT_TASK_SOURCE = "sub_project_task"
+
+    def sync_project_task(
+        self, org_id: UUID, data: CRMProjectTaskPayload
+    ) -> SyncEntity:
+        """Idempotently project one Sub project task into ERP PM."""
+        project_id = self._resolve_project_id(org_id, data.project_source_id)
+        if project_id is None:
+            raise ValueError(
+                f"project source mapping not found: {data.project_source_id}"
+            )
+        parent_task_id = self._resolve_sub_project_task_id(
+            org_id, data.parent_task_source_id
+        )
+        ticket_id = self._resolve_ticket_id(org_id, data.ticket_source_id)
+        sync = self.db.scalar(
+            select(SyncEntity).where(
+                SyncEntity.organization_id == org_id,
+                SyncEntity.source_system == "dotmac_sub",
+                SyncEntity.source_doctype == self._SUB_PROJECT_TASK_SOURCE,
+                SyncEntity.source_name == data.source_id,
+            )
+        )
+        task = self.db.get(Task, sync.target_id) if sync and sync.target_id else None
+        if task is None:
+            task = Task(
+                organization_id=org_id,
+                project_id=project_id,
+                task_code=self._generate_unique_code("PT", data.source_id, max_len=30),
+                task_name=data.title,
+            )
+            self.db.add(task)
+            self.db.flush()
+        task.project_id = project_id
+        task.parent_task_id = parent_task_id
+        task.ticket_id = ticket_id
+        task.task_name = data.title
+        task.description = data.description
+        task.status = TASK_STATUS_MAP.get(data.status.lower(), TaskStatus.OPEN)
+        task.priority = self._map_task_priority(data.priority)
+        task.start_date = data.start_at.date() if data.start_at else None
+        task.due_date = data.due_at.date() if data.due_at else None
+        task.actual_end_date = data.completed_at.date() if data.completed_at else None
+        task.estimated_hours = data.effort_hours
+        task.progress_percent = 100 if task.status == TaskStatus.COMPLETED else 0
+        if sync is None:
+            sync = SyncEntity(
+                organization_id=org_id,
+                source_system="dotmac_sub",
+                source_doctype=self._SUB_PROJECT_TASK_SOURCE,
+                source_name=data.source_id,
+                target_table="pm.task",
+                target_id=task.task_id,
+                sync_status=SyncStatus.SYNCED,
+            )
+            self.db.add(sync)
+        else:
+            sync.target_table = "pm.task"
+            sync.mark_synced(task.task_id)
+        logger.info("Synced Sub project task %s -> %s", data.source_id, task.task_id)
+        return sync
+
+    def _resolve_sub_project_task_id(
+        self, org_id: UUID, source_id: str | None
+    ) -> UUID | None:
+        if not source_id:
+            return None
+        sync = self.db.scalar(
+            select(SyncEntity).where(
+                SyncEntity.organization_id == org_id,
+                SyncEntity.source_system == "dotmac_sub",
+                SyncEntity.source_doctype == self._SUB_PROJECT_TASK_SOURCE,
+                SyncEntity.source_name == source_id,
+            )
+        )
+        if sync is None or sync.target_id is None:
+            raise ValueError(f"parent task source mapping not found: {source_id}")
+        return sync.target_id
+
     def sync_project(
         self,
         org_id: UUID,
