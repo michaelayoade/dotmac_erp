@@ -1,5 +1,8 @@
 .PHONY: help test lint type-check format security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
 
+DB_CONTAINER ?= dotmac_erp_db
+DB_NAME ?= dotmac_erp
+
 # Default target
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -66,7 +69,12 @@ mcp-health: ## Validate MCP DB config and read-only connectivity
 	poetry run python scripts/check_mcp_db.py
 
 pg-observe-setup: ## Enable pg_stat_statements and grant monitoring permissions (run docker compose up -d db first if new)
-	docker exec -i dotmac_erp_db psql -U postgres -d dotmac_erp < scripts/setup_pg_observability.sql
+	@test -n "$$PG_OBSERVER_PASSWORD" || { \
+	  echo "PG_OBSERVER_PASSWORD is not set. The observability role's password is"; \
+	  echo "deliberately not stored in the repository -- load it from OpenBao."; \
+	  exit 1; }
+	docker exec -i $(DB_CONTAINER) psql -U postgres -d $(DB_NAME) \
+	  -v observer_password="$$PG_OBSERVER_PASSWORD" < scripts/setup_pg_observability.sql
 
 # ─── Development ──────────────────────────────────────────
 
