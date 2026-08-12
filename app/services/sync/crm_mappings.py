@@ -47,10 +47,14 @@ TICKET_STATUS_MAP = {
 }
 
 TASK_STATUS_MAP = {
+    "backlog": TaskStatus.OPEN,
+    "todo": TaskStatus.OPEN,
     "draft": TaskStatus.OPEN,
     "scheduled": TaskStatus.OPEN,
     "active": TaskStatus.IN_PROGRESS,
     "in_progress": TaskStatus.IN_PROGRESS,
+    "blocked": TaskStatus.ON_HOLD,
+    "done": TaskStatus.COMPLETED,
     "completed": TaskStatus.COMPLETED,
     "cancelled": TaskStatus.CANCELLED,
     "canceled": TaskStatus.CANCELLED,
