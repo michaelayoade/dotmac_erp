@@ -136,11 +136,7 @@ def _lock_setting_identity(
         return
     identity = f"{domain.value}:{key}:{organization_id or 'global'}"
     db.execute(
-        text(
-            "SELECT pg_advisory_xact_lock("
-            "hashtextextended(:setting_identity, 0)"
-            ")"
-        ),
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:setting_identity, 0))"),
         {"setting_identity": identity},
     )
 
