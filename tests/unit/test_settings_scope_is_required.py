@@ -69,6 +69,18 @@ def test_a_cross_org_seed_context_maps_to_the_global_row():
     )
 
 
+def test_a_cross_org_seed_context_overrides_a_primed_tenant():
+    """Startup primes the default org before entering its global seed context."""
+    assert (
+        _resolve_operation_scope(
+            _session(organization_id=uuid4(), allow_cross_org=True),
+            AMBIENT,
+            "operation",
+        )
+        is None
+    )
+
+
 def test_explicit_tenant_scope_must_match_the_session():
     with pytest.raises(SettingsScopeRequired):
         _resolve_operation_scope(
@@ -126,6 +138,29 @@ def test_tenant_ensure_query_has_an_exact_organization_predicate():
     compiled = statement.compile()
     assert "domain_settings.organization_id =" in str(statement)
     assert organization_id in compiled.params.values()
+
+
+def test_postgres_ensure_locks_the_complete_setting_identity_before_querying():
+    organization_id = uuid4()
+    service = DomainSettings(domain=SettingDomain.auth)
+    db = MagicMock()
+    db.info = {"organization_id": organization_id}
+    db.get_bind.return_value.dialect.name = "postgresql"
+    db.scalar.return_value = MagicMock()
+
+    service.ensure_by_key(
+        db,
+        key="jwt_algorithm",
+        value_type=SettingValueType.string,
+    )
+
+    lock_call = db.execute.call_args
+    assert "pg_advisory_xact_lock" in str(lock_call.args[0])
+    assert lock_call.args[1] == {
+        "setting_identity": f"auth:jwt_algorithm:{organization_id}"
+    }
+    method_names = [call[0] for call in db.method_calls]
+    assert method_names.index("execute") < method_names.index("scalar")
 
 
 def test_global_settings_seed_states_and_restores_its_scope(monkeypatch):

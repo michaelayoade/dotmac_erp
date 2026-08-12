@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.services.setting_domains import registry
@@ -100,11 +100,11 @@ def _resolve_operation_scope(
                 )
         return organization_id
 
+    if db.info.get("allow_cross_org"):
+        return None
     scoped_org = db.info.get("organization_id")
     if scoped_org:
         return UUID(str(scoped_org))
-    if db.info.get("allow_cross_org"):
-        return None
     raise SettingsScopeRequired(
         f"{operation} needs an exact settings scope. Open a tenant session "
         "with `session_for_org(organization_id)`, or pass "
@@ -116,6 +116,29 @@ def _organization_predicate(organization_id: UUID | None):
     if organization_id is None:
         return DomainSetting.organization_id.is_(None)
     return DomainSetting.organization_id == organization_id
+
+
+def _lock_setting_identity(
+    db: Session,
+    domain: SettingDomain,
+    key: str,
+    organization_id: UUID | None,
+) -> None:
+    """Serialize one PostgreSQL settings identity for find-or-create writes.
+
+    Startup runs once in every Gunicorn worker. Without a lock, workers can
+    all observe a missing row and then race to insert the same setting. The
+    transaction-scoped advisory lock is held through the service's commit and
+    is keyed by the complete setting identity, so unrelated settings do not
+    block each other.
+    """
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    identity = f"{domain.value}:{key}:{organization_id or 'global'}"
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:setting_identity, 0))"),
+        {"setting_identity": identity},
+    )
 
 
 # Call sites already reported, so a hot path logs once rather than per request.
@@ -635,6 +658,7 @@ class DomainSettings(ListResponseMixin):
         org_id = _resolve_operation_scope(
             db, organization_id, "DomainSettingService.upsert_by_key"
         )
+        _lock_setting_identity(db, self.domain, key, org_id)
         with allow_cross_org(db):
             setting = db.scalar(
                 select(DomainSetting).where(
@@ -730,6 +754,7 @@ class DomainSettings(ListResponseMixin):
         org_id = _resolve_operation_scope(
             db, organization_id, "DomainSettingService.ensure_by_key"
         )
+        _lock_setting_identity(db, self.domain, key, org_id)
         with allow_cross_org(db):
             existing = db.scalar(
                 select(DomainSetting).where(
