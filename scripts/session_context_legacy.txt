@@ -21,13 +21,6 @@
 #   3. It genuinely still needs to run by hand -> open the session via
 #      `session_for_org(org_id)` or `cross_org_session()`.
 #
-# One provisioning entry remains BLOCKED rather than untouched, so that a
-# later pass does not mistake it for work nobody started:
-#
-#   seed_rbac.py      — seeds the GLOBAL Role/Permission catalogue (correct
-#     unscoped) and also reads org-scoped Person rows in the same session.
-#     Splitting it needs a ruling on which organization's people it means.
-#
 # Format: <path> <number-of-raw-SessionLocal()-calls>
 scripts/add_missing_contract_staff.py 1
 scripts/bulk_import.py 1
@@ -37,4 +30,3 @@ scripts/import_tb_audit.py 1
 scripts/link_gl_bank_accounts.py 1
 scripts/migration/2026-04-30_backfill_deferred_vat.py 1
 scripts/seed_payroll_from_excel.py 1
-scripts/seed_rbac.py 1
