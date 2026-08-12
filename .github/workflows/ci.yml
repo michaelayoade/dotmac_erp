@@ -315,7 +315,13 @@ jobs:
     name: Integration Tests (PostgreSQL)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
+    # No `continue-on-error`. Every PostgreSQL-only check lived behind it —
+    # tenant isolation, the migration chain, and the RLS coverage ratchet — so
+    # all of them reported and none of them gated: the suite could fail and the
+    # merge went green anyway. A ratchet that cannot fail a build is an alarm
+    # with the wire cut.
+    # If this job becomes flaky, fix or narrowly quarantine the unstable test;
+    # restoring this flag would silence every PostgreSQL check together.
     services:
       postgres:
         image: postgres:16
