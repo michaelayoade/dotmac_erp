@@ -83,6 +83,7 @@ from app.services import audit as audit_service
 from app.services.htmx import is_htmx_request
 from app.services.integration_config import seed_dotmac_sub_webhook_binding
 from app.services.settings_seed import seed_all_settings
+from app.ui import UI_ASSET_DIRECTORY, UI_ASSET_MOUNT
 from app.startup import log_startup_info, validate_startup
 from app.telemetry import setup_otel
 from app.templates import templates
@@ -889,6 +890,11 @@ app.include_router(files_router)  # /files/* (avatars, resumes, attachments, etc
 app.include_router(files_legacy_router)  # /uploads/* (legacy URL compat)
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
+app.mount(
+    UI_ASSET_MOUNT,
+    StaticFiles(directory=str(UI_ASSET_DIRECTORY)),
+    name="dotmac_ui_static",
+)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 

@@ -250,7 +250,7 @@ class TestEmptyListPagination:
 
         # Check for empty state
         empty_state = authenticated_page.locator(
-            ":text('No suppliers'), :text('No results'), :text('No data'), .empty-state"
+            ":text('No suppliers'), :text('No results'), :text('No data'), .dmui-empty-state, .empty-state"
         )
 
         # Pagination should not be prominently visible for empty results

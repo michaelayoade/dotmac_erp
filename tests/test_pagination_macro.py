@@ -1,12 +1,8 @@
-from pathlib import Path
-
-from jinja2 import Environment, FileSystemLoader
+from app.templates import templates
 
 
 def _render_pagination(**kwargs: object) -> str:
-    templates_dir = Path(__file__).resolve().parents[1] / "templates"
-    env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=True)
-    template = env.from_string(
+    template = templates.env.from_string(
         '{% from "components/macros.html" import pagination %}{{ pagination(**kwargs) }}'
     )
     return template.render(kwargs=kwargs)
