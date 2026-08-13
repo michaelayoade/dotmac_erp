@@ -2,6 +2,7 @@
   Reusable UI Components
   Import with: {% from "components/macros.html" import component_name %}
 #}
+{% from "dotmac_ui/components/empty_state.html" import empty_state as _dotmac_ui_empty_state %}
 
 {# ============================================
    STATUS BADGE
@@ -210,58 +211,18 @@
 {# ============================================
    EMPTY STATE
    Usage: {{ empty_state("No invoices", "Create your first invoice to get started", icon="document", cta_text="New Invoice", cta_href="/invoices/new") }}
-   Uses enhanced empty state styling with floating animation
+   Temporary ERP call-shape adapter over the published dotmac-ui component.
    ============================================ #}
 {% macro empty_state(title, description=none, icon="document", cta_text=none, cta_href=none, action_text=none, action_url=none, action_label=none, illustration=none) %}
 {% set resolved_text = cta_text or action_text or action_label %}
 {% set resolved_href = cta_href or action_url %}
-{#- Auto-select illustration from title keywords if not explicitly provided -#}
-{% set _title_lower = title | lower %}
-{% if not illustration %}
-  {% if 'invoice' in _title_lower or 'bill' in _title_lower or 'receipt' in _title_lower or 'journal' in _title_lower or 'document' in _title_lower or 'quote' in _title_lower or 'order' in _title_lower or 'credit note' in _title_lower %}
-    {% set illustration = 'empty-invoices.png' %}
-  {% elif 'transaction' in _title_lower or 'banking' in _title_lower or 'statement' in _title_lower or 'payment' in _title_lower or 'transfer' in _title_lower or 'reconcil' in _title_lower %}
-    {% set illustration = 'empty-transactions.png' %}
-  {% elif 'employee' in _title_lower or 'staff' in _title_lower or 'team' in _title_lower or 'people' in _title_lower or 'member' in _title_lower or 'claimant' in _title_lower or 'leave' in _title_lower or 'payroll' in _title_lower %}
-    {% set illustration = 'empty-employees.png' %}
-  {% elif 'inventory' in _title_lower or 'item' in _title_lower or 'stock' in _title_lower or 'warehouse' in _title_lower or 'product' in _title_lower or 'asset' in _title_lower or 'material' in _title_lower %}
-    {% set illustration = 'empty-inventory.png' %}
-  {% elif 'claim' in _title_lower or 'expense' in _title_lower or 'reimburs' in _title_lower or 'advance' in _title_lower %}
-    {% set illustration = 'empty-claims.png' %}
-  {% elif 'report' in _title_lower or 'chart' in _title_lower or 'trend' in _title_lower or 'data' in _title_lower or 'analytic' in _title_lower or 'status' in _title_lower or 'category' in _title_lower or 'department' in _title_lower or 'monthly' in _title_lower or 'summary' in _title_lower or 'aging' in _title_lower %}
-    {% set illustration = 'empty-reports.png' %}
-  {% elif 'approval' in _title_lower or 'pending' in _title_lower or 'review' in _title_lower or 'workflow' in _title_lower %}
-    {% set illustration = 'empty-approvals.png' %}
-  {% elif 'started' in _title_lower or 'begin' in _title_lower or 'first' in _title_lower or 'onboard' in _title_lower or 'welcome' in _title_lower %}
-    {% set illustration = 'getting-started.png' %}
-  {% elif 'search' in _title_lower or 'result' in _title_lower or 'found' in _title_lower or 'match' in _title_lower %}
-    {% set illustration = 'empty-search.png' %}
-  {% endif %}
-{% endif %}
-<div class="empty-state">
-  {% if illustration %}
-  <img src="/static/img/illustrations/{{ illustration }}" alt="" aria-hidden="true"
-       class="h-32 w-32 mx-auto mb-2 object-contain opacity-90 dark:opacity-80" loading="lazy">
-  {% else %}
-  <div class="empty-state-icon">
-    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      {{ icon_path(icon) }}
-    </svg>
-  </div>
-  {% endif %}
-  <p class="empty-state-title">{{ title }}</p>
-  {% if description %}
-  <p class="empty-state-description">{{ description }}</p>
-  {% endif %}
-  {% if resolved_text and resolved_href %}
-  <a href="{{ resolved_href }}" class="btn btn-teal">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-    </svg>
-    {{ resolved_text }}
-  </a>
-  {% endif %}
-</div>
+{# icon/illustration remain accepted only until callers move to the shared signature. #}
+{{ _dotmac_ui_empty_state(
+  title=title,
+  message=description,
+  action_label=resolved_text,
+  action_url=resolved_href
+) }}
 {% endmacro %}
 
 

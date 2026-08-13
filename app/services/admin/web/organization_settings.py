@@ -13,6 +13,10 @@ from app.models.finance.core_org.organization import Organization
 from app.models.person import Person
 from app.services.common import coerce_uuid
 from app.services.formatters import format_datetime as _format_datetime
+from app.services.tenant_projection import (
+    reconcile_organization_tenant,
+    retire_organization_tenant,
+)
 
 from .common import (
     _ORG_SLUG_PATTERN,
@@ -393,6 +397,7 @@ class AdminOrganizationSettingsMixin:
             from app.services.settings.bank_directory import OrgBankDirectoryService
 
             OrgBankDirectoryService(db).seed_defaults(org.organization_id)
+            reconcile_organization_tenant(db, org)
             db.commit()
             return org, None
         except Exception as exc:
@@ -501,6 +506,7 @@ class AdminOrganizationSettingsMixin:
                 if salary_payable_account_id
                 else None
             )
+            reconcile_organization_tenant(db, org)
             db.commit()
             return org, None
         except Exception as exc:
@@ -533,6 +539,7 @@ class AdminOrganizationSettingsMixin:
         if subsidiaries_count > 0:
             return f"Cannot delete organization with {subsidiaries_count} subsidiary(ies). Remove subsidiaries first."
         try:
+            retire_organization_tenant(db, org.organization_id)
             db.delete(org)
             db.commit()
             return None

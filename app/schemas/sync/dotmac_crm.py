@@ -207,6 +207,25 @@ class CRMWorkOrderPayload(BaseModel):
     metadata: dict | None = None
 
 
+class CRMProjectTaskPayload(BaseModel):
+    """Project task projected from Sub into ERP project management."""
+
+    source_id: str = Field(..., min_length=1, max_length=120)
+    project_source_id: str = Field(..., min_length=1, max_length=120)
+    parent_task_source_id: str | None = Field(None, max_length=120)
+    ticket_source_id: str | None = Field(None, max_length=120)
+    title: str = Field(..., min_length=1, max_length=200)
+    number: str | None = Field(None, max_length=40)
+    description: str | None = None
+    status: str = Field("todo", max_length=40)
+    priority: str | None = Field(None, max_length=40)
+    start_at: datetime | None = None
+    due_at: datetime | None = None
+    completed_at: datetime | None = None
+    effort_hours: Decimal | None = Field(None, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class CRMInventoryItemPayload(BaseModel):
     """Inventory item data from DotMac CRM."""
 
@@ -232,6 +251,9 @@ class BulkSyncRequest(BaseModel):
     """Bulk sync request from DotMac CRM."""
 
     projects: list[CRMProjectPayload] = Field(default_factory=list, max_length=500)
+    project_tasks: list[CRMProjectTaskPayload] = Field(
+        default_factory=list, max_length=500
+    )
     tickets: list[CRMTicketPayload] = Field(default_factory=list, max_length=500)
     work_orders: list[CRMWorkOrderPayload] = Field(default_factory=list, max_length=500)
 
@@ -247,7 +269,9 @@ class SyncError(BaseModel):
 class BulkSyncResponse(BaseModel):
     """Response from bulk sync operation."""
 
+    contract_version: Literal[2] = 2
     projects_synced: int = 0
+    project_tasks_synced: int = 0
     tickets_synced: int = 0
     work_orders_synced: int = 0
     errors: list[SyncError] = Field(default_factory=list)

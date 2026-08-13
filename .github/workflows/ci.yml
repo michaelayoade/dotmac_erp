@@ -19,7 +19,7 @@ env:
   DATABASE_URL: "sqlite:///./test.db"
   SECRET_KEY: "ci-test-secret-key-not-for-production"  # pragma: allowlist secret
   REDIS_URL: "redis://localhost:6379/0"
-  # Read auth for the private Forgejo PyPI index (dotmac-kernel). Same
+  # Read auth for the private Forgejo PyPI index (Dotmac packages). Same
   # ci-reader pattern as dotmac_vendor_control_plane; token source of record
   # is OpenBao (secret/dotmac/forgejo/read-token).
   POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader

@@ -397,22 +397,23 @@ def test_fake_licence_signer_works_via_erps_own_cryptography(
 
 
 # ---------------------------------------------------------------------------
-# 4. App-unchanged canary
+# 4. App bootstrap canary
 # ---------------------------------------------------------------------------
 
 
 def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> None:
-    """Importing ``app.main`` loads no kernel module beyond the pure-contract
-    closure of the E1 consume-pure surface.
+    """Importing ``app.main`` loads no kernel module beyond the reviewed closure.
 
     E2 pinned this at "zero kernel modules". E4 is the first slice where app/
     legitimately imports the kernel (``dotmac_kernel.money`` in the Money/FX
     boundary adapter), and importing any ``dotmac_kernel.<module>`` also runs
     the kernel package ``__init__`` (its DB-free top-level re-export surface).
-    The canary therefore snapshots the closure loaded by importing the
-    consume-pure surface alone, then asserts ``app.main`` adds NOTHING beyond
-    it — importing ``dotmac_kernel.db``, ``.messaging``, ``.deps`` or any
-    other deferred/prohibited module still fails loudly.
+    The kernel top-level re-export closure already imports ``models`` even when
+    the app asks only for ``money``. E8 slice 4's exact ``Tenant`` adoption is
+    therefore enforced at source-symbol precision by
+    ``test_kernel_import_boundary.py``; this subprocess canary still proves
+    app bootstrap adds no new DB/session/messaging/deps module beyond that
+    reviewed closure.
 
     Runs in a fresh subprocess (mirroring the import bootstrap of
     ``scripts/update_openapi_contract.py``: same env pins, ``tests.conftest``
@@ -451,7 +452,7 @@ def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> N
             f"                    or n.startswith({KERNEL_PACKAGE + '.'!r}))",
             "                and n not in allowed)",
             "assert leaked == [], (",
-            "    f'app.main loaded kernel modules beyond the pure-contract '",
+            "    f'app.main loaded kernel modules beyond the reviewed '",
             "    f'closure: {leaked}')",
             "print('ok')",
         ]
@@ -466,7 +467,7 @@ def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> N
     )
     assert result.returncode == 0, (
         "importing app.main must load no dotmac_kernel module beyond the "
-        "pure-contract closure — E4 allows the consume-pure surface only; "
+        "reviewed closure; exact persisted symbols are guarded statically; "
         f"kernel db/messaging/session surfaces stay unimported:\n{result.stderr}"
     )
     assert result.stdout.strip() == "ok"

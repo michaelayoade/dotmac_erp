@@ -19,6 +19,7 @@ from app.config import settings
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.finance.core_org.organization import Organization
 from app.services.finance.tax.seed import get_country_config, seed_default_tax_data
+from app.services.tenant_projection import reconcile_organization_tenant
 
 
 def main():
@@ -43,6 +44,8 @@ def main():
             .first()
         )
         if existing:
+            reconcile_organization_tenant(db, existing)
+            db.commit()
             print(
                 f"Organization '{args.code}' already exists with ID: {existing.organization_id}"
             )
@@ -60,6 +63,7 @@ def main():
             is_active=True,
         )
         db.add(org)
+        reconcile_organization_tenant(db, org)
         db.commit()
         org_id = org.organization_id
         print(f"Created organization: {args.name}")
