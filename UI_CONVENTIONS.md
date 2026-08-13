@@ -2,6 +2,20 @@
 
 This document captures the UI patterns and conventions for consistent, high‑quality screens.
 
+## Shared UI Contract
+
+- Browser document shells link `{{ dotmac_ui_stylesheet_url }}` after ERP's
+  product stylesheets.
+- Consume `dotmac-ui` only through `app/ui.py`; do not vendor its compiled
+  assets/templates or reach into private package source.
+- Packaged components resolve through the one shared environment in
+  `app/templates.py`. Tests must exercise that composed loader rather than a
+  hand-built approximation.
+- Existing `.dark` theme state remains ERP's single theme writer and is
+  supported by the shared token contract.
+- `empty_state(...)` keeps its ERP compatibility signature temporarily, but all
+  emitted empty-state markup is owned by the packaged component.
+
 ## App Shell
 - Use the shared sidebar header partial: `templates/partials/_sidebar_header.html`.
 - Use the shared top bar macro: `topbar()` from `templates/components/macros.html`.

@@ -96,6 +96,38 @@ def test_status_badge_and_empty_state_render_expected_content():
     assert "badge-pending" in html
     assert "No Invoices" in html
     assert "/finance/ar/invoices/new" in html
+    assert 'class="dmui-empty-state"' in html
+    assert 'class="dmui-empty-state__message"' in html
+    assert 'class="dmui-empty-state__action"' in html
+    assert "/static/img/illustrations/" not in html
+    assert 'class="empty-state' not in html
+
+
+def test_empty_state_adapter_preserves_keyword_alias_precedence():
+    html = _render(
+        """
+{% from "components/macros.html" import empty_state %}
+{{ empty_state(
+    title="No records",
+    description="Nothing matches",
+    cta_text="Primary label",
+    cta_href="/primary",
+    action_text="Legacy label",
+    action_url="/legacy",
+    action_label="Older label",
+    icon="users",
+    illustration="empty-employees.png"
+) }}
+"""
+    )
+
+    assert "Primary label" in html
+    assert 'href="/primary"' in html
+    assert "Legacy label" not in html
+    assert "Older label" not in html
+    assert "/legacy" not in html
+    assert "empty-employees.png" not in html
+    assert 'class="dmui-empty-state__icon"' in html
 
 
 def test_action_buttons_and_header_actions_render_links():

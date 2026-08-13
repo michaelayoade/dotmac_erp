@@ -1102,6 +1102,23 @@ url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
 reference = "forgejo"
 
 [[package]]
+name = "dotmac-ui"
+version = "0.1.0a7"
+description = "DotMac shared UI design system — semantic design tokens and compiled, self-hosted, CSP-compatible assets (ADR-0006 U1)"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_ui-0.1.0a7-py3-none-any.whl", hash = "sha256:2e04f52c00703a337bb959e8d54e0d3fc63b30ea904914b8926ff6c9bafe716e"},
+    {file = "dotmac_ui-0.1.0a7.tar.gz", hash = "sha256:19f9b2ceea309078349a81bdd6b55e10ef6651d11e5ff0ba24c0ec0018cde5d5"},
+]
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
 name = "ecdsa"
 version = "0.19.1"
 description = "ECDSA cryptographic signature library (pure python)"
@@ -5036,4 +5053,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "29ecea32a219a81fc3f4d64d175528f5730cd64ffe6b0bea00f262addf8fcd2c"
+content-hash = "88e6c81ed94a86a452d2674e7043bad1517ad61643147354d925988f93399f30"

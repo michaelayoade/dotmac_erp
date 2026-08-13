@@ -1,9 +1,11 @@
 # Platform Adoption Ledger — dotmac_erp
 
-**Status:** Rebaselined 2026-08-02 (kernel-adoption slice E1). Supersedes the
+**Status:** UI consumer slice added 2026-08-13; kernel adoption remains on its
+independent E8 track. Supersedes the
 Phase-0 draft (recon pin 318a6e0d, surveyed 2026-07-19), which predated this
 repo's checked-in SOT map, the executable SOT registry, and the released kernel.
-No code, schema, dependency, or runtime change is authorized by this document.
+This ledger records boundaries and evidence; it does not authorize a production
+deployment.
 
 **Evidence pins:**
 
@@ -15,6 +17,10 @@ No code, schema, dependency, or runtime change is authorized by this document.
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
   The dependency **is installed** at this exact pin; E8's migration inventory
   and compatibility tests inspect this installed distribution dynamically.
+- UI slice baseline: `dotmac_erp` `origin/main` at
+  `c5f933d9be758c1ae70167cc030326877d9b27f7`; exact target
+  `dotmac-ui==0.1.0a7`, UI contract `1` (source of record:
+  `dotmac_starter_mt/packages/dotmac-ui`, import name `dotmac_ui`).
 - E1's historical inventory baseline remains ERP commit `96928fa1`; sections
   that cite that hash describe that earlier measurement, not the E8 baseline.
 
@@ -89,6 +95,50 @@ This slice composes no external lineage and does not make `dotmac-files`
 admissible. Revision 0001 is still atomic, and its incompatible ERP identity,
 RBAC and audit tables plus RLS/grant effects remain blocked by
 `docs/architecture/kernel-0001-dispositions.md`.
+
+## UI slice U1 — packaged empty-state consumer
+
+`dotmac-ui` owns the fleet presentation contract; ERP owns its FastAPI/Jinja
+composition and its temporary compatibility adapter. ERP pins the released
+`0.1.0a7` artifact exactly and consumes only published paths:
+
+- `app/ui.py` resolves the installed static and template directories;
+- `app/main.py` mounts package assets ahead of ERP's broad `/static` mount;
+- `app/templates.py` layers the namespaced package directory into ERP's one
+  shared Jinja environment; and
+- browser document shells link the package stylesheet after ERP product CSS.
+
+The former ERP **macro implementation** is retired. The macro at
+`templates/components/macros.html` preserves the legacy positional and keyword
+call shape, maps `description` and the CTA aliases onto the published
+`title/message/action_label/action_url` contract, and delegates all emitted
+markup to `dotmac_ui/components/empty_state.html`. Legacy `icon` and
+`illustration` arguments remain accepted only during caller migration; they no
+longer select product SVG or `/static/img/illustrations` paths. This is one
+presentation owner for those callers, not a second renderer. At the slice
+baseline the adapter cuts over 351 macro invocations across 234 ERP templates;
+this is broad checked-in product adoption, not an isolated demonstration
+template.
+
+This is not yet fleet-wide retirement of ERP's old `.empty-state*` CSS. A
+separate measured set of 25 hand-written surfaces across 22 legacy templates
+still emits those classes, so deleting the styles here would break live product
+markup. Those screens must move through focused caller slices; they are not
+counted as consumers of the packaged component until they do. Both class
+families remain in E2E empty-state detection during that migration.
+The architecture guard freezes both the 25-surface and 22-file counts in both
+directions, with a sensitivity proof, so new inline markup cannot hide inside
+the retirement backlog and removals must lower the recorded baseline.
+
+`tests/architecture/test_dotmac_ui_adoption.py` pins the exact release,
+component signature, real shared-loader resolution, static mount ordering,
+browser stylesheet composition and no-vendoring boundary. The existing macro
+tests prove legacy calls reach the published `.dmui-empty-state*` markup.
+
+This is ERP's first independent component consumption evidence. It does not by
+itself promote the component slice to reuse-proven; that requires the planned
+independent Sub cutover on an exact released pin. It changes no accounting,
+tenancy, permissions, settings, database schema or migration lineage.
 
 ## Pin history
 

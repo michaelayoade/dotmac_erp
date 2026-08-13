@@ -31,7 +31,7 @@ RUN apt-get update \
 RUN pip install poetry && poetry config virtualenvs.create false
 
 COPY pyproject.toml poetry.lock ./
-# dotmac-kernel resolves from the private Forgejo index; the read token is a
+# Dotmac packages resolve from the private Forgejo index; the read token is a
 # BuildKit secret (id=forgejo_token) so it never lands in a layer. Build with:
 #   docker build --secret id=forgejo_token,src=<file-with-token> .
 RUN --mount=type=secret,id=forgejo_token \
