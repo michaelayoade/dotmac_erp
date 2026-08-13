@@ -55,7 +55,9 @@ def recorded(engine, monkeypatch):
     # the event plumbing under test is dialect-independent.
     def _fake_set_org(connection: Connection, organization_id: uuid.UUID) -> None:
         statements.append(
-            f"SET LOCAL app.current_organization_id = '{organization_id}'"
+            "SELECT "
+            f"set_config('app.current_organization_id', '{organization_id}', true), "
+            f"set_config('app.current_tenant', '{organization_id}', true)"
         )
 
     def _fake_bypass(connection: Connection) -> None:
@@ -86,6 +88,11 @@ def test_org_context_is_armed_before_the_first_query(recorded, session_factory):
     assert any(str(ORG) in s for s in recorded), (
         "the organization GUC was never emitted"
     )
+    assert all(
+        "app.current_tenant" in statement
+        for statement in recorded
+        if str(ORG) in statement
+    ), "the module tenant GUC must be armed with the ERP organization GUC"
 
 
 def test_org_context_is_re_armed_after_every_commit(recorded, session_factory):

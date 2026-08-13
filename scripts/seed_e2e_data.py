@@ -46,6 +46,7 @@ from app.models.inventory.item_category import ItemCategory
 from app.models.person import Person
 from app.services.finance.gl.fiscal_year import FiscalYearInput, fiscal_year_service
 from app.services.finance.tax.seed import NigeriaSeedSummary, seed_nigeria_tax_data
+from app.services.tenant_projection import reconcile_organization_tenant
 
 DEFAULT_ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
 
@@ -147,6 +148,7 @@ def ensure_organization(db, org_id: UUID, summary: SeedSummary) -> Organization:
         is_active=True,
     )
     db.add(org)
+    reconcile_organization_tenant(db, org)
     db.commit()
     summary.organizations += 1
     return org

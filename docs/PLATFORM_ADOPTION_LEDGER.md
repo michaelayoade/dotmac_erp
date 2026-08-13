@@ -7,13 +7,96 @@ No code, schema, dependency, or runtime change is authorized by this document.
 
 **Evidence pins:**
 
-- `dotmac_erp` `origin/main` at `96928fa1774612ecd5cd28db1ab04b8e45425df4`.
-- `dotmac-kernel==0.1.0a13` (source of record:
+- E8 slices 3 and 4: `dotmac_erp` `origin/main` at
+  `2f33a448b8394fc5c28564bb4a785bfea7c3b0ba`.
+- E8 slice 5 is an uncommitted working-tree continuation from that same pin;
+  its evidence is local until normal review and CI promotion occur.
+- Current lock: `dotmac-kernel==0.1.0a24` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
-  The dependency **is installed** at this exact pin since slice E2 (below).
-  Moved from `0.1.0a8` on 2026-08-07 — see "Pin history" below.
+  The dependency **is installed** at this exact pin; E8's migration inventory
+  and compatibility tests inspect this installed distribution dynamically.
+- E1's historical inventory baseline remains ERP commit `96928fa1`; sections
+  that cite that hash describe that earlier measurement, not the E8 baseline.
+
+## E8 slice 3 — Organization identity is module tenant identity
+
+The measured RLS audit/ratchet (E8 slices 1 and 2) is followed by the first
+runtime compatibility slice. `core_org.organization` remains the tenancy
+authority, and `app.tenancy.OrganizationTenantContext` maps it to shared-module
+tenant scope without a second id or mapping-table writer:
+
+```text
+tenant_id = organization_id
+```
+
+ERP retains its existing engine, `SessionLocal`, transaction boundaries, ORM
+listener and `app.current_organization_id` policies. Canonical session primers
+now set `app.current_organization_id` and `app.current_tenant` atomically and
+re-arm both after every transaction boundary. The latter is the scope consumed
+by stateful shared-module RLS. ERP's `app.bypass_rls` does not bypass that
+module scope; cross-organization module work iterates Organizations under
+separate `session_for_org` sessions.
+
+The complete contract and remaining gate are
+`docs/architecture/organization-tenant-boundary.md`. This slice creates no
+`tenants` table, runs no kernel or module lineage, admits no kernel persistence
+import, and does not make `dotmac-files` a consumer. Kernel revision 0001's
+atomic identity/RBAC/audit collisions and the truthful Organization→Tenant
+projection remain the next lineage gate.
+
+## E8 slice 4 — Tenant catalogue is an Organization projection
+
+ERP migration `20260813_tenant_projection` now hosts kernel-compatible
+`public.tenants` and `public.tenant_domains` tables in ERP's own lineage. Each
+Organization projects to a Tenant with the same UUID through the single runtime
+writer `app.services.tenant_projection`; create/update/retirement and projection
+mutation share the caller's ERP transaction. The only newly admitted persisted
+kernel symbol is `dotmac_kernel.models.Tenant` in that exact file. The
+symbol-level import guard continues to reject every Party, identity, RBAC and
+session model.
+
+The web settings paths, `create_org.py`, E2E organization seeding and generated
+instance bootstrap all call the same writer before their transaction commits.
+An exact source inventory test admits only those paths, the machine-verified
+shadowed legacy facade and one explicitly archived rename script.
+
+The migration fails closed on incompatible catalogues or data, inserts only
+missing truthful rows and hosts the exact `app_current_tenant_id()` RLS helper.
+It does **not** compose or stamp the kernel lineage and does not adopt
+`dotmac-files`. The complete unresolved 0001 matrix is
+`docs/architecture/kernel-0001-dispositions.md`.
+
+Read-only Seabone production preflight on 2026-08-13 found one Organization,
+zero invalid/oversized projected names, no tenant catalogue/function and none
+of kernel 0001's three database roles. No production write or migration ran.
+
+## E8 slice 5 — Kernel lineage failure is executable
+
+ERP now reuses Sub's installed-lineage PostgreSQL rehearsal instead of treating
+the revision-0001 inventory as sufficient evidence. The canary creates a
+disposable database, runs ERP's real Alembic chain, and attempts the installed
+Kernel lineage in its own `public.dotmac_kernel_alembic_version` table. It
+rehearses both fresh installation and the real predecessor-to-head upgrade.
+
+At the pinned `dotmac-kernel==0.1.0a24`, both paths fail exactly at
+`0001_initial_tenant_schema` on `public.tenants`. The failed transaction leaves
+no Kernel version row and no net creation of `app_admin`, `app_user` or
+`platform_api`. That exact failure is a forward-only ratchet: every later
+disposition must move it deliberately, and an earlier or different failure is
+a regression.
+
+This slice composes no external lineage and does not make `dotmac-files`
+admissible. Revision 0001 is still atomic, and its incompatible ERP identity,
+RBAC and audit tables plus RLS/grant effects remain blocked by
+`docs/architecture/kernel-0001-dispositions.md`.
 
 ## Pin history
+
+**Current E8 measurement — `0.1.0a24`.** The a24 dependency and lock were
+already present at the E8 slice baseline; this slice does not claim to perform
+that upgrade. The current distribution has 17 kernel migration revisions and
+E8's 0001 disposition test derives its table inventory from the installed
+revision rather than copying an a13-era count.
 
 **2026-08-07 — `0.1.0a8` → `0.1.0a13`.** The kernel release carrying the
 white-label foundation: the module registry and manifest declarations, D1's
@@ -307,7 +390,8 @@ migration tests, and a rollback/retirement plan.
    tax, asset, and backoffice records; the kernel never posts, moves stock, or
    decides employment outcomes.
 2. `Organization` remains the ERP tenancy key; `organization_id` is never
-   renamed. Kernel `Tenant` mapping is a later explicit adapter (E8 ADR).
+   renamed. Kernel `Tenant` is its same-UUID projection through the E8 adapter
+   and single writer.
 3. Dual-layer tenancy (ORM listener + PostgreSQL RLS) must never be weakened
    or partially initialized (evidence section below).
 4. ERP identity/OIDC/sessions/RBAC stay local; kernel Party/auth/RBAC is
@@ -351,8 +435,8 @@ slice that adopts them, in the same change that updates this table.
 | `dotmac_kernel.audit` | defer-db | After E6 consolidation | `write_audit_event` targets table `audit_events` — **collides exactly** with ERP `public.audit_events` (`app/models/audit.py:26`). No kernel audit table beside ERP's four unconsolidated writers |
 | `dotmac_kernel.entitlements` | defer-db | After E8 | `tenant_entitlement_grants` table; local grants only after Organization→Tenant mapping + module catalogue |
 | `dotmac_kernel.db` | defer-db | After E8 | Import constructs TWO engines + `SessionLocal`/`PlatformSessionLocal` from env at import time and primes RLS via GUC `app.current_tenant` — a different GUC than ERP's `app.current_organization_id`. Importing it violates the no-second-session-factory exclusion and would half-initialize tenancy |
-| `dotmac_kernel.migrations` | defer-db | After E8 | 12 revisions designed to compose into the consumer's Alembic `version_locations`; composing them into ERP's single-root, 372-revision graph (shared `public.alembic_version`) is an ADR-gated migration decision |
-| `dotmac_kernel.models` | prohibited (identity/RBAC); Tenant subset defer-db via E8 | — | `Tenant`/`Party`/`Role`/`UserCredential`/`AuthSession` etc. Table collisions: `roles` (ERP `app/models/rbac.py:17`), `user_credentials` (ERP `app/models/auth.py:47`). Party never replaces `Person` in this program |
+| `dotmac_kernel.migrations` | defer-db | After E8 | 17 revisions designed to compose into the consumer's Alembic `version_locations`; composing them into ERP's single-root, 372-revision graph (shared `public.alembic_version`) is an ADR-gated migration decision |
+| `dotmac_kernel.models` | partial persisted adoption: exact `Tenant` symbol only; identity/RBAC prohibited | E8 slice 4 | `app.services.tenant_projection` is the only admitted importer and writer. `TenantDomain` has a hosted table but no runtime import. `Party`/`Role`/`UserCredential`/`AuthSession` remain prohibited; Party never replaces `Person` in this program |
 | `dotmac_kernel.models_platform` | prohibited | — | Platform actor identity (`platform_admins`/`platform_sessions`/`platform_audit_events`); ERP has no platform-actor concept and identity stays local |
 | `dotmac_kernel.security` | prohibited | — | Kernel credential hashing/token machinery; ERP `auth.flow` owner stays |
 | `dotmac_kernel.deps` | prohibited | — | Kernel route guards query kernel identity models |
@@ -389,7 +473,7 @@ across classes, defeating per-module review. Import the classified submodule.
 | `roles` | **EXACT COLLISION** — ERP `public.roles` (`app/models/rbac.py:17`, global RBAC) | Kernel RBAC prohibited anyway |
 | `user_credentials` | **EXACT COLLISION** — ERP `public.user_credentials` (`app/models/auth.py:47`) | Kernel identity prohibited anyway |
 | `auth_sessions` | Near-miss — ERP uses `public.sessions` (`app/models/auth.py:190`); no name clash but same concern | Prohibited surface |
-| `tenants`, `tenant_domains` | No name clash; ERP tenancy authority is `core_org.organization` — a kernel `tenants` table would be a parallel tenancy authority | E8 ADR decides mapping |
+| `tenants`, `tenant_domains` | Hosted kernel-compatible catalogue. `tenants` is a same-UUID projection of authoritative `core_org.organization`; `tenant_domains` has no ERP writer yet | E8 slice 4; full kernel lineage still gated |
 | `parties`, `party_persons`, `party_organizations`, `party_roles` | No name clash with `public.people` (`app/models/person.py:50`) | Prohibited surface |
 | `outbox_events`, `inbox_records`, `platform_outbox_events`, `platform_inbox_records` | No name clash — ERP outbox is `platform.event_outbox` (`app/models/finance/platform/event_outbox.py:42`, schema `platform`) — but a second outbox beside it is prohibited by boundary 5 | Defer-db |
 | `platform_admins`, `platform_sessions`, `platform_audit_events` | No name clash; note ERP already uses a *schema* named `platform` — kernel `platform_*` tables in `public` would be confusable | Prohibited surface |
@@ -408,8 +492,8 @@ incl. `hr`, `lease`, `core_org`, `tax`, `rpt`, `pm`, `fa`, `support`,
   (`alembic/env.py` — `version_table_schema="public"`, `include_schemas=True`).
   Production migrates via `scripts/deploy.sh:93` →
   `poetry run alembic upgrade heads` (plural heads is a lived habit).
-- Kernel: 12 revisions under `dotmac_kernel/migrations/versions/`
-  (`…0001_initial_tenant_schema` … `…0012_platform_outbox`), designed to be
+- Kernel: 17 revisions under `dotmac_kernel/migrations/versions/`
+  (`…0001_initial_tenant_schema` … `…0017_history_actor`), designed to be
   composed via the consuming app's `version_locations`. Composition would put
   a **second root** into ERP's revision graph sharing the same
   `public.alembic_version` table → guaranteed extra head, and `upgrade heads`
