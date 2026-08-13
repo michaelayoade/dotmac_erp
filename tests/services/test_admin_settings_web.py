@@ -20,9 +20,14 @@ class TestAdminSettingsWebServiceUpdateOrganization:
         )
         db.get.return_value = org
 
-        with patch(
-            "app.services.people.perf.pms_config_service.PMSConfigService"
-        ) as mock_pms_config:
+        with (
+            patch(
+                "app.services.people.perf.pms_config_service.PMSConfigService"
+            ) as mock_pms_config,
+            patch(
+                "app.services.admin.settings_web.reconcile_organization_tenant"
+            ) as reconcile_projection,
+        ):
             service = AdminSettingsWebService()
 
             success, error = service.update_organization(
@@ -41,6 +46,7 @@ class TestAdminSettingsWebServiceUpdateOrganization:
         assert org.performance_mode == PerformanceMode.GOVERNMENT_PMS
         mock_pms_config.assert_called_once_with(db)
         mock_pms_config.return_value.activate_ohcsf_pms.assert_called_once()
+        reconcile_projection.assert_called_once_with(db, org)
         db.commit.assert_called_once()
 
     def test_disabling_pms_updates_org_without_seeding(self) -> None:
@@ -54,9 +60,14 @@ class TestAdminSettingsWebServiceUpdateOrganization:
         )
         db.get.return_value = org
 
-        with patch(
-            "app.services.people.perf.pms_config_service.PMSConfigService"
-        ) as mock_pms_config:
+        with (
+            patch(
+                "app.services.people.perf.pms_config_service.PMSConfigService"
+            ) as mock_pms_config,
+            patch(
+                "app.services.admin.settings_web.reconcile_organization_tenant"
+            ) as reconcile_projection,
+        ):
             service = AdminSettingsWebService()
 
             success, error = service.update_organization(
@@ -72,6 +83,7 @@ class TestAdminSettingsWebServiceUpdateOrganization:
         assert org.pms_ohcsf_enabled is False
         assert org.performance_mode == PerformanceMode.PRIVATE
         mock_pms_config.assert_not_called()
+        reconcile_projection.assert_called_once_with(db, org)
         db.commit.assert_called_once()
 
     def test_setting_performance_mode_updates_org(self) -> None:
@@ -85,17 +97,21 @@ class TestAdminSettingsWebServiceUpdateOrganization:
         )
         db.get.return_value = org
 
-        service = AdminSettingsWebService()
-        success, error = service.update_organization(
-            db,
-            uuid4(),
-            {"performance_mode": "HYBRID"},
-        )
+        with patch(
+            "app.services.admin.settings_web.reconcile_organization_tenant"
+        ) as reconcile_projection:
+            service = AdminSettingsWebService()
+            success, error = service.update_organization(
+                db,
+                uuid4(),
+                {"performance_mode": "HYBRID"},
+            )
 
         assert success is True
         assert error is None
         assert org.performance_mode == PerformanceMode.HYBRID
         assert org.pms_ohcsf_enabled is True
+        reconcile_projection.assert_called_once_with(db, org)
         db.commit.assert_called_once()
 
 

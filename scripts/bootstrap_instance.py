@@ -413,6 +413,7 @@ def generate_bootstrap_db_script() -> str:
         from app.models.person import Person
         from app.models.rbac import Permission, PersonRole, Role, RolePermission
         from app.services.auth_flow import hash_password
+        from app.services.tenant_projection import reconcile_organization_tenant
         from scripts.seed_rbac import DEFAULT_PERMISSIONS, DEFAULT_ROLES
 
 
@@ -461,6 +462,8 @@ def generate_bootstrap_db_script() -> str:
                     print(f"    Currency:  {currency}")
                 else:
                     print(f"  Organization exists: {org_code}")
+
+                reconcile_organization_tenant(db, org)
 
                 # --- 2. Seed RBAC (permissions + roles) ---
                 print("  Setting up RBAC...")

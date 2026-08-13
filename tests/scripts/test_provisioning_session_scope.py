@@ -53,10 +53,13 @@ def test_create_org_commits_org_and_tax_seed_in_separate_sessions(monkeypatch):
         )
     )
     monkeypatch.setattr(create_org, "seed_default_tax_data", seed)
+    reconcile = MagicMock()
+    monkeypatch.setattr(create_org, "reconcile_organization_tenant", reconcile)
 
     create_org.main()
 
     cross_db.commit.assert_called_once_with()
+    reconcile.assert_called_once_with(cross_db, cross_db.add.call_args.args[0])
     assert captured_org_ids == [org_id]
     seed.assert_called_once_with(org_db, org_id, country_code="NG")
     org_db.commit.assert_called_once_with()
