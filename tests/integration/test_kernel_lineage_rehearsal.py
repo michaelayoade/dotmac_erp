@@ -1,9 +1,43 @@
 """Execute the installed Kernel lineage against ERP's real migrated schema.
 
-This is the E8 lineage ratchet.  The Kernel root cannot be composed yet, but
-that assertion must come from PostgreSQL rather than from a migration-file
-inventory.  Each disposition moves the expected failure forward until the
-lineage can be composed truthfully.
+This is a PERMANENT NEGATIVE CANARY, not a forward ratchet. It proves the legacy
+Kernel lineage must never run or be stamped in ERP, and that assertion comes from
+PostgreSQL rather than from a migration-file inventory.
+
+## Why the expected failure can never advance
+
+An earlier version of this docstring said "each disposition moves the expected
+failure forward until the lineage can be composed truthfully". **That is false
+for ERP**, and believing it costs a slice.
+
+Kernel `0001_initial_tenant_schema` creates `public.tenants` unconditionally, as
+its FIRST table, before it reaches any identity/RBAC/audit work. ERP
+intentionally owns that table — `20260813_tenant_projection` hosts the tenant
+catalogue in ERP's own lineage as an Organization projection. So the collision is
+structural and permanent: no disposition of `people`, `roles`, `user_credentials`,
+`auth_sessions`, `person_roles` or `audit_events` can move a failure that happens
+before any of them is reached.
+
+Sub's equivalent rehearsal IS a forward ratchet, because Sub does not host
+`tenants`. The two tests look identical and behave oppositely. Do not port
+reasoning from one to the other.
+
+## What this test is for
+
+It stays red at `tenants`, forever, on purpose. It fails if the failure ever
+CHANGES — which would mean someone dropped ERP's tenant catalogue, stamped the
+kernel revision, or edited the kernel migration. Each of those is prohibited, and
+this is the thing that notices.
+
+## What replaced the thing it was blocking
+
+`dotmac-files` needed a tenant foreign-key target and three database roles — not
+the kernel's identity estate. Starter's ADR-0006 D1 amendment replaced the
+physical `depends_on` with LOGICAL prerequisites an assembly binds to its own
+truthful revisions, so ERP supplies `tenant_scope_catalog.v1` from
+`20260813_tenant_projection` and never runs kernel `0001` at all. Full
+Kernel-0001 convergence is explicitly NOT pursued: it would couple byte storage
+to credentials, sessions, RBAC and audit for no domain reason.
 """
 
 from __future__ import annotations
@@ -72,9 +106,16 @@ def isolated_database_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[URL]:
     name = f"erp_kernel_rehearsal_{uuid4().hex}"
     maintenance = base_url.set(database="postgres")
     with psycopg.connect(_psycopg_url(maintenance), autocommit=True) as admin:
-        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+        admin.execute(
+            sql.SQL("CREATE DATABASE {} OWNER app_admin").format(sql.Identifier(name))
+        )
     try:
-        database_url = base_url.set(database=name)
+        database_url = base_url.set(
+            database=name,
+            username="app_admin",
+            password=None,
+        )
+        monkeypatch.setenv("MIGRATION_DATABASE_URL", _render(database_url))
         monkeypatch.setattr(
             app_config.settings,
             "database_url",

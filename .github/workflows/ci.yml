@@ -229,12 +229,19 @@ jobs:
       - name: Create CI network
         run: docker network create ci-net
 
-      - name: Start PostgreSQL  # pragma: allowlist secret
-        run: |
+      # `HOST_AUTH_METHOD=trust` lets the migration executor connect as
+      # `app_admin` without provisioning a password for an ephemeral CI
+      # container that is never reachable outside the job's network. The pragma
+      # moves to the `run:` line because that is where detect-secrets attributes
+      # a block-scalar match, and `#` cannot be appended to a `\`-continued
+      # shell line.
+      - name: Start PostgreSQL
+        run: |  # pragma: allowlist secret
           docker run -d --name ci-db --network ci-net \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=dotmac_erp_ci \
+            -e POSTGRES_HOST_AUTH_METHOD=trust \
             --health-cmd "pg_isready -U postgres" \
             --health-interval 5s \
             --health-retries 10 \
@@ -254,10 +261,37 @@ jobs:
             sleep 2
           done
 
+      # Same real deploy step as the integration job — see the comment there.
+      # Runs in the app image because that is where `scripts/` lives.
+      # The password goes in PGPASSWORD, not in the URL. libpq reads it either
+      # way, and keeping credentials out of connection strings means they cannot
+      # leak through a logged URL, a `ps` listing, or an error message that
+      # echoes the DSN.
+      - name: Bootstrap database roles (explicitly privileged)
+        env:
+          # Declared here, not inline in the `run:` block, so the value sits in
+          # YAML where a reviewer (and the secret scanner) can see it annotated.
+          # `docker run -e PGPASSWORD` with no `=` passes it through from this
+          # environment rather than restating it on the command line, which also
+          # keeps it out of the container's visible argv.
+          PGPASSWORD: postgres  # pragma: allowlist secret
+        run: |
+          docker run --rm --name ci-role-bootstrap --network ci-net \
+            -e BOOTSTRAP_DATABASE_URL=postgresql://postgres@ci-db:5432/dotmac_erp_ci \
+            -e PGPASSWORD \
+            dotmac-erp:ci \
+            python scripts/bootstrap_database_roles.py
+
+      - name: Assign the CI database to the migration executor
+        run: >-
+          docker exec ci-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres
+          -c "ALTER DATABASE dotmac_erp_ci OWNER TO app_admin"
+
       - name: Run database migrations
         run: |  # pragma: allowlist secret
           docker run --rm --name ci-migrate --network ci-net \
             -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
+            -e MIGRATION_DATABASE_URL=postgresql+psycopg://app_admin@ci-db:5432/dotmac_erp_ci \
             -e SECRET_KEY=ci-test-secret-key-not-for-production \
             -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
             -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
@@ -330,6 +364,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres  # pragma: allowlist secret
           POSTGRES_DB: dotmac_erp_test
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -339,6 +374,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp_test"
+      MIGRATION_DATABASE_URL: "postgresql+psycopg://app_admin@localhost:5432/dotmac_erp_test"
       TEST_DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp_test"
       JWT_SECRET: "ci-integration-test-secret-key-minimum-32-bytes"  # pragma: allowlist secret
       TOTP_ENCRYPTION_KEY: "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="  # pragma: allowlist secret
@@ -365,6 +401,33 @@ jobs:
 
       - name: Install dependencies
         run: poetry install --no-interaction
+
+      # The role bootstrap is a REAL deploy step, so CI performs it exactly as an
+      # operator would: elevated credentials, its own connection string, before
+      # migrations. `20260814_database_roles` then verifies and fails closed, and
+      # it cannot create the roles itself — an ordinary `alembic upgrade` runs as
+      # unprivileged `app_admin`.
+      #
+      # Modelling it here is not scaffolding to make a test pass. If this step
+      # were dropped, the migration chain would stop with the same error a real
+      # deployment gets when the bootstrap is skipped, which is the point.
+      - name: Bootstrap database roles (explicitly privileged)
+        env:
+          # libpq URL (no `+psycopg`), superuser, deliberately distinct from
+          # DATABASE_URL so the elevation is visible in the job log. The password
+          # goes in PGPASSWORD rather than the URL: libpq reads it either way,
+          # and credentials outside the connection string cannot leak through a
+          # logged URL, a `ps` listing, or an error that echoes the DSN.
+          BOOTSTRAP_DATABASE_URL: "postgresql://postgres@localhost:5432/dotmac_erp_test"
+          PGPASSWORD: postgres  # pragma: allowlist secret
+        run: poetry run python scripts/bootstrap_database_roles.py
+
+      - name: Assign the test database to the migration executor
+        env:
+          BOOTSTRAP_DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
+          PGPASSWORD: postgres  # pragma: allowlist secret
+        run: |
+          poetry run python -c "import os, psycopg; connection = psycopg.connect(os.environ['BOOTSTRAP_DATABASE_URL'], autocommit=True); connection.execute('ALTER DATABASE dotmac_erp_test OWNER TO app_admin'); connection.close()"
 
       - name: Run Alembic migrations
         run: poetry run alembic upgrade heads

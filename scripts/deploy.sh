@@ -3,9 +3,13 @@
 # health gate -> auto-rollback on failure.
 #
 # Usage:
-#   ./scripts/deploy.sh              # full deploy (backup, pull, migrate, restart)
-#   ./scripts/deploy.sh --quick      # skip git pull + image pull (restart + migrate + sync)
+#   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh
+#   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh --quick
 #   SKIP_BACKUP=1 ./scripts/deploy.sh   # skip the pre-migration DB backup (NOT recommended)
+#
+# `MIGRATION_DATABASE_URL` comes from the approved secret source and is passed
+# only to one-off preflight/migration containers. Runtime services keep only
+# `DATABASE_URL`; Alembic never falls back to it.
 #
 # Notes on erp's deploy model: the container runs app code from the mounted
 # ./app volume, but alembic/ is NOT mounted — migrations ship inside the image.
@@ -45,6 +49,12 @@ export COMPOSE_PROJECT_NAME="$DEPLOY_COMPOSE_PROJECT_NAME"
 
 cd "$PROJECT_DIR"
 PREV_SHA="$(git rev-parse HEAD)"
+
+if [[ -z "${MIGRATION_DATABASE_URL:-}" ]]; then
+    echo "ERROR: MIGRATION_DATABASE_URL is required and must connect as the" >&2
+    echo "non-superuser app_admin role. Alembic never uses DATABASE_URL." >&2
+    exit 2
+fi
 
 # .env carries two values that merely RESTATE facts owned by the deployed
 # commit: ERP_IMAGE_TAG (the immutable image) and APP_VERSION (pyproject's
@@ -152,10 +162,43 @@ fi
 # From here a failure triggers an automatic rollback.
 trap 'echo "Deploy FAILED"; rollback; exit 1' ERR
 
-# Step 3: apply migrations on the freshly-pulled image (multi-head safe — erp has
+# Step 3a: PREFLIGHT migration identity, role posture and ownership before DDL.
+#
+# `20260814_database_roles` fails closed when `app_admin`, `app_user` or
+# `platform_api` is missing or wrong-shaped. Discovering that mid-chain means a
+# half-applied upgrade and an automatic rollback; discovering it here costs
+# nothing. This deliberately does NOT create the roles: creation needs superuser
+# or CREATEROLE, and the deploy path must never hold those. Run the explicitly
+# privileged bootstrap once, as an operator, then re-run the deploy.
+echo "→ Preflight: migration executor contract..."
+if ! docker compose run --rm --entrypoint "" \
+    -e MIGRATION_DATABASE_URL app \
+    poetry run python scripts/bootstrap_database_roles.py --verify-only
+then
+    echo ""
+    echo "DEPLOY STOPPED: the migration identity, role posture, or database" >&2
+    echo "ownership contract is unsatisfied. No migration was attempted." >&2
+    echo "" >&2
+    echo "If roles are missing or wrong-shaped, run the explicitly privileged" >&2
+    echo "bootstrap once with superuser or CREATEROLE credentials:" >&2
+    echo "" >&2
+    echo "  BOOTSTRAP_DATABASE_URL=postgresql://<superuser>@<host>/<db> \\" >&2
+    echo "      python scripts/bootstrap_database_roles.py --dry-run" >&2
+    echo "  # review, then drop --dry-run" >&2
+    echo "" >&2
+    echo "That script never sets passwords or transfers object ownership." >&2
+    echo "For an existing database whose objects have another owner, complete" >&2
+    echo "a separately reviewed ownership cutover before re-running deploy." >&2
+    exit 1
+fi
+echo "  roles present and correctly shaped"
+echo ""
+
+# Step 3b: apply migrations on the freshly-pulled image (multi-head safe — erp has
 # hit multi-head states, so `heads` (plural), never `head`).
 echo "→ Applying migrations (alembic upgrade heads)..."
-docker compose run --rm --entrypoint "" app poetry run alembic upgrade heads
+docker compose run --rm --entrypoint "" -e MIGRATION_DATABASE_URL app \
+    poetry run alembic upgrade heads
 echo ""
 
 # Step 4: recreate the app container on the new image + code
