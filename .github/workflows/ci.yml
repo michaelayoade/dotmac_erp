@@ -229,8 +229,14 @@ jobs:
       - name: Create CI network
         run: docker network create ci-net
 
-      - name: Start PostgreSQL  # pragma: allowlist secret
-        run: |
+      # `HOST_AUTH_METHOD=trust` lets the migration executor connect as
+      # `app_admin` without provisioning a password for an ephemeral CI
+      # container that is never reachable outside the job's network. The pragma
+      # moves to the `run:` line because that is where detect-secrets attributes
+      # a block-scalar match, and `#` cannot be appended to a `\`-continued
+      # shell line.
+      - name: Start PostgreSQL
+        run: |  # pragma: allowlist secret
           docker run -d --name ci-db --network ci-net \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
