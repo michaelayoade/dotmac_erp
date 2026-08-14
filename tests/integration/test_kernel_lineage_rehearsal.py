@@ -106,9 +106,16 @@ def isolated_database_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[URL]:
     name = f"erp_kernel_rehearsal_{uuid4().hex}"
     maintenance = base_url.set(database="postgres")
     with psycopg.connect(_psycopg_url(maintenance), autocommit=True) as admin:
-        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+        admin.execute(
+            sql.SQL("CREATE DATABASE {} OWNER app_admin").format(sql.Identifier(name))
+        )
     try:
-        database_url = base_url.set(database=name)
+        database_url = base_url.set(
+            database=name,
+            username="app_admin",
+            password=None,
+        )
+        monkeypatch.setenv("MIGRATION_DATABASE_URL", _render(database_url))
         monkeypatch.setattr(
             app_config.settings,
             "database_url",

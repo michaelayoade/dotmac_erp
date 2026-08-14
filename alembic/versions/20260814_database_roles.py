@@ -65,6 +65,7 @@ ROLE_CONTRACT: dict[str, tuple[bool, bool]] = {
     "app_user": (False, False),
     "platform_api": (False, False),
 }
+MIGRATION_EXECUTOR = "app_admin"
 
 _BOOTSTRAP = "scripts/bootstrap_database_roles.py"
 
@@ -80,6 +81,15 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":
         return
+
+    current_user = str(bind.scalar(sa.text("SELECT current_user")))
+    if current_user != MIGRATION_EXECUTOR:
+        raise RuntimeError(
+            f"migration connection is {current_user!r}, required "
+            f"{MIGRATION_EXECUTOR!r}. Use the dedicated "
+            "MIGRATION_DATABASE_URL; application and bootstrap credentials "
+            "may not execute Alembic."
+        )
 
     rows = bind.execute(
         sa.text(
