@@ -99,6 +99,68 @@ Pursuing full Kernel-0001 convergence merely to unlock stored bytes is
 explicitly rejected: it would couple byte storage to credentials, sessions, RBAC
 and audit for no domain reason.
 
+## Ownership cutover — required before `app_admin` can migrate anything
+
+**Creating the three roles does not make `app_admin` able to migrate.** A role
+owns nothing it did not create, and only an owner (or a superuser) may `ALTER`
+an object. A database built by `postgres` — the normal history for anything
+predating the unprivileged migration model — leaves `app_admin` able to connect
+and unable to work.
+
+**Measured on Seabone, read-only:** the ERP database is owned by `postgres` and
+**840 objects are postgres-owned**. Running the role bootstrap there and then
+deploying would satisfy every role check and fail at the first `ALTER`, half
+applied.
+
+### The procedure
+
+`scripts/cutover_database_ownership.py`, run by an operator with superuser or
+membership of the owning role. It is deliberately NOT part of any deploy: the
+deploy preflight REPORTS this problem and must never hold the privileges to fix
+it.
+
+```bash
+# 1. Review. Default is a dry run; nothing executes.
+OWNERSHIP_DATABASE_URL=postgresql://<superuser>@<host>/<db> \
+    python scripts/cutover_database_ownership.py
+
+# 2. Execute, naming whose objects move.
+OWNERSHIP_DATABASE_URL=... python scripts/cutover_database_ownership.py \
+    --execute --approve-owner postgres
+```
+
+### Why it is shaped this way
+
+- **Plan-first.** Ownership transfer is not undone by re-running something; it
+  rewrites who controls production objects.
+- **Approval names the owner.** A blanket "everything not owned by `app_admin`"
+  sweep would silently capture an integration role or a departed engineer's
+  personal role. Whose estate this is must be stated, not inferred — an
+  unapproved owner stops the run.
+- **One transaction.** A failure part-way leaves ownership exactly as it was.
+- **Its own post-condition.** Afterwards it re-runs the executor contract's
+  inventory and refuses to report success unless that returns empty.
+- **Same exclusions as the preflight** — extension-owned objects, system
+  schemas, `pg_database_owner` schemas — so it repairs precisely the set the
+  preflight refuses. Indexes, constraints and triggers follow their table;
+  partitions are listed individually, because `ALTER TABLE` on a partitioned
+  parent does not cascade.
+- **Grants are untouched.** Ownership and privilege are different: `app_user`
+  keeps exactly the grants it had, and nothing here widens anyone's access.
+
+### Order of operations for a database that predates the model
+
+1. `scripts/bootstrap_database_roles.py` — create the three roles (elevated).
+2. `scripts/cutover_database_ownership.py` — transfer the estate (elevated).
+3. Normal `scripts/deploy.sh` — preflight passes, migrations run as `app_admin`.
+
+Steps 1 and 2 are one-time and explicitly privileged. Step 3 is the ordinary
+unprivileged path, forever after.
+
+**Until this is done for Seabone, `dotmac-files` cannot be composed into ERP** —
+`fi_0001_stored_files` runs as `app_admin` and hits the same wall. The kernel
+repin and the prerequisite bindings are necessary but not sufficient.
+
 ## The database-role bootstrap
 
 `app_admin`, `app_user` and `platform_api` are cluster-wide identities every
