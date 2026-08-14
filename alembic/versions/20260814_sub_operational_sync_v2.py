@@ -67,9 +67,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("idx_expense_entry_task", table_name="expense_entry", schema="exp")
-    op.drop_index(
-        "idx_expense_entry_ticket", table_name="expense_entry", schema="exp"
-    )
+    op.drop_index("idx_expense_entry_ticket", table_name="expense_entry", schema="exp")
     op.drop_constraint(
         "fk_expense_entry_task", "expense_entry", schema="exp", type_="foreignkey"
     )

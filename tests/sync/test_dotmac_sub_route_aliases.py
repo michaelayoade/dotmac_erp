@@ -54,7 +54,9 @@ def test_material_support_routes_use_the_neutral_sub_adapter() -> None:
 
 
 def test_operational_bulk_route_uses_the_real_version_two_contract() -> None:
-    bulk_route = next(route for route in router.routes if route.path == "/sync/sub/bulk")
+    bulk_route = next(
+        route for route in router.routes if route.path == "/sync/sub/bulk"
+    )
 
     assert bulk_route.endpoint.__module__ == "app.api.sync.dotmac_sub"
     assert bulk_route.response_model is BulkSyncResponse

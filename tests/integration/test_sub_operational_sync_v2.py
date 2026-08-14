@@ -137,9 +137,7 @@ def test_real_erp_v2_response_creates_entities_and_expense_options(
     assert str(ticket.ticket_id) in {
         item["ticket_id"] for item in finance_context["tickets"]
     }
-    assert str(task.task_id) in {
-        item["task_id"] for item in finance_context["tasks"]
-    }
+    assert str(task.task_id) in {item["task_id"] for item in finance_context["tasks"]}
 
     expense = ExpenseService.create(
         db,
