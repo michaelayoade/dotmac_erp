@@ -28,6 +28,15 @@ from app.services.finance.payments.paystack_client import PaystackClient, Paysta
 logger = logging.getLogger(__name__)
 
 
+class WebhookRetryDisabledError(RuntimeError):
+    """Raised when webhook retry is attempted while the redrive path is disabled.
+
+    Disabled 2026-08-14: the retry path replayed a stored payload without
+    re-verifying its signature. Re-enabling requires an immutable verified
+    receipt, not a flag.
+    """
+
+
 class WebhookService:
     """
     Service for processing Paystack webhooks.
@@ -452,65 +461,38 @@ class WebhookService:
         )
 
     def retry_failed_webhook(self, webhook_id: UUID) -> PaymentWebhook:
+        """Refuse to reprocess a stored webhook payload. Always raises.
+
+        DISABLED 2026-08-14 — fail closed. This method used to reset a FAILED
+        webhook to RECEIVED and re-dispatch `_handle_charge_success`,
+        `_handle_charge_failed`, `_handle_transfer_success`,
+        `_handle_transfer_failed` and `_handle_transfer_reversed` from
+        `webhook.payload` — a row in our own database — with **no signature
+        verification anywhere in the path**.
+
+        Signature verification happens once, on the inbound request, against the
+        raw request body. Nothing re-verified the payload on the retry path, so
+        anyone able to influence a stored payload and reach this method could
+        execute charge, transfer and reversal handlers on data Paystack never
+        sent. The stored payload is evidence of what we received; it is not
+        proof of what was sent.
+
+        This method is disabled rather than repaired because the repair is a
+        different change: an immutable verified receipt carrying the raw-body
+        digest, the signature evidence, the verifier and config version, the
+        verification timestamp, and a parsed payload bound to that digest —
+        redriven through the same idempotent handler without resetting the
+        receipt to RECEIVED. Until that exists there is no verified artifact to
+        redrive, so there is nothing safe for this method to do.
+
+        It had zero callers when disabled, so failing closed costs no behaviour.
+
+        Raises:
+            WebhookRetryDisabledError: always.
         """
-        Retry a failed webhook.
-
-        Args:
-            webhook_id: ID of the failed webhook
-
-        Returns:
-            Updated PaymentWebhook record
-        """
-        webhook = self.db.get(PaymentWebhook, webhook_id)
-        if not webhook:
-            raise ValueError(f"Webhook {webhook_id} not found")
-
-        if webhook.status != WebhookStatus.FAILED:
-            raise ValueError(f"Can only retry FAILED webhooks, got {webhook.status}")
-
-        # Reset status and re-process
-        webhook.status = WebhookStatus.RECEIVED
-        webhook.error_message = None
-        self.db.flush()
-
-        # Find intent and re-process
-        intent = self.db.scalar(
-            select(PaymentIntent).where(
-                PaymentIntent.paystack_reference == webhook.paystack_reference
-            )
+        raise WebhookRetryDisabledError(
+            "retry_failed_webhook is disabled: replaying a stored webhook "
+            "payload would execute payment handlers on data whose signature "
+            "was never re-verified. Redrive requires an immutable verified "
+            "receipt; see the follow-up change."
         )
-
-        if not intent:
-            webhook.status = WebhookStatus.FAILED
-            webhook.error_message = "Payment intent not found"
-            self.db.flush()
-            self._commit_and_refresh(webhook)
-            return webhook
-
-        try:
-            webhook.status = WebhookStatus.PROCESSING
-            self.db.flush()
-
-            if webhook.event_type == "charge.success":
-                self._handle_charge_success(intent, webhook.payload or {})
-            elif webhook.event_type == "charge.failed":
-                self._handle_charge_failed(intent, webhook.payload or {})
-            elif webhook.event_type == "transfer.success":
-                self._handle_transfer_success(intent, webhook.payload or {})
-            elif webhook.event_type == "transfer.failed":
-                self._handle_transfer_failed(intent, webhook.payload or {})
-            elif webhook.event_type == "transfer.reversed":
-                self._handle_transfer_reversed(intent, webhook.payload or {})
-
-            webhook.status = WebhookStatus.PROCESSED
-            webhook.processed_at = datetime.now(UTC)
-
-        except Exception as e:
-            logger.exception(f"Webhook retry failed: {e}")
-            webhook.status = WebhookStatus.FAILED
-            webhook.error_message = str(e)[:1000]
-            webhook.retry_count += 1
-
-        self.db.flush()
-        self._commit_and_refresh(webhook)
-        return webhook
