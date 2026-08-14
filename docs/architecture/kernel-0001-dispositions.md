@@ -30,51 +30,107 @@ The catalogue migration is explicitly forward-fix only: it never drops tenant
 identity on downgrade, including when it verified and adopted a pre-existing
 catalogue. Later corrections amend the projection in place.
 
-## Executable lineage ratchet
+## Permanent negative canary — NOT a forward ratchet
 
-`tests/integration/test_kernel_lineage_rehearsal.py` ports Sub's proven
-installed-lineage rehearsal into ERP. It provisions a unique disposable
-PostgreSQL database, builds ERP through its real Alembic chain, and then runs
-the exact installed Kernel migrations through a separate
+**Corrected 2026-08-14.** This section previously called the rehearsal a ratchet
+whose expected failure moves forward as dispositions land. That is false for
+ERP, and acting on it would waste a slice chasing a failure that cannot move.
+
+`tests/integration/test_kernel_lineage_rehearsal.py` provisions a unique
+disposable PostgreSQL database, builds ERP through its real Alembic chain, and
+then runs the exact installed Kernel migrations through a separate
 `public.dotmac_kernel_alembic_version` table. It exercises both an empty
 database upgraded to current head and the real
 `20260812_merge_expand_withdrawal` predecessor with an Organization inserted
 before the tenant-projection upgrade.
 
-Both paths currently fail at `0001_initial_tenant_schema` when it tries to
-create the already hosted `public.tenants` table. The failure is the expected
-ratchet state, not a skip: the test asserts PostgreSQL `DuplicateTable`, the
-active revision and object name. It also proves the failed transaction records
-no Kernel revision and creates none of the three Kernel database roles that
-were absent before the attempt. A changed first failure is progress or
-regression and must be dispositioned deliberately.
+Both paths fail at `0001_initial_tenant_schema` when it tries to create the
+already hosted `public.tenants` table, and **they always will**. Kernel `0001`
+creates `public.tenants` unconditionally as its FIRST table, before reaching any
+identity, RBAC or audit work. ERP intentionally owns that table
+(`20260813_tenant_projection`). The collision therefore happens before every
+other disposition in this matrix is even reached, so none of them can advance it.
 
-The rehearsal does not make composition admissible. It converts the first
-lineage blocker from prose into an executable database fact and stays red if a
-future change merely stamps the revision or runs a copied lineage.
+Sub's equivalent rehearsal IS a forward ratchet, because Sub does not host
+`tenants`. The two tests look identical and behave oppositely. Do not port
+reasoning from one to the other.
+
+**What the canary is for.** It stays red at `tenants` permanently, on purpose,
+and fails if the failure ever CHANGES — which would mean someone dropped ERP's
+tenant catalogue, stamped the Kernel revision, or edited the Kernel migration.
+All three are prohibited. The test also proves the failed transaction records no
+Kernel revision and creates none of the three Kernel database roles.
+
+**The legacy Kernel lineage must never run or be stamped in ERP.** That is the
+standing disposition, not a temporary state awaiting more work.
 
 ## Cutover rule
 
-ERP may finish additive collision dispositions in coherent slices, but the
-revision-0001 lineage ratchet moves once and only after every atomic effect is
-adjudicated and rehearsed together. The next lineage slice must apply the
-accepted independent assembly-lineage/create-or-adopt pattern already being
-proved by the Sub reference adopter. The executable rehearsal above is the
-first reused part of that contract: verify catalogue/RLS/grant effects, reject
-drift and rehearse rollback/stamp behavior without pretending an incompatible
-effect ran. A raw Alembic stamp, a product-specific conditional copied into the
-kernel migration, or a blanket `IF EXISTS` is not evidence and remains
-forbidden.
+ERP may finish additive collision dispositions in coherent slices. What it may
+never do is run or stamp the Kernel lineage. A raw Alembic stamp, a
+product-specific conditional copied into the kernel migration, or a blanket
+`IF EXISTS` is not evidence and remains forbidden.
 
 This ERP slice is not authority to supply a new generic kernel facility during
 ADR-0017's adoption gate. Reuse the proven Starter/Sub contract; if ERP exposes
 a genuinely missing reusable seam, preserve it as evidence until two adopters
 prove the same need.
 
-`dotmac-files` stays gated even though its foreign-key target now exists: its
-`fi_0001_stored_files` lineage explicitly depends on
-`0001_initial_tenant_schema`. Alembic must be able to resolve that dependency
-truthfully before the files lineage is added to ERP's `version_locations`.
+## `dotmac-files` is unblocked by contract, not by convergence
+
+`fi_0001_stored_files` used to declare
+`depends_on = ("0001_initial_tenant_schema",)`, which ERP could never satisfy.
+Starter's **ADR-0006 D1 amendment** (kernel `0.1.0a56`) replaced that physical
+edge with LOGICAL prerequisites: a module declares the database EFFECTS it needs
+and each assembly binds them to its own truthful revisions.
+
+Files needs exactly two — a tenant catalogue to point a foreign key at
+(`tenant_scope_catalog.v1`) and three roles to grant to
+(`module_database_roles.v1`) — and neither requires the Kernel's identity estate.
+
+ERP's bindings:
+
+| Prerequisite | ERP provider |
+|---|---|
+| `tenant_scope_catalog.v1` | `20260813_tenant_projection` |
+| `module_database_roles.v1` | the database-role bootstrap (below) |
+
+Pursuing full Kernel-0001 convergence merely to unlock stored bytes is
+explicitly rejected: it would couple byte storage to credentials, sessions, RBAC
+and audit for no domain reason.
+
+## The database-role bootstrap
+
+`app_admin`, `app_user` and `platform_api` are cluster-wide identities every
+Dotmac module grants to. `CREATE ROLE` needs superuser or `CREATEROLE`, which an
+ordinary `alembic upgrade` must never hold, so creation and verification are
+split:
+
+| Step | Who runs it | What it does |
+|---|---|---|
+| `scripts/bootstrap_database_roles.py` | operator, **explicitly elevated** via `BOOTSTRAP_DATABASE_URL` | creates or adopts the three roles; `--dry-run` and opt-in `--repair` |
+| `20260814_database_roles` | ordinary unprivileged `app_admin` | **verifies only**, and fails closed naming the bootstrap |
+
+Adopt-only was rejected as the sole mechanism because it strands new
+installations: nothing in the deploy path would ever create the roles, so a
+fresh cluster could never satisfy the prerequisite (decision, 2026-08-14).
+
+The contract is `(rolbypassrls, rolsuper)`: `app_admin` `(true, false)`,
+`app_user` `(false, false)`, `platform_api` `(false, false)`. Both attributes
+are checked because **a superuser bypasses RLS regardless of `rolbypassrls`** —
+an `app_user SUPERUSER NOBYPASSRLS` would pass an existence check while silently
+defeating tenant isolation for every module. `app_admin` is BYPASSRLS and NOT
+superuser: its requirement is reading past RLS, and accepting a superuser would
+certify cluster-wide authority to satisfy it.
+
+`tests/architecture/test_database_role_contract.py` pins the script and the
+migration to the same contract and proves the migration issues no role DDL.
+
+**Still outstanding for the files adoption:** ERP pins kernel `0.1.0a24` and the
+logical-prerequisite contract arrived in `0.1.0a56`. Repinning is its own slice.
+Until then this revision is the *intended* provider for
+`module_database_roles.v1` but is not yet bound to it, and `dotmac-files` is not
+in ERP's `version_locations`.
 
 ## Production preflight, 2026-08-13
 
