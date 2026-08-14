@@ -51,11 +51,14 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
 )
+from app.services.finance.coverage import PAYMENT_DUST_DEFAULT
 
-# Sub-cent rounding dust: a balance this small is not a debt. Deliberately the
-# same value AR uses, declared separately because AP and AR are free to diverge
-# — but a change to either should be a conscious answer to "why not both?".
-PAYMENT_DUST = Decimal("0.01")
+# Sub-cent rounding dust. This was its own `Decimal("0.01")`, with a comment
+# saying AP and AR are "free to diverge — but a change to either should be a
+# conscious answer to 'why not both?'". ADR-0016 §4 answers it: the tolerance is
+# one business policy, so it is one setting (`payments.payment_dust`) and this
+# is its DEFAULT, re-exported here so the existing call sites keep their name.
+PAYMENT_DUST = PAYMENT_DUST_DEFAULT
 
 # Statuses whose meaning is not a function of payment coverage.
 NOT_PAYMENT_DETERMINED = frozenset(

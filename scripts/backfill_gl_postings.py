@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session
 # Bootstrap the app to get DB access
 sys.path.insert(0, ".")
 
-from app.db import SessionLocal  # noqa: E402
+from app.db.session_context import cross_org_session, session_for_org  # noqa: E402
 from app.models.expense.expense_claim import (  # noqa: E402
     ExpenseClaim,
     ExpenseClaimStatus,
@@ -66,6 +66,7 @@ from app.models.finance.gl.fiscal_period import (  # noqa: E402
     PeriodStatus,
 )
 from app.models.finance.gl.fiscal_year import FiscalYear  # noqa: E402
+from app.models.finance.core_org.organization import Organization  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -683,45 +684,58 @@ ENTITY_TYPES = {
 }
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Backfill GL postings for records missing journal entries."
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Report missing GL entries without making changes",
-    )
-    parser.add_argument(
-        "--execute",
-        action="store_true",
-        help="Actually create GL entries",
-    )
-    parser.add_argument(
-        "--entity-type",
-        choices=list(ENTITY_TYPES.keys()),
-        help="Process only this entity type (default: all)",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=1000,
-        help="Max records per entity type per run (default: 1000)",
-    )
-    parser.add_argument(
-        "--org-id",
-        type=str,
-        default=None,
-        help="Process only this organization (UUID)",
-    )
-    args = parser.parse_args()
+def main(
+    *,
+    organization_id: UUID | None = None,
+    args: argparse.Namespace | None = None,
+) -> None:
+    if args is None:
+        parser = argparse.ArgumentParser(
+            description="Backfill GL postings for records missing journal entries."
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Report missing GL entries without making changes",
+        )
+        parser.add_argument(
+            "--execute",
+            action="store_true",
+            help="Actually create GL entries",
+        )
+        parser.add_argument(
+            "--entity-type",
+            choices=list(ENTITY_TYPES.keys()),
+            help="Process only this entity type (default: all)",
+        )
+        parser.add_argument(
+            "--batch-size",
+            type=int,
+            default=1000,
+            help="Max records per entity type per run (default: 1000)",
+        )
+        parser.add_argument(
+            "--org-id",
+            type=str,
+            default=None,
+            help="Process only this organization (UUID)",
+        )
+        args = parser.parse_args()
 
-    if not args.dry_run and not args.execute:
-        parser.error("Specify --dry-run or --execute")
+        if not args.dry_run and not args.execute:
+            parser.error("Specify --dry-run or --execute")
 
-    org_id = UUID(args.org_id) if args.org_id else None
+    org_id = organization_id or (UUID(args.org_id) if args.org_id else None)
+    if org_id is None:
+        # Cross-tenant authority is limited to discovering organizations.
+        # Each organization's report and writes use a fresh tenant session.
+        with cross_org_session() as cross_db:
+            org_ids = list(cross_db.scalars(select(Organization.organization_id)).all())
+        for target_org_id in org_ids:
+            main(organization_id=target_org_id, args=args)
+        return
 
-    with SessionLocal() as db:
+    with session_for_org(org_id) as db:
         # Always show the report first
         logger.info("=" * 60)
         logger.info("GL POSTING BACKFILL REPORT")

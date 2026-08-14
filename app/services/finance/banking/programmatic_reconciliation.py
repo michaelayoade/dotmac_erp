@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from app.services.finance.banking.programmatic_parts import (
     BankFeeStrategy,
-    CustomerPaymentReferenceStrategy,
     CustomerReceiptProvider,
     CustomerReceiptReferenceStrategy,
     ExpenseReimbursementStrategy,
@@ -18,16 +17,13 @@ from app.services.finance.banking.programmatic_parts import (
     PaymentIntentReferenceStrategy,
     PayrollEntryStrategy,
     ProgrammaticReconciliationEngine,
-    SplynxCustomerPaymentProvider,
     SupplierPaymentProvider,
     SupplierPaymentReferenceStrategy,
-    UniqueDateAmountStrategy,
     build_extra_gl_account_ids,
 )
 
 __all__ = [
     "BankFeeStrategy",
-    "CustomerPaymentReferenceStrategy",
     "CustomerReceiptProvider",
     "CustomerReceiptReferenceStrategy",
     "ExpenseReimbursementStrategy",
@@ -37,9 +33,7 @@ __all__ = [
     "PaymentIntentReferenceStrategy",
     "PayrollEntryStrategy",
     "ProgrammaticReconciliationEngine",
-    "SplynxCustomerPaymentProvider",
     "SupplierPaymentProvider",
     "SupplierPaymentReferenceStrategy",
-    "UniqueDateAmountStrategy",
     "build_extra_gl_account_ids",
 ]

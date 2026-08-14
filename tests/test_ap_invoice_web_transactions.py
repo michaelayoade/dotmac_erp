@@ -4,6 +4,8 @@ import json
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
+
+from tests._helpers.document_stubs import invoice_stub
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -71,7 +73,7 @@ def test_invoice_detail_context_includes_linked_payments(monkeypatch):
     invoice_id = uuid4()
     payment_id = uuid4()
 
-    invoice = SimpleNamespace(
+    invoice = invoice_stub(
         invoice_id=invoice_id,
         organization_id=org_id,
         supplier_id=supplier_id,

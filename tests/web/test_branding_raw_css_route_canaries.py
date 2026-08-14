@@ -64,7 +64,7 @@ def _hostile_branding() -> OrganizationBranding:
 def api_client(monkeypatch):
     """The settings API router alone, with its DB and permission dependencies
     stubbed, and the branding lookup returning the hostile row above."""
-    from app.api.deps import get_db_admin_bypass
+    from app.api.deps import get_db_admin_bypass, require_admin_bypass
 
     monkeypatch.setattr(
         BrandingService, "get_by_org_id", lambda self, org_id: _hostile_branding()
@@ -73,14 +73,7 @@ def api_client(monkeypatch):
     app = FastAPI()
     app.include_router(settings_api_router, prefix="/api/v1")
     app.dependency_overrides[get_db_admin_bypass] = lambda: None
-
-    # `require_permission(...)` builds a fresh closure per route, so override by
-    # callable identity across every mounted dependant rather than by name.
-    for route in app.routes:
-        dependant = getattr(route, "dependant", None)
-        for dep in getattr(dependant, "dependencies", []):
-            if dep.call is not None and "permission" in dep.call.__name__.lower():
-                app.dependency_overrides[dep.call] = lambda: {"user_id": None}
+    app.dependency_overrides[require_admin_bypass] = lambda: {"user_id": None}
 
     with TestClient(app) as client:
         yield client

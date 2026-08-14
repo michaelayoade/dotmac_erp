@@ -347,6 +347,24 @@ def reject_expense_claim(
     return response
 
 
+@router.post("/claims/{claim_id}/withdraw-approval")
+def withdraw_expense_claim_approval(
+    claim_id: str,
+    reason: str = Form(...),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Withdraw approval from an approved, financially untouched claim."""
+    response = expense_claims_web_service.withdraw_approval_response(
+        claim_id=claim_id,
+        reason=reason,
+        auth=auth,
+        db=db,
+    )
+    db.commit()
+    return response
+
+
 @router.post("/claims/{claim_id}/cancel")
 def cancel_expense_claim(
     claim_id: str,

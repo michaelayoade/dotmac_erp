@@ -179,13 +179,11 @@ class CashFlowComputer(BaseComputer):
             InvoiceStatus.OVERDUE,
             InvoiceStatus.DISPUTED,
         )
-        ar_stmt = select(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).where(
+        ar_stmt = select(func.coalesce(func.sum(Invoice.balance_due), 0)).where(
             Invoice.organization_id == organization_id,
             Invoice.status.in_(ar_overdue_statuses),
             Invoice.due_date < snapshot_date,
-            (Invoice.total_amount - Invoice.amount_paid) > 0,
+            (Invoice.balance_due) > 0,
         )
         ar_overdue = Decimal(str(self.db.scalar(ar_stmt) or 0))
 
@@ -207,14 +205,14 @@ class CashFlowComputer(BaseComputer):
         }
         ap_stmt = select(
             func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
+                func.sum(SupplierInvoice.balance_due),
                 0,
             )
         ).where(
             SupplierInvoice.organization_id == organization_id,
             SupplierInvoice.status.in_(ap_active_statuses),
             SupplierInvoice.due_date <= ap_due_cutoff,
-            (SupplierInvoice.total_amount - SupplierInvoice.amount_paid) > 0,
+            (SupplierInvoice.balance_due) > 0,
         )
         ap_due_7d = Decimal(str(self.db.scalar(ap_stmt) or 0))
 

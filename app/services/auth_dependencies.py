@@ -724,24 +724,22 @@ def require_admin_bypass(
     session.last_seen_at = now
     db.flush()
 
-    # Check for admin role
+    # JWT role claims are a login-time snapshot. Cross-tenant authority must be
+    # checked against the live assignment on every request so removing the
+    # admin role takes effect immediately, even while the session and access
+    # token remain otherwise valid.
     roles_value = payload.get("roles")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-    if "admin" not in roles:
-        # Also check database for admin role
-        admin_role = db.scalar(
-            select(Role).where(Role.name == "admin").where(Role.is_active.is_(True))
-        )
-        if admin_role:
-            link = db.scalar(
-                select(PersonRole)
-                .where(PersonRole.person_id == person_uuid)
-                .where(PersonRole.role_id == admin_role.id)
-            )
-            if not link:
-                raise HTTPException(status_code=403, detail="Admin access required")
-        else:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    admin_link = db.scalar(
+        select(PersonRole)
+        .join(Role, PersonRole.role_id == Role.id)
+        .where(PersonRole.person_id == person_uuid)
+        .where(Role.name == "admin")
+        .where(Role.is_active.is_(True))
+        .limit(1)
+    )
+    if not admin_link:
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     # Enable RLS bypass for admin operations
     enable_rls_bypass_sync(db)

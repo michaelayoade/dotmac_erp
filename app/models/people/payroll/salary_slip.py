@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    Computed,
     Date,
     Enum,
     ForeignKey,
@@ -195,6 +196,26 @@ class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         Numeric(18, 2),
         default=Decimal("0"),
         comment="Gross - Deductions",
+    )
+    # ADR-0016 stage 2 (expand). The slip recorded `paid_at`, `paid_by_id` and
+    # `payment_reference` — who and when, never how much — so a part-
+    # disbursement left it reading PAID with nothing to contradict that.
+    # Coverage derives from these two; `status` keeps lifecycle only.
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2),
+        nullable=False,
+        default=Decimal("0"),
+        server_default=text("0"),
+        comment="How much of net_pay has actually been disbursed",
+    )
+    # Derived by the DATABASE, never written here. It has no value until the
+    # row is flushed, and on a loaded instance it holds whatever the last
+    # SELECT returned — so code that has just changed `amount_paid` must
+    # subtract live rather than read this. See `app.services.finance.coverage`.
+    balance_due: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2),
+        Computed("net_pay - amount_paid", persisted=True),
+        nullable=False,
     )
 
     # Functional currency amounts

@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.24.0")
+    app_version: str = os.getenv("APP_VERSION", "1.30.0")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -357,8 +357,8 @@ class Settings:
     # ==========================================================================
     # Path to the Ed25519-signed license file
     license_file_path: str = os.getenv("LICENSE_FILE_PATH", "/app/license/dotmac.lic")
-    # When True (default), skip all license validation — for development only
-    license_dev_mode: bool = os.getenv("DOTMAC_DEV_MODE", "true").lower() in {
+    # Development must opt in explicitly; an omitted flag enforces licensing.
+    license_dev_mode: bool = os.getenv("DOTMAC_DEV_MODE", "false").lower() in {
         "1",
         "true",
         "yes",

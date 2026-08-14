@@ -139,12 +139,10 @@ class EfficiencyComputer(BaseComputer):
         from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 
         # AR balance: sum of outstanding invoices (including disputed)
-        ar_stmt = select(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).where(
+        ar_stmt = select(func.coalesce(func.sum(Invoice.balance_due), 0)).where(
             Invoice.organization_id == organization_id,
             Invoice.status.in_(InvoiceStatus.outstanding() | {InvoiceStatus.DISPUTED}),
-            (Invoice.total_amount - Invoice.amount_paid) > 0,
+            (Invoice.balance_due) > 0,
         )
         ar_balance = Decimal(str(self.db.scalar(ar_stmt) or 0))
 
@@ -181,13 +179,13 @@ class EfficiencyComputer(BaseComputer):
         )
         ap_stmt = select(
             func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
+                func.sum(SupplierInvoice.balance_due),
                 0,
             )
         ).where(
             SupplierInvoice.organization_id == organization_id,
             SupplierInvoice.status.in_(outstanding_statuses),
-            (SupplierInvoice.total_amount - SupplierInvoice.amount_paid) > 0,
+            (SupplierInvoice.balance_due) > 0,
         )
         ap_balance = Decimal(str(self.db.scalar(ap_stmt) or 0))
 

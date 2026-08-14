@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Computed,
     Date,
     DateTime,
     Enum,
@@ -67,6 +68,17 @@ class LeasePaymentSchedule(Base):
 
     # Payment breakdown
     total_payment: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    # ADR-0016 stage 2 (expand). A schedule row could be SCHEDULED, INVOICED,
+    # PAID or OVERDUE but carried no record of how much was paid against it.
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0, server_default=text("0")
+    )
+    # Derived by the database; see the note on `SalarySlip`.
+    balance_due: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6),
+        Computed("total_payment - amount_paid", persisted=True),
+        nullable=False,
+    )
     principal_portion: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     interest_portion: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     variable_payment: Mapped[Decimal] = mapped_column(

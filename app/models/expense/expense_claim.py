@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    Computed,
     Date,
     Enum,
     ForeignKey,
@@ -48,6 +49,7 @@ class ExpenseClaimStatus(str, enum.Enum):
     SUBMITTED = "SUBMITTED"
     PENDING_APPROVAL = "PENDING_APPROVAL"
     APPROVED = "APPROVED"
+    APPROVAL_WITHDRAWN = "APPROVAL_WITHDRAWN"
     REJECTED = "REJECTED"
     PAID = "PAID"
     CANCELLED = "CANCELLED"
@@ -65,7 +67,9 @@ class ExpenseClaimStatus(str, enum.Enum):
     @classmethod
     def terminal(cls) -> frozenset["ExpenseClaimStatus"]:
         """Statuses where the claim is fully settled or cancelled."""
-        return frozenset({cls.PAID, cls.REJECTED, cls.CANCELLED})
+        return frozenset(
+            {cls.PAID, cls.REJECTED, cls.CANCELLED, cls.APPROVAL_WITHDRAWN}
+        )
 
 
 class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):
@@ -276,6 +280,29 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Numeric(12, 2),
         nullable=True,
         comment="approved_amount - advance_adjusted",
+    )
+    # ADR-0016 stage 2 (expand). MARK_PAID was an action, not a computation:
+    # nothing recorded how much of the payable was actually reimbursed.
+    #
+    # This model is THE owner of expense claims (ruled 2026-08-11); the copy at
+    # `app/models/people/exp/expense_claim.py` is a duplicate awaiting
+    # retirement and deliberately does NOT get these columns — two writers for
+    # one fact is what ADR-0016 exists to remove.
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default=text("0"),
+        comment="How much of net_payable_amount has actually been reimbursed",
+    )
+    # NULLABLE, unlike the other expanded documents, because its operand is:
+    # an unapproved claim has no `net_payable_amount`, so its balance is
+    # UNDETERMINED rather than zero. Coercing it would report a draft claim as
+    # overpaid. Derived by the database; see the note on `SalarySlip`.
+    balance_due: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        Computed("net_payable_amount - amount_paid", persisted=True),
+        nullable=True,
     )
 
     # Cost allocation

@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session
 from app.models.auth import AuthProvider, UserCredential
 from app.models.person import Person
 from app.services.auth_flow import hash_password
@@ -42,11 +42,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    session = SessionLocal()
+    # Genuinely cross-org: this walks EVERY Person in the deployment to
+    # repair credentials, so it is not scoped to one organization.
     updated = 0
     skipped = 0
 
-    try:
+    with cross_org_session() as session:
         persons = session.execute(select(Person)).scalars().all()
         for person in persons:
             email = (person.email or "").strip()
@@ -90,11 +91,9 @@ def main() -> int:
         else:
             session.rollback()
 
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    # No `except: rollback()` needed — an exception propagates out of the
+    # `with`, and closing the session discards anything uncommitted, which is
+    # exactly what the explicit rollback achieved.
 
     mode = "APPLIED" if args.apply else "DRY-RUN"
     print(f"{mode}: updated={updated} skipped={skipped}")

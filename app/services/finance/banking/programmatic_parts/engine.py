@@ -10,14 +10,9 @@ from app.services.finance.banking.programmatic_parts.base import (
     normalize_statement_line,
 )
 from app.services.finance.banking.programmatic_parts.payment_strategies import (
-    CustomerPaymentReferenceStrategy,
     CustomerReceiptReferenceStrategy,
     PaymentIntentReferenceStrategy,
     SupplierPaymentReferenceStrategy,
-    UniqueDateAmountStrategy,
-)
-from app.services.finance.banking.programmatic_parts.providers import (
-    SplynxCustomerPaymentProvider,
 )
 from app.services.finance.banking.programmatic_parts.special_strategies import (
     BankFeeStrategy,
@@ -32,8 +27,6 @@ class ProgrammaticReconciliationEngine:
     def __init__(self) -> None:
         self.strategies: tuple[MatchStrategy, ...] = (
             PaymentIntentReferenceStrategy(),
-            CustomerPaymentReferenceStrategy(),
-            UniqueDateAmountStrategy(),
             SupplierPaymentReferenceStrategy(),
             CustomerReceiptReferenceStrategy(),
             PayrollEntryStrategy(),
@@ -51,10 +44,6 @@ class ProgrammaticReconciliationEngine:
             line_id: extract_line_signals(normalized)
             for line_id, normalized in ctx.normalized_lines.items()
         }
-        # Preserve the original query order from AutoReconciliationService:
-        # preload Splynx payments once before running the pass sequence.
-        SplynxCustomerPaymentProvider().load(service, ctx)
-
         for strategy in self.strategies:
             if not ctx.still_unmatched_lines():
                 break

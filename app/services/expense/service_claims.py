@@ -1174,6 +1174,168 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 )
             raise
 
+    def has_financial_activity(self, claim: ExpenseClaim) -> bool:
+        """Whether anything downstream of approval has already happened.
+
+        A payment reference, a supplier invoice or a GL journal all mean the
+        approval has been acted on and can no longer be taken back.
+        """
+        return any(
+            (
+                claim.payment_reference,
+                claim.supplier_invoice_id,
+                claim.journal_entry_id,
+                claim.reimbursement_journal_id,
+                claim.paid_on,
+            )
+        )
+
+    def has_payment_in_flight(self, org_id: UUID, claim_id: UUID) -> bool:
+        """Whether a payment for this claim is pending or processing."""
+        from app.models.finance.payments.payment_intent import (
+            PaymentIntent,
+            PaymentIntentStatus,
+        )
+
+        return (
+            self.db.scalar(
+                select(PaymentIntent.intent_id).where(
+                    PaymentIntent.organization_id == org_id,
+                    PaymentIntent.source_type == "EXPENSE_CLAIM",
+                    PaymentIntent.source_id == claim_id,
+                    PaymentIntent.status.in_(
+                        [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+                    ),
+                )
+            )
+            is not None
+        )
+
+    def withdrawal_refusal(
+        self,
+        org_id: UUID,
+        claim: ExpenseClaim,
+        *,
+        approver_id: UUID | None,
+        allow_admin_override: bool = False,
+    ) -> str | None:
+        """Why this claim's approval cannot be withdrawn, or None if it can.
+
+        THE one place that decides. `withdraw_approval` enforces it and the
+        detail page asks it whether to offer the button, so the rule cannot be
+        enforced one way and displayed another. Before this the two were
+        separate copies of four conditions — a status check, an approver check,
+        the same five-field financial-activity tuple and the same PaymentIntent
+        query — which is a second writer for a decision, and the kind that
+        surfaces as "the button was there and it refused me".
+
+        Returns the MESSAGE rather than a bool, so the refusal a user sees is
+        the same sentence the service would have raised.
+        """
+        if claim.status != ExpenseClaimStatus.APPROVED:
+            return (
+                "Only an approved claim can have its approval withdrawn "
+                f"(this one is {claim.status.value})."
+            )
+        if not allow_admin_override and (
+            approver_id is None or claim.approver_id != approver_id
+        ):
+            return "Only the approver who approved this claim can withdraw approval."
+        if self.has_financial_activity(claim):
+            return (
+                "Approval cannot be withdrawn after payment or accounting "
+                "activity exists."
+            )
+        if self.has_payment_in_flight(org_id, claim.claim_id):
+            return (
+                "Approval cannot be withdrawn while payment is pending or processing."
+            )
+        return None
+
+    def withdraw_approval(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        *,
+        approver_id: UUID | None,
+        reason: str,
+        actor_id: UUID | None = None,
+        allow_admin_override: bool = False,
+    ) -> ExpenseClaim:
+        """Withdraw approval from an approved claim that has no financial activity."""
+        claim = self.get_claim(org_id, claim_id)
+        if claim.status == ExpenseClaimStatus.APPROVAL_WITHDRAWN:
+            return claim
+
+        reason = reason.strip()
+        if not reason:
+            raise ValueError("A reason is required to withdraw approval.")
+        if len(reason) > 1000:
+            raise ValueError("The withdrawal reason cannot exceed 1000 characters.")
+
+        refusal = self.withdrawal_refusal(
+            org_id,
+            claim,
+            approver_id=approver_id,
+            allow_admin_override=allow_admin_override,
+        )
+        if refusal is not None:
+            # A wrong status keeps its own error type — callers distinguish
+            # "not in a state for this" from "not permitted to do this".
+            if claim.status != ExpenseClaimStatus.APPROVED:
+                raise ExpenseClaimStatusError(
+                    claim.status.value, ExpenseClaimStatus.APPROVAL_WITHDRAWN.value
+                )
+            raise ExpenseServiceError(refusal)
+
+        if not self._begin_action(
+            org_id, claim_id, ExpenseClaimActionType.WITHDRAW_APPROVAL
+        ):
+            return claim
+
+        try:
+            old_status = claim.status.value
+            claim.status = ExpenseClaimStatus.APPROVAL_WITHDRAWN
+            # NOTE: a withdrawal reason is stored in `rejection_reason` because
+            # the claim has no column of its own for it. Two business facts in
+            # one column — the audit event must therefore name the column that
+            # was actually written, or the trail records a `withdrawal_reason`
+            # field that does not exist and cannot be matched to the row.
+            # Giving withdrawal its own column is a schema change belonging to
+            # the expense domain, not to this fix.
+            claim.rejection_reason = reason
+            self._stamp_status_change(claim, actor_id)
+            self.db.flush()
+            fire_audit_event(
+                db=self.db,
+                organization_id=org_id,
+                table_schema="expense",
+                table_name="expense_claim",
+                record_id=str(claim.claim_id),
+                action=AuditAction.UPDATE,
+                old_values={"status": old_status},
+                new_values={
+                    "status": ExpenseClaimStatus.APPROVAL_WITHDRAWN.value,
+                    "rejection_reason": reason,
+                },
+            )
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.WITHDRAW_APPROVAL,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            logger.info("Withdrew approval for expense claim %s", claim_id)
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.WITHDRAW_APPROVAL,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
+
     def _notify_claim_rejected(
         self, claim: ExpenseClaim, org_id: UUID, approver, reason: str
     ) -> None:

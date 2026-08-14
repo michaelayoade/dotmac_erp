@@ -481,7 +481,24 @@ SETTINGS_SPECS: list[SettingSpec] = [
         value_type=SettingValueType.string,
         default=None,
     ),
-    # Payments Domain Settings (Paystack Integration)
+    # Payments Domain Settings
+    #
+    # Sub-cent rounding dust: a balance at or under this is not a debt. ADR-0016
+    # §4 — the tolerance is business policy, so it is a setting rather than a
+    # constant welded into a module (AR and AP each declared their own
+    # `Decimal("0.01")` before this existed) or into the generated column's DDL
+    # (where changing it would mean dropping and re-adding the column).
+    # Read through `app.services.finance.coverage.resolve_payment_dust`.
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="payment_dust",
+        env_var="PAYMENT_DUST",
+        # A string, parsed with `Decimal` — money is never a float, and this
+        # spec system has no decimal value type.
+        value_type=SettingValueType.string,
+        default="0.01",
+    ),
+    # Paystack integration
     SettingSpec(
         domain=SettingDomain.payments,
         key="paystack_enabled",

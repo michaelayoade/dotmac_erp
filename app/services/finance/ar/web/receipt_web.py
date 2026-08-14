@@ -350,7 +350,7 @@ class ReceiptWebService:
         open_invoices = []
         selected_invoice = None
         for invoice, customer in rows:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             view = {
                 "invoice_id": invoice.invoice_id,
                 "invoice_number": invoice.invoice_number,

@@ -27,6 +27,7 @@ from app.db import Base
 class ExpenseClaimActionType(str, enum.Enum):
     SUBMIT = "SUBMIT"
     APPROVE = "APPROVE"
+    WITHDRAW_APPROVAL = "WITHDRAW_APPROVAL"
     REJECT = "REJECT"
     MARK_PAID = "MARK_PAID"
     LINK_ADVANCE = "LINK_ADVANCE"

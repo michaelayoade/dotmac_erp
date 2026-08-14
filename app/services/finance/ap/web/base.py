@@ -239,7 +239,7 @@ def invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
 
 def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> dict:
     """Transform invoice to detail view."""
-    balance = invoice.total_amount - invoice.amount_paid
+    balance = invoice.balance_due
     today = date.today()
     return {
         "invoice_id": invoice.invoice_id,
@@ -442,9 +442,7 @@ def calculate_supplier_balance_trends(
             select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 ).label("balance"),
             )

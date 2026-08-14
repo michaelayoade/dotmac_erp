@@ -426,6 +426,7 @@ os.environ["JWT_SECRET"] = "test-secret"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["TOTP_ENCRYPTION_KEY"] = "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="
 os.environ["TOTP_ISSUER"] = "StarterTemplate"
+os.environ["DOTMAC_DEV_MODE"] = "true"
 os.environ.setdefault("PYTEST_CURRENT_TEST", "1")
 
 # Now import the models - they'll use our mocked db module
@@ -632,6 +633,7 @@ def client(db_session):
     from fastapi import APIRouter, Depends, FastAPI
 
     from app.api.audit import router as audit_router
+    from app.api.auth import router as auth_admin_router
     from app.api.auth_flow import router as auth_flow_router
     from app.api.deps import get_db_admin_bypass, get_db_auth_bypass, get_db_with_org
     from app.api.people.discipline import router as discipline_router
@@ -640,6 +642,7 @@ def client(db_session):
     from app.api.scheduler import router as scheduler_router
     from app.api.service_hooks import router as service_hooks_router
     from app.api.settings import router as settings_router
+    from app.db.session_context import allow_cross_org
     from app.errors import register_error_handlers
     from app.services.auth_dependencies import (
         _get_db as auth_deps_get_db,
@@ -666,6 +669,14 @@ def client(db_session):
         finally:
             session.close()
 
+    def override_get_db_admin():
+        session = Session()
+        try:
+            with allow_cross_org(session):
+                yield session
+        finally:
+            session.close()
+
     def _include_api_router(router, dependencies=None):
         app.include_router(router, dependencies=dependencies)
         app.include_router(router, prefix="/api/v1", dependencies=dependencies)
@@ -673,6 +684,7 @@ def client(db_session):
     # Build a minimal app for API tests to avoid costly full app import.
     app = FastAPI()
     register_error_handlers(app)
+    _include_api_router(auth_admin_router)
     _include_api_router(auth_flow_router)
     _include_api_router(audit_router)
     _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
@@ -694,8 +706,8 @@ def client(db_session):
     # persons, rbac, settings to get_db_admin_bypass; auth bootstrap
     # routes use get_db_auth_bypass; wave-1/2/3 modules use
     # get_db_with_org.
-    app.dependency_overrides[get_db_admin_bypass] = override_get_db
-    app.dependency_overrides[get_db_auth_bypass] = override_get_db
+    app.dependency_overrides[get_db_admin_bypass] = override_get_db_admin
+    app.dependency_overrides[get_db_auth_bypass] = override_get_db_admin
     app.dependency_overrides[get_db_with_org] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 

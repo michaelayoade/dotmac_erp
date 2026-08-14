@@ -20,7 +20,7 @@ from app.schemas.auth import (
 from app.schemas.common import ListResponse
 from app.services import auth as auth_service
 from app.api.deps import get_db_admin_bypass
-from app.services.auth_dependencies import require_permission
+from app.services.auth_dependencies import require_admin_bypass
 
 router = APIRouter()
 
@@ -33,7 +33,7 @@ router = APIRouter()
 )
 def create_user_credential(
     payload: UserCredentialCreate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.user_credentials.create(db, payload)
@@ -46,7 +46,7 @@ def create_user_credential(
 )
 def get_user_credential(
     credential_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.user_credentials.get(db, credential_id)
@@ -65,7 +65,7 @@ def list_user_credentials(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.user_credentials.list_response(
@@ -81,7 +81,7 @@ def list_user_credentials(
 def update_user_credential(
     credential_id: str,
     payload: UserCredentialUpdate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.user_credentials.update(db, credential_id, payload)
@@ -94,7 +94,7 @@ def update_user_credential(
 )
 def delete_user_credential(
     credential_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     auth_service.user_credentials.delete(db, credential_id)
@@ -108,7 +108,7 @@ def delete_user_credential(
 )
 def create_mfa_method(
     payload: MFAMethodCreate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.mfa_methods.create(db, payload)
@@ -121,7 +121,7 @@ def create_mfa_method(
 )
 def get_mfa_method(
     method_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.mfa_methods.get(db, method_id)
@@ -142,7 +142,7 @@ def list_mfa_methods(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.mfa_methods.list_response(
@@ -167,7 +167,7 @@ def list_mfa_methods(
 def update_mfa_method(
     method_id: str,
     payload: MFAMethodUpdate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.mfa_methods.update(db, method_id, payload)
@@ -180,7 +180,7 @@ def update_mfa_method(
 )
 def delete_mfa_method(
     method_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     auth_service.mfa_methods.delete(db, method_id)
@@ -194,7 +194,7 @@ def delete_mfa_method(
 )
 def create_session(
     payload: SessionCreate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.sessions.create(db, payload)
@@ -207,7 +207,7 @@ def create_session(
 )
 def get_session(
     session_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.sessions.get(db, session_id)
@@ -225,7 +225,7 @@ def list_sessions(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.sessions.list_response(
@@ -241,7 +241,7 @@ def list_sessions(
 def update_session(
     session_id: str,
     payload: SessionUpdate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.sessions.update(db, session_id, payload)
@@ -254,7 +254,7 @@ def update_session(
 )
 def delete_session(
     session_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     auth_service.sessions.delete(db, session_id)
@@ -268,7 +268,7 @@ def delete_session(
 )
 def create_api_key(
     payload: ApiKeyCreate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.api_keys.create(db, payload)
@@ -283,7 +283,7 @@ def create_api_key(
 def generate_api_key(
     payload: ApiKeyGenerateRequest,
     request: Request,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.api_keys.generate_with_rate_limit(db, payload, request)
@@ -296,7 +296,7 @@ def generate_api_key(
 )
 def get_api_key(
     key_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.api_keys.get(db, key_id)
@@ -314,7 +314,7 @@ def list_api_keys(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.api_keys.list_response(
@@ -330,7 +330,7 @@ def list_api_keys(
 def update_api_key(
     key_id: str,
     payload: ApiKeyUpdate,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_service.api_keys.update(db, key_id, payload)
@@ -343,7 +343,7 @@ def update_api_key(
 )
 def delete_api_key(
     key_id: str,
-    auth: dict = Depends(require_permission("auth:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     auth_service.api_keys.revoke(db, key_id)

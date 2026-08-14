@@ -4,7 +4,8 @@ Web routes for user profile pages.
 Provides profile view and edit functionality for authenticated users.
 """
 
-from typing import Any
+from typing import Any, cast
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -119,7 +120,12 @@ async def update_profile(
         bio=bio or None,
     )
 
-    people.update(db, str(auth.person_id), payload)
+    people.update(
+        db,
+        cast(UUID, auth.organization_id),
+        str(auth.person_id),
+        payload,
+    )
     return RedirectResponse(url="/profile?updated=1", status_code=303)
 
 
@@ -149,5 +155,10 @@ async def update_profile_preferences(
         marketing_opt_in=marketing_opt_in,
     )
 
-    people.update(db, str(auth.person_id), payload)
+    people.update(
+        db,
+        cast(UUID, auth.organization_id),
+        str(auth.person_id),
+        payload,
+    )
     return RedirectResponse(url="/profile?updated=1", status_code=303)

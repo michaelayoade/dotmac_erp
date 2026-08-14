@@ -82,9 +82,9 @@ def predecessor_engine() -> Iterator[Engine]:
     admin = sa.create_engine(_admin_url(), isolation_level="AUTOCOMMIT")
     name = f"erp_setting_domain_{uuid.uuid4().hex[:12]}"
     with admin.connect() as conn:
-        conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
+        conn.execute(sa.text(f'CREATE DATABASE "{name}" OWNER app_admin'))
 
-    target_url = admin.url.set(database=name)
+    target_url = admin.url.set(database=name, username="app_admin", password=None)
     engine = sa.create_engine(target_url)
     members = ", ".join(f"'{m}'" for m in _LEGACY_MEMBERS)
     with engine.begin() as conn:
@@ -167,18 +167,13 @@ def _seed_enum_backed_row(
 def _alembic_against(engine: Engine) -> Iterator[Config]:
     """Alembic config pointed at `engine`.
 
-    Setting `sqlalchemy.url` on the Config is NOT enough: `alembic/env.py:44`
-    overwrites it with `settings.database_url` on every run, so a test that only
-    sets the Config silently migrates whatever the ambient settings point at —
-    SQLite under the test conftest. Patching the settings object is what env.py
-    actually reads.
+    The migration URL is a distinct authority from the application's URL, so
+    the test installs it through the same environment seam production uses.
     """
-    from app.config import settings
-
     url = engine.url.render_as_string(hide_password=False)
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", url)
-    with mock.patch.object(settings, "database_url", url):
+    with mock.patch.dict(os.environ, {"MIGRATION_DATABASE_URL": url}):
         yield config
 
 

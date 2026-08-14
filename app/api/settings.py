@@ -28,7 +28,10 @@ from app.schemas.settings import (
 )
 from app.services import settings_api as settings_service
 from app.api.deps import get_db_admin_bypass
-from app.services.auth_dependencies import require_permission, require_tenant_permission
+from app.services.auth_dependencies import (
+    require_admin_bypass,
+    require_tenant_permission,
+)
 from app.services.domain_settings import (
     get_history_entry,
     list_setting_history,
@@ -53,7 +56,7 @@ def list_auth_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_auth_settings_response(
@@ -70,7 +73,7 @@ def list_auth_settings(
 def upsert_auth_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_auth_setting(db, key, payload)
@@ -83,7 +86,7 @@ def upsert_auth_setting(
 )
 def get_auth_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_auth_setting(db, key)
@@ -100,7 +103,7 @@ def list_audit_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_audit_settings_response(
@@ -117,7 +120,7 @@ def list_audit_settings(
 def upsert_audit_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_audit_setting(db, key, payload)
@@ -130,7 +133,7 @@ def upsert_audit_setting(
 )
 def get_audit_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_audit_setting(db, key)
@@ -147,7 +150,7 @@ def list_scheduler_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_scheduler_settings_response(
@@ -164,7 +167,7 @@ def list_scheduler_settings(
 def upsert_scheduler_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_scheduler_setting(db, key, payload)
@@ -177,7 +180,7 @@ def upsert_scheduler_setting(
 )
 def get_scheduler_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_scheduler_setting(db, key)
@@ -194,7 +197,7 @@ def list_email_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_email_settings_response(
@@ -211,7 +214,7 @@ def list_email_settings(
 def upsert_email_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_email_setting(db, key, payload)
@@ -224,7 +227,7 @@ def upsert_email_setting(
 )
 def get_email_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_email_setting(db, key)
@@ -241,7 +244,7 @@ def list_features_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_features_settings_response(
@@ -258,7 +261,7 @@ def list_features_settings(
 def upsert_features_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_features_setting(db, key, payload)
@@ -271,7 +274,7 @@ def upsert_features_setting(
 )
 def get_features_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_features_setting(db, key)
@@ -288,7 +291,7 @@ def list_automation_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_automation_settings_response(
@@ -305,7 +308,7 @@ def list_automation_settings(
 def upsert_automation_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_automation_setting(db, key, payload)
@@ -318,7 +321,7 @@ def upsert_automation_setting(
 )
 def get_automation_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_automation_setting(db, key)
@@ -335,7 +338,7 @@ def list_reporting_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_reporting_settings_response(
@@ -352,7 +355,7 @@ def list_reporting_settings(
 def upsert_reporting_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_reporting_setting(db, key, payload)
@@ -365,7 +368,7 @@ def upsert_reporting_setting(
 )
 def get_reporting_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_reporting_setting(db, key)
@@ -387,7 +390,7 @@ def list_payments_settings(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.list_payments_settings_response(
@@ -404,7 +407,7 @@ def list_payments_settings(
 def upsert_payments_setting(
     key: str,
     payload: DomainSettingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.upsert_payments_setting(db, key, payload)
@@ -417,7 +420,7 @@ def upsert_payments_setting(
 )
 def get_payments_setting(
     key: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     return settings_service.get_payments_setting(db, key)
@@ -436,7 +439,7 @@ def get_payments_setting(
 )
 def export_settings(
     payload: SettingsExportRequest,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """
@@ -462,7 +465,7 @@ def export_settings(
 )
 def import_settings(
     payload: SettingsImportRequest,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """
@@ -624,7 +627,7 @@ def restore_setting(
 )
 def get_branding(
     org_id: UUID,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """Get branding configuration for an organization."""
@@ -643,7 +646,7 @@ def get_branding(
 )
 def get_or_create_branding(
     org_id: UUID,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """Get existing branding or create with defaults."""
@@ -662,7 +665,7 @@ def get_or_create_branding(
 )
 def create_branding(
     payload: BrandingCreate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """Create new branding configuration for an organization."""
@@ -684,7 +687,7 @@ def create_branding(
 def update_branding(
     branding_id: UUID,
     payload: BrandingUpdate,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """Update branding configuration."""
@@ -703,7 +706,7 @@ def update_branding(
 )
 def delete_branding(
     branding_id: UUID,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
     db: Session = Depends(get_db_admin_bypass),
 ):
     """Delete branding configuration."""
@@ -755,7 +758,7 @@ def get_branding_fonts_url(
 )
 def preview_branding_css(
     payload: BrandingPreview,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
 ):
     """
     Generate CSS from branding options without saving.
@@ -789,7 +792,7 @@ def preview_branding_css(
 )
 def get_color_palette(
     hex_color: str,
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
 ):
     """
     Generate a full color palette from a base color.
@@ -816,7 +819,7 @@ def list_fonts(
     category: str | None = Query(
         None, description="Filter by category: sans-serif, serif, monospace"
     ),
-    auth: dict = Depends(require_permission("settings:manage")),
+    auth: dict = Depends(require_admin_bypass),
 ):
     """List available font options for branding."""
     fonts = FONT_PRESETS

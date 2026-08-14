@@ -4,26 +4,25 @@ Auto-Reconciliation Service.
 
 Deterministic matching of bank statement lines to internal payment records.
 
-Seven matching strategies run in sequence:
+Five matching strategies run in sequence:
 1. **PaymentIntent** — matches DotMac-initiated Paystack transfers using
    ``paystack_reference`` as a join key.
-2. **Splynx CustomerPayment by reference** — extracts Paystack transaction IDs
-   from ``CustomerPayment.description`` (regex ``[0-9a-f]{12,14}``) and matches
-   against statement line references.  Also falls back to the Splynx receipt
-   number in ``CustomerPayment.reference``.
-3. **Date + amount fallback** — for remaining unmatched Splynx payments,
-   matches when exactly one payment and one statement line share the same
-   date and amount.
-4. **AP supplier payments** — matches CLEARED ``SupplierPayment`` records
+2. **AP supplier payments** — matches CLEARED ``SupplierPayment`` records
    by ``payment_number`` / ``reference`` first, then by date + amount.
    Only matches **debit** bank lines (outgoing).
-5. **Non-Splynx AR payments** — matches CLEARED ``CustomerPayment`` records
-   where ``splynx_id IS NULL`` (app-created receipts) by reference first,
-   then by date + amount.  Only matches **credit** bank lines (incoming).
-6. **Bank fees** — identifies Paystack fee lines (``Paystack Fee:`` in
+3. **AR customer payments** — matches CLEARED ``CustomerPayment`` records by
+   reference first, then by date + amount.  Only matches **credit** bank
+   lines (incoming).
+
+   This covers ALL customer payments, including those carrying a
+   ``splynx_id``. Two Splynx-specific passes used to sit ahead of it and this
+   one deliberately excluded their rows; retiring the integration merged them,
+   so historical Splynx payments reconcile through the general path rather
+   than becoming unmatchable.
+4. **Bank fees** — identifies Paystack fee lines (``Paystack Fee:`` in
    description), creates a GL journal (debit Finance Cost, credit bank GL),
    and auto-matches the statement line to the new journal.
-7. **Settlements** — matches Paystack settlement debits to corresponding
+5. **Settlements** — matches Paystack settlement debits to corresponding
    deposits on receiving bank accounts (UBA, Zenith) within a 0–10 day
    date window.  Creates inter-bank transfer journals and matches both
    the outflow and inflow sides.
@@ -120,21 +119,6 @@ class AutoMatchDefaults:
     """Runtime configuration loaded from DomainSettings (banking domain)."""
 
     pass_payment_intents_enabled: bool = True
-    # Splynx is retired. These two passes matched CustomerPayments carrying a
-    # `splynx_id`; turning them off removes `receivable_payment_synced` from
-    # the policy's enabled providers, so both Splynx strategies short-circuit
-    # on their own `allows_*` checks and do nothing.
-    #
-    # Nothing is deleted yet, deliberately: this is the reversible half of the
-    # retirement. Set either back to True to restore the old behaviour while
-    # the change is being verified. The code goes in a later stage, once it
-    # has been confirmed that no Splynx-era payment lost a match it needed.
-    #
-    # Historical Splynx payments stay matchable — `_load_ar_payments` no
-    # longer excludes them (it used to filter `splynx_id IS NULL`), so they
-    # fall to the general AR pass instead of becoming invisible.
-    pass_splynx_by_ref_enabled: bool = False
-    pass_splynx_date_amount_enabled: bool = False
     pass_ap_payments_enabled: bool = True
     pass_ar_payments_enabled: bool = True
     pass_bank_fees_enabled: bool = False

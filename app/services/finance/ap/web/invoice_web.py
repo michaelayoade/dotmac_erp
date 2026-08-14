@@ -163,9 +163,7 @@ class InvoiceWebService:
         # Build stats using the same base filters as a subquery source
         outstanding_base = base_stmt.where(SupplierInvoice.status.in_(open_statuses))
 
-        balance_expr = func.coalesce(
-            func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-        )
+        balance_expr = func.coalesce(func.sum(SupplierInvoice.balance_due), 0)
 
         total_outstanding = db.scalar(
             select(balance_expr).select_from(outstanding_base.subquery())
@@ -200,7 +198,7 @@ class InvoiceWebService:
 
         invoices_view = []
         for invoice, supplier in invoices:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             invoices_view.append(
                 {
                     "invoice_id": invoice.invoice_id,

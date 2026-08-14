@@ -60,6 +60,7 @@ jobs:
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=dotmac_erp_ci \
+            -e POSTGRES_HOST_AUTH_METHOD=trust \
             --health-cmd "pg_isready -U postgres" \
             --health-interval 5s \
             --health-retries 10 \
@@ -74,9 +75,21 @@ jobs:
             echo "Waiting... ($i/30)"; sleep 2
           done
 
+          # Provision cluster identities under explicit elevation, then hand
+          # database ownership and Alembic execution to the exact unprivileged
+          # migration role. The application URL remains a separate runtime
+          # credential even in this disposable image rehearsal.
+          docker run --rm --name ci-hard-role-bootstrap --network ci-hardened-net \
+            -e BOOTSTRAP_DATABASE_URL=postgresql://postgres@ci-hard-db:5432/dotmac_erp_ci \
+            dotmac-erp-hardened:ci \
+            python scripts/bootstrap_database_roles.py
+          docker exec ci-hard-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -c "ALTER DATABASE dotmac_erp_ci OWNER TO app_admin"
+
           # Run migrations
           docker run --rm --name ci-hard-migrate --network ci-hardened-net \
             -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-hard-db:5432/dotmac_erp_ci \
+            -e MIGRATION_DATABASE_URL=postgresql+psycopg://app_admin@ci-hard-db:5432/dotmac_erp_ci \
             -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
             -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
             -e REDIS_URL=redis://ci-hard-redis:6379/0 \

@@ -54,8 +54,14 @@ with log_path.open("a", encoding="utf-8") as log:
 if args[:2] == ["inspect", "--format"]:
     print("ghcr.io/michaelayoade/dotmac_erp:sha-old")
 
+# The deploy makes two `compose run` calls: the executor preflight and then the
+# migration. Fail only the operation named by each test flag.
 if os.environ.get("DEPLOY_TEST_FAIL_MIGRATION") == "1":
-    if args[:2] == ["compose", "run"]:
+    if args[:2] == ["compose", "run"] and "alembic" in args and "upgrade" in args:
+        raise SystemExit(1)
+
+if os.environ.get("DEPLOY_TEST_FAIL_ROLE_PREFLIGHT") == "1":
+    if args[:2] == ["compose", "run"] and "--verify-only" in args:
         raise SystemExit(1)
 """,
     )
@@ -78,6 +84,9 @@ set -euo pipefail
     env["DEPLOY_TEST_LOG"] = str(invocation_log)
     env["SKIP_BACKUP"] = "1"
     env["HEALTH_TIMEOUT"] = "1"
+    env["MIGRATION_DATABASE_URL"] = (
+        "postgresql+psycopg://app_admin@database.test/dotmac_erp"
+    )
     env.pop("COMPOSE_PROJECT_NAME", None)
     return deploy_script, env, invocation_log
 
@@ -100,7 +109,32 @@ def test_deploy_script_exports_stable_compose_project_name(tmp_path: Path) -> No
     assert any("|compose up -d app" in line for line in invocations)
     assert any("|compose up -d worker beat" in line for line in invocations)
     assert all(line.startswith("dotmac|") for line in invocations)
+    one_off = [line for line in invocations if "|compose run " in line]
+    runtime = [line for line in invocations if "|compose up " in line]
+    assert one_off
+    assert all("-e MIGRATION_DATABASE_URL" in line for line in one_off)
+    assert all("MIGRATION_DATABASE_URL" not in line for line in runtime)
     assert "compose: dotmac" in result.stdout
+
+
+def test_deploy_script_refuses_a_missing_migration_credential(
+    tmp_path: Path,
+) -> None:
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+    env.pop("MIGRATION_DATABASE_URL")
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "MIGRATION_DATABASE_URL is required" in result.stderr
+    assert not invocation_log.exists()
 
 
 def test_deploy_script_rejects_conflicting_compose_project_name(
@@ -144,3 +178,55 @@ def test_deploy_script_rollback_keeps_stable_compose_project_name(
     assert any("|compose up -d app worker beat" in line for line in invocations)
     assert all(line.startswith("dotmac|") for line in invocations)
     assert "Rolling back code" in result.stdout
+
+
+def test_the_executor_preflight_runs_before_migrations(tmp_path: Path) -> None:
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    preflights = [
+        index
+        for index, line in enumerate(invocations)
+        if "|compose run " in line and "--verify-only" in line
+    ]
+    migrations = [
+        index
+        for index, line in enumerate(invocations)
+        if "|compose run " in line and "alembic" in line and "upgrade" in line
+    ]
+    assert preflights, "the migration-executor preflight was not recorded"
+    assert migrations, "the Alembic migration invocation was not recorded"
+    assert preflights[0] < migrations[0]
+
+
+def test_a_failed_executor_preflight_stops_before_migrating(
+    tmp_path: Path,
+) -> None:
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+    env["DEPLOY_TEST_FAIL_ROLE_PREFLIGHT"] = "1"
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "DEPLOY STOPPED" in result.stderr
+    assert "bootstrap_database_roles.py" in result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert not any("alembic" in line and "upgrade" in line for line in invocations)
+    assert "Rolling back code" not in result.stdout

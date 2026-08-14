@@ -94,7 +94,7 @@ class AROverdueAnalyzer:
         days_overdue_expr = func.extract(
             "day", func.age(func.current_date(), Invoice.due_date)
         )
-        balance_due = Invoice.total_amount - Invoice.amount_paid
+        balance_due = Invoice.balance_due  # generated column, ADR-0016
         ratio = balance_due / func.nullif(Invoice.total_amount, 0)
         balance_due_fc = Invoice.functional_currency_amount * func.coalesce(ratio, 0)
 
@@ -131,7 +131,7 @@ class AROverdueAnalyzer:
         limit: int = 5,
     ) -> list[dict]:
         today = date.today()
-        balance_due = Invoice.total_amount - Invoice.amount_paid
+        balance_due = Invoice.balance_due  # generated column, ADR-0016
         ratio = balance_due / func.nullif(Invoice.total_amount, 0)
         balance_due_fc = Invoice.functional_currency_amount * func.coalesce(ratio, 0)
 

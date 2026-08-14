@@ -37,16 +37,44 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         domain="organization_tenancy",
         services=(
             SOTService(
+                name="tenancy.mapping",
+                module="app.tenancy",
+                owns=("identity-preserving Organization-to-Tenant scope mapping",),
+                notes=(
+                    "core_org.organization remains authoritative; tenant_id is "
+                    "the same UUID and the hosted tenants row is a projection."
+                ),
+            ),
+            SOTService(
+                name="tenancy.projection",
+                module="app.services.tenant_projection",
+                owns=(
+                    "Organization-to-kernel-Tenant projection writes and repair",
+                    "stable ERP tenant slug derivation",
+                    "Organization deletion tenant tombstones",
+                ),
+                depends_on=("tenancy.mapping",),
+                notes=(
+                    "core_org.organization remains authoritative; the projection "
+                    "mutates in the caller's ERP-owned transaction."
+                ),
+            ),
+            SOTService(
                 name="tenancy.context",
                 module="app.db.session_context",
                 owns=(
-                    "organization request/task context priming",
+                    "organization and module-tenant request/task context priming",
                     "one-session-per-org rule for SET LOCAL lifetimes",
                     "cross-org session escape hatch",
                 ),
-                depends_on=("tenancy.orm_filter", "tenancy.rls"),
+                depends_on=(
+                    "tenancy.mapping",
+                    "tenancy.projection",
+                    "tenancy.orm_filter",
+                    "tenancy.rls",
+                ),
                 notes=(
-                    "Both enforcement layers must be primed together; the "
+                    "All enforcement inputs must be primed together; the "
                     "canonical deps (get_db_with_org, get_db_for_org, "
                     "session_for_org) are the only sanctioned entry points."
                 ),
@@ -62,16 +90,20 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 module="app.rls",
                 owns=(
                     "PostgreSQL RLS GUC context "
-                    "(app.current_organization_id, app.bypass_rls)",
+                    "(app.current_organization_id, app.current_tenant, "
+                    "app.bypass_rls)",
                 ),
-                notes="Layer 2; policies are created dynamically by migration.",
+                notes=(
+                    "ERP and shared-module scope GUCs are set atomically; "
+                    "app.bypass_rls never bypasses module policies."
+                ),
             ),
         ),
         entrypoints=("app.api.deps", "app.web.deps", "app.db.session_context"),
         rule=(
-            "Organization scoping is dual-layer by design: the ORM listener "
-            "and native RLS are set together or not at all. No entry point "
-            "may prime one layer without the other."
+            "Organization scoping is one identity enforced by the ORM listener, "
+            "ERP RLS and shared-module RLS. Canonical entry points set every "
+            "input together or not at all."
         ),
     ),
     DomainSOT(
