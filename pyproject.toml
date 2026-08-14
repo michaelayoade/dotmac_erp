@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dotmac_erp"
-version = "1.27.0"
+version = "1.28.0"
 description = "IFRS-based multi-tenant accounting software"
 authors = ["DotMac <dev@dotmac.ng>"]
 package-mode = false
@@ -50,7 +50,7 @@ pymysql = "^1.1.1"
 # tests/architecture/test_kernel_import_boundary.py. No extras: [testing]'s
 # only pull (httpx) and [licensing]'s (cryptography) are already ERP main
 # dependencies at compatible versions.
-dotmac-kernel = {version = "0.1.0a24", source = "forgejo"}
+dotmac-kernel = {version = "0.1.0a56", source = "forgejo"}
 
 # Shared presentation contract: compiled assets and inert Jinja package data.
 # ERP supplies the host loader and never vendors or recompiles this package.
