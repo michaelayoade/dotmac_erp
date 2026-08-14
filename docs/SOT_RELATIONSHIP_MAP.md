@@ -34,10 +34,18 @@ semantics.
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
-| `external_sync` | Sub AR ingestion, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
+| `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
 ## Sub service workflows and ERP backoffice support
+
+`sync.sub_operational_context` owns ERP's organization-scoped mirror of Sub
+projects, tickets, project tasks, and work orders. `/sync/sub/bulk` is the
+neutral version-2 entry point and currently delegates to the established bulk
+projection workflow during compatibility migration. Sub remains authoritative;
+ERP's copies are rebuildable and exist only for local finance and
+employee-expense linking. The typed contract, retry behavior, form usage, and
+limitations are documented in `docs/SUB_OPERATIONAL_SYNC.md`.
 
 `inventory.material_support` owns the ERP side of the first cross-system
 operating slice. Dotmac Sub retains its service work order, operational material

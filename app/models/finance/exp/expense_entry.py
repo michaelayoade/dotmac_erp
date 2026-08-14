@@ -72,6 +72,8 @@ class ExpenseEntry(Base):
         Index("idx_expense_entry_status", "organization_id", "status"),
         Index("idx_expense_entry_account", "expense_account_id"),
         Index("idx_expense_entry_project", "project_id"),
+        Index("idx_expense_entry_ticket", "ticket_id"),
+        Index("idx_expense_entry_task", "task_id"),
         Index("idx_expense_entry_cost_center", "cost_center_id"),
         {"schema": "exp"},
     )
@@ -138,6 +140,18 @@ class ExpenseEntry(Base):
         ForeignKey("core_org.project.project_id"),
         nullable=True,
         comment="Project for cost allocation",
+    )
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("support.ticket.ticket_id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Support ticket for operational cost attribution",
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pm.task.task_id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Project task for operational cost attribution",
     )
     cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -230,6 +244,16 @@ class ExpenseEntry(Base):
     project = relationship(
         "Project",
         foreign_keys=[project_id],
+        lazy="joined",
+    )
+    ticket = relationship(
+        "Ticket",
+        foreign_keys=[ticket_id],
+        lazy="joined",
+    )
+    task = relationship(
+        "Task",
+        foreign_keys=[task_id],
         lazy="joined",
     )
     cost_center = relationship(

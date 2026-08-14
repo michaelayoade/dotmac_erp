@@ -54,6 +54,7 @@ TASK_STATUS_MAP = {
     "active": TaskStatus.IN_PROGRESS,
     "in_progress": TaskStatus.IN_PROGRESS,
     "blocked": TaskStatus.ON_HOLD,
+    "on_hold": TaskStatus.ON_HOLD,
     "done": TaskStatus.COMPLETED,
     "completed": TaskStatus.COMPLETED,
     "cancelled": TaskStatus.CANCELLED,
@@ -137,7 +138,9 @@ def map_task_priority(priority_str: str | None) -> TaskPriority:
     if not priority_str:
         return TaskPriority.MEDIUM
     priority_map = {
+        "lower": TaskPriority.LOW,
         "low": TaskPriority.LOW,
+        "normal": TaskPriority.MEDIUM,
         "medium": TaskPriority.MEDIUM,
         "high": TaskPriority.HIGH,
         "urgent": TaskPriority.URGENT,
