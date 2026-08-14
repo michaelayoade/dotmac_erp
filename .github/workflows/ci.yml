@@ -254,6 +254,15 @@ jobs:
             sleep 2
           done
 
+      # Same real deploy step as the integration job — see the comment there.
+      # Runs in the app image because that is where `scripts/` lives.
+      - name: Bootstrap database roles (explicitly privileged)
+        run: |  # pragma: allowlist secret
+          docker run --rm --name ci-role-bootstrap --network ci-net \
+            -e BOOTSTRAP_DATABASE_URL=postgresql://postgres:postgres@ci-db:5432/dotmac_erp_ci \
+            dotmac-erp:ci \
+            python scripts/bootstrap_database_roles.py
+
       - name: Run database migrations
         run: |  # pragma: allowlist secret
           docker run --rm --name ci-migrate --network ci-net \
@@ -365,6 +374,22 @@ jobs:
 
       - name: Install dependencies
         run: poetry install --no-interaction
+
+      # The role bootstrap is a REAL deploy step, so CI performs it exactly as an
+      # operator would: elevated credentials, its own connection string, before
+      # migrations. `20260814_database_roles` then verifies and fails closed, and
+      # it cannot create the roles itself — an ordinary `alembic upgrade` runs as
+      # unprivileged `app_admin`.
+      #
+      # Modelling it here is not scaffolding to make a test pass. If this step
+      # were dropped, the migration chain would stop with the same error a real
+      # deployment gets when the bootstrap is skipped, which is the point.
+      - name: Bootstrap database roles (explicitly privileged)
+        env:
+          # libpq URL (no `+psycopg`), superuser, deliberately distinct from
+          # DATABASE_URL so the elevation is visible in the job log.
+          BOOTSTRAP_DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/dotmac_erp_test"  # pragma: allowlist secret
+        run: poetry run python scripts/bootstrap_database_roles.py
 
       - name: Run Alembic migrations
         run: poetry run alembic upgrade heads

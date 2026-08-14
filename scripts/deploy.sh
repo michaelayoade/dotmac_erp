@@ -152,7 +152,56 @@ fi
 # From here a failure triggers an automatic rollback.
 trap 'echo "Deploy FAILED"; rollback; exit 1' ERR
 
-# Step 3: apply migrations on the freshly-pulled image (multi-head safe — erp has
+# Step 3a: PREFLIGHT the database roles before touching migrations.
+#
+# `20260814_database_roles` fails closed when `app_admin`, `app_user` or
+# `platform_api` is missing or wrong-shaped. Discovering that mid-chain means a
+# half-applied upgrade and an automatic rollback; discovering it here costs
+# nothing. This deliberately does NOT create the roles: creation needs superuser
+# or CREATEROLE, and the deploy path must never hold those. Run the explicitly
+# privileged bootstrap once, as an operator, then re-run the deploy.
+echo "→ Preflight: database roles..."
+if ! docker compose run --rm --entrypoint "" app \
+    poetry run python - <<'PREFLIGHT'
+import os
+import sys
+
+import psycopg
+
+REQUIRED = {"app_admin": (True, False), "app_user": (False, False),
+            "platform_api": (False, False)}
+url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
+with psycopg.connect(url) as conn:
+    rows = conn.execute(
+        "SELECT rolname, rolbypassrls, rolsuper FROM pg_roles WHERE rolname = ANY(%s)",
+        (list(REQUIRED),),
+    ).fetchall()
+observed = {str(r[0]): (bool(r[1]), bool(r[2])) for r in rows}
+missing = sorted(set(REQUIRED) - set(observed))
+drift = [r for r, want in REQUIRED.items() if r in observed and observed[r] != want]
+if missing or drift:
+    print(f"missing={missing} wrong_shaped={drift}", file=sys.stderr)
+    sys.exit(1)
+PREFLIGHT
+then
+    echo ""
+    echo "DEPLOY STOPPED: the Dotmac database roles are missing or wrong-shaped." >&2
+    echo "Migrations are NOT unprivileged-safe to continue past this point." >&2
+    echo "" >&2
+    echo "Run the explicitly privileged bootstrap ONCE, with elevated" >&2
+    echo "credentials (superuser or CREATEROLE), then re-run this deploy:" >&2
+    echo "" >&2
+    echo "  BOOTSTRAP_DATABASE_URL=postgresql://<superuser>@<host>/<db> \\" >&2
+    echo "      python scripts/bootstrap_database_roles.py --dry-run" >&2
+    echo "  # review, then drop --dry-run" >&2
+    echo "" >&2
+    echo "It never sets a password and never grants object privileges." >&2
+    exit 1
+fi
+echo "  roles present and correctly shaped"
+echo ""
+
+# Step 3b: apply migrations on the freshly-pulled image (multi-head safe — erp has
 # hit multi-head states, so `heads` (plural), never `head`).
 echo "→ Applying migrations (alembic upgrade heads)..."
 docker compose run --rm --entrypoint "" app poetry run alembic upgrade heads
