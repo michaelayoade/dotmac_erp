@@ -118,6 +118,37 @@ def test_postgres_format_specifiers_are_escaped_for_psycopg() -> None:
     assert "%%(target)s" not in OWNERSHIP_PLAN_SQL
 
 
+def test_every_bind_carries_an_explicit_type() -> None:
+    """`format()` takes variadic `"any"`, so an untyped bind makes PostgreSQL
+    raise `AmbiguousParameter: could not determine data type of parameter $1`.
+
+    Found by the integration rehearsal, not by reading the SQL — and added here
+    afterwards, because this is decidable statically and a driver round-trip is
+    an expensive way to learn it a third time.
+    """
+    import re
+
+    untyped = re.findall(r"%\(target\)s(?!::)", OWNERSHIP_PLAN_SQL)
+    assert not untyped, (
+        f"{len(untyped)} bind(s) lack an explicit cast; PostgreSQL cannot infer "
+        "a type for a parameter passed to format()'s variadic argument"
+    )
+
+
+def test_no_stray_placeholder_survives() -> None:
+    """Exhaustive rather than illustrative: after removing the two legal forms —
+    doubled `%%` for PostgreSQL and `%(target)s::text` for psycopg — no `%` may
+    remain. Either kind of leftover is a query the driver or the server rejects.
+    """
+    import re
+
+    residue = re.sub(r"%\(target\)s::text", "", OWNERSHIP_PLAN_SQL.replace("%%", ""))
+    assert "%" not in residue, (
+        "unescaped '%' remains in the plan SQL: "
+        f"{residue[max(0, residue.index('%') - 40) : residue.index('%') + 40]!r}"
+    )
+
+
 def test_every_relkind_maps_to_a_real_alter_form() -> None:
     """`ALTER TABLE` is invalid for a sequence, view, matview or foreign table;
     each needs its own keyword or the cutover fails mid-transaction."""

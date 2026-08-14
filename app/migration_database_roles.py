@@ -128,10 +128,10 @@ SELECT 'database' AS object_kind,
        pg_get_userbyid(database_catalog.datdba) AS current_owner,
        quote_ident(database_catalog.datname) AS object_name,
        format('ALTER DATABASE %%I OWNER TO %%I',
-              database_catalog.datname, %(target)s) AS statement
+              database_catalog.datname, %(target)s::text) AS statement
 FROM pg_database AS database_catalog
 WHERE database_catalog.datname = current_database()
-  AND pg_get_userbyid(database_catalog.datdba) <> %(target)s
+  AND pg_get_userbyid(database_catalog.datdba) <> %(target)s::text
 
 UNION ALL
 
@@ -139,10 +139,10 @@ SELECT 'schema',
        pg_get_userbyid(namespace_catalog.nspowner),
        quote_ident(namespace_catalog.nspname),
        format('ALTER SCHEMA %%I OWNER TO %%I',
-              namespace_catalog.nspname, %(target)s)
+              namespace_catalog.nspname, %(target)s::text)
 FROM pg_namespace AS namespace_catalog
 WHERE namespace_catalog.nspname !~ '^(pg_|information_schema)'
-  AND pg_get_userbyid(namespace_catalog.nspowner) <> %(target)s
+  AND pg_get_userbyid(namespace_catalog.nspowner) <> %(target)s::text
   AND pg_get_userbyid(namespace_catalog.nspowner) <> 'pg_database_owner'
   AND NOT EXISTS (
       SELECT 1 FROM pg_extension AS extension_catalog
@@ -162,13 +162,13 @@ SELECT 'relation',
                   WHEN 'f' THEN 'FOREIGN TABLE'
                   ELSE 'TABLE'
               END,
-              relation_catalog.oid::regclass::text, %(target)s)
+              relation_catalog.oid::regclass::text, %(target)s::text)
 FROM pg_class AS relation_catalog
 JOIN pg_namespace AS namespace_catalog
   ON namespace_catalog.oid = relation_catalog.relnamespace
 WHERE namespace_catalog.nspname !~ '^(pg_|information_schema)'
   AND relation_catalog.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
-  AND pg_get_userbyid(relation_catalog.relowner) <> %(target)s
+  AND pg_get_userbyid(relation_catalog.relowner) <> %(target)s::text
   AND NOT EXISTS (
       SELECT 1 FROM pg_depend AS dependency_catalog
       WHERE dependency_catalog.classid = 'pg_class'::regclass
@@ -183,13 +183,13 @@ SELECT 'type',
        type_catalog.oid::regtype::text,
        format('ALTER %%s %%s OWNER TO %%I',
               CASE type_catalog.typtype WHEN 'd' THEN 'DOMAIN' ELSE 'TYPE' END,
-              type_catalog.oid::regtype::text, %(target)s)
+              type_catalog.oid::regtype::text, %(target)s::text)
 FROM pg_type AS type_catalog
 JOIN pg_namespace AS namespace_catalog
   ON namespace_catalog.oid = type_catalog.typnamespace
 WHERE namespace_catalog.nspname !~ '^(pg_|information_schema)'
   AND type_catalog.typtype IN ('d', 'e')
-  AND pg_get_userbyid(type_catalog.typowner) <> %(target)s
+  AND pg_get_userbyid(type_catalog.typowner) <> %(target)s::text
   AND NOT EXISTS (
       SELECT 1 FROM pg_depend AS dependency_catalog
       WHERE dependency_catalog.classid = 'pg_type'::regclass
@@ -205,12 +205,12 @@ SELECT 'routine',
        format('ALTER %%s %%s OWNER TO %%I',
               CASE routine_catalog.prokind WHEN 'p' THEN 'PROCEDURE'
                                            ELSE 'FUNCTION' END,
-              routine_catalog.oid::regprocedure::text, %(target)s)
+              routine_catalog.oid::regprocedure::text, %(target)s::text)
 FROM pg_proc AS routine_catalog
 JOIN pg_namespace AS namespace_catalog
   ON namespace_catalog.oid = routine_catalog.pronamespace
 WHERE namespace_catalog.nspname !~ '^(pg_|information_schema)'
-  AND pg_get_userbyid(routine_catalog.proowner) <> %(target)s
+  AND pg_get_userbyid(routine_catalog.proowner) <> %(target)s::text
   AND NOT EXISTS (
       SELECT 1 FROM pg_depend AS dependency_catalog
       WHERE dependency_catalog.classid = 'pg_proc'::regclass
