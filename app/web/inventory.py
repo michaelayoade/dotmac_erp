@@ -1342,6 +1342,8 @@ def cancel_material_request(
             [
                 "inv:material_requests:submit",
                 "inventory:material_requests:submit",
+                "inv:material_requests:approve",
+                "inventory:material_requests:approve",
             ]
         )
     ),
