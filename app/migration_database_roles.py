@@ -127,7 +127,7 @@ OWNERSHIP_PLAN_SQL: Final[str] = """
 SELECT 'database' AS object_kind,
        pg_get_userbyid(database_catalog.datdba) AS current_owner,
        quote_ident(database_catalog.datname) AS object_name,
-       format('ALTER DATABASE %I OWNER TO %I',
+       format('ALTER DATABASE %%I OWNER TO %%I',
               database_catalog.datname, %(target)s) AS statement
 FROM pg_database AS database_catalog
 WHERE database_catalog.datname = current_database()
@@ -138,7 +138,7 @@ UNION ALL
 SELECT 'schema',
        pg_get_userbyid(namespace_catalog.nspowner),
        quote_ident(namespace_catalog.nspname),
-       format('ALTER SCHEMA %I OWNER TO %I',
+       format('ALTER SCHEMA %%I OWNER TO %%I',
               namespace_catalog.nspname, %(target)s)
 FROM pg_namespace AS namespace_catalog
 WHERE namespace_catalog.nspname !~ '^(pg_|information_schema)'
@@ -154,7 +154,7 @@ UNION ALL
 SELECT 'relation',
        pg_get_userbyid(relation_catalog.relowner),
        relation_catalog.oid::regclass::text,
-       format('ALTER %s %s OWNER TO %I',
+       format('ALTER %%s %%s OWNER TO %%I',
               CASE relation_catalog.relkind
                   WHEN 'S' THEN 'SEQUENCE'
                   WHEN 'v' THEN 'VIEW'
@@ -181,7 +181,7 @@ UNION ALL
 SELECT 'type',
        pg_get_userbyid(type_catalog.typowner),
        type_catalog.oid::regtype::text,
-       format('ALTER %s %s OWNER TO %I',
+       format('ALTER %%s %%s OWNER TO %%I',
               CASE type_catalog.typtype WHEN 'd' THEN 'DOMAIN' ELSE 'TYPE' END,
               type_catalog.oid::regtype::text, %(target)s)
 FROM pg_type AS type_catalog
@@ -202,7 +202,7 @@ UNION ALL
 SELECT 'routine',
        pg_get_userbyid(routine_catalog.proowner),
        routine_catalog.oid::regprocedure::text,
-       format('ALTER %s %s OWNER TO %I',
+       format('ALTER %%s %%s OWNER TO %%I',
               CASE routine_catalog.prokind WHEN 'p' THEN 'PROCEDURE'
                                            ELSE 'FUNCTION' END,
               routine_catalog.oid::regprocedure::text, %(target)s)

@@ -100,7 +100,22 @@ def test_statements_are_rendered_by_postgres_not_by_python() -> None:
     quoting gets wrong. Python must never concatenate an identifier here."""
     assert "::regclass::text" in OWNERSHIP_PLAN_SQL
     assert "::regprocedure::text" in OWNERSHIP_PLAN_SQL
-    assert "OWNER TO %I" in OWNERSHIP_PLAN_SQL
+    assert "OWNER TO %%I" in OWNERSHIP_PLAN_SQL
+
+
+def test_postgres_format_specifiers_are_escaped_for_psycopg() -> None:
+    """psycopg parses the query for its OWN `%` placeholders and rejects `%I`
+    before the statement ever reaches PostgreSQL, so `format()`'s specifiers
+    must be doubled while the real `%(target)s` bind stays single.
+
+    An earlier version asserted `"OWNER TO %I" in ...` and passed, because the
+    string genuinely contained it — the query was still unusable. That is the
+    class of defect a driver-level test catches and a text assertion cannot,
+    which is why the integration rehearsal exists.
+    """
+    assert "%I'" not in OWNERSHIP_PLAN_SQL.replace("%%I'", "")
+    assert "%(target)s" in OWNERSHIP_PLAN_SQL
+    assert "%%(target)s" not in OWNERSHIP_PLAN_SQL
 
 
 def test_every_relkind_maps_to_a_real_alter_form() -> None:
