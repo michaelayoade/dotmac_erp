@@ -111,7 +111,11 @@ docker-shell: ## Open shell in app container
 	docker exec -it dotmac_erp_app bash
 
 docker-migrate: ## Run migrations inside Docker + regenerate schema skill
-	docker exec dotmac_erp_app alembic upgrade head
+	@test -n "$$MIGRATION_DATABASE_URL" || { \
+	  echo "MIGRATION_DATABASE_URL must connect as app_admin"; \
+	  exit 2; }
+	docker compose run --rm --entrypoint "" -e MIGRATION_DATABASE_URL app \
+	  alembic upgrade heads
 	@echo "Regenerating schema skill..."
 	@poetry run python scripts/generate_schema_skill.py
 

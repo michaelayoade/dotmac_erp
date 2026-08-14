@@ -229,12 +229,19 @@ jobs:
       - name: Create CI network
         run: docker network create ci-net
 
-      - name: Start PostgreSQL  # pragma: allowlist secret
-        run: |
+      # `HOST_AUTH_METHOD=trust` lets the migration executor connect as
+      # `app_admin` without provisioning a password for an ephemeral CI
+      # container that is never reachable outside the job's network. The pragma
+      # moves to the `run:` line because that is where detect-secrets attributes
+      # a block-scalar match, and `#` cannot be appended to a `\`-continued
+      # shell line.
+      - name: Start PostgreSQL
+        run: |  # pragma: allowlist secret
           docker run -d --name ci-db --network ci-net \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=dotmac_erp_ci \
+            -e POSTGRES_HOST_AUTH_METHOD=trust \
             --health-cmd "pg_isready -U postgres" \
             --health-interval 5s \
             --health-retries 10 \
@@ -275,10 +282,16 @@ jobs:
             dotmac-erp:ci \
             python scripts/bootstrap_database_roles.py
 
+      - name: Assign the CI database to the migration executor
+        run: >-
+          docker exec ci-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres
+          -c "ALTER DATABASE dotmac_erp_ci OWNER TO app_admin"
+
       - name: Run database migrations
         run: |  # pragma: allowlist secret
           docker run --rm --name ci-migrate --network ci-net \
             -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
+            -e MIGRATION_DATABASE_URL=postgresql+psycopg://app_admin@ci-db:5432/dotmac_erp_ci \
             -e SECRET_KEY=ci-test-secret-key-not-for-production \
             -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
             -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
@@ -351,6 +364,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres  # pragma: allowlist secret
           POSTGRES_DB: dotmac_erp_test
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -360,6 +374,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp_test"
+      MIGRATION_DATABASE_URL: "postgresql+psycopg://app_admin@localhost:5432/dotmac_erp_test"
       TEST_DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp_test"
       JWT_SECRET: "ci-integration-test-secret-key-minimum-32-bytes"  # pragma: allowlist secret
       TOTP_ENCRYPTION_KEY: "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="  # pragma: allowlist secret
@@ -406,6 +421,13 @@ jobs:
           BOOTSTRAP_DATABASE_URL: "postgresql://postgres@localhost:5432/dotmac_erp_test"
           PGPASSWORD: postgres  # pragma: allowlist secret
         run: poetry run python scripts/bootstrap_database_roles.py
+
+      - name: Assign the test database to the migration executor
+        env:
+          BOOTSTRAP_DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
+          PGPASSWORD: postgres  # pragma: allowlist secret
+        run: |
+          poetry run python -c "import os, psycopg; connection = psycopg.connect(os.environ['BOOTSTRAP_DATABASE_URL'], autocommit=True); connection.execute('ALTER DATABASE dotmac_erp_test OWNER TO app_admin'); connection.close()"
 
       - name: Run Alembic migrations
         run: poetry run alembic upgrade heads

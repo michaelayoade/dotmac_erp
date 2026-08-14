@@ -1,24 +1,32 @@
-"""The role contract has one definition, expressed in two places on purpose.
+"""The role contract has one runtime owner and one migration snapshot.
 
-`scripts/bootstrap_database_roles.py` CREATES the roles under explicit
-elevation; `alembic/versions/20260814_database_roles.py` VERIFIES them under
-ordinary unprivileged migration. They must agree exactly, or the bootstrap
-builds something the migration then refuses — a deploy that fails after the
-privileged step has already run, which is the worst place to discover it.
+`app.migration_database_roles` is the runtime decision used by the elevated
+bootstrap, deploy preflight and Alembic environment. The migration copies that
+contract as a point-in-time snapshot. They must agree exactly, or the bootstrap
+builds something the migration then refuses.
 
-The migration copies the contract rather than importing it, following the
-existing house rule that a migration is a snapshot of an accepted decision. This
-test is what makes the copy safe.
+The migration does not import mutable runtime code. This test is what makes the
+deliberate copy safe.
 """
 
 from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "bootstrap_database_roles.py"
 MIGRATION = REPO_ROOT / "alembic" / "versions" / "20260814_database_roles.py"
+RUNTIME_CONTRACT = REPO_ROOT / "app" / "migration_database_roles.py"
+ALEMBIC_ENV = REPO_ROOT / "alembic" / "env.py"
+DEPLOY = REPO_ROOT / "scripts" / "deploy.sh"
+CI = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+HARDENED_CI = REPO_ROOT / ".github" / "workflows" / "release-hardened.yml"
+MAKEFILE = REPO_ROOT / "Makefile"
+HARDENED_DOCKERFILE = REPO_ROOT / "Dockerfile.hardened"
 
 #: The accepted contract, as `(rolbypassrls, rolsuper)`. Stated a third time,
 #: here, so the test cannot pass by both sources drifting together.
@@ -27,6 +35,7 @@ EXPECTED = {
     "app_user": (False, False),
     "platform_api": (False, False),
 }
+EXPECTED_EXECUTOR = "app_admin"
 
 
 def _contract(path: Path) -> dict[str, tuple[bool, bool]]:
@@ -47,12 +56,97 @@ def _contract(path: Path) -> dict[str, tuple[bool, bool]]:
     raise AssertionError(f"{path} declares no ROLE_CONTRACT")
 
 
-def test_the_bootstrap_script_states_the_accepted_contract() -> None:
-    assert _contract(SCRIPT) == EXPECTED
+def _constant(path: Path, name: str) -> object:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == name
+            and node.value is not None
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"{path} declares no {name}")
+
+
+def _unbound_migration_steps(source: str) -> list[str]:
+    workflow: dict[str, Any] = yaml.safe_load(source)
+    failures: list[str] = []
+    for job_name, job in workflow.get("jobs", {}).items():
+        job_env = job.get("env", {})
+        for step in job.get("steps", []):
+            run = str(step.get("run", ""))
+            if "alembic upgrade" not in run:
+                continue
+            evidence = f"{job_env}\n{step.get('env', {})}\n{run}"
+            if (
+                "MIGRATION_DATABASE_URL" not in evidence
+                or "postgresql+psycopg://app_admin@" not in evidence
+            ):
+                failures.append(f"{job_name}: {step.get('name', '<unnamed>')}")
+    return failures
+
+
+def test_the_runtime_verifier_states_the_accepted_contract() -> None:
+    assert _contract(RUNTIME_CONTRACT) == EXPECTED
 
 
 def test_the_migration_states_the_same_contract() -> None:
     assert _contract(MIGRATION) == EXPECTED
+    assert _constant(RUNTIME_CONTRACT, "MIGRATION_EXECUTOR") == EXPECTED_EXECUTOR
+    assert _constant(MIGRATION, "MIGRATION_EXECUTOR") == EXPECTED_EXECUTOR
+
+
+def test_bootstrap_and_deploy_reuse_the_runtime_verifier() -> None:
+    bootstrap = SCRIPT.read_text(encoding="utf-8")
+    deploy = DEPLOY.read_text(encoding="utf-8")
+
+    assert "from app.migration_database_roles import" in bootstrap
+    assert "MIGRATION_OWNERSHIP_SQL" in bootstrap
+    assert "--verify-only" in deploy
+    assert "REQUIRED =" not in deploy
+
+
+def test_alembic_requires_the_dedicated_migration_url_and_exact_executor() -> None:
+    source = ALEMBIC_ENV.read_text(encoding="utf-8")
+
+    assert 'os.environ.get("MIGRATION_DATABASE_URL"' in source
+    assert "verify_migration_connection" in source
+    assert "MIGRATION_OWNERSHIP_SQL" in source
+    assert "with connection.begin():\n            verify_migration_connection" in source
+    assert "settings.database_url" not in source
+
+
+def test_ci_runs_migrations_as_app_admin_not_postgres() -> None:
+    for workflow in (CI, HARDENED_CI):
+        source = workflow.read_text(encoding="utf-8")
+
+        assert "alembic upgrade" in source
+        assert _unbound_migration_steps(source) == []
+
+        # Sensitivity proof: the entry-point-family detector must fail when the
+        # dedicated executor channel is mechanically removed.
+        broken = source.replace("MIGRATION_DATABASE_URL", "BROKEN_MIGRATION_URL")
+        assert _unbound_migration_steps(broken)
+
+    hardened_image = HARDENED_DOCKERFILE.read_text(encoding="utf-8")
+    assert "COPY scripts/bootstrap_database_roles.py" in hardened_image
+
+
+def test_operator_migration_entrypoints_do_not_reuse_the_running_app() -> None:
+    deploy = DEPLOY.read_text(encoding="utf-8")
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+
+    assert "-e MIGRATION_DATABASE_URL app" in deploy
+    assert 'docker compose run --rm --entrypoint "" -e MIGRATION_DATABASE_URL app' in (
+        makefile
+    )
+    assert "docker exec dotmac_erp_app alembic" not in makefile
 
 
 def test_app_admin_bypasses_rls_and_is_not_a_superuser() -> None:

@@ -36,7 +36,12 @@ string, not an implicit escalation hidden inside a migration.
     BOOTSTRAP_DATABASE_URL=postgresql://postgres@host/db \\
         python scripts/bootstrap_database_roles.py [--dry-run] [--repair]
 
-Exit codes: 0 satisfied (or created), 1 drift found without `--repair`,
+Deploy preflight uses the same verifier without elevated credentials:
+
+    MIGRATION_DATABASE_URL=postgresql://app_admin@host/db python \
+        scripts/bootstrap_database_roles.py --verify-only
+
+Exit codes: 0 satisfied (or created), 1 contract drift,
 2 usage/connection error.
 """
 
@@ -44,29 +49,30 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 import sys
+
+# Direct execution sets ``sys.path[0]`` to ``scripts/`` rather than the
+# repository root. Deploy and CI intentionally use the documented
+# ``python scripts/bootstrap_database_roles.py`` entrypoint, so install the
+# root before importing the shared runtime contract.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import psycopg
 from psycopg import sql
 
-#: The exact contract, as `(rolbypassrls, rolsuper)`.
-#:
-#: `app_admin` bypasses RLS because offline and migration work has to see every
-#: tenant's rows; an `app_admin` that cannot turns maintenance into a silent
-#: zero-row success. It is NOT a superuser — that would hand cluster-wide
-#: authority (DDL on any database, role creation, `COPY PROGRAM`) to something
-#: whose only real requirement is reading past RLS.
-#:
-#: The two online roles must have neither. A superuser bypasses RLS regardless
-#: of `rolbypassrls`, so both attributes are checked; reading only the flag
-#: would certify `app_user SUPERUSER NOBYPASSRLS` as isolated when it is not.
-ROLE_CONTRACT: dict[str, tuple[bool, bool]] = {
-    "app_admin": (True, False),
-    "app_user": (False, False),
-    "platform_api": (False, False),
-}
+from app.migration_database_roles import (
+    MIGRATION_OWNERSHIP_SQL,
+    ROLE_CONTRACT,
+    migration_executor_violations,
+    migration_ownership_violations,
+    role_contract_violations,
+)
 
 BOOTSTRAP_URL_VAR = "BOOTSTRAP_DATABASE_URL"
+MIGRATION_URL_VAR = "MIGRATION_DATABASE_URL"
 
 
 def _attributes(bypassrls: bool, superuser: bool) -> str:
@@ -86,7 +92,21 @@ def _observe(conn: psycopg.Connection) -> dict[str, tuple[bool, bool]]:
 
 def bootstrap(conn: psycopg.Connection, *, dry_run: bool, repair: bool) -> int:
     observed = _observe(conn)
-    drift = 0
+
+    wrong_existing = [
+        violation
+        for violation in role_contract_violations(observed)
+        if not violation.endswith("is missing")
+    ]
+    if wrong_existing and not repair:
+        for violation in wrong_existing:
+            print(
+                f"DRIFT: {violation}. Re-run with --repair to correct it — "
+                "this is opt-in because silently rewriting cluster access is "
+                "not a fix.",
+                file=sys.stderr,
+            )
+        return 1
 
     for role, (want_bypass, want_super) in ROLE_CONTRACT.items():
         identifier = sql.Identifier(role)
@@ -109,15 +129,6 @@ def bootstrap(conn: psycopg.Connection, *, dry_run: bool, repair: bool) -> int:
             continue
 
         have = _attributes(*observed[role])
-        drift += 1
-        if not repair:
-            print(
-                f"DRIFT: {role} is {have}, contract requires {wanted}. "
-                "Re-run with --repair to correct it — this is opt-in because "
-                "silently rewriting cluster access is not a fix.",
-                file=sys.stderr,
-            )
-            continue
         if dry_run:
             print(f"would repair: {role} {have} -> {wanted}")
         else:
@@ -125,9 +136,22 @@ def bootstrap(conn: psycopg.Connection, *, dry_run: bool, repair: bool) -> int:
                 sql.SQL("ALTER ROLE {} {}").format(identifier, sql.SQL(wanted))
             )
             print(f"repaired: {role} {have} -> {wanted}")
-            drift -= 1
 
-    return 1 if drift else 0
+    return 0
+
+
+def verify_migration_connection(conn: psycopg.Connection) -> int:
+    current_user = str(conn.execute("SELECT current_user").fetchone()[0])
+    observed = _observe(conn)
+    ownership_rows = conn.execute(MIGRATION_OWNERSHIP_SQL).fetchall()
+    non_owned_counts = {str(row[0]): int(row[1]) for row in ownership_rows}
+    violations = (
+        *migration_executor_violations(current_user, observed),
+        *migration_ownership_violations(non_owned_counts),
+    )
+    for violation in violations:
+        print(f"MIGRATION CONTRACT: {violation}", file=sys.stderr)
+    return 1 if violations else 0
 
 
 def main() -> int:
@@ -142,20 +166,31 @@ def main() -> int:
         action="store_true",
         help="correct an existing role whose attributes violate the contract",
     )
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="verify roles and the app_admin executor; execute no DDL",
+    )
     args = parser.parse_args()
 
-    url = os.environ.get(BOOTSTRAP_URL_VAR, "").strip()
+    if args.verify_only and (args.dry_run or args.repair):
+        parser.error("--verify-only cannot be combined with --dry-run or --repair")
+
+    url_var = MIGRATION_URL_VAR if args.verify_only else BOOTSTRAP_URL_VAR
+    url = os.environ.get(url_var, "").strip()
     if not url:
         print(
-            f"{BOOTSTRAP_URL_VAR} is not set. This step is deliberately separate "
-            "from the application's own connection strings: it needs superuser "
-            "or CREATEROLE, which ordinary migrations must never hold.",
+            f"{url_var} is not set. Bootstrap and migration identities are "
+            "deliberately separate from the application's connection string.",
             file=sys.stderr,
         )
         return 2
 
     try:
-        with psycopg.connect(url, autocommit=not args.dry_run) as conn:
+        connect_url = url.replace("postgresql+psycopg://", "postgresql://", 1)
+        with psycopg.connect(connect_url, autocommit=False) as conn:
+            if args.verify_only:
+                return verify_migration_connection(conn)
             return bootstrap(conn, dry_run=args.dry_run, repair=args.repair)
     except psycopg.Error as exc:
         print(f"database error: {exc}", file=sys.stderr)

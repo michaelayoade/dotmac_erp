@@ -12,7 +12,7 @@ a second identity authority.
 
 | Revision 0001 effect | ERP disposition | Gate |
 |---|---|---|
-| DB roles `app_admin`, `app_user`, `platform_api` | Unresolved. A later composition slice must inspect existing cluster roles and privileges and create/adopt them without passwords or privilege escalation. | Blocked |
+| DB roles `app_admin`, `app_user`, `platform_api` | Provided by the explicit privileged bootstrap plus fail-closed `20260814_database_roles` adoption. Existing `postgres`-owned databases still need a reviewed ownership cutover before `app_admin` can migrate them. | Resolved in code; existing-environment rollout blocked |
 | `tenants` | Hosted by ERP migration `20260813_tenant_projection`; kernel `Tenant` is read/written only through the Organization projection owner. | Resolved locally; kernel lineage still unrecorded |
 | `tenant_domains` | Hosted with the exact kernel shape. No ERP runtime writer is admitted yet. | Resolved locally; kernel lineage still unrecorded |
 | `people` | Incompatible name collision with ERP staff identity. Kernel creation, RLS and grants are prohibited; Party/identity migration is outside this E8 slice. | Blocked |
@@ -111,6 +111,22 @@ split:
 | `scripts/bootstrap_database_roles.py` | operator, **explicitly elevated** via `BOOTSTRAP_DATABASE_URL` | creates or adopts the three roles; `--dry-run` and opt-in `--repair` |
 | `20260814_database_roles` | ordinary unprivileged `app_admin` | **verifies only**, and fails closed naming the bootstrap |
 
+Alembic has a separate, mandatory `MIGRATION_DATABASE_URL`. Its environment
+verifies `current_user = 'app_admin'` and the exact role posture before running
+any revision; it never falls back to the application's `DATABASE_URL`. Deploy
+uses the bootstrap's shared `--verify-only` path, so preflight and migration
+cannot carry independent copies of the role contract. Real bootstrap changes
+are planned before DDL and commit in one transaction; unapproved drift produces
+no partial role creation.
+
+The same preflight also proves that the database and every non-extension schema,
+relation, enum/domain and routine Alembic may alter are owned by `app_admin`.
+Changing a database owner does not re-own its existing objects. Therefore an
+existing installation created by `postgres` needs a separately reviewed,
+elevated ownership cutover after role bootstrap and before its first
+`app_admin` migration. The role bootstrap deliberately does not perform that
+broader operation; deploy fails before DDL until the cutover is complete.
+
 Adopt-only was rejected as the sole mechanism because it strands new
 installations: nothing in the deploy path would ever create the roles, so a
 fresh cluster could never satisfy the prerequisite (decision, 2026-08-14).
@@ -123,8 +139,9 @@ defeating tenant isolation for every module. `app_admin` is BYPASSRLS and NOT
 superuser: its requirement is reading past RLS, and accepting a superuser would
 certify cluster-wide authority to satisfy it.
 
-`tests/architecture/test_database_role_contract.py` pins the script and the
-migration to the same contract and proves the migration issues no role DDL.
+`tests/architecture/test_database_role_contract.py` pins the runtime owner and
+migration snapshot to the same contract, proves the migration issues no role
+DDL, and checks every CI migration entry-point family with a sensitivity proof.
 
 **Still outstanding for the files adoption:** ERP pins kernel `0.1.0a24` and the
 logical-prerequisite contract arrived in `0.1.0a56`. Repinning is its own slice.
@@ -132,13 +149,14 @@ Until then this revision is the *intended* provider for
 `module_database_roles.v1` but is not yet bound to it, and `dotmac-files` is not
 in ERP's `version_locations`.
 
-## Production preflight, 2026-08-13
+## Historical production preflight, 2026-08-13
 
 Read-only measurement on the explicitly named Seabone ERP database found one
 Organization, maximum trimmed legal-name length 23, and zero names that are
 blank or exceed the Tenant contract. `public.tenants`,
 `public.tenant_domains`, `public.app_current_tenant_id()` and all three kernel
-database roles are absent. The candidate migration therefore has no live
-catalogue to adopt and no current name-fit blocker; database-role creation and
-full revision-0001 lineage authority remain unresolved exactly as the matrix
-states. This was measurement only—no production migration or write ran.
+database roles were absent. At that date the candidate migration therefore had
+no live catalogue to adopt and no current name-fit blocker; database-role
+creation and full revision-0001 lineage authority were unresolved. This was
+measurement only—no production migration or write ran. The later role-provider
+decision above supersedes only the role disposition, not this measurement.
