@@ -60,10 +60,9 @@ class TestDevMode:
         with patch.dict("os.environ", {"DOTMAC_DEV_MODE": "false"}):
             assert _is_dev_mode() is False
 
-    def test_dev_mode_default_is_true(self) -> None:
-        with patch.dict("os.environ", {}, clear=False):
-            # Default in the code is "true"
-            assert _is_dev_mode() is True
+    def test_dev_mode_default_is_false(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            assert _is_dev_mode() is False
 
 
 class TestValidateLicense:

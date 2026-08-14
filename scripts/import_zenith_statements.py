@@ -7,36 +7,41 @@ This script handles both Zenith statement formats:
 - "BOP_CBA_003_Report" (newer format, Oct 2024-Dec 2025)
 
 Usage:
-    poetry run python scripts/import_zenith_statements.py [--dry-run]
+    poetry run python scripts/import_zenith_statements.py --org-id <uuid> [--dry-run]
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
-import re
+import os
+import sys
+import uuid
 from dataclasses import dataclass
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
-from uuid import UUID
 
 import openpyxl
-from sqlalchemy import select
 
-from app.db import SessionLocal
-from app.models.finance.banking.bank_account import (
-    BankAccount,
-    BankAccountStatus,
-    BankAccountType,
-)
-from app.models.finance.banking.bank_statement import (
-    StatementLineType,
-)
-from app.models.finance.gl.account import Account
+from app.db.session_context import session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation, file_manifest_digest
 from app.services.finance.banking.bank_statement import (
     BankStatementService,
-    StatementLineInput,
+)
+from app.services.finance.banking.statement_import import (
+    AccountProfile,
+    BankProfile,
+    ensure_bank_account,
+    find_bank_account,
+    to_statement_lines,
+)
+from app.services.finance.banking.statement_parsing import (
+    extract_account_number,
+    parse_date,
+    parse_decimal,
+    parse_period,
 )
 
 logging.basicConfig(
@@ -44,8 +49,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Path to statement files
-STATEMENT_DIR = Path("/root/.dotmac/zenith statement")
+BANK = BankProfile(bank_name="Zenith Bank", bank_code="057")
+
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+# Zenith's control account in the chart of accounts. UBA is 1202; these two are
+# the pair `finish_interbank_matching` matches on (DR 1200 / CR 1202).
+ZENITH_GL_ACCOUNT_CODE = "1200"
+
+# Where the statement workbooks are read from. This was `/root/.dotmac/zenith
+# statement` — an absolute, root-owned path no non-root run could read, and the
+# kind of environment-specific literal `AGENTS.md` § "Everything by config"
+# exists to keep out. Same knob shape as the UBA importer.
+STATEMENT_DIR = Path(
+    os.environ.get("ZENITH_STATEMENT_DIR", "~/.dotmac/statements/zenith")
+).expanduser()
 
 # Account mapping: account_number -> (name, currency, file_pairs)
 # file_pairs = [(old_format_file, new_format_file), ...]
@@ -104,76 +122,6 @@ class ParsedStatement:
     total_credit: Decimal
     transactions: list[dict]
     source_file: str
-
-
-def parse_date(value) -> date | None:
-    """Parse date from various formats."""
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        value = value.strip()
-        if not value:
-            return None
-        # Try different date formats
-        for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y"]:
-            try:
-                return datetime.strptime(value, fmt).date()
-            except ValueError:
-                continue
-    return None
-
-
-def parse_period(period_str: str) -> tuple[date | None, date | None]:
-    """Parse period string like '01/01/2022 TO 30/09/2024'."""
-    if not period_str:
-        return None, None
-
-    # Clean up the string
-    period_str = str(period_str).strip()
-
-    # Try different separators
-    for sep in [" TO ", " to ", "-"]:
-        if sep in period_str:
-            parts = period_str.split(sep)
-            if len(parts) == 2:
-                start = parse_date(parts[0].strip())
-                end = parse_date(parts[1].strip())
-                if start and end:
-                    return start, end
-
-    return None, None
-
-
-def parse_decimal(value) -> Decimal | None:
-    """Parse decimal from various formats."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return Decimal(str(value))
-    if isinstance(value, Decimal):
-        return value
-    if isinstance(value, str):
-        # Clean up the string
-        value = value.strip().replace(",", "").replace(" ", "")
-        if not value or value == "-":
-            return None
-        try:
-            return Decimal(value)
-        except InvalidOperation:
-            return None
-    return None
-
-
-def extract_account_number(value: str) -> str | None:
-    """Extract account number from strings like 'CA         1011649523'."""
-    if not value:
-        return None
-    match = re.search(r"(\d{10})", str(value))
-    return match.group(1) if match else None
 
 
 def parse_old_format_statement(filepath: Path) -> ParsedStatement | None:
@@ -365,124 +313,43 @@ def parse_new_format_statement(filepath: Path) -> ParsedStatement | None:
         return None
 
 
-def ensure_bank_account(
-    db,
-    org_id: UUID,
-    account_number: str,
-    config: dict,
-) -> BankAccount:
-    """Ensure bank account exists, create if not."""
-
-    # Check if account exists
-    existing = db.execute(
-        select(BankAccount).where(
-            BankAccount.organization_id == org_id,
-            BankAccount.account_number == account_number,
-        )
-    ).scalar_one_or_none()
-
-    if existing:
-        logger.info(f"Found existing bank account: {account_number}")
-        return existing
-
-    # Find GL account (Zenith Bank = 1200)
-    gl_account = db.execute(
-        select(Account).where(
-            Account.organization_id == org_id,
-            Account.account_code == "1200",
-        )
-    ).scalar_one_or_none()
-
-    if not gl_account:
-        raise ValueError("GL Account 1200 (Zenith Bank) not found")
-
-    # Create new bank account
-    account = BankAccount(
-        organization_id=org_id,
-        bank_name="Zenith Bank",
-        bank_code="057",
-        account_name=config["name"],
-        account_number=account_number,
-        account_type=BankAccountType.checking,
-        currency_code=config["currency"],
-        gl_account_id=gl_account.account_id,
-        status=BankAccountStatus.active,
-    )
-    db.add(account)
-    db.flush()
-
-    logger.info(f"Created new bank account: {account_number} - {config['name']}")
-    return account
+def _configured_files() -> list[Path]:
+    """Every statement file this run will read, in configuration order."""
+    return [
+        STATEMENT_DIR / filename
+        for config in ACCOUNT_CONFIG.values()
+        for filename in config["files"]
+    ]
 
 
-def convert_to_statement_lines(
-    transactions: list[dict],
-    start_line: int = 1,
-) -> list[StatementLineInput]:
-    """Convert parsed transactions to StatementLineInput objects."""
-    lines = []
+def import_statements(
+    *, organization_id: uuid.UUID, actor_id: uuid.UUID, dry_run: bool = False
+) -> int:
+    """Import every configured Zenith account. Returns the number of failures."""
 
-    for i, txn in enumerate(transactions):
-        amount = txn["debit"] or txn["credit"] or Decimal("0")
-        txn_type = StatementLineType.debit if txn["debit"] else StatementLineType.credit
-
-        # Convert raw_data to JSON-serializable format
-        raw_data = {
-            "date_posted": txn["date_posted"].isoformat()
-            if txn.get("date_posted")
-            else None,
-            "value_date": txn["value_date"].isoformat()
-            if txn.get("value_date")
-            else None,
-            "description": txn.get("description"),
-            "debit": str(txn["debit"]) if txn.get("debit") else None,
-            "credit": str(txn["credit"]) if txn.get("credit") else None,
-            "balance": str(txn["balance"]) if txn.get("balance") else None,
-        }
-
-        lines.append(
-            StatementLineInput(
-                line_number=start_line + i,
-                transaction_date=txn["date_posted"],
-                value_date=txn["value_date"],
-                transaction_type=txn_type,
-                amount=amount,
-                description=txn["description"],
-                running_balance=txn.get("balance"),
-                raw_data=raw_data,
-            )
-        )
-
-    return lines
-
-
-def import_statements(dry_run: bool = False):
-    """Main import function."""
-
+    mode = "DRY RUN" if dry_run else "EXECUTE"
     logger.info("=" * 60)
-    logger.info("Zenith Bank Statement Import")
+    logger.info("Zenith Bank Statement Import (%s) — org %s", mode, organization_id)
     logger.info("=" * 60)
 
-    if dry_run:
-        logger.info("DRY RUN MODE - No changes will be made")
+    checksum, per_file = file_manifest_digest(_configured_files())
+    logger.info("Input manifest: %d file(s), digest %s", len(per_file), checksum[:12])
 
-    with SessionLocal() as db:
-        # Get organization ID from existing account
-        existing = (
-            db.execute(
-                select(BankAccount).where(BankAccount.bank_name.ilike("%zenith%"))
-            )
-            .scalars()
-            .first()
-        )
-
-        if not existing:
-            logger.error("No existing Zenith bank account found to determine org ID")
-            return
-
-        org_id = existing.organization_id
-        logger.info(f"Organization ID: {org_id}")
-
+    with (
+        session_for_org(organization_id) as db,
+        batch_operation(
+            db,
+            organization_id=organization_id,
+            operation_type=BatchOperationType.IMPORT,
+            operation_name="import_zenith_statements",
+            started_by_id=actor_id,
+            description=f"Zenith statement import ({mode})",
+            source_file=str(STATEMENT_DIR),
+            source_checksum=checksum,
+            metadata={"bank": BANK.bank_code, "files": per_file},
+        ) as tally,
+    ):
+        org_id = organization_id
         total_imported = 0
         total_skipped = 0
 
@@ -491,8 +358,29 @@ def import_statements(dry_run: bool = False):
             logger.info(f"Processing account: {account_number} ({config['name']})")
             logger.info("-" * 40)
 
-            # Ensure bank account exists
-            bank_account = ensure_bank_account(db, org_id, account_number, config)
+            # Creating the bank account is a WRITE, so a dry run must not do it.
+            # This call used to be unguarded and was harmless only by accident:
+            # dry runs skipped the final `db.commit()` and the session closed
+            # with a rollback. `batch_operation` commits when it completes the
+            # run, so that accident is gone and the guard is now load-bearing.
+            if dry_run:
+                bank_account = find_bank_account(
+                    db, organization_id=org_id, account_number=account_number
+                )
+            else:
+                bank_account = ensure_bank_account(
+                    db,
+                    organization_id=org_id,
+                    bank=BANK,
+                    account=AccountProfile(
+                        account_number=account_number,
+                        # The registered name at the bank, not the internal
+                        # label in `name` — this is what appears on the account.
+                        account_name=config["account_name"],
+                        currency_code=config["currency"],
+                        gl_account_code=ZENITH_GL_ACCOUNT_CODE,
+                    ),
+                )
 
             # Parse all statement files for this account
             all_transactions = []
@@ -567,10 +455,16 @@ def import_statements(dry_run: bool = False):
 
             if dry_run:
                 logger.info("  [DRY RUN] Would import statement")
+                tally.skipped += len(unique_transactions)
+                continue
+
+            if not bank_account:
+                logger.error("  Bank account not found")
+                tally.failed += 1
                 continue
 
             # Convert to statement lines
-            lines = convert_to_statement_lines(unique_transactions)
+            lines = to_statement_lines(unique_transactions)
 
             # Import using BankStatementService
             service = BankStatementService()
@@ -599,8 +493,12 @@ def import_statements(dry_run: bool = False):
 
                 total_imported += result.lines_imported
                 total_skipped += result.lines_skipped
+                tally.created += result.lines_imported
+                tally.skipped += result.lines_skipped
+                tally.track("bank_statement", result.statement.bank_statement_id)
 
                 if result.errors:
+                    tally.failed += len(result.errors)
                     for err in result.errors[:5]:
                         logger.warning(f"    Error: {err}")
 
@@ -609,26 +507,55 @@ def import_statements(dry_run: bool = False):
                         logger.info(f"    Warning: {warn}")
 
             except Exception as e:
-                logger.error(f"  Failed to import: {e}")
-                import traceback
+                # One unreadable account must not abandon the others, but the
+                # run is NOT a success: the failure count reaches the batch
+                # record and the exit status.
+                logger.error(f"  Failed to import: {e}", exc_info=True)
+                tally.failed += 1
 
-                traceback.print_exc()
-
+        # NOTE: `batch_operation` commits when it marks the run COMPLETED, so a
+        # dry run is safe only because the body writes nothing. That is why
+        # `ensure_bank_account` above is guarded — see the comment there.
         if not dry_run:
             db.commit()
-            logger.info("")
-            logger.info("=" * 60)
-            logger.info(
-                f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped"
-            )
-            logger.info("=" * 60)
+
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info(
+            "Import %s: %d imported, %d skipped, %d failed",
+            "complete" if not tally.failed else "FINISHED WITH FAILURES",
+            total_imported,
+            total_skipped,
+            tally.failed,
+        )
+        logger.info("=" * 60)
+        return tally.failed
 
 
-if __name__ == "__main__":
+def main() -> int:
     parser = argparse.ArgumentParser(description="Import Zenith bank statements")
+    parser.add_argument(
+        "--org-id",
+        required=True,
+        type=uuid.UUID,
+        help="Organization to import into (no default: this is multi-tenant)",
+    )
+    parser.add_argument(
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Recorded as who ran this, on the BatchOperation record",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Parse only, don't import"
     )
     args = parser.parse_args()
 
-    import_statements(dry_run=args.dry_run)
+    failures = import_statements(
+        organization_id=args.org_id, actor_id=args.actor_id, dry_run=args.dry_run
+    )
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

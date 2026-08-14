@@ -21,7 +21,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.banking.bank_statement import (
     BankStatement,
@@ -104,7 +104,7 @@ def main() -> None:
     mode_label = "DRY-RUN" if dry_run else "EXECUTE"
     logger.info("=== Jan 2026 Reconciliation [%s] ===", mode_label)
 
-    with SessionLocal() as db:
+    with session_for_org(ORG_ID) as db:
         statements = find_jan_2026_statements(db)
         logger.info("Found %d statements overlapping Jan 2026", len(statements))
 

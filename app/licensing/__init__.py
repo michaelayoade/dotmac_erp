@@ -1,5 +1,6 @@
 """DotMac ERP commercial licensing system.
 
 Handles license validation, module gating, and enforcement for on-premise
-deployments. In dev mode (DOTMAC_DEV_MODE=true), all checks are bypassed.
+deployments. Only explicit dev mode (DOTMAC_DEV_MODE=true) bypasses checks;
+an omitted flag fails closed into normal license enforcement.
 """

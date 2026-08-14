@@ -19,7 +19,7 @@ import uuid
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session, session_for_org
 from app.models.auth import UserCredential
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
@@ -74,104 +74,108 @@ def setup_e2e_user():
     username = os.environ.get("E2E_TEST_USERNAME", DEFAULT_USERNAME)
     password = os.environ.get("E2E_TEST_PASSWORD", DEFAULT_PASSWORD)
 
-    db = SessionLocal()
-    try:
-        # Check if user already exists
-        existing_cred = (
-            db.query(UserCredential).filter(UserCredential.username == username).first()
-        )
-
-        if existing_cred:
-            # Update password if user exists
-            existing_cred.password_hash = hash_password(password)
-            existing_cred.is_active = True
-            existing_cred.must_change_password = False
-            db.commit()
-            print(f"Updated existing E2E test user: {username}")
-            # Assign admin role
-            assign_admin_role(db, existing_cred.person_id)
-            return existing_cred.person_id
-
-        # Check if person with this email exists
-        email = f"{username}@e2e-test.local"
-        existing_person = db.query(Person).filter(Person.email == email).first()
-
-        if existing_person:
-            person = existing_person
-            print(f"Found existing person with email: {email}")
-        else:
-            # Create new person
-            person = Person(
-                id=uuid.uuid4(),
-                organization_id=DEFAULT_ORG_ID,
-                first_name="E2E",
-                last_name="Test User",
-                email=email,
-                email_verified=True,
-                is_active=True,
-                status="active",
+    # Per-org: every row below belongs to the default organization.
+    with session_for_org(DEFAULT_ORG_ID) as db:
+        try:
+            # Check if user already exists
+            existing_cred = (
+                db.query(UserCredential)
+                .filter(UserCredential.username == username)
+                .first()
             )
-            db.add(person)
-            db.flush()
-            print(f"Created new person: {person.id}")
 
-        # Create credential
-        credential = UserCredential(
-            id=uuid.uuid4(),
-            person_id=person.id,
-            username=username,
-            password_hash=hash_password(password),
-            is_active=True,
-            must_change_password=False,
-        )
-        db.add(credential)
-        db.commit()
+            if existing_cred:
+                # Update password if user exists
+                existing_cred.password_hash = hash_password(password)
+                existing_cred.is_active = True
+                existing_cred.must_change_password = False
+                db.commit()
+                print(f"Updated existing E2E test user: {username}")
+                # Assign admin role
+                assign_admin_role(db, existing_cred.person_id)
+                return existing_cred.person_id
 
-        print("Created E2E test user successfully!")
-        print(f"  Username: {username}")
-        print(f"  Password: {password}")
-        print(f"  Person ID: {person.id}")
-        print(f"  Organization ID: {DEFAULT_ORG_ID}")
+            # Check if person with this email exists
+            email = f"{username}@e2e-test.local"
+            existing_person = db.query(Person).filter(Person.email == email).first()
 
-        # Assign admin role
-        assign_admin_role(db, person.id)
+            if existing_person:
+                person = existing_person
+                print(f"Found existing person with email: {email}")
+            else:
+                # Create new person
+                person = Person(
+                    id=uuid.uuid4(),
+                    organization_id=DEFAULT_ORG_ID,
+                    first_name="E2E",
+                    last_name="Test User",
+                    email=email,
+                    email_verified=True,
+                    is_active=True,
+                    status="active",
+                )
+                db.add(person)
+                db.flush()
+                print(f"Created new person: {person.id}")
 
-        return person.id
+            # Create credential
+            credential = UserCredential(
+                id=uuid.uuid4(),
+                person_id=person.id,
+                username=username,
+                password_hash=hash_password(password),
+                is_active=True,
+                must_change_password=False,
+            )
+            db.add(credential)
+            db.commit()
 
-    except Exception as e:
-        db.rollback()
-        print(f"Error creating E2E test user: {e}")
-        raise
-    finally:
-        db.close()
+            print("Created E2E test user successfully!")
+            print(f"  Username: {username}")
+            print(f"  Password: {password}")
+            print(f"  Person ID: {person.id}")
+            print(f"  Organization ID: {DEFAULT_ORG_ID}")
+
+            # Assign admin role
+            assign_admin_role(db, person.id)
+
+            return person.id
+
+        except Exception as e:
+            db.rollback()
+            print(f"Error creating E2E test user: {e}")
+            raise
 
 
 def check_organization_exists():
     """Ensure the default organization exists."""
-    db = SessionLocal()
-    try:
-        # Check if we need to create the organization
-        # This depends on your Organization model location
-        from sqlalchemy import text
+    # Cross-org: this asks whether the organization exists AT ALL, so it
+    # cannot be scoped to it — a scoped session would filter out the very
+    # row it is looking for and report "missing" for one that is present.
+    with cross_org_session() as db:
+        try:
+            # Check if we need to create the organization
+            # This depends on your Organization model location
+            from sqlalchemy import text
 
-        result = db.execute(
-            text("SELECT 1 FROM core_org.organization WHERE organization_id = :org_id"),
-            {"org_id": str(DEFAULT_ORG_ID)},
-        ).fetchone()
+            result = db.execute(
+                text(
+                    "SELECT 1 FROM core_org.organization WHERE organization_id = :org_id"
+                ),
+                {"org_id": str(DEFAULT_ORG_ID)},
+            ).fetchone()
 
-        if not result:
-            print(f"Warning: Default organization {DEFAULT_ORG_ID} does not exist.")
-            print(
-                "Please run database migrations first: poetry run alembic upgrade head"
-            )
+            if not result:
+                print(f"Warning: Default organization {DEFAULT_ORG_ID} does not exist.")
+                print(
+                    "Please run database migrations first: poetry run alembic upgrade head"
+                )
+                return False
+            return True
+        except Exception as e:
+            print(f"Could not check organization: {e}")
+            print("Make sure the database is running and migrations are applied.")
             return False
-        return True
-    except Exception as e:
-        print(f"Could not check organization: {e}")
-        print("Make sure the database is running and migrations are applied.")
-        return False
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":

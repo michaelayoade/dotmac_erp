@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import settings
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session, session_for_org
 from app.models.auth import UserCredential
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
@@ -46,6 +46,7 @@ from app.models.inventory.item_category import ItemCategory
 from app.models.person import Person
 from app.services.finance.gl.fiscal_year import FiscalYearInput, fiscal_year_service
 from app.services.finance.tax.seed import NigeriaSeedSummary, seed_nigeria_tax_data
+from app.services.tenant_projection import reconcile_organization_tenant
 
 DEFAULT_ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
 
@@ -147,6 +148,7 @@ def ensure_organization(db, org_id: UUID, summary: SeedSummary) -> Organization:
         is_active=True,
     )
     db.add(org)
+    reconcile_organization_tenant(db, org)
     db.commit()
     summary.organizations += 1
     return org
@@ -723,19 +725,28 @@ def main() -> None:
     load_dotenv()
     args = parse_args()
 
-    db = SessionLocal()
-    try:
-        orgs = resolve_orgs(db, args)
+    # Resolving (and, on a bare database, creating) the target organizations
+    # is cross-org work. Seeding each one is per-org work, so it runs under
+    # that organization's scope rather than continuing under the bypass.
+    with cross_org_session() as cross_db:
+        orgs = resolve_orgs(cross_db, args)
         if not orgs and not args.org_id and not args.org_code:
-            orgs = [ensure_organization(db, DEFAULT_ORG_ID, SeedSummary())]
+            orgs = [ensure_organization(cross_db, DEFAULT_ORG_ID, SeedSummary())]
+            cross_db.commit()
+        targets = [(org.organization_id, org.organization_code) for org in orgs]
 
-        if not orgs:
-            raise SystemExit("No organizations matched for E2E seed data.")
+    if not targets:
+        raise SystemExit("No organizations matched for E2E seed data.")
 
-        for org in orgs:
+    for org_id, org_code in targets:
+        with session_for_org(org_id) as db:
+            # Re-read inside this organization's scope: the instance from the
+            # cross-org session belongs to a session that is now closed.
+            org = db.get(Organization, org_id)
             summary, nigeria_summary = seed_for_org(db, org)
+            db.commit()
             print(
-                f"Seeded E2E data for org {org.organization_code} ({org.organization_id}): "
+                f"Seeded E2E data for org {org_code} ({org_id}): "
                 f"categories={summary.categories}, "
                 f"accounts={summary.accounts}, "
                 f"fiscal_years={summary.fiscal_years}, "
@@ -753,8 +764,6 @@ def main() -> None:
                 f"nigeria_jurisdictions={nigeria_summary.jurisdictions_created}, "
                 f"nigeria_tax_codes={nigeria_summary.tax_codes_created}"
             )
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":

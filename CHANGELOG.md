@@ -9,9 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 - Repeatable employee self-service submission for qualifications, certifications, skills, dependants, and documents using approval-backed batch envelopes and itemized HR review.
+- Kernel-compatible `tenants`/`tenant_domains` catalogue projected from authoritative ERP Organizations, with one same-transaction reconciler and shared-module RLS scope bridge.
+- Executable fresh and predecessor-upgrade PostgreSQL rehearsal that pins the installed Kernel lineage's exact revision-0001 collision without stamping it or leaking database-role changes.
 
 ### Changed
 - HR info change review now supports tenant-scoped batch detail pages plus approve-all and reject-all actions that operate through the owning service layer.
+- ERP Organization sessions now prime both `app.current_organization_id` and `app.current_tenant`; the independent kernel migration lineage and stateful modules remain gated on explicit revision-0001 dispositions.
 
 ### Fixed
 - Self-service pending evidence cleanup now rolls back all uploaded files for failed batch submissions and preserves duplicate checks across pending and approved employee-profile items.

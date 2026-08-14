@@ -31,17 +31,18 @@ def test_domain_setting_domain_mismatch(db_session):
 
 
 def test_settings_api_auth_upsert_and_validation(db_session):
-    updated = settings_api_service.upsert_auth_setting(
-        db_session,
-        "jwt_access_ttl_minutes",
-        DomainSettingUpdate(value_text="30"),
-    )
-    assert updated.value_type == SettingValueType.integer
-    assert updated.value_text == "30"
-    fetched = settings_api_service.get_auth_setting(
-        db_session, "jwt_access_ttl_minutes"
-    )
-    assert fetched.id == updated.id
+    with domain_settings_service.allow_cross_org(db_session):
+        updated = settings_api_service.upsert_auth_setting(
+            db_session,
+            "jwt_access_ttl_minutes",
+            DomainSettingUpdate(value_text="30"),
+        )
+        assert updated.value_type == SettingValueType.integer
+        assert updated.value_text == "30"
+        fetched = settings_api_service.get_auth_setting(
+            db_session, "jwt_access_ttl_minutes"
+        )
+        assert fetched.id == updated.id
 
 
 def test_settings_api_invalid_key(db_session):

@@ -30,7 +30,8 @@ from sqlalchemy.orm import Session
 
 sys.path.insert(0, ".")
 
-from app.db import SessionLocal  # noqa: E402
+from app.db.session_context import cross_org_session, session_for_org  # noqa: E402
+from app.models.finance.core_org.organization import Organization  # noqa: E402
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus  # noqa: E402
 from app.models.finance.gl.fiscal_year import FiscalYear  # noqa: E402
 from app.models.inventory.inventory_transaction import (  # noqa: E402
@@ -336,39 +337,63 @@ def process_batch(
     }
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Backfill GL postings for inventory transactions"
-    )
-    parser.add_argument("--dry-run", action="store_true", help="Report only")
-    parser.add_argument("--execute", action="store_true", help="Post to GL")
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=1000,
-        help="Max inventory transactions to process (default: 1000)",
-    )
-    parser.add_argument(
-        "--org-id",
-        type=str,
-        default=None,
-        help="Limit to one organization UUID",
-    )
-    parser.add_argument(
-        "--transaction-type",
-        choices=[t.value for t in SUPPORTED_TYPES],
-        default=None,
-        help="Limit to one inventory transaction type",
-    )
-    args = parser.parse_args()
+def main(
+    *,
+    organization_id: UUID | None = None,
+    args: argparse.Namespace | None = None,
+    candidate_limit: int | None = None,
+) -> int:
+    if args is None:
+        parser = argparse.ArgumentParser(
+            description="Backfill GL postings for inventory transactions"
+        )
+        parser.add_argument("--dry-run", action="store_true", help="Report only")
+        parser.add_argument("--execute", action="store_true", help="Post to GL")
+        parser.add_argument(
+            "--batch-size",
+            type=int,
+            default=1000,
+            help="Max inventory transactions to process (default: 1000)",
+        )
+        parser.add_argument(
+            "--org-id",
+            type=str,
+            default=None,
+            help="Limit to one organization UUID",
+        )
+        parser.add_argument(
+            "--transaction-type",
+            choices=[t.value for t in SUPPORTED_TYPES],
+            default=None,
+            help="Limit to one inventory transaction type",
+        )
+        args = parser.parse_args()
 
-    if not args.dry_run and not args.execute:
-        parser.error("Specify --dry-run or --execute")
+        if not args.dry_run and not args.execute:
+            parser.error("Specify --dry-run or --execute")
 
-    org_id = UUID(args.org_id) if args.org_id else None
+    org_id = organization_id or (UUID(args.org_id) if args.org_id else None)
     txn_type = TransactionType(args.transaction_type) if args.transaction_type else None
+    requested_limit = args.batch_size if candidate_limit is None else candidate_limit
+    effective_limit = min(requested_limit, 25) if args.dry_run else requested_limit
+    if org_id is None:
+        # Cross-tenant authority is limited to discovering organizations.
+        # Each organization's report and writes use a fresh tenant session.
+        with cross_org_session() as cross_db:
+            org_ids = list(cross_db.scalars(select(Organization.organization_id)).all())
+        remaining = effective_limit
+        for target_org_id in org_ids:
+            if remaining <= 0:
+                break
+            selected = main(
+                organization_id=target_org_id,
+                args=args,
+                candidate_limit=remaining,
+            )
+            remaining -= selected
+        return effective_limit - remaining
 
-    with SessionLocal() as db:
+    with session_for_org(org_id) as db:
         logger.info("=" * 60)
         logger.info("INVENTORY GL BACKFILL REPORT")
         logger.info("=" * 60)
@@ -382,7 +407,7 @@ def main() -> None:
         if args.dry_run:
             candidates = load_candidates(
                 db,
-                batch_size=min(args.batch_size, 25),
+                batch_size=effective_limit,
                 org_id=org_id,
                 transaction_type=txn_type,
             )
@@ -396,20 +421,20 @@ def main() -> None:
                     txn.reference,
                 )
             logger.info("DRY RUN — no changes made.")
-            return
+            return len(candidates)
 
         if counts["missing_gl"] == 0:
             logger.info(
                 "Nothing to do — all inventory transactions are already posted."
             )
-            return
+            return 0
 
         reopened_periods = prepare_inventory_fiscal_periods(db, org_id, txn_type)
 
         try:
             candidates = load_candidates(
                 db,
-                batch_size=args.batch_size,
+                batch_size=effective_limit,
                 org_id=org_id,
                 transaction_type=txn_type,
             )
@@ -423,6 +448,8 @@ def main() -> None:
             logger.info("-" * 60)
         finally:
             restore_inventory_fiscal_periods(db, reopened_periods)
+
+        return result["total"]
 
 
 if __name__ == "__main__":

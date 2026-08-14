@@ -1,6 +1,14 @@
 import uuid
 
+import pytest
+
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
+
+
+@pytest.fixture()
+def auth_headers(admin_headers):
+    """The global RBAC API is reachable only by the explicit admin principal."""
+    return admin_headers
 
 
 class TestRolesAPI:
@@ -24,6 +32,16 @@ class TestRolesAPI:
         payload = {"name": "unauthorized_role", "description": "Test"}
         response = client.post("/rbac/roles", json=payload)
         assert response.status_code == 401
+
+    def test_permission_scoped_non_admin_cannot_manage_global_rbac(
+        self, client, auth_token
+    ):
+        response = client.get(
+            "/rbac/roles",
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+
+        assert response.status_code == 403
 
     def test_get_role(self, client, auth_headers, role):
         """Test getting a role by ID."""

@@ -155,6 +155,14 @@ def test_admin_bypass_dep_pairs_with_admin_gate():
     )
 
 
+def test_global_identity_and_settings_apis_require_system_admin():
+    """A tenant permission must never authorize a cross-organization session."""
+    for relative_path in ("app/api/auth.py", "app/api/rbac.py", "app/api/settings.py"):
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "require_admin_bypass" in text, relative_path
+        assert "Depends(require_permission(" not in text, relative_path
+
+
 def test_no_unprimed_get_db_imports_in_api_modules():
     """Catch the loophole that hid ``coach.py`` and ``ipsas.py`` from the
     initial migration: a module that imports ``get_db`` (or aliases
@@ -265,15 +273,16 @@ def test_migrated_modules_use_get_db_with_org():
         # genuinely tenant-scoped (every route uses require_tenant_auth or
         # require_organization_id; just didn't fit the original scan).
         "app/api/files.py",
+        "app/api/persons.py",
         "app/api/scheduler.py",
         "app/api/service_hooks.py",
         "app/api/support.py",
         "app/api/workflow_tasks.py",
         # Wave 4B — admin/cross-tenant via get_db_admin_bypass (genuine
-        # cross-tenant access, app.bypass_rls + allow_cross_org).
+        # cross-tenant access, app.bypass_rls + allow_cross_org). People CRUD
+        # is deliberately absent from this subset: it is tenant-owned.
         "app/api/audit.py",
         "app/api/auth.py",
-        "app/api/persons.py",
         "app/api/rbac.py",
         "app/api/settings.py",
     }
@@ -282,7 +291,6 @@ def test_migrated_modules_use_get_db_with_org():
     admin_bypass_modules = {
         "app/api/audit.py",
         "app/api/auth.py",
-        "app/api/persons.py",
         "app/api/rbac.py",
         "app/api/settings.py",
     }

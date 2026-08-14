@@ -2,6 +2,19 @@
 
 Comprehensive reference for all UI decisions. Fonts are self-hosted. Stack: Tailwind CSS + Alpine.js + HTMX + Jinja2.
 
+## Shared UI Contract
+
+ERP consumes the exact released `dotmac-ui` package through `app/ui.py`. Its
+compiled stylesheet is self-hosted and loaded after ERP product CSS; never copy
+package assets into `static/` or rebuild them with ERP's Tailwind/PostCSS
+pipeline. Its inert, namespaced templates are rendered by ERP's shared Jinja
+environment.
+
+For new custom CSS, prefer a public `--dmui-*` semantic role token when one
+exists. Existing ERP value-named tokens remain compatibility inputs and should
+migrate incrementally. Product layout and domain accents remain ERP-owned until
+the package publishes a corresponding contract.
+
 ## Design Tokens
 
 ### Color Palette (CSS Variables)
@@ -229,7 +242,11 @@ ALWAYS use the macro — NEVER write inline badge HTML:
 ) }}
 ```
 
-Centered layout, min-height 300px, floating icon animation, gradient icon background (teal → gold).
+The local macro is a temporary call-shape adapter over
+`dotmac_ui/components/empty_state.html`. New callers should use the logical
+`title`, `description`, `cta_text`, and `cta_href` inputs only. `icon` and
+`illustration` remain accepted for old callers but no longer control markup;
+the shared component owns its fixed decorative visual and action icon.
 
 ### Search (Live Search Macro)
 

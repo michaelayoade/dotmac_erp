@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dotmac_erp"
-version = "1.24.0"
+version = "1.30.0"
 description = "IFRS-based multi-tenant accounting software"
 authors = ["DotMac <dev@dotmac.ng>"]
 package-mode = false
@@ -50,9 +50,13 @@ pymysql = "^1.1.1"
 # tests/architecture/test_kernel_import_boundary.py. No extras: [testing]'s
 # only pull (httpx) and [licensing]'s (cryptography) are already ERP main
 # dependencies at compatible versions.
-dotmac-kernel = {version = "0.1.0a24", source = "forgejo"}
+dotmac-kernel = {version = "0.1.0a56", source = "forgejo"}
 
-# Private Forgejo PyPI index (dotmac-kernel releases). Explicit priority: only
+# Shared presentation contract: compiled assets and inert Jinja package data.
+# ERP supplies the host loader and never vendors or recompiles this package.
+dotmac-ui = {version = "0.1.0a7", source = "forgejo"}
+
+# Private Forgejo PyPI index (Dotmac packages). Explicit priority: only
 # dependencies that name this source resolve from it; PyPI stays the default.
 # Credentials are NEVER stored in this repository — poetry reads them from its
 # own auth store under the source name "forgejo".

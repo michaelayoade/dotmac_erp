@@ -1,20 +1,20 @@
 """Architecture guard: the dotmac-kernel import boundary under ``app/``.
 
 Enforces the kernel-adoption ledger (``docs/PLATFORM_ADOPTION_LEDGER.md``,
-"Kernel public-module classification"): only the documented *consume-pure*
-kernel modules may ever be imported by application code. Everything else —
-kernel persistence (``db``, ``models``, ``messaging`` storage, ``audit``,
+"Kernel public-module classification"): documented *consume-pure* modules
+are generally importable, while a persisted symbol needs an exact named
+file/module/symbol adoption. Everything else — kernel persistence (``db``,
+unlisted ``models`` symbols, ``messaging`` storage, ``audit``,
 ``entitlements``, ``settings_models``, ``migrations``), kernel identity/auth
 (``models``, ``security``, ``deps``, ``web_deps``, ``platform_auth``,
 ``identity``), kernel web/app surface (``app_factory``, ``middleware``,
 ``crud``, ``templating``, ``branding``, ``display``), bare ``import
 dotmac_kernel``, and any ``_``-private kernel path — fails this test.
 
-The scan is a static AST walk: ``dotmac_kernel`` is NOT installed at the E1
-pin, and this test must never import it. When a later slice adopts an
-``adapt-existing`` or ``defer-db`` module, it extends ``ALLOWED_KERNEL_MODULES``
-in the same change that updates the ledger's classification table (the
-ledger-sync test below keeps the two from drifting).
+The scan is a static AST walk. Consume-pure modules are allowed throughout
+``app/``. A persisted kernel type is admitted only as an exact
+file/module/symbol tuple in ``ADOPTED_KERNEL_IMPORTS``; admitting the whole
+``models`` module would also admit Party/RBAC/auth models that E8 prohibits.
 
 Red-sensitivity is proven, not assumed: the negative-control tests run the
 same checker over a synthetic tree containing forbidden imports and assert
@@ -42,14 +42,26 @@ ALLOWED_KERNEL_MODULES: frozenset[str] = frozenset(
         "features",
         "licensing",
         "money",
+        # ADR-0006 D1 amendment: pure vocabulary + this assembly's binding
+        # declaration. No I/O, no ORM — the consume-pure shape exactly.
+        "prerequisites",
         "profiles",
         "providers",
         "testing",
     }
 )
 
+# E8 slice 4: the assembly hosts exactly the kernel Tenant projection while
+# ERP's Organization remains authoritative. Path and symbol are both
+# load-bearing; every other import from dotmac_kernel.models stays prohibited.
+ADOPTED_KERNEL_IMPORTS: dict[Path, frozenset[tuple[str, str]]] = {
+    Path("services/tenant_projection.py"): frozenset(
+        {("dotmac_kernel.models", "Tenant")}
+    ),
+}
 
-def _classify(module: str) -> str | None:
+
+def _classify(module: str, *, relative_path: Path | None = None) -> str | None:
     """Return a violation reason for a kernel import, or None if allowed.
 
     ``module`` is a dotted import target such as ``dotmac_kernel.db`` or
@@ -67,9 +79,16 @@ def _classify(module: str) -> str | None:
         )
     if any(part.startswith("_") for part in parts[1:]):
         return f"kernel-internal (private) import '{module}'"
+    if relative_path is not None and len(parts) >= 3:
+        allowed = ADOPTED_KERNEL_IMPORTS.get(relative_path, frozenset())
+        imported_module = ".".join(parts[:-1])
+        imported_symbol = parts[-1]
+        if (imported_module, imported_symbol) in allowed:
+            return None
     if parts[1] not in ALLOWED_KERNEL_MODULES:
         return (
-            f"'{module}' is outside the documented consume-pure allowlist "
+            f"'{module}' is outside the documented consume-pure or exact-adoption "
+            "allowlist "
             f"(see docs/PLATFORM_ADOPTION_LEDGER.md)"
         )
     return None
@@ -94,7 +113,9 @@ def _imported_kernel_targets(tree: ast.AST) -> list[tuple[int, str]]:
                     for alias in node.names
                 )
             else:
-                targets.append((node.lineno, node.module))
+                targets.extend(
+                    (node.lineno, f"{node.module}.{alias.name}") for alias in node.names
+                )
     return targets
 
 
@@ -108,7 +129,7 @@ def kernel_import_violations(root: Path) -> list[str]:
             continue
         rel = path.relative_to(root)
         for lineno, target in _imported_kernel_targets(tree):
-            reason = _classify(target)
+            reason = _classify(target, relative_path=rel)
             if reason is not None:
                 violations.append(f"{rel}:{lineno}: {reason}")
     return violations
@@ -120,11 +141,10 @@ def kernel_import_violations(root: Path) -> list[str]:
 
 
 def test_app_imports_only_documented_kernel_modules() -> None:
-    """No file under app/ imports outside the consume-pure kernel surface.
+    """No file imports outside consume-pure or exact persisted adoptions.
 
-    At the E1 pin this holds trivially (the dependency is not installed and
-    nothing imports it); the guard exists so that E2+ cannot add an
-    undocumented, internal, or prohibited kernel import without failing CI.
+    The guard keeps a single exact ``Tenant`` importer from opening the entire
+    kernel models module to Party/RBAC/auth callers.
     """
     violations = kernel_import_violations(APP_DIR)
     assert violations == [], "undocumented dotmac_kernel imports under app/:\n" + (

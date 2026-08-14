@@ -24,13 +24,16 @@ Approval Tiers (for financial controls):
 import argparse
 import os
 import sys
+from uuid import UUID
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session, session_for_org
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 
@@ -2653,18 +2656,22 @@ ROLE_PERMISSIONS = {
 }
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Seed RBAC roles and permissions.")
     parser.add_argument("--admin-email", help="Email to map to admin role.")
     parser.add_argument("--admin-person-id", help="Person ID to map to admin role.")
+    parser.add_argument(
+        "--org-id",
+        help="Organization containing the admin person; required for assignment.",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print changes without applying."
     )
     return parser.parse_args()
 
 
-def _ensure_role(db, name, description):
-    role = db.query(Role).filter(Role.name == name).first()
+def _ensure_role(db: Session, name: str, description: str) -> Role:
+    role = db.scalar(select(Role).where(Role.name == name))
     if not role:
         role = Role(name=name, description=description, is_active=True)
         db.add(role)
@@ -2676,8 +2683,8 @@ def _ensure_role(db, name, description):
     return role
 
 
-def _ensure_permission(db, key, description):
-    permission = db.query(Permission).filter(Permission.key == key).first()
+def _ensure_permission(db: Session, key: str, description: str) -> Permission:
+    permission = db.scalar(select(Permission).where(Permission.key == key))
     if not permission:
         permission = Permission(key=key, description=description, is_active=True)
         db.add(permission)
@@ -2689,12 +2696,14 @@ def _ensure_permission(db, key, description):
     return permission
 
 
-def _ensure_role_permission(db, role_id, permission_id):
-    link = (
-        db.query(RolePermission)
-        .filter(RolePermission.role_id == role_id)
-        .filter(RolePermission.permission_id == permission_id)
-        .first()
+def _ensure_role_permission(
+    db: Session, role_id: UUID, permission_id: UUID
+) -> RolePermission:
+    link = db.scalar(
+        select(RolePermission).where(
+            RolePermission.role_id == role_id,
+            RolePermission.permission_id == permission_id,
+        )
     )
     if not link:
         link = RolePermission(role_id=role_id, permission_id=permission_id)
@@ -2702,12 +2711,12 @@ def _ensure_role_permission(db, role_id, permission_id):
     return link
 
 
-def _ensure_person_role(db, person_id, role_id):
-    link = (
-        db.query(PersonRole)
-        .filter(PersonRole.person_id == person_id)
-        .filter(PersonRole.role_id == role_id)
-        .first()
+def _ensure_person_role(db: Session, person_id: UUID, role_id: UUID) -> PersonRole:
+    link = db.scalar(
+        select(PersonRole).where(
+            PersonRole.person_id == person_id,
+            PersonRole.role_id == role_id,
+        )
     )
     if not link:
         link = PersonRole(person_id=person_id, role_id=role_id)
@@ -2715,7 +2724,62 @@ def _ensure_person_role(db, person_id, role_id):
     return link
 
 
-def main():
+def _seed_catalog(db: Session) -> UUID:
+    """Seed the global RBAC catalogue and return the admin role ID."""
+    for name, description in DEFAULT_ROLES:
+        _ensure_role(db, name, description)
+    for key, description in DEFAULT_PERMISSIONS:
+        _ensure_permission(db, key, description)
+    db.flush()
+
+    roles = {role.name: role for role in db.scalars(select(Role)).all()}
+    permissions = {
+        permission.key: permission
+        for permission in db.scalars(select(Permission)).all()
+    }
+    for role_name, permission_keys in ROLE_PERMISSIONS.items():
+        role = roles.get(role_name)
+        if not role:
+            continue
+        for key in permission_keys:
+            permission = permissions.get(key)
+            if not permission:
+                print(f"Warning: Permission '{key}' not found for role '{role_name}'")
+                continue
+            _ensure_role_permission(db, role.id, permission.id)
+
+    admin_role = roles.get("admin")
+    if admin_role is None:
+        raise RuntimeError("RBAC seed did not create the admin role.")
+    return admin_role.id
+
+
+def _resolve_admin_person(
+    db: Session,
+    *,
+    organization_id: UUID,
+    person_id: str | None,
+    email: str | None,
+) -> Person | None:
+    person = None
+    if person_id:
+        person = db.scalar(
+            select(Person).where(
+                Person.id == UUID(person_id),
+                Person.organization_id == organization_id,
+            )
+        )
+    if person is None and email:
+        person = db.scalar(
+            select(Person).where(
+                Person.email == email,
+                Person.organization_id == organization_id,
+            )
+        )
+    return person
+
+
+def main() -> None:
     load_dotenv()
     args = parse_args()
 
@@ -2734,49 +2798,36 @@ def main():
             print(f"  {role_name}: {len(perms)} permissions")
         return
 
-    db = SessionLocal()
-    try:
-        for name, description in DEFAULT_ROLES:
-            _ensure_role(db, name, description)
-        for key, description in DEFAULT_PERMISSIONS:
-            _ensure_permission(db, key, description)
+    admin_requested = bool(args.admin_email or args.admin_person_id)
+    if admin_requested and not args.org_id:
+        raise SystemExit("--org-id is required when assigning the admin role.")
+
+    # Roles, permissions, and their links are a global catalogue. This phase
+    # deliberately bypasses tenant filters and never reads or writes Person.
+    with cross_org_session() as db:
+        admin_role_id = _seed_catalog(db)
         db.commit()
 
-        roles = {role.name: role for role in db.query(Role).all()}
-        permissions = {perm.key: perm for perm in db.query(Permission).all()}
-        for role_name, permission_keys in ROLE_PERMISSIONS.items():
-            role = roles.get(role_name)
-            if not role:
-                continue
-            for key in permission_keys:
-                permission = permissions.get(key)
-                if not permission:
-                    print(
-                        f"Warning: Permission '{key}' not found for role '{role_name}'"
-                    )
-                    continue
-                _ensure_role_permission(db, role.id, permission.id)
-        db.commit()
-
-        admin_role = roles.get("admin")
-        if admin_role and (args.admin_email or args.admin_person_id):
-            person = None
-            if args.admin_person_id:
-                person = db.get(Person, args.admin_person_id)
-            if not person and args.admin_email:
-                person = (
-                    db.query(Person).filter(Person.email == args.admin_email).first()
-                )
+    if admin_requested:
+        organization_id = UUID(args.org_id)
+        # Person lookup and assignment belong to exactly one tenant. A fresh
+        # session prevents the catalogue bypass from crossing this boundary.
+        with session_for_org(organization_id) as db:
+            person = _resolve_admin_person(
+                db,
+                organization_id=organization_id,
+                person_id=args.admin_person_id,
+                email=args.admin_email,
+            )
             if not person:
                 raise SystemExit("Admin person not found.")
-            _ensure_person_role(db, person.id, admin_role.id)
+            _ensure_person_role(db, person.id, admin_role_id)
             db.commit()
             print("Admin role assigned.")
-        print("RBAC seed complete.")
-        print(f"  Roles: {len(DEFAULT_ROLES)}")
-        print(f"  Permissions: {len(DEFAULT_PERMISSIONS)}")
-    finally:
-        db.close()
+
+    print("RBAC seed complete.")
+    print(f"  Roles: {len(DEFAULT_ROLES)}")
+    print(f"  Permissions: {len(DEFAULT_PERMISSIONS)}")
 
 
 if __name__ == "__main__":

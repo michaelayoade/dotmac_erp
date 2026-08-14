@@ -1,5 +1,7 @@
 import logging
 import os
+from collections.abc import Callable
+from functools import wraps
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +21,19 @@ from app.services.domain_settings import (
     scheduler_settings,
 )
 from app.services.secrets import is_openbao_ref
+
+
+def _global_settings_seed(
+    seed: Callable[[Session], None],
+) -> Callable[[Session], None]:
+    """State the intentional global scope used by infrastructure seeders."""
+
+    @wraps(seed)
+    def scoped_seed(db: Session) -> None:
+        with allow_cross_org(db):
+            seed(db)
+
+    return scoped_seed
 
 
 def _csv_list(raw: str | None, upper: bool = True) -> list[str] | None:
@@ -124,6 +139,7 @@ def seed_auth_settings(db: Session) -> None:
             )
 
 
+@_global_settings_seed
 def seed_audit_settings(db: Session) -> None:
     audit_settings.ensure_by_key(
         db,
@@ -179,6 +195,7 @@ def _sync_scheduler_connection(
             select(DomainSetting).where(
                 DomainSetting.domain == SettingDomain.scheduler,
                 DomainSetting.key == key,
+                DomainSetting.organization_id.is_(None),
             )
         )
     if existing:
@@ -195,6 +212,7 @@ def _sync_scheduler_connection(
         )
 
 
+@_global_settings_seed
 def seed_scheduler_settings(db: Session) -> None:
     broker = (
         os.getenv("CELERY_BROKER_URL")
@@ -229,6 +247,7 @@ def seed_scheduler_settings(db: Session) -> None:
     )
 
 
+@_global_settings_seed
 def seed_email_settings(db: Session) -> None:
     """Seed email/SMTP settings from environment variables."""
     email_settings.ensure_by_key(
@@ -294,6 +313,7 @@ def seed_email_settings(db: Session) -> None:
         )
 
 
+@_global_settings_seed
 def seed_automation_settings(db: Session) -> None:
     """Seed automation settings with sensible defaults."""
     automation_settings.ensure_by_key(
@@ -383,6 +403,7 @@ def seed_automation_settings(db: Session) -> None:
     )
 
 
+@_global_settings_seed
 def seed_features_settings(db: Session) -> None:
     """Seed feature flag global defaults from the registry table."""
     from app.models.feature_flag import FeatureFlagRegistry, FeatureFlagStatus
@@ -403,6 +424,7 @@ def seed_features_settings(db: Session) -> None:
         )
 
 
+@_global_settings_seed
 def seed_reporting_settings(db: Session) -> None:
     """Seed reporting settings with defaults."""
     reporting_settings.ensure_by_key(
@@ -432,6 +454,7 @@ def seed_reporting_settings(db: Session) -> None:
     # watermark_text is optional, no default
 
 
+@_global_settings_seed
 def seed_payments_settings(db: Session) -> None:
     """Seed payments/Paystack settings from environment variables."""
     payments_settings.ensure_by_key(

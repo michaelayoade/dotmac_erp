@@ -133,9 +133,7 @@ def _calculate_customer_balance_trends(
         balances = db.execute(
             select(
                 Invoice.customer_id,
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                ).label("balance"),
+                func.coalesce(func.sum(Invoice.balance_due), 0).label("balance"),
             )
             .where(Invoice.organization_id == organization_id)
             .where(Invoice.customer_id.in_(customer_ids))
@@ -281,7 +279,7 @@ def _compute_receivable(invoice: Invoice) -> Decimal:
 
 
 def _invoice_detail_view(invoice: Invoice, customer: Customer | None) -> dict:
-    balance = invoice.total_amount - invoice.amount_paid
+    balance = invoice.balance_due
     today = date.today()
     return {
         "invoice_id": invoice.invoice_id,
@@ -679,9 +677,7 @@ class ARWebService:
         balances = db.execute(
             select(
                 Invoice.customer_id,
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                ).label("balance"),
+                func.coalesce(func.sum(Invoice.balance_due), 0).label("balance"),
             )
             .where(Invoice.organization_id == org_id)
             .where(Invoice.status.in_(open_statuses))
@@ -828,7 +824,7 @@ class ARWebService:
         balance = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid),
+                    func.sum(Invoice.balance_due),
                     0,
                 )
             )
@@ -849,7 +845,7 @@ class ARWebService:
         today = date.today()
         open_invoices = []
         for invoice in invoices:
-            balance_due = invoice.total_amount - invoice.amount_paid
+            balance_due = invoice.balance_due
             open_invoices.append(
                 {
                     "invoice_id": invoice.invoice_id,
@@ -985,9 +981,7 @@ class ARWebService:
             InvoiceStatus.OVERDUE,
         ]
         stats_base = (
-            select(
-                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-            )
+            select(func.coalesce(func.sum(Invoice.balance_due), 0))
             .select_from(Invoice)
             .join(Customer, Invoice.customer_id == Customer.customer_id)
             .where(*conditions)
@@ -1019,7 +1013,7 @@ class ARWebService:
 
         invoices_view = []
         for invoice, customer in invoices:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             invoices_view.append(
                 {
                     "invoice_id": invoice.invoice_id,
@@ -1588,7 +1582,7 @@ class ARWebService:
         open_invoices = []
         selected_invoice = None
         for invoice, customer in rows:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             view = {
                 "invoice_id": invoice.invoice_id,
                 "invoice_number": invoice.invoice_number,
@@ -2197,7 +2191,7 @@ class ARWebService:
         )
 
         for invoice, customer in db.execute(invoices_query).all():
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             view = {
                 "invoice_id": invoice.invoice_id,
                 "invoice_number": invoice.invoice_number,

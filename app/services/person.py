@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -27,15 +28,20 @@ def _validate_enum(value, enum_cls, label):
 
 class People(ListResponseMixin):
     @staticmethod
-    def create(db: Session, payload: PersonCreate):
-        person = Person(**payload.model_dump())
+    def create(db: Session, organization_id: UUID, payload: PersonCreate) -> Person:
+        person = Person(organization_id=organization_id, **payload.model_dump())
         db.add(person)
         db.flush()
         return person
 
     @staticmethod
-    def get(db: Session, person_id: str):
-        person = db.get(Person, coerce_uuid(person_id))
+    def get(db: Session, organization_id: UUID, person_id: str) -> Person:
+        person = db.scalar(
+            select(Person).where(
+                Person.id == coerce_uuid(person_id),
+                Person.organization_id == organization_id,
+            )
+        )
         if not person:
             raise HTTPException(status_code=404, detail="Person not found")
         return person
@@ -43,6 +49,7 @@ class People(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
+        organization_id: UUID,
         email: str | None,
         status: str | None,
         is_active: bool | None,
@@ -50,8 +57,8 @@ class People(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
-        query = select(Person)
+    ) -> list[Person]:
+        query = select(Person).where(Person.organization_id == organization_id)
         if email:
             query = query.where(Person.email.ilike(f"%{email}%"))
         if status:
@@ -70,11 +77,21 @@ class People(ListResponseMixin):
                 "email": Person.email,
             },
         )
-        return db.scalars(_apply_pagination(query, limit, offset)).all()
+        return list(db.scalars(_apply_pagination(query, limit, offset)).all())
 
     @staticmethod
-    def update(db: Session, person_id: str, payload: PersonUpdate):
-        person = db.get(Person, coerce_uuid(person_id))
+    def update(
+        db: Session,
+        organization_id: UUID,
+        person_id: str,
+        payload: PersonUpdate,
+    ) -> Person:
+        person = db.scalar(
+            select(Person).where(
+                Person.id == coerce_uuid(person_id),
+                Person.organization_id == organization_id,
+            )
+        )
         if not person:
             raise HTTPException(status_code=404, detail="Person not found")
         for key, value in payload.model_dump(exclude_unset=True).items():
@@ -83,8 +100,13 @@ class People(ListResponseMixin):
         return person
 
     @staticmethod
-    def delete(db: Session, person_id: str):
-        person = db.get(Person, coerce_uuid(person_id))
+    def delete(db: Session, organization_id: UUID, person_id: str) -> None:
+        person = db.scalar(
+            select(Person).where(
+                Person.id == coerce_uuid(person_id),
+                Person.organization_id == organization_id,
+            )
+        )
         if not person:
             raise HTTPException(status_code=404, detail="Person not found")
         db.delete(person)

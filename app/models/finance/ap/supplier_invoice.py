@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Computed,
     Date,
     DateTime,
     Enum,
@@ -170,7 +171,16 @@ class SupplierInvoice(Base, VersionedMixin):
     amount_paid: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=0
     )
-    # balance_due is computed
+    # Derived by the DATABASE, never written here — see ADR-0016. Was a Python
+    # @property, which could not be queried, so services hand-wrote the
+    # subtraction as SQL. One definition now serves the ORM and SQL alike.
+    # A generated column is None until flush; SQLAlchemy refetches it after
+    # every flush, including updates to the operands.
+    balance_due: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6),
+        Computed("total_amount - amount_paid", persisted=True),
+        nullable=False,
+    )
     functional_currency_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -313,10 +323,6 @@ class SupplierInvoice(Base, VersionedMixin):
         back_populates="invoice",
         cascade="all, delete-orphan",
     )
-
-    @property
-    def balance_due(self) -> Decimal:
-        return self.total_amount - self.amount_paid
 
 
 # Forward reference

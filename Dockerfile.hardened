@@ -46,7 +46,7 @@ RUN apt-get update \
 RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
 
 COPY pyproject.toml poetry.lock ./
-# dotmac-kernel resolves from the private Forgejo index (BuildKit secret; see Dockerfile).
+# Dotmac packages resolve from the private Forgejo index (BuildKit secret; see Dockerfile).
 RUN --mount=type=secret,id=forgejo_token \
     POETRY_HTTP_BASIC_FORGEJO_USERNAME=ci-reader \
     POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)" \
@@ -83,7 +83,7 @@ RUN apt-get update \
 RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
 
 COPY pyproject.toml poetry.lock ./
-# dotmac-kernel resolves from the private Forgejo index (BuildKit secret; see Dockerfile).
+# Dotmac packages resolve from the private Forgejo index (BuildKit secret; see Dockerfile).
 RUN --mount=type=secret,id=forgejo_token \
     POETRY_HTTP_BASIC_FORGEJO_USERNAME=ci-reader \
     POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)" \
@@ -98,6 +98,10 @@ COPY --from=nuitka-compiler /app/gunicorn.conf.py ./gunicorn.conf.py
 COPY templates ./templates
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
+# The hardened-image rehearsal and operator preflight use the same read-only
+# verifier as standard deploys. Copy only that named entrypoint; the rest of
+# scripts/ is not part of the hardened runtime surface.
+COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py
 
 # Copy compiled CSS from builder stage
 COPY --from=css-builder /build/static/css/app.css ./static/css/app.css

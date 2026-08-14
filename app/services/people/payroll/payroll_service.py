@@ -39,6 +39,7 @@ from app.models.people.payroll.salary_structure import (
 from app.services.common import PaginatedResult, PaginationParams, coerce_uuid
 from app.services.finance.platform.org_context import org_context_service
 from app.services.people.integrations.payroll_gl_adapter import PayrollGLAdapter
+from app.services.people.payroll.disbursement import record_disbursement
 from app.services.people.payroll.eligibility import (
     is_employee_payroll_eligible_for_period,
     payroll_employee_eligibility_clause,
@@ -1074,7 +1075,17 @@ class PayrollService:
         paid_by_id: UUID,
         slip_ids: list[UUID] | None = None,
         payment_reference: str | None = None,
+        amounts_paid: dict[UUID, Decimal] | None = None,
     ) -> dict:
+        """Mark slips paid, recording how much was actually disbursed.
+
+        `amounts_paid` maps a slip to the amount that genuinely moved. Omit an
+        entry and the slip records its full `net_pay`, which is exactly the
+        claim this method has always made implicitly — see the note in
+        `record_disbursement`. The parameter exists so a caller that KNOWS a
+        part-disbursement can say so; making it mandatory is stage 2 step 3's
+        job, once every caller has a real amount to supply.
+        """
         entry = self.get_payroll_entry(org_id, entry_id)
         slips = list(entry.salary_slips or [])
         if slip_ids:
@@ -1102,6 +1113,7 @@ class PayrollService:
             slip.paid_at = datetime.now(UTC)
             slip.paid_by_id = paid_by_id
             slip.payment_reference = payment_reference
+            record_disbursement(slip, (amounts_paid or {}).get(slip.slip_id))
 
             employee = self.db.get(Employee, slip.employee_id)
             if employee and employee.eligible_for_final_payroll:

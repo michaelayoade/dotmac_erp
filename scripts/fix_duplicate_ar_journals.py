@@ -32,9 +32,9 @@ from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,9 +56,7 @@ def run(*, commit: bool = False) -> dict[str, int]:
         "errors": 0,
     }
 
-    with SessionLocal() as db:
-        db.execute(text(f"SET app.current_organization_id = '{ORG_ID}'"))
-
+    with session_for_org(ORG_ID) as db:
         from app.models.finance.ar.invoice import Invoice
         from app.models.finance.gl.journal_entry import (
             JournalEntry,

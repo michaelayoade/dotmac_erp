@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Guard: enforce dual-layer tenant-context priming at non-HTTP entry points.
+"""Guard: enforce complete tenant-context priming at non-HTTP entry points.
 
 Celery tasks (and any other non-request entry point) MUST open database
 sessions through the canonical context managers in
 ``app.db.session_context`` — ``session_for_org`` (single tenant) or
-``cross_org_session`` (genuine cross-tenant batch). Those helpers set BOTH
-tenant-isolation layers:
+``cross_org_session`` (genuine cross-tenant batch). Tenant work through
+``session_for_org`` sets every isolation input:
 
 1. the SQLAlchemy ORM ``do_orm_execute`` listener (``session.info[...]``), and
-2. the PostgreSQL RLS GUC (``SET LOCAL app.current_organization_id``).
+2. ERP's PostgreSQL RLS GUC (``app.current_organization_id``); and
+3. shared modules' PostgreSQL RLS GUC (``app.current_tenant``).
+
+``cross_org_session`` bypasses the first two ERP-owned layers only. It does not
+bypass module RLS; a batch that touches module rows must return to one
+``session_for_org`` per Organization.
 
 A raw ``SessionLocal()`` in a task primes neither, which is a silent bug:
 queries either raise ``MissingOrgContextError``, return zero rows under

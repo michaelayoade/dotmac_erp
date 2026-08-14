@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 class PersonBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    organization_id: UUID
     first_name: str = Field(min_length=1, max_length=80)
     last_name: str = Field(min_length=1, max_length=80)
     display_name: str | None = Field(default=None, max_length=120)
@@ -69,5 +68,6 @@ class PersonRead(PersonBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
+    organization_id: UUID
     created_at: datetime
     updated_at: datetime

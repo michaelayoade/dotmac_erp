@@ -63,11 +63,15 @@ from datetime import date
 from decimal import Decimal
 
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.services.finance.coverage import PAYMENT_DUST_DEFAULT
 
 # Sub-cent rounding dust: a balance this small is not a debt. Shared with the
 # allocation path so "too small to allocate" and "small enough to be paid"
-# cannot drift apart.
-PAYMENT_DUST = Decimal("0.01")
+# cannot drift apart — and, since ADR-0016 §4, shared with AP too: this is the
+# DEFAULT of one setting (`payments.payment_dust`) rather than one of two
+# independent `Decimal("0.01")` declarations. Re-exported under the old name so
+# the existing call sites are unchanged.
+PAYMENT_DUST = PAYMENT_DUST_DEFAULT
 
 # Statuses whose meaning is not a function of payment coverage. Returned
 # unchanged, whatever the numbers say.

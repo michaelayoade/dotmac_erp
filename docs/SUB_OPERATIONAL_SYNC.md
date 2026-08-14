@@ -7,7 +7,8 @@ link costs to that work. ERP does not become the workflow owner.
 ## Contract and retry behavior
 
 Self-Care sends `POST /api/v1/sync/sub/bulk` with API-key scope
-`sub:domain:write`. The version-2 request contains these arrays, processed in
+`sub:domain:write`. The legacy `crm:sync:write` scope remains a transition-only
+compatibility grant. The version-2 request contains these arrays, processed in
 this order:
 
 1. `projects`

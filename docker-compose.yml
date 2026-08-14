@@ -10,7 +10,8 @@ services:
     - .env
     environment:
       APP_URL: https://erp.dotmac.io
-      APP_VERSION: ${APP_VERSION:-1.24.0}
+      APP_VERSION: ${APP_VERSION:-1.30.0}
+      DOTMAC_DEV_MODE: ${DOTMAC_DEV_MODE:?Set DOTMAC_DEV_MODE explicitly}
       BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       DEFAULT_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000001
       TRUSTED_PROXY_IPS: 172.16.0.0/12,127.0.0.1
@@ -69,6 +70,7 @@ services:
     - .env
     environment:
       APP_URL: https://erp.dotmac.io
+      DOTMAC_DEV_MODE: 'true'
       BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0

@@ -392,9 +392,7 @@ class SupplierService(ListResponseMixin):
         outstanding_balance = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     Decimal("0"),
                 )
             ).where(

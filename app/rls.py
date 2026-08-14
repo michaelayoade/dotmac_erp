@@ -1,7 +1,12 @@
 """
 Row Level Security (RLS) context utilities.
 
-This module provides utilities for managing tenant context in PostgreSQL RLS policies.
+This module is the one writer for ERP and shared-module PostgreSQL RLS context.
+
+ERP's Organization UUID maps directly to the shared Tenant UUID. Every tenant
+primer sets ``app.current_organization_id`` and ``app.current_tenant`` in one
+transaction-local statement; ERP's legacy bypass remains separate and is not a
+module-RLS bypass.
 
 Usage:
     # In a request middleware or dependency:
@@ -11,9 +16,9 @@ Usage:
     ):
         await set_current_organization(db, organization_id)
 
-    # For admin/system operations that need to bypass RLS:
+    # For admin/system operations that need to bypass ERP-owned RLS:
     async with bypass_rls(db):
-        # queries here see all data across tenants
+        # ERP policies may see all organizations; module RLS is not bypassed
         all_orgs = await db.execute(select(Organization))
 
     # Or using the context manager:
@@ -32,10 +37,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
+from app.tenancy import OrganizationTenantContext
+
 # Pattern for validating UUID strings - only allows hex digits and hyphens
 # This prevents SQL injection since these characters cannot break out of the string
 _UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
+
+_SET_CURRENT_SCOPE_SQL = text(
+    """
+    SELECT
+        set_config('app.current_organization_id', :organization_id, true),
+        set_config('app.current_tenant', :tenant_id, true)
+    """
+)
+_CLEAR_CURRENT_SCOPE_SQL = text(
+    """
+    SELECT
+        set_config('app.current_organization_id', '', true),
+        set_config('app.current_tenant', '', true)
+    """
 )
 
 
@@ -60,12 +82,21 @@ def _validate_uuid_string(value: str) -> str:
     return value
 
 
+def _scope_params(organization_id: uuid.UUID) -> dict[str, str]:
+    """Resolve ERP and shared-module scope from the one mapping owner."""
+    context = OrganizationTenantContext.for_organization(organization_id)
+    return {
+        "organization_id": _validate_uuid_string(str(context.organization_id)),
+        "tenant_id": _validate_uuid_string(str(context.tenant_id)),
+    }
+
+
 async def set_current_organization(
     db: AsyncSession,
     organization_id: uuid.UUID,
 ) -> None:
     """
-    Set the current organization context for RLS policies.
+    Set ERP organization and shared-module tenant context for RLS policies.
 
     This should be called at the beginning of each request/transaction
     to scope all subsequent queries to the specified organization.
@@ -74,18 +105,12 @@ async def set_current_organization(
         db: The database session
         organization_id: The UUID of the current organization/tenant
 
-    Note:
-        SET LOCAL doesn't support parameterized queries, so we use string
-        formatting with explicit UUID validation. The UUID type ensures
-        the value is safe (no SQL injection possible).
+    Both transaction-local GUCs are set by one SQL statement so a session can
+    never enter a half-primed organization/tenant state. ERP policies continue
+    to read ``app.current_organization_id``; shared modules read
+    ``app.current_tenant``.
     """
-    org_id_str = str(organization_id)
-    # Validate UUID format before using in SQL
-    _validate_uuid_str = _validate_uuid_string(org_id_str)
-    # SET LOCAL sets a GUC string param — no ::uuid cast (it's not a SQL value)
-    await db.execute(
-        text(f"SET LOCAL app.current_organization_id = '{_validate_uuid_str}'")
-    )
+    await db.execute(_SET_CURRENT_SCOPE_SQL, _scope_params(organization_id))
 
 
 async def clear_organization_context(db: AsyncSession) -> None:
@@ -95,14 +120,16 @@ async def clear_organization_context(db: AsyncSession) -> None:
     Args:
         db: The database session
     """
-    await db.execute(text("RESET app.current_organization_id"))
+    await db.execute(_CLEAR_CURRENT_SCOPE_SQL)
 
 
 async def enable_rls_bypass(db: AsyncSession) -> None:
     """
-    Enable RLS bypass for admin/system operations.
+    Enable the legacy ERP-policy RLS bypass for admin/system operations.
 
-    WARNING: Use with caution! This allows access to all tenant data.
+    WARNING: Use with caution! This allows cross-organization access only for
+    ERP policies that explicitly consult ``app.bypass_rls``. Shared-module
+    policies do not consult it and remain tenant-scoped/fail-closed.
 
     Args:
         db: The database session
@@ -127,7 +154,7 @@ async def bypass_rls(db: AsyncSession) -> AsyncGenerator[None, None]:
 
     Usage:
         async with bypass_rls(db):
-            # All queries here bypass RLS
+            # ERP policies that opt in are bypassed; module RLS is not
             all_data = await db.execute(select(SomeModel))
 
     Args:
@@ -194,29 +221,23 @@ def set_current_organization_sync(
     organization_id: uuid.UUID,
 ) -> None:
     """
-    Synchronous version of set_current_organization.
+    Synchronous version of :func:`set_current_organization`.
 
     Args:
         db: The database session
         organization_id: The UUID of the current organization/tenant
 
-    Note:
-        SET LOCAL doesn't support parameterized queries, so we use string
-        formatting with explicit UUID validation. The UUID type ensures
-        the value is safe (no SQL injection possible).
+    ERP and shared-module scope are set atomically from the explicit
+    Organization-to-Tenant mapping.
     """
-    org_id_str = str(organization_id)
-    # Validate UUID format before using in SQL
-    validated = _validate_uuid_string(org_id_str)
-    # SET LOCAL sets a GUC string param — no ::uuid cast (it's not a SQL value)
-    db.execute(text(f"SET LOCAL app.current_organization_id = '{validated}'"))
+    db.execute(_SET_CURRENT_SCOPE_SQL, _scope_params(organization_id))
 
 
 def set_current_organization_on_connection(
     connection: Connection,
     organization_id: uuid.UUID,
 ) -> None:
-    """Set the tenant GUC directly on a Connection.
+    """Set ERP and shared-module scope directly on a Connection.
 
     Needed by the ``after_begin`` re-arming in
     ``app.db.session_context``: that event fires while the Session is still
@@ -230,8 +251,7 @@ def set_current_organization_on_connection(
         # outright. Guarding here rather than at the call site keeps the
         # arming path a straight call, and mirrors prime_tenant_context.
         return
-    validated = _validate_uuid_string(str(organization_id))
-    connection.execute(text(f"SET LOCAL app.current_organization_id = '{validated}'"))
+    connection.execute(_SET_CURRENT_SCOPE_SQL, _scope_params(organization_id))
 
 
 def enable_rls_bypass_on_connection(connection: Connection) -> None:
@@ -242,13 +262,13 @@ def enable_rls_bypass_on_connection(connection: Connection) -> None:
 
 
 def clear_organization_context_sync(db: Session) -> None:
-    """Clear the current organization context (sync version)."""
-    db.execute(text("RESET app.current_organization_id"))
+    """Clear ERP and shared-module scope together (sync version)."""
+    db.execute(_CLEAR_CURRENT_SCOPE_SQL)
 
 
 def enable_rls_bypass_sync(db: Session) -> None:
     """
-    Synchronous version of enable_rls_bypass.
+    Synchronous version of the ERP-only ``enable_rls_bypass``.
 
     Args:
         db: The database session
@@ -273,7 +293,7 @@ def bypass_rls_sync(db: Session) -> Generator[None, None, None]:
 
     Usage:
         with bypass_rls_sync(db):
-            # All queries here bypass RLS
+            # Only ERP policies that consult app.bypass_rls are bypassed
             all_data = db.execute(select(SomeModel))
 
     Args:

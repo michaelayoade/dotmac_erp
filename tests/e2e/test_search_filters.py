@@ -65,7 +65,7 @@ class TestSearchFunctionality:
 
             # Should show no results message or empty table
             no_results = authenticated_page.locator(
-                ":text('No suppliers'), :text('No results'), :text('No data'), :text('Nothing found'), .empty-state"
+                ":text('No suppliers'), :text('No results'), :text('No data'), :text('Nothing found'), .dmui-empty-state, .empty-state"
             )
             authenticated_page.locator("table tbody tr")
 

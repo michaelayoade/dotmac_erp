@@ -23,32 +23,10 @@
 #
 # Format: <path> <number-of-raw-SessionLocal()-calls>
 scripts/add_missing_contract_staff.py 1
-scripts/audit_payroll_deductions.py 1
-scripts/backfill_gl_postings.py 1
-scripts/backfill_inventory_gl_postings.py 1
 scripts/bulk_import.py 1
-scripts/create_org.py 1
-scripts/create_unallocated_payroll_cc.py 1
 scripts/fix_display_names.py 1
-scripts/fix_duplicate_ar_journals.py 1
 scripts/import_dotmac_tb.py 1
 scripts/import_tb_audit.py 1
-scripts/import_uba_statements.py 1
-scripts/import_zenith_statements.py 1
 scripts/link_gl_bank_accounts.py 1
 scripts/migration/2026-04-30_backfill_deferred_vat.py 1
-scripts/post_and_match_paystack_opex_expense_reimbursements.py 1
-scripts/post_jan_2026_ap_invoices.py 3
-scripts/reconcile_jan_2026_dryrun.py 1
-scripts/seed_admin.py 1
-scripts/seed_demo_banking.py 1
-scripts/seed_demo_transactions.py 1
-scripts/seed_e2e_data.py 1
-scripts/seed_nigeria.py 1
 scripts/seed_payroll_from_excel.py 1
-scripts/seed_rbac.py 1
-scripts/settings_sync.py 1
-scripts/settings_validate.py 1
-scripts/setup_e2e_user.py 2
-scripts/update_org_name.py 1
-scripts/update_user_credentials.py 1

@@ -19,6 +19,7 @@ class TestPrimeSession:
         prime_session(session, org_id)
 
         assert session.info["organization_id"] == org_id
+        assert session.info["tenant_id"] == org_id
 
     def test_overwrites_existing_organization_id(self):
         from app.db.session_context import prime_session
@@ -30,6 +31,7 @@ class TestPrimeSession:
         prime_session(session, new_org_id)
 
         assert session.info["organization_id"] == new_org_id
+        assert session.info["tenant_id"] == new_org_id
 
 
 class TestAllowCrossOrg:
@@ -143,6 +145,7 @@ class TestSessionForOrg:
         org_id = uuid4()
         with session_for_org(org_id) as db:
             assert db.info["organization_id"] == org_id
+            assert db.info["tenant_id"] == org_id
 
     def test_sets_both_layers(self):
         """Contract: session_for_org composes BOTH tenant layers. Future
@@ -259,6 +262,7 @@ class TestCrossOrgSession:
 
         with cross_org_session() as db:
             assert "organization_id" not in db.info
+            assert "tenant_id" not in db.info
 
     def test_calls_both_bypass_layers(self):
         """Contract: cross_org_session composes the ORM ``allow_cross_org``

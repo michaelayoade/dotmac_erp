@@ -33,6 +33,7 @@ from app.services.settings_cache import get_cached_setting
 from app.services.settings_spec import (
     resolve_value,
 )
+from app.services.tenant_projection import reconcile_organization_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +237,7 @@ class AdminSettingsWebService:
 
             PMSConfigService(db).activate_ohcsf_pms(organization_id)
 
+        reconcile_organization_tenant(db, org)
         db.commit()
         return True, None
 

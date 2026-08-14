@@ -159,12 +159,14 @@ CLAIM_STATUS_TRANSITIONS = {
     },
     ExpenseClaimStatus.APPROVED: {
         ExpenseClaimStatus.PAID,
+        ExpenseClaimStatus.APPROVAL_WITHDRAWN,
     },
     ExpenseClaimStatus.REJECTED: {
         ExpenseClaimStatus.DRAFT,
     },
     ExpenseClaimStatus.PAID: set(),
     ExpenseClaimStatus.CANCELLED: set(),
+    ExpenseClaimStatus.APPROVAL_WITHDRAWN: set(),
 }
 
 REPORTABLE_EXPENSE_CLAIM_STATUSES = (

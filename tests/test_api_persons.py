@@ -1,5 +1,6 @@
 import uuid
 
+from app.models.person import Person
 from tests.conftest import DEFAULT_TEST_ORG_ID
 
 
@@ -12,7 +13,6 @@ class TestPersonsAPI:
             "first_name": "John",
             "last_name": "Doe",
             "email": f"john.doe.{uuid.uuid4().hex[:8]}@example.com",
-            "organization_id": str(DEFAULT_TEST_ORG_ID),
         }
         response = client.post("/people", json=payload, headers=auth_headers)
         assert response.status_code == 201
@@ -31,7 +31,6 @@ class TestPersonsAPI:
             "display_name": "Jane S.",
             "locale": "en-US",
             "timezone": "America/New_York",
-            "organization_id": str(DEFAULT_TEST_ORG_ID),
         }
         response = client.post("/people", json=payload, headers=auth_headers)
         assert response.status_code == 201
@@ -50,6 +49,22 @@ class TestPersonsAPI:
         response = client.post("/people", json=payload)
         assert response.status_code == 401
 
+    def test_create_person_derives_organization_from_auth(self, client, auth_headers):
+        """Caller-supplied ownership must never select another organization."""
+        response = client.post(
+            "/people",
+            json={
+                "first_name": "Scoped",
+                "last_name": "User",
+                "email": f"scoped.{uuid.uuid4().hex[:8]}@example.com",
+                "organization_id": str(uuid.uuid4()),
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 201
+        assert response.json()["organization_id"] == str(DEFAULT_TEST_ORG_ID)
+
     def test_get_person(self, client, auth_headers, person):
         """Test getting a person by ID."""
         response = client.get(f"/people/{person.id}", headers=auth_headers)
@@ -62,6 +77,22 @@ class TestPersonsAPI:
         """Test getting a non-existent person."""
         fake_id = str(uuid.uuid4())
         response = client.get(f"/people/{fake_id}", headers=auth_headers)
+        assert response.status_code == 404
+
+    def test_get_person_hides_other_organization(
+        self, client, auth_headers, db_session
+    ):
+        other = Person(
+            first_name="Other",
+            last_name="Organization",
+            email=f"other.{uuid.uuid4().hex[:8]}@example.com",
+            organization_id=uuid.uuid4(),
+        )
+        db_session.add(other)
+        db_session.commit()
+
+        response = client.get(f"/people/{other.id}", headers=auth_headers)
+
         assert response.status_code == 404
 
     def test_list_people(self, client, auth_headers, person):
@@ -107,6 +138,23 @@ class TestPersonsAPI:
         )
         assert response.status_code == 200
 
+    def test_list_people_excludes_other_organization(
+        self, client, auth_headers, db_session
+    ):
+        other = Person(
+            first_name="Hidden",
+            last_name="Person",
+            email=f"hidden.{uuid.uuid4().hex[:8]}@example.com",
+            organization_id=uuid.uuid4(),
+        )
+        db_session.add(other)
+        db_session.commit()
+
+        response = client.get("/people", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert str(other.id) not in {item["id"] for item in response.json()["items"]}
+
     def test_update_person(self, client, auth_headers, person):
         """Test updating a person."""
         payload = {"first_name": "Updated"}
@@ -142,6 +190,28 @@ class TestPersonsAPI:
         )
         assert response.status_code == 404
 
+    def test_update_person_hides_other_organization(
+        self, client, auth_headers, db_session
+    ):
+        other = Person(
+            first_name="Other",
+            last_name="Organization",
+            email=f"update-hidden.{uuid.uuid4().hex[:8]}@example.com",
+            organization_id=uuid.uuid4(),
+        )
+        db_session.add(other)
+        db_session.commit()
+
+        response = client.patch(
+            f"/people/{other.id}",
+            json={"first_name": "Compromised"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 404
+        db_session.refresh(other)
+        assert other.first_name == "Other"
+
     def test_delete_person(self, client, auth_headers, db_session):
         """Test deleting a person."""
         from app.models.person import Person
@@ -166,6 +236,23 @@ class TestPersonsAPI:
         response = client.delete(f"/people/{fake_id}", headers=auth_headers)
         assert response.status_code == 404
 
+    def test_delete_person_hides_other_organization(
+        self, client, auth_headers, db_session
+    ):
+        other = Person(
+            first_name="Other",
+            last_name="Organization",
+            email=f"delete-hidden.{uuid.uuid4().hex[:8]}@example.com",
+            organization_id=uuid.uuid4(),
+        )
+        db_session.add(other)
+        db_session.commit()
+
+        response = client.delete(f"/people/{other.id}", headers=auth_headers)
+
+        assert response.status_code == 404
+        assert db_session.get(Person, other.id) is not None
+
 
 class TestPersonsAPIV1:
     """Tests for the /api/v1/people endpoints."""
@@ -176,7 +263,6 @@ class TestPersonsAPIV1:
             "first_name": "V1",
             "last_name": "User",
             "email": f"v1_{uuid.uuid4().hex[:8]}@example.com",
-            "organization_id": str(DEFAULT_TEST_ORG_ID),
         }
         response = client.post("/api/v1/people", json=payload, headers=auth_headers)
         assert response.status_code == 201

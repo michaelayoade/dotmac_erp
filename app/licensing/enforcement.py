@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 
 def _is_dev_mode() -> bool:
-    """Return ``True`` when license checks should be skipped entirely."""
-    return os.getenv("DOTMAC_DEV_MODE", "true").strip().lower() in {
+    """Return ``True`` only when development bypass is explicitly enabled."""
+    return os.getenv("DOTMAC_DEV_MODE", "false").strip().lower() in {
         "1",
         "true",
         "yes",

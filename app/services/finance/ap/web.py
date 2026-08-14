@@ -155,9 +155,7 @@ def _calculate_supplier_balance_trends(
             select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 ).label("balance"),
             )
@@ -292,7 +290,7 @@ def _invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
 
 
 def _invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> dict:
-    balance = invoice.total_amount - invoice.amount_paid
+    balance = invoice.balance_due
     today = date.today()
     return {
         "invoice_id": invoice.invoice_id,
@@ -594,9 +592,7 @@ class APWebService:
             select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 ).label("balance"),
             )
@@ -654,9 +650,7 @@ class APWebService:
         total_payables_raw = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 )
             ).where(
@@ -751,9 +745,7 @@ class APWebService:
         balance = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 )
             ).where(
@@ -777,7 +769,7 @@ class APWebService:
         today = date.today()
         open_invoices = []
         for invoice in invoices:
-            balance_due = invoice.total_amount - invoice.amount_paid
+            balance_due = invoice.balance_due
             open_invoices.append(
                 {
                     "invoice_id": invoice.invoice_id,
@@ -917,9 +909,7 @@ class APWebService:
         total_outstanding = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 )
             ).where(*outstanding_conditions)
@@ -928,9 +918,7 @@ class APWebService:
         past_due = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 )
             ).where(*outstanding_conditions, SupplierInvoice.due_date < today)
@@ -940,9 +928,7 @@ class APWebService:
         due_this_week = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(
-                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
-                    ),
+                    func.sum(SupplierInvoice.balance_due),
                     0,
                 )
             ).where(
@@ -964,7 +950,7 @@ class APWebService:
 
         invoices_view = []
         for invoice, supplier in invoices:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             invoices_view.append(
                 {
                     "invoice_id": invoice.invoice_id,
@@ -1581,7 +1567,7 @@ class APWebService:
         open_invoices = []
         selected_invoice = None
         for invoice, supplier in rows:
-            balance = invoice.total_amount - invoice.amount_paid
+            balance = invoice.balance_due
             view = {
                 "invoice_id": invoice.invoice_id,
                 "invoice_number": invoice.invoice_number,

@@ -5,7 +5,7 @@ Import UBA Bank Statements from Excel files.
 Handles password-protected UBA statement files.
 
 Usage:
-    poetry run python scripts/import_uba_statements.py [--dry-run]
+    poetry run python scripts/import_uba_statements.py --org-id <uuid> [--dry-run]
 """
 
 from __future__ import annotations
@@ -13,30 +13,35 @@ from __future__ import annotations
 import argparse
 import io
 import logging
-import re
+import os
+import sys
+import uuid
 from dataclasses import dataclass
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
-from uuid import UUID
 
 import msoffcrypto
 import openpyxl
-from sqlalchemy import select
 
-from app.db import SessionLocal
-from app.models.finance.banking.bank_account import (
-    BankAccount,
-    BankAccountStatus,
-    BankAccountType,
-)
-from app.models.finance.banking.bank_statement import (
-    StatementLineType,
-)
-from app.models.finance.gl.account import Account
+from app.db.session_context import session_for_org
+from app.models.batch_operation import BatchOperationType
+from app.services.batch_operation import batch_operation, file_manifest_digest
 from app.services.finance.banking.bank_statement import (
     BankStatementService,
-    StatementLineInput,
+)
+from app.services.finance.banking.statement_import import (
+    AccountProfile,
+    BankProfile,
+    ensure_bank_account,
+    find_bank_account,
+    to_statement_lines,
+)
+from app.services.finance.banking.statement_parsing import (
+    extract_account_number,
+    parse_date,
+    parse_decimal,
+    parse_period,
 )
 
 logging.basicConfig(
@@ -44,15 +49,46 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Path to statement files
-STATEMENT_DIR = Path("/root/.dotmac/zenith statement/uba/Uba statement 2022-2025")
+BANK = BankProfile(bank_name="United Bank for Africa", bank_code="033")
 
-# Account configuration
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+# Where the statement workbooks are read from. Overridable, with no
+# environment-specific path baked in.
+STATEMENT_DIR = Path(
+    os.environ.get("UBA_STATEMENT_DIR", "~/.dotmac/statements/uba")
+).expanduser()
+
+
+def _statement_password(account_number: str) -> str:
+    """The workbook password for one UBA account, from the environment.
+
+    These were committed literals until 2026-08-11. They are bank-issued
+    passwords for the statement workbooks, and no default is provided on
+    purpose: a script that silently falls back to "no password" would report
+    a parse failure rather than a missing credential, which is the harder
+    thing to diagnose.
+
+    Set `UBA_STATEMENT_PASSWORD_<account-number>` in the environment, sourced
+    from OpenBao rather than typed. Deliberately NOT derived in code from the
+    account number — that is UBA's scheme to change, not ours to hardcode.
+    """
+    variable = f"UBA_STATEMENT_PASSWORD_{account_number}"
+    password = os.environ.get(variable)
+    if not password:
+        raise SystemExit(
+            f"{variable} is not set — the workbook for account {account_number} "
+            "cannot be opened. Load it from OpenBao into the environment; it is "
+            "deliberately not stored in this file."
+        )
+    return password
+
+
+# Account configuration. Passwords are NOT here — see `_statement_password`.
 ACCOUNT_CONFIG = {
     "1018904696": {
         "name": "UBA 96 (Main)",
         "currency": "NGN",
-        "password": "89046",
         "gl_account_code": "1202",  # UBA GL account
         "files": [
             "101xxxxx96.xlsx",
@@ -62,7 +98,6 @@ ACCOUNT_CONFIG = {
     "3004154294": {
         "name": "UBA USD",
         "currency": "USD",
-        "password": "41542",
         "gl_account_code": "1202",  # UBA GL account
         "files": [
             "300xxxxx94.xlsx",
@@ -86,74 +121,6 @@ class ParsedStatement:
     total_credit: Decimal
     transactions: list[dict]
     source_file: str
-
-
-def parse_date(value) -> date | None:
-    """Parse date from various formats."""
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        value = value.strip()
-        if not value:
-            return None
-        # Try different date formats
-        for fmt in ["%d-%b-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"]:
-            try:
-                return datetime.strptime(value, fmt).date()
-            except ValueError:
-                continue
-    return None
-
-
-def parse_period(period_str: str) -> tuple[date | None, date | None]:
-    """Parse period string like '01-Jan-2022 - 31-Dec-2023'."""
-    if not period_str:
-        return None, None
-
-    period_str = str(period_str).strip()
-
-    # Try different separators
-    for sep in [" - ", " TO ", " to "]:
-        if sep in period_str:
-            parts = period_str.split(sep)
-            if len(parts) == 2:
-                start = parse_date(parts[0].strip())
-                end = parse_date(parts[1].strip())
-                if start and end:
-                    return start, end
-
-    return None, None
-
-
-def parse_decimal(value) -> Decimal | None:
-    """Parse decimal from various formats."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return Decimal(str(value))
-    if isinstance(value, Decimal):
-        return value
-    if isinstance(value, str):
-        value = value.strip().replace(",", "").replace(" ", "")
-        if not value or value == "-":
-            return None
-        try:
-            return Decimal(value)
-        except InvalidOperation:
-            return None
-    return None
-
-
-def extract_account_number(value: str) -> str | None:
-    """Extract account number from strings like '1018904696 . '."""
-    if not value:
-        return None
-    match = re.search(r"(\d{10})", str(value))
-    return match.group(1) if match else None
 
 
 def open_workbook(filepath: Path, password: str | None = None):
@@ -272,120 +239,43 @@ def parse_uba_statement(
         return None
 
 
-def ensure_bank_account(
-    db,
-    org_id: UUID,
-    account_number: str,
-    config: dict,
-) -> BankAccount:
-    """Ensure bank account exists, create if not."""
-
-    # Check if account exists
-    existing = db.execute(
-        select(BankAccount).where(
-            BankAccount.organization_id == org_id,
-            BankAccount.account_number == account_number,
-        )
-    ).scalar_one_or_none()
-
-    if existing:
-        logger.info(f"Found existing bank account: {account_number}")
-        return existing
-
-    # Find GL account
-    gl_account = db.execute(
-        select(Account).where(
-            Account.organization_id == org_id,
-            Account.account_code == config["gl_account_code"],
-        )
-    ).scalar_one_or_none()
-
-    if not gl_account:
-        raise ValueError(f"GL Account {config['gl_account_code']} not found")
-
-    # Create new bank account
-    account = BankAccount(
-        organization_id=org_id,
-        bank_name="United Bank for Africa",
-        bank_code="033",
-        account_name=config["name"],
-        account_number=account_number,
-        account_type=BankAccountType.checking,
-        currency_code=config["currency"],
-        gl_account_id=gl_account.account_id,
-        status=BankAccountStatus.active,
-    )
-    db.add(account)
-    db.flush()
-
-    logger.info(f"Created new bank account: {account_number} - {config['name']}")
-    return account
+def _configured_files() -> list[Path]:
+    """Every statement file this run will read, in configuration order."""
+    return [
+        STATEMENT_DIR / filename
+        for config in ACCOUNT_CONFIG.values()
+        for filename in config["files"]
+    ]
 
 
-def convert_to_statement_lines(
-    transactions: list[dict],
-    start_line: int = 1,
-) -> list[StatementLineInput]:
-    """Convert parsed transactions to StatementLineInput objects."""
-    lines = []
+def import_statements(
+    *, organization_id: uuid.UUID, actor_id: uuid.UUID, dry_run: bool = False
+) -> int:
+    """Import every configured UBA account. Returns the number of failures."""
 
-    for i, txn in enumerate(transactions):
-        amount = txn["debit"] or txn["credit"] or Decimal("0")
-        txn_type = StatementLineType.debit if txn["debit"] else StatementLineType.credit
-
-        # Convert raw_data to JSON-serializable format
-        raw_data = {
-            "date_posted": txn["date_posted"].isoformat()
-            if txn.get("date_posted")
-            else None,
-            "value_date": txn["value_date"].isoformat()
-            if txn.get("value_date")
-            else None,
-            "description": txn.get("description"),
-            "reference": txn.get("reference"),
-            "debit": str(txn["debit"]) if txn.get("debit") else None,
-            "credit": str(txn["credit"]) if txn.get("credit") else None,
-            "balance": str(txn["balance"]) if txn.get("balance") else None,
-        }
-
-        lines.append(
-            StatementLineInput(
-                line_number=start_line + i,
-                transaction_date=txn["date_posted"],
-                value_date=txn["value_date"],
-                transaction_type=txn_type,
-                amount=amount,
-                description=txn["description"],
-                reference=txn.get("reference"),
-                running_balance=txn.get("balance"),
-                raw_data=raw_data,
-            )
-        )
-
-    return lines
-
-
-def import_statements(dry_run: bool = False):
-    """Main import function."""
-
+    mode = "DRY RUN" if dry_run else "EXECUTE"
     logger.info("=" * 60)
-    logger.info("UBA Bank Statement Import")
+    logger.info("UBA Bank Statement Import (%s) — org %s", mode, organization_id)
     logger.info("=" * 60)
 
-    if dry_run:
-        logger.info("DRY RUN MODE - No changes will be made")
+    checksum, per_file = file_manifest_digest(_configured_files())
+    logger.info("Input manifest: %d file(s), digest %s", len(per_file), checksum[:12])
 
-    with SessionLocal() as db:
-        # Get organization ID from existing bank account
-        existing = db.execute(select(BankAccount).limit(1)).scalars().first()
-
-        if not existing:
-            logger.error("No existing bank account found to determine org ID")
-            return
-
-        org_id = existing.organization_id
-        logger.info(f"Organization ID: {org_id}")
-
+    with (
+        session_for_org(organization_id) as db,
+        batch_operation(
+            db,
+            organization_id=organization_id,
+            operation_type=BatchOperationType.IMPORT,
+            operation_name="import_uba_statements",
+            started_by_id=actor_id,
+            description=f"UBA statement import ({mode})",
+            source_file=str(STATEMENT_DIR),
+            source_checksum=checksum,
+            metadata={"bank": BANK.bank_code, "files": per_file},
+        ) as tally,
+    ):
+        org_id = organization_id
         total_imported = 0
         total_skipped = 0
 
@@ -396,14 +286,21 @@ def import_statements(dry_run: bool = False):
 
             # Ensure bank account exists
             if not dry_run:
-                bank_account = ensure_bank_account(db, org_id, account_number, config)
+                bank_account = ensure_bank_account(
+                    db,
+                    organization_id=org_id,
+                    bank=BANK,
+                    account=AccountProfile(
+                        account_number=account_number,
+                        account_name=config["name"],
+                        currency_code=config["currency"],
+                        gl_account_code=config["gl_account_code"],
+                    ),
+                )
             else:
-                bank_account = db.execute(
-                    select(BankAccount).where(
-                        BankAccount.organization_id == org_id,
-                        BankAccount.account_number == account_number,
-                    )
-                ).scalar_one_or_none()
+                bank_account = find_bank_account(
+                    db, organization_id=org_id, account_number=account_number
+                )
 
             # Parse all statement files for this account
             all_transactions = []
@@ -418,7 +315,9 @@ def import_statements(dry_run: bool = False):
                     logger.warning(f"  File not found: {filename}")
                     continue
 
-                parsed = parse_uba_statement(filepath, config["password"])
+                parsed = parse_uba_statement(
+                    filepath, _statement_password(account_number)
+                )
 
                 if parsed:
                     all_transactions.extend(parsed.transactions)
@@ -476,14 +375,16 @@ def import_statements(dry_run: bool = False):
 
             if dry_run:
                 logger.info("  [DRY RUN] Would import statement")
+                tally.skipped += len(unique_transactions)
                 continue
 
             if not bank_account:
                 logger.error("  Bank account not found")
+                tally.failed += 1
                 continue
 
             # Convert to statement lines
-            lines = convert_to_statement_lines(unique_transactions)
+            lines = to_statement_lines(unique_transactions)
 
             # Import using BankStatementService
             service = BankStatementService()
@@ -512,8 +413,12 @@ def import_statements(dry_run: bool = False):
 
                 total_imported += result.lines_imported
                 total_skipped += result.lines_skipped
+                tally.created += result.lines_imported
+                tally.skipped += result.lines_skipped
+                tally.track("bank_statement", result.statement.bank_statement_id)
 
                 if result.errors:
+                    tally.failed += len(result.errors)
                     for err in result.errors[:5]:
                         logger.warning(f"    Error: {err}")
 
@@ -522,26 +427,59 @@ def import_statements(dry_run: bool = False):
                         logger.info(f"    Warning: {warn}")
 
             except Exception as e:
-                logger.error(f"  Failed to import: {e}")
-                import traceback
+                # One unreadable account must not abandon the others, but the
+                # run is NOT a success: the failure count reaches the batch
+                # record and the exit status, so "Import Complete" stops being
+                # printed over a partial import.
+                logger.error(f"  Failed to import: {e}", exc_info=True)
+                tally.failed += 1
 
-                traceback.print_exc()
-
+        # NOTE: `batch_operation` commits when it marks the run COMPLETED, so a
+        # dry run is safe only because the body writes nothing — the
+        # `ensure_bank_account` call above is guarded and `import_statement` is
+        # never reached. Do not add an unguarded write below this line expecting
+        # the old "skip the commit and let the session roll back" behaviour;
+        # that behaviour is gone.
         if not dry_run:
             db.commit()
-            logger.info("")
-            logger.info("=" * 60)
-            logger.info(
-                f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped"
-            )
-            logger.info("=" * 60)
+
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info(
+            "Import %s: %d imported, %d skipped, %d failed",
+            "complete" if not tally.failed else "FINISHED WITH FAILURES",
+            total_imported,
+            total_skipped,
+            tally.failed,
+        )
+        logger.info("=" * 60)
+        return tally.failed
 
 
-if __name__ == "__main__":
+def main() -> int:
     parser = argparse.ArgumentParser(description="Import UBA bank statements")
+    parser.add_argument(
+        "--org-id",
+        required=True,
+        type=uuid.UUID,
+        help="Organization to import into (no default: this is multi-tenant)",
+    )
+    parser.add_argument(
+        "--actor-id",
+        type=uuid.UUID,
+        default=SYSTEM_ACTOR_ID,
+        help="Recorded as who ran this, on the BatchOperation record",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Parse only, don't import"
     )
     args = parser.parse_args()
 
-    import_statements(dry_run=args.dry_run)
+    failures = import_statements(
+        organization_id=args.org_id, actor_id=args.actor_id, dry_run=args.dry_run
+    )
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -100,6 +101,10 @@ def test_payout_clears_final_payroll_flag_and_marks_processed():
         paid_by_id=None,
         payment_reference=None,
         employee=None,
+        # Paying a slip now records the amount (ADR-0016 expand), so the
+        # double needs the two columns coverage derives from.
+        net_pay=Decimal("100000.00"),
+        amount_paid=Decimal("0"),
     )
     entry = SimpleNamespace(salary_slips=[slip])
     employee = SimpleNamespace(

@@ -145,7 +145,16 @@ def _list_domain_settings(
     service = settings_spec.DOMAIN_SETTINGS_SERVICE.get(domain)
     if not service:
         raise HTTPException(status_code=400, detail="Unknown settings domain")
-    return service.list(db, None, is_active, order_by, order_dir, limit, offset)
+    return service.list(
+        db,
+        None,
+        is_active,
+        order_by,
+        order_dir,
+        limit,
+        offset,
+        organization_id=None,
+    )
 
 
 def _list_domain_settings_response(
@@ -170,7 +179,7 @@ def _upsert_domain_setting(
     service = settings_spec.DOMAIN_SETTINGS_SERVICE.get(domain)
     if not service:
         raise HTTPException(status_code=400, detail="Unknown settings domain")
-    return service.upsert_by_key(db, key, normalized_payload)
+    return service.upsert_by_key(db, key, normalized_payload, organization_id=None)
 
 
 def _get_domain_setting(db: Session, domain: SettingDomain, key: str):
@@ -183,7 +192,7 @@ def _get_domain_setting(db: Session, domain: SettingDomain, key: str):
     service = settings_spec.DOMAIN_SETTINGS_SERVICE.get(domain)
     if not service:
         raise HTTPException(status_code=400, detail="Unknown settings domain")
-    return service.get_by_key(db, key)
+    return service.get_by_key(db, key, organization_id=None)
 
 
 def list_auth_settings_response(
@@ -318,7 +327,7 @@ def upsert_features_setting(db: Session, key: str, payload: DomainSettingUpdate)
         value_text="true" if enabled else "false",
         is_active=True,
     )
-    return service.upsert_by_key(db, key, normalized)
+    return service.upsert_by_key(db, key, normalized, organization_id=None)
 
 
 def get_features_setting(db: Session, key: str):
@@ -338,7 +347,7 @@ def get_features_setting(db: Session, key: str):
     service = settings_spec.DOMAIN_SETTINGS_SERVICE.get(SettingDomain.features)
     if not service:
         raise HTTPException(status_code=400, detail="Unknown settings domain")
-    return service.get_by_key(db, key)
+    return service.get_by_key(db, key, organization_id=None)
 
 
 def list_automation_settings_response(
@@ -452,7 +461,16 @@ def export_settings(
             continue
 
         domain_settings = {}
-        settings_list = service.list(db, None, True, "key", "asc", 1000, 0)
+        settings_list = service.list(
+            db,
+            None,
+            True,
+            "key",
+            "asc",
+            1000,
+            0,
+            organization_id=None,
+        )
 
         for setting in settings_list:
             value = (
@@ -617,7 +635,7 @@ def import_settings(
                         is_secret=spec.is_secret,
                     )
                     normalized = _normalize_spec_setting(domain, key, payload)
-                    service.upsert_by_key(db, key, normalized)
+                    service.upsert_by_key(db, key, normalized, organization_id=None)
                     result["imported"].append(
                         {
                             "domain": domain_str,

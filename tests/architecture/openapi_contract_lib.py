@@ -18,7 +18,7 @@ the committed manifest diffs at route granularity in review.
 
 ``app/main.py`` mounts several routers conditionally behind module flags
 (``ENABLED_MODULES``: unset -> all modules) and dev-mode licensing
-(``DOTMAC_DEV_MODE``: unset -> true -> every module licensed). The manifest
+(``DOTMAC_DEV_MODE=true`` explicitly -> every module licensed). The manifest
 therefore pins the surface UNDER THE TEST ENVIRONMENT'S FLAG DEFAULTS —
 every module enabled. One known test-env exclusion: ``app/api/people``
 skips mounting its sub-routers when ``PYTEST_CURRENT_TEST`` is set (pytest

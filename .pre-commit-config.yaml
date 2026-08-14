@@ -73,4 +73,14 @@ repos:
     hooks:
       - id: detect-secrets
         args: [--baseline, .secrets.baseline]
-        exclude: (\.env\.example|tests/|alembic/|scripts/)
+        # Python is excluded because it is COVERED, not because it is trusted:
+        # tests/architecture/test_no_committed_credentials.py walks the AST of
+        # every tracked .py file — including scripts/, which this hook has
+        # always skipped and where all four previously-committed credentials
+        # actually lived. It asks a decidable question (is there a literal
+        # value bound to a credential-named target?) instead of an
+        # entropy heuristic, so it has no baseline to accumulate in.
+        #
+        # This hook keeps the file types that guard cannot parse: YAML, JSON,
+        # Markdown, HTML, SQL, .env.
+        exclude: (\.env\.example|tests/|alembic/|scripts/|\.py$)
