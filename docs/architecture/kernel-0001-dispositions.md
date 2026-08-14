@@ -119,32 +119,48 @@ membership of the owning role. It is deliberately NOT part of any deploy: the
 deploy preflight REPORTS this problem and must never hold the privileges to fix
 it.
 
+Run both steps in a maintenance window after verifying a restorable backup.
+Apply takes a transaction advisory lock against another invocation of this
+tool, but ordinary application or operator DDL does not share that lock.
+
 ```bash
 # 1. Review. Default is a dry run; nothing executes.
 OWNERSHIP_DATABASE_URL=postgresql://<superuser>@<host>/<db> \
-    python scripts/cutover_database_ownership.py
+    python scripts/cutover_database_ownership.py \
+    --expected-database <db>
 
-# 2. Execute, naming whose objects move.
+# 2. Execute the identical reviewed target set, naming whose objects move.
 OWNERSHIP_DATABASE_URL=... python scripts/cutover_database_ownership.py \
-    --execute --approve-owner postgres
+    --expected-database <db> \
+    --execute --approve-owner postgres \
+    --plan-sha256 <PLAN_SHA256-from-step-1>
 ```
 
 ### Why it is shaped this way
 
 - **Plan-first.** Ownership transfer is not undone by re-running something; it
-  rewrites who controls production objects.
+  rewrites who controls production objects. Planning is read-only, names the
+  exact database, and emits a SHA-256 over the database, target role and every
+  ordered statement.
+- **Execution is review-bound.** Apply recomputes the plan under a transaction
+  lock and refuses before DDL if the database or target set differs from the
+  reviewed SHA-256. Approving `postgres` does not silently approve a new
+  `postgres`-owned object that appeared after review.
 - **Approval names the owner.** A blanket "everything not owned by `app_admin`"
   sweep would silently capture an integration role or a departed engineer's
   personal role. Whose estate this is must be stated, not inferred — an
   unapproved owner stops the run.
-- **One transaction.** A failure part-way leaves ownership exactly as it was.
+- **One transaction.** A failure part-way leaves ownership exactly as it was;
+  commit happens only after the post-condition passes.
 - **Its own post-condition.** Afterwards it re-runs the executor contract's
-  inventory and refuses to report success unless that returns empty.
+  inventory as `app_admin`, not as the elevated operator, and refuses and rolls
+  back unless that returns empty.
 - **Same exclusions as the preflight** — extension-owned objects, system
   schemas, `pg_database_owner` schemas — so it repairs precisely the set the
   preflight refuses. Indexes, constraints and triggers follow their table;
   partitions are listed individually, because `ALTER TABLE` on a partitioned
-  parent does not cascade.
+  parent does not cascade. Tables precede sequences because PostgreSQL refuses
+  to re-own a sequence while its `OWNED BY` table still has the old owner.
 - **Grants are untouched.** Ownership and privilege are different: `app_user`
   keeps exactly the grants it had, and nothing here widens anyone's access.
 

@@ -8,7 +8,9 @@ when runtime code evolves.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+import hashlib
+import json
 from typing import Final
 
 RolePosture = tuple[bool, bool]
@@ -20,6 +22,8 @@ ROLE_CONTRACT: Final[dict[str, RolePosture]] = {
     "platform_api": (False, False),
 }
 MIGRATION_EXECUTOR: Final[str] = "app_admin"
+OWNERSHIP_PLAN_VERSION: Final[int] = 1
+OwnershipPlanRow = tuple[str, str, str, str]
 
 # Non-extension objects that Alembic may need to alter must be owned by the
 # migration executor. Database ownership alone does not transfer ownership of
@@ -128,7 +132,8 @@ SELECT 'database' AS object_kind,
        pg_get_userbyid(database_catalog.datdba) AS current_owner,
        quote_ident(database_catalog.datname) AS object_name,
        format('ALTER DATABASE %%I OWNER TO %%I',
-              database_catalog.datname, %(target)s::text) AS statement
+              database_catalog.datname, %(target)s::text) AS statement,
+       10 AS execution_order
 FROM pg_database AS database_catalog
 WHERE database_catalog.datname = current_database()
   AND pg_get_userbyid(database_catalog.datdba) <> %(target)s::text
@@ -139,7 +144,8 @@ SELECT 'schema',
        pg_get_userbyid(namespace_catalog.nspowner),
        quote_ident(namespace_catalog.nspname),
        format('ALTER SCHEMA %%I OWNER TO %%I',
-              namespace_catalog.nspname, %(target)s::text)
+              namespace_catalog.nspname, %(target)s::text),
+       20
 FROM pg_namespace AS namespace_catalog
 WHERE namespace_catalog.nspname !~ '^(pg_|information_schema)'
   AND pg_get_userbyid(namespace_catalog.nspowner) <> %(target)s::text
@@ -162,7 +168,15 @@ SELECT 'relation',
                   WHEN 'f' THEN 'FOREIGN TABLE'
                   ELSE 'TABLE'
               END,
-              relation_catalog.oid::regclass::text, %(target)s::text)
+              relation_catalog.oid::regclass::text, %(target)s::text),
+       CASE relation_catalog.relkind
+           WHEN 'r' THEN 40
+           WHEN 'p' THEN 40
+           WHEN 'f' THEN 40
+           WHEN 'S' THEN 50
+           WHEN 'v' THEN 60
+           WHEN 'm' THEN 60
+       END
 FROM pg_class AS relation_catalog
 JOIN pg_namespace AS namespace_catalog
   ON namespace_catalog.oid = relation_catalog.relnamespace
@@ -183,7 +197,8 @@ SELECT 'type',
        type_catalog.oid::regtype::text,
        format('ALTER %%s %%s OWNER TO %%I',
               CASE type_catalog.typtype WHEN 'd' THEN 'DOMAIN' ELSE 'TYPE' END,
-              type_catalog.oid::regtype::text, %(target)s::text)
+              type_catalog.oid::regtype::text, %(target)s::text),
+       30
 FROM pg_type AS type_catalog
 JOIN pg_namespace AS namespace_catalog
   ON namespace_catalog.oid = type_catalog.typnamespace
@@ -204,8 +219,10 @@ SELECT 'routine',
        routine_catalog.oid::regprocedure::text,
        format('ALTER %%s %%s OWNER TO %%I',
               CASE routine_catalog.prokind WHEN 'p' THEN 'PROCEDURE'
+                                           WHEN 'a' THEN 'AGGREGATE'
                                            ELSE 'FUNCTION' END,
-              routine_catalog.oid::regprocedure::text, %(target)s::text)
+              routine_catalog.oid::regprocedure::text, %(target)s::text),
+       70
 FROM pg_proc AS routine_catalog
 JOIN pg_namespace AS namespace_catalog
   ON namespace_catalog.oid = routine_catalog.pronamespace
@@ -218,8 +235,29 @@ WHERE namespace_catalog.nspname !~ '^(pg_|information_schema)'
         AND dependency_catalog.deptype = 'e'
   )
 
-ORDER BY 1, 3
+ORDER BY execution_order, object_kind, object_name
 """
+
+
+def ownership_plan_sha256(
+    expected_database: str,
+    target: str,
+    plan: Sequence[OwnershipPlanRow],
+) -> str:
+    """Bind an operator approval to one database and exact ordered target set."""
+    payload = {
+        "contract_version": OWNERSHIP_PLAN_VERSION,
+        "expected_database": expected_database,
+        "target": target,
+        "plan": [list(row) for row in plan],
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def unexpected_owners(
@@ -293,10 +331,13 @@ __all__ = [
     "MIGRATION_EXECUTOR",
     "MIGRATION_OWNERSHIP_SQL",
     "OWNERSHIP_PLAN_SQL",
+    "OWNERSHIP_PLAN_VERSION",
+    "OwnershipPlanRow",
     "ROLE_CONTRACT",
     "RolePosture",
     "migration_executor_violations",
     "migration_ownership_violations",
+    "ownership_plan_sha256",
     "posture",
     "role_contract_violations",
     "unexpected_owners",

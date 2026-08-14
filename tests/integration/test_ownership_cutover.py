@@ -15,6 +15,10 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from pathlib import Path
+import re
+import subprocess
+import sys
 from uuid import uuid4
 
 import psycopg
@@ -38,6 +42,8 @@ ESTATE = (
     "CREATE TABLE partitioned (id integer, tenant integer) PARTITION BY RANGE (id)",
     "CREATE TABLE partition_one PARTITION OF partitioned FOR VALUES FROM (0) TO (10)",
     "CREATE SEQUENCE plain_sequence",
+    "CREATE TABLE zzz_owned_table (id integer PRIMARY KEY)",
+    "CREATE SEQUENCE aaa_owned_sequence OWNED BY zzz_owned_table.id",
     "CREATE VIEW plain_view AS SELECT 1 AS one",
     "CREATE MATERIALIZED VIEW plain_matview AS SELECT 1 AS one",
     "CREATE TYPE plain_enum AS ENUM ('a', 'b')",
@@ -45,7 +51,13 @@ ESTATE = (
     "CREATE FUNCTION plain_function(a integer, b text) RETURNS integer "
     "LANGUAGE sql IMMUTABLE AS $$ SELECT a $$",
     "CREATE PROCEDURE plain_procedure(a integer) LANGUAGE sql AS $$ SELECT 1 $$",
+    "CREATE AGGREGATE plain_aggregate(integer) "
+    "(SFUNC = int4pl, STYPE = integer, INITCOND = '0')",
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CUTOVER_SCRIPT = PROJECT_ROOT / "scripts" / "cutover_database_ownership.py"
+PLAN_TOKEN = re.compile(r"^PLAN_SHA256=([0-9a-f]{64})$", re.MULTILINE)
 
 
 def _maintenance_url() -> str:
@@ -91,6 +103,42 @@ def _residual(conn: psycopg.Connection) -> dict[str, int]:
     }
 
 
+def _database_name(url: str) -> str:
+    with psycopg.connect(url) as conn:
+        row = conn.execute("SELECT current_database()").fetchone()
+        assert row is not None
+        return str(row[0])
+
+
+def _source_owner(url: str) -> str:
+    with psycopg.connect(url) as conn:
+        row = conn.execute(
+            "SELECT pg_get_userbyid(datdba) FROM pg_database "
+            "WHERE datname = current_database()"
+        ).fetchone()
+        assert row is not None
+        return str(row[0])
+
+
+def _run_cli(url: str, *args: str) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["OWNERSHIP_DATABASE_URL"] = url
+    return subprocess.run(  # noqa: S603 - interpreter and script are constants
+        [sys.executable, str(CUTOVER_SCRIPT), *args],
+        cwd=PROJECT_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _token(result: subprocess.CompletedProcess[str]) -> str:
+    match = PLAN_TOKEN.search(result.stdout)
+    assert match, result.stdout + result.stderr
+    return match.group(1)
+
+
 def test_the_estate_starts_out_refusing_migrations(foreign_owned_database: str) -> None:
     """Non-vacuity. If the fixture were already app_admin-owned, the cutover
     test below would pass while proving nothing."""
@@ -122,6 +170,65 @@ def test_the_cutover_makes_every_generated_statement_execute(
         # rather than by trusting the plan that just ran.
         conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(MIGRATION_EXECUTOR)))
         assert {k: v for k, v in _residual(conn).items() if v} == {}
+
+
+def test_the_real_cli_is_database_and_review_bound_and_checks_as_app_admin(
+    foreign_owned_database: str,
+) -> None:
+    database = _database_name(foreign_owned_database)
+    owner = _source_owner(foreign_owned_database)
+
+    wrong_database = _run_cli(
+        foreign_owned_database,
+        "--expected-database",
+        f"wrong_{database}",
+    )
+    assert wrong_database.returncode == 1
+    assert "expected database" in wrong_database.stderr
+
+    reviewed = _run_cli(
+        foreign_owned_database,
+        "--expected-database",
+        database,
+    )
+    assert reviewed.returncode == 0, reviewed.stderr
+
+    # A same-owner object created after review must invalidate the exact plan,
+    # even though --approve-owner still names that owner.
+    with psycopg.connect(foreign_owned_database) as conn:
+        conn.execute("CREATE TABLE arrived_after_review (id integer)")
+    stale = _run_cli(
+        foreign_owned_database,
+        "--expected-database",
+        database,
+        "--execute",
+        "--approve-owner",
+        owner,
+        "--plan-sha256",
+        _token(reviewed),
+    )
+    assert stale.returncode == 1
+    assert "reviewed plan" in stale.stderr
+    assert _source_owner(foreign_owned_database) == owner
+
+    current = _run_cli(
+        foreign_owned_database,
+        "--expected-database",
+        database,
+    )
+    applied = _run_cli(
+        foreign_owned_database,
+        "--expected-database",
+        database,
+        "--execute",
+        "--approve-owner",
+        owner,
+        "--plan-sha256",
+        _token(current),
+    )
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert "post-check: the migration ownership inventory is empty" in applied.stdout
+    assert _source_owner(foreign_owned_database) == MIGRATION_EXECUTOR
 
 
 def test_a_second_run_is_a_no_op(foreign_owned_database: str) -> None:
