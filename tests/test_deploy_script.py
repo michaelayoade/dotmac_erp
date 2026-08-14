@@ -54,8 +54,18 @@ with log_path.open("a", encoding="utf-8") as log:
 if args[:2] == ["inspect", "--format"]:
     print("ghcr.io/michaelayoade/dotmac_erp:sha-old")
 
+# The deploy now makes TWO `compose run` calls: a database-role preflight and
+# then the migration. Failing every `compose run` would abort at the preflight,
+# so `DEPLOY_TEST_FAIL_MIGRATION` would silently stop testing the migration
+# rollback it is named for. Match on `alembic` to fail only the migration.
 if os.environ.get("DEPLOY_TEST_FAIL_MIGRATION") == "1":
-    if args[:2] == ["compose", "run"]:
+    if args[:2] == ["compose", "run"] and "alembic" in args:
+        raise SystemExit(1)
+
+# The role preflight runs a heredoc through `python -`; the fake has no
+# database, so it succeeds unless a test asks for the opposite.
+if os.environ.get("DEPLOY_TEST_FAIL_ROLE_PREFLIGHT") == "1":
+    if args[:2] == ["compose", "run"] and "alembic" not in args:
         raise SystemExit(1)
 """,
     )
@@ -144,3 +154,65 @@ def test_deploy_script_rollback_keeps_stable_compose_project_name(
     assert any("|compose up -d app worker beat" in line for line in invocations)
     assert all(line.startswith("dotmac|") for line in invocations)
     assert "Rolling back code" in result.stdout
+
+
+def test_the_role_preflight_runs_before_migrations(tmp_path: Path) -> None:
+    """Order is the whole point.
+
+    `20260814_database_roles` fails closed when the three database roles are
+    absent. Discovering that mid-chain means a half-applied upgrade and a
+    rollback; discovering it in the preflight costs nothing.
+    """
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+
+    subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    runs = [i for i, line in enumerate(invocations) if "|compose run " in line]
+    migrations = [
+        i
+        for i, line in enumerate(invocations)
+        if "|compose run " in line and "alembic" in line
+    ]
+    assert runs, "no `compose run` invocations recorded at all"
+    assert migrations, "the migration invocation was not recorded"
+    assert runs[0] < migrations[0], (
+        "the database-role preflight must precede `alembic upgrade`; "
+        f"invocations were {invocations}"
+    )
+
+
+def test_a_failed_role_preflight_stops_before_migrating(tmp_path: Path) -> None:
+    """And it does NOT roll back, because nothing has changed yet.
+
+    A preflight that triggered the rollback trap would restore a previous image
+    over a deployment that was never modified — noise that trains an operator to
+    ignore rollback messages.
+    """
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+    env["DEPLOY_TEST_FAIL_ROLE_PREFLIGHT"] = "1"
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "DEPLOY STOPPED" in result.stderr
+    assert "bootstrap_database_roles.py" in result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert not any("alembic" in line for line in invocations), (
+        "migrations must not run once the role preflight has failed"
+    )
+    assert "Rolling back code" not in result.stdout
