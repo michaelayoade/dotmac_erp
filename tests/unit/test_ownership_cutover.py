@@ -9,7 +9,10 @@ and the SQL that renders the statements is pinned by shape.
 from __future__ import annotations
 
 import ast
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -18,6 +21,7 @@ from app.migration_database_roles import (
     MIGRATION_OWNERSHIP_SQL,
     OWNERSHIP_PLAN_SQL,
     migration_ownership_violations,
+    ownership_plan_sha256,
     unexpected_owners,
 )
 
@@ -154,12 +158,34 @@ def test_every_relkind_maps_to_a_real_alter_form() -> None:
     each needs its own keyword or the cutover fails mid-transaction."""
     for form in ("SEQUENCE", "VIEW", "MATERIALIZED VIEW", "FOREIGN TABLE", "TABLE"):
         assert f"'{form}'" in OWNERSHIP_PLAN_SQL
-    for form in ("DOMAIN", "PROCEDURE", "FUNCTION"):
+    for form in ("DOMAIN", "PROCEDURE", "FUNCTION", "AGGREGATE"):
         assert f"'{form}'" in OWNERSHIP_PLAN_SQL
+
+
+def test_tables_precede_sequences_that_may_be_owned_by_them() -> None:
+    """PostgreSQL refuses a sequence owner change while its OWNED BY table
+    still has the old owner, even though both objects are valid plan targets."""
+    assert "WHEN 'r' THEN 40" in OWNERSHIP_PLAN_SQL
+    assert "WHEN 'p' THEN 40" in OWNERSHIP_PLAN_SQL
+    assert "WHEN 'S' THEN 50" in OWNERSHIP_PLAN_SQL
+    assert "ORDER BY execution_order" in OWNERSHIP_PLAN_SQL
 
 
 def test_the_plan_targets_the_migration_executor() -> None:
     assert MIGRATION_EXECUTOR == "app_admin"
+
+
+def test_plan_digest_binds_database_target_and_every_statement() -> None:
+    plan = [
+        ("database", "postgres", '"erp"', 'ALTER DATABASE "erp" OWNER TO app_admin'),
+        ("relation", "postgres", "public.entries", "ALTER TABLE public.entries"),
+    ]
+    baseline = ownership_plan_sha256("erp", MIGRATION_EXECUTOR, plan)
+
+    assert baseline == ownership_plan_sha256("erp", MIGRATION_EXECUTOR, list(plan))
+    assert baseline != ownership_plan_sha256("another", MIGRATION_EXECUTOR, plan)
+    assert baseline != ownership_plan_sha256("erp", "another_admin", plan)
+    assert baseline != ownership_plan_sha256("erp", MIGRATION_EXECUTOR, plan[:-1])
 
 
 # ── The script's safety posture ─────────────────────────────────────────────
@@ -183,11 +209,43 @@ def test_execution_is_opt_in() -> None:
     }
     assert "--execute" in flags, "execution must be opt-in, not the default"
     assert "--approve-owner" in flags, "the operator must name whose objects move"
+    assert "--expected-database" in flags, "the target database must be explicit"
+    assert "--plan-sha256" in flags, "execute must bind to the reviewed target set"
+
+
+def test_documented_direct_invocation_can_import_the_runtime_contract() -> None:
+    env = os.environ.copy()
+    env.pop("OWNERSHIP_DATABASE_URL", None)
+
+    result = subprocess.run(  # noqa: S603 - interpreter and script are constants
+        [sys.executable, str(SCRIPT), "--expected-database", "erp"],
+        cwd=SCRIPT.parent.parent,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "OWNERSHIP_DATABASE_URL is not set" in result.stderr
+    assert "ModuleNotFoundError" not in result.stderr
 
 
 def test_the_cutover_runs_in_one_transaction() -> None:
     """A failure part-way must leave ownership as it was, not half-transferred."""
-    assert "autocommit=False" in _script_source()
+    source = _script_source()
+    assert "autocommit=False" in source
+    assert ".commit()" not in source, (
+        "the connection context owns commit; an explicit commit before the "
+        "post-condition makes a refusal irreversible"
+    )
+    assert "SET LOCAL ROLE" in source, (
+        "MIGRATION_OWNERSHIP_SQL compares against current_user, so the elevated "
+        "operator must check it as app_admin"
+    )
+    assert "conn.rollback()" in source, (
+        "a residual post-condition must roll back before returning a refusal"
+    )
 
 
 def test_the_cutover_never_grants() -> None:
