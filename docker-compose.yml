@@ -10,7 +10,7 @@ services:
     - .env
     environment:
       APP_URL: https://erp.dotmac.io
-      APP_VERSION: ${APP_VERSION:-1.27.0}
+      APP_VERSION: ${APP_VERSION:-1.28.0}
       DOTMAC_DEV_MODE: ${DOTMAC_DEV_MODE:?Set DOTMAC_DEV_MODE explicitly}
       BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       DEFAULT_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000001

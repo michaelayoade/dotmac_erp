@@ -48,7 +48,7 @@ import pytest
 
 KERNEL_DIST = "dotmac-kernel"
 KERNEL_PACKAGE = "dotmac_kernel"
-KERNEL_PIN = "0.1.0a24"
+KERNEL_PIN = "0.1.0a56"
 FORGEJO_SOURCE = "forgejo"
 FORGEJO_URL = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple/"
 
@@ -72,6 +72,7 @@ CONSUME_PURE_IMPORTS: tuple[str, ...] = (
     "dotmac_kernel.features",
     "dotmac_kernel.licensing",
     "dotmac_kernel.money",
+    "dotmac_kernel.prerequisites",
     "dotmac_kernel.profiles",
     "dotmac_kernel.providers",
     "dotmac_kernel.providers.provisioning",

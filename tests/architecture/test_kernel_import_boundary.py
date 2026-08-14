@@ -42,6 +42,9 @@ ALLOWED_KERNEL_MODULES: frozenset[str] = frozenset(
         "features",
         "licensing",
         "money",
+        # ADR-0006 D1 amendment: pure vocabulary + this assembly's binding
+        # declaration. No I/O, no ORM — the consume-pure shape exactly.
+        "prerequisites",
         "profiles",
         "providers",
         "testing",

@@ -6,8 +6,11 @@ from pathlib import Path
 from sqlalchemy import engine_from_config, pool, text
 from sqlalchemy.engine import Connection, make_url
 
+from dotmac_kernel.prerequisites import install_prerequisite_bindings
+
 from alembic import context
 from app.db import Base
+from app.migration_bindings import ASSEMBLY_PREREQUISITE_BINDINGS
 from app.migration_database_roles import (
     MIGRATION_EXECUTOR,
     MIGRATION_OWNERSHIP_SQL,
@@ -15,6 +18,23 @@ from app.migration_database_roles import (
     migration_executor_violations,
     migration_ownership_violations,
 )
+
+# Installed BEFORE the revision map is built, so a composed module lineage can
+# resolve its `depends_on` from these bindings at script-load time. ERP hosts
+# `public.tenants` itself and can never run kernel `0001`, which is exactly why
+# a module must declare the EFFECT it needs rather than a foreign revision —
+# see `app/migration_bindings.py`.
+#
+# This is independent of the executor contract below: bindings decide WHICH
+# revision supplies an effect, `verify_migration_connection` decides whether the
+# identity running the migration may alter anything at all. Both must hold.
+#
+# Graph commands (`alembic heads`, `history`, `show`) do NOT run this file. They
+# resolve to empty edges unless `DOTMAC_MIGRATION_BINDINGS` is set, which is
+# tolerated by design: ordering correctness rests on this call before every
+# upgrade, on the composed gate, and on `require_prerequisites` proving the
+# effects against the database before any DDL.
+install_prerequisite_bindings(ASSEMBLY_PREREQUISITE_BINDINGS)
 
 MODEL_MODULES = (
     "app.models.audit",
