@@ -45,8 +45,8 @@ from app.schemas.sync.dotmac_crm import (
     InventoryItemDetail,
     InventoryListResponse,
 )
-from app.services.inventory.material_support import MaterialSupportService
 from app.schemas.sync.dotmac_sub import SubPurchaseInvoiceStatusResponse
+from app.services.inventory.material_support import MaterialSupportService
 from app.services.sync.sub_purchase_invoice_status import (
     PurchaseInvoiceStatusNotFoundError,
     get_purchase_invoice_status,

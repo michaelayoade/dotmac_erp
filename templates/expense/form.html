@@ -119,11 +119,11 @@
             </div>
         </div>
 
-        <!-- Cost Allocation -->
+        <!-- Operational Context -->
         <div class="grid gap-6 sm:grid-cols-3">
             <div>
                 <label class="form-label">Project</label>
-                <select aria-label="Project" name="project_id" class="form-input form-select">
+                <select id="project_select" aria-label="Project" name="project_id" class="form-input form-select">
                     <option value="">No project</option>
                     {% for proj in projects %}
                     <option value="{{ proj.project_id }}" {% if expense and expense.project_id == proj.project_id %}selected{% endif %}>
@@ -132,6 +132,32 @@
                     {% endfor %}
                 </select>
             </div>
+            <div>
+                <label class="form-label">Ticket</label>
+                <select id="ticket_select" aria-label="Ticket" name="ticket_id" class="form-input form-select">
+                    <option value="">No ticket</option>
+                    {% for ticket in tickets %}
+                    <option value="{{ ticket.ticket_id }}" {% if expense and expense.ticket_id == ticket.ticket_id %}selected{% endif %}>
+                        {{ ticket.ticket_number }} - {{ ticket.subject }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Task</label>
+                <select id="task_select" aria-label="Task" name="task_id" class="form-input form-select">
+                    <option value="">No task</option>
+                    {% for task in tasks %}
+                    <option value="{{ task.task_id }}" data-project-id="{{ task.project_id }}" data-ticket-id="{{ task.ticket_id }}" {% if expense and expense.task_id == task.task_id %}selected{% endif %}>
+                        {{ task.task_code }} - {{ task.task_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Cost Allocation -->
+        <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label">Cost Center</label>
                 <select aria-label="Cost Center" name="cost_center_id" class="form-input form-select">
@@ -186,6 +212,22 @@ function updateTax() {
     taxInput.value = tax.toFixed(2);
 }
 
+function filterTasks() {
+    const projectId = document.getElementById('project_select').value;
+    const ticketId = document.getElementById('ticket_select').value;
+    const taskSelect = document.getElementById('task_select');
+    for (const option of taskSelect.options) {
+        if (!option.value) continue;
+        const projectMatches = !projectId || option.dataset.projectId === projectId;
+        const ticketMatches = !ticketId || option.dataset.ticketId === ticketId;
+        option.hidden = !(projectMatches && ticketMatches);
+        if (option.hidden && option.selected) taskSelect.value = '';
+    }
+}
+
 document.querySelector('input[name="amount"]').addEventListener('input', updateTax);
+document.getElementById('project_select').addEventListener('change', filterTasks);
+document.getElementById('ticket_select').addEventListener('change', filterTasks);
+filterTasks();
 </script>
 {% endblock %}

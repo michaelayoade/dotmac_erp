@@ -13,11 +13,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.finance.core_org.project import Project
 from app.models.finance.exp.expense_entry import (
     ExpenseEntry,
     ExpenseStatus,
     PaymentMethod,
 )
+from app.models.pm.task import Task
+from app.models.support.ticket import Ticket
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -71,9 +74,20 @@ class ExpenseService:
         project_id: str | None = None,
         cost_center_id: str | None = None,
         business_unit_id: str | None = None,
+        ticket_id: str | None = None,
+        task_id: str | None = None,
     ) -> ExpenseEntry:
         """Create a new expense entry."""
         org_id = coerce_uuid(organization_id)
+        resolved_project_id, resolved_ticket_id, resolved_task_id = (
+            ExpenseService._validate_operational_context(
+                db,
+                organization_id=org_id,
+                project_id=project_id,
+                ticket_id=ticket_id,
+                task_id=task_id,
+            )
+        )
 
         expense = ExpenseEntry(
             organization_id=org_id,
@@ -92,7 +106,9 @@ class ExpenseService:
             payee=payee,
             receipt_reference=receipt_reference,
             notes=notes,
-            project_id=coerce_uuid(project_id) if project_id else None,
+            project_id=resolved_project_id,
+            ticket_id=resolved_ticket_id,
+            task_id=resolved_task_id,
             cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
             business_unit_id=coerce_uuid(business_unit_id)
             if business_unit_id
@@ -105,6 +121,60 @@ class ExpenseService:
         db.flush()
 
         return expense
+
+    @staticmethod
+    def _validate_operational_context(
+        db: Session,
+        *,
+        organization_id: UUID,
+        project_id: str | None,
+        ticket_id: str | None,
+        task_id: str | None,
+    ) -> tuple[UUID | None, UUID | None, UUID | None]:
+        """Resolve and validate the expense's project, ticket, and task links."""
+        resolved_project_id = coerce_uuid(project_id) if project_id else None
+        resolved_ticket_id = coerce_uuid(ticket_id) if ticket_id else None
+        resolved_task_id = coerce_uuid(task_id) if task_id else None
+
+        if resolved_project_id:
+            project = db.scalar(
+                select(Project).where(
+                    Project.organization_id == organization_id,
+                    Project.project_id == resolved_project_id,
+                )
+            )
+            if project is None:
+                raise ValueError("Selected project was not found")
+
+        if resolved_ticket_id:
+            ticket = db.scalar(
+                select(Ticket).where(
+                    Ticket.organization_id == organization_id,
+                    Ticket.ticket_id == resolved_ticket_id,
+                )
+            )
+            if ticket is None:
+                raise ValueError("Selected ticket was not found")
+
+        if resolved_task_id:
+            task = db.scalar(
+                select(Task).where(
+                    Task.organization_id == organization_id,
+                    Task.task_id == resolved_task_id,
+                )
+            )
+            if task is None:
+                raise ValueError("Selected task was not found")
+            if resolved_project_id and task.project_id != resolved_project_id:
+                raise ValueError(
+                    "Selected task does not belong to the selected project"
+                )
+            if resolved_ticket_id and task.ticket_id != resolved_ticket_id:
+                raise ValueError("Selected task does not belong to the selected ticket")
+            resolved_project_id = resolved_project_id or task.project_id
+            resolved_ticket_id = resolved_ticket_id or task.ticket_id
+
+        return resolved_project_id, resolved_ticket_id, resolved_task_id
 
     @staticmethod
     def submit(
