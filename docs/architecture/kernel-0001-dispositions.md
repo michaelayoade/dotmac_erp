@@ -61,13 +61,57 @@ tenant catalogue, stamped the Kernel revision, or edited the Kernel migration.
 All three are prohibited. The test also proves the failed transaction records no
 Kernel revision and creates none of the three Kernel database roles.
 
-**The legacy Kernel lineage must never run or be stamped in ERP.** That is the
+**The legacy Kernel lineage must not run or be stamped in ERP.** That is the
 standing disposition, not a temporary state awaiting more work.
+
+### Why "must not", and not "can never"
+
+An earlier wording said the lineage *can never* run here. That overstated a
+decision as a physical law, and the distinction matters to anyone re-examining
+it later.
+
+The `tenants` collision is the first symptom, not the whole reason. Kernel `0001`
+creates eight tables, and ERP already owns authorities for six of them with
+materially different shapes: `people` (30-column staff identity, organization-
+scoped), `user_credentials` (provider/username/lockout), `auth_sessions` (ERP's
+own `sessions`), `roles` (globally unique `name VARCHAR(80)`, no tenant),
+`person_roles`, and `audit_events` (`entity_type VARCHAR(160)`, nullable
+organization). Running the lineage would install a SECOND authority for identity,
+credentials, sessions, RBAC and audit in a product that already owns all five —
+which is what the source-of-truth standard exists to prevent.
+
+Four ways to "run it anyway", and why each fails:
+
+- **A separate schema.** Kernel `0001` is unqualified, so `search_path` could
+  place it elsewhere — but `fi_0001_stored_files` hardcodes
+  `["public.tenants.id"]`, so modules would still point at `public`. The kernel
+  catalogue would be unreachable dead weight AND a second tenant store, and it
+  breaks ADR-0006 D1, where `public` is the kernel's own namespace.
+- **Kernel-first on the existing database.** Fails at the six colliding tables
+  instead of at `tenants` — later, not better.
+- **Stamp `0001`, run `0002+`.** Forbidden, and structurally broken anyway:
+  `0003_party_identity` and `0005_single_email_authority` ALTER tables `0001`
+  created, which ERP does not have in kernel shape.
+- **Cherry-pick.** Alembic has no partial application, and the dependencies above
+  make any subset incoherent.
+
+What running it would BUY is nothing ERP needs: a module requires a tenant
+catalogue to point a foreign key at and three roles to grant to, and ERP supplies
+both from its own revisions. **The prerequisites are the interface.**
+
+The variant that genuinely would work is a GREENFIELD ERP deployment running
+kernel-first and adopting kernel identity wholesale — no collisions, because
+there is nothing to collide with. That is not impossible; it is a different
+product decision that retires ERP's Person, RBAC and audit authorities, and it
+belongs in an accepted ADR rather than arriving via a migration.
+
+So the accurate statement is: **ERP cannot run the Kernel lineage without
+replacing five of its own authorities, and gains nothing by doing so.**
 
 ## Cutover rule
 
-ERP may finish additive collision dispositions in coherent slices. What it may
-never do is run or stamp the Kernel lineage. A raw Alembic stamp, a
+ERP may finish additive collision dispositions in coherent slices. What it must
+not do is run or stamp the Kernel lineage. A raw Alembic stamp, a
 product-specific conditional copied into the kernel migration, or a blanket
 `IF EXISTS` is not evidence and remains forbidden.
 
