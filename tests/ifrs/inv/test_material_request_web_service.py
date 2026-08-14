@@ -149,3 +149,96 @@ def test_approve_request_posts_real_transfer() -> None:
     assert txn_input.source_document_id == request_id
     assert txn_input.source_document_line_id == line_id
     assert call_kwargs["auto_commit"] is False
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        MaterialRequestStatus.DRAFT,
+        MaterialRequestStatus.SUBMITTED,
+        MaterialRequestStatus.PENDING_STOCK,
+    ],
+)
+def test_cancel_request_allows_unprocessed_states(status) -> None:
+    db = MagicMock()
+    organization_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    request_id = uuid.uuid4()
+    request = MagicMock(
+        organization_id=organization_id,
+        status=status,
+        source_system="sub",
+    )
+    db.get.return_value = request
+
+    with patch.object(MaterialRequestWebService, "_emit_sub_outcome") as emit:
+        result = MaterialRequestWebService.cancel_request(
+            db=db,
+            organization_id=organization_id,
+            user_id=user_id,
+            request_id=str(request_id),
+            cancel_reason="Wrong warehouse selected",
+        )
+
+    assert result is request
+    assert request.status == MaterialRequestStatus.CANCELLED
+    assert request.cancel_reason == "Wrong warehouse selected"
+    assert request.updated_by_id == user_id
+    emit.assert_called_once_with(
+        db,
+        organization_id,
+        request,
+        status,
+        MaterialRequestStatus.CANCELLED,
+        user_id,
+    )
+
+
+def test_cancel_request_rejects_processed_state() -> None:
+    db = MagicMock()
+    organization_id = uuid.uuid4()
+    request = MagicMock(
+        organization_id=organization_id,
+        status=MaterialRequestStatus.ISSUED,
+    )
+    db.get.return_value = request
+
+    with pytest.raises(ValueError, match="pending-stock"):
+        MaterialRequestWebService.cancel_request(
+            db=db,
+            organization_id=organization_id,
+            user_id=uuid.uuid4(),
+            request_id=str(uuid.uuid4()),
+            cancel_reason="Wrong warehouse selected",
+        )
+
+    assert request.status == MaterialRequestStatus.ISSUED
+
+
+def test_cancel_request_requires_reason_and_enforces_tenant() -> None:
+    db = MagicMock()
+    organization_id = uuid.uuid4()
+    request = MagicMock(
+        organization_id=organization_id,
+        status=MaterialRequestStatus.PENDING_STOCK,
+    )
+    db.get.return_value = request
+
+    with pytest.raises(ValueError, match="Cancellation reason is required"):
+        MaterialRequestWebService.cancel_request(
+            db=db,
+            organization_id=organization_id,
+            user_id=uuid.uuid4(),
+            request_id=str(uuid.uuid4()),
+            cancel_reason="   ",
+        )
+
+    request.organization_id = uuid.uuid4()
+    with pytest.raises(ValueError, match="Material request not found"):
+        MaterialRequestWebService.cancel_request(
+            db=db,
+            organization_id=organization_id,
+            user_id=uuid.uuid4(),
+            request_id=str(uuid.uuid4()),
+            cancel_reason="Wrong warehouse selected",
+        )

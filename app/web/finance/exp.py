@@ -604,6 +604,8 @@ def create_expense(
     receipt_reference: str | None = Form(None),
     notes: str | None = Form(None),
     project_id: str | None = Form(None),
+    ticket_id: str | None = Form(None),
+    task_id: str | None = Form(None),
     cost_center_id: str | None = Form(None),
     business_unit_id: str | None = Form(None),
     return_to: str | None = Form(None),
@@ -629,6 +631,8 @@ def create_expense(
             receipt_reference=receipt_reference,
             notes=notes,
             project_id=project_id,
+            ticket_id=ticket_id,
+            task_id=task_id,
             cost_center_id=cost_center_id,
             business_unit_id=business_unit_id,
         )

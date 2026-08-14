@@ -348,6 +348,21 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 ),
             ),
             SOTService(
+                name="sync.sub_operational_context",
+                module="app.services.sync.crm.projects",
+                owns=(
+                    "version-2 Sub operational-context intake",
+                    "ERP project, ticket, project-task, and work-order projections",
+                    "organization-scoped source-ID upsert mappings",
+                ),
+                notes=(
+                    "Sub owns operational lifecycle decisions. ERP projections are "
+                    "rebuildable context for finance and employee-expense links; "
+                    "the neutral /sync/sub/bulk route reuses the established "
+                    "idempotent projection service during compatibility migration."
+                ),
+            ),
+            SOTService(
                 name="inventory.material_support",
                 module="app.services.inventory.material_support",
                 owns=(

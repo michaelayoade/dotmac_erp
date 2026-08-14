@@ -684,7 +684,11 @@ class MaterialRequestWebService:
                 "can_submit": request.status == MaterialRequestStatus.DRAFT,
                 "can_approve": request.status == MaterialRequestStatus.SUBMITTED,
                 "can_cancel": request.status
-                in [MaterialRequestStatus.DRAFT, MaterialRequestStatus.SUBMITTED],
+                in [
+                    MaterialRequestStatus.DRAFT,
+                    MaterialRequestStatus.SUBMITTED,
+                    MaterialRequestStatus.PENDING_STOCK,
+                ],
                 "can_delete": request.status == MaterialRequestStatus.DRAFT,
                 "items": detail_items,
             },
@@ -1152,8 +1156,11 @@ class MaterialRequestWebService:
         if request.status not in [
             MaterialRequestStatus.DRAFT,
             MaterialRequestStatus.SUBMITTED,
+            MaterialRequestStatus.PENDING_STOCK,
         ]:
-            raise ValueError("Only draft or submitted requests can be cancelled")
+            raise ValueError(
+                "Only draft, submitted, or pending-stock requests can be cancelled"
+            )
 
         reason = (cancel_reason or "").strip()
         if not reason:

@@ -635,8 +635,22 @@ class _ProjectSyncMixin(_CRMSyncBase):
 
     def _create_project(self, org_id: UUID, data: CRMProjectPayload) -> Project:
         """Create a local Project from CRM data."""
-        # Generate unique project code from CRM ID hash
-        project_code = self._generate_unique_code("CRM", data.crm_id, max_len=20)
+        source_code = (data.code or "").strip()
+        source_code_in_use = (
+            self.db.scalar(
+                select(Project.project_id).where(
+                    Project.organization_id == org_id,
+                    Project.project_code == source_code,
+                )
+            )
+            if source_code and len(source_code) <= 20
+            else None
+        )
+        project_code = (
+            source_code
+            if source_code and len(source_code) <= 20 and source_code_in_use is None
+            else self._generate_unique_code("CRM", data.crm_id, max_len=20)
+        )
 
         project = Project(
             organization_id=org_id,

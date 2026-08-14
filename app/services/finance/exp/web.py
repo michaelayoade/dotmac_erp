@@ -25,6 +25,8 @@ from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.tax.tax_code import TaxCode
+from app.models.pm.task import Task, TaskStatus
+from app.models.support.ticket import Ticket, TicketStatus
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.exp.expense import expense_service
@@ -262,6 +264,44 @@ class ExpenseWebService:
             for p in projects
         ]
 
+        tickets = db.scalars(
+            select(Ticket)
+            .where(
+                Ticket.organization_id == org_id,
+                Ticket.status.in_(
+                    [TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]
+                ),
+            )
+            .order_by(Ticket.ticket_number)
+        ).all()
+        ticket_options = [
+            {
+                "ticket_id": str(ticket.ticket_id),
+                "ticket_number": ticket.ticket_number,
+                "subject": ticket.subject,
+            }
+            for ticket in tickets
+        ]
+
+        tasks = db.scalars(
+            select(Task)
+            .where(
+                Task.organization_id == org_id,
+                Task.status != TaskStatus.CANCELLED,
+            )
+            .order_by(Task.task_code)
+        ).all()
+        task_options = [
+            {
+                "task_id": str(task.task_id),
+                "task_code": task.task_code,
+                "task_name": task.task_name,
+                "project_id": str(task.project_id),
+                "ticket_id": str(task.ticket_id) if task.ticket_id else "",
+            }
+            for task in tasks
+        ]
+
         # Get cost centers
         cost_centers = db.scalars(
             select(CostCenter)
@@ -305,6 +345,8 @@ class ExpenseWebService:
             "tax_codes": tax_code_options,
             "fiscal_periods": period_options,
             "projects": project_options,
+            "tickets": ticket_options,
+            "tasks": task_options,
             "cost_centers": cost_center_options,
             "business_units": business_unit_options,
             "payment_methods": payment_methods,
@@ -337,6 +379,8 @@ class ExpenseWebService:
                     "payee": expense.payee or "",
                     "receipt_reference": expense.receipt_reference or "",
                     "project_id": str(expense.project_id) if expense.project_id else "",
+                    "ticket_id": str(expense.ticket_id) if expense.ticket_id else "",
+                    "task_id": str(expense.task_id) if expense.task_id else "",
                     "cost_center_id": str(expense.cost_center_id)
                     if expense.cost_center_id
                     else "",
@@ -368,6 +412,8 @@ class ExpenseWebService:
                     joinedload(ExpenseEntry.expense_account),
                     joinedload(ExpenseEntry.payment_account),
                     joinedload(ExpenseEntry.project),
+                    joinedload(ExpenseEntry.ticket),
+                    joinedload(ExpenseEntry.task),
                     joinedload(ExpenseEntry.cost_center),
                     joinedload(ExpenseEntry.business_unit),
                     joinedload(ExpenseEntry.journal_entry),
@@ -418,6 +464,12 @@ class ExpenseWebService:
                 "project_code": expense.project.project_code
                 if expense.project
                 else None,
+                "ticket": expense.ticket.subject if expense.ticket else None,
+                "ticket_number": expense.ticket.ticket_number
+                if expense.ticket
+                else None,
+                "task": expense.task.task_name if expense.task else None,
+                "task_code": expense.task.task_code if expense.task else None,
                 "cost_center": expense.cost_center.cost_center_name
                 if expense.cost_center
                 else None,
@@ -486,6 +538,8 @@ class ExpenseWebService:
         project_id: str | None = None,
         cost_center_id: str | None = None,
         business_unit_id: str | None = None,
+        ticket_id: str | None = None,
+        task_id: str | None = None,
     ) -> ExpenseEntry:
         """Create an expense from form data.
 
@@ -541,6 +595,8 @@ class ExpenseWebService:
             project_id=project_id if project_id else None,
             cost_center_id=cost_center_id if cost_center_id else None,
             business_unit_id=business_unit_id if business_unit_id else None,
+            ticket_id=ticket_id if ticket_id else None,
+            task_id=task_id if task_id else None,
         )
 
         return expense

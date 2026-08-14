@@ -1,5 +1,10 @@
 # DotMac CRM Integration Guide
 
+> This guide covers the CRM compatibility API. Self-Care uses the neutral
+> `/api/v1/sync/sub/bulk` path documented in `docs/SUB_OPERATIONAL_SYNC.md`.
+> Both bulk paths currently share the version-2 projection contract, including
+> project tasks, while callers migrate away from CRM-named routes.
+
 This document describes how to integrate DotMac CRM with the ERP system for syncing projects, tickets, work orders, expenses, and inventory.
 
 ## Overview

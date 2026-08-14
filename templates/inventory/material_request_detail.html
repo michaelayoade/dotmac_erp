@@ -255,8 +255,9 @@
             </form>
             {% endif %}
 
-{% if material_request.can_cancel and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
-            <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/cancel" class="inline">
+{% if material_request.can_cancel and auth is defined and (auth.is_admin or auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit', 'inv:material_requests:approve', 'inventory:material_requests:approve'])) %}
+            <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/cancel" class="inline"
+                  onsubmit="return confirm('{% if material_request.status == 'PENDING_STOCK' %}Reject this pending-stock request? Self-care will be notified that it was cancelled, and a corrected request can then be submitted.{% else %}Cancel this material request?{% endif %}')">
                 {{ request.state.csrf_form | safe }}
                 <div class="flex items-center gap-3">
                     <input aria-label="Cancellation reason" type="text" name="cancel_reason" required
@@ -264,7 +265,7 @@
                            class="form-input w-72" >
                     <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
                     {{ icon_svg("x-mark", "h-4 w-4 mr-1.5") }}
-                    Cancel Request
+                    {% if material_request.status == 'PENDING_STOCK' %}Reject / Cancel Request{% else %}Cancel Request{% endif %}
                 </button>
                 </div>
             </form>
