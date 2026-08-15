@@ -276,7 +276,15 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # 108 at disposition (PR #305). The tenant-catalog discovery contract
     # converted 33 of the 71 `tenant_catalog_definer` callers to the narrow
     # definer plus `session_for_org`, leaving 38 in that family.
-    baseline = 75
+    #
+    # 75 -> 72 when the unshipped OIDC implementation was deleted: its three
+    # admin binding routes (create/disable/list_oidc_identity) each reached
+    # RLS-protected `public.people` through the identity-bootstrap bypass, so
+    # they counted as blockers. Removing dead code is the cheapest kind of
+    # progress and the ratchet is right to make it lower the number rather than
+    # quietly benefit from it — a baseline that only ever falls by accident
+    # stops describing anything.
+    baseline = 72
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()
