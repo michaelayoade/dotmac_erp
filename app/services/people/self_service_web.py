@@ -808,7 +808,7 @@ class SelfServiceWebService:
             )
         except FileUploadError:
             raise
-        return str(result.file_path)
+        return result.relative_path
 
     @staticmethod
     def _get_tickets_for_dropdown(db: Session, org_id: UUID) -> list[dict]:
@@ -3027,8 +3027,9 @@ class SelfServiceWebService:
                         subdirs=(str(org_id),),
                         original_filename=upload.filename,
                     )
-                    uploaded_paths.append(str(result.file_path))
-                    resolved_receipt_urls.append(str(result.file_path))
+                    receipt_key = result.s3_key.replace("\\", "/")
+                    uploaded_paths.append(receipt_key)
+                    resolved_receipt_urls.append(receipt_key)
             except FileUploadError as exc:
                 for path in uploaded_paths:
                     try:

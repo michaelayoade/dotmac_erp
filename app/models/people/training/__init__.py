@@ -29,6 +29,11 @@ from app.models.people.training.learning_assessment import (
     TrainingQuestionTagMap,
     TrainingQuestionType,
 )
+from app.models.people.training.academy import (
+    AcademyLearningProgress,
+    AcademyLearningRequirement,
+    AcademyProgressStatus,
+)
 from app.models.people.training.training_event import (
     AttendeeStatus,
     TrainingAttendee,
@@ -69,4 +74,7 @@ __all__ = [
     "TrainingLessonProgress",
     "TrainingExamAttempt",
     "TrainingExamAnswer",
+    "AcademyLearningRequirement",
+    "AcademyLearningProgress",
+    "AcademyProgressStatus",
 ]

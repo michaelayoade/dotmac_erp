@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-08-15
+
 ### Added
 - Repeatable employee self-service submission for qualifications, certifications, skills, dependants, and documents using approval-backed batch envelopes and itemized HR review.
 - Kernel-compatible `tenants`/`tenant_domains` catalogue projected from authoritative ERP Organizations, with one same-transaction reconciler and shared-module RLS scope bridge.

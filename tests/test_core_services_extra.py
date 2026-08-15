@@ -154,7 +154,7 @@ def test_admin_audit_logs_context_date_range_and_pagination(db_session, person):
     context = admin_web_service.audit_logs_context(
         db=db_session,
         organization_id=person.organization_id,
-        search="",
+        search="req-new",
         actor_type="",
         status="",
         start_date=today,

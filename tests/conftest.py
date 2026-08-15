@@ -157,10 +157,10 @@ _test_engine = create_engine(
             "core_org": None,
             "hr": None,
             "perf": None,
+            "training": None,
             "pm": None,
             "support": None,
             "automation": None,
-            "training": None,
         }
     },
 )
