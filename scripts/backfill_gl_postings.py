@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session
 # Bootstrap the app to get DB access
 sys.path.insert(0, ".")
 
-from app.db.session_context import cross_org_session, session_for_org  # noqa: E402
+from app.db.session_context import session_for_org  # noqa: E402
 from app.models.expense.expense_claim import (  # noqa: E402
     ExpenseClaim,
     ExpenseClaimStatus,
@@ -66,7 +66,7 @@ from app.models.finance.gl.fiscal_period import (  # noqa: E402
     PeriodStatus,
 )
 from app.models.finance.gl.fiscal_year import FiscalYear  # noqa: E402
-from app.models.finance.core_org.organization import Organization  # noqa: E402
+from app.tenant_catalog import organization_ids
 
 logging.basicConfig(
     level=logging.INFO,
@@ -729,8 +729,7 @@ def main(
     if org_id is None:
         # Cross-tenant authority is limited to discovering organizations.
         # Each organization's report and writes use a fresh tenant session.
-        with cross_org_session() as cross_db:
-            org_ids = list(cross_db.scalars(select(Organization.organization_id)).all())
+        org_ids = organization_ids(include_inactive=True)
         for target_org_id in org_ids:
             main(organization_id=target_org_id, args=args)
         return

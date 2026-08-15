@@ -273,7 +273,10 @@ def test_ready_callers_do_not_claim_access_to_an_rls_protected_table() -> None:
 
 
 def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
-    baseline = 108
+    # 108 at disposition (PR #305). The tenant-catalog discovery contract
+    # converted 33 of the 71 `tenant_catalog_definer` callers to the narrow
+    # definer plus `session_for_org`, leaving 38 in that family.
+    baseline = 75
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

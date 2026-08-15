@@ -18,8 +18,9 @@ from typing import Any
 from celery import shared_task
 
 from app.config import settings
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.services.settings_spec import resolve_value
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -401,14 +402,7 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.is_active == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = active_organization_ids()
 
     for org_id in org_ids:
         results["organizations_checked"] += 1

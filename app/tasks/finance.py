@@ -28,7 +28,6 @@ from app.db.session_context import (
     session_for_org,
 )
 from app.models.email_profile import EmailModule
-from app.models.finance.core_org.organization import Organization
 from app.models.finance.rpt.report_instance import ReportInstance, ReportStatus
 from app.models.notification import EntityType, NotificationType
 from app.models.person import Person
@@ -37,19 +36,13 @@ from app.services.email import send_email
 from app.services.finance.rpt.report_instance import ReportInstanceService
 from app.services.notification import NotificationService
 from app.services.storage import get_storage
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
 
 def _list_active_organization_ids() -> list[UUID]:
-    with cross_org_session() as db:
-        return list(
-            db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.is_active.is_(True)
-                )
-            ).all()
-        )
+    return active_organization_ids()
 
 
 def _resolve_report_instance_org(instance_id: str) -> UUID | None:

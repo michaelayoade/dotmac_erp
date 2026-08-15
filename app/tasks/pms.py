@@ -18,9 +18,36 @@ from uuid import UUID
 
 from celery import shared_task
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import for_each_organization, session_for_org
 
 logger = logging.getLogger(__name__)
+
+
+def _pms_enabled_organization_ids() -> list[UUID]:
+    """Organizations with the OHCSF performance module switched on.
+
+    ``pms_ohcsf_enabled`` is a column on the RLS-protected
+    ``core_org.organization`` row, and the tenant-catalog definer returns
+    identifiers and nothing else — deliberately, so that discovery can never
+    become a general cross-tenant read of organization data.
+
+    So the flag is read where reading it is ordinary tenant data access: inside
+    each organization's own primed session. The alternative — teaching the
+    definer to carry a domain column — would widen a security boundary to save
+    one query per organization on a task that already opens a session per
+    organization.
+    """
+    # Imported inside the function like every other model reference in this
+    # module: importing app.models at module scope here reintroduces the
+    # circular import that the local-import idiom in each task avoids.
+    from app.models.finance.core_org.organization import Organization
+
+    enabled: list[UUID] = []
+    for organization_id, db in for_each_organization():
+        organization = db.get(Organization, organization_id)
+        if organization is not None and organization.pms_ohcsf_enabled:
+            enabled.append(organization_id)
+    return enabled
 
 
 def _window_start(day: date) -> datetime:
@@ -73,7 +100,6 @@ def pms_monthly_review_reminder() -> dict[str, Any]:
 
     from sqlalchemy import select
 
-    from app.models.finance.core_org.organization import Organization
     from app.models.notification import (
         EntityType,
         NotificationChannel,
@@ -91,14 +117,7 @@ def pms_monthly_review_reminder() -> dict[str, Any]:
 
     notification_service = NotificationService()
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.pms_ohcsf_enabled == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = _pms_enabled_organization_ids()
 
     for org_id in org_ids:
         results["orgs_checked"] += 1
@@ -202,7 +221,6 @@ def pms_quarterly_appraisal_reminder() -> dict[str, Any]:
 
     from sqlalchemy import select
 
-    from app.models.finance.core_org.organization import Organization
     from app.models.notification import (
         EntityType,
         NotificationChannel,
@@ -227,14 +245,7 @@ def pms_quarterly_appraisal_reminder() -> dict[str, Any]:
 
     notification_service = NotificationService()
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.pms_ohcsf_enabled == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = _pms_enabled_organization_ids()
 
     for org_id in org_ids:
         results["orgs_checked"] += 1
@@ -344,7 +355,6 @@ def pms_contract_deadline_check() -> dict[str, Any]:
 
     from sqlalchemy import select
 
-    from app.models.finance.core_org.organization import Organization
     from app.models.notification import (
         EntityType,
         NotificationChannel,
@@ -366,14 +376,7 @@ def pms_contract_deadline_check() -> dict[str, Any]:
     notification_service = NotificationService()
     unsigned_statuses = [ContractStatus.DRAFT, ContractStatus.PENDING_SIGNATURE]
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.pms_ohcsf_enabled == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = _pms_enabled_organization_ids()
 
     for org_id in org_ids:
         results["orgs_checked"] += 1
@@ -467,7 +470,6 @@ def pms_underperformance_detection() -> dict[str, Any]:
 
     from sqlalchemy import select
 
-    from app.models.finance.core_org.organization import Organization
     from app.models.people.perf.appraisal_cycle import (
         AppraisalCycle,
         AppraisalCycleStatus,
@@ -491,14 +493,7 @@ def pms_underperformance_detection() -> dict[str, Any]:
         )
         return results
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.pms_ohcsf_enabled == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = _pms_enabled_organization_ids()
 
     for org_id in org_ids:
         results["orgs_checked"] += 1
@@ -587,9 +582,6 @@ def pms_probation_check() -> dict[str, Any]:
         "errors": [],
     }
 
-    from sqlalchemy import select
-
-    from app.models.finance.core_org.organization import Organization
     from app.models.notification import (
         EntityType,
         NotificationChannel,
@@ -606,14 +598,7 @@ def pms_probation_check() -> dict[str, Any]:
     notification_service = NotificationService()
     first_of_month = today.replace(day=1)
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.pms_ohcsf_enabled == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = _pms_enabled_organization_ids()
 
     for org_id in org_ids:
         results["orgs_checked"] += 1
@@ -728,7 +713,6 @@ def pms_appeal_deadline_check() -> dict[str, Any]:
 
     from sqlalchemy import select
 
-    from app.models.finance.core_org.organization import Organization
     from app.models.notification import (
         EntityType,
         NotificationChannel,
@@ -765,14 +749,7 @@ def pms_appeal_deadline_check() -> dict[str, Any]:
         AppealStatus.REFERRED_TO_COMMITTEE,
     ]
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.pms_ohcsf_enabled == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = _pms_enabled_organization_ids()
 
     for org_id in org_ids:
         results["orgs_checked"] += 1
@@ -866,7 +843,6 @@ def pms_pip_review_reminder() -> dict[str, Any]:
 
     from sqlalchemy import select
 
-    from app.models.finance.core_org.organization import Organization
     from app.models.notification import (
         EntityType,
         NotificationChannel,
@@ -886,14 +862,7 @@ def pms_pip_review_reminder() -> dict[str, Any]:
         PIPStatus.EXTENDED,
     ]
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.pms_ohcsf_enabled == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = _pms_enabled_organization_ids()
 
     for org_id in org_ids:
         results["orgs_checked"] += 1

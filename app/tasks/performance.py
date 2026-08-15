@@ -16,15 +16,14 @@ from celery import shared_task
 from sqlalchemy import select
 
 from app.db.session_context import cross_org_session, session_for_org
-from app.models.finance.core_org.organization import Organization
 from app.models.people.perf.appraisal_cycle import AppraisalCycle, AppraisalCycleStatus
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
 
 def _list_organization_ids() -> list[UUID]:
-    with cross_org_session() as db:
-        return list(db.scalars(select(Organization.organization_id)).all())
+    return organization_ids(include_inactive=True)
 
 
 @shared_task

@@ -107,13 +107,13 @@ The reviewed state at 2026-08-15 is:
 
 | Contract | Callers | Cutover meaning |
 |---|---:|---|
-| ordinary `app_user` | 90 | Ready only because the named target tables have no RLS at migration heads; this is least privilege, not tenant isolation |
-| narrow tenant-catalog definer, then `session_for_org` | 71 | Blocked |
+| ordinary `app_user` | 91 | Ready only because the named target tables have no RLS at migration heads; this is least privilege, not tenant isolation |
+| narrow tenant-catalog definer, then `session_for_org` | 38 | Blocked; 33 of the original 71 converted |
 | narrow tenant-resolution definer, then `session_for_org` | 27 | Blocked |
 | isolated cross-tenant service | 8 | Blocked; no credential or service exists yet |
 | replace with the existing tenant session | 2 | Blocked |
 
-The 108 blocked callers are a two-directional ratchet. A new caller fails the
+The 75 blocked callers are a two-directional ratchet. A new caller fails the
 exact inventory; removing or converting one also fails until the inventory and
 baseline are lowered in the same review. A `ready` row is structurally refused
 when it claims access to an RLS-protected table.
@@ -124,9 +124,41 @@ A sensitivity proof covers aliased helpers, FastAPI dependencies, and a direct
 marker write. The inventory therefore cannot be bypassed by adding a wrapper.
 
 This completes disposition, not remediation. The `app_user` cutover remains
-blocked. The next coherent slice is the shared tenant-catalog discovery
-contract, because it removes the largest blocker family without putting a
-cross-tenant credential in the ordinary application pool.
+blocked.
+
+## The tenant-catalog discovery contract
+
+Revision `20260815_tenant_catalog_discovery` installs
+`tenant_catalog.organization_ids(include_inactive boolean)`: `SECURITY
+DEFINER`, `RETURNS SETOF uuid`, `search_path` pinned to `pg_catalog`, body
+schema-qualified, `EXECUTE` revoked from `PUBLIC` and granted to `app_user`
+alone. `app/tenant_catalog.py` is its only caller; `for_each_organization` in
+`app/db/session_context.py` composes it with `session_for_org`.
+
+**No credential was created.** The privilege lives in the function's owner —
+`app_admin`, already pinned `BYPASSRLS NOSUPERUSER` by the role contract — not
+in the application's login. `app_user` gains the ability to learn *which*
+tenants exist and nothing else; every read of a tenant's data still happens in
+a tenant-scoped session under RLS. The rejected alternative, a second
+`BYPASSRLS` login in the ordinary worker pool, would have traded one narrow
+audited hole for a general cross-tenant capability held by every worker.
+
+The definer returns identifiers only, and that is enforced rather than
+documented (`tests/architecture/test_tenant_catalog_contract.py`). Two
+consequences are deliberate:
+
+- A caller that needs an organization *column* reads it inside that
+  organization's own session. `app/tasks/pms.py` filters on
+  `pms_ohcsf_enabled` this way, because widening the definer to carry a domain
+  column would make it a cross-tenant read path for that column.
+- Callers that previously scanned a domain table cross-tenant to find "orgs
+  with due work" must fan out over the catalog and let each tenant's own
+  scoped query answer. That is a query-count change, not a correctness one, and
+  it is why the remaining 38 are a separate slice rather than a mechanical
+  rewrite.
+
+33 callers converted. The remaining 38 in this family are the domain-scan and
+row-resolution shapes described above.
 
 ## Ordered follow-up
 
