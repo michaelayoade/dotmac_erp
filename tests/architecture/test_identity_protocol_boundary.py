@@ -199,9 +199,11 @@ def find_federated_identity_use(rel_path: str, source: str) -> list[str]:
     docstrings = _docstring_nodes(tree)
     hits: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and node.id == "FederatedIdentity":
-            hits.append(f"{rel_path}:{node.lineno} references FederatedIdentity")
-        elif isinstance(node, ast.Attribute) and node.attr == "FederatedIdentity":
+        # The model reached either bare or through a module — `FederatedIdentity`
+        # and `models.FederatedIdentity` are the same consumer.
+        if (isinstance(node, ast.Name) and node.id == "FederatedIdentity") or (
+            isinstance(node, ast.Attribute) and node.attr == "FederatedIdentity"
+        ):
             hits.append(f"{rel_path}:{node.lineno} references FederatedIdentity")
         elif (
             isinstance(node, ast.Constant)
@@ -355,9 +357,12 @@ def test_the_adapter_scanner_is_silent_on_prose_and_on_erp_login() -> None:
     """The complement. This repository documents that adopting the adapter is
     the intended future path — saying so must not trip the guard, or the only
     way to green is to delete the explanation."""
-    assert find_adapter_usage(
-        "x.py", '"""Reintroduction is an adoption of dotmac_auth_oidc."""\n'
-    ) == []
+    assert (
+        find_adapter_usage(
+            "x.py", '"""Reintroduction is an adoption of dotmac_auth_oidc."""\n'
+        )
+        == []
+    )
     assert find_adapter_usage("x.py", "# see dotmac_auth_oidc start_login\n") == []
     # ERP's own local login is not an OIDC ceremony.
     assert find_adapter_usage("x.py", "def login_response(db, request): ...\n") == []
@@ -380,11 +385,13 @@ def test_the_settings_scanner_catches_every_knob_not_a_chosen_three() -> None:
         assert find_oidc_settings("app/config.py", f'x = os.getenv("{name}", "")\n'), (
             f"{name} would not have been caught"
         )
-    assert find_oidc_settings("app/config.py", 'oidc_enabled: bool = False\n')
+    assert find_oidc_settings("app/config.py", "oidc_enabled: bool = False\n")
     assert find_oidc_settings("app/config.py", 'x = os.environ("OIDC_ISSUER")\n')
     # Prose, and an unrelated setting, stay silent.
     assert find_oidc_settings("x.py", '"""OIDC_ENABLED was removed."""\n') == []
-    assert find_oidc_settings("x.py", 'database_url = os.getenv("DATABASE_URL")\n') == []
+    assert (
+        find_oidc_settings("x.py", 'database_url = os.getenv("DATABASE_URL")\n') == []
+    )
 
 
 def test_the_federated_identity_scanner_catches_raw_sql_not_only_the_model() -> None:
@@ -397,7 +404,9 @@ def test_the_federated_identity_scanner_catches_raw_sql_not_only_the_model() -> 
     assert find_federated_identity_use(
         "app/services/x.py", "binding = db.scalar(select(FederatedIdentity))\n"
     )
-    assert find_federated_identity_use("app/services/x.py", "models.FederatedIdentity\n")
+    assert find_federated_identity_use(
+        "app/services/x.py", "models.FederatedIdentity\n"
+    )
     # The model's own docstring explains its retirement — that must not fire.
     assert (
         find_federated_identity_use(
