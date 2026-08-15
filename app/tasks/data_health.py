@@ -30,7 +30,11 @@ from uuid import UUID
 from celery import shared_task
 from sqlalchemy.engine import CursorResult
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import (
+    cross_org_session,
+    for_each_organization,
+    session_for_org,
+)
 from app.services.common import coerce_uuid
 from app.services.finance.ar.payment_status import PAYMENT_DUST, apply_payment_status
 
@@ -44,11 +48,59 @@ def _resolve_org_id(organization_id: UUID | str | None) -> UUID | None:
     return UUID(str(coerce_uuid(organization_id)))
 
 
-def _task_session(organization_id: UUID | str | None):
-    """Return resolved org_id plus the correct task session context."""
-    org_id = _resolve_org_id(organization_id)
-    session_context = session_for_org(org_id) if org_id else cross_org_session()
-    return org_id, session_context
+def _tenant_sessions(organization_id: UUID | str | None):
+    """One tenant-scoped session per organization in scope.
+
+    This replaces ``_task_session``, whose unpinned branch opened a single
+    ``cross_org_session`` and ran the whole fleet's repair through it. That
+    bypasses only ERP's SQLAlchemy listener, never PostgreSQL RLS, so under
+    ``app_user`` every unpinned run of these jobs sees zero rows: the repair
+    tasks repair nothing, and the health check reports a clean bill of health
+    for a fleet it cannot see. Both outcomes are indistinguishable from
+    success.
+
+    Two deliberate choices:
+
+    * ``include_inactive=True`` — a deactivated organization's false-PAID
+      invoices, unbalanced journals and stale drafts still have to be
+      repaired, and the scan this replaces never looked at organization
+      status.
+    * ``only=`` rather than an unchecked ``session_for_org`` — an
+      ``organization_id`` argument that is not in the catalogue now yields an
+      empty run instead of an unscoped one.
+
+    Every organization filter these tasks used to apply *conditionally* is now
+    applied unconditionally. That is not belt-and-braces: the ORM listener
+    filters SELECTs only, so a ``DELETE`` or ``UPDATE`` issued in a tenant
+    session is scoped by PostgreSQL RLS alone — and by nothing at all in the
+    SQLite unit-test lane.
+    """
+    return for_each_organization(
+        include_inactive=True, only=_resolve_org_id(organization_id)
+    )
+
+
+def _outbox_session(org_id: UUID | None):
+    """The outbox is read fleet-wide, and deliberately not through a fan-out.
+
+    ``event_outbox`` has no ``organization_id`` column. The ORM listener
+    therefore skips it and the RLS migration never gave it a policy — so
+    reading it fleet-wide is not an RLS bypass at all, and works unchanged
+    under ``app_user``. Its tenant identity lives in a JSONB header instead.
+
+    That is why these two entry points are NOT converted to
+    :func:`_tenant_sessions`. A per-tenant fan-out would filter on
+    ``headers['organization_id']`` and silently skip every event whose header
+    is absent, malformed, or names an organization missing from the catalogue
+    — precisely the events a stuck-event recovery job and a data-health check
+    exist to surface. It would turn a visible backlog into an invisible one.
+
+    Recorded for disposition review: the inventory classifies this module as
+    ``tenant_catalog_definer``, which is right for the seven tenant-table jobs
+    and wrong for these two. This residual use needs a non-tenant contract,
+    not a fan-out.
+    """
+    return session_for_org(org_id) if org_id else cross_org_session()
 
 
 @shared_task
@@ -76,8 +128,7 @@ def cleanup_old_notifications(
     unread_deleted = 0
     errors: list[str] = []
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
         from app.models.notification import Notification
 
         now = datetime.now(UTC)
@@ -87,32 +138,33 @@ def cleanup_old_notifications(
         try:
             from sqlalchemy import delete
 
+            # The organization filter is unconditional now. A DELETE is not a
+            # SELECT, so the ORM listener does not scope it — only RLS would,
+            # and only on PostgreSQL. Dropping this filter inside a tenant
+            # session would purge the whole fleet's notifications.
             read_del_stmt = delete(Notification).where(
                 Notification.is_read.is_(True),
                 Notification.created_at < read_cutoff,
+                Notification.organization_id == org_id,
             )
             unread_del_stmt = delete(Notification).where(
                 Notification.is_read.is_(False),
                 Notification.created_at < unread_cutoff,
+                Notification.organization_id == org_id,
             )
-            if org_id is not None:
-                read_del_stmt = read_del_stmt.where(
-                    Notification.organization_id == org_id
-                )
-                unread_del_stmt = unread_del_stmt.where(
-                    Notification.organization_id == org_id
-                )
 
-            read_deleted = (
+            read_deleted += (
                 cast(CursorResult[Any], db.execute(read_del_stmt)).rowcount or 0
             )
-            unread_deleted = (
+            unread_deleted += (
                 cast(CursorResult[Any], db.execute(unread_del_stmt)).rowcount or 0
             )
 
             db.commit()
         except Exception as e:
-            logger.exception("Failed to cleanup notifications")
+            logger.exception(
+                "Failed to cleanup notifications for organization %s", org_id
+            )
             db.rollback()
             errors.append(str(e))
 
@@ -141,6 +193,10 @@ def process_stuck_outbox_events(
     Marks old PENDING events as FAILED so the retry logic can pick them up,
     or publishes them if they have no handler errors.
 
+    ``event_outbox`` carries no ``organization_id`` column, so this sweep is
+    NOT a tenant fan-out — see :func:`_outbox_session` for why converting it
+    would hide exactly the events it exists to recover.
+
     Args:
         stuck_minutes: Events PENDING longer than this are considered stuck.
         batch_size: Maximum events to process per run.
@@ -158,8 +214,8 @@ def process_stuck_outbox_events(
     marked_dead = 0
     errors: list[str] = []
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    org_id = _resolve_org_id(organization_id)
+    with _outbox_session(org_id) as db:
         from sqlalchemy import or_, select
 
         from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
@@ -232,8 +288,7 @@ def reconcile_invoice_statuses(
     fixed_to_posted = 0
     errors: list[str] = []
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
         from sqlalchemy import select
 
         from app.models.finance.ar.invoice import Invoice, InvoiceStatus
@@ -241,9 +296,8 @@ def reconcile_invoice_statuses(
         stmt = select(Invoice).where(
             Invoice.status == InvoiceStatus.PAID,
             (Invoice.balance_due) > PAYMENT_DUST,
+            Invoice.organization_id == org_id,
         )
-        if org_id is not None:
-            stmt = stmt.where(Invoice.organization_id == org_id)
         false_paid = list(db.scalars(stmt).all())
 
         for inv in false_paid:
@@ -291,6 +345,9 @@ def auto_post_approved_invoices(
 
     Args:
         max_age_days: Only post invoices approved longer than this.
+        batch_size: Optional cap on invoices posted per run. It stays a
+            FLEET-WIDE cap: the remaining budget is carried across
+            organizations rather than restarting at each one.
 
     Returns:
         Dict with posting counts.
@@ -300,9 +357,12 @@ def auto_post_approved_invoices(
     posted = 0
     skipped = 0
     errors: list[str] = []
+    remaining = batch_size
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
+        if remaining is not None and remaining <= 0:
+            break
+
         from sqlalchemy import select
 
         from app.models.finance.ar.invoice import Invoice, InvoiceStatus
@@ -313,12 +373,13 @@ def auto_post_approved_invoices(
         stmt = select(Invoice).where(
             Invoice.status == InvoiceStatus.APPROVED,
             Invoice.updated_at < cutoff,
+            Invoice.organization_id == org_id,
         )
-        if org_id is not None:
-            stmt = stmt.where(Invoice.organization_id == org_id)
-        if batch_size:
-            stmt = stmt.limit(batch_size)
+        if remaining is not None:
+            stmt = stmt.limit(remaining)
         approved = list(db.scalars(stmt).all())
+        if remaining is not None:
+            remaining -= len(approved)
 
         for inv in approved:
             try:
@@ -379,8 +440,7 @@ def cleanup_stale_drafts(
     voided = 0
     errors: list[str] = []
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
         from sqlalchemy import func, select
 
         from app.models.finance.ap.supplier_invoice import (
@@ -395,53 +455,39 @@ def cleanup_stale_drafts(
         journal_drafts_stmt = select(func.count(JournalEntry.journal_entry_id)).where(
             JournalEntry.status == JournalStatus.DRAFT,
             JournalEntry.created_at < cutoff,
+            JournalEntry.organization_id == org_id,
         )
         invoice_drafts_stmt = select(func.count(Invoice.invoice_id)).where(
             Invoice.status == InvoiceStatus.DRAFT,
             Invoice.created_at < cutoff,
+            Invoice.organization_id == org_id,
         )
         ap_invoice_drafts_stmt = select(func.count(SupplierInvoice.invoice_id)).where(
             SupplierInvoice.status == SupplierInvoiceStatus.DRAFT,
             SupplierInvoice.created_at < cutoff,
+            SupplierInvoice.organization_id == org_id,
         )
-        if org_id is not None:
-            journal_drafts_stmt = journal_drafts_stmt.where(
-                JournalEntry.organization_id == org_id
-            )
-            invoice_drafts_stmt = invoice_drafts_stmt.where(
-                Invoice.organization_id == org_id
-            )
-            ap_invoice_drafts_stmt = ap_invoice_drafts_stmt.where(
-                SupplierInvoice.organization_id == org_id
-            )
 
-        journal_drafts = db.scalar(journal_drafts_stmt) or 0
-        invoice_drafts = db.scalar(invoice_drafts_stmt) or 0
-        ap_invoice_drafts = db.scalar(ap_invoice_drafts_stmt) or 0
+        journal_drafts += db.scalar(journal_drafts_stmt) or 0
+        invoice_drafts += db.scalar(invoice_drafts_stmt) or 0
+        ap_invoice_drafts += db.scalar(ap_invoice_drafts_stmt) or 0
 
         if not dry_run:
             stale_journals_stmt = select(JournalEntry).where(
                 JournalEntry.status == JournalStatus.DRAFT,
                 JournalEntry.created_at < cutoff,
+                JournalEntry.organization_id == org_id,
             )
             stale_invoices_stmt = select(Invoice).where(
                 Invoice.status == InvoiceStatus.DRAFT,
                 Invoice.created_at < cutoff,
+                Invoice.organization_id == org_id,
             )
             stale_ap_stmt = select(SupplierInvoice).where(
                 SupplierInvoice.status == SupplierInvoiceStatus.DRAFT,
                 SupplierInvoice.created_at < cutoff,
+                SupplierInvoice.organization_id == org_id,
             )
-            if org_id is not None:
-                stale_journals_stmt = stale_journals_stmt.where(
-                    JournalEntry.organization_id == org_id
-                )
-                stale_invoices_stmt = stale_invoices_stmt.where(
-                    Invoice.organization_id == org_id
-                )
-                stale_ap_stmt = stale_ap_stmt.where(
-                    SupplierInvoice.organization_id == org_id
-                )
 
             stale_journals = list(db.scalars(stale_journals_stmt).all())
             for je in stale_journals:
@@ -495,36 +541,37 @@ def rebuild_account_balances(
     rows_written = 0
     errors: list[str] = []
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
         from sqlalchemy import func, select
 
         from app.models.finance.gl.account_balance import AccountBalance, BalanceType
         from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 
         try:
-            agg_stmt = select(
-                PostedLedgerLine.organization_id,
-                PostedLedgerLine.account_id,
-                PostedLedgerLine.fiscal_period_id,
-                PostedLedgerLine.business_unit_id,
-                PostedLedgerLine.cost_center_id,
-                PostedLedgerLine.project_id,
-                PostedLedgerLine.segment_id,
-                func.sum(PostedLedgerLine.debit_amount).label("total_debit"),
-                func.sum(PostedLedgerLine.credit_amount).label("total_credit"),
-                func.count().label("txn_count"),
-            ).group_by(
-                PostedLedgerLine.organization_id,
-                PostedLedgerLine.account_id,
-                PostedLedgerLine.fiscal_period_id,
-                PostedLedgerLine.business_unit_id,
-                PostedLedgerLine.cost_center_id,
-                PostedLedgerLine.project_id,
-                PostedLedgerLine.segment_id,
+            agg_stmt = (
+                select(
+                    PostedLedgerLine.organization_id,
+                    PostedLedgerLine.account_id,
+                    PostedLedgerLine.fiscal_period_id,
+                    PostedLedgerLine.business_unit_id,
+                    PostedLedgerLine.cost_center_id,
+                    PostedLedgerLine.project_id,
+                    PostedLedgerLine.segment_id,
+                    func.sum(PostedLedgerLine.debit_amount).label("total_debit"),
+                    func.sum(PostedLedgerLine.credit_amount).label("total_credit"),
+                    func.count().label("txn_count"),
+                )
+                .group_by(
+                    PostedLedgerLine.organization_id,
+                    PostedLedgerLine.account_id,
+                    PostedLedgerLine.fiscal_period_id,
+                    PostedLedgerLine.business_unit_id,
+                    PostedLedgerLine.cost_center_id,
+                    PostedLedgerLine.project_id,
+                    PostedLedgerLine.segment_id,
+                )
+                .where(PostedLedgerLine.organization_id == org_id)
             )
-            if org_id is not None:
-                agg_stmt = agg_stmt.where(PostedLedgerLine.organization_id == org_id)
 
             rows = db.execute(agg_stmt).all()
 
@@ -581,7 +628,9 @@ def rebuild_account_balances(
 
             db.commit()
         except Exception as e:
-            logger.exception("Failed to rebuild account balances")
+            logger.exception(
+                "Failed to rebuild account balances for organization %s", org_id
+            )
             db.rollback()
             errors.append(str(e))
 
@@ -602,7 +651,9 @@ def reconcile_payment_allocations(
     first by due_date).
 
     Args:
-        batch_size: Maximum payments to process per run.
+        batch_size: Maximum payments to process per run. It stays a FLEET-WIDE
+            cap: the remaining budget is carried across organizations rather
+            than restarting at each one.
         dry_run: If True, only report counts without creating allocations.
 
     Returns:
@@ -619,9 +670,15 @@ def reconcile_payment_allocations(
     no_match = 0
     allocations_created = 0
     errors: list[str] = []
+    # Named `budget`, not `remaining`: the per-payment loop below already owns
+    # a `remaining` (the unallocated portion of ONE payment), and reusing the
+    # name would let the first payment silently overwrite the fleet-wide cap.
+    budget = batch_size
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
+        if budget <= 0:
+            break
+
         from sqlalchemy import select
 
         from app.models.finance.ar.customer_payment import (
@@ -647,15 +704,19 @@ def reconcile_payment_allocations(
                 ),
                 CustomerPayment.amount > Decimal("0"),
                 ~has_alloc,
+                CustomerPayment.organization_id == org_id,
             )
             .order_by(CustomerPayment.payment_date)
-            .limit(batch_size)
+            .limit(budget)
         )
-        if org_id is not None:
-            stmt = stmt.where(CustomerPayment.organization_id == org_id)
         unallocated = list(db.scalars(stmt).all())
+        budget -= len(unallocated)
 
-        logger.info("Found %d unallocated payments to process", len(unallocated))
+        logger.info(
+            "Found %d unallocated payments to process in organization %s",
+            len(unallocated),
+            org_id,
+        )
 
         for payment in unallocated:
             try:
@@ -768,7 +829,9 @@ def fix_unbalanced_posted_journals(
 
     Args:
         dry_run: If True, only report findings without fixing.
-        batch_size: Maximum journals to process per run.
+        batch_size: Maximum journals to process per run. It stays a FLEET-WIDE
+            cap: the remaining budget is carried across organizations rather
+            than restarting at each one.
 
     Returns:
         Dict with journal counts and details.
@@ -783,9 +846,12 @@ def fix_unbalanced_posted_journals(
     fixed = 0
     details: list[dict[str, Any]] = []
     errors: list[str] = []
+    remaining = batch_size
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
+        if remaining <= 0:
+            break
+
         from sqlalchemy import func, select
 
         from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
@@ -822,7 +888,10 @@ def fix_unbalanced_posted_journals(
                 JournalEntryLine,
                 JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
             )
-            .where(JournalEntry.status == JournalStatus.POSTED)
+            .where(
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.organization_id == org_id,
+            )
             .group_by(
                 JournalEntry.journal_entry_id,
                 JournalEntry.journal_number,
@@ -833,14 +902,11 @@ def fix_unbalanced_posted_journals(
             )
             .having(func.abs(imbalance_expr) > Decimal("0.01"))
             .order_by(func.abs(imbalance_expr).desc())
-            .limit(batch_size)
+            .limit(remaining)
         )
-        if org_id is not None:
-            unbalanced_stmt = unbalanced_stmt.where(
-                JournalEntry.organization_id == org_id
-            )
         rows = db.execute(unbalanced_stmt).all()
-        found = len(rows)
+        found += len(rows)
+        remaining -= len(rows)
 
         for row in rows:
             imbalance = Decimal(str(row.imbalance))
@@ -914,6 +980,41 @@ def fix_unbalanced_posted_journals(
     }
 
 
+def _outbox_counters(org_id: UUID | None) -> dict[str, int]:
+    """Count stuck and dead outbox events, fleet-wide unless pinned.
+
+    Deliberately outside the tenant fan-out above, for the reason spelled out
+    in :func:`_outbox_session`: ``event_outbox`` has no ``organization_id``
+    column, so a per-tenant count would drop every event whose JSONB header is
+    missing or names an unknown organization — and those are exactly the
+    events a health check has to surface. Counting them per tenant and summing
+    would report a smaller backlog than actually exists, which is worse than
+    reporting none at all.
+    """
+    from sqlalchemy import func, select
+
+    from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+
+    outbox_cutoff = datetime.now(UTC) - timedelta(minutes=30)
+    stuck_stmt = select(func.count(EventOutbox.event_id)).where(
+        EventOutbox.status == EventStatus.PENDING,
+        EventOutbox.created_at < outbox_cutoff,
+    )
+    dead_stmt = select(func.count(EventOutbox.event_id)).where(
+        EventOutbox.status == EventStatus.DEAD,
+    )
+    if org_id is not None:
+        header_org = EventOutbox.headers["organization_id"].astext == str(org_id)
+        stuck_stmt = stuck_stmt.where(header_org)
+        dead_stmt = dead_stmt.where(header_org)
+
+    with _outbox_session(org_id) as db:
+        return {
+            "stuck_outbox_events": db.scalar(stuck_stmt) or 0,
+            "dead_outbox_events": db.scalar(dead_stmt) or 0,
+        }
+
+
 @shared_task
 def run_data_health_check(
     organization_id: UUID | str | None = None,
@@ -933,10 +1034,24 @@ def run_data_health_check(
     """
     logger.info("Starting comprehensive data health check")
 
-    results: dict[str, Any] = {}
+    # Seeded with zeros rather than built key-by-key: a fleet with no
+    # organizations, or an `organization_id` that is not in the catalogue,
+    # must still answer every counter. A missing key would read to a caller as
+    # "this check was not run", which is not what an empty fleet means.
+    results: dict[str, Any] = {
+        "unbalanced_journals": 0,
+        "false_paid_invoices": 0,
+        "stuck_outbox_events": 0,
+        "dead_outbox_events": 0,
+        "stale_journal_drafts": 0,
+        "account_balance_rows": 0,
+        "notification_total": 0,
+        "notification_unread": 0,
+        "approved_invoices_stuck": 0,
+        "unallocated_payments": 0,
+    }
 
-    org_id, session_context = _task_session(organization_id)
-    with session_context as db:
+    for org_id, db in _tenant_sessions(organization_id):
         from sqlalchemy import exists, func, select
 
         from app.models.finance.ar.customer_payment import (
@@ -948,7 +1063,6 @@ def run_data_health_check(
         from app.models.finance.gl.account_balance import AccountBalance
         from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
         from app.models.finance.gl.journal_entry_line import JournalEntryLine
-        from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
         from app.models.notification import Notification
 
         # 1. Unbalanced posted journals
@@ -973,15 +1087,14 @@ def run_data_health_check(
                 JournalEntry,
                 JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
             )
-            .where(JournalEntry.status == JournalStatus.POSTED)
+            .where(
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.organization_id == org_id,
+            )
             .group_by(JournalEntryLine.journal_entry_id)
             .having(func.abs(imbalance_expr) > Decimal("0.01"))
         )
-        if org_id is not None:
-            unbalanced_stmt = unbalanced_stmt.where(
-                JournalEntry.organization_id == org_id
-            )
-        results["unbalanced_journals"] = (
+        results["unbalanced_journals"] += (
             db.scalar(select(func.count()).select_from(unbalanced_stmt.subquery())) or 0
         )
 
@@ -989,79 +1102,46 @@ def run_data_health_check(
         false_paid_stmt = select(func.count(Invoice.invoice_id)).where(
             Invoice.status == InvoiceStatus.PAID,
             (Invoice.balance_due) > Decimal("0.01"),
+            Invoice.organization_id == org_id,
         )
-        if org_id is not None:
-            false_paid_stmt = false_paid_stmt.where(Invoice.organization_id == org_id)
-        results["false_paid_invoices"] = db.scalar(false_paid_stmt) or 0
+        results["false_paid_invoices"] += db.scalar(false_paid_stmt) or 0
 
-        # 3. Stuck outbox events (PENDING > 30 min)
-        outbox_cutoff = datetime.now(UTC) - timedelta(minutes=30)
-        stuck_outbox_stmt = select(func.count(EventOutbox.event_id)).where(
-            EventOutbox.status == EventStatus.PENDING,
-            EventOutbox.created_at < outbox_cutoff,
-        )
-        if org_id is not None:
-            stuck_outbox_stmt = stuck_outbox_stmt.where(
-                EventOutbox.headers["organization_id"].astext == str(org_id)
-            )
-        results["stuck_outbox_events"] = db.scalar(stuck_outbox_stmt) or 0
-
-        # 4. Dead outbox events
-        dead_outbox_stmt = select(func.count(EventOutbox.event_id)).where(
-            EventOutbox.status == EventStatus.DEAD,
-        )
-        if org_id is not None:
-            dead_outbox_stmt = dead_outbox_stmt.where(
-                EventOutbox.headers["organization_id"].astext == str(org_id)
-            )
-        results["dead_outbox_events"] = db.scalar(dead_outbox_stmt) or 0
-
-        # 5. Stale drafts (> 180 days)
+        # 3. Stale drafts (> 180 days)
         draft_cutoff = datetime.now(UTC) - timedelta(days=180)
         stale_journal_stmt = select(func.count(JournalEntry.journal_entry_id)).where(
             JournalEntry.status == JournalStatus.DRAFT,
             JournalEntry.created_at < draft_cutoff,
+            JournalEntry.organization_id == org_id,
         )
-        if org_id is not None:
-            stale_journal_stmt = stale_journal_stmt.where(
-                JournalEntry.organization_id == org_id
-            )
-        results["stale_journal_drafts"] = db.scalar(stale_journal_stmt) or 0
+        results["stale_journal_drafts"] += db.scalar(stale_journal_stmt) or 0
 
-        # 6. Account balance rows
-        account_balance_stmt = select(func.count(AccountBalance.balance_id))
-        if org_id is not None:
-            account_balance_stmt = account_balance_stmt.where(
-                AccountBalance.organization_id == org_id
-            )
-        results["account_balance_rows"] = db.scalar(account_balance_stmt) or 0
+        # 4. Account balance rows
+        account_balance_stmt = select(func.count(AccountBalance.balance_id)).where(
+            AccountBalance.organization_id == org_id
+        )
+        results["account_balance_rows"] += db.scalar(account_balance_stmt) or 0
 
-        # 7. Notification stats
-        notification_total_stmt = select(func.count(Notification.notification_id))
+        # 5. Notification stats
+        notification_total_stmt = select(
+            func.count(Notification.notification_id)
+        ).where(Notification.organization_id == org_id)
         notification_unread_stmt = select(
             func.count(Notification.notification_id)
-        ).where(Notification.is_read.is_(False))
-        if org_id is not None:
-            notification_total_stmt = notification_total_stmt.where(
-                Notification.organization_id == org_id
-            )
-            notification_unread_stmt = notification_unread_stmt.where(
-                Notification.organization_id == org_id
-            )
-        results["notification_total"] = db.scalar(notification_total_stmt) or 0
-        results["notification_unread"] = db.scalar(notification_unread_stmt) or 0
+        ).where(
+            Notification.is_read.is_(False),
+            Notification.organization_id == org_id,
+        )
+        results["notification_total"] += db.scalar(notification_total_stmt) or 0
+        results["notification_unread"] += db.scalar(notification_unread_stmt) or 0
 
-        # 8. Approved invoices (stuck)
+        # 6. Approved invoices (stuck)
         approved_invoices_stmt = select(func.count(Invoice.invoice_id)).where(
             Invoice.status == InvoiceStatus.APPROVED,
+            Invoice.organization_id == org_id,
         )
-        if org_id is not None:
-            approved_invoices_stmt = approved_invoices_stmt.where(
-                Invoice.organization_id == org_id
-            )
-        results["approved_invoices_stuck"] = db.scalar(approved_invoices_stmt) or 0
+        results["approved_invoices_stuck"] += db.scalar(approved_invoices_stmt) or 0
 
-        # 9. Unallocated payments (APPROVED/CLEARED with no allocation records)
+        # 7. Unallocated payments (APPROVED/CLEARED with no allocation records)
         unallocated_stmt = select(func.count(CustomerPayment.payment_id)).where(
             CustomerPayment.status.in_([PaymentStatus.APPROVED, PaymentStatus.CLEARED]),
             CustomerPayment.amount > 0,
@@ -1070,12 +1150,11 @@ def run_data_health_check(
                     PaymentAllocation.payment_id == CustomerPayment.payment_id
                 )
             ),
+            CustomerPayment.organization_id == org_id,
         )
-        if org_id is not None:
-            unallocated_stmt = unallocated_stmt.where(
-                CustomerPayment.organization_id == org_id
-            )
-        results["unallocated_payments"] = db.scalar(unallocated_stmt) or 0
+        results["unallocated_payments"] += db.scalar(unallocated_stmt) or 0
+
+    results.update(_outbox_counters(_resolve_org_id(organization_id)))
 
     # Log summary
     logger.info("=== Data Health Check Results ===")

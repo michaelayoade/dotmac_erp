@@ -1,13 +1,52 @@
-"""Tests for data health Celery tasks."""
+"""Tests for data health Celery tasks.
+
+These tasks used to share one session seam, ``_task_session``, whose unpinned
+branch was a single ``cross_org_session`` — an ORM-listener bypass that never
+bypassed PostgreSQL RLS, so under ``app_user`` every unpinned run saw zero rows
+and repaired nothing while reporting success.
+
+Seven of them now fan out over tenants; each test below therefore drives the
+task through ``one_tenant``, which stands in for the fan-out with a single
+tenant session. The two outbox entry points deliberately did NOT convert (see
+``_outbox_session``) and keep patching ``cross_org_session``, which is what
+tells these tests apart at a glance.
+
+The fan-out properties themselves — per-tenant sessions, summed counters,
+fleet-wide batch budgets — are asserted in
+``tests/tasks/test_data_health_tenant_fanout.py``.
+"""
 
 from __future__ import annotations
 
 import uuid
+from contextlib import contextmanager
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from app.models.finance.ar.invoice import InvoiceStatus
+
+ONE_ORG = uuid.UUID("00000000-0000-0000-0000-0000000000a1")
+
+
+@contextmanager
+def one_tenant(mock_db, org_id: uuid.UUID = ONE_ORG):
+    """Run a fanned-out task against exactly one tenant session.
+
+    Replaces the old ``patch("app.tasks.data_health.cross_org_session")``: that
+    symbol is no longer the seam these tasks reach the database through, so a
+    test patching it would silently exercise the real fan-out — or fail with
+    AttributeError once the import goes.
+    """
+
+    def fake_for_each_organization(**_kwargs):
+        yield org_id, mock_db
+
+    with patch(
+        "app.tasks.data_health.for_each_organization", fake_for_each_organization
+    ):
+        yield
+
 
 # ── Notification cleanup ─────────────────────────────────────
 
@@ -23,10 +62,7 @@ class TestCleanupOldNotifications:
             MagicMock(rowcount=0),
         ]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             from app.tasks.data_health import cleanup_old_notifications
 
             result = cleanup_old_notifications(read_days=30, unread_days=90)
@@ -39,10 +75,7 @@ class TestCleanupOldNotifications:
         mock_db = MagicMock()
         mock_db.execute.side_effect = RuntimeError("DB error")
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             from app.tasks.data_health import cleanup_old_notifications
 
             result = cleanup_old_notifications()
@@ -53,6 +86,22 @@ class TestCleanupOldNotifications:
 
 
 # ── Stuck outbox recovery ────────────────────────────────────
+
+
+@contextmanager
+def whole_outbox(mock_db):
+    """The outbox sweep is NOT a tenant fan-out, and this is where that shows.
+
+    ``event_outbox`` has no ``organization_id`` column, so it has no RLS policy
+    and no ORM-listener filter: reading it fleet-wide works unchanged under
+    ``app_user``. Fanning it out on its JSONB header would hide every event
+    whose header is absent or names an unknown organization — the exact events
+    a recovery job exists to unstick.
+    """
+    with patch("app.tasks.data_health.cross_org_session") as mock_session:
+        mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_session.return_value.__exit__ = MagicMock(return_value=False)
+        yield
 
 
 class TestProcessStuckOutboxEvents:
@@ -70,15 +119,12 @@ class TestProcessStuckOutboxEvents:
         mock_db.scalars.return_value.all.return_value = [mock_event]
 
         with (
-            patch("app.tasks.data_health.cross_org_session") as mock_session,
+            whole_outbox(mock_db),
             patch(
                 "app.tasks.data_health.process_stuck_outbox_events.__wrapped__",
                 process_stuck_outbox_events.__wrapped__,
             ),
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
             result = process_stuck_outbox_events(stuck_minutes=30, batch_size=100)
 
         assert result["recovered"] == 1
@@ -95,10 +141,7 @@ class TestProcessStuckOutboxEvents:
         mock_db = MagicMock()
         mock_db.scalars.return_value.all.return_value = [mock_event]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with whole_outbox(mock_db):
             result = process_stuck_outbox_events(stuck_minutes=30, batch_size=100)
 
         assert result["marked_dead"] == 1
@@ -126,10 +169,7 @@ class TestReconcileInvoiceStatuses:
         mock_db = MagicMock()
         mock_db.scalars.return_value.all.return_value = [mock_inv]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = reconcile_invoice_statuses()
 
         assert result["fixed_to_partially_paid"] == 1
@@ -150,10 +190,7 @@ class TestReconcileInvoiceStatuses:
         mock_db = MagicMock()
         mock_db.scalars.return_value.all.return_value = [mock_inv]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = reconcile_invoice_statuses()
 
         assert result["fixed_to_posted"] == 1
@@ -180,10 +217,7 @@ class TestReconcileInvoiceStatuses:
         mock_db = MagicMock()
         mock_db.scalars.return_value.all.return_value = [mock_inv]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = reconcile_invoice_statuses()
 
         assert mock_inv.status is InvoiceStatus.OVERDUE
@@ -203,10 +237,7 @@ class TestCleanupStaleDrafts:
         mock_db = MagicMock()
         mock_db.scalar.side_effect = [3, 5, 2]  # journals, invoices, AP
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = cleanup_stale_drafts(draft_age_days=180, dry_run=True)
 
         assert result["journal_drafts"] == 3
@@ -222,16 +253,18 @@ class TestRunDataHealthCheck:
     """Tests for run_data_health_check task."""
 
     def test_returns_all_check_keys(self) -> None:
-        """Health check returns all expected keys."""
+        """Health check returns all expected keys.
+
+        Both seams are stood up because this one task uses both: seven
+        counters fan out over tenants, and the two outbox counters are read
+        fleet-wide because ``event_outbox`` is not tenant-scoped.
+        """
         from app.tasks.data_health import run_data_health_check
 
         mock_db = MagicMock()
         mock_db.scalar.return_value = 0
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db), whole_outbox(mock_db):
             result = run_data_health_check()
 
         expected_keys = {
@@ -269,15 +302,12 @@ class TestAutoPostApprovedInvoices:
         mock_db.scalars.return_value.all.return_value = [mock_inv]
 
         with (
-            patch("app.tasks.data_health.cross_org_session") as mock_session,
+            one_tenant(mock_db),
             patch(
                 "app.services.finance.ar.invoice.ARInvoiceService.post_invoice",
                 side_effect=ValueError("Period closed"),
             ),
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
             result = auto_post_approved_invoices(max_age_days=7)
 
         assert result["posted"] == 0
@@ -315,10 +345,7 @@ class TestRebuildAccountBalances:
         mock_db.execute.return_value.all.return_value = [mock_row]
         mock_db.scalar.return_value = None  # No existing balance
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = rebuild_account_balances()
 
         assert result["rows_written"] == 1
@@ -360,10 +387,7 @@ class TestReconcilePaymentAllocations:
             [mock_invoice],
         ]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = reconcile_payment_allocations(batch_size=100, dry_run=True)
 
         assert result["fully_allocated"] == 1
@@ -403,10 +427,7 @@ class TestReconcilePaymentAllocations:
             [mock_invoice],
         ]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = reconcile_payment_allocations(batch_size=100, dry_run=False)
 
         # Payment is fully allocated (all 500 used up)
@@ -433,10 +454,7 @@ class TestReconcilePaymentAllocations:
             [],  # No matching invoices
         ]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = reconcile_payment_allocations(batch_size=100, dry_run=True)
 
         assert result["no_match"] == 1
@@ -467,10 +485,7 @@ class TestFixUnbalancedPostedJournals:
         mock_db = MagicMock()
         mock_db.execute.return_value.all.return_value = [mock_row]
 
-        with patch("app.tasks.data_health.cross_org_session") as mock_session:
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
+        with one_tenant(mock_db):
             result = fix_unbalanced_posted_journals(dry_run=True)
 
         assert result["found"] == 1
@@ -507,15 +522,12 @@ class TestFixUnbalancedPostedJournals:
         mock_db.execute.return_value.all.return_value = [mock_row]
 
         with (
-            patch("app.tasks.data_health.cross_org_session") as mock_session,
+            one_tenant(mock_db),
             patch(
                 "app.services.finance.gl.reversal.ReversalService.create_reversal",
                 return_value=mock_reversal_result,
             ) as mock_reversal,
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
             result = fix_unbalanced_posted_journals(dry_run=False)
 
         assert result["found"] == 1
@@ -547,15 +559,12 @@ class TestFixUnbalancedPostedJournals:
         mock_db.execute.return_value.all.return_value = [mock_row]
 
         with (
-            patch("app.tasks.data_health.cross_org_session") as mock_session,
+            one_tenant(mock_db),
             patch(
                 "app.services.finance.gl.reversal.ReversalService.create_reversal",
                 return_value=mock_reversal_result,
             ),
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
-
             result = fix_unbalanced_posted_journals(dry_run=False)
 
         assert result["found"] == 1
