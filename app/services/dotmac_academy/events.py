@@ -17,7 +17,10 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.services.dotmac_academy.training_sync import record_course_completion
+from app.services.dotmac_academy.training_sync import (
+    record_course_completion,
+    record_training_projection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,9 @@ Handler = Callable[..., dict[str, Any]]
 
 _HANDLERS: dict[tuple[int, str], Handler] = {
     (1, "course_completed"): record_course_completion,
+    (2, "training_enrolled"): record_training_projection,
+    (2, "training_progress_updated"): record_training_projection,
+    (2, "course_completed"): record_training_projection,
 }
 
 SUPPORTED_EVENTS = sorted({event for _, event in _HANDLERS})
