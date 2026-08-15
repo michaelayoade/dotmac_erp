@@ -17,8 +17,6 @@ def test_gl_backfill_discovers_globally_then_reports_per_org(monkeypatch):
         UUID("00000000-0000-0000-0000-000000000041"),
         UUID("00000000-0000-0000-0000-000000000042"),
     ]
-    cross_db = MagicMock()
-    cross_db.scalars.return_value.all.return_value = org_ids
     tenant_db = MagicMock()
     captured_org_ids: list[UUID] = []
 
@@ -29,8 +27,8 @@ def test_gl_backfill_discovers_globally_then_reports_per_org(monkeypatch):
     )
     monkeypatch.setattr(
         backfill_gl_postings,
-        "cross_org_session",
-        lambda: _session(cross_db),
+        "organization_ids",
+        lambda **_: org_ids,
     )
 
     def session_for_org(org_id):
@@ -59,8 +57,6 @@ def test_inventory_backfill_discovers_globally_then_reports_per_org(monkeypatch)
         UUID("00000000-0000-0000-0000-000000000041"),
         UUID("00000000-0000-0000-0000-000000000042"),
     ]
-    cross_db = MagicMock()
-    cross_db.scalars.return_value.all.return_value = org_ids
     tenant_db = MagicMock()
     captured_org_ids: list[UUID] = []
 
@@ -71,8 +67,8 @@ def test_inventory_backfill_discovers_globally_then_reports_per_org(monkeypatch)
     )
     monkeypatch.setattr(
         backfill_inventory_gl_postings,
-        "cross_org_session",
-        lambda: _session(cross_db),
+        "organization_ids",
+        lambda **_: org_ids,
     )
 
     def session_for_org(org_id):
@@ -107,8 +103,6 @@ def test_inventory_backfill_applies_batch_size_once_across_all_orgs(monkeypatch)
         UUID("00000000-0000-0000-0000-000000000041"),
         UUID("00000000-0000-0000-0000-000000000042"),
     ]
-    cross_db = MagicMock()
-    cross_db.scalars.return_value.all.return_value = org_ids
     candidate_limits: list[tuple[UUID, int]] = []
     processed: list[int] = []
 
@@ -124,8 +118,8 @@ def test_inventory_backfill_applies_batch_size_once_across_all_orgs(monkeypatch)
     )
     monkeypatch.setattr(
         backfill_inventory_gl_postings,
-        "cross_org_session",
-        lambda: _session(cross_db),
+        "organization_ids",
+        lambda **_: org_ids,
     )
     monkeypatch.setattr(
         backfill_inventory_gl_postings,

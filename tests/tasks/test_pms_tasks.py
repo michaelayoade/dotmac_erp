@@ -27,17 +27,17 @@ class TestPMSMonthlyReviewReminder:
             supervisor_id=supervisor_employee_id,
         )
         mock_db = MagicMock()
-        mock_db.scalars.side_effect = [
-            _make_scalars_result([org_id]),
-            _make_scalars_result([contract]),
-        ]
+        mock_db.scalars.return_value = _make_scalars_result([contract])
         mock_db.scalar.return_value = None
 
         notification_service = MagicMock()
         notification_service.create_if_not_sent_since.return_value = object()
 
         with (
-            patch("app.tasks.pms.cross_org_session") as mock_session,
+            patch(
+                "app.tasks.pms._pms_enabled_organization_ids",
+                return_value=[org_id],
+            ),
             patch("app.tasks.pms.session_for_org") as mock_org_session,
             patch(
                 "app.services.notification.NotificationService",
@@ -48,8 +48,6 @@ class TestPMSMonthlyReviewReminder:
                 return_value=supervisor_person_id,
             ) as resolve_person,
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
             mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -83,7 +81,6 @@ class TestPMSProbationCheck:
         milestone = {"employee_id": employee_id, "months_of_service": 20}
 
         mock_db = MagicMock()
-        mock_db.scalars.return_value = _make_scalars_result([org_id])
         mock_db.get.return_value = employee
 
         underperformance_service = MagicMock()
@@ -92,7 +89,10 @@ class TestPMSProbationCheck:
         notification_service.create_if_not_sent_since.return_value = object()
 
         with (
-            patch("app.tasks.pms.cross_org_session") as mock_session,
+            patch(
+                "app.tasks.pms._pms_enabled_organization_ids",
+                return_value=[org_id],
+            ),
             patch("app.tasks.pms.session_for_org") as mock_org_session,
             patch(
                 "app.services.notification.NotificationService",
@@ -105,8 +105,6 @@ class TestPMSProbationCheck:
             patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls,
         ):
             resolver_cls.return_value.get_manager.return_value = manager
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
             mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
 

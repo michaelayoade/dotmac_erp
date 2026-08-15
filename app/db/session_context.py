@@ -26,9 +26,13 @@ clean up:
 
 - :func:`session_for_org` — single-org tenant session (Celery tasks,
   CLI scripts, anything outside a web request).
-- :func:`cross_org_session` — explicit application-layer cross-tenant access
-  for global batch jobs (e.g. "list every org with pending work"). It does not
-  bypass PostgreSQL RLS.
+- :func:`for_each_organization` — every organization in turn, each in its own
+  tenant session. This is what a fleet-wide batch job wants: discovery goes
+  through the narrow catalog definer in :mod:`app.tenant_catalog`, never
+  through a cross-org read of ``core_org.organization``.
+- :func:`cross_org_session` — application-layer cross-tenant access to tables
+  that have **no** PostgreSQL RLS policy. It does not bypass PostgreSQL RLS,
+  so it cannot be used to enumerate organizations; see its own warning.
 
 The low-level primitives below (:func:`prime_session`,
 :func:`allow_cross_org`) exist for infrastructure code only — the web
@@ -236,12 +240,25 @@ def cross_org_session() -> Iterator[Session]:
     """Canonical session for cross-organization ERP work (admin/batch).
 
     Opens a fresh ``SessionLocal`` with ``allow_cross_org`` active for the ORM
-    listener. It does not bypass PostgreSQL RLS. Use this to discover rows
-    across Organizations that are not yet database-protected, then process
-    each module scope under its own per-org session::
+    listener. It does not bypass PostgreSQL RLS.
+
+    .. warning::
+
+       **This is not how you enumerate organizations.**
+       ``core_org.organization`` is RLS-protected at migration heads, so
+       ``select(Organization.organization_id)`` here returns every row under
+       today's ``postgres`` superuser runtime and *zero* rows under
+       ``app_user`` — a scheduled task that silently processes nothing and
+       exits 0. Use :func:`for_each_organization` below, or
+       :func:`app.tenant_catalog.active_organization_ids` when you need the ids
+       without the sessions.
+
+    What remains legitimate here is discovering rows in tables that have **no**
+    RLS policy at migration heads, then processing each module scope under its
+    own per-org session::
 
         with cross_org_session() as cross_db:
-            org_ids = list(cross_db.scalars(select(Organization.id)).all())
+            ids = list(cross_db.scalars(select(UnprotectedThing.id)).all())
         for org_id in org_ids:
             with session_for_org(org_id) as db:
                 ...
@@ -261,3 +278,45 @@ def cross_org_session() -> Iterator[Session]:
     finally:
         session.info["allow_cross_org"] = False
         session.close()
+
+
+def for_each_organization(
+    *,
+    include_inactive: bool = False,
+    only: UUID | None = None,
+) -> Iterator[tuple[UUID, Session]]:
+    """Yield ``(organization_id, tenant-scoped session)`` for each organization.
+
+    This is the canonical replacement for the retired
+    "``cross_org_session`` to list orgs, then ``session_for_org`` to work" pair.
+    Discovery goes through the narrow catalog definer
+    (:mod:`app.tenant_catalog`); each iteration then gets a fully primed
+    tenant session from :func:`session_for_org`::
+
+        for org_id, db in for_each_organization():
+            Service(db).run(org_id)
+            db.commit()
+
+    The discovery session is closed before the first tenant session opens, so
+    an unscoped session is never alive at the same time as a scoped one.
+
+    Each organization's session is opened and closed inside its own iteration.
+    An exception raised in the caller's loop body therefore closes that
+    organization's session and propagates — it does not leak into the next
+    organization's scope. Callers that must continue past a failing tenant
+    wrap their own body in ``try/except``, which is what every task in
+    ``app/tasks`` already does to collect per-org errors.
+
+    Args:
+        include_inactive: passed straight to
+            :func:`app.tenant_catalog.organization_ids`.
+        only: restrict to a single organization, for tasks that accept an
+            optional ``organization_id`` argument.
+    """
+    from app.tenant_catalog import organization_ids
+
+    for organization_id in organization_ids(
+        include_inactive=include_inactive, only=only
+    ):
+        with session_for_org(organization_id) as session:
+            yield organization_id, session

@@ -16,11 +16,9 @@ import logging
 import uuid
 
 from celery import shared_task
-from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.models.batch_operation import BatchOperationType
-from app.models.finance.core_org.organization import Organization
 from app.services.batch_operation import batch_operation
 from app.services.expense.posting_backlog import post_unposted_claims
 from app.services.finance.gl.posting_backlog import post_approved_journals
@@ -29,6 +27,7 @@ from app.services.finance.gl.stranded_fee_posting import (
     find_stranded_journals,
     post_one,
 )
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +39,7 @@ SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 def _organization_ids(organization_id: str | None) -> list[uuid.UUID]:
     if organization_id is not None:
         return [uuid.UUID(str(organization_id))]
-    with cross_org_session() as db:
-        return list(db.scalars(select(Organization.organization_id)).all())
+    return organization_ids(include_inactive=True)
 
 
 @shared_task
