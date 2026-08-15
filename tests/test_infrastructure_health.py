@@ -1,5 +1,4 @@
 import uuid
-from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
 
@@ -7,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from app.db.session_context import prime_session
 from app.models.infrastructure_health import (
     InfraAlertSeverity,
     InfraAlertStatus,
@@ -180,21 +180,8 @@ def test_infrastructure_alert_reopen_and_escalate(db_session):
     assert alert.severity == InfraAlertSeverity.CRITICAL
 
 
-def test_infrastructure_alert_notifications_target_monitoring_users(
-    db_session, person, monkeypatch
-):
+def test_infrastructure_alert_notifications_target_monitoring_users(db_session, person):
     service = InfrastructureHealthService()
-    allow_cross_org_calls = 0
-
-    @contextmanager
-    def fake_allow_cross_org(db):
-        nonlocal allow_cross_org_calls
-        allow_cross_org_calls += 1
-        yield
-
-    monkeypatch.setattr(
-        "app.services.infrastructure_health.allow_cross_org", fake_allow_cross_org
-    )
     role = Role(name=f"monitoring_{uuid.uuid4().hex}", is_active=True)
     permission = Permission(
         key="system:alerts:read",
@@ -222,6 +209,13 @@ def test_infrastructure_alert_notifications_target_monitoring_users(
     ]
     result = service.run_checks(db_session)
     db_session.commit()
+
+    # `deliver_notifications` is now a per-tenant call: the caller hands it a
+    # session already scoped to one organization, and the fan-out over
+    # organizations lives in `run_infrastructure_health_checks`. Priming here
+    # is what the tenant session does in production; it used to be an
+    # `allow_cross_org` bypass, which reached zero rows under `app_user`.
+    prime_session(db_session, person.organization_id)
     delivered = service.deliver_notifications(db_session, result["notification_events"])
 
     # Scope to the two users this test created — an unfiltered count picks up
@@ -239,7 +233,6 @@ def test_infrastructure_alert_notifications_target_monitoring_users(
     assert len(notifications) == 1
     assert notifications[0].recipient_id == person.id
     assert notifications[0].action_url.startswith("/admin/system/health/alerts/")
-    assert allow_cross_org_calls == 1
 
 
 def test_infrastructure_health_persists_when_notification_delivery_fails(

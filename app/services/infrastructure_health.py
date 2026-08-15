@@ -20,7 +20,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.db.session_context import allow_cross_org
+from app.db.session_context import for_each_organization
 from app.dependency_health import collect_dependency_health
 from app.models.infrastructure_health import (
     InfraAlertSeverity,
@@ -885,6 +885,14 @@ class InfrastructureHealthService:
     def deliver_notifications(
         self, db: Session, events: list[AlertNotificationEvent]
     ) -> int:
+        """Deliver every event to ONE tenant's monitoring users.
+
+        ``db`` is a tenant-scoped session. An infrastructure alert is
+        fleet-wide, but the people it notifies are not: recipients are
+        ``Person`` rows and notifications are tenant rows, so the delivery
+        phase runs once per organization. The loop over organizations lives in
+        :func:`run_infrastructure_health_checks`, which owns session lifecycle.
+        """
         delivered = 0
         for event in events:
             delivered += self._notify_monitoring_users(db, event)
@@ -924,6 +932,14 @@ class InfrastructureHealthService:
         return delivered
 
     def _monitoring_recipients(self, db: Session) -> list[Person]:
+        """The monitoring users of the organization ``db`` is scoped to.
+
+        This used to run under ``allow_cross_org`` to collect every tenant's
+        monitoring users in one pass. That bypasses only the SQLAlchemy
+        listener, never PostgreSQL RLS, so under ``app_user`` it returns zero
+        recipients and every infrastructure alert is delivered to nobody while
+        the health check still reports success.
+        """
         recipient_ids = (
             select(Person.id)
             .join(PersonRole, PersonRole.person_id == Person.id)
@@ -935,8 +951,7 @@ class InfrastructureHealthService:
             .where(Permission.key.in_(MONITORING_READ_PERMISSIONS))
             .distinct()
         )
-        with allow_cross_org(db):
-            return list(db.scalars(select(Person).where(Person.id.in_(recipient_ids))))
+        return list(db.scalars(select(Person).where(Person.id.in_(recipient_ids))))
 
     def _worst_status(self, db: Session) -> InfraHealthStatus:
         statuses = list(db.scalars(select(InfrastructureHealthStatus.status)))
@@ -1056,6 +1071,41 @@ class InfrastructureHealthService:
 infrastructure_health_service = InfrastructureHealthService()
 
 
+def _deliver_alerts_to_every_tenant(events: list[AlertNotificationEvent]) -> int:
+    """Fan the fleet-wide alerts out over tenants, one session each.
+
+    The checks themselves read fleet tables (``infrastructure_health_status``,
+    ``infrastructure_alert`` — neither carries an ``organization_id``), so they
+    run once on the unscoped session. Delivery is the opposite: recipients are
+    ``Person`` rows and notifications are tenant rows, both RLS-protected, so
+    each organization is served inside its own tenant session obtained from the
+    catalogue definer.
+
+    ``include_inactive=True`` preserves the previous recipient set exactly: the
+    cross-org scan it replaces never looked at organization status. Narrowing
+    infrastructure alerting to active tenants is a product decision, not part
+    of this cutover.
+
+    One tenant's failure is contained to that tenant — the remaining
+    organizations are still notified, and the health-check result is still
+    returned.
+    """
+    delivered = 0
+    for organization_id, db in for_each_organization(include_inactive=True):
+        try:
+            count = infrastructure_health_service.deliver_notifications(db, events)
+            if count:
+                db.commit()
+                delivered += count
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Infrastructure alert notification delivery failed for organization %s",
+                organization_id,
+            )
+    return delivered
+
+
 def run_infrastructure_health_checks() -> dict[str, Any]:
     db = SessionLocal()
     try:
@@ -1063,16 +1113,9 @@ def run_infrastructure_health_checks() -> dict[str, Any]:
         notification_events = list(result.pop("notification_events", []))
         db.commit()
         if notification_events:
-            try:
-                delivered = infrastructure_health_service.deliver_notifications(
-                    db, notification_events
-                )
-                result["notifications"] = delivered
-                db.commit()
-            except Exception:
-                db.rollback()
-                result["notifications"] = 0
-                logger.exception("Infrastructure alert notification delivery failed")
+            result["notifications"] = _deliver_alerts_to_every_tenant(
+                notification_events
+            )
         return result
     except Exception:
         db.rollback()

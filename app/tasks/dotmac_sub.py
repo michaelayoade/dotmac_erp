@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import for_each_organization, session_for_org
 from app.models.finance.ar.customer import Customer
 from app.models.finance.core_org.organization import Organization
 from app.models.finance.gl.account import Account
@@ -319,13 +319,36 @@ def cleanup_stale_dotmac_sub_sync_history(
     limit: int = 500,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Mark stale RUNNING dotmac_sub SyncHistory rows as FAILED."""
+    """Mark stale RUNNING dotmac_sub SyncHistory rows as FAILED.
+
+    ``sync.sync_history`` is tenant-scoped and RLS-protected, so the single
+    ``cross_org_session`` scan this replaces returned zero rows under
+    ``app_user`` — the sweep found nothing to unstick and reported success.
+    Each organization is now swept inside its own tenant session, discovered
+    through the catalogue definer.
+
+    ``include_inactive=True``: a deactivated organization's stuck RUNNING rows
+    still have to be closed out, and the scan this replaces never looked at
+    organization status.
+
+    ``limit`` stays a FLEET-WIDE cap rather than becoming a per-tenant one:
+    ``remaining`` is carried across organizations so a run still touches at
+    most ``limit`` rows. Only the ordering changes — oldest-first within each
+    organization instead of oldest-first across the whole fleet.
+    """
     stale_after_minutes = max(stale_after_minutes, 1)
     limit = max(limit, 1)
     now_utc = datetime.now(UTC)
     cutoff = now_utc - timedelta(minutes=stale_after_minutes)
 
-    with cross_org_session() as db:
+    checked = 0
+    marked = 0
+    remaining = limit
+
+    for _organization_id, db in for_each_organization(include_inactive=True):
+        if remaining <= 0:
+            break
+
         stmt = (
             select(SyncHistory)
             .where(
@@ -335,13 +358,15 @@ def cleanup_stale_dotmac_sub_sync_history(
                 SyncHistory.started_at < cutoff,
             )
             .order_by(SyncHistory.started_at.asc())
-            .limit(limit)
+            .limit(remaining)
         )
         stale_rows = list(db.scalars(stmt).all())
         if not stale_rows:
-            return {"success": True, "checked": 0, "marked_failed": 0}
+            continue
 
-        marked = 0
+        checked += len(stale_rows)
+        remaining -= len(stale_rows)
+
         for row in stale_rows:
             started_at = row.started_at or now_utc
             age = int((now_utc - started_at).total_seconds() // 60)
@@ -351,15 +376,20 @@ def cleanup_stale_dotmac_sub_sync_history(
             )
             marked += 1
 
-        if dry_run:
-            db.rollback()
-            return {"success": True, "checked": len(stale_rows), "would_mark": marked}
+        # No explicit rollback on the dry-run path: the tenant session is
+        # closed at the end of this iteration and anything uncommitted is
+        # discarded, which is exactly what the rollback achieved.
+        if not dry_run:
+            db.commit()
 
-        db.commit()
-        logger.info(
-            "Marked %d stale dotmac_sub RUNNING sync_history rows FAILED", marked
-        )
-        return {"success": True, "checked": len(stale_rows), "marked_failed": marked}
+    if checked == 0:
+        return {"success": True, "checked": 0, "marked_failed": 0}
+
+    if dry_run:
+        return {"success": True, "checked": checked, "would_mark": marked}
+
+    logger.info("Marked %d stale dotmac_sub RUNNING sync_history rows FAILED", marked)
+    return {"success": True, "checked": checked, "marked_failed": marked}
 
 
 # ---------------------------------------------------------------------------

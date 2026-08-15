@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from uuid import UUID
 
 from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.people.hr.offboarding import EmployeeOffboardingService
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +29,28 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _list_org_ids(limit_org_id: str | None) -> list:
-    if limit_org_id:
-        from uuid import UUID
+def _list_org_ids(limit_org_id: str | None) -> list[UUID]:
+    """Enumerate tenants through the catalogue definer.
 
-        return [UUID(limit_org_id)]
-    with cross_org_session() as db:
-        return list(db.scalars(select(Employee.organization_id).distinct()).all())
+    This used to read ``select(Employee.organization_id).distinct()`` inside a
+    ``cross_org_session``. That bypasses only the SQLAlchemy listener, never
+    PostgreSQL RLS, so under ``app_user`` it returns zero organizations and the
+    backfill offboards nobody while exiting 0.
+
+    Two deliberate consequences of asking the catalogue instead of the employee
+    table:
+
+    * ``include_inactive=True`` — a deactivated organization's exited employees
+      still hold mailboxes, and the scan this replaces never filtered on
+      organization status.
+    * ``--organization-id`` now goes through ``only=``, so an id that is not in
+      the catalogue yields an empty run rather than an unscoped one.
+
+    Organizations with no exited employees are now visited and log a zero
+    count, where the old ``DISTINCT`` skipped them.
+    """
+    only = UUID(limit_org_id) if limit_org_id else None
+    return organization_ids(include_inactive=True, only=only)
 
 
 def main() -> int:
@@ -51,8 +68,6 @@ def main() -> int:
                 ),
             )
             if args.employee_id:
-                from uuid import UUID
-
                 stmt = stmt.where(Employee.employee_id == UUID(args.employee_id))
             employees = list(db.scalars(stmt).all())
             logger.info("Found %d exited employees in org %s", len(employees), org_id)
