@@ -30,8 +30,7 @@ from sqlalchemy.orm import Session
 
 sys.path.insert(0, ".")
 
-from app.db.session_context import cross_org_session, session_for_org  # noqa: E402
-from app.models.finance.core_org.organization import Organization  # noqa: E402
+from app.db.session_context import session_for_org  # noqa: E402
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus  # noqa: E402
 from app.models.finance.gl.fiscal_year import FiscalYear  # noqa: E402
 from app.models.inventory.inventory_transaction import (  # noqa: E402
@@ -39,6 +38,7 @@ from app.models.inventory.inventory_transaction import (  # noqa: E402
     TransactionType,
 )
 from app.services.inventory.inv_posting_adapter import inv_posting_adapter  # noqa: E402
+from app.tenant_catalog import organization_ids
 
 logging.basicConfig(
     level=logging.INFO,
@@ -379,8 +379,7 @@ def main(
     if org_id is None:
         # Cross-tenant authority is limited to discovering organizations.
         # Each organization's report and writes use a fresh tenant session.
-        with cross_org_session() as cross_db:
-            org_ids = list(cross_db.scalars(select(Organization.organization_id)).all())
+        org_ids = organization_ids(include_inactive=True)
         remaining = effective_limit
         for target_org_id in org_ids:
             if remaining <= 0:

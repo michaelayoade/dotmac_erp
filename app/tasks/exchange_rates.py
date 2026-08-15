@@ -11,10 +11,9 @@ import logging
 from typing import Any
 
 from celery import shared_task
-from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
-from app.models.finance.core_org.organization import Organization
+from app.db.session_context import session_for_org
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +36,7 @@ def fetch_daily_exchange_rates() -> dict[str, Any]:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_ids = list(cross_db.scalars(select(Organization.organization_id)).all())
+    org_ids = organization_ids(include_inactive=True)
 
     fetcher = ExchangeRateFetcher()
 
