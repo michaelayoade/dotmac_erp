@@ -311,9 +311,9 @@ def world():
             organization_id=org_id,
             fiscal_year_id=year.fiscal_year_id,
             period_number=7,
-            period_name="2026-07",
+            period_name="2026",
             start_date=date(2026, 7, 1),
-            end_date=date(2026, 7, 31),
+            end_date=date(2026, 12, 31),
             status=PeriodStatus.OPEN,
             created_at=now,
         )

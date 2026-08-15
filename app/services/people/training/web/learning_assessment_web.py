@@ -18,6 +18,9 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
 from app.models.people.training import (
+    AcademyLearningProgress,
+    AcademyLearningRequirement,
+    AcademyProgressStatus,
     TrainingAssessment,
     TrainingAssessmentQuestion,
     TrainingAssessmentStatus,
@@ -34,6 +37,9 @@ from app.models.rbac import Role
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import OrganizationService
 from app.services.people.training import (
+    AcademyProgressService,
+    AcademyReportService,
+    AcademyRequirementService,
     AssessmentService,
     AssignmentService,
     CourseService,
@@ -888,6 +894,284 @@ class LearningAssessmentWebService:
         return templates.TemplateResponse(
             request, "people/training/learning/assignments.html", context
         )
+
+    def academy_requirements_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        designation_id: str | None = None,
+        include_inactive: str | None = None,
+        success: str | None = None,
+        error: str | None = None,
+        page: int = 1,
+    ) -> HTMLResponse:
+        _require_any(auth, ASSIGNMENT_MANAGE_PERMISSIONS)
+        org_id = coerce_uuid(auth.organization_id)
+        pagination = PaginationParams.from_page(page, per_page=25)
+        result = AcademyRequirementService(db).list_requirements(
+            org_id,
+            designation_id=parse_uuid(designation_id),
+            include_inactive=include_inactive == "1",
+            pagination=pagination,
+        )
+        context = base_context(
+            request,
+            auth,
+            "Academy Requirements",
+            "training",
+            db=db,
+        )
+        context.update(
+            {
+                "requirements": result.items,
+                "designations": self._designations(db, org_id),
+                "designation_id": designation_id,
+                "include_inactive": include_inactive == "1",
+                "active_filters": [
+                    name
+                    for name, value in [
+                        ("designation", designation_id),
+                        ("inactive", include_inactive),
+                    ]
+                    if value
+                ],
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total_count": result.total,
+                "limit": result.limit,
+                "success": success,
+                "error": error,
+            }
+        )
+        return templates.TemplateResponse(
+            request,
+            "people/training/learning/academy_requirements.html",
+            context,
+        )
+
+    async def create_academy_requirement_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        _require_any(auth, ASSIGNMENT_MANAGE_PERMISSIONS)
+        form_data = dict(await request.form())
+        try:
+            AcademyRequirementService(db).create_requirement(
+                coerce_uuid(auth.organization_id),
+                designation_id=coerce_uuid(form_data["designation_id"]),
+                academy_course_id=str(form_data.get("academy_course_id") or ""),
+                academy_course_title=str(form_data.get("academy_course_title") or ""),
+                academy_assessment_id=_form_str(form_data, "academy_assessment_id"),
+                academy_assessment_title=_form_str(
+                    form_data,
+                    "academy_assessment_title",
+                ),
+                is_required=_bool(form_data, "is_required"),
+                notes=_form_str(form_data, "notes"),
+                created_by=_actor_id(auth),
+            )
+            db.commit()
+            return _redirect(
+                "/people/training/academy/requirements?success=Requirement+saved"
+            )
+        except Exception as exc:
+            db.rollback()
+            logger.exception("create_academy_requirement_response: failed")
+            return _redirect(_error_url("/people/training/academy/requirements", exc))
+
+    def deactivate_academy_requirement_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        requirement_id: str,
+    ) -> RedirectResponse:
+        _require_any(auth, ASSIGNMENT_MANAGE_PERMISSIONS)
+        try:
+            AcademyRequirementService(db).deactivate_requirement(
+                coerce_uuid(auth.organization_id),
+                coerce_uuid(requirement_id),
+            )
+            db.commit()
+            return _redirect(
+                "/people/training/academy/requirements?success=Requirement+archived"
+            )
+        except Exception as exc:
+            db.rollback()
+            logger.exception("deactivate_academy_requirement_response: failed")
+            return _redirect(_error_url("/people/training/academy/requirements", exc))
+
+    def academy_progress_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        employee_id: str | None = None,
+        designation_id: str | None = None,
+        academy_course_id: str | None = None,
+        status: str | None = None,
+        page: int = 1,
+    ) -> HTMLResponse:
+        _require_any(auth, COURSE_READ_PERMISSIONS)
+        org_id = coerce_uuid(auth.organization_id)
+        progress_status = _enum(AcademyProgressStatus, status)
+        result = AcademyProgressService(db).list_progress(
+            org_id,
+            employee_id=parse_uuid(employee_id),
+            designation_id=parse_uuid(designation_id),
+            academy_course_id=academy_course_id or None,
+            status=progress_status,
+            pagination=PaginationParams.from_page(page, per_page=25),
+        )
+        academy_courses = db.execute(
+            select(
+                AcademyLearningProgress.academy_course_id,
+                func.max(AcademyLearningProgress.academy_course_title),
+            )
+            .where(AcademyLearningProgress.organization_id == org_id)
+            .group_by(AcademyLearningProgress.academy_course_id)
+            .order_by(AcademyLearningProgress.academy_course_id)
+        ).all()
+        context = base_context(request, auth, "Academy Progress", "training", db=db)
+        context.update(
+            {
+                "progress_records": result.items,
+                "employees": self._employees(db, org_id),
+                "designations": self._designations(db, org_id),
+                "academy_courses": academy_courses,
+                "statuses": [item.value for item in AcademyProgressStatus],
+                "employee_id": employee_id,
+                "designation_id": designation_id,
+                "academy_course_id": academy_course_id,
+                "status": status,
+                "active_filters": [
+                    name
+                    for name, value in [
+                        ("employee", employee_id),
+                        ("designation", designation_id),
+                        ("course", academy_course_id),
+                        ("status", status),
+                    ]
+                    if value
+                ],
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total_count": result.total,
+                "limit": result.limit,
+            }
+        )
+        return templates.TemplateResponse(
+            request,
+            "people/training/learning/academy_progress.html",
+            context,
+        )
+
+    def academy_report_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        report_name: str,
+        designation_id: str | None = None,
+        academy_course_id: str | None = None,
+        export: str | None = None,
+    ) -> HTMLResponse | Response:
+        _require_any(auth, COURSE_READ_PERMISSIONS)
+        org_id = coerce_uuid(auth.organization_id)
+        data = self._academy_report_data(
+            db,
+            org_id,
+            report_name,
+            designation_id,
+            academy_course_id,
+        )
+        if export == "csv":
+            return _csv_response(f"academy_{report_name}.csv", data["report"]["rows"])
+        context = base_context(request, auth, data["title"], "training", db=db)
+        context.update(data)
+        context.update(
+            {
+                "designations": self._designations(db, org_id),
+                "academy_courses": self._academy_courses(db, org_id),
+                "designation_id": designation_id,
+                "academy_course_id": academy_course_id,
+                "active_filters": [
+                    name
+                    for name, value in [
+                        ("designation", designation_id),
+                        ("course", academy_course_id),
+                    ]
+                    if value
+                ],
+            }
+        )
+        return templates.TemplateResponse(
+            request,
+            "people/training/learning/academy_report.html",
+            context,
+        )
+
+    def _academy_report_data(
+        self,
+        db: Session,
+        org_id: UUID,
+        report_name: str,
+        designation_id: str | None,
+        academy_course_id: str | None,
+    ) -> dict[str, Any]:
+        svc = AcademyReportService(db)
+        designation_uuid = parse_uuid(designation_id)
+        course_id = academy_course_id or None
+        if report_name == "compliance-by-designation":
+            report = svc.compliance_by_designation(
+                org_id,
+                designation_id=designation_uuid,
+                academy_course_id=course_id,
+            )
+            title = "Academy Compliance by Designation"
+        elif report_name == "missing-required":
+            report = svc.missing_required_courses(
+                org_id,
+                designation_id=designation_uuid,
+                academy_course_id=course_id,
+            )
+            title = "Missing Required Academy Courses"
+        elif report_name == "certification-gaps":
+            report = svc.certification_gaps(
+                org_id,
+                designation_id=designation_uuid,
+                academy_course_id=course_id,
+            )
+            title = "Academy Certification Gaps"
+        else:
+            raise HTTPException(status_code=404, detail="Academy report not found")
+        return {"report": report, "report_name": report_name, "title": title}
+
+    @staticmethod
+    def _academy_courses(db: Session, org_id: UUID) -> list[tuple[str, str | None]]:
+        rows = db.execute(
+            select(
+                AcademyLearningProgress.academy_course_id,
+                func.max(AcademyLearningProgress.academy_course_title),
+            )
+            .where(AcademyLearningProgress.organization_id == org_id)
+            .group_by(AcademyLearningProgress.academy_course_id)
+            .order_by(AcademyLearningProgress.academy_course_id)
+        ).all()
+        requirement_rows = db.execute(
+            select(
+                AcademyLearningRequirement.academy_course_id,
+                func.max(AcademyLearningRequirement.academy_course_title),
+            )
+            .where(AcademyLearningRequirement.organization_id == org_id)
+            .group_by(AcademyLearningRequirement.academy_course_id)
+            .order_by(AcademyLearningRequirement.academy_course_id)
+        ).all()
+        courses = {course_id: title for course_id, title in rows}
+        courses.update({course_id: title for course_id, title in requirement_rows})
+        return sorted(courses.items(), key=lambda item: item[0])
 
     async def assign_employee_response(
         self,

@@ -397,6 +397,8 @@ tax	tax_period	direct	true	true	app_admin	4	true	--	--
 tax	tax_reconciliation	direct	true	true	app_admin	4	true	--	--
 tax	tax_return	direct	true	true	app_admin	4	true	--	--
 tax	tax_transaction	direct	true	true	app_admin	4	true	--	--
+training	academy_learning_progress	direct	true	true	app_admin	1	true	--	--
+training	academy_learning_requirement	direct	true	true	app_admin	1	true	--	--
 training	training_assessment	direct	true	false	app_admin	1	true	--	--
 training	training_assessment_question	direct	true	false	app_admin	1	true	--	--
 training	training_attendee	direct	true	false	app_admin	1	false	--	--
