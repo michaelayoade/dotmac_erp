@@ -29,6 +29,10 @@ These are the repo-level instructions Codex should follow for this workspace.
 - Do not weaken security controls without explicit approval.
 
 ## Codebase Rules (Source of Truth)
+- `docs/adr/` for accepted architecture decisions. An ADR outranks a plan
+  document; where they disagree, fix the plan. Added 2026-08-15 — ERP had no
+  decision record directory, which is how a gate ("After E8 ADR") came to point
+  at a document that did not exist.
 - `CLAUDE.md` for critical coding rules, workflow, verification steps, and module map.
 - `.claude/rules/` for design system, templates, security, services, and web routes standards.
 - `UI_CONVENTIONS.md` and `CONSISTENCY_CHECKLIST.md` for UI consistency checks.
