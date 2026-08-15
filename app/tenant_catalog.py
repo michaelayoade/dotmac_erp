@@ -61,14 +61,14 @@ DISCOVERY_FUNCTION = "tenant_catalog.organization_ids"
 #:
 #: Written as a literal rather than interpolating ``DISCOVERY_FUNCTION``: the
 #: only variable here is a bound parameter, and a query built by string
-#: formatting is worth neither the lint suppression nor the second read. The
-#: assertion below keeps the literal and the constant from drifting.
+#: formatting is worth neither the lint suppression nor the second read.
+#:
+#: ``test_tenant_catalog_contract`` asserts that this literal and
+#: ``DISCOVERY_FUNCTION`` name the same function, so the two cannot drift. That
+#: check lives in the test rather than in a module-level ``assert`` here: it is
+#: a developer-time invariant, and an ``assert`` would both run on every import
+#: in production and vanish under ``python -O``.
 _DISCOVER_SQL = text("SELECT * FROM tenant_catalog.organization_ids(:include_inactive)")
-
-assert DISCOVERY_FUNCTION in str(_DISCOVER_SQL), (
-    "the discovery SQL must call the function named by DISCOVERY_FUNCTION; "
-    "the architecture test asserts nothing else in the tree names it"
-)
 
 
 def _discover_postgresql(session: Session, include_inactive: bool) -> list[uuid.UUID]:

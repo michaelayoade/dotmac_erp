@@ -257,3 +257,19 @@ def test_the_contract_module_uses_raw_sql_not_the_orm_for_discovery() -> None:
         "the SQLite branch is the only place the marker is legitimate, and the "
         "cross-org caller inventory records it as such"
     )
+
+
+def test_the_discovery_sql_and_the_function_constant_cannot_drift() -> None:
+    """The SQL literal and ``DISCOVERY_FUNCTION`` must name the same function.
+
+    ``app/tenant_catalog.py`` writes the query as a literal rather than
+    interpolating the constant, so that the only variable in it is a bound
+    parameter. This test is what keeps the two in step — deliberately here
+    rather than as a module-level ``assert``, which would run on every import
+    in production and disappear under ``python -O``.
+    """
+    source = CONTRACT_MODULE.read_text()
+    assert f"FROM {DISCOVERY_FUNCTION}(" in source, (
+        f"the discovery SQL must call {DISCOVERY_FUNCTION}; the migration "
+        "installs that name and nothing else grants EXECUTE on another"
+    )
