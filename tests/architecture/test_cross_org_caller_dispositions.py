@@ -278,7 +278,18 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # leaving 38. PR #307 converted the three discipline reminder jobs — the
     # first of the domain-scan shape, where due work is found inside each
     # tenant's own session rather than by one cross-tenant scan — leaving 35.
-    baseline = 72
+    #
+    # Then the unshipped OIDC implementation was deleted: its three admin
+    # binding routes (create/disable/list_oidc_identity) each reached
+    # RLS-protected `public.people` through the identity-bootstrap bypass, so
+    # they counted as blockers too.
+    #
+    # 75 -> 69, and the arithmetic is the reason this line is worth reading.
+    # #307 and the OIDC deletion each removed THREE, and each branch therefore
+    # said 72 on its own. Resolving the merge by taking either side's number
+    # would have silently re-admitted the other's three. The count comes from
+    # the merged ledger, not from a side of the conflict.
+    baseline = 69
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

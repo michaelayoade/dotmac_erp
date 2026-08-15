@@ -78,11 +78,15 @@ Dotmac ERP owns only the backoffice and accounting records created inside ERP.
 - Delivery failure is retried and reconciled locally; there is no shared
   transaction or required shared business-domain runtime.
 
-Authentication now follows the same boundary. ERP uses OIDC Authorization Code
-with PKCE to accept an identity assertion, resolves the opaque issuer/subject
-through an ERP-owned binding, and creates an ERP-owned session. ERP does not
-query an identity-provider database, share JWT signing secrets, share cookies,
-or accept provider roles as ERP permissions. See `docs/oidc_identity_contract.md`.
+Authentication follows the same boundary, in its strongest form: ERP accepts no
+external identity assertion at all. Login is local username and password, and
+ERP is the sole issuer of its sessions and cookies. The unshipped OIDC adapter
+was deleted on 2026-08-15 (never enabled, zero rows in production), so no
+protocol owner is registered in `app/services/sot_relationships.py`. ERP does
+not query an identity-provider database, share JWT signing secrets, share
+cookies, or accept provider roles as ERP permissions. Reintroducing external
+identity means adopting the released `dotmac-auth-oidc` package under the terms
+in `docs/oidc_identity_contract.md`.
 
 The detailed local contract is `docs/replaceable_application_boundary.md`.
 

@@ -455,8 +455,9 @@ migration tests, and a rollback/retirement plan.
    and single writer.
 3. Dual-layer tenancy (ORM listener + PostgreSQL RLS) must never be weakened
    or partially initialized (evidence section below).
-4. ERP identity/OIDC/sessions/RBAC stay local; kernel Party/auth/RBAC is
-   prohibited in this program.
+4. ERP identity/sessions/RBAC stay local; kernel Party/auth/RBAC is
+   prohibited in this program. (ERP's unshipped OIDC adapter was deleted on
+   2026-08-15 — see `docs/oidc_identity_contract.md`.)
 5. The existing finance outbox is improved in place; kernel messaging tables
    are not introduced beside it before the E8 ADR.
 6. Kernel `Money` is a boundary value only; ERP's six-decimal posting, FX,
@@ -612,9 +613,11 @@ incl. `hr`, `lease`, `core_org`, `tax`, `rpt`, `pm`, `fa`, `support`,
 
 - Kernel `Party`/`UserCredential`/`AuthSession`/`platform_auth` vs ERP
   `Person` (`public.people`) + `user_credentials`/`sessions`/`mfa_methods`/
-  `api_keys`/`federated_identities` (`app/models/auth.py`) + OIDC adapter
-  (`app/services/sso/oidc.py`). Prohibited for this program (boundary 4);
+  `api_keys` (`app/models/auth.py`). Prohibited for this program (boundary 4);
   guarded already by `tests/architecture/test_identity_protocol_boundary.py`.
+  There is no OIDC adapter to compare against: `app/services/sso/` was deleted
+  on 2026-08-15 (never enabled, zero rows). `federated_identities` survives as
+  an empty table with no reader, pending a separate retirement change.
 
 ### Outbox
 
