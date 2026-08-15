@@ -34,9 +34,17 @@ KERNEL_LINEAGE = "dotmac_kernel.migrations"
 
 
 def _version_locations() -> list[str]:
+    """Read the RAW value — interpolation off.
+
+    `version_locations` contains `%(here)s`, which Alembic injects at runtime
+    and a plain `ConfigParser` does not know about; interpolating raises
+    `InterpolationMissingOptionError` before any assertion runs. Nothing here
+    needs the substituted path anyway: these checks are about which lineages are
+    listed, and `dotmac_files.migrations:versions` is already literal.
+    """
     import configparser
 
-    parser = configparser.ConfigParser()
+    parser = configparser.ConfigParser(interpolation=None)
     parser.read(ALEMBIC_INI)
     return parser["alembic"]["version_locations"].split()
 
