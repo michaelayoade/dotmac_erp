@@ -1,0 +1,75 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, icon_svg %}
+
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block header_actions %}
+<div class="flex flex-wrap gap-2">
+    <a href="/people/training/academy/requirements" class="btn btn-secondary">{{ icon_svg("settings", "h-4 w-4 mr-1.5") }} Requirements</a>
+    <a href="/people/training/academy/progress" class="btn btn-secondary">{{ icon_svg("chart", "h-4 w-4 mr-1.5") }} Progress</a>
+    <a href="{{ request.url.include_query_params(export='csv') }}" class="btn btn-primary">{{ icon_svg("download", "h-4 w-4 mr-1.5") }} Export CSV</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap gap-2">
+        <a href="/people/training/academy/reports/compliance-by-designation" class="btn {{ 'btn-primary' if report_name == 'compliance-by-designation' else 'btn-secondary' }}">Compliance</a>
+        <a href="/people/training/academy/reports/missing-required" class="btn {{ 'btn-primary' if report_name == 'missing-required' else 'btn-secondary' }}">Missing Required</a>
+        <a href="/people/training/academy/reports/certification-gaps" class="btn {{ 'btn-primary' if report_name == 'certification-gaps' else 'btn-secondary' }}">Certification Gaps</a>
+    </div>
+
+    {% call(filter_attrs) compact_filters(base_url="/people/training/academy/reports/" ~ report_name, active_filters=active_filters, auto_submit=false, show_apply_button=true) %}
+        <select name="designation_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Designations</option>
+            {% for designation in designations %}
+            <option value="{{ designation.designation_id }}" {{ 'selected' if designation_id == designation.designation_id|string }}>{{ designation.designation_name }}</option>
+            {% endfor %}
+        </select>
+        <select name="academy_course_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Academy Courses</option>
+            {% for course_id, course_title in academy_courses %}
+            <option value="{{ course_id }}" {{ 'selected' if academy_course_id == course_id }}>{{ course_title or course_id }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
+
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {% for label, value in report.summary.items() %}
+        <div class="card p-5">
+            <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">{{ label|replace('_', ' ')|title }}</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ value }}{% if 'rate' in label %}%{% endif %}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div id="results-container">
+        {% if report.rows %}
+        <div class="card overflow-hidden">
+            <div class="table-container">
+                <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-800/50">
+                            {% for key in report.rows[0].keys() %}
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">{{ key|replace('_', ' ')|title }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        {% for row in report.rows %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            {% for value in row.values() %}
+                            <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ value if value is not none else "-" }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        {{ empty_state("No report data", "No Academy records match the selected filters.", "chart") }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

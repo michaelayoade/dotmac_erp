@@ -132,28 +132,31 @@ class TestComputeChecksum:
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"test content")
             f.flush()
-            try:
-                result = _compute_checksum(f.name)
-                assert isinstance(result, str)
-                assert len(result) == 64  # SHA-256 hex length
-            finally:
-                os.unlink(f.name)
+            filename = f.name
+        try:
+            result = _compute_checksum(filename)
+            assert isinstance(result, str)
+            assert len(result) == 64  # SHA-256 hex length
+        finally:
+            os.unlink(filename)
 
     def test_compute_checksum_deterministic(self):
         """Test that same content produces same checksum."""
         with tempfile.NamedTemporaryFile(delete=False) as f1:
             f1.write(b"identical content")
             f1.flush()
-            with tempfile.NamedTemporaryFile(delete=False) as f2:
-                f2.write(b"identical content")
-                f2.flush()
-                try:
-                    result1 = _compute_checksum(f1.name)
-                    result2 = _compute_checksum(f2.name)
-                    assert result1 == result2
-                finally:
-                    os.unlink(f1.name)
-                    os.unlink(f2.name)
+            filename1 = f1.name
+        with tempfile.NamedTemporaryFile(delete=False) as f2:
+            f2.write(b"identical content")
+            f2.flush()
+            filename2 = f2.name
+        try:
+            result1 = _compute_checksum(filename1)
+            result2 = _compute_checksum(filename2)
+            assert result1 == result2
+        finally:
+            os.unlink(filename1)
+            os.unlink(filename2)
 
 
 class TestGetUploadPath:
@@ -375,19 +378,16 @@ class TestDeleteAttachment:
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"test content")
             f.flush()
+            filename = f.name
 
-            with (
-                patch.object(
-                    AttachmentService, "get_file_path", return_value=Path(f.name)
-                ),
-            ):
-                result = AttachmentService.delete(
-                    mock_db, str(attachment.attachment_id), org_id
-                )
+        with patch.object(AttachmentService, "get_file_path", return_value=Path(filename)):
+            result = AttachmentService.delete(
+                mock_db, str(attachment.attachment_id), org_id
+            )
 
-            assert result is True
-            mock_db.delete.assert_called_once_with(attachment)
-            mock_db.flush.assert_called()
+        assert result is True
+        mock_db.delete.assert_called_once_with(attachment)
+        mock_db.flush.assert_called()
 
     def test_delete_nonexistent_attachment_returns_false(self, mock_db, org_id):
         """Test deleting non-existent attachment returns False."""

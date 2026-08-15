@@ -11,9 +11,13 @@ from .learning_assessment import (
     ProgressService,
     QuestionBankService,
 )
+from .academy import AcademyProgressService, AcademyReportService, AcademyRequirementService
 from .training_service import TrainingService
 
 __all__ = [
+    "AcademyRequirementService",
+    "AcademyProgressService",
+    "AcademyReportService",
     "TrainingService",
     "CourseService",
     "ModuleService",

@@ -31,9 +31,12 @@ from sqlalchemy.dialects.postgresql.json import JSONB as _REAL_JSONB  # noqa: E4
 from sqlalchemy.sql.sqltypes import UUID as _REAL_UUID  # noqa: E402
 
 
-def _fix_patched_types() -> None:
+def _fix_patched_types():
     """Replace SQLite-patched column types with real PostgreSQL types."""
     from sqlalchemy import Text  # noqa: E402
+
+    previous_uuid_type = _pg_dialect.UUID
+    previous_jsonb_type = getattr(_pg_dialect, "JSONB", None)
 
     # Step 1: restore module-level attributes
     _pg_dialect.UUID = _REAL_UUID  # type: ignore[misc]
@@ -50,6 +53,10 @@ def _fix_patched_types() -> None:
     # Step 2: fix already-constructed model columns
     from app.db import Base  # noqa: E402
 
+    previous_column_types = {
+        col: col.type for table in Base.metadata.tables.values() for col in table.columns
+    }
+
     for table in Base.metadata.tables.values():
         for col in table.columns:
             col_type = col.type
@@ -64,10 +71,14 @@ def _fix_patched_types() -> None:
             elif _PatchedJSONB is not None and isinstance(col_type, _PatchedJSONB):
                 col.type = _REAL_JSONB()
 
+    def _restore() -> None:
+        _pg_dialect.UUID = previous_uuid_type  # type: ignore[misc]
+        if previous_jsonb_type is not None:
+            _pg_dialect.JSONB = previous_jsonb_type  # type: ignore[misc]
+        for col, col_type in previous_column_types.items():
+            col.type = col_type
 
-# Only run if the patch was applied (PatchedUUID has an .impl attribute)
-if hasattr(_pg_dialect.UUID, "impl"):
-    _fix_patched_types()
+    return _restore
 
 import os  # noqa: E402
 import uuid  # noqa: E402
@@ -167,9 +178,11 @@ def db(engine) -> Generator[Session, None, None]:
     Each test runs in a transaction that is rolled back after the test,
     ensuring complete isolation between tests.
     """
+    restore_patched_types = _fix_patched_types()
     try:
         connection = engine.connect()
     except OperationalError as exc:
+        restore_patched_types()
         pytest.skip(f"Integration database unavailable: {exc}")
     transaction = connection.begin()
     connection.execute(text("SET LOCAL app.bypass_rls = 'true'"))
@@ -194,6 +207,7 @@ def db(engine) -> Generator[Session, None, None]:
         session.close()
         transaction.rollback()
         connection.close()
+        restore_patched_types()
 
 
 @pytest.fixture(scope="function")

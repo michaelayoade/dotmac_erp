@@ -27,6 +27,7 @@ from app.models.people.training.learning_assessment import (
     TrainingProgressStatus,
 )
 from app.models.person import Person
+from app.services.people.training import AcademyProgressService
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,13 @@ def record_course_completion(
     if not email:
         return {"status": "ignored", "reason": "missing email"}
     if not payload.get("passed"):
+        progress_result = record_course_progress(
+            db,
+            organization_id=organization_id,
+            payload=payload,
+        )
+        if progress_result.get("status") in {"recorded", "updated"}:
+            return progress_result
         return {"status": "ignored", "reason": "not passed"}
 
     course_title = (payload.get("course_title") or "Fiber Academy course").strip()
@@ -82,6 +90,20 @@ def record_course_completion(
     if employee is None:
         return {"status": "ignored", "reason": "no matching employee"}
 
+    progress = None
+    try:
+        progress = AcademyProgressService(db).upsert_from_payload(
+            organization_id,
+            employee=employee,
+            payload={
+                **payload,
+                "status": payload.get("status") or "completed",
+                "progress_percentage": payload.get("progress_percentage") or "100",
+            },
+        )
+    except Exception:
+        logger.exception("Failed to record academy progress for %s", email)
+
     existing: EmployeeCertification | None = None
     if certificate_ref:
         existing = (
@@ -99,6 +121,8 @@ def record_course_completion(
         existing.certification_name = course_title
         existing.issue_date = issue_date
         existing.is_verified = True
+        if progress is not None:
+            progress.certification_id = existing.certification_id
         db.flush()
         logger.info("Updated academy certification %s", existing.certification_id)
         return {"status": "updated", "certification_id": str(existing.certification_id)}
@@ -114,6 +138,9 @@ def record_course_completion(
     )
     db.add(cert)
     db.flush()
+    if progress is not None:
+        progress.certification_id = cert.certification_id
+        db.flush()
     logger.info(
         "Recorded academy certification %s for employee %s",
         cert.certification_id,
@@ -253,3 +280,31 @@ def record_training_projection(
         "assignment_id": str(assignment.id),
         "certification_id": certification_id,
     }
+
+
+def record_course_progress(
+    db: Session, *, organization_id: UUID, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Record an Academy progress event without requiring final certification."""
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        return {"status": "ignored", "reason": "missing email"}
+    employee = (
+        db.execute(
+            select(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .where(Employee.organization_id == organization_id)
+            .where(func.lower(Person.email) == email)
+        )
+        .scalars()
+        .first()
+    )
+    if employee is None:
+        return {"status": "ignored", "reason": "no matching employee"}
+
+    progress = AcademyProgressService(db).upsert_from_payload(
+        organization_id,
+        employee=employee,
+        payload=payload,
+    )
+    return {"status": "updated", "academy_progress_id": str(progress.id)}
