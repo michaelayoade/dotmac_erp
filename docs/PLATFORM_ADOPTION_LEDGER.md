@@ -40,8 +40,10 @@ listener and `app.current_organization_id` policies. Canonical session primers
 now set `app.current_organization_id` and `app.current_tenant` atomically and
 re-arm both after every transaction boundary. The latter is the scope consumed
 by stateful shared-module RLS. Runtime code has no PostgreSQL bypass writer;
-cross-organization module work iterates Organizations under separate
-`session_for_org` sessions.
+that removal is fail-closed against ERP's migrated policy set, not a no-op.
+Cross-organization module work iterates Organizations under separate
+`session_for_org` sessions, and the future `app_user` cutover remains blocked
+until every residual database-wide caller has a narrow reviewed contract.
 
 The complete contract and remaining gate are
 `docs/architecture/organization-tenant-boundary.md`. This slice creates no
@@ -639,9 +641,9 @@ ERP tenancy is dual-layer, and both layers must always be primed together
   SELECT-time only; UPDATE/DELETE isolation is RLS's job.
 - **Layer 2 — PostgreSQL RLS:** policies created dynamically by migration
   `alembic/versions/add_rls_policies.py` (plus `add_hr_rls_policies.py` and
-  schema-specific successors). The 16 currently enabled `training.*` policies
-  still carry the legacy `should_bypass_rls() OR organization_id =
-  get_current_organization_id()` predicate until Step 3 rewrites them.
+  schema-specific successors). A clean database at migration heads has 103
+  tables whose policies still carry the legacy `should_bypass_rls()` predicate;
+  the earlier 16-table count described stale production, not ERP's design.
   Runtime code sets only `app.current_organization_id` (and shared-module
   `app.current_tenant`); it has no writer for the user-settable bypass GUC.
 

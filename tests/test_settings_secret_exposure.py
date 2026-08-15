@@ -88,10 +88,12 @@ class TestHistoryMasksSecrets:
 
 
 class TestHistoryIsTenantScoped:
-    """The settings routes run on an RLS-bypass session, so nothing under them
-    scopes a history row to a tenant. The ownership check is the only thing
-    standing between one tenant and another's settings history — including a
-    cross-tenant *write* via ``POST /history/restore``.
+    """Settings routes use the ORM cross-org marker, not an RLS bypass.
+
+    The current settings-history table has no PostgreSQL RLS, so this ownership
+    check is the application boundary between tenants — including for a
+    cross-tenant write through ``POST /history/restore``. Future database RLS
+    remains independently effective.
     """
 
     def test_entry_from_another_organization_is_not_owned(self):

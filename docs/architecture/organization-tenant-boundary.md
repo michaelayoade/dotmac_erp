@@ -90,13 +90,17 @@ another.
 ## Bypass boundary
 
 Runtime code has no writer for the legacy user-settable `app.bypass_rls` GUC.
-The 16 existing `training.*` policies still consult it until the Step 3 forward
-migration rewrites them, but no application, worker, CLI, cron SQL, or archived
-executable can assert it. Historical Alembic revisions remain immutable.
+A clean database at migration heads has 103 tables with policies that still
+consult it until a forward migration rewrites them. The earlier 16-table count
+described stale production, not ERP's migration design. No application, worker,
+CLI, cron SQL, or archived executable can assert the GUC; historical Alembic
+revisions remain immutable.
 
 `session.info["allow_cross_org"]` is a separate application-layer boundary. It
 continues to bypass the ORM listener for approved pre-auth and administrative
-flows, but it does not bypass PostgreSQL RLS.
+flows, but it does not bypass PostgreSQL RLS. Removing the GUC writer therefore
+makes migrated cross-tenant reads fail closed under `app_user`; the runtime-role
+cutover is blocked until those callers have individual database contracts.
 
 A cross-organization job that touches an RLS-protected ERP or module table must
 enumerate Organizations under an approved discovery path, close that session,

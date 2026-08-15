@@ -6,8 +6,9 @@ This module is the one writer for ERP and shared-module PostgreSQL tenant scope.
 ERP's Organization UUID maps directly to the shared Tenant UUID. Every tenant
 primer sets ``app.current_organization_id`` and ``app.current_tenant`` in one
 transaction-local statement. Runtime code cannot assert a PostgreSQL RLS
-bypass; cross-organization application reads use the separate ORM-listener
-boundary in ``app.db.session_context``.
+bypass. The separate ORM-listener boundary in ``app.db.session_context`` permits
+application-layer cross-organization reads only where PostgreSQL RLS does not
+require tenant context; it is not database authority.
 
 Usage:
     # In a request middleware or dependency:
