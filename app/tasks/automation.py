@@ -14,15 +14,38 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from sqlalchemy import distinct, select
+from sqlalchemy import select
 
 from app.db.session_context import cross_org_session, session_for_org
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
 
+def _list_organization_ids() -> list[UUID]:
+    """Every tenant, deactivated ones included.
+
+    The two scans this replaced enumerated distinct ``organization_id`` values
+    from ``RecurringTemplate`` and ``WorkflowRule`` rows. Neither carried an
+    organization-active predicate, so a deactivated organization with a due
+    template or an active scheduled rule was processed. Enumerating only active
+    organizations here would quietly stop processing it — a narrowing decision
+    that is separate from repairing the discovery path, and not one this change
+    makes.
+    """
+    return organization_ids(include_inactive=True)
+
+
 def _resolve_workflow_rule_org(rule_id: str) -> UUID | None:
-    """Resolve a workflow rule's organization before tenant-scoped execution."""
+    """Resolve a workflow rule's organization before tenant-scoped execution.
+
+    This is resolution, not enumeration: it answers "which tenant owns this one
+    row", given an id that arrived from outside any tenant context. The
+    tenant-catalog definer deliberately returns identifiers and nothing else, so
+    it cannot answer that question, and there is no tenant-resolution contract
+    to use instead yet. The seam therefore stays as it is rather than being
+    converted into something that only looks converted.
+    """
     from app.models.finance.automation import WorkflowRule
 
     with cross_org_session() as db:
@@ -31,40 +54,6 @@ def _resolve_workflow_rule_org(rule_id: str) -> UUID | None:
                 WorkflowRule.rule_id == UUID(rule_id)
             )
         )
-
-
-def _list_orgs_with_due_recurring_templates() -> list[UUID]:
-    """List organizations that have due recurring templates."""
-    from datetime import date
-
-    from app.models.finance.automation import RecurringStatus, RecurringTemplate
-
-    stmt = (
-        select(distinct(RecurringTemplate.organization_id))
-        .where(
-            RecurringTemplate.status == RecurringStatus.ACTIVE,
-            RecurringTemplate.next_run_date <= date.today(),
-        )
-        .order_by(RecurringTemplate.organization_id)
-    )
-    with cross_org_session() as db:
-        return list(db.scalars(stmt).all())
-
-
-def _list_orgs_with_scheduled_workflow_rules() -> list[UUID]:
-    """List organizations that have active scheduled workflow rules."""
-    from app.models.finance.automation import TriggerEvent, WorkflowRule
-
-    stmt = (
-        select(distinct(WorkflowRule.organization_id))
-        .where(
-            WorkflowRule.is_active.is_(True),
-            WorkflowRule.trigger_event == TriggerEvent.ON_SCHEDULE,
-        )
-        .order_by(WorkflowRule.organization_id)
-    )
-    with cross_org_session() as db:
-        return list(db.scalars(stmt).all())
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
@@ -160,9 +149,14 @@ def process_recurring_templates() -> dict[str, Any]:
     total = 0
     succeeded = 0
     failed = 0
-    for org_id in _list_orgs_with_due_recurring_templates():
+    for org_id in _list_organization_ids():
         try:
             with session_for_org(org_id) as db:
+                # ``run_due_templates`` takes no organization_id — it scopes
+                # through the session. Called here it sees only this tenant's
+                # templates, and only the due ones, so the pre-scan that used to
+                # narrow the loop to organizations with due work bought nothing
+                # a tenant-scoped query does not already do.
                 logs: list[Any] = recurring_service.run_due_templates(db)
                 db.commit()
         except Exception:
@@ -206,9 +200,11 @@ def process_scheduled_workflow_rules() -> dict[str, Any]:
         "actions_fired": 0,
         "errors": [],
     }
-    for org_id in _list_orgs_with_scheduled_workflow_rules():
+    for org_id in _list_organization_ids():
         try:
             with session_for_org(org_id) as db:
+                # Same shape: ``evaluate_due_rules`` selects the active
+                # ON_SCHEDULE rules itself, through this tenant's session.
                 org_results = scheduled_evaluator.evaluate_due_rules(db)
                 db.commit()
             results["rules_checked"] += org_results["rules_checked"]
