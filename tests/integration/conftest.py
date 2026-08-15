@@ -170,7 +170,11 @@ def pytest_collection_modifyitems(config: object, items: list[pytest.Item]) -> N
 @pytest.fixture(scope="session")
 def engine():
     """Provide the test database engine."""
-    return _test_engine
+    restore_patched_types = _fix_patched_types()
+    try:
+        yield _test_engine
+    finally:
+        restore_patched_types()
 
 
 @pytest.fixture(scope="function")
@@ -181,11 +185,9 @@ def db(engine) -> Generator[Session, None, None]:
     Each test runs in a transaction that is rolled back after the test,
     ensuring complete isolation between tests.
     """
-    restore_patched_types = _fix_patched_types()
     try:
         connection = engine.connect()
     except OperationalError as exc:
-        restore_patched_types()
         pytest.skip(f"Integration database unavailable: {exc}")
     transaction = connection.begin()
     connection.execute(text("SET LOCAL app.bypass_rls = 'true'"))
@@ -210,7 +212,6 @@ def db(engine) -> Generator[Session, None, None]:
         session.close()
         transaction.rollback()
         connection.close()
-        restore_patched_types()
 
 
 @pytest.fixture(scope="function")
