@@ -1,4 +1,4 @@
-"""The exact tenant disposition of every ERP table, enforced against PostgreSQL.
+"""The exact migration-defined tenant disposition, enforced against PostgreSQL.
 
 Counts are too easy to game: "16 tables have RLS" stays true when someone adds a
 policy to one table and drops it from another. So this checks the EXACT set —
@@ -7,40 +7,36 @@ and write it — against the live catalog. A table that appears, disappears, or
 changes disposition fails until `tenant_table_inventory.tsv` is updated in the
 same change, which is what makes the update a reviewed diff.
 
-## The three debts this pins
+The baseline is generated from a clean PostgreSQL database after `alembic upgrade
+heads`, including every composed module lineage. It describes the schema ERP
+defines, not whichever subset production has applied. Production migration drift
+is recorded separately under `docs/inventories/` and is never an input to this
+gate.
 
-Measured 2026-08-15 on Seabone production. They are separate programmes and must
-not be conflated:
+## The debts this pins
 
-1. **Tenant-isolation debt.** 311 tables carry `organization_id`; 16 have RLS.
-   295 tenant-scoped tables have no database-level isolation at all.
-2. **Least-privilege debt.** The application connects as `postgres`. Moving it to
-   `app_user` removes superuser, DDL and ownership — it does NOT deliver tenant
-   isolation while 295 tables have no policy, and must not be described as if it
-   did.
-3. **Referential-integrity debt.** The ORM declares 1,279 `ForeignKey`
-   relationships; the database holds 188 FK constraints across 65 tables. 355
-   tables have none. This is why the 103 `unclassified` rows below cannot be
-   resolved from the catalog: their link to a tenant-owning parent exists only in
-   Python.
+1. **Tenant-isolation debt.** 309 tables carry ERP's `organization_id`; module
+   tenant tables instead carry `tenant_id`. The baseline records exact ENABLE,
+   FORCE, policy-count and unsafe-GUC state for every table.
+2. **Referential-integrity debt.** A table is `inherited` only when PostgreSQL
+   enforces its path to a direct tenant table. ORM metadata is not evidence for a
+   database boundary.
+3. **Deployment drift.** Production was still at
+   `20260808_open_setting_domain` when this baseline was corrected. Its 420-table
+   catalog is a drift snapshot, not ERP's design.
 
 ## Reading the classes
 
-- `direct` — carries `organization_id`. Tenant data, isolatable today.
-- `inherited` — no `organization_id`, but a real FK to a table that has one, so
-  the tenant path is derivable in the database (the starter's `PartyPerson`
-  shape).
-- `unclassified` — neither. **NOT a synonym for global.** 102 of the 103 have no
-  foreign keys whatsoever, and most are plainly tenant data by name
-  (`ar.invoice_line`, `gl.journal_entry_line`, `ap.payment_allocation`). Each
-  needs an explicit disposition — genuine reference data, tenant child requiring
-  a declared path, or dead — and until it gets one it is UNKNOWN, which is the
+- `direct` — carries `organization_id` or module-standard `tenant_id`. Tenant
+  data, isolatable today.
+- `inherited` — no direct scope column, but a real FK to a table that has one, so
+  the tenant path is derivable in PostgreSQL.
+- `platform` — an explicitly dispositioned control-plane/catalog table. These
+  tables do not use tenant RLS and must not be inferred from a nullable scope.
+- `unclassified` — none of the three. **NOT a synonym for global.** Each needs
+  an explicit disposition — genuine reference data, tenant child requiring a
+  declared path, or dead — and until it gets one it is UNKNOWN, which is the
   honest state to record.
-
-Two rows are worth naming because their disposition is obviously "delete, after
-checking": `fa.asset_gl_recon_backup_20260506` and
-`fa.asset_serial_placeholder_backup_20260520` are ad-hoc backup copies of tenant
-data sitting outside every policy.
 """
 
 from __future__ import annotations
@@ -79,18 +75,6 @@ SCHEMA_FIELDS = (
     "policy_uses_settable_guc",
 )
 
-# Tables that exist in production and in NO migration — ad-hoc backups taken
-# during past incidents. Their presence is itself the finding: copies of tenant
-# data sitting outside every policy, invisible to any schema review. Listed so
-# the set cannot grow unnoticed, and excluded from the migration-built
-# comparison because no migration creates them.
-PRODUCTION_ONLY = frozenset(
-    {
-        ("fa", "asset_gl_recon_backup_20260506"),
-        ("fa", "asset_serial_placeholder_backup_20260520"),
-    }
-)
-
 # Mirrors the extraction query. `has_table_privilege` rather than ACL parsing:
 # it answers the question that matters — can this role actually reach the table,
 # including through role membership — instead of what a grant statement said.
@@ -101,20 +85,29 @@ WITH t AS (
          c.relforcerowsecurity AS forced, pg_get_userbyid(c.relowner) AS owner
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-), org AS (
+), scoped AS (
   SELECT attrelid FROM pg_attribute
-  WHERE attname = 'organization_id' AND attnum > 0 AND NOT attisdropped
+  WHERE attname IN ('organization_id', 'tenant_id')
+    AND attnum > 0 AND NOT attisdropped
 ), fk AS (
-  SELECT conrelid, bool_or(confrelid IN (SELECT attrelid FROM org)) AS fk_to_org
+  SELECT conrelid,
+         bool_or(confrelid IN (SELECT attrelid FROM scoped)) AS fk_to_scope
   FROM pg_constraint WHERE contype = 'f' GROUP BY conrelid
 ), pol AS (
   SELECT polrelid, count(*) AS npol,
-         bool_or(pg_get_expr(polqual, polrelid) LIKE '%should_bypass_rls%') AS uses_guc
+         bool_or(
+           COALESCE(pg_get_expr(polqual, polrelid), '') LIKE '%should_bypass_rls%'
+           OR COALESCE(pg_get_expr(polwithcheck, polrelid), '')
+              LIKE '%should_bypass_rls%'
+         ) AS uses_guc
   FROM pg_policy GROUP BY polrelid
 )
 SELECT t.sch, t.tbl,
-       CASE WHEN t.oid IN (SELECT attrelid FROM org) THEN 'direct'
-            WHEN COALESCE(fk.fk_to_org, false) THEN 'inherited'
+       CASE WHEN (t.sch = 'public' AND t.tbl IN ('tenants', 'tenant_domains'))
+                  OR (t.sch = 'mod_files' AND t.tbl = 'platform_stored_files')
+              THEN 'platform'
+            WHEN t.oid IN (SELECT attrelid FROM scoped) THEN 'direct'
+            WHEN COALESCE(fk.fk_to_scope, false) THEN 'inherited'
             ELSE 'unclassified' END,
        t.rls::text, t.forced::text, t.owner,
        COALESCE(pol.npol, 0)::text, COALESCE(pol.uses_guc, false)::text,
@@ -156,9 +149,7 @@ def test_no_table_appears_or_disappears_unrecorded(observed) -> None:
     or it fails here."""
     recorded = _recorded()
     added = sorted(f"{s}.{t}" for s, t in observed.keys() - recorded.keys())
-    removed = sorted(
-        f"{s}.{t}" for s, t in recorded.keys() - observed.keys() - PRODUCTION_ONLY
-    )
+    removed = sorted(f"{s}.{t}" for s, t in recorded.keys() - observed.keys())
     assert not added, f"tables present in the database but not the inventory: {added}"
     assert not removed, f"inventory names tables the database lacks: {removed}"
 
@@ -175,18 +166,6 @@ def test_every_recorded_disposition_matches_the_database(observed) -> None:
     assert not drift, "catalog disposition drifted from the inventory:\n" + "\n".join(
         drift
     )
-
-
-def test_production_only_tables_are_named_and_do_not_multiply() -> None:
-    """Ad-hoc backup copies of tenant data, created outside any migration.
-
-    Recorded rather than quietly excluded: an exclusion nobody can see is how a
-    table full of another tenant's rows stays invisible for a year.
-    """
-    recorded = _recorded()
-    for schema, table in PRODUCTION_ONLY:
-        assert (schema, table) in recorded, f"{schema}.{table} vanished from inventory"
-    assert len(PRODUCTION_ONLY) == 2
 
 
 def test_the_drift_detector_is_sensitive(observed) -> None:
@@ -222,7 +201,7 @@ def test_the_isolation_debt_is_recorded_and_only_shrinks() -> None:
     being lowered in the same change, so progress is recorded rather than
     silently absorbed.
     """
-    baseline = 295
+    baseline = 158
     unprotected = [
         f"{row['schema']}.{row['table']}"
         for row in _recorded().values()
@@ -238,7 +217,7 @@ def test_the_isolation_debt_is_recorded_and_only_shrinks() -> None:
 def test_unclassified_tables_are_listed_not_assumed_global() -> None:
     """`unclassified` means UNKNOWN, and the count is pinned so the unknown set
     cannot quietly grow while nobody dispositions it."""
-    baseline = 103
+    baseline = 20
     unclassified = [
         f"{row['schema']}.{row['table']}"
         for row in _recorded().values()
@@ -251,10 +230,26 @@ def test_unclassified_tables_are_listed_not_assumed_global() -> None:
     )
 
 
+def test_enabled_rls_without_force_is_recorded_and_only_shrinks() -> None:
+    """FORCE debt cannot disappear without lowering its reviewed baseline."""
+    baseline = 70
+    owner_exempt = [
+        f"{row['schema']}.{row['table']}"
+        for row in _recorded().values()
+        if row["rls_enabled"] == "true" and row["rls_forced"] != "true"
+    ]
+    assert len(owner_exempt) == baseline, (
+        f"{len(owner_exempt)} RLS-enabled tables lack FORCE, baseline is "
+        f"{baseline}. If this fell, lower the baseline in the same change; if "
+        "it rose, an owner-exempt policy shipped."
+    )
+
+
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Step 3 of the programme: all 16 policies still consult the settable "
+        "Step 3 of the programme: 103 migrated tables still have policies "
+        "that consult the settable "
         "`app.bypass_rls`. strict=True so this FAILS the moment the repair "
         "lands, forcing the marker off rather than letting a fixed defect keep "
         "an xfail forever."
@@ -268,10 +263,10 @@ def test_no_policy_depends_on_a_user_settable_guc() -> None:
     (`REVOKE SET ON PARAMETER` is accepted and is a no-op, since a customized
     option has no default grant to revoke).
 
-    Currently 16 of 16 policies depend on it, so this is marked `xfail(strict)`
-    rather than skipped: a skip is invisible, while a strict xfail is both
-    visible today and the acceptance signal for step 3 — it turns into a build
-    failure the moment the repair makes it pass.
+    Currently 103 migrated tables have at least one dependent policy, so this is
+    marked `xfail(strict)` rather than skipped: a skip is invisible, while a
+    strict xfail is both visible today and the acceptance signal for step 3 — it
+    turns into a build failure the moment the repair makes it pass.
     """
     offenders = sorted(
         f"{row['schema']}.{row['table']}"
@@ -279,6 +274,6 @@ def test_no_policy_depends_on_a_user_settable_guc() -> None:
         if row["policy_uses_settable_guc"] == "true"
     )
     assert not offenders, (
-        f"{len(offenders)} policies can be bypassed by `SET app.bypass_rls`: "
+        f"{len(offenders)} tables have policies bypassed by `SET app.bypass_rls`: "
         f"{offenders}"
     )
