@@ -10,7 +10,7 @@ staff are recorded here).
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
@@ -142,7 +142,7 @@ def record_training_projection(
             _required_text(payload, "occurred_at").replace("Z", "+00:00")
         )
         if occurred_at.tzinfo is None:
-            occurred_at = occurred_at.replace(tzinfo=UTC)
+            occurred_at = occurred_at.replace(tzinfo=timezone.utc)
     except (ValueError, InvalidOperation) as exc:
         return {"status": "ignored", "reason": str(exc)}
     if progress_pct < 0 or progress_pct > 100:
@@ -210,7 +210,7 @@ def record_training_projection(
     elif progress.academy_updated_at:
         projected_at = progress.academy_updated_at
         if projected_at.tzinfo is None:
-            projected_at = projected_at.replace(tzinfo=UTC)
+            projected_at = projected_at.replace(tzinfo=timezone.utc)
         if occurred_at <= projected_at:
             return {"status": "duplicate", "assignment_id": str(assignment.id)}
     progress.completion_percentage = progress_pct

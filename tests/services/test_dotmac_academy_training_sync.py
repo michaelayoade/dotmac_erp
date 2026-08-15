@@ -351,18 +351,24 @@ def test_v2_older_progress_cannot_overwrite_newer_state(db_session):
         occurred_at="2026-08-15T11:00:00+00:00",
     )
     older = dict(newer, progress_pct=20, occurred_at="2026-08-15T10:00:00+00:00")
-    assert dispatch(
-        db_session,
-        organization_id=ORG,
-        event_type="training_progress_updated",
-        payload=newer,
-    )["status"] == "recorded"
-    assert dispatch(
-        db_session,
-        organization_id=ORG,
-        event_type="training_progress_updated",
-        payload=older,
-    )["status"] == "duplicate"
+    assert (
+        dispatch(
+            db_session,
+            organization_id=ORG,
+            event_type="training_progress_updated",
+            payload=newer,
+        )["status"]
+        == "recorded"
+    )
+    assert (
+        dispatch(
+            db_session,
+            organization_id=ORG,
+            event_type="training_progress_updated",
+            payload=older,
+        )["status"]
+        == "duplicate"
+    )
     progress = db_session.scalar(
         select(TrainingCourseProgress).where(
             TrainingCourseProgress.organization_id == ORG,
