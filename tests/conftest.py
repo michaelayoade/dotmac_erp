@@ -316,15 +316,7 @@ class MockSettings:
     dotmac_academy_webhook_secret = None
     dotmac_academy_webhook_prefix = "/dotmac-academy"
     dotmac_academy_issuing_authority = "Dotmac Academy"
-    # OpenID Connect settings
-    oidc_enabled = False
-    oidc_issuer = None
-    oidc_client_id = None
-    oidc_client_secret = None
-    oidc_discovery_url = None
-    oidc_redirect_uri = None
-    oidc_scopes = "openid profile email"
-    oidc_request_timeout = 10.0
+    # No OIDC settings: ERP ships no external-identity protocol adapter.
     # Multi-org session listener defaults on; tests keep the same posture.
     enforce_org_filter = True
     # Coach / Intelligence Engine

@@ -131,19 +131,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "single has_permission owner is the consolidation target."
                 ),
             ),
-            SOTService(
-                name="auth.oidc",
-                module="app.services.sso.oidc",
-                owns=(
-                    "OIDC Authorization Code + PKCE protocol exchange",
-                    "issuer/subject to ERP person binding resolution",
-                ),
-                depends_on=("auth.flow", "auth.rbac"),
-                notes=(
-                    "The identity provider proves identity only. ERP owns its "
-                    "sessions, cookies, roles, permissions, and user status."
-                ),
-            ),
+            # No external-identity protocol owner is registered: ERP's
+            # unshipped OIDC adapter was deleted, and the registry records
+            # as-built owners only. Reintroduction adopts the released
+            # dotmac-auth-oidc package and re-registers an owner here.
             SOTService(
                 name="auth.rbac",
                 module="app.services.rbac",
@@ -161,9 +152,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         entrypoints=("app.api.auth_flow", "app.web.auth", "app.api.rbac"),
         rule=(
             "Person is the single ERP login identity; credentials, sessions, "
-            "MFA, API keys, and federated issuer/subject bindings resolve to "
-            "person_id. External authorization claims and counterparties "
-            "(Customer, Supplier) are not ERP identities or permission owners."
+            "MFA, and API keys resolve to person_id. ERP accepts no external "
+            "identity assertion today. External authorization claims and "
+            "counterparties (Customer, Supplier) are not ERP identities or "
+            "permission owners."
         ),
     ),
     DomainSOT(

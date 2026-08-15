@@ -1279,7 +1279,8 @@ def require_web_auth(
     """
     Require authentication for web routes and set tenant context.
 
-    OIDC users reach this dependency only after ERP has issued a local session.
+    Every session reaching this dependency was issued by ERP itself; ERP
+    accepts no externally minted session or identity assertion.
 
     Checks for JWT in:
     1. Authorization header (Bearer token)

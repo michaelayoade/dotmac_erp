@@ -3,9 +3,10 @@ Auth web view service.
 
 Provides response builders for auth-related web routes.
 
-OIDC Support:
-When OIDC is enabled, login pages use Authorization Code + PKCE. ERP then
-creates its own local session from a pre-provisioned federated identity binding.
+ERP has no external-identity protocol adapter: login is local username and
+password only, and ERP is the sole issuer of its sessions and cookies. See
+``docs/oidc_identity_contract.md`` for what reintroducing an external identity
+provider would require.
 """
 
 import logging
@@ -28,11 +29,6 @@ if TYPE_CHECKING:
 from app.config import settings
 from app.db import SessionLocal
 from app.services.auth_flow import AuthFlow, hash_session_token
-from app.services.sso.oidc import (
-    OIDC_STATE_COOKIE,
-    OIDC_STATE_TTL_SECONDS,
-    oidc_client,
-)
 from app.templates import templates
 from app.web.deps import WebAuthContext, brand_context, org_brand_context
 
@@ -103,29 +99,6 @@ def _sanitize_redirect_url(url: str, request: Request, default: str = "/") -> st
 class AuthWebService:
     """View service for auth web routes."""
 
-    def _oidc_login_response(
-        self,
-        request: Request,
-        next_url: str,
-        db: "Session | None",
-    ) -> RedirectResponse | None:
-        if not settings.oidc_enabled:
-            return None
-        if db is None:
-            raise RuntimeError("OIDC login requires an ERP database session")
-        login = oidc_client.start_login(db, request, next_url)
-        response = RedirectResponse(url=login.authorization_url, status_code=302)
-        response.set_cookie(
-            key=OIDC_STATE_COOKIE,
-            value=login.state_cookie,
-            httponly=True,
-            secure=AuthFlow.refresh_cookie_settings(db)["secure"],
-            samesite="lax",
-            path="/auth/oidc",
-            max_age=OIDC_STATE_TTL_SECONDS,
-        )
-        return response
-
     def _get_brand_for_login(
         self,
         db: "Session | None",
@@ -180,10 +153,6 @@ class AuthWebService:
         if auth.is_authenticated:
             return RedirectResponse(url=safe_next_url, status_code=302)
 
-        oidc_response = self._oidc_login_response(request, safe_next_url, db)
-        if oidc_response:
-            return oidc_response
-
         brand = self._get_brand_for_login(db, org_slug)
 
         response = templates.TemplateResponse(
@@ -211,10 +180,6 @@ class AuthWebService:
 
         if auth.is_authenticated and "admin" in auth.roles:
             return RedirectResponse(url=safe_next_url, status_code=302)
-
-        oidc_response = self._oidc_login_response(request, safe_next_url, db)
-        if oidc_response:
-            return oidc_response
 
         brand = self._get_brand_for_login(db)
 
@@ -322,29 +287,6 @@ class AuthWebService:
         except Exception as e:
             logger.warning("Failed to revoke session: %s", e)
             db.rollback()
-
-    def oidc_callback_response(
-        self,
-        request: Request,
-        *,
-        code: str,
-        state: str,
-        state_cookie: str | None,
-        db: "Session",
-    ) -> RedirectResponse:
-        authentication = oidc_client.complete_login(
-            db,
-            request,
-            code=code,
-            state=state,
-            state_cookie=state_cookie,
-        )
-        next_url = _sanitize_redirect_url(authentication.next_url, request, default="/")
-        tokens = AuthFlow._issue_tokens(db, authentication.person_id, request)
-        response = RedirectResponse(url=next_url, status_code=302)
-        AuthFlow.set_auth_cookies(db, response, tokens)
-        response.delete_cookie(key=OIDC_STATE_COOKIE, path="/auth/oidc")
-        return response
 
     def forgot_password_response(
         self,
