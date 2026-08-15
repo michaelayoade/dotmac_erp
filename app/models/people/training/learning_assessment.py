@@ -100,6 +100,13 @@ class TrainingCourse(Base):
         Index("idx_training_course_org_active", "organization_id", "is_active"),
         Index("idx_training_course_department", "organization_id", "department_id"),
         Index("idx_training_course_status", "organization_id", "status"),
+        Index(
+            "uq_training_course_academy_ref",
+            "organization_id",
+            "academy_course_ref",
+            unique=True,
+            postgresql_where=text("academy_course_ref IS NOT NULL"),
+        ),
         {"schema": "training"},
     )
 
@@ -116,6 +123,9 @@ class TrainingCourse(Base):
         index=True,
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Stable Academy-owned identity. Course titles are presentation data and
+    # must never be used to join the two systems.
+    academy_course_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     thumbnail_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     department_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -179,7 +189,6 @@ class TrainingCourse(Base):
         nullable=True,
         onupdate=func.now(),
     )
-
     department: Mapped[Department | None] = relationship("Department")
     creator: Mapped[Person | None] = relationship("Person")
     modules: Mapped[list[TrainingCourseModule]] = relationship(
@@ -1029,6 +1038,9 @@ class TrainingCourseProgress(Base):
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
+    )
+    academy_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     course: Mapped[TrainingCourse] = relationship(
