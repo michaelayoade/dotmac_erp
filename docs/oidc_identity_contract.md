@@ -102,8 +102,36 @@ Reintroduction requires all of the following, and none of it is a
    `iss`/`aud`/`exp`/`iat` requirement (including a **missing** `aud`), and
    nonce mismatch against real tokens. Monkeypatching the validator out is what
    hid defect 2; a test suite that does it again is not acceptance evidence.
-3. Provision protocol state signing material distinct from the session-JWT
-   secret.
+3. Hold the ceremony **server-side**, addressed by an opaque, single-use
+   state id, in a **shared atomic `StateStore`**.
+
+   Not "state signing material distinct from the session-JWT secret" — that was
+   this document's earlier requirement and it is superseded. It described a
+   better version of the wrong design.
+
+   Signing the ceremony into the `state` parameter makes it tamper-evident but
+   still **readable** by anything that sees the URL: a referrer header, a proxy
+   log, browser history. The PKCE verifier is in there, and possession of it
+   plus an intercepted code completes the exchange — which is the interception
+   PKCE exists to prevent. Its confidentiality would rest on the consumer
+   setting an `HttpOnly` cookie, which is a property of the integration rather
+   than of the design.
+
+   An opaque id has nothing to leak, so the question disappears instead of being
+   managed. It also removes the moving part: with nothing serialized there is no
+   signing key, no domain separator, and no key separation to get wrong — which
+   is what defect 1 above was. **The safest version of that defect is not a
+   better key; it is no key.**
+
+   The store must be SHARED across every process serving the callback and its
+   claim must be ATOMIC (`DELETE ... RETURNING`, or Redis `GETDEL`). ERP runs
+   `cpu_count() * 2 + 1` gunicorn workers, so a per-process store fails a share
+   of logins at random. Claiming the ceremony is how the verifier is recovered,
+   so single use is structural rather than an added check: a replayed callback
+   finds nothing to exchange with.
+
+   `dotmac-auth-oidc` implements exactly this and requires a store — there is no
+   null-store mode to fall into.
 4. Re-register an `auth.oidc` owner in `app/services/sot_relationships.py`.
 5. Re-add the admin binding routes and regenerate
    `tests/architecture/openapi_contract_surface.json` with
@@ -133,8 +161,21 @@ deletion. The recommendation and its implications:
   is a NEW migration at the current head whose `downgrade()` recreates the table
   exactly as `20260720` defined it.
 - The same commit removes the `FederatedIdentity` class, its export from
-  `app/models/__init__.py`, its entry in `tests/conftest.py`'s
-  `SQLITE_COMPATIBLE_TABLES`, and the `test_federated_identity_has_no_reader_or_writer`
-  guard that only exists to protect the interim state.
+  `app/models/__init__.py`, and its entry in `tests/conftest.py`'s
+  `SQLITE_COMPATIBLE_TABLES`.
+- **Replace `test_federated_identity_has_no_reader_or_writer`; do not simply
+  delete it.** That guard protects the interim state — a table with no
+  consumer — and once the table is gone its premise has evaporated. But
+  deleting it leaves the region UNMONITORED rather than resolved, which is the
+  distinction ADR-0018 draws: an exemption (or a retirement) has to state an
+  enforceable premise, and "nothing checks this any more" is not one.
+
+  The successor asserts the stronger post-drop invariant, in three parts:
+  **no table** (absent from the models metadata and from the migration head's
+  schema), **no model** (no `FederatedIdentity` class anywhere), and **no
+  consumer** (no reference to the class and no raw `federated_identities` in
+  SQL — the raw-name half is what a model-only scan misses). Carry the AST
+  scanners from the current guard rather than rewriting them as text matches,
+  and keep their sensitivity proofs.
 - If external identity is reintroduced before the drop lands, drop the drop
   instead: the table is already the right shape.
