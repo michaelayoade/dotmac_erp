@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db.session_context import prime_tenant_context
 from app.models.people.hr import Employee, EmployeeStatus
-from app.rls import bypass_rls_sync
 from app.models.people.hr.checklist_template import (
     ChecklistTemplate,
     ChecklistTemplateType,
@@ -271,10 +270,11 @@ class OnboardingService:
         - Onboarding is not cancelled
 
         Session lifecycle: the public portal route opens this session
-        unprimed (the org isn't known until the token resolves). We
-        bypass tenant scoping for the lookup, then call
-        :func:`prime_tenant_context` once the org is identified so the
-        rest of the request runs with both tenant layers set.
+        unprimed (the org isn't known until the token resolves). The lookup's
+        behavior is unchanged here; once the org is identified,
+        :func:`prime_tenant_context` sets both tenant layers for the rest of
+        the request. The protected-domain slice must supply a narrow pre-auth
+        contract before enabling RLS on this table.
 
         Security: Tokens are stored as SHA-256 hashes. The incoming token
         is hashed before comparison to prevent timing attacks and ensure
@@ -287,23 +287,23 @@ class OnboardingService:
 
         # The initial lookup is cross-org by necessity — the token is
         # the *only* identifier we have, and the row carries the org.
-        # Without ``bypass_rls_sync`` this select silently returns None
-        # on any RLS-protected schema (today the people.hr schema does
-        # not have DB-native RLS so the bug is latent; this guards
-        # against tightening in either direction).
-        with bypass_rls_sync(self.db):
-            onboarding = self.db.scalar(
-                select(EmployeeOnboarding)
-                .options(joinedload(EmployeeOnboarding.activities))
-                .where(EmployeeOnboarding.self_service_token == token_hash)
-            )
+        # This local route session is unprimed and does not opt out of the ORM
+        # listener. The removed PostgreSQL GUC never affected that listener,
+        # so this preserves the existing lookup behavior. When the listener
+        # or database RLS protects this table, the lookup must move to the
+        # narrow pre-auth contract owned by that domain slice.
+        onboarding = self.db.scalar(
+            select(EmployeeOnboarding)
+            .options(joinedload(EmployeeOnboarding.activities))
+            .where(EmployeeOnboarding.self_service_token == token_hash)
+        )
 
-            if not onboarding:
-                logger.warning("Invalid self-service token attempted")
-                raise InvalidSelfServiceTokenError()
+        if not onboarding:
+            logger.warning("Invalid self-service token attempted")
+            raise InvalidSelfServiceTokenError()
 
-            # Org-active check is also cross-org until prime fires below.
-            org = self.db.get(Organization, onboarding.organization_id)
+        # Org-active check is also cross-org until prime fires below.
+        org = self.db.get(Organization, onboarding.organization_id)
 
         # Validate token expiry (use timezone-aware comparison)
         if onboarding.self_service_token_expires:

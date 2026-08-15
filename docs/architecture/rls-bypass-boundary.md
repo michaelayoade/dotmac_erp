@@ -1,158 +1,109 @@
-# Where the RLS bypass belongs
+# ERP cross-organization and PostgreSQL RLS boundaries
 
-**Status:** Proposed
-**Date:** 2026-08-11
+**Status:** Accepted; Step 2 implemented in this branch
+**Date:** 2026-08-15
 **Decision owner:** Michael
-**Gates:** every E8 table-family migration. Decide before moving tables, not
-after — see "Why the order matters".
 
-## Context
+## Measured state
 
-Every RLS policy in this repository carries the same predicate:
+ERP has two mechanisms whose old composition made them look like one bypass:
 
-```sql
-USING (should_bypass_rls() OR organization_id = get_current_organization_id())
-```
+| Mechanism | Enforced by | Current reach | Disposition |
+|---|---|---|---|
+| `session.info["allow_cross_org"]` | SQLAlchemy ORM listener | Organization filtering across the ERP ORM estate | Retained |
+| `app.bypass_rls` | 16 `training.*` PostgreSQL policies | No runtime caller queries those tables | Runtime writer retired |
 
-`should_bypass_rls()` reads the `app.bypass_rls` GUC. Two facts about it are
-better than its name suggests, and both were verified rather than assumed:
+No application, worker, CLI, cron SQL, or archived executable caller of the
+GUC touches any of the 16 RLS-protected tables. The GUC therefore changes no
+runtime result today. It remains dangerous: as RLS coverage grows, a surviving
+writer would silently pre-defeat every new policy that copied the legacy
+predicate.
 
-- It is set with **`SET LOCAL`**, so it is transaction-scoped and reverts at
-  COMMIT or ROLLBACK. It cannot leak into a later transaction on a pooled
-  connection.
-- It is reached only through two context managers in `app/rls.py`
-  (`bypass_rls`, `bypass_rls_sync`) which set it back to `'false'` explicitly.
+`allow_cross_org` is not dead. The ORM listener in `app/db/org_listener.py`
+uses it across the application estate, which is where almost all current ERP
+tenant filtering occurs. Removing or silently narrowing it would change live
+authorization behavior.
 
-There are 22 call sites across 6 files, and outside `app/rls.py` and
-`app/db/session_context.py` — the seam itself — the real callers are few:
+## Exact runtime disposition
 
-| Caller | Why it bypasses |
-|---|---|
-| `careers_service.py` | Public careers portal resolves an `Organization` from a URL slug. No org is in scope yet, because finding the org *is* the request. |
-| `people/hr/onboarding.py` | Token-based onboarding. Its own comment: *"the token is the only identifier we have, and the row carries the org."* |
-| `api/deps.py` | Documents the mechanism for the dependency layer. |
-| `sot_relationships.py` | Names the GUCs in a registry entry. |
+| Runtime source | Dead GUC use removed | Effective behavior retained |
+|---|---|---|
+| `app/rls.py` | async, sync, context-manager, and connection writers | tenant-scope primers |
+| `app/api/deps.py` | request-session setter | `allow_cross_org`, lifecycle, guards |
+| `app/db/session_context.py` | cross-session setter and re-arming | dedicated session and ORM marker |
+| `app/services/auth_dependencies.py` | admin-auth setter | live admin-role revalidation |
+| `app/services/careers/careers_service.py` | slug-lookup wrapper | `Organization` remains ORM deny-listed, then the caller primes tenant scope |
+| `app/services/people/hr/onboarding.py` | token-lookup wrapper | unchanged unprimed pre-auth query; the removed GUC never affected the ORM listener |
+| `scripts/archive/remediate_splynx_credit_note_gl.py` | two wrappers | existing `allow_cross_org` blocks |
+| `scripts/archive/fix_splynx_credit_note_signs.py` | wrapper | existing unprotected raw-SQL behavior |
+| `scripts/archive/migration/2026-06-04_parent_multisite_customers.py` | raw setter | existing `allow_cross_org` block |
+| `scripts/archive/reconstruct_inventory_valuation.py` | raw setter | existing unprotected raw-SQL behavior |
+| `scripts/audit_subledger_to_gl.sql` | raw setter | current read-only SQL behavior |
+| `scripts/audit_tax_monthly_recon.sql` | raw setter | current read-only SQL behavior |
+| `scripts/merge_duplicate_departments.py` | raw setter | current raw-connection SQL behavior; its future protected-domain slice owns disposition |
 
-PR #260 additionally established, against production, that `dotmac_erp_app` is
-**not** a superuser and does **not** hold `BYPASSRLS`, and that 87 tables carry
-`FORCE ROW LEVEL SECURITY`.
+Alembic revisions and the PostgreSQL policy-integration fixture are not runtime
+callers. They remain until the Step 3 forward migration changes the installed
+policies and their test setup.
 
-So this is not a hole someone left open. It is a deliberate, narrow,
-auto-reverting escape doing real work.
+## Accepted boundary
 
-## The problem
+### Runtime code cannot assert a PostgreSQL bypass
 
-The escape is expressed in the **policy predicate** rather than as a **role
-privilege**, and it conflates two needs that deserve different answers.
+`app.rls` owns only the two tenant-scope GUCs:
 
-**1. Bootstrap lookup.** The scope is inside the row being read. A slug or a
-token arrives, and the organization it belongs to cannot be known until that one
-row is fetched. This is legitimate, unavoidable, and narrow: one row, read-only,
-and the very next thing the caller does is scope the session properly.
+- `app.current_organization_id`; and
+- `app.current_tenant`.
 
-**2. Administrative cross-organization work.** Reports, repair scripts,
-migrations, reconciliation across orgs. Broad by nature.
+The async, sync, and connection-level bypass helpers are deleted. A structural
+guard scans every runtime entry-point family under `app/` and `scripts/`,
+including archived executable scripts and raw SQL, and rejects helper calls or
+SQL that sets/reads the bypass GUC. Its sensitivity proof injects both a Python
+caller and a raw-SQL setter and proves both are found.
 
-Today a single switch serves both. That has three consequences:
+Historical Alembic revisions remain immutable and are outside that runtime
+guard. PostgreSQL integration setup may continue to exercise the installed
+legacy policies until Step 3 owns their forward rewrite.
 
-- **It is not a privilege boundary.** `SET LOCAL app.bypass_rls = 'true'` is
-  unprivileged SQL. Any code path that reaches the database inside a
-  transaction can turn it on, including one an attacker arrives at through
-  injection. Transaction scoping limits the blast radius in time, not in
-  authority.
-- **Case 1's needs are met with case 2's power.** Resolving one organization by
-  slug is granted the ability to read every organization's rows for the rest of
-  the transaction.
-- **Every policy pays for it.** The predicate is duplicated across every policy
-  on every protected table, so the shape is now replicated 85+ times and would
-  be replicated across all 309 as coverage grows.
+### `allow_cross_org` remains application-layer only
 
-## Decision
+`get_db_admin_bypass`, `get_db_auth_bypass`, and `cross_org_session` retain
+their existing public names for caller compatibility, but set only
+`session.info["allow_cross_org"]`. They do not set any PostgreSQL bypass and
+cannot read through RLS-protected tables without a tenant context.
 
-### 1. Administrative cross-org work becomes a role privilege
+The names must not be cited as evidence of database authority. Their route
+guards and existing individual authorization checks remain required.
 
-A dedicated role holds PostgreSQL's `BYPASSRLS` attribute. Reports, repair and
-migrations connect as that role. It is grantable, revocable, visible in
-`pg_roles`, and — critically — **unreachable from application SQL**, because
-acquiring it requires a different connection rather than a `SET`.
+### Future database-wide authority stays deferred
 
-### 2. Bootstrap lookup gets a narrow, purpose-built contract
+No cross-tenant database login, pool, service, or third credential is created
+in this step. Such a boundary has little meaning while only 16 of 420 tables
+have RLS, and the caller dispositions may eliminate most of its demand.
 
-Not a general read escape. A `SECURITY DEFINER` function per lookup that takes
-the opaque identifier and returns **only the organization id** — not the row,
-not a cursor, not a table:
+When identity/pre-auth tables receive RLS, slug/token bootstrap lookups move to
+the narrowest reviewed PostgreSQL contract, normally a purpose-specific
+`SECURITY DEFINER` function returning only the tenant identifier. That work
+belongs to the domain migration that creates the protection; this step does not
+ship speculative functions over unprotected tables.
 
-```sql
-resolve_organization_by_slug(slug text) RETURNS uuid
-resolve_organization_by_onboarding_token(token text) RETURNS uuid
-```
+## Ordered follow-up
 
-The caller then primes the session with `prime_tenant_context(...)` and every
-subsequent read is ordinarily scoped. What the caller gains is exactly one
-organization id, which is the least it can be given and still do its job.
+1. Step 3 rewrites the 16 `training.*` policies to the tenant predicate only,
+   drops `should_bypass_rls()` in a forward migration, and turns the strict
+   inventory xfail into a passing assertion.
+2. The least-privilege cutover proves routes, jobs, workers, scripts, ownership,
+   and grants under `app_user`. It is not called tenant isolation.
+3. Each later RLS domain slice dispositions its cross-organization callers and
+   database-enforced tenant relationships before enabling its policies.
 
-### 3. Policies collapse
+## Rejected shapes
 
-```sql
-USING (organization_id = get_current_organization_id())
-```
-
-No `should_bypass_rls()`. The function and the `app.bypass_rls` GUC are retired
-once no policy references them.
-
-### 4. The application role must never hold `BYPASSRLS`
-
-Stated explicitly because it is the obvious shortcut and it is strictly worse
-than today. Granting the web role `BYPASSRLS` would convert a transaction-scoped
-escape into a **permanent** one on every connection in the pool. `dotmac_erp_app`
-does not hold it today (#260); it must not acquire it as a side effect of this
-work.
-
-## Why the order matters
-
-Every table migrated under the current predicate inherits `should_bypass_rls()
-OR ...`. Coverage today is 85 of 309 organization-scoped tables
-(`docs/rls-coverage-baseline.json`). Fixing the predicate afterwards means
-rewriting policies across all 309 a second time.
-
-Deciding the shape first is the difference between one pass and two.
-
-## Interaction with the script-scope ratchet
-
-PR #260 records 29 batch scripts that open a session without setting any scope.
-Under the current predicate they read whatever is unprotected. Under decision 3
-they will read **nothing** on any protected table, silently, and exit 0.
-
-That is not an argument against this decision — it is an argument for sequencing:
-**burn down the 29 unscoped callers before, or alongside, the 224 unprotected
-tables.** A protected table with an unscoped caller fails silently and succeeds
-loudly, which is worse than either problem alone.
-
-Decision 2 also gives those scripts the right tool: a script that genuinely needs
-cross-org reach connects as the `BYPASSRLS` role and says so, rather than being
-silently unscoped.
-
-## Alternatives rejected
-
-**Leave it as-is.** Defensible on the narrow security reading — `SET LOCAL` plus
-context managers is not careless. But it leaves case 1 holding case 2's
-authority, keeps an unprivileged switch in the predicate of every policy, and
-makes the kernel-convergence question (`dotmac_kernel` has no bypass concept at
-all) harder the longer coverage grows.
-
-**Grant the app role `BYPASSRLS` and drop the GUC.** Simplest to implement and
-strictly worse — see decision 4.
-
-**Keep the GUC but restrict who may set it.** PostgreSQL can restrict `SET` of a
-custom GUC only via `ALTER SYSTEM`-level controls that do not apply per-role in
-the way this would need. The privilege model already exists as role attributes;
-inventing a second one in the predicate is the thing to stop doing.
-
-## Open questions this does not answer
-
-- Whether `get_current_organization_id()`'s catch-all
-  `EXCEPTION WHEN OTHERS THEN RETURN NULL` should remain. It converts a
-  configuration error into an empty result set, which is the same silent-zero
-  failure #260 documents. Related, but separable.
-- Whether the eventual kernel convergence renames the GUC to
-  `app.current_tenant`. That belongs to E8's identity mapping, not here.
+- Restoring the GUC because a future policy might need it. That would recreate
+  the unprivileged escape before the protected domain exists.
+- Deleting `get_db_*_bypass` dependencies wholesale. Those dependencies also
+  own the real ORM-listener boundary and their removal changes current behavior.
+- Granting the ordinary application login `BYPASSRLS`. That would make every
+  pooled runtime connection permanently cross-tenant.
+- Building the isolated cross-tenant service now. Its genuine residual demand
+  can only be measured after database isolation exists.

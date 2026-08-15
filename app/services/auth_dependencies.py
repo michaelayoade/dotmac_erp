@@ -21,7 +21,6 @@ from app.models.auth import Session as AuthSession
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.observability import actor_id_var
-from app.rls import enable_rls_bypass_sync
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.cache import cache_service
@@ -683,17 +682,20 @@ def require_admin_bypass(
     db: Session = Depends(_get_db),
 ):
     """
-    Admin-only dependency that bypasses RLS using an ERP-owned session.
+    Authorize an admin-only cross-organization route.
 
-    Use this for system administration endpoints that need to see
-    data across all tenants. Requires the 'admin' role.
+    This dependency proves live admin authority; it does not modify its
+    database session and cannot bypass PostgreSQL RLS. Pair it with the route's
+    existing ``get_db_admin_bypass`` dependency, whose historical name refers
+    only to the ORM listener's ``allow_cross_org`` marker.
 
-    WARNING: Use with extreme caution! This bypasses tenant isolation.
+    Use for system administration endpoints that need application-layer access
+    across organizations. Requires the live ``admin`` role assignment.
 
     Usage:
         @app.get("/admin/all-organizations")
         def list_all_orgs(auth=Depends(require_admin_bypass), db: Session = Depends(get_db)):
-            # Can see all organizations across tenants
+            # The route's DB dependency owns any approved cross-org context.
             return db.scalars(select(Organization)).all()
     """
     token = _extract_bearer_token(authorization)
@@ -740,9 +742,6 @@ def require_admin_bypass(
     )
     if not admin_link:
         raise HTTPException(status_code=403, detail="Admin access required")
-
-    # Enable RLS bypass for admin operations
-    enable_rls_bypass_sync(db)
 
     scopes_value = payload.get("scopes")
     scopes = (

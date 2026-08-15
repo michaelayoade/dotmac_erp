@@ -86,10 +86,10 @@ def main() -> None:
     args = parser.parse_args()
 
     from app.db import SessionLocal
-    from app.db.session_context import allow_cross_org, bypass_rls_sync
+    from app.db.session_context import allow_cross_org
 
     with SessionLocal() as db:
-        with bypass_rls_sync(db), allow_cross_org(db):
+        with allow_cross_org(db):
             rows = db.execute(text(_AFFECTED_SQL)).all()
 
             junk = [r for r in rows if r.klass == "junk_journal"]
@@ -135,7 +135,7 @@ def main() -> None:
         reversed_n = 0
         reposted_n = 0
         failed: list[str] = []
-        with bypass_rls_sync(db), allow_cross_org(db):
+        with allow_cross_org(db):
             for r in rows:
                 invoice = db.get(Invoice, r.invoice_id)
                 if invoice is None:

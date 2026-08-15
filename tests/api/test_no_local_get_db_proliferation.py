@@ -148,8 +148,8 @@ def test_admin_bypass_dep_pairs_with_admin_gate():
     assert not violations, (
         "These modules use ``Depends(get_db_admin_bypass)`` without "
         "pairing it with an admin auth gate. The dep bypasses tenant "
-        "scoping at *both* layers (PostgreSQL bypass_rls + Python "
-        "allow_cross_org), so unauthenticated cross-tenant access is "
+        "application scoping through Python allow_cross_org, so "
+        "unauthenticated cross-tenant access is "
         "exactly what gets exposed. Add ``require_audit_auth`` or "
         "another gate from the allow-list:\n  - " + "\n  - ".join(sorted(violations))
     )
@@ -279,8 +279,8 @@ def test_migrated_modules_use_get_db_with_org():
         "app/api/support.py",
         "app/api/workflow_tasks.py",
         # Wave 4B — admin/cross-tenant via get_db_admin_bypass (genuine
-        # cross-tenant access, app.bypass_rls + allow_cross_org). People CRUD
-        # is deliberately absent from this subset: it is tenant-owned.
+        # application-layer cross-tenant access through allow_cross_org).
+        # People CRUD is deliberately absent: it is tenant-owned.
         "app/api/audit.py",
         "app/api/auth.py",
         "app/api/rbac.py",

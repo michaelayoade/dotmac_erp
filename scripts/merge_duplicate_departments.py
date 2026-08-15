@@ -309,12 +309,6 @@ def main() -> None:
 
     engine = create_engine(database_url())
     with engine.begin() as conn:
-        # hr.department is under FORCE ROW LEVEL SECURITY. Without the bypass
-        # GUC every SELECT returns zero rows for the app role and the script
-        # silently reports "no duplicates" (and reference counts would be
-        # wrong even with partial visibility). SET LOCAL is transaction-
-        # scoped, so it covers exactly this engine.begin() block.
-        conn.execute(text("SET LOCAL app.bypass_rls = 'true'"))
         merge_duplicates(
             conn,
             apply=args.apply,

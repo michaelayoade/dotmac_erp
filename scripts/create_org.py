@@ -4,8 +4,9 @@
 Two sessions, deliberately. Creating the organization is cross-tenant work —
 there is no organization to be scoped to yet — but seeding its tax data is
 per-organization work on the row that was just created. Reusing the
-cross-org session for the seed would run the whole seed with RLS bypassed,
-which is the mistake `cross_org_session`'s own docstring warns about.
+cross-org session for the seed would leave the seed without PostgreSQL tenant
+scope; protected tables would fail closed. This is the mistake
+`cross_org_session`'s own docstring warns about.
 """
 
 import argparse

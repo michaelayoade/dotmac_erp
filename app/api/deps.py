@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.db.session_context import prime_session
-from app.rls import enable_rls_bypass_sync, set_current_organization_sync
+from app.rls import set_current_organization_sync
 from app.services.auth_dependencies import (
     optional_web_session,
     require_admin_bypass,
@@ -117,7 +117,6 @@ def get_db_with_org(
 def _yield_bypass_session():
     db = SessionLocal()
     try:
-        enable_rls_bypass_sync(db)
         db.info["allow_cross_org"] = True
         yield db
         db.commit()
@@ -140,21 +139,18 @@ def get_db_auth_bypass():
 
 
 def get_db_admin_bypass(auth: dict = Depends(require_user_auth)):
-    """DB session dependency for genuinely cross-tenant admin routes.
+    """DB session dependency for cross-organization admin routes.
 
-    Yields a Session that bypasses tenant scoping at *both* layers:
-    - PostgreSQL: ``SET LOCAL app.bypass_rls = 'true'`` makes the RLS
-      policies return rows regardless of GUC (the policies are
-      ``should_bypass_rls() OR organization_id = get_current_org_id()``).
-    - Python: ``session.info["allow_cross_org"] = True`` tells the
-      ``do_orm_execute`` listener (when enabled) to skip its
-      WHERE-injection — otherwise it would raise
-      MissingOrgContextError on every org-scoped SELECT.
+    Yields a Session with ``session.info["allow_cross_org"] = True`` so the
+    ``do_orm_execute`` listener skips its WHERE-injection. It does not bypass
+    PostgreSQL RLS. The historical dependency name remains temporarily stable
+    for its 92 guarded route consumers; ``bypass`` here means the application
+    ORM filter only.
 
     Use only for routes that genuinely operate across all tenants:
     super-admin audit log views, system maintenance endpoints, etc.
     Routes that operate within a single org should depend on
-    ``get_db_with_org`` instead — they get RLS protection for free.
+    ``get_db_with_org`` instead.
 
     Requires an authenticated caller in its own signature so an accidental
     route use cannot expose unauthenticated cross-tenant access. Callers

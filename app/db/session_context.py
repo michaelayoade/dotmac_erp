@@ -21,13 +21,14 @@ opened for "an org" that doesn't actually scope its queries to that org.
 Public API for callers
 ----------------------
 
-Use the high-level context managers — they establish every applicable input
-and clean up:
+Use the high-level context managers — they establish the applicable input and
+clean up:
 
 - :func:`session_for_org` — single-org tenant session (Celery tasks,
   CLI scripts, anything outside a web request).
-- :func:`cross_org_session` — explicit cross-tenant access for global
-  batch jobs (e.g. "list every org with pending work").
+- :func:`cross_org_session` — explicit application-layer cross-tenant access
+  for global batch jobs (e.g. "list every org with pending work"). It does not
+  bypass PostgreSQL RLS.
 
 The low-level primitives below (:func:`prime_session`,
 :func:`allow_cross_org`) exist for infrastructure code only — the web
@@ -44,8 +45,8 @@ middle of its work therefore lost its RLS GUC and silently started
 returning zero rows, while ``session.info`` kept the ORM-listener layer
 looking primed: it read as scoped and behaved as unscoped.
 
-``session_for_org`` and ``cross_org_session`` now re-arm their GUC on
-SQLAlchemy's ``after_begin``, which fires as each new transaction opens.
+``session_for_org`` re-arms its scope GUCs on SQLAlchemy's ``after_begin``,
+which fires as each new transaction opens.
 Commit-and-continue inside a block is therefore safe, and the call site is
 no longer the contract owner for it.
 
@@ -69,8 +70,6 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.rls import (
-    bypass_rls_sync,
-    enable_rls_bypass_on_connection,
     set_current_organization_on_connection,
     set_current_organization_sync,
 )
@@ -110,8 +109,8 @@ def allow_cross_org(session: Session) -> Iterator[None]:
 
        Like :func:`prime_session`, this bypasses ONLY the ORM listener
        layer. It does NOT bypass PostgreSQL RLS policies. Use
-       :func:`cross_org_session` for genuine cross-tenant work — it
-       bypasses both layers and opens a dedicated session.
+       :func:`cross_org_session` for genuine cross-tenant application work —
+       it opens a dedicated session but retains that database boundary.
 
        Direct use is reserved for infrastructure code that composes both
        layers (web admin-bypass dependencies, audit listeners that
@@ -134,8 +133,8 @@ def prime_tenant_context(session: Session, organization_id: UUID) -> None:
     Use this when a request opens unprimed (the org isn't known at
     request entry — e.g., a public portal route resolving an org from a
     URL slug, or an onboarding portal resolving from a token) and the
-    service has just looked the org up under :func:`allow_cross_org` /
-    :func:`app.rls.bypass_rls_sync`. After the lookup, retroactively
+    service has just looked the org up under :func:`allow_cross_org`. After
+    the lookup, retroactively
     prime the session for the rest of the work:
 
         # Route opens unprimed because slug → org_id isn't known yet
@@ -236,11 +235,10 @@ def session_for_org(organization_id: UUID) -> Iterator[Session]:
 def cross_org_session() -> Iterator[Session]:
     """Canonical session for cross-organization ERP work (admin/batch).
 
-    Opens a fresh ``SessionLocal`` with ERP's **two** bypass layers active —
-    ``allow_cross_org`` for the ORM listener and ``bypass_rls_sync`` for ERP
-    PostgreSQL policies. Shared-module RLS is deliberately not bypassed. Use
-    this to discover rows across Organizations, then process each module scope
-    under its own per-org session::
+    Opens a fresh ``SessionLocal`` with ``allow_cross_org`` active for the ORM
+    listener. It does not bypass PostgreSQL RLS. Use this to discover rows
+    across Organizations that are not yet database-protected, then process
+    each module scope under its own per-org session::
 
         with cross_org_session() as cross_db:
             org_ids = list(cross_db.scalars(select(Organization.id)).all())
@@ -248,30 +246,18 @@ def cross_org_session() -> Iterator[Session]:
             with session_for_org(org_id) as db:
                 ...
 
-    Don't query a shared-module table or reuse a ``cross_org_session`` for
-    per-org work — switching contexts mid-session is the bug class this helper
-    exists to prevent.
+    Don't query a PostgreSQL-RLS-protected table or reuse a
+    ``cross_org_session`` for per-org work — switching contexts mid-session is
+    the bug class this helper exists to prevent.
     """
     from app.db import SessionLocal
 
     session = SessionLocal()
 
-    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
-        # Same hazard as session_for_org: SET LOCAL app.bypass_rls dies with
-        # the transaction, so a commit mid-block would silently restore RLS
-        # with no organization set — every later read returning zero rows
-        # while `allow_cross_org` still claimed the bypass was active.
-        # On the CONNECTION for the same reason as above.
-        enable_rls_bypass_on_connection(connection)
-
     try:
         # ORM listener bypass — session.info marker the listener checks.
         session.info["allow_cross_org"] = True
-        # PostgreSQL RLS bypass, re-armed on every transaction.
-        event.listen(session, "after_begin", _arm)
-        with bypass_rls_sync(session):
-            yield session
+        yield session
     finally:
-        event.remove(session, "after_begin", _arm)
         session.info["allow_cross_org"] = False
         session.close()

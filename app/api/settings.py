@@ -500,9 +500,10 @@ def import_settings(
 def _owns_history_entry(entry: object, auth: dict) -> bool:
     """Does this history entry belong to the caller's organization?
 
-    The settings routes run on ``get_db_admin_bypass`` (RLS off), so nothing
-    below this scopes a history row to a tenant. Global settings rows carry a
-    NULL ``organization_id`` and are readable by anyone with the permission.
+    The settings routes run with ``get_db_admin_bypass``'s ORM cross-org
+    marker, so the database query below does not scope a history row to a
+    tenant. PostgreSQL RLS still applies. Global settings rows carry a NULL
+    ``organization_id`` and are readable by anyone with the permission.
     """
     entry_org = getattr(entry, "organization_id", None)
     if entry_org is None:

@@ -39,9 +39,9 @@ ERP retains its existing engine, `SessionLocal`, transaction boundaries, ORM
 listener and `app.current_organization_id` policies. Canonical session primers
 now set `app.current_organization_id` and `app.current_tenant` atomically and
 re-arm both after every transaction boundary. The latter is the scope consumed
-by stateful shared-module RLS. ERP's `app.bypass_rls` does not bypass that
-module scope; cross-organization module work iterates Organizations under
-separate `session_for_org` sessions.
+by stateful shared-module RLS. Runtime code has no PostgreSQL bypass writer;
+cross-organization module work iterates Organizations under separate
+`session_for_org` sessions.
 
 The complete contract and remaining gate are
 `docs/architecture/organization-tenant-boundary.md`. This slice creates no
@@ -639,25 +639,23 @@ ERP tenancy is dual-layer, and both layers must always be primed together
   SELECT-time only; UPDATE/DELETE isolation is RLS's job.
 - **Layer 2 — PostgreSQL RLS:** policies created dynamically by migration
   `alembic/versions/add_rls_policies.py` (plus `add_hr_rls_policies.py` and
-  schema-specific successors): per-table SELECT/INSERT/UPDATE/DELETE policies
-  of the form `should_bypass_rls() OR organization_id =
-  get_current_organization_id()`, with **`FORCE ROW LEVEL SECURITY`**
-  (`add_rls_policies.py:108`), reading GUCs `app.current_organization_id` and
-  `app.bypass_rls` set via `app/rls.py`
-  (`set_current_organization_sync`, `bypass_rls_sync`; `SET LOCAL`, i.e.
-  transaction-scoped — reset at COMMIT/ROLLBACK).
+  schema-specific successors). The 16 currently enabled `training.*` policies
+  still carry the legacy `should_bypass_rls() OR organization_id =
+  get_current_organization_id()` predicate until Step 3 rewrites them.
+  Runtime code sets only `app.current_organization_id` (and shared-module
+  `app.current_tenant`); it has no writer for the user-settable bypass GUC.
 
 Per execution context:
 
 | Context | Priming path | Both layers? |
 |---|---|---|
-| HTTP JSON API | `app/api/deps.py::get_db_with_org` — `prime_session(db, org)` + `set_current_organization_sync(db, org)` (deps.py:106-107), org from `require_tenant_auth`; auto-commit at edge. Cross-tenant admin: `get_db_admin_bypass` / auth bootstrap: `get_db_auth_bypass` — both bypass layers together (`enable_rls_bypass_sync` + `info["allow_cross_org"]`) | Yes — single dependency owns both |
+| HTTP JSON API | `app/api/deps.py::get_db_with_org` — `prime_session(db, org)` + `set_current_organization_sync(db, org)` (deps.py:106-107), org from `require_tenant_auth`; auto-commit at edge. Cross-tenant admin/auth bootstrap dependencies set only `info["allow_cross_org"]`; their historical `*_bypass` names refer to the ORM listener, not PostgreSQL RLS | Tenant paths: yes. Cross-org paths: ORM only |
 | HTTP web (Jinja/HTMX) | `app/web/deps.py::get_db_for_org` (web/deps.py:1436; primes both at 1468-1475). Public-slug flows (careers/onboarding) open unprimed via `get_db` (web/deps.py:79), resolve the org under bypass, then `prime_tenant_context` (`app/db/session_context.py:119`) sets both layers retroactively | Yes — canonical dep or `prime_tenant_context` |
 | **Not middleware** | ERP has **no tenant middleware**: org context is established by DB dependencies after authentication, never from Host headers. (Contrast: kernel `middleware/tenant.py` + kernel `get_db`.) | n/a |
-| Celery tasks | `app/db/session_context.py::session_for_org` primes both layers; `cross_org_session` bypasses both. Both helpers re-arm their transaction-local PostgreSQL GUC on every `after_begin`, so commits do not silently lose scope. One session per org remains required to avoid identity-map contamination. `scripts/check_session_context.py` enforces the boundary in CI and pre-commit. Worker bootstrap (`app/celery_app.py`): `worker_process_init` re-registers audit listeners per process; beat uses `app.celery_scheduler.DbScheduler` | Yes — canonical context managers |
+| Celery tasks | `app/db/session_context.py::session_for_org` primes ORM and database tenant scope; `cross_org_session` bypasses only the ORM listener. `session_for_org` re-arms its transaction-local PostgreSQL scope GUCs on every `after_begin`, so commits do not silently lose scope. One session per org remains required to avoid identity-map contamination. `scripts/check_session_context.py` enforces the boundary in CI and pre-commit. Worker bootstrap (`app/celery_app.py`): `worker_process_init` re-registers audit listeners per process; beat uses `app.celery_scheduler.DbScheduler` | Tenant paths: yes. Cross-org discovery: ORM only |
 | CLI / maintenance scripts | Same context managers (`session_for_org` / `cross_org_session`), e.g. `scripts/backfill_mailcow_offboarding.py`, `scripts/review_suspicious_bank_matches.py`. `scripts/check_session_context.py` now scans `scripts/` as well as `app/tasks/` and `app/tools/`; the exact legacy count is a shrinking ratchet in `scripts/session_context_legacy.txt`, with the fail-silent RLS subset independently ratcheted by `tests/architecture/test_script_rls_scope.py`. Provisioning entry points now separate global discovery/catalogue work from tenant-owned writes | Yes — enforced, with a shrinking legacy baseline |
 | Reconciliation jobs | They are Celery tasks (e.g. `app/tasks/dotmac_sub.py` daily/full reconciliation, `app/tasks/outbox_relay.py`) → `session_for_org`/`cross_org_session` path above. The outbox relay processes per-event org context from the event row | Yes — same task path |
-| Migrations | `alembic/env.py` builds its own engine from `settings.database_url` (no session-context helpers, no GUCs). DDL is unaffected by RLS; **data** migrations run subject to `FORCE ROW LEVEL SECURITY` unless they explicitly `SET app.bypass_rls = 'true'` (the policy functions honor it — `add_rls_policies.py:58,73-76`). Deploy path: `scripts/deploy.sh` → `alembic upgrade heads` inside the app container | RLS applies at the DB; no org context — bypass must be explicit per data migration |
+| Migrations | `alembic/env.py` builds its own engine from the migration URL. Historical revisions that set the legacy GUC remain immutable; new data migrations must use the migration executor's approved database authority rather than reintroducing a runtime GUC escape. Deploy path: `scripts/deploy.sh` → `alembic upgrade heads` inside the app container | Separate migration authority |
 
 Any kernel adoption that opens sessions (db/messaging/entitlements/audit)
 must reach RLS through these exact seams or atomically extend them — a kernel

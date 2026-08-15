@@ -89,14 +89,19 @@ another.
 
 ## Bypass boundary
 
-ERP's legacy transaction-local `app.bypass_rls` remains limited to ERP-owned
-policies that explicitly consult it. It does not set or bypass
-`app.current_tenant`, and shared module policies do not consult it.
+Runtime code has no writer for the legacy user-settable `app.bypass_rls` GUC.
+The 16 existing `training.*` policies still consult it until the Step 3 forward
+migration rewrites them, but no application, worker, CLI, cron SQL, or archived
+executable can assert it. Historical Alembic revisions remain immutable.
 
-A cross-organization job that touches a tenant module must enumerate
-Organizations under `cross_org_session`, close that discovery session, and do
-each tenant's work under `session_for_org`. A broad ERP bypass never becomes a
-broad module bypass.
+`session.info["allow_cross_org"]` is a separate application-layer boundary. It
+continues to bypass the ORM listener for approved pre-auth and administrative
+flows, but it does not bypass PostgreSQL RLS.
+
+A cross-organization job that touches an RLS-protected ERP or module table must
+enumerate Organizations under an approved discovery path, close that session,
+and do each tenant's work under `session_for_org`. `cross_org_session` bypasses
+only the ORM listener; it is not a database privilege.
 
 ## What remains gated
 
