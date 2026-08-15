@@ -133,6 +133,102 @@ async def assign_learning_course_team(
     return await training_web_service.assign_team_response(request, auth, db)
 
 
+@router.get("/academy/requirements", response_class=HTMLResponse)
+def list_academy_requirements(
+    request: Request,
+    designation_id: str | None = None,
+    include_inactive: str | None = None,
+    success: str | None = None,
+    error: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_training_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return training_web_service.academy_requirements_response(
+        request,
+        auth,
+        db,
+        designation_id,
+        include_inactive,
+        success,
+        error,
+        page,
+    )
+
+
+@router.post("/academy/requirements", response_class=HTMLResponse)
+async def create_academy_requirement(
+    request: Request,
+    auth: WebAuthContext = Depends(require_training_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return await training_web_service.create_academy_requirement_response(
+        request,
+        auth,
+        db,
+    )
+
+
+@router.post(
+    "/academy/requirements/{requirement_id}/archive",
+    response_class=HTMLResponse,
+)
+def archive_academy_requirement(
+    requirement_id: str,
+    auth: WebAuthContext = Depends(require_training_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return training_web_service.deactivate_academy_requirement_response(
+        auth,
+        db,
+        requirement_id,
+    )
+
+
+@router.get("/academy/progress", response_class=HTMLResponse)
+def list_academy_progress(
+    request: Request,
+    employee_id: str | None = None,
+    designation_id: str | None = None,
+    academy_course_id: str | None = None,
+    status: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_training_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return training_web_service.academy_progress_response(
+        request,
+        auth,
+        db,
+        employee_id,
+        designation_id,
+        academy_course_id,
+        status,
+        page,
+    )
+
+
+@router.get("/academy/reports/{report_name}", response_class=HTMLResponse)
+def academy_report(
+    request: Request,
+    report_name: str,
+    designation_id: str | None = None,
+    academy_course_id: str | None = None,
+    export: str | None = None,
+    auth: WebAuthContext = Depends(require_training_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return training_web_service.academy_report_response(
+        request,
+        auth,
+        db,
+        report_name,
+        designation_id,
+        academy_course_id,
+        export,
+    )
+
+
 @router.get("/my-courses", response_class=HTMLResponse)
 def my_learning_courses(
     request: Request,
