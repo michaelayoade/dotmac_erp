@@ -56,6 +56,18 @@ dotmac-kernel = {version = "0.1.0a56", source = "forgejo"}
 # ERP supplies the host loader and never vendors or recompiles this package.
 dotmac-ui = {version = "0.1.0a7", source = "forgejo"}
 
+# Stored bytes and their repairable physical lifecycle — NOT what those bytes
+# mean to a customer, invoice or ticket (ADR-0022). ERP's first foreign
+# migration lineage: `mod_files` is owned by this distribution, and ERP composes
+# it through `alembic.ini`'s `version_locations` rather than copying it.
+#
+# It installs here at all only because a module declares the database EFFECTS it
+# needs instead of naming a foreign revision. `fi_0001` requires
+# `tenant_scope_catalog.v1` and `module_database_roles.v1`; ERP binds both to
+# revisions it actually runs (`app/migration_bindings.py`), because kernel
+# `0001` can never run in ERP — it creates `public.tenants`, which ERP owns.
+dotmac-files = {version = "0.1.0a2", source = "forgejo"}
+
 # Private Forgejo PyPI index (Dotmac packages). Explicit priority: only
 # dependencies that name this source resolve from it; PyPI stays the default.
 # Credentials are NEVER stored in this repository — poetry reads them from its
