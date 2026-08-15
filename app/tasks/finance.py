@@ -45,6 +45,24 @@ def _list_active_organization_ids() -> list[UUID]:
     return active_organization_ids()
 
 
+def _list_all_organization_ids() -> list[UUID]:
+    """Every organization, deactivated ones included.
+
+    The enumerations this replaces read a work table (a refresh queue, an
+    expiring reservation, a linked bank account) with no ``Organization``
+    predicate at all, so they saw deactivated tenants too. Settlement-shaped
+    work has to keep seeing them: a tenant switched off yesterday still has
+    ledger balances to refresh and reservations to release. Using
+    ``active_organization_ids`` here would silently narrow that.
+
+    Imported inside the function because two unrelated tasks in this module
+    already bind ``organization_ids`` as a local name.
+    """
+    from app.tenant_catalog import organization_ids
+
+    return organization_ids(include_inactive=True)
+
+
 def _resolve_report_instance_org(instance_id: str) -> UUID | None:
     with cross_org_session() as db:
         instance = db.get(ReportInstance, UUID(instance_id))
@@ -511,24 +529,34 @@ def process_monthly_depreciation_runs(
 
     run_cutoff_date = date.fromisoformat(as_of_date) if as_of_date else date.today()
 
-    with cross_org_session() as db:
-        if not DepreciationService.automation_enabled(db):
-            logger.info("Monthly FA depreciation automation is disabled")
-            return results
-
-        effective_auto_post = (
-            auto_post
-            if auto_post is not None
-            else DepreciationService.automation_auto_post_enabled(db)
-        )
-        results["automation_enabled"] = True
-        results["auto_post"] = effective_auto_post
-
-        organization_ids = DepreciationService.list_active_organization_ids(db)
-    results["organizations_checked"] = len(organization_ids)
-
-    for organization_id in organization_ids:
+    # Discovery is the tenant catalogue, not a scan of `core_org.organization`
+    # through the ORM-listener bypass: that bypass never touched PostgreSQL RLS,
+    # so under `app_user` it enumerated nothing and the job reported a clean run
+    # having created no depreciation at all.
+    #
+    # The automation switches move inside the tenant session with it. They are
+    # `SettingDomain.automation` values, which resolve tenant -> platform ->
+    # default *through the session*; asked on an unscoped session they answered
+    # for no particular tenant. Asked here they answer for this one, which is
+    # what a per-tenant switch was always supposed to mean.
+    for organization_id in active_organization_ids():
         with session_for_org(organization_id) as db:
+            if not DepreciationService.automation_enabled(db):
+                logger.info(
+                    "Monthly FA depreciation automation is disabled for org %s",
+                    organization_id,
+                )
+                continue
+
+            effective_auto_post = (
+                auto_post
+                if auto_post is not None
+                else DepreciationService.automation_auto_post_enabled(db)
+            )
+            results["automation_enabled"] = True
+            results["auto_post"] = effective_auto_post
+            results["organizations_checked"] += 1
+
             try:
                 outcome = DepreciationService.create_automated_monthly_run(
                     db,
@@ -1393,17 +1421,24 @@ def sync_mono_transactions(**_legacy_kwargs: Any) -> dict[str, Any]:
 
     from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 
-    with cross_org_session() as db:
-        mono_account_ids = list(
-            db.scalars(
-                select(BankAccount.mono_account_id)
-                .where(
-                    BankAccount.mono_account_id.isnot(None),
-                    BankAccount.status == BankAccountStatus.active,
-                )
-                .order_by(BankAccount.organization_id, BankAccount.bank_account_id)
-            ).all()
-        )
+    # One tenant session per organization instead of a single cross-tenant
+    # SELECT: `cross_org_session` lifted only the ORM listener, so under
+    # `app_user` this listed zero accounts and the sweep reported "no Mono-linked
+    # bank accounts" for a fleet full of them. The `organization_id` leg of the
+    # old ORDER BY is now the enumeration order itself.
+    mono_account_ids: list[str | None] = []
+    for org_id in _list_all_organization_ids():
+        with session_for_org(org_id) as db:
+            mono_account_ids.extend(
+                db.scalars(
+                    select(BankAccount.mono_account_id)
+                    .where(
+                        BankAccount.mono_account_id.isnot(None),
+                        BankAccount.status == BankAccountStatus.active,
+                    )
+                    .order_by(BankAccount.bank_account_id)
+                ).all()
+            )
 
     if not mono_account_ids:
         return {
@@ -1668,22 +1703,18 @@ def refresh_stale_balances(batch_size: int = 200) -> dict[str, Any]:
     Runs frequently and refreshes only account/period keys invalidated by
     recent postings, keeping reporting aggregates current.
     """
-    from app.models.finance.gl.balance_refresh_queue import BalanceRefreshQueue
     from app.services.finance.gl.balance_refresh import BalanceRefreshService
 
-    with cross_org_session() as db:
-        org_ids = list(
-            db.scalars(
-                select(BalanceRefreshQueue.organization_id)
-                .where(BalanceRefreshQueue.processed_at.is_(None))
-                .distinct()
-                .limit(batch_size)
-            ).all()
-        )
-
+    # The queue no longer has to be probed across tenants to find out who has
+    # work: `process_queue` takes no organization_id and reads the queue through
+    # the session, so inside a tenant session it sees exactly that tenant's
+    # pending entries and returns zeros for a tenant with none. The old
+    # cross-tenant DISTINCT that fed this loop returned zero rows under
+    # `app_user`, which made every balance look fresh and stopped the refresh
+    # entirely — with no error to notice.
     results = {"processed": 0, "refreshed": 0, "errors": 0}
     remaining = batch_size
-    for org_id in org_ids:
+    for org_id in _list_all_organization_ids():
         if remaining <= 0:
             break
         with session_for_org(org_id) as db:
@@ -1708,22 +1739,15 @@ def refresh_stale_balances(batch_size: int = 200) -> dict[str, Any]:
 @shared_task
 def release_expired_stock_reservations(batch_size: int = 200) -> dict[str, Any]:
     """Release inventory reservations that passed expiry timestamp."""
-    from app.models.inventory.stock_reservation import StockReservation
     from app.services.inventory.stock_reservation import StockReservationService
 
-    with cross_org_session() as db:
-        org_ids = list(
-            db.scalars(
-                select(StockReservation.organization_id)
-                .where(StockReservation.expires_at.isnot(None))
-                .distinct()
-                .limit(batch_size)
-            ).all()
-        )
-
+    # Same shape as `refresh_stale_balances`: `release_expired` scopes through
+    # the session, so the cross-tenant DISTINCT that used to pick the orgs is
+    # not needed — and under `app_user` it found nobody, leaving every expired
+    # reservation holding stock forever.
     results = {"checked": 0, "released": 0, "errors": 0}
     remaining = batch_size
-    for org_id in org_ids:
+    for org_id in _list_all_organization_ids():
         if remaining <= 0:
             break
         with session_for_org(org_id) as db:

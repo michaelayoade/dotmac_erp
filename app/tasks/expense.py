@@ -23,7 +23,7 @@ from typing import Any
 from celery import shared_task
 from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.models.expense import (
     ExpenseClaim,
     ExpenseClaimStatus,
@@ -32,7 +32,7 @@ from app.models.expense import (
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.notification import NotificationService
-from app.tenant_catalog import active_organization_ids
+from app.tenant_catalog import active_organization_ids, organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -174,26 +174,24 @@ def process_expense_approval_reminders() -> dict:
     today = date.today()
     today_start = datetime.combine(today, datetime.min.time())
 
-    with cross_org_session() as cross_db:
-        # Find all pending claims. PENDING_APPROVAL is unused — all claims
-        # awaiting approval are in SUBMITTED status.
-        pending_claim_meta = list(
-            cross_db.execute(
-                select(ExpenseClaim.claim_id, ExpenseClaim.organization_id)
-                .where(ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED)
-                .order_by(ExpenseClaim.claim_date)
-            ).all()
-        )
-
-    claims_by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
-    for claim_id, org_id in pending_claim_meta:
-        claims_by_org.setdefault(org_id, []).append(claim_id)
-
-    for org_id, claim_ids in claims_by_org.items():
+    # Fan out over tenants rather than scanning across them. The old shape read
+    # every tenant's submitted claims through `cross_org_session`, grouped the
+    # ids by organization, then re-fetched each group inside a tenant session.
+    # `cross_org_session` lifts only the SQLAlchemy listener, never PostgreSQL
+    # RLS, so that first read returns zero rows under `app_user` — and an
+    # approval-reminder job that finds no pending claims looks exactly like a
+    # fleet with none. The grouping dict and the id re-fetch are deleted rather
+    # than adapted: the same SELECT inside the tenant session already returns
+    # only this tenant's claims, so both existed solely to serve the cross-tenant
+    # read. `include_inactive=True` keeps the old reach — that scan had no
+    # `Organization` predicate.
+    for org_id in organization_ids(include_inactive=True):
         with session_for_org(org_id) as db:
+            # Find this tenant's pending claims. PENDING_APPROVAL is unused —
+            # all claims awaiting approval are in SUBMITTED status.
             pending_claims = db.scalars(
                 select(ExpenseClaim)
-                .where(ExpenseClaim.claim_id.in_(claim_ids))
+                .where(ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED)
                 .order_by(ExpenseClaim.claim_date)
             ).all()
 
@@ -787,10 +785,20 @@ def poll_stuck_expense_transfers() -> dict:
     # Expire PENDING intents that never had a transfer initiated
     # (step 2 was never called) and are past their expires_at.
     now = datetime.now(UTC)
-    with cross_org_session() as cross_db:
-        stale_pending_meta = list(
-            cross_db.execute(
-                select(PaymentIntent.intent_id, PaymentIntent.organization_id).where(
+    # Both sweeps below fan out over tenants instead of scanning across them.
+    # The cross-tenant SELECT they replace bypassed only the SQLAlchemy listener
+    # — never PostgreSQL RLS — so under `app_user` it found no intents at all:
+    # stale transfers would never expire, stuck ones would never be polled, and
+    # the task would report a clean run every two minutes while doing nothing.
+    # The two grouping dicts and the id-list re-fetch they fed are deleted: the
+    # same predicates evaluated inside a tenant session already return only that
+    # tenant's intents. `include_inactive=True` matches the old reach — neither
+    # scan had an `Organization` predicate, and a deactivated tenant's in-flight
+    # payout still has to settle.
+    for org_id in organization_ids(include_inactive=True):
+        with session_for_org(org_id) as db:
+            stale_pending = db.scalars(
+                select(PaymentIntent).where(
                     PaymentIntent.direction == PaymentDirection.OUTBOUND,
                     PaymentIntent.status == PaymentIntentStatus.PENDING,
                     PaymentIntent.source_type == "EXPENSE_CLAIM",
@@ -798,17 +806,6 @@ def poll_stuck_expense_transfers() -> dict:
                     PaymentIntent.expires_at.isnot(None),
                     PaymentIntent.expires_at <= now,
                 )
-            ).all()
-        )
-
-    stale_by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
-    for intent_id, org_id in stale_pending_meta:
-        stale_by_org.setdefault(org_id, []).append(intent_id)
-
-    for org_id, intent_ids in stale_by_org.items():
-        with session_for_org(org_id) as db:
-            stale_pending = db.scalars(
-                select(PaymentIntent).where(PaymentIntent.intent_id.in_(intent_ids))
             ).all()
             for intent in stale_pending:
                 intent.status = PaymentIntentStatus.EXPIRED
@@ -822,10 +819,11 @@ def poll_stuck_expense_transfers() -> dict:
 
     # Fast fallback: check PROCESSING transfers older than 2 minutes.
     cutoff = now - timedelta(minutes=2)
-    with cross_org_session() as cross_db:
-        stuck_intent_meta = list(
-            cross_db.execute(
-                select(PaymentIntent.intent_id, PaymentIntent.organization_id).where(
+    stuck_found = False
+    for org_id in organization_ids(include_inactive=True):
+        with session_for_org(org_id) as db:
+            intents = db.scalars(
+                select(PaymentIntent).where(
                     PaymentIntent.direction == PaymentDirection.OUTBOUND,
                     PaymentIntent.status.in_(
                         [
@@ -839,19 +837,13 @@ def poll_stuck_expense_transfers() -> dict:
                     PaymentIntent.poll_count < MAX_POLL_ATTEMPTS,
                 )
             ).all()
-        )
+            if not intents:
+                # Nothing stuck here. Skipping before the config read keeps the
+                # "No Paystack keys" warning to tenants that actually have a
+                # transfer waiting on those keys, as the old grouping did.
+                continue
+            stuck_found = True
 
-    if not stuck_intent_meta:
-        logger.info("No stuck transfers found")
-        return results
-
-    # Group by organization to use correct config
-    by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
-    for intent_id, org_id in stuck_intent_meta:
-        by_org.setdefault(org_id, []).append(intent_id)
-
-    for org_id, intent_ids in by_org.items():
-        with session_for_org(org_id) as db:
             # Get Paystack config for this org
             secret_key = resolve_value(
                 db, SettingDomain.payments, "paystack_secret_key"
@@ -872,9 +864,6 @@ def poll_stuck_expense_transfers() -> dict:
                 webhook_secret=str(webhook_secret or ""),
             )
             svc = PaymentService(db, org_id)
-            intents = db.scalars(
-                select(PaymentIntent).where(PaymentIntent.intent_id.in_(intent_ids))
-            ).all()
 
             for intent in intents:
                 try:
@@ -932,6 +921,9 @@ def poll_stuck_expense_transfers() -> dict:
                         )
 
             db.commit()
+
+    if not stuck_found:
+        logger.info("No stuck transfers found")
 
     logger.info(
         "Transfer polling complete: %d checked, %d completed, %d failed, %d abandoned",
