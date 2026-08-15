@@ -1,5 +1,5 @@
 # Scripts that open a SessionLocal without ever setting an organization
-# scope or an explicit RLS bypass.
+# scope.
 #
 # This list is a RATCHET: it may shrink, never grow. See
 # tests/architecture/test_script_rls_scope.py for why an entry here is a

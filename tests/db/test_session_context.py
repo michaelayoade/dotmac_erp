@@ -242,8 +242,8 @@ class TestCrossOrgSession:
 
     cross_org_session() exists for batch jobs that must list/operate
     across every organization (e.g. "find every org with pending work").
-    It bypasses both ORM-listener filtering AND PostgreSQL native RLS,
-    so callers must use it deliberately and only for legitimate
+    It bypasses ORM-listener filtering but never PostgreSQL native RLS, so
+    callers must use it deliberately and only for legitimate application-layer
     cross-tenant work — not as a substitute for forgetting to prime.
     """
 
@@ -263,20 +263,6 @@ class TestCrossOrgSession:
         with cross_org_session() as db:
             assert "organization_id" not in db.info
             assert "tenant_id" not in db.info
-
-    def test_calls_both_bypass_layers(self):
-        """Contract: cross_org_session composes the ORM ``allow_cross_org``
-        flag AND ``bypass_rls_sync``. Future refactors must not drop one."""
-        from unittest.mock import patch
-
-        from app.db.session_context import cross_org_session
-
-        with patch("app.db.session_context.bypass_rls_sync") as mock_bypass:
-            mock_bypass.return_value.__enter__ = lambda self: None
-            mock_bypass.return_value.__exit__ = lambda self, *a: None
-            with cross_org_session() as db:
-                assert db.info["allow_cross_org"] is True
-                mock_bypass.assert_called_once_with(db)
 
     def test_closes_session_on_exit(self):
         from app.db.session_context import cross_org_session

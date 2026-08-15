@@ -332,7 +332,6 @@ def main() -> int:
     )
 
     with SessionLocal() as db:
-        db.execute(text("SET app.bypass_rls = 'true'"))
         for d in targets:
             logger.info("=" * 50)
             run_for_date(db, d, args.execute)

@@ -43,8 +43,9 @@ logger = logging.getLogger(__name__)
 def run(*, dry_run: bool) -> int:
     """Return the row count shifted (or that would be shifted on dry-run)."""
     # Cross-org by design: shifts every Mono-sourced banking row regardless of
-    # tenant. cross_org_session() makes that intent explicit and bypasses both
-    # tenant layers (the raw SQL here targets the non-RLS banking schema).
+    # tenant. cross_org_session() makes that application-layer intent explicit;
+    # the raw SQL targets a banking table that does not yet have RLS. This must
+    # be dispositioned when that domain gains database protection.
     with cross_org_session() as db:
         before = db.execute(
             text(

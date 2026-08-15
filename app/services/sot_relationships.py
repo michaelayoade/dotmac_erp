@@ -89,13 +89,12 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 name="tenancy.rls",
                 module="app.rls",
                 owns=(
-                    "PostgreSQL RLS GUC context "
-                    "(app.current_organization_id, app.current_tenant, "
-                    "app.bypass_rls)",
+                    "PostgreSQL tenant-scope GUC context "
+                    "(app.current_organization_id, app.current_tenant)",
                 ),
                 notes=(
                     "ERP and shared-module scope GUCs are set atomically; "
-                    "app.bypass_rls never bypasses module policies."
+                    "runtime code has no user-settable RLS bypass."
                 ),
             ),
         ),

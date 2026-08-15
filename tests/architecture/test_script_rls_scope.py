@@ -1,21 +1,10 @@
-"""A script that opens a session without a scope reads NOTHING, and says so nowhere.
+"""An unscoped script silently reads nothing once its tables acquire RLS.
 
-`dotmac_erp_app` is not a superuser and does not hold BYPASSRLS, and 87 tables
-carry `FORCE ROW LEVEL SECURITY`. The policy on them is
-
-    should_bypass_rls() OR organization_id = get_current_organization_id()
-
-and `get_current_organization_id()` returns NULL when `app.current_organization_id`
-is unset — via `current_setting(..., true)`, `NULLIF`, and a catch-all
-`EXCEPTION WHEN OTHERS THEN RETURN NULL`. So `organization_id = NULL` is never
-true, and the query returns zero rows **without raising**.
-
-Measured on production 2026-08-10, same session, same role, same table:
-
-    SET LOCAL ROLE dotmac_erp_app;
-    SELECT count(*) FROM people;                       -->     0
-    -- then, with app.current_organization_id set:
-    SELECT count(*) FROM people;                       -->   569
+ERP's RLS coverage is being added domain by domain. A script without
+``app.current_organization_id`` evaluates the tenant predicate against NULL,
+so a newly protected query returns zero rows without raising. Runtime code no
+longer has a user-settable PostgreSQL bypass; only an explicit tenant scope is
+valid here.
 
 A batch job in that state does not fail. It processes nothing and reports
 success. `allocate_splynx_fifo.py` allocates no payments; `post_unposted_ap_invoices.py`
@@ -39,10 +28,10 @@ The second rule is what makes it a ratchet rather than a permanent amnesty.
 
 ## What counts as scoping
 
-Any use of `app.rls`'s own helpers: `tenant_context`/`tenant_context_sync` to
-scope, or `bypass_rls`/`enable_rls_bypass` to opt out deliberately. **Bypassing
-counts as passing** — an explicit bypass is a decision on the record, which is
-the thing the silent case lacks.
+Any use of `app.rls`'s tenant helpers: `tenant_context` /
+`tenant_context_sync`, the direct scope setters used by infrastructure code,
+or `prime_tenant_context`. Application-layer `allow_cross_org` is not a
+PostgreSQL RLS scope and does not count.
 
 This is a static check and can only see the script's own source. A script that
 scopes indirectly, through a service that sets the context for it, will look
@@ -60,18 +49,14 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 BASELINE = pathlib.Path(__file__).with_name("rls_scope_baseline.txt")
 
-# `app.rls`'s public helpers. Scoping and bypassing both count: the failure this
-# guards against is doing NEITHER.
+# Tenant-scoping helpers. A user-settable PostgreSQL bypass is deliberately not
+# part of this vocabulary.
 _SCOPE_MARKERS = frozenset(
     {
         "tenant_context",
         "tenant_context_sync",
-        "bypass_rls",
-        "bypass_rls_sync",
         "set_current_organization",
         "set_current_organization_sync",
-        "enable_rls_bypass",
-        "enable_rls_bypass_sync",
         "prime_tenant_context",
     }
 )
@@ -123,8 +108,8 @@ def test_no_new_unscoped_scripts() -> None:
         "These scripts open a SessionLocal and never set an organization scope "
         "or an explicit bypass. Under FORCE RLS they will read zero rows and "
         "exit 0:\n  " + "\n  ".join(new) + "\n\n"
-        "Wrap the work in `tenant_context_sync(db, org_id)`, or `bypass_rls_sync(db)` "
-        "if it is genuinely cross-organization."
+        "Wrap the work in `tenant_context_sync(db, org_id)` or migrate it to "
+        "the canonical per-organization session helper."
     )
 
 
