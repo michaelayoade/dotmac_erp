@@ -123,9 +123,6 @@ app/tasks/automation.py	_resolve_workflow_rule_org	cross_org_session	1	yes	tenan
 app/tasks/banking.py	auto_match_unreconciled_statements	cross_org_session	1	yes	tenant_catalog_definer	blocked	banking	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/crm.py	crm_inventory_health_check	cross_org_session	1	yes	tenant_catalog_definer	blocked	crm	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/data_health.py	_task_session	cross_org_session	1	yes	tenant_catalog_definer	blocked	data_health	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/discipline.py	process_discipline_appeal_deadline_reminders	cross_org_session	1	yes	tenant_catalog_definer	blocked	discipline	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/discipline.py	process_discipline_hearing_reminders	cross_org_session	1	yes	tenant_catalog_definer	blocked	discipline	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/discipline.py	process_discipline_response_reminders	cross_org_session	1	yes	tenant_catalog_definer	blocked	discipline	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/dotmac_sub.py	cleanup_stale_dotmac_sub_sync_history	cross_org_session	1	yes	tenant_catalog_definer	blocked	dotmac_sub	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/email.py	send_email_async	cross_org_session	1	yes	tenant_resolution_definer	blocked	email	event identity must resolve one tenant before opening session_for_org
 app/tasks/expense.py	poll_stuck_expense_transfers	cross_org_session	2	yes	tenant_catalog_definer	blocked	expense	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
