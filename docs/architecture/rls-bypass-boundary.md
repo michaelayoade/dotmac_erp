@@ -94,6 +94,40 @@ This PR creates no cross-tenant role, pool, service, Bao field or credential.
 Those are added only for residual, measured demand after individual
 disposition—not as a blanket replacement for the GUC.
 
+## Caller disposition inventory
+
+The post-removal audit is checked in at
+`docs/inventories/rls-cross-org-callers.tsv`. It records the exact runtime
+syntax under `app/` and active `scripts/`: 198 owning functions and 200
+boundary uses across 61 files. A table appearing in the migrated catalog and a
+caller appearing in this inventory are separate facts; neither is inferred
+from the other.
+
+The reviewed state at 2026-08-15 is:
+
+| Contract | Callers | Cutover meaning |
+|---|---:|---|
+| ordinary `app_user` | 90 | Ready only because the named target tables have no RLS at migration heads; this is least privilege, not tenant isolation |
+| narrow tenant-catalog definer, then `session_for_org` | 71 | Blocked |
+| narrow tenant-resolution definer, then `session_for_org` | 27 | Blocked |
+| isolated cross-tenant service | 8 | Blocked; no credential or service exists yet |
+| replace with the existing tenant session | 2 | Blocked |
+
+The 108 blocked callers are a two-directional ratchet. A new caller fails the
+exact inventory; removing or converting one also fails until the inventory and
+baseline are lowered in the same review. A `ready` row is structurally refused
+when it claims access to an RLS-protected table.
+
+The low-level ORM marker is a closed writer set, independent of the inventory:
+`allow_cross_org`, `cross_org_session`, and the API dependency session owner.
+A sensitivity proof covers aliased helpers, FastAPI dependencies, and a direct
+marker write. The inventory therefore cannot be bypassed by adding a wrapper.
+
+This completes disposition, not remediation. The `app_user` cutover remains
+blocked. The next coherent slice is the shared tenant-catalog discovery
+contract, because it removes the largest blocker family without putting a
+cross-tenant credential in the ordinary application pool.
+
 ## Ordered follow-up
 
 1. The migrated catalog inventory is the policy/caller audit input; the stale

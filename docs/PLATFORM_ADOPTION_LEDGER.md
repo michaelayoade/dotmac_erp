@@ -45,6 +45,15 @@ Cross-organization module work iterates Organizations under separate
 `session_for_org` sessions, and the future `app_user` cutover remains blocked
 until every residual database-wide caller has a narrow reviewed contract.
 
+That caller disposition is now exact and checked in at
+`docs/inventories/rls-cross-org-callers.tsv`: 198 owning functions contain 200
+boundary uses across 61 runtime files. Ninety callers are ready for ordinary
+`app_user` only as a least-privilege change; 108 remain blocked. The largest
+blocked family is 71 jobs and scripts that need a narrow tenant-catalog reader
+followed by one `session_for_org` per tenant. The two-directional ratchet and
+sensitivity proof live in
+`tests/architecture/test_cross_org_caller_dispositions.py`.
+
 The complete contract and remaining gate are
 `docs/architecture/organization-tenant-boundary.md`. This slice creates no
 `tenants` table, runs no kernel or module lineage, admits no kernel persistence
