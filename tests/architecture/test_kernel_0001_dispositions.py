@@ -77,9 +77,18 @@ def test_the_kernel_lineage_is_still_not_composed() -> None:
     composing the KERNEL lineage is the thing that can never happen, because
     kernel `0001` creates `public.tenants` and ERP owns that table.
     """
-    config = ALEMBIC_INI.read_text(encoding="utf-8")
-    assert "dotmac_files.migrations:versions" in config
-    assert "dotmac_kernel.migrations" not in config
+    import configparser
+
+    # Parsed, not substring-matched. `alembic.ini` explains in a COMMENT why the
+    # kernel lineage is absent, and a naive `"dotmac_kernel.migrations" not in
+    # text` check matches that explanation — failing because the reason is
+    # documented. Interpolation is off because the value contains `%(here)s`,
+    # which Alembic injects and ConfigParser knows nothing about.
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(ALEMBIC_INI)
+    locations = parser["alembic"]["version_locations"].split()
+    assert "dotmac_files.migrations:versions" in locations
+    assert not [item for item in locations if "dotmac_kernel.migrations" in item]
     document = DISPOSITIONS.read_text(encoding="utf-8")
     assert "cannot stamp" in document.lower()
     assert "`fi_0001_stored_files`" in document

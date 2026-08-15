@@ -150,4 +150,3 @@ class TestComposedLineage:
         )
         assert edges == {"20260813_tenant_projection", "20260814_database_roles"}
         assert "0001_initial_tenant_schema" not in edges
-
