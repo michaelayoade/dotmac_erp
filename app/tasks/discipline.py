@@ -9,7 +9,6 @@ Handles:
 
 import logging
 from datetime import date, datetime, timezone
-from uuid import UUID
 
 try:
     from datetime import UTC  # type: ignore
@@ -19,15 +18,14 @@ except ImportError:  # pragma: no cover
 from typing import TypedDict
 
 from celery import shared_task
-from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.models.notification import (
     EntityType,
     NotificationChannel,
     NotificationType,
 )
-from app.models.people.discipline import DisciplinaryCase
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +44,6 @@ class HearingReminderResults(TypedDict):
 class AppealReminderResults(TypedDict):
     reminders_sent: int
     errors: list[str]
-
-
-def _group_case_ids_by_org(
-    cases: list[DisciplinaryCase],
-) -> dict[UUID, list[UUID]]:
-    grouped: dict[UUID, list[UUID]] = {}
-    for case in cases:
-        grouped.setdefault(case.organization_id, []).append(case.case_id)
-    return grouped
 
 
 @shared_task
@@ -81,24 +70,16 @@ def process_discipline_response_reminders() -> ResponseReminderResults:
     from app.services.notification import notification_service
     from app.services.people.discipline import DisciplineService
 
-    with cross_org_session() as cross_db:
-        service = DisciplineService(cross_db)
-        pending_by_org = _group_case_ids_by_org(
-            service.get_cases_with_pending_responses(days_before=3)
-        )
-        overdue_by_org = _group_case_ids_by_org(
-            service.get_cases_with_overdue_responses()
-        )
-
-    for org_id in set(pending_by_org) | set(overdue_by_org):
+    for org_id in active_organization_ids():
         with session_for_org(org_id) as db:
-            pending_cases = list(
-                db.scalars(
-                    select(DisciplinaryCase).where(
-                        DisciplinaryCase.case_id.in_(pending_by_org.get(org_id, []))
-                    )
-                ).all()
-            )
+            # The service methods take no organization_id — they scope through
+            # the session. Called here, inside the tenant session, each returns
+            # only this organization's cases, under both the ORM listener and
+            # PostgreSQL RLS. The previous cross-org scan got every tenant's
+            # rows at once and then had to re-fetch them per organization.
+            service = DisciplineService(db)
+
+            pending_cases = service.get_cases_with_pending_responses(days_before=3)
             for case in pending_cases:
                 try:
                     if not case.employee or not case.employee.person_id:
@@ -125,13 +106,7 @@ def process_discipline_response_reminders() -> ResponseReminderResults:
                     )
                     results["errors"].append(f"{case.case_number}: {str(e)}")
 
-            overdue_cases = list(
-                db.scalars(
-                    select(DisciplinaryCase).where(
-                        DisciplinaryCase.case_id.in_(overdue_by_org.get(org_id, []))
-                    )
-                ).all()
-            )
+            overdue_cases = service.get_cases_with_overdue_responses()
             for case in overdue_cases:
                 try:
                     if not case.employee or not case.employee.person_id:
@@ -189,19 +164,10 @@ def process_discipline_hearing_reminders() -> HearingReminderResults:
     from app.services.notification import notification_service
     from app.services.people.discipline import DisciplineService
 
-    with cross_org_session() as cross_db:
-        cases_by_org = _group_case_ids_by_org(
-            DisciplineService(cross_db).get_cases_with_upcoming_hearings(days_before=3)
-        )
-
-    for org_id, case_ids in cases_by_org.items():
+    for org_id in active_organization_ids():
         with session_for_org(org_id) as db:
-            cases = list(
-                db.scalars(
-                    select(DisciplinaryCase).where(
-                        DisciplinaryCase.case_id.in_(case_ids)
-                    )
-                ).all()
+            cases = DisciplineService(db).get_cases_with_upcoming_hearings(
+                days_before=3
             )
             for case in cases:
                 try:
@@ -264,20 +230,9 @@ def process_discipline_appeal_deadline_reminders() -> AppealReminderResults:
     from app.services.notification import notification_service
     from app.services.people.discipline import DisciplineService
 
-    with cross_org_session() as cross_db:
-        cases_by_org = _group_case_ids_by_org(
-            DisciplineService(cross_db).get_cases_with_expiring_appeals(days_before=7)
-        )
-
-    for org_id, case_ids in cases_by_org.items():
+    for org_id in active_organization_ids():
         with session_for_org(org_id) as db:
-            cases = list(
-                db.scalars(
-                    select(DisciplinaryCase).where(
-                        DisciplinaryCase.case_id.in_(case_ids)
-                    )
-                ).all()
-            )
+            cases = DisciplineService(db).get_cases_with_expiring_appeals(days_before=7)
             for case in cases:
                 try:
                     if not case.employee or not case.employee.person_id:

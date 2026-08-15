@@ -274,9 +274,11 @@ def test_ready_callers_do_not_claim_access_to_an_rls_protected_table() -> None:
 
 def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # 108 at disposition (PR #305). The tenant-catalog discovery contract
-    # converted 33 of the 71 `tenant_catalog_definer` callers to the narrow
-    # definer plus `session_for_org`, leaving 38 in that family.
-    baseline = 75
+    # converted 33 of the 71 `tenant_catalog_definer` callers (PR #306),
+    # leaving 38. PR #307 converted the three discipline reminder jobs — the
+    # first of the domain-scan shape, where due work is found inside each
+    # tenant's own session rather than by one cross-tenant scan — leaving 35.
+    baseline = 72
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

@@ -108,12 +108,12 @@ The reviewed state at 2026-08-15 is:
 | Contract | Callers | Cutover meaning |
 |---|---:|---|
 | ordinary `app_user` | 91 | Ready only because the named target tables have no RLS at migration heads; this is least privilege, not tenant isolation |
-| narrow tenant-catalog definer, then `session_for_org` | 38 | Blocked; 33 of the original 71 converted |
+| narrow tenant-catalog definer, then `session_for_org` | 35 | Blocked; 36 of the original 71 converted |
 | narrow tenant-resolution definer, then `session_for_org` | 27 | Blocked |
 | isolated cross-tenant service | 8 | Blocked; no credential or service exists yet |
 | replace with the existing tenant session | 2 | Blocked |
 
-The 75 blocked callers are a two-directional ratchet. A new caller fails the
+The 72 blocked callers are a two-directional ratchet. A new caller fails the
 exact inventory; removing or converting one also fails until the inventory and
 baseline are lowered in the same review. A `ready` row is structurally refused
 when it claims access to an RLS-protected table.
@@ -157,8 +157,22 @@ consequences are deliberate:
   it is why the remaining 38 are a separate slice rather than a mechanical
   rewrite.
 
-33 callers converted. The remaining 38 in this family are the domain-scan and
-row-resolution shapes described above.
+33 callers converted in #306. PR #307 converted the first three of the
+domain-scan shape — the `app/tasks/discipline.py` reminder jobs — as a proving
+slice: enumerate through the catalogue, then let each tenant's own scoped
+session answer "what is due here". The grouping helper and the per-organization
+id re-fetch it fed both disappeared, because a tenant-scoped service query
+returns that organization's rows directly.
+
+That slice widened no definer and added no credential. 35 remain in this
+family, to be taken in coherent domain groups.
+
+One practical note for those groups, learned in #306: tests that monkeypatch
+`cross_org_session` on a converting module fail with `AttributeError` before
+asserting anything. Inventory the patch targets before moving a seam. The
+current concentrations are `app/tasks/data_health.py` (17), `hooks.py` (7),
+`outbox_relay.py` (6), `notifications.py` (5), `finance.py` (2) and
+`audit.py` (1); `discipline.py` had none, which is part of why it went first.
 
 ## Ordered follow-up
 
