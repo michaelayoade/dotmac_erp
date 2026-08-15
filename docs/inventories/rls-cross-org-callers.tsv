@@ -23,10 +23,7 @@ app/api/auth.py	update_api_key	get_db_admin_bypass	1	no	ordinary_app_user	ready	
 app/api/auth.py	update_mfa_method	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
 app/api/auth.py	update_session	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
 app/api/auth.py	update_user_credential	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth_flow.py	create_oidc_identity	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	disable_oidc_identity	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
 app/api/auth_flow.py	forgot_password	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	list_oidc_identities	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
 app/api/auth_flow.py	login	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
 app/api/auth_flow.py	logout	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
 app/api/auth_flow.py	mfa_confirm	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
