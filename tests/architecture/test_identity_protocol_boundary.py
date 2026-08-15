@@ -53,19 +53,95 @@ def _mentions(source: str, marker: str) -> bool:
 
 
 # The model class survives its own deletion because migration
-# 20260720_federated_identity still owns the table. Only these files may name
-# it — see the FederatedIdentity docstring.
+# 20260720_add_federated_identity still owns the table. Only these files may
+# name it — see the FederatedIdentity docstring.
+#
+# The migration is on this list because the test asks whether anything READS or
+# WRITES the table at runtime, and DDL that defines a table is neither. It was
+# invisible while the scan covered `app/` only; widening to every executable
+# root surfaced it as a false positive, which is the honest reason it is named
+# here rather than a carve-out for convenience. Dropping the table (a separate,
+# destructive change) deletes this revision's entry along with the rest.
 _FEDERATED_IDENTITY_ALLOWED = {
     Path("app/models/auth.py"),
     Path("app/models/__init__.py"),
+    Path("alembic/versions/20260720_add_federated_identity.py"),
 }
 
 
-def _app_sources() -> list[tuple[Path, str]]:
-    return [
-        (path.relative_to(ROOT), path.read_text(encoding="utf-8"))
-        for path in sorted(APP.rglob("*.py"))
-    ]
+#: Every root this repository can actually execute. The claim under test is
+#: that no external-identity adapter exists ANYWHERE executable, so scanning
+#: `app/` alone could not support it: a Celery entry point under `scripts/`, a
+#: data migration under `alembic/`, or a maintenance command under `tools/`
+#: speaks the protocol just as effectively as a route does. `tests/` is
+#: deliberately absent — this file plants protocol probes on purpose, and a
+#: guard that scans its own sensitivity proofs can only ever fail.
+_EXECUTABLE_ROOTS = ("app", "scripts", "alembic", "tools")
+_SKIPPED_PARTS = frozenset({"__pycache__", "archive", "node_modules"})
+
+
+def _executable_sources() -> list[tuple[Path, str]]:
+    sources: list[tuple[Path, str]] = []
+    for root in _EXECUTABLE_ROOTS:
+        base = ROOT / root
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*.py")):
+            if _SKIPPED_PARTS & set(path.parts):
+                continue
+            sources.append((path.relative_to(ROOT), path.read_text(encoding="utf-8")))
+    return sources
+
+
+def _is_environ(node: ast.AST) -> bool:
+    """`os.environ` reached as an attribute, or bare after `from os import environ`."""
+    return (isinstance(node, ast.Attribute) and node.attr == "environ") or (
+        isinstance(node, ast.Name) and node.id == "environ"
+    )
+
+
+def _is_oidc_name(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.upper().startswith("OIDC_")
+    )
+
+
+def find_protocol_markers(rel_path: str, source: str) -> list[str]:
+    """Wire strings and identifiers, never prose.
+
+    These markers name the token/JWKS ceremony. Matching them against raw file
+    text — the previous behaviour — also matched the comment explaining why the
+    ceremony is gone, and the docstring of the contract that documents its
+    gated return. That makes deleting the explanation the cheapest way to green,
+    which is the opposite of what the guard is for.
+
+    So: string constants that are not docstrings (a real wire string, e.g. a URL
+    path or a claim name), and identifiers (`jwks_uri = ...`, `resp.id_token`).
+    Comments never appear in an AST at all, so they are excluded for free.
+    """
+    tree = _parse(source)
+    if tree is None:
+        return []
+    docstrings = _docstring_nodes(tree)
+    hits: list[str] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docstrings
+        ):
+            for marker in _PROTOCOL_MARKERS:
+                if _mentions(node.value, marker):
+                    hits.append(f"{rel_path}:{node.lineno} contains {marker}")
+        elif isinstance(node, ast.Name) and node.id in _PROTOCOL_MARKERS:
+            hits.append(f"{rel_path}:{node.lineno} binds {node.id}")
+        elif isinstance(node, ast.Attribute) and node.attr in _PROTOCOL_MARKERS:
+            hits.append(f"{rel_path}:{node.lineno} reads .{node.attr}")
+        elif isinstance(node, ast.keyword) and node.arg in _PROTOCOL_MARKERS:
+            hits.append(f"{rel_path}:{node.lineno} passes {node.arg}=")
+    return hits
 
 
 # ── Structural scanners ─────────────────────────────────────────────────────
@@ -164,14 +240,23 @@ def find_oidc_settings(rel_path: str, source: str) -> list[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             func = node.func
-            if isinstance(func, ast.Attribute) and func.attr in {"getenv", "environ"}:
+            # `os.getenv("X")`, and `os.environ.get("X")` — the latter is an
+            # attribute access ON os.environ, not a call to it.
+            reads_env = isinstance(func, ast.Attribute) and (
+                func.attr == "getenv"
+                or (func.attr == "get" and _is_environ(func.value))
+            )
+            if reads_env:
                 for arg in node.args:
-                    if (
-                        isinstance(arg, ast.Constant)
-                        and isinstance(arg.value, str)
-                        and arg.value.upper().startswith("OIDC_")
-                    ):
+                    if _is_oidc_name(arg):
                         hits.append(f"{rel_path}:{node.lineno} reads {arg.value}")
+        # `os.environ["X"]` — a subscript, and the most common spelling of all.
+        # An earlier version matched `os.environ(...)` as a CALL, which is not
+        # how a mapping is read: that branch could only ever fire on code that
+        # raises TypeError, while both real forms went undetected.
+        if isinstance(node, ast.Subscript) and _is_environ(node.value):
+            if _is_oidc_name(node.slice):
+                hits.append(f"{rel_path}:{node.lineno} reads {node.slice.value}")
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             targets = [node.target]
         elif isinstance(node, ast.Assign):
@@ -245,17 +330,16 @@ def test_erp_ships_no_external_identity_protocol_adapter() -> None:
     )
 
     offenders = [
-        f"{path}: {marker}"
-        for path, source in _app_sources()
-        for marker in _PROTOCOL_MARKERS
-        if _mentions(source, marker)
+        hit
+        for path, source in _executable_sources()
+        for hit in find_protocol_markers(str(path), source)
     ]
     # The other way back: importing the released adapter rather than rewriting
     # the ceremony. Structural, because that code contains none of the wire
     # strings above.
     offenders += [
         hit
-        for path, source in _app_sources()
+        for path, source in _executable_sources()
         for hit in find_adapter_usage(str(path), source)
     ]
     assert not offenders, (
@@ -272,7 +356,7 @@ def test_no_oidc_configuration_knob_has_been_reintroduced() -> None:
     sets it believes federated login is on."""
     offenders = [
         hit
-        for path, source in _app_sources()
+        for path, source in _executable_sources()
         for hit in find_oidc_settings(str(path), source)
     ]
     assert not offenders, (
@@ -292,7 +376,7 @@ def test_federated_identity_has_no_reader_or_writer() -> None:
     without also reopening the retirement decision."""
     offenders = [
         hit
-        for path, source in _app_sources()
+        for path, source in _executable_sources()
         if path not in _FEDERATED_IDENTITY_ALLOWED
         for hit in find_federated_identity_use(str(path), source)
     ]
@@ -386,7 +470,19 @@ def test_the_settings_scanner_catches_every_knob_not_a_chosen_three() -> None:
             f"{name} would not have been caught"
         )
     assert find_oidc_settings("app/config.py", "oidc_enabled: bool = False\n")
-    assert find_oidc_settings("app/config.py", 'x = os.environ("OIDC_ISSUER")\n')
+
+    # The three ways an environment variable is ACTUALLY read. The previous
+    # version asserted `os.environ("OIDC_ISSUER")` — calling a mapping, which
+    # raises TypeError and appears in no working code — while both real
+    # spellings below went undetected.
+    assert find_oidc_settings("app/config.py", 'x = os.environ["OIDC_ISSUER"]\n'), (
+        "subscript reads of os.environ were the gap"
+    )
+    assert find_oidc_settings(
+        "app/config.py", 'x = os.environ.get("OIDC_ISSUER", "")\n'
+    ), "os.environ.get is an attribute call ON environ, not a call TO it"
+    # Bare `environ` after `from os import environ`.
+    assert find_oidc_settings("app/config.py", 'x = environ["OIDC_ISSUER"]\n')
     # Prose, and an unrelated setting, stay silent.
     assert find_oidc_settings("x.py", '"""OIDC_ENABLED was removed."""\n') == []
     assert (
@@ -415,3 +511,60 @@ def test_the_federated_identity_scanner_catches_raw_sql_not_only_the_model() -> 
         )
         == []
     )
+
+
+def test_the_protocol_marker_scanner_catches_code_and_ignores_prose() -> None:
+    """Sensitivity and complement for the marker scanner.
+
+    The scanner previously matched raw file text, so the comment explaining that
+    the ceremony was removed tripped the guard protecting its removal. Deleting
+    the explanation was then the cheapest way to green. These assertions pin
+    both directions: real code is caught, prose is not.
+    """
+    # Caught: a wire string, an identifier, an attribute read, a keyword.
+    assert find_protocol_markers("x.py", 'URL = "/.well-known/openid-configuration"\n')
+    assert find_protocol_markers("x.py", 'jwks_uri = discover()["jwks_uri"]\n')
+    assert find_protocol_markers("x.py", "claims = response.id_token\n")
+    assert find_protocol_markers("x.py", "exchange(code_challenge=verifier)\n")
+
+    # Not caught: the explanations this repository has to be able to write.
+    assert find_protocol_markers("x.py", "# the id_token ceremony was deleted\n") == []
+    assert (
+        find_protocol_markers(
+            "x.py", '"""ERP performs no jwks_uri lookup; see the contract."""\n'
+        )
+        == []
+    ), "a module docstring describing the boundary must not trip the guard"
+    assert (
+        find_protocol_markers(
+            "x.py",
+            "def f():\n"
+            '    """Adoption would add a token_endpoint call."""\n'
+            "    return None\n",
+        )
+        == []
+    ), "a function docstring is prose too"
+    # A word that merely contains a marker is not a marker.
+    assert (
+        find_protocol_markers("x.py", "value = _require_valid_token(request)\n") == []
+    )
+
+
+def test_the_marker_scanner_reaches_every_executable_root() -> None:
+    """The claim is 'nowhere executable', so the scan must cover those roots.
+
+    Scanning `app/` alone could not support the claim: a Celery entry point in
+    `scripts/`, a data migration in `alembic/`, or a maintenance command in
+    `tools/` speaks the protocol just as well as a route does.
+    """
+    assert set(_EXECUTABLE_ROOTS) >= {"app", "scripts", "alembic", "tools"}
+
+    scanned_roots = {path.parts[0] for path, _ in _executable_sources()}
+    missing = {
+        root for root in _EXECUTABLE_ROOTS if (ROOT / root).exists()
+    } - scanned_roots
+    assert missing == set(), f"{sorted(missing)} exist but were not scanned"
+
+    # And the scanner does not scan itself: this file plants protocol probes on
+    # purpose, so including `tests/` would make the guard permanently red.
+    assert "tests" not in scanned_roots
