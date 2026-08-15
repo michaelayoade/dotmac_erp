@@ -249,8 +249,8 @@ def test_a_tenants_cycle_is_only_advanced_in_that_tenants_session(tenant_session
     def service_factory(db):
         service = MagicMock()
         service.get_cycles_ready_for_transition.return_value = by_session[db]
-        service.advance_cycle_phase.side_effect = (
-            lambda cycle, _status: advanced.append((db, cycle)) or True
+        service.advance_cycle_phase.side_effect = lambda cycle, _status: (
+            advanced.append((db, cycle)) or True
         )
         return service
 
