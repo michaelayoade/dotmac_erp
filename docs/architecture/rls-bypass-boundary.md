@@ -175,6 +175,53 @@ Their `target_relations` is still populated: unbounded means the recorded set
 is a lower bound, not that it is unknown. The backlog shrinks by narrowing a
 caller, never by moving a row into it.
 
+## The `app_user` proof, and what it does not prove
+
+Everything above is static: relations traced from source, dispositions written
+against them. Nothing had executed a statement as the role the whole programme
+is about. `tests/integration/test_app_user_cross_org_reachability.py` does, in
+the PostgreSQL lane, after `scripts/bootstrap_database_roles.py` and
+`alembic upgrade heads`. For each of the 48 relations the ledger's
+`target_relations` column names, it ATTEMPTS the read and records the outcome in
+`tests/integration/app_user_reachability.tsv` — exact rows, not counts.
+
+Becoming the role. The bootstrap deliberately sets no password, so no direct
+`app_user` DSN generally exists and the lane connects as the superuser and
+issues `SET LOCAL ROLE`. That is sound for what is asserted here: PostgreSQL
+evaluates both the superuser exemption and `rolbypassrls` against
+`current_user`, and the test asserts `current_user`, `(rolsuper, rolbypassrls)
+= (false, false)`, `should_bypass_rls()` false, and no organization GUC — the
+precondition, not an assumption. An `APP_USER_DATABASE_URL` knob selects a
+direct login where a deployment provides one, and refuses a URL carrying a
+password: credentials go in `PGPASSWORD`, as the CI bootstrap step already
+does.
+
+Today's measurement is almost entirely `denied-no-grant`: no migration issues a
+table-level `GRANT … TO app_user`, only `EXECUTE` on two functions, so
+`app_user` holds `SELECT` on 1 of 420 relations. That produces four honest
+limits the module's own docstring carries:
+
+- **A `ready` row is not proved reachable.** All 91 have an unreachable target,
+  recorded as a two-directional ratchet rather than asserted, because 91 red
+  rows on the first run is how a gate gets deleted. It becomes a real assertion
+  in the change that adds the grants.
+- **A `blocked` row is not proved refused.** `denied-no-grant` is the absence of
+  a privilege, not the presence of a boundary; 158 `known_gaps` relations carry
+  no RLS at all and would return every organization's rows once granted.
+- **Reachability is not isolation.** Every policy's first disjunct is
+  `should_bypass_rls()`, and `app.bypass_rls` is `PGC_USERSET` — `app_user` can
+  set it itself. The measurement is conditional on that GUC being unset, which
+  is why the test asserts it.
+- **It measures relations, not callers**, and the design catalog, not
+  production.
+
+The expectation file is a DERIVATION, not a typed claim: `app_user_priv`
+decides granted-or-not and `rls_enabled` decides the rest, both read out of
+`tests/integration/tenant_table_inventory.tsv`, and a test asserts that every
+recorded row reproduces from it. This is the one part of the bridge programme
+that is real evidence about the live system rather than intent, which is why it
+survives the retirement reframing below.
+
 ## The tenant-catalog discovery contract
 
 Revision `20260815_tenant_catalog_discovery` installs
