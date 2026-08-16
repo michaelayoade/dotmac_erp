@@ -24,6 +24,8 @@ which restores the process's real registry whatever happens.
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from app.models.domain_settings import SettingDomain
@@ -47,21 +49,21 @@ def _registry_state():
     """
     saved = set(setting_scopes._PLATFORM_OWNED)
     saved_loaded = setting_scopes._loaded
-    saved_loading = setting_scopes._loading
+    saved_loading = getattr(setting_scopes._import_state, "loading", False)
     try:
         yield
     finally:
         setting_scopes._PLATFORM_OWNED.clear()
         setting_scopes._PLATFORM_OWNED.update(saved)
         setting_scopes._loaded = saved_loaded
-        setting_scopes._loading = saved_loading
+        setting_scopes._import_state.loading = saved_loading
 
 
 def _enter_the_window() -> None:
     """Put the module in exactly the state the partial import produces."""
     setting_scopes._PLATFORM_OWNED.clear()
     setting_scopes._loaded = False
-    setting_scopes._loading = False
+    setting_scopes._import_state.loading = False
 
 
 def test_a_no_op_import_that_registered_nothing_does_not_latch(_registry_state):
@@ -75,7 +77,55 @@ def test_a_no_op_import_that_registered_nothing_does_not_latch(_registry_state):
         "on that flag, so the registry stays empty for the life of the process "
         "and every key answers 'not platform-owned'"
     )
-    assert setting_scopes._loading is False, "the re-entry guard was left set"
+    assert setting_scopes._import_state.loading is False, (
+        "the re-entry guard was left set"
+    )
+
+
+def test_the_reentry_guard_is_not_read_by_a_thread_that_did_not_set_it(
+    _registry_state,
+):
+    """The guard is per-thread, and a second thread must not answer from it.
+
+    As a plain module global it was READ by threads that never set it: this
+    app serves sync routes from a threadpool, so a caller arriving while
+    another thread held the flag returned at the guard and answered from a
+    registry that may still be empty — `False` for every key, with no
+    exception raised. That is the fail-open this module exists to prevent, and
+    it is invisible: the wrong answer and the right one have the same shape.
+
+    Here the main thread parks inside the guarded region and a second thread
+    asks the question. It must refuse (empty registry) rather than answer.
+    """
+    _enter_the_window()
+    setting_scopes._import_state.loading = True  # as the owning thread would
+    try:
+        answers: list[object] = []
+
+        def _ask() -> None:
+            try:
+                answers.append(
+                    setting_scopes.is_platform_owned(
+                        SettingDomain.automation, "webhook_allowed_hosts"
+                    )
+                )
+            except BaseException as exc:  # noqa: BLE001 - recorded, then asserted
+                answers.append(exc)
+
+        worker = threading.Thread(target=_ask)
+        worker.start()
+        worker.join(timeout=10)
+        assert not worker.is_alive(), "the second thread never returned"
+
+        assert answers, "the second thread recorded nothing"
+        assert answers[0] is not False, (
+            "a thread that never set the re-entry guard short-circuited on it "
+            "and answered 'not platform-owned' from an empty registry — the "
+            "write listener and all four read overrides are off for that "
+            "request, silently"
+        )
+    finally:
+        setting_scopes._import_state.loading = False
 
 
 def test_the_window_refuses_rather_than_answering_false(_registry_state):

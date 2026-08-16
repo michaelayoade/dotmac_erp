@@ -33,16 +33,28 @@ tenant override.
 
 from __future__ import annotations
 
+import threading
+
 _PLATFORM_OWNED: set[tuple[str, str]] = set()
 
-# Import state for `_ensure_loaded`. `_loading` covers exactly one case: a
-# query arriving underneath the import THIS module started, which must answer
-# from whatever has registered so far rather than recurse forever. It does not
-# cover a query arriving while `settings_spec` is mid-import from some other
-# entry point — see `_ensure_loaded` for that case and why `_loaded` may not be
-# set until the registry has been validated.
+# Import state for `_ensure_loaded`. The re-entry guard covers exactly one
+# case: a query arriving underneath the import THIS CALL started, on THIS
+# thread, which must answer from whatever has registered so far rather than
+# recurse forever. It does not cover a query arriving while `settings_spec` is
+# mid-import from some other entry point — see `_ensure_loaded` for that case
+# and why `_loaded` may not be set until the registry has been validated.
+#
+# It is THREAD-LOCAL, and that is load-bearing rather than tidy. As a plain
+# global it was read by threads that had not set it: this app serves sync
+# routes from a threadpool, so while one thread held `_loading = True` every
+# other thread's `is_platform_owned` returned at the guard and answered from a
+# registry that may still be empty — `False` for every key, silently, which is
+# the fail-open this module exists to prevent. Per-thread, a second thread
+# instead performs its own import; CPython's per-module import lock makes it
+# WAIT for the in-flight import and then see the completed module, so the
+# cross-thread race resolves into a correct answer instead of a quiet one.
 _loaded = False
-_loading = False
+_import_state = threading.local()
 
 
 def register_platform_owned(domain: object, key: str) -> None:
@@ -67,8 +79,9 @@ def _ensure_loaded() -> None:
     ``DomainSetting`` is constructed while ``settings_spec`` is itself mid-import
     — its registration loop runs at the END of that module — this function's
     import returns immediately, having executed nothing, and the registry is
-    still empty. ``_loading`` does not cover that: the import was begun by some
-    other entry point, not by us, so ``_loading`` is ``False`` here.
+    still empty. The re-entry guard does not cover that: the import was begun
+    by some other entry point, not by this call, so ``_import_state.loading``
+    is ``False`` here.
 
     An earlier version then set ``_loaded = True`` regardless. That LATCHED the
     empty registry for the life of the process: ``is_platform_owned`` answered
@@ -80,15 +93,26 @@ def _ensure_loaded() -> None:
     refusal it can retry — the next call re-imports (cheap: ``sys.modules``
     lookup), re-validates, and succeeds as soon as ``settings_spec`` has
     finished. Failing closed and retryable is the correct direction for a
-    security check; latching open is not. No lock is taken: every step here is
-    idempotent, so the worst a race does is repeat a no-op import, whereas a
-    lock around an ``import`` invites deadlock against the import machinery's
-    own.
+    security check; latching open is not.
+
+    No lock is taken here, and the re-entry flag is per-thread
+    ------------------------------------------------------------
+    An earlier note claimed "the worst a race does is repeat a no-op import".
+    That was true of the import and false of the flag: as a plain global, the
+    guard was READ by threads that had not set it, so a concurrent caller
+    short-circuited on another thread's in-flight import and answered from a
+    registry that might still be empty — ``False`` for every key, no
+    exception, which is precisely the fail-open direction. Per-thread, the
+    concurrent caller runs its own ``import`` and blocks on CPython's
+    per-module import lock until the in-flight one finishes, then validates a
+    populated registry. Every step remains idempotent, and no lock of ours
+    wraps an ``import`` — that is what would deadlock against the import
+    machinery's own.
     """
-    global _loaded, _loading
-    if _loaded or _loading:
+    global _loaded
+    if _loaded or getattr(_import_state, "loading", False):
         return
-    _loading = True
+    _import_state.loading = True
     try:
         import app.services.settings_spec  # noqa: F401  (import for its side effect)
 
@@ -102,7 +126,7 @@ def _ensure_loaded() -> None:
                 "once that import completes."
             )
     finally:
-        _loading = False
+        _import_state.loading = False
     # Reached only on a complete, validated load. Never move this above the
     # validation, and never put it in the `finally`.
     _loaded = True
