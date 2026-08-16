@@ -130,6 +130,51 @@ marker write. The inventory therefore cannot be bypassed by adding a wrapper.
 This completes disposition, not remediation. The `app_user` cutover remains
 blocked.
 
+## What each caller actually reaches (`target_relations`)
+
+The table above is a snapshot of the reviewed state at 2026-08-15. The
+inventory carries 148 rows, and every row names the schema-qualified relations
+its bypass region reaches.
+
+That column exists because the disposition was previously unfalsifiable. A row
+could describe its own reach in prose and name a relation the caller never
+queries — `app/startup.py::warn_unconfigured_webhook_allowlist` claimed
+`core_org.organization` and touches `public.domain_settings` and
+`automation.workflow_rule`; all three `app/api/audit.py` rows named
+`audit.audit_log` where the caller reads `public.audit_events`. Nothing
+compared either claim to anything, because there was nothing to compare it to.
+
+`target_relations` is a sorted, deduplicated, `|`-joined list of
+`schema.table` names, traced from source one bypass region at a time. `-` is
+the sentinel for a region that issues no statement — a legal value and never a
+legal disposition, kept so the guard bites on the next such caller rather than
+on the last one. The format is parsed by
+`tests/architecture/test_cross_org_caller_dispositions.py`, so a name that is
+not a relation, or a list that is unsorted or duplicated, fails the build.
+
+### Unbounded reach
+
+Three callers' relation sets are not fixed by their own bodies, and none is
+given an invented one. They sit in a named two-directional ratchet in
+`tests/architecture/test_cross_org_caller_dispositions.py`:
+
+- `app/services/settings_seed.py::_global_settings_seed.scoped_seed` — the
+  bypass region is a decorator body wrapping an arbitrary callable, so its
+  reach is fixed by the seven `@_global_settings_seed` call sites. A new
+  decorated seed widens it without touching the row.
+- `app/tasks/data_health.py::_task_session` — the bypass region returns a
+  session context to its caller rather than issuing a statement, so its reach
+  is the union of the ten data-health tasks that pass `organization_id=None`.
+  A new task widens it without touching the row.
+- `app/tasks/finance.py::refresh_analysis_cubes` — the None-organization
+  branch issues `REFRESH MATERIALIZED VIEW` on a name read out of
+  `rpt.analysis_cube.source_view`, so the refreshed relation is a row *value*.
+  It also reads `pg_catalog.pg_matviews`, which no tenant catalog can contain.
+
+Their `target_relations` is still populated: unbounded means the recorded set
+is a lower bound, not that it is unknown. The backlog shrinks by narrowing a
+caller, never by moving a row into it.
+
 ## The tenant-catalog discovery contract
 
 Revision `20260815_tenant_catalog_discovery` installs
