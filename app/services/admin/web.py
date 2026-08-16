@@ -2605,7 +2605,18 @@ class AdminWebService:
         is_secret: bool = False,
         is_active: bool = True,
     ) -> tuple[DomainSetting | None, str | None]:
-        """Create a new setting. Returns (setting, error)."""
+        """Create a new setting. Returns (setting, error).
+
+        Writes the PLATFORM row: no ``organization_id`` is set, so this is the
+        ceiling rather than one organization's override. Reachable only behind
+        the ``admin`` role — the same authority the platform settings route
+        requires — and that guard is load-bearing for the platform-owned keys
+        (the webhook SSRF allowlist, ``openbao_allow_insecure``), which have no
+        other tenant-side writer left. An organization-scoped write attempted
+        here for such a key would be refused at the ORM boundary by
+        ``_require_platform_scope``; nothing about that refusal makes the role
+        check optional.
+        """
         # Validate domain
         try:
             domain_enum = registry().require(domain)

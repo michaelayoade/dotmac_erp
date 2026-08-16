@@ -30,6 +30,11 @@ from app.models.finance.automation import (
     WorkflowExecution,
     WorkflowRule,
 )
+# The SUBMODULE is named directly rather than reached through
+# `app.services.finance.automation`, whose `__init__` imports this module: a
+# `from <package> import <submodule>` there resolves an attribute on a
+# half-initialised package.
+from app.services.finance.automation.webhook_policy import effective_policy
 
 logger = logging.getLogger(__name__)
 
@@ -111,17 +116,6 @@ def _coerce_bool(value: object | None, default: bool) -> bool:
     return default
 
 
-def _coerce_float(value: object | None, default: float) -> float:
-    if value is None:
-        return default
-    if isinstance(value, (int, float)):
-        return float(value)
-    try:
-        return float(str(value).strip())
-    except ValueError:
-        return default
-
-
 def _allowed_webhook_hosts(db: Session | None = None) -> set[str]:
     raw = _db_setting(db, "webhook_allowed_hosts")
     if raw is None:
@@ -150,11 +144,11 @@ def _allow_localhost_webhooks(db: Session | None = None) -> bool:
     return _coerce_bool(raw, default=False)
 
 
-def _webhook_timeout(db: Session | None = None) -> float:
-    raw = _db_setting(db, "webhook_timeout_seconds")
-    if raw is None:
-        raw = os.getenv("WEBHOOK_TIMEOUT_SECONDS")
-    return _coerce_float(raw, default=10.0)
+# `_webhook_timeout` used to live here. It is gone rather than merely unused:
+# it read `webhook_timeout_seconds` and returned it unbounded, so leaving it
+# beside a clamped call site would be a second, unclamped reader of the same
+# value waiting for the next caller. The bounded answer is
+# `effective_policy(db, org).timeout_seconds`.
 
 
 def _is_private_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -1113,7 +1107,19 @@ class WorkflowService:
                 "data": context.new_values,
             }
 
-            timeout = httpx.Timeout(_webhook_timeout(db), connect=5.0)
+            # Timeout channel 1 of 2. The value an organization may set
+            # (`webhook_timeout_seconds`) is bounded HERE, at the point the
+            # request is made, by the platform ceiling
+            # `webhook_max_timeout_seconds`. Clamping only where the setting is
+            # read would leave the second channel — a service hook's
+            # `handler_config["timeout_seconds"]`, clamped in
+            # `app/services/hooks/registry.py` — free to exceed the maximum, and
+            # a ceiling one channel honours is not a ceiling.
+            #
+            # Only the timeout is taken from the policy module in this change;
+            # the allowlist reads above are cut over separately.
+            policy = effective_policy(db, context.organization_id)
+            timeout = httpx.Timeout(policy.timeout_seconds, connect=5.0)
             with httpx.Client(timeout=timeout, follow_redirects=False) as client:
                 response = client.request(
                     method=method,

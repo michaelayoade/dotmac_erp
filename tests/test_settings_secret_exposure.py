@@ -17,7 +17,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.api.settings import _owns_history_entry
+from app.api.settings import _can_read_history_entry, _can_restore_history_entry
 from app.schemas.settings import MASKED_VALUE, SettingHistoryRead
 from app.web.deps import require_admin_access
 
@@ -100,21 +100,50 @@ class TestHistoryIsTenantScoped:
         auth = {"organization_id": str(uuid4())}
         entry = _history_entry(organization_id=uuid4())
 
-        assert _owns_history_entry(entry, auth) is False
+        assert _can_read_history_entry(entry, auth) is False
+        assert _can_restore_history_entry(entry, auth) is False
 
     def test_entry_from_the_callers_organization_is_owned(self):
         org = uuid4()
         auth = {"organization_id": str(org)}
         entry = _history_entry(organization_id=org)
 
-        assert _owns_history_entry(entry, auth) is True
+        assert _can_read_history_entry(entry, auth) is True
+        assert _can_restore_history_entry(entry, auth) is True
 
     def test_global_setting_is_readable(self):
         """Global settings carry a NULL organization_id and stay visible."""
         auth = {"organization_id": str(uuid4())}
         entry = _history_entry(organization_id=None)
 
-        assert _owns_history_entry(entry, auth) is True
+        assert _can_read_history_entry(entry, auth) is True
+
+    def test_global_setting_is_not_restorable_by_a_tenant_administrator(self):
+        """Reading a platform row's history is not permission to rewrite it.
+
+        `restore_from_history` resolves its target scope from the entry, so a
+        NULL-org entry rewrites the platform row. `settings:manage` is a TENANT
+        permission; without this split a tenant admin could roll a
+        platform-owned SSRF control back to any value it ever held.
+        """
+        auth = {"organization_id": str(uuid4()), "roles": ["finance_manager"]}
+        entry = _history_entry(organization_id=None)
+
+        assert _can_read_history_entry(entry, auth) is True
+        assert _can_restore_history_entry(entry, auth) is False
+
+    def test_global_setting_is_restorable_by_a_platform_administrator(self):
+        auth = {"organization_id": str(uuid4()), "roles": ["admin"]}
+        entry = _history_entry(organization_id=None)
+
+        assert _can_restore_history_entry(entry, auth) is True
+
+    def test_missing_roles_key_denies_rather_than_raises(self):
+        """The auth dict is built elsewhere; absent `roles` must fail closed."""
+        entry = _history_entry(organization_id=None)
+
+        assert _can_restore_history_entry(entry, {}) is False
+        assert _can_restore_history_entry(entry, {"roles": None}) is False
 
 
 class TestAdminSurfaceRequiresAdmin:

@@ -51,6 +51,13 @@ CEILING_KEYS = (
     "webhook_allow_localhost",
     "webhook_max_timeout_seconds",
 )
+# Every platform-owned key in the automation domain, which is the ceiling above
+# plus one. `openbao_allow_insecure` is not part of the webhook ceiling and is
+# not composed by `webhook_policy`; it is platform-owned for the same reason —
+# a tenant-writable row that turns off TLS verification, here against the store
+# holding every other secret — and it shares the refusal mechanism exactly, so
+# the write and read tests below must cover it too.
+PLATFORM_OWNED_KEYS = CEILING_KEYS + ("openbao_allow_insecure",)
 TENANT_OWNED_KEYS = (
     "webhook_timeout_seconds",
     "webhook_tenant_allowed_hosts",
@@ -90,7 +97,7 @@ def cleanup(db_session):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("key", CEILING_KEYS)
+@pytest.mark.parametrize("key", PLATFORM_OWNED_KEYS)
 def test_the_ceiling_keys_are_declared_platform_owned(key):
     spec = get_spec(SettingDomain.automation, key)
     assert spec is not None, f"automation/{key} is not a registered spec"
@@ -117,7 +124,7 @@ def test_the_registry_is_populated_and_narrow():
     """It is neither empty (a check that fails open) nor everything."""
     declared = platform_owned_keys()
     assert declared, "no platform-owned keys registered — the check fails open"
-    for key in CEILING_KEYS:
+    for key in PLATFORM_OWNED_KEYS:
         assert (str(SettingDomain.automation), key) in declared
     for key in TENANT_OWNED_KEYS:
         assert (str(SettingDomain.automation), key) not in declared
@@ -128,7 +135,7 @@ def test_the_registry_is_populated_and_narrow():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("key", CEILING_KEYS)
+@pytest.mark.parametrize("key", PLATFORM_OWNED_KEYS)
 def test_an_organization_row_for_a_platform_key_is_refused_on_insert(
     db_session, org_id, key
 ):

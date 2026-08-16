@@ -28,6 +28,7 @@ from app.services.formatting_context import (
 )
 from app.services.settings_spec import (
     DOMAIN_SETTINGS_SERVICE,
+    SettingScopeAuthority,
     get_spec,
     list_specs,
     resolve_value,
@@ -625,6 +626,11 @@ class SettingsWebService:
                 "min": spec.min_value,
                 "max": spec.max_value,
                 "allowed": list(spec.allowed) if spec.allowed else None,
+                # The template renders a platform-owned control read-only. That
+                # is UX; the mechanism is the spec declaration plus the ORM
+                # listener. Derived from the spec so a new platform control is
+                # rendered correctly without touching the template.
+                "platform_owned": spec.scope is SettingScopeAuthority.PLATFORM,
             }
 
         return {"settings": settings, "specs": specs}
@@ -632,7 +638,17 @@ class SettingsWebService:
     def update_automation_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
     ) -> tuple[bool, str | None]:
-        """Update automation settings."""
+        """Update THIS organization's automation settings.
+
+        A PLATFORM-owned spec is skipped, not rejected: this form renders every
+        automation spec, including the read-only platform controls, so a normal
+        submission always carries them back and rejecting would make the page
+        unsaveable. The skip is derived from the spec rather than from a literal
+        key set in the route, so a new platform control is covered the day it is
+        declared. A write that reached the database anyway would still be
+        refused at the ORM boundary by ``_require_platform_scope``; this skip is
+        the friendly layer, not the enforcing one.
+        """
         service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.automation)
         if not service:
             return False, "Automation settings service not found"
@@ -641,12 +657,18 @@ class SettingsWebService:
             spec = get_spec(SettingDomain.automation, key)
             if not spec:
                 continue
+            if spec.scope is SettingScopeAuthority.PLATFORM:
+                continue
 
             payload = DomainSettingUpdate(
                 value_type=spec.value_type,
                 value_text=str(value) if value is not None else None,
             )
-            service.upsert_by_key(db, key, payload)
+            # Stated, not implied. The method already received the scope and
+            # previously discarded it, letting `_resolve_operation_scope`
+            # re-derive the same value from `db.info` — one more ambient-scope
+            # call site for no benefit.
+            service.upsert_by_key(db, key, payload, organization_id=organization_id)
 
         db.commit()
         return True, None

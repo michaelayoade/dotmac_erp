@@ -505,13 +505,29 @@ SETTINGS_SPECS: list[SettingSpec] = [
         min_value=1,
         max_value=300,
     ),
-    # Secrets Provider Settings
+    # ── Secrets provider ──────────────────────────────────────────────────
+    # PLATFORM, and this is a FIFTH key beyond the four the webhook ruling
+    # names. It is here because the protection it had was the same literal
+    # `restricted_keys` set in `app/web/finance/settings.py` that this change
+    # deletes, and it is the same failure class as `webhook_allow_insecure`: a
+    # tenant-writable row that turns off TLS verification, here against the
+    # secret store holding every other secret. Deleting the set without
+    # carrying this key would have left it strictly less protected than before
+    # — a silent regression riding along on a hardening change.
+    #
+    # This is a real tightening, not a like-for-like carry: today a tenant
+    # ADMIN may flip it (the old set was skipped entirely for `is_admin`);
+    # after this only the platform settings route
+    # `PUT /settings/automation/openbao_allow_insecure` may. Preserving the
+    # old protection exactly would have meant re-introducing a role literal in
+    # a route handler, which is the convention being retired.
     SettingSpec(
         domain=SettingDomain.automation,
         key="openbao_allow_insecure",
         env_var="OPENBAO_ALLOW_INSECURE",
         value_type=SettingValueType.boolean,
         default=False,
+        scope=SettingScopeAuthority.PLATFORM,
     ),
     SettingSpec(
         domain=SettingDomain.automation,

@@ -281,6 +281,24 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # tenant_resolution_definer. That moves nothing here on purpose:
     # reclassification corrects what a caller needs, not whether it blocks.
     # The count falls only when a caller is actually converted.
+    #
+    # The webhook SSRF hardening (webhook_policy becomes platform-owned) moves
+    # no caller in this half: 61, unchanged. It declares `SettingSpec.scope`,
+    # builds the write refusal plus the read-side scope override, closes the
+    # tenant writers and clamps both outbound timeout channels. It touches
+    # app/ in eight files and adds no `allow_cross_org`, `cross_org_session`
+    # or bypass-session dependency of its own -- deliberately so.
+    # app/services/secrets.py::_openbao_allow_insecure needed a
+    # platform-scoped read, and the obvious way to get one was a local
+    # `allow_cross_org` around its hand-written query; it was instead routed
+    # through DomainSettingService.get_by_key, which already owns that bypass
+    # and already discards a caller's organization for a platform-owned key.
+    # A hardening step that grew the bypass surface to hold a scope override in
+    # a second place would have been the wrong trade twice over.
+    #
+    # Reclassification never moves this number. It corrects what a caller
+    # needs, not whether it blocks; the count falls only when a caller is
+    # actually converted or deleted.
     baseline = 61
     blocked = [
         f"{row['path']}::{row['symbol']}"
