@@ -406,11 +406,23 @@ def _require_platform_scope(
     """Refuse an organization row for a setting the platform owns.
 
     This is the WRITE half of the platform-ownership mechanism. The READ half
-    lives in ``settings_spec.resolve_value``, ``DomainSettings.get_by_key`` and
-    ``SettingsCache``, each of which discards a caller-supplied organization
-    for such a key. Both halves are needed because ``public.domain_settings``
-    has no RLS policy: this listener covers every ORM writer, and the read-side
-    override is what makes a row inserted outside the ORM inert instead of
+    is FOUR paths, and the count is stated because a docstring that named three
+    of them was true of the code and still left the fourth uncovered:
+
+    * ``settings_spec.resolve_value``
+    * ``DomainSettings.get_by_key``
+    * ``SettingsCache._get_setting_value_for_scope`` (single key, cached)
+    * ``SettingsCache._load_domain_rows`` (the BULK path behind
+      ``get_domain_settings``)
+
+    The first three discard a caller-supplied organization for such a key. The
+    fourth cannot — it selects both scopes in one statement and lets an
+    ``ORDER BY`` decide — so it skips the organization row instead, which
+    leaves the same value standing.
+
+    Both halves are needed because ``public.domain_settings`` has no RLS
+    policy: this listener covers every ORM writer, and the read-side override
+    is what makes a row inserted outside the ORM inert instead of
     authoritative.
 
     Imported lazily, and from the leaf ``setting_scopes`` module rather than

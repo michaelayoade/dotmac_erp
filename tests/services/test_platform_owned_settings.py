@@ -7,10 +7,16 @@ the constrained party rewrite its own constraint, so:
 * the WRITE is refused at the ORM boundary — one listener on `DomainSetting`,
   which is the single place every `DomainSetting(...)` constructor, the
   settings import path and the history-restore path all pass through;
-* the READ discards a caller-supplied organization for such a key, in all
-  three read paths, so a row created OUTSIDE the ORM (raw SQL, a psql
-  session, a replica that predates this change) is inert rather than
-  authoritative.
+* the READ refuses to let an organization row answer, on all FOUR read paths,
+  so a row created OUTSIDE the ORM (raw SQL, a psql session, a replica that
+  predates this change) is inert rather than authoritative. Three of them —
+  `resolve_value`, `DomainSettings.get_by_key`, and `SettingsCache`'s
+  single-key path — discard the caller's organization. The fourth,
+  `SettingsCache._load_domain_rows` behind `get_domain_settings`, selects both
+  scopes in one statement and lets an `ORDER BY` decide, so it skips the
+  organization row instead. The count is stated because an earlier version of
+  this docstring said "three", which was true of the three it named and left
+  the bulk path applying plain override semantics.
 
 Both halves are needed. `public.domain_settings` has no RLS policy — a
 platform row's `organization_id` is NULL and matches no
@@ -379,3 +385,119 @@ def test_the_cached_path_collapses_a_platform_key_to_one_entry(
         "the read cached under an organization scope; a platform write would "
         "have to sweep one entry per organization to invalidate it"
     )
+
+
+# ---------------------------------------------------------------------------
+# The fourth read path — the bulk one
+# ---------------------------------------------------------------------------
+
+
+def test_the_bulk_path_does_not_let_an_organization_row_answer(
+    db_session, org_id, cleanup
+):
+    """`get_domain_settings` selects both scopes at once, so it needs its own check.
+
+    The three single-key paths discard the caller's organization. This one
+    cannot: one statement fetches the organization row and the platform row
+    together and an `ORDER BY` puts the organization's last, so plain override
+    semantics would hand back the smuggled value — the same widening the other
+    three refuse, reached through a different public method while three
+    docstrings said the read side was covered.
+    """
+    platform_row = DomainSetting(
+        domain=SettingDomain.automation,
+        key="webhook_allowed_hosts",
+        organization_id=None,
+        scope=SettingScope.GLOBAL,
+        value_type=SettingValueType.string,
+        value_text="selfcare.dotmac.io",
+    )
+    db_session.add(platform_row)
+    db_session.commit()
+    cleanup.append(platform_row.id)
+
+    cleanup.append(
+        _insert_outside_the_orm(
+            db_session,
+            domain=SettingDomain.automation,
+            key="webhook_allowed_hosts",
+            organization_id=org_id,
+            scope=SettingScope.ORG_SPECIFIC,
+            value_type=SettingValueType.string,
+            value_text="attacker.example",
+        )
+    )
+
+    values = settings_cache.get_domain_settings(
+        db_session, SettingDomain.automation, organization_id=org_id
+    )
+    assert values.get("webhook_allowed_hosts") == "selfcare.dotmac.io", (
+        "the bulk read path applied plain override semantics to a platform-owned key"
+    )
+
+
+def test_the_bulk_path_still_prefers_an_organization_row_for_a_tenant_key(
+    db_session, org_id, cleanup
+):
+    """Sensitivity. A blanket "global always wins" would pass the test above.
+
+    Override semantics are correct for every key that is not platform-owned,
+    and `webhook_tenant_allowed_hosts` — same domain, adjacent name, the
+    organization's OWN narrowing — must keep them.
+    """
+    platform_row = DomainSetting(
+        domain=SettingDomain.automation,
+        key="webhook_tenant_allowed_hosts",
+        organization_id=None,
+        scope=SettingScope.GLOBAL,
+        value_type=SettingValueType.string,
+        value_text="platform.example",
+    )
+    db_session.add(platform_row)
+    db_session.commit()
+    cleanup.append(platform_row.id)
+
+    org_row = DomainSetting(
+        domain=SettingDomain.automation,
+        key="webhook_tenant_allowed_hosts",
+        organization_id=org_id,
+        scope=SettingScope.ORG_SPECIFIC,
+        value_type=SettingValueType.string,
+        value_text="mine.example",
+    )
+    db_session.add(org_row)
+    db_session.commit()
+    cleanup.append(org_row.id)
+
+    values = settings_cache.get_domain_settings(
+        db_session, SettingDomain.automation, organization_id=org_id
+    )
+    assert values.get("webhook_tenant_allowed_hosts") == "mine.example"
+
+
+def test_the_bulk_path_omits_a_platform_key_with_no_platform_row(
+    db_session, org_id, cleanup
+):
+    """An organization value must not stand in for a ceiling nobody set.
+
+    Skipping the row rather than reordering it is what makes this true: the key
+    is simply absent, which is what "unconfigured" means on every other path,
+    and `read_platform_webhook_ceiling` then falls back to the environment or
+    to deny-all rather than to a tenant's value.
+    """
+    cleanup.append(
+        _insert_outside_the_orm(
+            db_session,
+            domain=SettingDomain.automation,
+            key="webhook_allowed_hosts",
+            organization_id=org_id,
+            scope=SettingScope.ORG_SPECIFIC,
+            value_type=SettingValueType.string,
+            value_text="attacker.example",
+        )
+    )
+
+    values = settings_cache.get_domain_settings(
+        db_session, SettingDomain.automation, organization_id=org_id
+    )
+    assert "webhook_allowed_hosts" not in values

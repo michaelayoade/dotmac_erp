@@ -42,8 +42,13 @@ What this module does NOT claim
 heads, and cannot straightforwardly get the standard one: every policy
 ``add_rls_policies`` writes is ``organization_id = get_current_organization_id()``
 and a platform row's ``organization_id`` is NULL, which matches no GUC value.
-Ownership here is therefore APPLICATION-enforced — an ORM write listener plus a
-read-side scope override — not database-enforced. Do not describe it otherwise.
+Ownership here is therefore APPLICATION-enforced — one ORM write listener plus
+a scope override on each of the FOUR read paths (``resolve_value``,
+``DomainSettings.get_by_key``, and both the single-key and bulk paths of
+``SettingsCache``; see ``app/models/domain_settings.py::_require_platform_scope``
+for the list and why the bulk one differs) — not database-enforced. Do not
+describe it otherwise, and do not describe the read side as covered without
+counting the paths.
 """
 
 from __future__ import annotations

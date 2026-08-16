@@ -476,8 +476,29 @@ class SettingsCache:
         with allow_cross_org(db):
             rows = list(db.scalars(stmt).all())
 
+        from app.services.setting_scopes import is_platform_owned
+
         result: dict[str, Any] = {}
         for setting in rows:
+            # The BULK read path, and the fourth place the scope override has
+            # to be stated. The three single-key paths discard a caller's
+            # organization for a platform-owned key; this one selects both
+            # scopes at once and lets the ORDER BY decide, so without the
+            # check below an organization row for such a key would overwrite
+            # the platform row in the returned mapping — the same widening the
+            # other three refuse, arriving through `get_domain_settings`.
+            #
+            # Skipping the row rather than reordering it: a platform-owned key
+            # has exactly one valid row and it is already in `result` (global
+            # rows are ordered first), so dropping the organization row leaves
+            # the ceiling standing. If no platform row exists, the key is
+            # simply absent, which is what "unconfigured" means everywhere
+            # else — an organization value must not be able to stand in for a
+            # ceiling that was never set.
+            if setting.organization_id is not None and is_platform_owned(
+                setting.domain, setting.key
+            ):
+                continue
             result[setting.key] = self._extract_value(setting)
         return result
 
@@ -579,7 +600,9 @@ class SettingsCache:
         """
         Get all effective settings for a domain, for one organization.
 
-        Org-specific rows override the platform-wide rows of the same key.
+        Org-specific rows override the platform-wide rows of the same key —
+        EXCEPT for a platform-owned key, where no organization row may answer.
+        See ``_load_domain_rows``.
 
         Args:
             db: Database session
