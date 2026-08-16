@@ -12,10 +12,10 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from sqlalchemy import distinct, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.models.fleet.enums import MaintenanceStatus
 from app.models.fleet.maintenance import MaintenanceRecord
 from app.models.fleet.vehicle_document import VehicleDocument
@@ -25,8 +25,22 @@ from app.models.notification import (
     NotificationChannel,
     NotificationType,
 )
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
+
+
+def _list_organization_ids() -> list[UUID]:
+    """Every tenant, deactivated ones included.
+
+    The scans this replaced enumerated distinct ``organization_id`` values from
+    ``VehicleDocument`` and ``MaintenanceRecord`` rows. Neither carried an
+    organization-active predicate, so a deactivated organization's expiring
+    insurance still raised a notification. Enumerating only active organizations
+    would silently change that; whether these reminders should stop for a
+    deactivated tenant is a product decision, not part of repairing discovery.
+    """
+    return organization_ids(include_inactive=True)
 
 
 def _get_operations_recipients(db: Session, organization_id: UUID) -> list[UUID]:
@@ -59,17 +73,6 @@ def _get_operations_recipients(db: Session, organization_id: UUID) -> list[UUID]
     return list(db.scalars(stmt).all())
 
 
-def _get_organization_ids_with_documents(
-    db: Session, expiry_cutoff: date
-) -> list[UUID]:
-    """Get distinct organization IDs that have documents expiring within cutoff."""
-    stmt = select(distinct(VehicleDocument.organization_id)).where(
-        VehicleDocument.expiry_date.isnot(None),
-        VehicleDocument.expiry_date <= expiry_cutoff,
-    )
-    return list(db.scalars(stmt).all())
-
-
 def _notification_already_sent_today(
     db: Session,
     entity_id: UUID,
@@ -85,17 +88,6 @@ def _notification_already_sent_today(
         )
     )
     return (count or 0) > 0
-
-
-def _get_organization_ids_with_maintenance(
-    db: Session, date_cutoff: date
-) -> list[UUID]:
-    """Get distinct organization IDs that have scheduled maintenance due within cutoff."""
-    stmt = select(distinct(MaintenanceRecord.organization_id)).where(
-        MaintenanceRecord.status == MaintenanceStatus.SCHEDULED,
-        MaintenanceRecord.scheduled_date <= date_cutoff,
-    )
-    return list(db.scalars(stmt).all())
 
 
 @shared_task
@@ -129,12 +121,15 @@ def process_document_expiry_notifications() -> dict[str, Any]:
     expiry_cutoff = today + timedelta(days=30)
 
     notification_service = NotificationService()
-    with cross_org_session() as db:
-        org_ids = _get_organization_ids_with_documents(db, expiry_cutoff)
-
-    for org_id in org_ids:
+    for org_id in _list_organization_ids():
         with session_for_org(org_id) as db:
-            # Get documents for this organization with eager-loaded vehicle
+            # Get documents for this organization with eager-loaded vehicle.
+            # This query already carries the whole cutoff predicate, so the
+            # cross-tenant pre-scan that used to narrow the loop to
+            # organizations with expiring documents was only ever an
+            # optimisation over the same filter — one that returned zero rows,
+            # and therefore sent zero notifications, the moment the runtime
+            # stopped being a superuser.
             stmt = (
                 select(VehicleDocument)
                 .options(selectinload(VehicleDocument.vehicle))
@@ -250,12 +245,11 @@ def process_maintenance_due_notifications() -> dict[str, Any]:
     date_cutoff = today + timedelta(days=7)
 
     notification_service = NotificationService()
-    with cross_org_session() as db:
-        org_ids = _get_organization_ids_with_maintenance(db, date_cutoff)
-
-    for org_id in org_ids:
+    for org_id in _list_organization_ids():
         with session_for_org(org_id) as db:
-            # Get maintenance records for this organization with eager-loaded vehicle
+            # Get maintenance records for this organization with eager-loaded
+            # vehicle. Same shape as the document job above: the per-tenant
+            # query holds the full cutoff predicate on its own.
             stmt = (
                 select(MaintenanceRecord)
                 .options(selectinload(MaintenanceRecord.vehicle))

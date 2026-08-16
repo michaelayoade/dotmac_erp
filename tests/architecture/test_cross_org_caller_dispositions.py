@@ -273,23 +273,15 @@ def test_ready_callers_do_not_claim_access_to_an_rls_protected_table() -> None:
 
 
 def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
-    # 108 at disposition (PR #305). The tenant-catalog discovery contract
-    # converted 33 of the 71 `tenant_catalog_definer` callers (PR #306),
-    # leaving 38. PR #307 converted the three discipline reminder jobs — the
-    # first of the domain-scan shape, where due work is found inside each
-    # tenant's own session rather than by one cross-tenant scan — leaving 35.
+    # 108 at disposition (#305) -> 75 (#306, 33 catalog enumerations) -> 72
+    # (#307, three discipline domain scans) -> 69 (#302, three obsolete OIDC
+    # callers). This change converts eight workforce fan-outs.
     #
-    # Then the unshipped OIDC implementation was deleted: its three admin
-    # binding routes (create/disable/list_oidc_identity) each reached
-    # RLS-protected `public.people` through the identity-bootstrap bypass, so
-    # they counted as blockers too.
-    #
-    # 75 -> 69, and the arithmetic is the reason this line is worth reading.
-    # #307 and the OIDC deletion each removed THREE, and each branch therefore
-    # said 72 on its own. Resolving the merge by taking either side's number
-    # would have silently re-admitted the other's three. The count comes from
-    # the merged ledger, not from a side of the conflict.
-    baseline = 69
+    # It ALSO reclassifies five rows from tenant_catalog_definer to
+    # tenant_resolution_definer. That moves nothing here on purpose:
+    # reclassification corrects what a caller needs, not whether it blocks.
+    # The count falls only when a caller is actually converted.
+    baseline = 61
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()
