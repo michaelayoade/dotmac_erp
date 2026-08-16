@@ -10,15 +10,19 @@ ERP has two mechanisms that must not be conflated:
 | Mechanism | Enforced by | Migration-defined reach | Disposition |
 |---|---|---|---|
 | `session.info["allow_cross_org"]` | SQLAlchemy ORM listener | Application SELECT filtering across the ERP ORM estate | Retained |
-| `app.bypass_rls` | PostgreSQL policies | 103 tables after `alembic upgrade heads` | Runtime writer retired; replacement contracts required before `app_user` cutover |
+| `app.bypass_rls` | PostgreSQL policies | 105 tables after `alembic upgrade heads` | Runtime writer retired; replacement contracts required before `app_user` cutover |
 
 The first audit measured stale production at
 `20260808_open_setting_domain`: 16 RLS-enabled `training.*` tables. It then
 incorrectly described that deployment snapshot as ERP's design and concluded
 that every GUC writer was a database-layer no-op.
 
-A clean database at migration heads has 418 tables, 158 with RLS enabled, and
-103 whose policies consult `should_bypass_rls()`. The no-op claim is withdrawn.
+A clean database at migration heads has 420 tables, 158 with RLS enabled, and
+105 whose policies consult `should_bypass_rls()`. (Re-measured 2026-08-15; this
+prose previously read 418/103. The classification partitions exactly —
+312 direct + 85 inherited + 3 platform + 20 unclassified = 420 — so the
+correction is two more direct tenant tables and two more dependent policies.)
+The no-op claim is withdrawn.
 Several administrative, pre-auth and batch paths touch protected domains in
 that migrated design.
 
@@ -167,26 +171,58 @@ returns that organization's rows directly.
 That slice widened no definer and added no credential. 35 remain in this
 family, to be taken in coherent domain groups.
 
-One practical note for those groups, learned in #306: tests that monkeypatch
-`cross_org_session` on a converting module fail with `AttributeError` before
-asserting anything. Inventory the patch targets before moving a seam. The
-current concentrations are `app/tasks/data_health.py` (17), `hooks.py` (7),
-`outbox_relay.py` (6), `notifications.py` (5), `finance.py` (2) and
-`audit.py` (1); `discipline.py` had none, which is part of why it went first.
+Two practical notes for those groups.
+
+First, learned in #306: tests that monkeypatch `cross_org_session` on a
+converting module fail with `AttributeError` before asserting anything.
+Inventory the patch targets before moving a seam. `discipline.py` had none,
+which is part of why it went first; `app/tasks/data_health.py` has 17, and its
+single ledger row hides nine entry points, so it gets a dedicated slice.
+
+Second, and more important: **test-patch count is not a grouping key.**
+`audit.py`, `notifications.py` and `outbox_relay.py` carry the
+`tenant_resolution_definer` contract, not this one, and are blocked on a
+contract that does not exist yet — sequencing them by patch count would have
+started work that cannot finish. `hooks.py` is mixed: its cleanup path is a
+catalog fan-out, its execution path is resolution, so one owner takes it across
+both phases rather than two owners colliding in the same file. Group by the
+`contract` column; treat the label as a first pass and re-check the shape.
 
 ## Ordered follow-up
 
 1. The migrated catalog inventory is the policy/caller audit input; the stale
    production snapshot remains a deployment-drift report only.
-2. Disposition cross-organization callers against the 103-table policy set.
-3. Forward-migrate every dependent policy to tenant predicates only, add FORCE
-   where missing, prove `pg_depend` has no remaining reference, and drop
-   `should_bypass_rls()`.
-4. Turn the strict GUC-policy xfail into a pass and prove tenant visibility and
-   cross-tenant denial through a separate real `app_user` connection, never
-   `SET ROLE`.
-5. Perform the least-privilege runtime cutover only after routes, jobs, workers,
-   scripts, ownership and grants pass under their final credentials.
+2. **Caller dispositions.** Convert the remaining catalog fan-outs. A
+   `tenant_catalog_definer` label is a first pass, not a verdict: several rows
+   carrying it are resolution- or special-shaped, and reclassifying one does
+   **not** lower the blocker count. The ratchet falls only when a caller is
+   actually converted.
+3. **Resolution contracts.** Design the tenant-resolution contract, then convert
+   the callers that resolve which organization owns one specific row. This is
+   the gate for `audit.py`, `notifications.py`, `outbox_relay.py` and the
+   execution half of `hooks.py`.
+4. **Isolated/offline boundaries** for the irreducible remainder.
+5. **Exact catalog classification.** Land the corrected 420/312/105 baseline and
+   make inherited tenant debt enforceable — 79 inherited tenant tables have no
+   RLS and no ratchet watching them. Repairing policies against a catalog that
+   under-counts the surface would certify the gap.
+6. **RLS/FORCE/GUC repair.** Forward-migrate every dependent policy to tenant
+   predicates only, add FORCE where missing, prove `pg_depend` has no remaining
+   reference, and drop `should_bypass_rls()`. Turn the strict GUC-policy xfail
+   into a pass and prove tenant visibility and cross-tenant denial through a
+   separate real `app_user` connection, never `SET ROLE`.
+7. **Production-only table disposition.**
+8. **Deployment preflight**, OpenBao-mediated secret injection, and a migration
+   rehearsal against a production clone.
+9. **Two deployment stages, deliberately separate.** First ship
+   `app_user`-compatible code and migrations **while retaining the current
+   runtime credential** — that release changes no identity and is revertible on
+   its own. Then, after burn-in, cut the runtime over to `app_user` as its own
+   change. Combining them would put a code regression and a privilege regression
+   in one blast radius, with a single rollback for two unrelated failures.
+
+Production deployment happens only after every gate above passes, and only
+against a host named explicitly at the time.
 
 ## Rejected shapes
 
