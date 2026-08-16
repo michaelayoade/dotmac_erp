@@ -281,7 +281,30 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # tenant_resolution_definer. That moves nothing here on purpose:
     # reclassification corrects what a caller needs, not whether it blocks.
     # The count falls only when a caller is actually converted.
-    baseline = 61
+    # This change deletes four rows outright: 152 rows -> 148, 61 -> 57. None
+    # of the four is a fan-out; each bypass turned out to be protecting
+    # nothing. crm_inventory_health_check opened a cross-org session only to
+    # satisfy InventoryPushService.__init__ — the probe it runs is an HTTP POST
+    # to the configured webhook and queries no table, so `db` became optional
+    # behind a property that still raises on any inventory read attempted
+    # without a session. DisciplineWebService._can_view_department_case
+    # suppressed the ORM listener around two statements that already spell out
+    # Employee.organization_id == org_id. execute_async_hook opened one purely
+    # to read back an organization both enqueue sites already hold, so the org
+    # now travels on the message. verify_audit_hash_chain discovered its
+    # tenants with SELECT DISTINCT over audit.audit_log, which is genuinely
+    # RLS-protected: under app_user that returned zero rows — a tamper check
+    # that verified nothing and exited 0.
+    #
+    # Three candidates examined in the same pass were REFUTED and are recorded
+    # here because a refutation is a finding, not an omission.
+    # cleanup_old_hook_executions keeps its row: platform.service_hook_execution
+    # is a known RLS gap with a nullable organization_id, so a fan-out would
+    # permanently orphan every NULL-org row. app/main.py::lifespan keeps its
+    # row: it is process startup with no request and no authenticated actor.
+    # The three app/api/audit.py rows keep theirs: a cross-tenant operator API
+    # has no tenant to iterate, because the cross-tenant query IS the question.
+    baseline = 57
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

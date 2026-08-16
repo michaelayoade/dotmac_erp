@@ -104,7 +104,6 @@ app/services/finance/banking/mono_sync.py	MonoSyncService._record_webhook_failur
 app/services/finance/banking/mono_sync.py	MonoSyncService.process_webhook	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
 app/services/finance/banking/mono_sync.py	MonoSyncService.sync_by_mono_account_id	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
 app/services/infrastructure_health.py	InfrastructureHealthService._monitoring_recipients	allow_cross_org	1	yes	tenant_catalog_definer	blocked	infrastructure_health	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/services/people/discipline/web/discipline_web.py	DisciplineWebService._can_view_department_case	allow_cross_org	1	yes	tenant_session	blocked	people	authenticated request must use its existing tenant context
 app/services/scheduler_config.py	_get_setting_value	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
 app/services/settings_cache.py	SettingsCache._load_domain_rows	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
 app/services/settings_cache.py	SettingsCache._load_setting_row	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
@@ -113,10 +112,8 @@ app/services/settings_seed.py	_sync_scheduler_connection	allow_cross_org	1	no	or
 app/services/settings_seed.py	seed_auth_settings	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
 app/startup.py	warn_unconfigured_webhook_allowlist	allow_cross_org	1	yes	tenant_catalog_definer	blocked	startup	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/audit.py	_write_audit_event	cross_org_session	1	yes	tenant_resolution_definer	blocked	audit	event identity must resolve one tenant before opening session_for_org
-app/tasks/audit_integrity.py	verify_audit_hash_chain	cross_org_session	1	yes	tenant_catalog_definer	blocked	audit_integrity	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/automation.py	_resolve_workflow_rule_org	cross_org_session	1	yes	tenant_resolution_definer	blocked	automation	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
 app/tasks/banking.py	auto_match_unreconciled_statements	cross_org_session	1	yes	tenant_catalog_definer	blocked	banking	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/crm.py	crm_inventory_health_check	cross_org_session	1	yes	tenant_catalog_definer	blocked	crm	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/data_health.py	_task_session	cross_org_session	1	yes	tenant_catalog_definer	blocked	data_health	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/dotmac_sub.py	cleanup_stale_dotmac_sub_sync_history	cross_org_session	1	yes	tenant_catalog_definer	blocked	dotmac_sub	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/email.py	send_email_async	cross_org_session	1	yes	tenant_resolution_definer	blocked	email	event identity must resolve one tenant before opening session_for_org
@@ -131,7 +128,6 @@ app/tasks/finance.py	release_expired_stock_reservations	cross_org_session	1	yes	
 app/tasks/finance.py	sync_mono_account	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/finance.py	sync_mono_transactions	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/hooks.py	cleanup_old_hook_executions	cross_org_session	1	yes	tenant_catalog_definer	blocked	hooks	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/hooks.py	execute_async_hook	cross_org_session	1	yes	tenant_resolution_definer	blocked	hooks	event identity must resolve one tenant before opening session_for_org
 app/tasks/hr.py	send_welcome_email	cross_org_session	1	yes	tenant_catalog_definer	blocked	hr	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/notifications.py	_task_db_session	cross_org_session	1	yes	tenant_resolution_definer	blocked	notifications	event identity must resolve one tenant before opening session_for_org
 app/tasks/outbox_relay.py	_task_db_session	cross_org_session	1	yes	tenant_resolution_definer	blocked	outbox_relay	event identity must resolve one tenant before opening session_for_org
