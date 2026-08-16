@@ -12,7 +12,8 @@ Four places name ruff and every one of them can drift on its own:
   * ``pyproject.toml`` declares the dev dependency,
   * ``poetry.lock`` records what actually resolved,
   * ``.pre-commit-config.yaml`` pins the hook that rewrites files on commit,
-  * ``Makefile`` / ``.github/workflows/ci.yml`` invoke the binary.
+  * ``Makefile`` / every workflow under ``.github/workflows/`` invoke the
+    binary, as does the ``entry:`` of any ``repo: local`` pre-commit hook.
 
 The failure this file exists to prevent already happened: the declaration was
 ``^0.15.0`` (a caret — any 0.x >= 0.15 satisfies it) while the lock and the
@@ -24,10 +25,18 @@ Two independent invariants are asserted here:
 
   1. **Coherence.** The declaration is an exact version, and the lock and the
      pre-commit ``rev`` name that same version.
-  2. **Reachability.** Every ruff invocation in `make check` and in the CI lint
-     job goes through ``poetry run``, so it is the LOCKED ruff that runs. A
-     bare ``ruff`` picks up whatever is on ``PATH`` — which is precisely how a
-     0.13.0 got in — and would make invariant 1 decorative.
+  2. **Reachability.** Every ruff invocation goes through ``poetry run``, so it
+     is the LOCKED ruff that runs. A bare ``ruff`` picks up whatever is on
+     ``PATH`` — which is precisely how a 0.13.0 got in — and would make
+     invariant 1 decorative. "Every" means the entry-point FAMILY, not one
+     remembered filename: `make check`, every workflow under
+     `.github/workflows/`, and the `entry:` of every `repo: local` pre-commit
+     hook, which is unpinned by construction.
+  3. **Non-disablement.** The gate cannot be turned off by a one-token edit.
+     pre-commit's ``SKIP`` env var is an off switch with no reader, so the
+     workflow scan refuses a SKIP list naming a formatter hook, and the format
+     check is required to be a parsed `run:` step that can actually fail —
+     not a substring that a comment or a `|| true` would satisfy.
 
 Everything below is a pure function over supplied text, with the real-file
 tests as thin callers. That is what lets the sensitivity proof at the bottom
@@ -54,7 +63,11 @@ PYPROJECT = ROOT / "pyproject.toml"
 LOCK = ROOT / "poetry.lock"
 PRE_COMMIT = ROOT / ".pre-commit-config.yaml"
 MAKEFILE = ROOT / "Makefile"
-CI_WORKFLOW = ROOT / ".github/workflows/ci.yml"
+WORKFLOW_DIR = ROOT / ".github/workflows"
+
+# Pre-commit hook ids whose whole job is to fail on formatter drift. Skipping
+# one is indistinguishable from deleting the gate, so `SKIP:` may not name them.
+GUARDED_HOOK_IDS = frozenset({"ruff", "ruff-format"})
 
 RUFF_PRE_COMMIT_REPO = "astral-sh/ruff-pre-commit"
 
@@ -70,6 +83,11 @@ _RUFF_COMMAND = re.compile(r"(?<![\w.\-])ruff\s+(?:check|format)\b")
 
 
 # ─── pure checkers ────────────────────────────────────────────────────────
+
+
+def workflow_files() -> list[Path]:
+    """Every workflow in the family, not one remembered filename."""
+    return sorted(WORKFLOW_DIR.glob("*.yml")) + sorted(WORKFLOW_DIR.glob("*.yaml"))
 
 
 def declared_ruff_pin(pyproject_text: str) -> str | None:
@@ -175,6 +193,106 @@ def make_target_prerequisites(makefile_text: str, target: str) -> list[str]:
     return body.split()
 
 
+_RUN_KEY = re.compile(r"^(\s*)-?\s*run:\s*(.*)$")
+_BLOCK_SCALAR = frozenset({"|", ">", "|-", ">-", "|+", ">+"})
+
+# A command whose failure cannot fail the step. `|| true`, `|| :` and
+# `|| exit 0` all report success whatever ruff said.
+_NEUTERED = re.compile(r"\|\|\s*(?:true\b|:|exit\s+0\b)")
+
+# `ruff format` carrying --check, i.e. a verification rather than a rewrite.
+_FORMAT_CHECK = re.compile(r"(?<![\w.\-])ruff\s+format\b[^\n]*--check\b")
+
+# `make format-check`, the delegated form of the same question.
+_MAKE_FORMAT_CHECK = re.compile(r"(?<![\w.\-])make\b[^\n]*\bformat-check\b")
+
+_SKIP_ASSIGNMENT = re.compile(r"^\s*SKIP:\s*(.+?)\s*$")
+
+
+def workflow_run_commands(workflow_text: str) -> list[str]:
+    """Every shell command a workflow's ``run:`` steps actually execute.
+
+    A line scan, not a YAML parse, for the reason in the module docstring:
+    PyYAML is not a declared dev dependency and a toolchain guard must not be
+    what makes a transitive package load-bearing.
+
+    Both `run:` forms are handled — inline (``run: cmd``) and block scalar
+    (``run: |`` plus the more-indented body). Comment lines are DROPPED, which
+    is the point: a commented-out step executes nothing, and the substring
+    check this replaces passed on exactly that.
+    """
+    commands: list[str] = []
+    lines = workflow_text.splitlines()
+    index = 0
+    while index < len(lines):
+        raw = lines[index]
+        if raw.strip().startswith("#"):
+            index += 1
+            continue
+        match = _RUN_KEY.match(raw)
+        if match is None:
+            index += 1
+            continue
+        key_indent = len(raw) - len(raw.lstrip())
+        value = match.group(2).strip()
+        index += 1
+        if value in _BLOCK_SCALAR:
+            while index < len(lines):
+                body = lines[index]
+                stripped = body.strip()
+                if stripped and (len(body) - len(body.lstrip())) <= key_indent:
+                    break
+                if stripped and not stripped.startswith("#"):
+                    commands.append(stripped)
+                index += 1
+        elif value:
+            commands.append(value)
+    return commands
+
+
+def is_enforcing(command: str) -> bool:
+    """False when the command reports success whatever the tool decided."""
+    return _NEUTERED.search(command) is None
+
+
+def local_hook_entries(pre_commit_text: str) -> list[str]:
+    """``entry:`` commands of ``repo: local`` hooks.
+
+    A hosted hook is version-pinned by its ``rev``; a local ``language: system``
+    hook is a bare shell command against whatever the runner has on PATH, which
+    is the same escape a bare ``ruff`` in a Makefile is. Unknown shapes yield
+    nothing, and the sensitivity proof asserts a planted entry IS found, so
+    "yields nothing" cannot silently mean "parsed nothing".
+    """
+    entries: list[str] = []
+    current_repo: str | None = None
+    for raw in pre_commit_text.splitlines():
+        line = raw.strip().lstrip("-").strip()
+        if line.startswith("repo:"):
+            current_repo = line.split(":", 1)[1].strip().strip("\"'")
+        elif line.startswith("entry:") and current_repo == "local":
+            entries.append(line.split(":", 1)[1].strip().strip("\"'"))
+    return entries
+
+
+def skipped_pre_commit_hooks(workflow_text: str) -> set[str]:
+    """Hook ids a workflow disables through pre-commit's ``SKIP`` env var."""
+    skipped: set[str] = set()
+    for raw in workflow_text.splitlines():
+        match = _SKIP_ASSIGNMENT.match(raw)
+        if match is None:
+            continue
+        value = match.group(1).split("#", 1)[0].strip().strip("\"'")
+        skipped.update(part.strip() for part in value.split(",") if part.strip())
+    return skipped
+
+
+def format_roots(makefile_text: str) -> list[str]:
+    """The value of ``FORMAT_ROOTS``, however it is assigned."""
+    match = re.search(r"^FORMAT_ROOTS\s*[:?]?=\s*(.+)$", makefile_text, re.MULTILINE)
+    return match.group(1).split("#", 1)[0].split() if match else []
+
+
 # ─── the real repository ──────────────────────────────────────────────────
 
 
@@ -206,19 +324,105 @@ def test_no_makefile_ruff_escapes_the_lock() -> None:
     )
 
 
-def test_no_ci_ruff_escapes_the_lock() -> None:
-    offenders = bare_ruff_invocations(CI_WORKFLOW.read_text())
+def test_the_workflow_family_is_not_empty() -> None:
+    """A glob that matches nothing passes every check below for free."""
+    assert workflow_files(), f"no workflows found under {WORKFLOW_DIR}"
+
+
+def test_no_workflow_ruff_escapes_the_lock() -> None:
+    """Every workflow, not one remembered filename.
+
+    The guard used to name .github/workflows/ci.yml. Four other workflows were
+    never read, so a bare `ruff format` added to any of them was invisible.
+    """
+    offenders: dict[str, list[str]] = {}
+    for path in workflow_files():
+        commands = "\n".join(workflow_run_commands(path.read_text()))
+        found = bare_ruff_invocations(commands)
+        if found:
+            offenders[path.name] = found
+    assert offenders == {}, f"a workflow invokes ruff without `poetry run`: {offenders}"
+
+
+def test_no_pre_commit_local_hook_escapes_the_lock() -> None:
+    """A `language: system` hook's `entry:` is a bare PATH command.
+
+    The hosted ruff hook is pinned by its `rev`. A local hook is not pinned by
+    anything, so `entry: ruff format` there would reintroduce exactly the
+    system-ruff-0.13.0 escape the rev pin exists to close.
+    """
+    offenders = bare_ruff_invocations(
+        "\n".join(local_hook_entries(PRE_COMMIT.read_text()))
+    )
     assert offenders == [], (
-        f"the CI workflow invokes ruff without `poetry run`: {offenders}"
+        f"a `repo: local` pre-commit hook invokes ruff off the lock: {offenders}"
     )
 
 
-def test_ci_lint_job_checks_formatting() -> None:
-    """CI and `make check` must ask the same question of the same roots."""
-    ci = CI_WORKFLOW.read_text()
-    assert "ruff format --check" in ci, (
-        "the CI lint job must run `ruff format --check`; without it a "
-        "differently-versioned formatter's output reaches main unnoticed"
+def test_no_workflow_skips_a_formatter_hook() -> None:
+    """`SKIP:` is an off switch with no reader. Give it one.
+
+    ci.yml already sets `SKIP: semgrep`. Appending `,ruff-format` is a
+    one-token edit that disables the only formatter check covering tests/ and
+    scripts/, and nothing anywhere would have noticed.
+    """
+    skipped = {
+        path.name: sorted(skipped_pre_commit_hooks(path.read_text()) & GUARDED_HOOK_IDS)
+        for path in workflow_files()
+    }
+    skipped = {name: hooks for name, hooks in skipped.items() if hooks}
+    assert skipped == {}, (
+        "a workflow's pre-commit SKIP list disables a formatter hook, which is "
+        f"indistinguishable from deleting the gate: {skipped}"
+    )
+
+
+def test_a_workflow_actually_enforces_the_format_check() -> None:
+    """Parsed, not substring-matched, and required to be able to fail.
+
+    The predecessor was `assert "ruff format --check" in ci`, which passes on a
+    commented-out step, on a mention inside a `name:`, and on a step suffixed
+    with `|| true`. This reads the `run:` steps and requires at least one that
+    asks the question AND can fail the job.
+    """
+    enforcing = {
+        path.name: [
+            command
+            for command in workflow_run_commands(path.read_text())
+            if (_FORMAT_CHECK.search(command) or _MAKE_FORMAT_CHECK.search(command))
+            and is_enforcing(command)
+        ]
+        for path in workflow_files()
+    }
+    assert any(enforcing.values()), (
+        "no workflow runs a format check that can fail; without one a "
+        f"differently-versioned formatter's output reaches main unnoticed: {enforcing}"
+    )
+
+
+def test_format_roots_cover_every_python_root() -> None:
+    """`make check` must not ask a narrower question than CI's pre-commit job.
+
+    The ruff-format hook declares no `files:` and no `exclude:`, and
+    pre-commit/action runs `--all-files`, so CI format-checks every tracked
+    .py. FORMAT_ROOTS read `app/`, so `make check` passed on trees CI rejects —
+    which is how eight blocks under tests/ reached a push.
+    """
+    roots = format_roots(MAKEFILE.read_text())
+    assert roots, "Makefile defines no FORMAT_ROOTS"
+    if roots == ["."]:
+        return
+    covered = {root.rstrip("/") for root in roots}
+    ignored = {".git", ".venv", "venv", "node_modules", "build", "dist", ".seabone"}
+    python_roots = {
+        (path.relative_to(ROOT).parts[0])
+        for path in ROOT.rglob("*.py")
+        if not (set(path.relative_to(ROOT).parts) & ignored)
+    }
+    missing = sorted(python_roots - covered)
+    assert not missing, (
+        "CI's pre-commit job format-checks these roots and FORMAT_ROOTS does "
+        f"not, so `make check` is weaker than CI: {missing}"
     )
 
 
@@ -342,3 +546,93 @@ def test_sensitivity_a_check_target_without_format_check_is_visible() -> None:
         "format-check",
         "type-check",
     ]
+
+
+_WORKFLOW_WITH_A_COMMENTED_OUT_CHECK = """
+jobs:
+  lint:
+    steps:
+      # - name: Ruff format check
+      #   run: poetry run ruff format --check app/
+      - name: Tests
+        run: pytest -q
+"""
+
+_WORKFLOW_WITH_A_NEUTERED_CHECK = """
+jobs:
+  lint:
+    steps:
+      - name: Ruff format check
+        run: poetry run ruff format --check app/ || true
+"""
+
+_WORKFLOW_WITH_A_BLOCK_SCALAR_CHECK = """
+jobs:
+  lint:
+    steps:
+      - name: Ruff format check
+        run: |
+          poetry run ruff format --check app/
+          poetry run ruff check app/
+"""
+
+
+def test_sensitivity_a_commented_out_step_runs_nothing() -> None:
+    assert workflow_run_commands(_WORKFLOW_WITH_A_COMMENTED_OUT_CHECK) == ["pytest -q"]
+
+
+def test_sensitivity_a_neutered_step_is_not_an_enforcing_one() -> None:
+    commands = workflow_run_commands(_WORKFLOW_WITH_A_NEUTERED_CHECK)
+    assert commands == ["poetry run ruff format --check app/ || true"]
+    assert _FORMAT_CHECK.search(commands[0]) is not None
+    assert is_enforcing(commands[0]) is False
+
+
+def test_sensitivity_a_block_scalar_body_is_read() -> None:
+    assert workflow_run_commands(_WORKFLOW_WITH_A_BLOCK_SCALAR_CHECK) == [
+        "poetry run ruff format --check app/",
+        "poetry run ruff check app/",
+    ]
+
+
+def test_sensitivity_an_enforcing_check_is_recognised_in_both_forms() -> None:
+    assert is_enforcing("poetry run ruff format --check app/") is True
+    assert _MAKE_FORMAT_CHECK.search("make format-check") is not None
+    assert _MAKE_FORMAT_CHECK.search("make check") is None
+
+
+def test_sensitivity_a_local_hook_entry_is_found_and_a_hosted_one_is_not() -> None:
+    planted = """
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: rogue
+        language: system
+        entry: ruff format --check app/
+"""
+    assert local_hook_entries(planted) == ["ruff format --check app/"]
+    assert bare_ruff_invocations("\n".join(local_hook_entries(planted))) == [
+        "ruff format --check app/"
+    ]
+
+
+def test_sensitivity_a_skip_list_naming_a_formatter_hook_is_reported() -> None:
+    assert skipped_pre_commit_hooks("        SKIP: semgrep") == {"semgrep"}
+    assert skipped_pre_commit_hooks("        SKIP: semgrep,ruff-format") == {
+        "semgrep",
+        "ruff-format",
+    }
+    assert skipped_pre_commit_hooks("        SKIP: semgrep  # comment") == {"semgrep"}
+    planted = skipped_pre_commit_hooks("        SKIP: semgrep,ruff-format")
+    assert planted & GUARDED_HOOK_IDS == {"ruff-format"}
+
+
+def test_sensitivity_narrow_format_roots_are_reported() -> None:
+    assert format_roots("FORMAT_ROOTS ?= app/") == ["app/"]
+    assert format_roots("FORMAT_ROOTS ?= .") == ["."]
+    assert format_roots("FORMAT_ROOTS ?= app/ tests/  # roots") == ["app/", "tests/"]
+    assert format_roots("nothing here") == []
