@@ -434,8 +434,17 @@ def read_platform_webhook_ceiling(db: Session | None) -> WebhookCeiling:
     read the platform row only because startup happened to have no ambient
     organization context, which is not the same thing.
 
-    ``db is None`` (a caller with no session at all) falls back to the process
-    environment, the same platform-level source the seed reads.
+    The environment is consulted in THREE cases, not one: no session at all
+    (``db is None``), ``resolve_value`` returning ``None``, and the defensive
+    ``except`` below. It is the same platform-level source the seed reads, so
+    every one of them stays platform-scoped — no organization row can reach
+    it — but the second and third are worth stating because on a seeded
+    database they are effectively dead: ``settings_seed`` creates each of
+    these rows with ``os.getenv(<VAR>, "")`` under create-if-missing, and an
+    existing row never resolves to ``None``. An operator changing a variable
+    on a deployed database therefore changes nothing; the platform row is the
+    only live control. See the recovery section of migration
+    ``20260816_platform_owned_webhook_ssrf_policy``.
     """
 
     def _setting(key: str, env: str | None) -> object | None:

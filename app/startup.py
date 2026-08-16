@@ -304,10 +304,14 @@ def warn_unconfigured_webhook_allowlist(db: Session | None = None) -> None:
         if any_tenant_has_an_active_webhook_rule():
             logger.warning(
                 "SECURITY: Active webhook automation rules exist, but no platform "
-                "webhook allowlist is configured. Set WEBHOOK_ALLOWED_HOSTS and/or "
-                "WEBHOOK_ALLOWED_DOMAINS, or write the platform rows via "
-                "PUT /settings/automation/webhook_allowed_hosts, to constrain "
-                "outbound webhook targets."
+                "webhook allowlist is configured. Outbound webhooks stay denied "
+                "until an admin writes the platform rows: "
+                "PUT /api/v1/settings/automation/webhook_allowed_hosts and "
+                "PUT /api/v1/settings/automation/webhook_allowed_domains, body "
+                '{"value_text": "hooks.example.net,api.example.net"}. Setting '
+                "WEBHOOK_ALLOWED_HOSTS/WEBHOOK_ALLOWED_DOMAINS in the process "
+                "environment does NOT end this: the environment seeds these rows "
+                "once at first boot and is never read again once a row exists."
             )
     except (MissingOrgContextError, SQLAlchemyError):
         logger.debug(

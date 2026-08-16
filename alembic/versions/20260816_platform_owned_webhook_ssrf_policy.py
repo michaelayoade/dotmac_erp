@@ -79,11 +79,20 @@ Recovery — the ONE supported operation
 Write the platform row through the admin settings API. Exact route, exact
 keys, admin credentials (``require_admin_bypass``)::
 
-    PUT /settings/automation/webhook_allowed_hosts
+    PUT /api/v1/settings/automation/webhook_allowed_hosts
         {"value_text": "hooks.example.net,api.example.net"}
 
-    PUT /settings/automation/webhook_allowed_domains
+    PUT /api/v1/settings/automation/webhook_allowed_domains
         {"value_text": "example.net"}
+
+The ``/api/v1`` prefix is load-bearing and is the whole route: ``app/main.py``
+mounts ``app.api.settings.router`` with ``prefix="/api/v1"`` directly, NOT
+through ``_include_api_router``, which is the helper that also registers the
+bare alias. There is no bare ``PUT /settings/automation/<key>``: the unprefixed
+``/settings`` namespace belongs to the HTML router ``app/web/settings.py``,
+which serves ``GET``/``POST /settings/{module_key}`` only, so the unprefixed
+form answers 405/404 and writes nothing. An earlier draft of this paragraph
+printed it without the prefix; an operator following that stayed down.
 
 ``app/api/settings.py::upsert_automation_setting`` hands
 ``organization_id=None`` to the service unconditionally, so this route writes
@@ -337,8 +346,9 @@ def _missing_ceiling_notice() -> str:
 
                 IF v_narrowed > 0 AND v_ceiling = 0 THEN
                     RAISE NOTICE
-                        'webhook SSRF policy: % organization row(s) now narrow %/%, but this deployment has NO platform row for it. The ceiling is NOT synthesised from them. Outbound webhooks stay denied for that key until an operator sets the environment default or writes the platform row.',
-                        v_narrowed, '{_DOMAIN}', v_move.platform_key;
+                        'webhook SSRF policy: % organization row(s) now narrow %/%, but this deployment has NO platform row for it. The ceiling is NOT synthesised from them. Outbound webhooks stay denied for that key until an admin writes the platform row: PUT /api/v1/settings/automation/%, JSON body with a value_text field. The process environment cannot end this; it seeds the row once at first boot and is not read again.',
+                        v_narrowed, '{_DOMAIN}', v_move.platform_key,
+                        v_move.platform_key;
                 END IF;
             END LOOP;
         END $$;

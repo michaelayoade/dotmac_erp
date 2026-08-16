@@ -438,7 +438,7 @@ def _require_platform_scope(
         raise PlatformOwnedSettingError(
             f"{target.domain}/{target.key} is platform-owned; an "
             "organization-scoped row may not exist for it. Write the platform "
-            f"row through PUT /settings/{target.domain}/{target.key}, or "
+            f"row through PUT /api/v1/settings/{target.domain}/{target.key}, or "
             "narrow it with the corresponding webhook_tenant_* setting."
         )
 

@@ -518,8 +518,8 @@ SETTINGS_SPECS: list[SettingSpec] = [
     # This is a real tightening, not a like-for-like carry: today a tenant
     # ADMIN may flip it (the old set was skipped entirely for `is_admin`);
     # after this only the platform settings route
-    # `PUT /settings/automation/openbao_allow_insecure` may. Preserving the
-    # old protection exactly would have meant re-introducing a role literal in
+    # `PUT /api/v1/settings/automation/openbao_allow_insecure` may. Preserving
+    # the old protection exactly would have meant re-introducing a role literal in
     # a route handler, which is the convention being retired.
     SettingSpec(
         domain=SettingDomain.automation,
