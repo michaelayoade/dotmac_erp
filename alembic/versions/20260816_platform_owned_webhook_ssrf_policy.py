@@ -31,10 +31,28 @@ What the demotion means for each value, under the conjunction in
   longer permit anything: the conjunction drops them at read time. This is the
   vulnerability being closed;
 * a list DISJOINT from the ceiling leaves that organization sending no
-  webhooks. Loud, not silent — the row is visibly present and the effective
-  policy is visibly empty;
+  webhooks;
 * ``allow_insecure``/``allow_localhost`` compose narrow-only, so an
   organization may still force a protection ON and can no longer turn one OFF.
+
+Those four are claims about RUNTIME, not about this file, and they are true
+only because the demoted key is actually composed onto the ceiling at the point
+a request is made. That is
+``workflow._validate_webhook_target``, the single host/scheme/loopback gate for
+both outbound channels, which resolves one ``effective_policy`` per call;
+``tests/services/test_webhook_call_site.py`` drives the disjoint case above end
+to end. Were a reader of the ceiling keys to reappear beside it, this migration
+would move values into a key nothing consults, and all four bullets would
+quietly become false — which is why that test also enumerates every file under
+``app/`` allowed to name one of the four keys.
+
+Two limits on the third bullet, stated because an earlier draft called it
+"loud": a disjoint narrowing surfaces as an ordinary per-request
+"Webhook host is not in the allowlist" failure on the workflow execution, the
+same message an unconfigured ceiling produces. Nothing logs "this
+organization's narrowing is disjoint from the ceiling", and no screen renders
+the composed policy. It is VISIBLE — the row is present and the failures are
+recorded — but an operator has to go and look.
 
 Each move is recorded as an ``UPDATE`` row in ``public.domain_setting_history``
 with the OLD ``(domain, key)`` in the denormalised columns, so it surfaces in
@@ -54,8 +72,17 @@ rows (``PUT /settings/automation/<key>`` with no organization). That is not a
 regression — the previous behaviour was a tenant choosing its own SSRF
 boundary — but it is a live outage for such a deployment and must not be
 discovered in production. This migration ``RAISE NOTICE``s one line per moved
-``(organization, key, value)`` and one per key left without a ceiling, so the
-deploy log tells an operator exactly which values to compose a ceiling from.
+``(organization, key, value)``, so the deploy log carries the values an
+operator composes a ceiling from, and one line per key that ends up with
+narrowing rows and no active platform row.
+
+That second notice is deliberately NOT one per unconfigured key: a key with no
+organization rows and no ceiling is the ordinary unconfigured state of a
+deployment that never used it, and saying so once per migration per key would
+train an operator to skip the notices that matter. The boot-time
+``warn_unconfigured_webhook_allowlist`` is what keeps saying it, at every start,
+for as long as active webhook rules exist without a ceiling.
+
 The pre-deploy dry run is::
 
     SELECT organization_id, key, value_type, value_text, value_json,
@@ -309,11 +336,18 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Move every narrowing row back to the key it came from.
 
-    Exactly reverses the upgrade on a database that has not changed since.
-    On one that has, an organization row written against a ``webhook_tenant_*``
-    key after the upgrade is indistinguishable from a demoted one and is
-    restored as an override — which is what the pre-upgrade schema meant by
-    that value anyway. No value is discarded in either direction.
+    Reverses the upgrade's EFFECT on ``public.domain_settings``: every value
+    ends up under the key it started at, with the same row id. It does not
+    reverse the audit trail, and deliberately so — it APPENDS its own
+    ``UPDATE`` rows rather than deleting the upgrade's. A history table a
+    migration can erase from is not an audit trail, and both moves genuinely
+    happened.
+
+    On a database that has changed since, an organization row written against a
+    ``webhook_tenant_*`` key after the upgrade is indistinguishable from a
+    demoted one and is restored as an override — which is what the pre-upgrade
+    schema meant by that value anyway. No value is discarded in either
+    direction.
     """
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":

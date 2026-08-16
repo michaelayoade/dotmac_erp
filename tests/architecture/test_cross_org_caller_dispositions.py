@@ -334,6 +334,17 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # existing ready row on app/services/domain_settings.py, which rows key on
     # (path, symbol, mechanism) and so does not grow.
     #
+    # The §4.5 call-site cutover and the platform-row door repairs that follow
+    # move nothing again: 151 rows, blocked 60. They add no allow_cross_org,
+    # cross_org_session or bypass-session dependency. One row is RENAMED --
+    # app/services/domain_settings.py::restore_from_history became
+    # ::_restore_from_history when the platform-owned refusal was wrapped
+    # around it -- and a rename is not a delta: same path, same mechanism, same
+    # occurrence, same `ready` disposition, so both counts stand. The row was
+    # edited rather than left to drift, because the scan keys on
+    # (path, symbol, mechanism) and a stale symbol would present as one row
+    # appearing and one disappearing.
+    #
     # Reclassification never moves this number. It corrects what a caller
     # needs, not whether it blocks; the count falls only when a caller is
     # actually converted or deleted.
