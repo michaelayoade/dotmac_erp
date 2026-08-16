@@ -246,18 +246,22 @@ class TestValueComparison:
 
 
 class TestWebhookAllowlist:
+    # The `webhook_allowlist_configured()` assertions that used to sit
+    # alongside these moved to `tests/services/test_webhook_policy.py::
+    # TestTheCeilingIsConfigured`, where they are stated as
+    # `read_platform_webhook_ceiling(None).is_configured` — the platform-scoped
+    # question, asked of the module that now owns it.
+
     def test_unconfigured_allowlist_defaults_to_deny(self, monkeypatch):
         monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
         monkeypatch.delenv("WEBHOOK_ALLOWED_DOMAINS", raising=False)
 
-        assert workflow_module.webhook_allowlist_configured() is False
         assert workflow_module._host_matches_allowlist("example.com") is False
 
     def test_domain_allowlist_matches_host_and_subdomain(self, monkeypatch):
         monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
         monkeypatch.setenv("WEBHOOK_ALLOWED_DOMAINS", "example.com")
 
-        assert workflow_module.webhook_allowlist_configured() is True
         assert workflow_module._host_matches_allowlist("example.com") is True
         assert workflow_module._host_matches_allowlist("api.example.com") is True
         assert workflow_module._host_matches_allowlist("api.other.com") is False

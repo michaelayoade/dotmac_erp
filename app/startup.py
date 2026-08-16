@@ -15,10 +15,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.multi_tenant import MissingOrgContextError
-from app.db.session_context import allow_cross_org
-from app.services.finance.automation.workflow import (
-    has_active_webhook_actions,
-    webhook_allowlist_configured,
+from app.services.finance.automation.webhook_policy import (
+    any_tenant_has_an_active_webhook_rule,
+    read_platform_webhook_ceiling,
 )
 from app.services.secrets import is_openbao_ref, resolve_openbao_ref
 from app.services.setting_domains import validate_registry as validate_setting_domains
@@ -268,21 +267,48 @@ def validate_openbao_connectivity() -> list[str]:
 
 
 def warn_unconfigured_webhook_allowlist(db: Session | None = None) -> None:
-    """Warn when active webhook automation exists without an outbound allowlist."""
+    """Warn when active webhook automation exists without an outbound allowlist.
+
+    Two questions with two different scopes, asked separately because they are
+    two different questions:
+
+    * *is the platform ceiling configured?* — a PLATFORM-scoped settings read.
+      `read_platform_webhook_ceiling` STATES `organization_id=None`; no
+      organization row can answer it and none is consulted. The retired code
+      read the platform row only because process startup happens to carry no
+      ambient organization context, which is not the same thing as asking for
+      platform scope.
+    * *does any organization have an active webhook rule?* — a per-organization
+      question, answered by enumerating the narrow catalogue definer and asking
+      each organization inside its own `session_for_org`.
+
+    The old shape wrapped both in one `allow_cross_org` block, and that was
+    inaccurate twice over: the settings read already opens its own cross-org
+    block inside `DomainSettingService.get_by_key`, and the rule count used
+    `select(func.count()).select_from(WorkflowRule)` — a shape the org-filter
+    listener resolves no entity from, on a table with no RLS policy — so it was
+    a fleet-wide count with or without the wrapper. See
+    `webhook_policy.any_tenant_has_an_active_webhook_rule` for why the query
+    shape had to change rather than just lose its wrapper.
+
+    The enumeration runs only when the ceiling is UNconfigured, and stops at the
+    first organization that has a rule. A correctly configured deployment opens
+    no organization session here at all.
+    """
     if db is None:
         return
 
     try:
-        with allow_cross_org(db):
-            if webhook_allowlist_configured(db):
-                return
-            if has_active_webhook_actions(db):
-                logger.warning(
-                    "SECURITY: Active webhook automation rules exist, but no webhook "
-                    "allowlist is configured. Set WEBHOOK_ALLOWED_HOSTS and/or "
-                    "WEBHOOK_ALLOWED_DOMAINS (or corresponding automation settings) "
-                    "to constrain outbound webhook targets."
-                )
+        if read_platform_webhook_ceiling(db).is_configured:
+            return
+        if any_tenant_has_an_active_webhook_rule():
+            logger.warning(
+                "SECURITY: Active webhook automation rules exist, but no platform "
+                "webhook allowlist is configured. Set WEBHOOK_ALLOWED_HOSTS and/or "
+                "WEBHOOK_ALLOWED_DOMAINS, or write the platform rows via "
+                "PUT /settings/automation/webhook_allowed_hosts, to constrain "
+                "outbound webhook targets."
+            )
     except (MissingOrgContextError, SQLAlchemyError):
         logger.debug(
             "Skipping webhook allowlist startup warning check due to database or tenant-context error",

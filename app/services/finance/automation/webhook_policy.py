@@ -388,11 +388,13 @@ def compose_webhook_policy(
     organization widen the ceiling?" has exactly one place to be answered and
     exactly one place to be got wrong.
 
-    The consumers themselves — the workflow webhook action, the service-hook
-    dispatcher, the startup check — are NOT yet cut over; each still reads the
-    settings for itself. This module is the owner as declared, not yet as
-    called, and saying otherwise here would be the kind of claim that outlives
-    the plan that justified it.
+    The remaining consumers — the workflow webhook action and the service-hook
+    dispatcher — are NOT yet cut over; each still reads the settings for
+    itself. The startup check IS: it reads the ceiling through
+    :func:`read_platform_webhook_ceiling` and discovers active rules through
+    :func:`any_tenant_has_an_active_webhook_rule`. This module is the owner as
+    declared and only partly as called, and saying otherwise here would be the
+    kind of claim that outlives the plan that justified it.
     """
     return EffectiveWebhookPolicy(
         ceiling=ceiling,
@@ -476,6 +478,70 @@ def read_tenant_restriction(
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Discovery
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def any_tenant_has_an_active_webhook_rule() -> bool:
+    """Does ANY organization have an active WEBHOOK workflow rule?
+
+    Enumeration goes through the narrow ``SECURITY DEFINER`` catalogue
+    (:mod:`app.tenant_catalog`, via
+    :func:`app.db.session_context.for_each_organization`); each organization is
+    then asked inside its own ``session_for_org``.
+
+    This REPLACES a fleet-wide ``select(func.count()).select_from(WorkflowRule)``
+    rather than adapting it, and the distinction matters. That shape has no
+    mapped entity for ``app.db.org_listener._add_org_filter`` to resolve —
+    ``bind_mapper`` is ``None`` and ``func.count()`` contributes no entity to
+    ``column_descriptions`` — so the listener returned before injecting
+    anything and the count was fleet-wide whether or not a bypass wrapped it.
+    ``automation.workflow_rule`` has no RLS policy either, so nothing in the
+    database would have caught that. Deleting the wrapper and keeping the query
+    would have produced code that READS as tenant-scoped and is not.
+
+    Two properties of the replacement, both deliberate:
+
+    1. an explicit ``organization_id ==`` predicate, so the scoping is stated
+       in the statement and does not depend on a listener firing;
+    2. ``select(WorkflowRule.rule_id)`` rather than a bare count, because a
+       column-on-entity select DOES put ``WorkflowRule`` in
+       ``column_descriptions`` with a non-None entity, so the listener resolves
+       a target class and injects its own predicate as well. The two agree; if
+       the session were ever mis-primed they would disagree and the query would
+       return nothing rather than everything.
+
+    ``include_inactive=True``: the retired count had no ``Organization``
+    predicate, so it saw deactivated organizations' rules. This is a
+    configuration warning, not scheduled work — a deactivated organization's
+    active webhook rule still fires the moment the organization is reactivated,
+    and dropping it silently would make the warning quieter than the risk.
+
+    Short-circuits on the first organization that has one. Called once per
+    process, and only when the platform ceiling is unconfigured, so a correctly
+    configured deployment opens no organization session here at all.
+    """
+    from sqlalchemy import select
+
+    from app.db.session_context import for_each_organization
+    from app.models.finance.automation import ActionType, WorkflowRule
+
+    for organization_id, session in for_each_organization(include_inactive=True):
+        found = session.scalar(
+            select(WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.organization_id == organization_id,
+                WorkflowRule.is_active.is_(True),
+                WorkflowRule.action_type == ActionType.WEBHOOK,
+            )
+            .limit(1)
+        )
+        if found is not None:
+            return True
+    return False
+
+
 def effective_policy(
     db: Session | None, organization_id: UUID | None
 ) -> EffectiveWebhookPolicy:
@@ -495,6 +561,7 @@ __all__ = [
     "EffectiveWebhookPolicy",
     "TenantWebhookRestriction",
     "WebhookCeiling",
+    "any_tenant_has_an_active_webhook_rule",
     "compose_webhook_policy",
     "effective_policy",
     "narrow_only",

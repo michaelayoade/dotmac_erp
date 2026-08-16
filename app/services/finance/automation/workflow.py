@@ -177,22 +177,21 @@ def _host_matches_allowlist(host: str, db: Session | None = None) -> bool:
     return False
 
 
-def webhook_allowlist_configured(db: Session | None = None) -> bool:
-    return bool(_allowed_webhook_hosts(db) or _allowed_webhook_domains(db))
-
-
-def has_active_webhook_actions(db: Session) -> bool:
-    stmt = (
-        select(func.count())
-        .select_from(WorkflowRule)
-        .where(
-            and_(
-                WorkflowRule.is_active.is_(True),
-                WorkflowRule.action_type == ActionType.WEBHOOK,
-            )
-        )
-    )
-    return int(db.scalar(stmt) or 0) > 0
+# `webhook_allowlist_configured` and `has_active_webhook_actions` used to live
+# here, and both are gone rather than merely unused.
+#
+# `webhook_allowlist_configured` answered "is the allowlist configured?" from
+# whatever scope its caller happened to be in. Its one caller was the startup
+# check, which now asks the question at PLATFORM scope explicitly:
+# `webhook_policy.read_platform_webhook_ceiling(db).is_configured`.
+#
+# `has_active_webhook_actions` ran `select(func.count()).select_from(
+# WorkflowRule)` — a shape `app.db.org_listener._add_org_filter` resolves no
+# entity from, so it counted across every organization no matter what session
+# it was handed, on a table with no RLS policy to catch it. Leaving it here
+# unused would leave that shape available to the next caller. Its replacement,
+# `webhook_policy.any_tenant_has_an_active_webhook_rule`, enumerates the
+# catalogue definer and asks each organization in its own session.
 
 
 def _validate_webhook_target(

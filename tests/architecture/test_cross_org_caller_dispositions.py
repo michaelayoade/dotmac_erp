@@ -283,7 +283,7 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # The count falls only when a caller is actually converted.
     #
     # The webhook SSRF hardening (webhook_policy becomes platform-owned) moves
-    # no caller in this half: 61, unchanged. It declares `SettingSpec.scope`,
+    # no caller in its first two halves: 61, unchanged. It declares `SettingSpec.scope`,
     # builds the write refusal plus the read-side scope override, closes the
     # tenant writers and clamps both outbound timeout channels. It touches
     # app/ in eight files and adds no `allow_cross_org`, `cross_org_session`
@@ -296,10 +296,48 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # A hardening step that grew the bypass surface to hold a scope override in
     # a second place would have been the wrong trade twice over.
     #
+    # The startup split deletes one row: 152 -> 151, blocked 61 -> 60.
+    # app/startup.py::warn_unconfigured_webhook_allowlist asked two
+    # questions of different scopes inside one allow_cross_org block, and the
+    # block was doing almost no work. Its settings read reaches
+    # DomainSettingService.get_by_key, which opens its own cross-org block
+    # around the SELECT, so the outer wrapper added nothing there. Its rule
+    # count was select(func.count()).select_from(WorkflowRule) — a shape
+    # app.db.org_listener._add_org_filter resolves no target class from,
+    # because bind_mapper is None and func.count() puts no entity in
+    # column_descriptions — so the listener returned before injecting anything
+    # and the count was fleet-wide with or without the wrapper, on a table
+    # (automation.workflow_rule) that appears in
+    # docs/rls-coverage-baseline.json known_gaps and has no policy to catch it.
+    #
+    # That is why deleting the wrapper alone would have been a regression
+    # rather than a fix: it would have left a fleet-wide count reading as
+    # though it were tenant-scoped. Both questions changed shape. The ceiling
+    # is now read at STATED platform scope
+    # (webhook_policy.read_platform_webhook_ceiling, organization_id=None),
+    # where the old path got the platform row only by accident of startup
+    # carrying no ambient organization; the discovery is now
+    # any_tenant_has_an_active_webhook_rule, which enumerates the catalogue
+    # definer via for_each_organization and asks each organization inside its
+    # own session_for_org with an explicit organization_id predicate. This
+    # count falls because the caller was genuinely converted and narrowed.
+    #
+    # The deleted row's evidence string named core_org.organization, a relation
+    # that caller never read — the same class of inaccuracy already recorded
+    # against the three app/api/audit.py rows. It described the remedy, not the
+    # access. Recorded here rather than corrected in place, because the row is
+    # gone.
+    #
+    # No new row replaces it. webhook_policy uses for_each_organization,
+    # session_for_org and resolve_value; none is a scanned mechanism, and
+    # resolve_value's descent into get_by_key's own allow_cross_org is an
+    # existing ready row on app/services/domain_settings.py, which rows key on
+    # (path, symbol, mechanism) and so does not grow.
+    #
     # Reclassification never moves this number. It corrects what a caller
     # needs, not whether it blocks; the count falls only when a caller is
     # actually converted or deleted.
-    baseline = 61
+    baseline = 60
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

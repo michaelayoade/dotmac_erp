@@ -31,6 +31,7 @@ from app.services.finance.automation.webhook_policy import (
     WebhookCeiling,
     compose_webhook_policy,
     narrow_only,
+    read_platform_webhook_ceiling,
 )
 
 # ---------------------------------------------------------------------------
@@ -379,3 +380,33 @@ def test_the_policy_object_carries_both_layers():
     assert isinstance(policy, EffectiveWebhookPolicy)
     assert policy.ceiling is ceiling
     assert policy.restriction is restriction
+
+
+# ---------------------------------------------------------------------------
+# The ceiling's "is it configured?" question
+#
+# Moved here from `tests/services/test_workflow_engine.py::
+# TestWebhookAllowlist`, where it was asked as
+# `workflow_module.webhook_allowlist_configured()` — a function that answered
+# from whatever scope its caller happened to be in. The question belongs to the
+# ceiling, so it is asked of the ceiling.
+# ---------------------------------------------------------------------------
+
+
+class TestTheCeilingIsConfigured:
+    def test_an_unconfigured_ceiling_reports_itself_unconfigured(self, monkeypatch):
+        monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
+        monkeypatch.delenv("WEBHOOK_ALLOWED_DOMAINS", raising=False)
+
+        assert read_platform_webhook_ceiling(None).is_configured is False
+
+    def test_a_domain_list_alone_configures_the_ceiling(self, monkeypatch):
+        monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
+        monkeypatch.setenv("WEBHOOK_ALLOWED_DOMAINS", "example.com")
+
+        ceiling = read_platform_webhook_ceiling(None)
+
+        assert ceiling.is_configured is True
+        assert ceiling.permits_host("example.com") is True
+        assert ceiling.permits_host("api.example.com") is True
+        assert ceiling.permits_host("api.other.com") is False
