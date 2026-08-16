@@ -206,7 +206,9 @@ def test_tenant_may_turn_a_boolean_off_but_never_on(ceiling, tenant, expected, w
 
 
 @pytest.mark.parametrize(("ceiling", "tenant", "expected", "why"), BOOLEAN_TABLE)
-def test_the_boolean_table_holds_through_the_composition(ceiling, tenant, expected, why):
+def test_the_boolean_table_holds_through_the_composition(
+    ceiling, tenant, expected, why
+):
     """L3 again, through the public surface, for both flags.
 
     Proving it on `narrow_only` alone would not catch a composition that

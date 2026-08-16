@@ -7,13 +7,12 @@ Handles workflow rule evaluation and action execution.
 import builtins
 import ipaddress
 import logging
-import os
 import re
 import socket
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -30,11 +29,15 @@ from app.models.finance.automation import (
     WorkflowExecution,
     WorkflowRule,
 )
+
 # The SUBMODULE is named directly rather than reached through
 # `app.services.finance.automation`, whose `__init__` imports this module: a
 # `from <package> import <submodule>` there resolves an attribute on a
 # half-initialised package.
-from app.services.finance.automation.webhook_policy import effective_policy
+from app.services.finance.automation.webhook_policy import (
+    effective_policy,
+    organization_in_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,79 +78,23 @@ def _email_module_for_entity(entity_type: str | None) -> EmailModule:
     return EmailModule.FINANCE
 
 
-def _db_setting(db: Session | None, key: str) -> object | None:
-    if db is None:
-        return None
-    try:
-        from app.services.domain_settings import automation_settings
-
-        setting = automation_settings.get_by_key(db, key)
-    except HTTPException:
-        return None
-    if setting.value_text is not None:
-        return cast(object, setting.value_text)
-    if setting.value_json is not None:
-        return cast(object, setting.value_json)
-    return None
-
-
-def _coerce_csv(value: object | None) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, (list, tuple, set)):
-        items = [str(item) for item in value]
-    else:
-        items = str(value).split(",")
-    return [item.strip() for item in items if item and str(item).strip()]
-
-
-def _coerce_bool(value: object | None, default: bool) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    normalized = str(value).strip().lower()
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    return default
-
-
-def _allowed_webhook_hosts(db: Session | None = None) -> set[str]:
-    raw = _db_setting(db, "webhook_allowed_hosts")
-    if raw is None:
-        raw = os.getenv("WEBHOOK_ALLOWED_HOSTS", "")
-    return {item.strip().lower() for item in _coerce_csv(raw)}
-
-
-def _allowed_webhook_domains(db: Session | None = None) -> set[str]:
-    raw = _db_setting(db, "webhook_allowed_domains")
-    if raw is None:
-        raw = os.getenv("WEBHOOK_ALLOWED_DOMAINS", "")
-    return {item.strip().lower().lstrip(".") for item in _coerce_csv(raw)}
-
-
-def _allow_insecure_webhooks(db: Session | None = None) -> bool:
-    raw = _db_setting(db, "webhook_allow_insecure")
-    if raw is None:
-        raw = os.getenv("WEBHOOK_ALLOW_INSECURE")
-    return _coerce_bool(raw, default=False)
-
-
-def _allow_localhost_webhooks(db: Session | None = None) -> bool:
-    raw = _db_setting(db, "webhook_allow_localhost")
-    if raw is None:
-        raw = os.getenv("WEBHOOK_ALLOW_LOCALHOST")
-    return _coerce_bool(raw, default=False)
-
-
-# `_webhook_timeout` used to live here. It is gone rather than merely unused:
-# it read `webhook_timeout_seconds` and returned it unbounded, so leaving it
-# beside a clamped call site would be a second, unclamped reader of the same
-# value waiting for the next caller. The bounded answer is
+# `_db_setting`, `_coerce_csv`, `_coerce_bool`, `_allowed_webhook_hosts`,
+# `_allowed_webhook_domains`, `_allow_insecure_webhooks`,
+# `_allow_localhost_webhooks` and `_webhook_timeout` all used to live here.
+# They are gone rather than merely unused.
+#
+# Each of them read one of the four SSRF ceiling keys — or the unbounded
+# timeout — directly, through `automation_settings.get_by_key` at whatever
+# scope its caller happened to be in. Now that those keys are PLATFORM-owned,
+# that read resolves the platform row ALONE: an organization's own, NARROWER
+# row no longer applies to it. Leaving these readers beside a policy object
+# that composes both layers would therefore not merely duplicate the answer,
+# it would give the WRONG one — the ceiling where the conjunction is meant to
+# be — and would do it silently, in the direction of MORE reachable hosts.
+#
+# There is exactly one reader of the ceiling keys left in the application,
+# `webhook_policy.read_platform_webhook_ceiling`, and exactly one composition,
+# `webhook_policy.effective_policy`. The bounded timeout is
 # `effective_policy(db, org).timeout_seconds`.
 
 
@@ -160,21 +107,6 @@ def _is_private_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) 
         or address.is_reserved
         or address.is_unspecified
     )
-
-
-def _host_matches_allowlist(host: str, db: Session | None = None) -> bool:
-    host = host.lower()
-    allowed_hosts = _allowed_webhook_hosts(db)
-    allowed_domains = _allowed_webhook_domains(db)
-    if not allowed_hosts and not allowed_domains:
-        return False
-    if allowed_hosts and host in allowed_hosts:
-        return True
-    if allowed_domains:
-        for domain in allowed_domains:
-            if host == domain or host.endswith(f".{domain}"):
-                return True
-    return False
 
 
 # `webhook_allowlist_configured` and `has_active_webhook_actions` used to live
@@ -199,7 +131,24 @@ def _validate_webhook_target(
     db: Session | None = None,
     *,
     allow_localhost: bool | None = None,
+    organization_id: UUID | None = None,
 ) -> tuple[bool, str | None]:
+    """The ONE host/scheme/loopback gate for both outbound webhook channels.
+
+    Every decision below comes from a single
+    :func:`~app.services.finance.automation.webhook_policy.effective_policy`
+    object — the CONJUNCTION of the platform ceiling and this organization's
+    narrowing — resolved once per call. It is deliberately not four separate
+    settings reads: four reads can disagree with each other mid-call, and each
+    of them was previously a place where the ceiling could be consulted without
+    the narrowing.
+
+    ``allow_localhost`` is a caller's NARROWING, and is now ``AND``-ed with the
+    policy rather than replacing it. Under the retired code
+    ``allow_localhost=True`` overrode the settings outright — an in-process
+    argument that could widen the SSRF policy of a deployment that had turned
+    loopback off. ``None`` still means "no opinion, use the policy".
+    """
     if not url or not isinstance(url, str):
         return False, "Webhook URL is required"
 
@@ -212,13 +161,17 @@ def _validate_webhook_target(
         return False, "Webhook URL must include a host"
 
     host = parsed.hostname
-    if not _host_matches_allowlist(host, db):
+    policy = effective_policy(db, organization_in_scope(db, organization_id))
+
+    if not policy.permits_host(host):
         return False, "Webhook host is not in the allowlist"
 
     allow_localhost_webhooks = (
-        _allow_localhost_webhooks(db) if allow_localhost is None else allow_localhost
+        policy.allow_localhost
+        if allow_localhost is None
+        else (allow_localhost and policy.allow_localhost)
     )
-    require_https = parsed.scheme == "http" and not _allow_insecure_webhooks(db)
+    require_https = parsed.scheme == "http" and not policy.allow_insecure
     loopback_host = False
 
     try:
@@ -1073,7 +1026,13 @@ class WorkflowService:
 
         url_value = config.get("url")
         url = "" if url_value is None else str(url_value)
-        is_valid, error_message = _validate_webhook_target(url, db)
+        # `context.organization_id` is passed EXPLICITLY rather than left to the
+        # session's ambient value. Channel 1 knows which organization it is
+        # acting for, and a stated argument cannot be lost by a caller that
+        # forgot to prime the session.
+        is_valid, error_message = _validate_webhook_target(
+            url, db, organization_id=context.organization_id
+        )
         if not is_valid:
             return ActionResult(success=False, error_message=error_message)
 

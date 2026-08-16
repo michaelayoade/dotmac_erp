@@ -303,9 +303,7 @@ def test_a_smuggled_organization_row_does_not_widen_the_policy(
     )
 
 
-def test_a_smuggled_row_does_not_win_over_the_platform_row(
-    db_session, org_id, cleanup
-):
+def test_a_smuggled_row_does_not_win_over_the_platform_row(db_session, org_id, cleanup):
     """With both rows present, the platform row is the one that answers."""
     platform_row = DomainSetting(
         domain=SettingDomain.automation,

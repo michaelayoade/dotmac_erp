@@ -251,20 +251,36 @@ class TestWebhookAllowlist:
     # TestTheCeilingIsConfigured`, where they are stated as
     # `read_platform_webhook_ceiling(None).is_configured` — the platform-scoped
     # question, asked of the module that now owns it.
+    #
+    # `_host_matches_allowlist` is gone with the rest of workflow.py's own
+    # settings readers, so these are restated against the composed policy the
+    # gate now consults. The DENY case still goes through the real gate — it
+    # is refused before any name resolution — while the ALLOW case asks the
+    # policy directly, because `_validate_webhook_target` resolves a permitted
+    # host and a test that reached DNS would be asserting on the network.
+    # The gate's own end-to-end behaviour, name resolution stubbed, is in
+    # `tests/services/test_webhook_call_site.py`.
 
     def test_unconfigured_allowlist_defaults_to_deny(self, monkeypatch):
         monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
         monkeypatch.delenv("WEBHOOK_ALLOWED_DOMAINS", raising=False)
 
-        assert workflow_module._host_matches_allowlist("example.com") is False
+        allowed, reason = workflow_module._validate_webhook_target(
+            "https://example.com/hook"
+        )
+        assert allowed is False
+        assert reason == "Webhook host is not in the allowlist"
 
     def test_domain_allowlist_matches_host_and_subdomain(self, monkeypatch):
+        from app.services.finance.automation.webhook_policy import effective_policy
+
         monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
         monkeypatch.setenv("WEBHOOK_ALLOWED_DOMAINS", "example.com")
 
-        assert workflow_module._host_matches_allowlist("example.com") is True
-        assert workflow_module._host_matches_allowlist("api.example.com") is True
-        assert workflow_module._host_matches_allowlist("api.other.com") is False
+        policy = effective_policy(None, None)
+        assert policy.permits_host("example.com") is True
+        assert policy.permits_host("api.example.com") is True
+        assert policy.permits_host("api.other.com") is False
 
 
 # ---------------------------------------------------------------------------

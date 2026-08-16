@@ -104,9 +104,7 @@ def recording_service():
 
 
 class TestTheAutomationSettingsFormCannotWriteAPlatformKey:
-    def test_platform_keys_are_skipped_and_tenant_keys_are_not(
-        self, recording_service
-    ):
+    def test_platform_keys_are_skipped_and_tenant_keys_are_not(self, recording_service):
         db = MagicMock()
         org = uuid4()
 
@@ -124,9 +122,7 @@ class TestTheAutomationSettingsFormCannotWriteAPlatformKey:
             "recurring_lookback_days": "14",
         }
 
-        ok, error = settings_web_service.update_automation_settings(
-            db, org, submission
-        )
+        ok, error = settings_web_service.update_automation_settings(db, org, submission)
 
         assert (ok, error) == (True, None)
         assert recording_service.written_keys == {
@@ -261,9 +257,7 @@ def _clamped_ceiling(monkeypatch, *, maximum: float, requested: float) -> None:
     monkeypatch.setattr(
         webhook_policy,
         "read_tenant_restriction",
-        lambda db, organization_id: TenantWebhookRestriction(
-            timeout_seconds=requested
-        ),
+        lambda db, organization_id: TenantWebhookRestriction(timeout_seconds=requested),
     )
 
 

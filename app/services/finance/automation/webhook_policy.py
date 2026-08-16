@@ -14,11 +14,13 @@ There is deliberately no code path by which an organization value widens a
 platform value. :func:`compose_webhook_policy` is the only composition, and
 ``tests/services/test_webhook_policy.py`` is its proof.
 
-Status: this module is the DECLARED owner. The existing readers in
-``app/services/finance/automation/workflow.py`` and ``app/services/hooks/
-registry.py`` still resolve these settings themselves and are cut over to it
-in a following change; until then the two coexist, and only the ownership of
-the KEYS (the write refusal and the read-side scope override) is in force.
+Status: this module is the owner AS DECLARED AND AS CALLED. Both outbound
+channels — the workflow webhook action and the service-hook dispatcher — reach
+it through the single gate ``workflow._validate_webhook_target``, which resolves
+one :func:`effective_policy` per call and takes host, scheme and loopback from
+it. :func:`read_platform_webhook_ceiling` is the only reader of the four
+ceiling keys left in the application; a second one would be a reader of the
+ceiling WITHOUT the narrowing, which is a widening.
 
 Why the narrowing gets its own keys
 -----------------------------------
@@ -383,18 +385,18 @@ def compose_webhook_policy(
 ) -> EffectiveWebhookPolicy:
     """THE composition. Conjunction only; there is no union anywhere in it.
 
-    One function, one owner: every consumer of webhook policy is to reach it
+    One function, one owner: every consumer of webhook policy reaches it
     through this or through :func:`effective_policy` below, so "may an
     organization widen the ceiling?" has exactly one place to be answered and
     exactly one place to be got wrong.
 
-    The remaining consumers — the workflow webhook action and the service-hook
-    dispatcher — are NOT yet cut over; each still reads the settings for
-    itself. The startup check IS: it reads the ceiling through
-    :func:`read_platform_webhook_ceiling` and discovers active rules through
-    :func:`any_tenant_has_an_active_webhook_rule`. This module is the owner as
-    declared and only partly as called, and saying otherwise here would be the
-    kind of claim that outlives the plan that justified it.
+    The consumers, all three of them: ``workflow._validate_webhook_target``
+    (the single host/scheme/loopback gate, called by the workflow webhook
+    action and, through ``app/services/hooks/registry.py``, by the service-hook
+    dispatcher), the two timeout call sites via :meth:`
+    EffectiveWebhookPolicy.clamp_timeout`, and the startup check, which reads
+    the ceiling through :func:`read_platform_webhook_ceiling` and discovers
+    active rules through :func:`any_tenant_has_an_active_webhook_rule`.
     """
     return EffectiveWebhookPolicy(
         ceiling=ceiling,
@@ -542,6 +544,44 @@ def any_tenant_has_an_active_webhook_rule() -> bool:
     return False
 
 
+def organization_in_scope(
+    db: Session | None, organization_id: UUID | None = None
+) -> UUID | None:
+    """Which organization's narrowing applies to a call on this session.
+
+    An explicit argument always wins. Otherwise the session's own ambient
+    organization is used, because both outbound webhook paths already run on a
+    tenant-scoped session (``session_for_org`` primes
+    ``session.info["organization_id"]``) and threading the id through every
+    intermediate signature in one change would be a larger edit with more
+    places to forget it.
+
+    Falling back is SAFE IN ONE DIRECTION only, which is why it is allowed
+    here: a resolved organization can add a narrowing conjunct and can never
+    remove one, so the worst outcome of the fallback finding an id is a
+    tighter policy, and the worst outcome of it finding nothing is the ceiling
+    alone — exactly what the caller would have got before this module existed.
+    Nothing about which HOSTS the ceiling permits depends on this answer.
+    """
+    if organization_id is not None:
+        return organization_id
+    if db is None:
+        return None
+    ambient = db.info.get("organization_id")
+    if ambient is None:
+        return None
+    if isinstance(ambient, UUID):
+        return ambient
+    try:
+        return UUID(str(ambient))
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        logger.debug(
+            "Ignoring un-parseable ambient organization_id on the session",
+            exc_info=True,
+        )
+        return None
+
+
 def effective_policy(
     db: Session | None, organization_id: UUID | None
 ) -> EffectiveWebhookPolicy:
@@ -566,6 +606,7 @@ __all__ = [
     "effective_policy",
     "narrow_only",
     "normalize_host",
+    "organization_in_scope",
     "read_platform_webhook_ceiling",
     "read_tenant_restriction",
 ]
