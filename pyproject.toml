@@ -85,7 +85,13 @@ pytest-playwright = "^0.7.2"
 mypy = "^1.19.1"
 types-python-dateutil = "^2.9.0.20251115"
 pandas = "^2.3.3"
-ruff = "^0.15.0"
+# Exact, not a caret range. A caret lets any 0.x >= 0.15 satisfy the
+# declaration, so a fresh `poetry lock` can float the formatter underneath a
+# repo whose committed formatting is a fixed point of ONE ruff version. The
+# lock, .pre-commit-config.yaml's `rev`, and this line must name the same
+# version — tests/architecture/test_toolchain_coherence.py fails when they
+# drift apart.
+ruff = "0.15.0"
 pre-commit = "^4.5.1"
 detect-secrets = "^1.5.0"
 bandit = "^1.9.3"

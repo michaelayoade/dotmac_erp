@@ -1,7 +1,14 @@
-.PHONY: help test lint type-check format security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
+.PHONY: help test lint type-check format format-check security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
 
 DB_CONTAINER ?= dotmac_erp_db
 DB_NAME ?= dotmac_erp
+
+# The roots ruff formats. `format` (writes) and `format-check` (verifies) must
+# read the SAME list, or the gate can pass over a root the writer never
+# touched. Today that is app/ only, which is also what CI's "Ruff format
+# check" step passes; widening it is a deliberate change that comes with the
+# one-off reformat commit for the new roots.
+FORMAT_ROOTS ?= app/
 
 # Default target
 help: ## Show this help
@@ -13,8 +20,11 @@ lint: ## Run ruff linter
 	poetry run ruff check app/
 
 format: ## Format code with ruff
-	poetry run ruff format app/
-	poetry run ruff check --fix app/
+	poetry run ruff format $(FORMAT_ROOTS)
+	poetry run ruff check --fix $(FORMAT_ROOTS)
+
+format-check: ## Verify formatting without writing (same check CI runs)
+	poetry run ruff format --check $(FORMAT_ROOTS)
 
 type-check: ## Run mypy type checker
 	poetry run mypy app/ --ignore-missing-imports
@@ -25,7 +35,7 @@ security: ## Run bandit security scan
 semgrep: ## Run semgrep custom rules (DotMac anti-patterns)
 	poetry run semgrep --config .semgrep/ app/ --exclude='tests/' --exclude='alembic/' --exclude='scripts/' --no-git-ignore
 
-check: lint type-check security semgrep ## Run all quality checks (lint + type-check + security + semgrep)
+check: lint format-check type-check security semgrep ## Run all quality checks (lint + format + type-check + security + semgrep)
 
 # ─── Testing ──────────────────────────────────────────────
 

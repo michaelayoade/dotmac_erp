@@ -11,7 +11,11 @@ These are the repo-level instructions Codex should follow for this workspace.
 - Unit/integration: `pytest tests/ --ignore=tests/e2e/`
 - Coverage: `pytest --cov=app --cov-report=html`
 - E2E: `pytest tests/e2e/ -v`
-- Lint: `ruff`
+- Lint: `make lint` (`poetry run ruff check`) — never a bare `ruff`, which
+  runs whatever is on `PATH` rather than the version `poetry.lock` pins.
+- Formatting: `make format-check` (verify) / `make format` (write). Both are
+  part of `make check`; ruff is pinned exactly and the pins are guarded by
+  `tests/architecture/test_toolchain_coherence.py`.
 - Typing: `mypy`
 - CSS build: `npm run dev` or `npm run watch:css` (outputs `static/css/app.css`)
 
