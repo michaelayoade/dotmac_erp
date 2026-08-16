@@ -36,7 +36,9 @@ from app.models.domain_settings import (
     SettingScope,
     SettingValueType,
 )
+from app.services.finance.automation import webhook_policy
 from app.services.finance.automation import workflow as workflow_module
+from app.services.setting_scopes import platform_owned_keys
 from app.services.settings_cache import settings_cache
 
 CEILING_HOST = "selfcare.dotmac.io"
@@ -318,16 +320,31 @@ class TestTheCallerArgumentIsNarrowingOnly:
 # ---------------------------------------------------------------------------
 
 
-CEILING_KEY_LITERALS = frozenset(
-    {
-        "webhook_allowed_hosts",
-        "webhook_allowed_domains",
-        "webhook_allow_insecure",
-        "webhook_allow_localhost",
-    }
-)
+# DERIVED, never restated. The previous version of this guard copied FOUR
+# literals out of a declaration that had FIVE members, so `webhook_max_timeout_
+# seconds` — the key that bounds BOTH organization timeout channels — was
+# outside the scan, and a second reader of it would not have been caught.
+# Deriving is the only version of this guard that cannot drift: a sixth ceiling
+# key is scanned the moment it is declared, without anyone remembering to come
+# here.
+CEILING_KEY_LITERALS = frozenset(key for key, _env in webhook_policy.PLATFORM_KEYS)
 
-# Every file under `app/` allowed to name one of the four ceiling keys, and
+# `platform_owned_keys()` is the WIDER registry — every `scope=PLATFORM` spec,
+# not just the webhook ceiling. Pinning the difference keeps a platform-owned
+# key from sitting outside every enumeration, which is exactly where
+# `openbao_allow_insecure` sat: platform-owned, refused to organizations by the
+# same listener, and named in no guard. It is deliberately NOT in the ceiling —
+# `webhook_policy` neither reads nor composes it — so it is named here as a
+# stated remainder rather than folded in.
+NOT_A_CEILING_KEY = {
+    "openbao_allow_insecure": (
+        "platform-owned for the same reason (a tenant-writable row that turns "
+        "off TLS verification against the secret store), but not composed by "
+        "webhook_policy and not part of the webhook ceiling"
+    ),
+}
+
+# Every file under `app/` allowed to name one of the five ceiling keys, and
 # why. Two DECLARE them and one READS them; nothing else may, because a reader
 # of the ceiling that does not also compose the narrowing is a widening.
 # This list only shrinks. Adding to it means adding a second answer to "what
@@ -343,6 +360,57 @@ ACCOUNTED_FOR = {
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+def test_the_derived_ceiling_set_is_not_vacuous():
+    """A derived set can silently become empty; an empty scan passes.
+
+    `test_only_the_policy_module_reads_the_ceiling_keys` compares two sets, and
+    if `CEILING_KEY_LITERALS` were empty both would be empty and it would pass
+    while checking nothing at all. So the derivation is pinned to its size and
+    to the one member the hand-copied version dropped.
+    """
+    assert len(CEILING_KEY_LITERALS) == 5, (
+        "the webhook ceiling changed size. That is allowed — update this "
+        "number — but the scan below and the reader ledger both widen with it, "
+        f"so look at what is now in it: {sorted(CEILING_KEY_LITERALS)}"
+    )
+    assert "webhook_max_timeout_seconds" in CEILING_KEY_LITERALS, (
+        "the timeout ceiling bounds BOTH organization timeout channels "
+        "(the setting and ServiceHook.handler_config); it is a ceiling key"
+    )
+    assert CEILING_KEY_LITERALS == frozenset(
+        key for key, _env in webhook_policy.PLATFORM_KEYS
+    )
+
+
+def test_every_platform_owned_key_is_in_exactly_one_enumeration():
+    """No platform-owned key sits outside both the ceiling and the remainder.
+
+    The registry is the wider truth — it drives the write listener and all four
+    read overrides — and a key can join it by a one-line `scope=PLATFORM` on a
+    spec, with no edit here. This asserts the partition, so such a key lands in
+    the ceiling scan or is named in `NOT_A_CEILING_KEY` with its reason, and
+    never in neither.
+    """
+    automation = {
+        key
+        for domain, key in platform_owned_keys()
+        if domain == str(SettingDomain.automation)
+    }
+    assert automation, "no platform-owned keys registered — the check fails open"
+    assert CEILING_KEY_LITERALS <= automation, (
+        "a webhook ceiling key is not declared scope=PLATFORM, so an "
+        "organization row for it would be accepted and would answer: "
+        f"{sorted(CEILING_KEY_LITERALS - automation)}"
+    )
+    assert automation - CEILING_KEY_LITERALS == set(NOT_A_CEILING_KEY), (
+        "a platform-owned automation key is in no enumeration. Either it "
+        "belongs to the webhook ceiling (add it to webhook_policy."
+        "PLATFORM_KEYS, which this file derives from) or it does not (name it "
+        "in NOT_A_CEILING_KEY with the reason). unaccounted: "
+        f"{sorted(automation - CEILING_KEY_LITERALS - set(NOT_A_CEILING_KEY))}"
+    )
 
 
 def test_only_the_policy_module_reads_the_ceiling_keys():
