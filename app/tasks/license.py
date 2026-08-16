@@ -105,7 +105,7 @@ def _notify_admins(state, results: dict) -> None:
     try:
         from sqlalchemy import select
 
-        from app.models.people.person import Person
+        from app.models.person import Person
         from app.models.rbac import PersonRole, Role
 
         # Notify all admin/finance_manager-role users, one tenant at a time.
