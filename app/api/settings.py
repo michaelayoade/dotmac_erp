@@ -29,6 +29,7 @@ from app.schemas.settings import (
 from app.services import settings_api as settings_service
 from app.api.deps import get_db_admin_bypass
 from app.services.auth_dependencies import (
+    has_live_admin_grant,
     require_admin_bypass,
     require_tenant_permission,
 )
@@ -511,7 +512,7 @@ def _can_read_history_entry(entry: object, auth: dict) -> bool:
     return str(entry_org) == str(auth.get("organization_id"))
 
 
-def _can_restore_history_entry(entry: object, auth: dict) -> bool:
+def _can_restore_history_entry(entry: object, auth: dict, db: Session) -> bool:
     """May the caller RESTORE this history entry? A stricter question.
 
     This used to be the same predicate as the read above, whose justification
@@ -531,10 +532,18 @@ def _can_restore_history_entry(entry: object, auth: dict) -> bool:
     The repair is general: it protects every platform row's history, not only
     the webhook keys. It is a real behaviour change for an operator who today
     restores a global setting from a non-admin tenant account.
+
+    The admin half asks ``has_live_admin_grant``, not ``auth["roles"]``. That
+    list is a login-time claim, so a first version of this check read it and
+    left a revoked administrator holding ceiling-write until the token expired
+    — a stale-claim door onto exactly the row this branch is making
+    platform-owned. ``require_admin_bypass`` already states the standard and
+    already asks the grant tables; this is the same function, not a third
+    check.
     """
     entry_org = getattr(entry, "organization_id", None)
     if entry_org is None:
-        return "admin" in (auth.get("roles") or [])
+        return has_live_admin_grant(db, auth.get("person_id"))
     return str(entry_org) == str(auth.get("organization_id"))
 
 
@@ -632,7 +641,7 @@ def restore_setting(
     role — see ``_can_restore_history_entry``.
     """
     entry = get_history_entry(db, str(payload.history_id))
-    if not entry or not _can_restore_history_entry(entry, auth):
+    if not entry or not _can_restore_history_entry(entry, auth, db):
         raise HTTPException(status_code=404, detail="History entry not found")
 
     user_id = auth.get("user_id") if auth else None

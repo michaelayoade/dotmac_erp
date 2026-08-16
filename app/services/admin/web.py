@@ -39,6 +39,7 @@ from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.services.audit_dispatcher import fire_audit_event
+from app.services.auth_dependencies import has_live_admin_grant
 from app.services.auth_flow import hash_password
 from app.services.common import coerce_uuid
 from app.services.formatters import format_datetime as _format_datetime
@@ -3240,12 +3241,32 @@ class AdminWebService:
     def _require_admin_web_auth(
         self,
         request: Request,
+        db: Session,
         auth: WebAuthContext,
     ) -> WebAuthContext | RedirectResponse:
+        """Admin authority for a portal request, re-checked against the grants.
+
+        ``auth.roles`` is a login-time SNAPSHOT taken when the web session was
+        established, so ``"admin" not in auth.roles`` left a revoked
+        administrator holding every screen behind this guard — including
+        ``settings_create_response``/``settings_update_response``, which write
+        PLATFORM rows (no ``organization_id``): the webhook SSRF ceiling and
+        ``openbao_allow_insecure`` have no other writer left, so this guard is
+        what stands in front of them.
+
+        ``has_live_admin_grant`` is the same function ``require_admin_bypass``
+        uses, which already stated this standard for the API's cross-org
+        routes. Sharing it rather than writing a third check is deliberate: two
+        hand-written copies of one security question is how one of them stays
+        on the stale claim.
+
+        The claim is still checked first. It is cheap, it is a necessary
+        condition, and a request that fails it never reaches the database.
+        """
         if not auth.is_authenticated:
             return self._admin_login_redirect(self._request_path_with_query(request))
 
-        if "admin" not in auth.roles:
+        if "admin" not in auth.roles or not has_live_admin_grant(db, auth.person_id):
             raise HTTPException(
                 status_code=403,
                 detail="Admin access required",
@@ -3313,7 +3334,7 @@ class AdminWebService:
         db: Session,
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.dashboard_context(db)
@@ -3442,7 +3463,7 @@ class AdminWebService:
         search: str,
         status: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.users_context(db, search, status, page)
@@ -3463,7 +3484,7 @@ class AdminWebService:
         db: Session,
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.user_form_context(db)
@@ -3497,7 +3518,7 @@ class AdminWebService:
         must_change_password: str,
         roles: list[str],
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.create_user(
@@ -3563,7 +3584,7 @@ class AdminWebService:
         auth: WebAuthContext,
         user_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.user_form_context(db, user_id)
@@ -3600,7 +3621,7 @@ class AdminWebService:
         email_verified: str,
         roles: list[str],
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.update_user(
@@ -3661,7 +3682,7 @@ class AdminWebService:
         auth: WebAuthContext,
         user_id: str,
     ) -> RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         error = self.delete_user(db, user_id)
@@ -3679,7 +3700,7 @@ class AdminWebService:
         auth: WebAuthContext,
         user_id: str,
     ) -> RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
 
@@ -3702,7 +3723,7 @@ class AdminWebService:
         search: str,
         status: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.roles_context(db=db, search=search, status=status, page=page)
@@ -3723,7 +3744,7 @@ class AdminWebService:
         db: Session,
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.role_form_context(db)
@@ -3749,7 +3770,7 @@ class AdminWebService:
         is_active: str,
         permissions: list[str],
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.create_role(
@@ -3784,7 +3805,7 @@ class AdminWebService:
         auth: WebAuthContext,
         role_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.role_profile_context(db, role_id)
@@ -3809,7 +3830,7 @@ class AdminWebService:
         auth: WebAuthContext,
         role_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.role_form_context(db, role_id)
@@ -3839,7 +3860,7 @@ class AdminWebService:
         is_active: str,
         permissions: list[str],
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.update_role(
@@ -3885,7 +3906,7 @@ class AdminWebService:
         auth: WebAuthContext,
         role_id: str,
     ) -> RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         error = self.delete_role(db, role_id)
@@ -3902,7 +3923,7 @@ class AdminWebService:
         search: str,
         status: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.permissions_context(
@@ -3925,7 +3946,7 @@ class AdminWebService:
         db: Session,
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.permission_form_context(db)
@@ -3950,7 +3971,7 @@ class AdminWebService:
         description: str,
         is_active: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         if not key:
@@ -4017,7 +4038,7 @@ class AdminWebService:
         auth: WebAuthContext,
         permission_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.permission_form_context(db, permission_id)
@@ -4046,7 +4067,7 @@ class AdminWebService:
         description: str,
         is_active: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         if not key:
@@ -4116,7 +4137,7 @@ class AdminWebService:
         auth: WebAuthContext,
         permission_id: str,
     ) -> RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         error = self.delete_permission(db, permission_id)
@@ -4133,7 +4154,7 @@ class AdminWebService:
         search: str,
         status: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.organizations_context(
@@ -4156,7 +4177,7 @@ class AdminWebService:
         db: Session,
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.organization_form_context(
@@ -4199,7 +4220,7 @@ class AdminWebService:
         ownership_percentage: str,
         is_active: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.create_organization(
@@ -4260,7 +4281,7 @@ class AdminWebService:
         auth: WebAuthContext,
         org_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.organization_form_context(db, org_id)
@@ -4304,7 +4325,7 @@ class AdminWebService:
         salaries_expense_account_id: str = "",
         salary_payable_account_id: str = "",
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.update_organization(
@@ -4364,7 +4385,7 @@ class AdminWebService:
         auth: WebAuthContext,
         org_id: str,
     ) -> RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         error = self.delete_organization(db, org_id)
@@ -4382,7 +4403,7 @@ class AdminWebService:
         status: str,
         domain: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.settings_context(
@@ -4405,7 +4426,7 @@ class AdminWebService:
         db: Session,
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.setting_form_context(db)
@@ -4433,7 +4454,7 @@ class AdminWebService:
         is_secret: str,
         is_active: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.create_setting(
@@ -4480,7 +4501,7 @@ class AdminWebService:
         auth: WebAuthContext,
         setting_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.setting_form_context(db, setting_id)
@@ -4512,7 +4533,7 @@ class AdminWebService:
         is_secret: str,
         is_active: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.update_setting(
@@ -4561,7 +4582,7 @@ class AdminWebService:
         auth: WebAuthContext,
         setting_id: str,
     ) -> RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         error = self.delete_setting(db, setting_id)
@@ -4581,7 +4602,7 @@ class AdminWebService:
         start_date: str,
         end_date: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.audit_logs_context(
@@ -4616,7 +4637,7 @@ class AdminWebService:
         search: str,
         status: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.tasks_context(db=db, search=search, status=status, page=page)
@@ -4637,7 +4658,7 @@ class AdminWebService:
         db: Session,
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.task_form_context(db)
@@ -4666,7 +4687,7 @@ class AdminWebService:
         kwargs_json: str,
         enabled: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.create_task(
@@ -4713,7 +4734,7 @@ class AdminWebService:
         auth: WebAuthContext,
         task_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.task_form_context(db, task_id)
@@ -4746,7 +4767,7 @@ class AdminWebService:
         kwargs_json: str,
         enabled: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         _, error = self.update_task(
@@ -4795,7 +4816,7 @@ class AdminWebService:
         auth: WebAuthContext,
         task_id: str,
     ) -> RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         error = self.delete_task(db, task_id)
@@ -4937,7 +4958,7 @@ class AdminWebService:
         action: str,
         search: str,
     ) -> HTMLResponse | RedirectResponse:
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.data_changes_context(
@@ -4973,7 +4994,7 @@ class AdminWebService:
         auth: WebAuthContext,
     ) -> HTMLResponse | RedirectResponse:
         """License status page."""
-        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        auth_or_redirect = self._require_admin_web_auth(request, db, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
 
