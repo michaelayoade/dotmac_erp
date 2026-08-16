@@ -22,14 +22,30 @@ The two source artifacts are now deliberately separate:
 | Fact | Production snapshot | Fully migrated design |
 |---|---:|---:|
 | Alembic state | `20260808_open_setting_domain` | `20260815_academy_course_projection` + `fi_0001_stored_files` |
-| Tables | 420 | 418 |
-| Direct tenant tables | 311 (`organization_id` only) | 310 (`organization_id` or module `tenant_id`) |
+| Tables | 420 | 420 |
+| Direct tenant tables | 311 (`organization_id` only) | 312 (`organization_id` or module `tenant_id`) |
 | Database-enforced inherited paths | 6 | 85 |
 | Explicit platform catalogs | not classified | 3 |
 | Unclassified tables | 103 | 20 |
 | RLS enabled | 16 | 158 |
 | RLS forced | 87 | 88 |
-| Tables with a `should_bypass_rls()` policy | 16 | 103 |
+| Tables with a `should_bypass_rls()` policy | 16 | 105 |
+| Direct tenant tables **without** RLS | not measured | 158 |
+| Inherited tenant tables **without** RLS | not measured | 79 |
+
+The migrated-design column was re-measured on 2026-08-15 after the tenancy
+slices landed; it previously read 418 tables, 310 direct and 103 GUC-dependent
+policies. The classification still partitions exactly — 312 + 85 + 3 + 20 = 420
+— so the correction is two additional direct tenant tables and two additional
+policies, not a change of method.
+
+The last two rows are new, and they are the point of the re-measure. **The
+existing caller ratchet covers direct tenant tables only.** 79 inherited tenant
+tables have no RLS of their own and no ratchet watching them, so today they are
+neither protected nor counted: an inherited path that loses its join predicate
+fails silently and nothing fails a build. Making that debt enforceable is a
+prerequisite of policy repair, not a follow-up to it — repairing policies against
+a catalog that under-counts the surface would certify the gap.
 | PostgreSQL foreign keys | 188 across 65 tables | 1,130 across 368 tables |
 | Tables with no PostgreSQL foreign key | 355 | 50 |
 
