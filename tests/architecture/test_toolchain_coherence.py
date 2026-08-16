@@ -35,8 +35,11 @@ Two independent invariants are asserted here:
   3. **Non-disablement.** The gate cannot be turned off by a one-token edit.
      pre-commit's ``SKIP`` env var is an off switch with no reader, so the
      workflow scan refuses a SKIP list naming a formatter hook, and the format
-     check is required to be a parsed `run:` step that can actually fail —
-     not a substring that a comment or a `|| true` would satisfy.
+     check is required to be a parsed `run:` step that can actually fail — not
+     a substring that a comment, a `|| true`, or a `continue-on-error: true`
+     on the step or on its whole job would satisfy. That last switch is not
+     hypothetical here: ci.yml's `integration-test` job carries a comment
+     recording that it once silenced every PostgreSQL-only check at once.
 
 Everything below is a pure function over supplied text, with the real-file
 tests as thin callers. That is what lets the sensitivity proof at the bottom
@@ -57,6 +60,7 @@ from __future__ import annotations
 import re
 import tomllib
 from pathlib import Path
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT = ROOT / "pyproject.toml"
@@ -193,12 +197,92 @@ def make_target_prerequisites(makefile_text: str, target: str) -> list[str]:
     return body.split()
 
 
-_RUN_KEY = re.compile(r"^(\s*)-?\s*run:\s*(.*)$")
+_RUN_KEY = re.compile(r"^run:\s*(.*)$")
 _BLOCK_SCALAR = frozenset({"|", ">", "|-", ">-", "|+", ">+"})
+
+# One YAML line, split into its leading indent, any `- ` sequence marker, and
+# the mapping key that follows. A sequence item's keys start PAST the marker,
+# which is what makes step-level and job-level indentation comparable.
+_YAML_LINE = re.compile(r"^([ \t]*)(-[ \t]+)?(.*)$")
+
+# GitHub's own swallow-the-exit-status switch. Valid on a step and on a whole
+# job, and it neuters a check exactly as `|| true` does — from outside the
+# shell rather than inside it.
+_CONTINUE_ON_ERROR = re.compile(r"^continue-on-error:\s*(.+?)\s*$")
+
+# Only a literal false disarms that switch. `continue-on-error: ${{ ... }}` is
+# legal and cannot be evaluated from the file, so the guard refuses to assume
+# it is false — an expression that might be true is treated as the off switch
+# it might be.
+_FALSE_LITERALS = frozenset({"false", "'false'", '"false"', "no", "off"})
 
 # A command whose failure cannot fail the step. `|| true`, `|| :` and
 # `|| exit 0` all report success whatever ruff said.
 _NEUTERED = re.compile(r"\|\|\s*(?:true\b|:|exit\s+0\b)")
+
+
+class RunStep(NamedTuple):
+    """One command a workflow runs, and whether its job swallowed the result."""
+
+    command: str
+    continue_on_error: bool
+
+
+def _yaml_line(raw: str) -> tuple[int, int, str]:
+    """``(block column, key column, key text)`` for one YAML line."""
+    match = _YAML_LINE.match(raw)
+    if match is None:  # pragma: no cover - a trailing `.*` cannot fail
+        return 0, 0, raw
+    lead, marker, content = match.group(1), match.group(2), match.group(3)
+    block = len(lead)
+    return block, block + (len(marker) if marker else 0), content
+
+
+def _is_blank_or_comment(content: str) -> bool:
+    stripped = content.strip()
+    return not stripped or stripped.startswith("#")
+
+
+def _mapping_region(lines: list[str], index: int, key_column: int) -> tuple[int, int]:
+    """Half-open line range of the mapping whose keys sit at ``key_column``.
+
+    Walked in BOTH directions, because ``continue-on-error:`` is a sibling key
+    that may be written before or after the ``run:`` it neuters — and after is
+    the commoner order.
+    """
+    start = index
+    while start > 0:
+        block, key, content = _yaml_line(lines[start - 1])
+        if _is_blank_or_comment(content):
+            start -= 1
+            continue
+        if key == key_column and block < key_column:
+            start -= 1  # the `- ` opening this sequence item: the mapping starts
+            break
+        if block < key_column:
+            break
+        start -= 1
+    end = index + 1
+    while end < len(lines):
+        block, _key, content = _yaml_line(lines[end])
+        if not _is_blank_or_comment(content) and block < key_column:
+            break
+        end += 1
+    return start, end
+
+
+def _swallowed_lines(lines: list[str]) -> set[int]:
+    """Indices of lines inside a mapping carrying ``continue-on-error: true``."""
+    swallowed: set[int] = set()
+    for index, raw in enumerate(lines):
+        _block, key, content = _yaml_line(raw)
+        match = _CONTINUE_ON_ERROR.match(content)
+        if match is None or match.group(1).lower() in _FALSE_LITERALS:
+            continue
+        start, end = _mapping_region(lines, index, key)
+        swallowed.update(range(start, end))
+    return swallowed
+
 
 # `ruff format` carrying --check, i.e. a verification rather than a rewrite.
 _FORMAT_CHECK = re.compile(r"(?<![\w.\-])ruff\s+format\b[^\n]*--check\b")
@@ -209,8 +293,9 @@ _MAKE_FORMAT_CHECK = re.compile(r"(?<![\w.\-])make\b[^\n]*\bformat-check\b")
 _SKIP_ASSIGNMENT = re.compile(r"^\s*SKIP:\s*(.+?)\s*$")
 
 
-def workflow_run_commands(workflow_text: str) -> list[str]:
-    """Every shell command a workflow's ``run:`` steps actually execute.
+def workflow_run_steps(workflow_text: str) -> list[RunStep]:
+    """Every shell command a workflow's ``run:`` steps execute, plus the one
+    thing a command's own text cannot say: whether the job kept its result.
 
     A line scan, not a YAML parse, for the reason in the module docstring:
     PyYAML is not a declared dev dependency and a toolchain guard must not be
@@ -221,38 +306,46 @@ def workflow_run_commands(workflow_text: str) -> list[str]:
     is the point: a commented-out step executes nothing, and the substring
     check this replaces passed on exactly that.
     """
-    commands: list[str] = []
     lines = workflow_text.splitlines()
+    swallowed = _swallowed_lines(lines)
+    steps: list[RunStep] = []
     index = 0
     while index < len(lines):
-        raw = lines[index]
-        if raw.strip().startswith("#"):
-            index += 1
-            continue
-        match = _RUN_KEY.match(raw)
+        _block, key, content = _yaml_line(lines[index])
+        match = None if _is_blank_or_comment(content) else _RUN_KEY.match(content)
         if match is None:
             index += 1
             continue
-        key_indent = len(raw) - len(raw.lstrip())
-        value = match.group(2).strip()
+        neutered = index in swallowed
+        value = match.group(1).strip()
         index += 1
         if value in _BLOCK_SCALAR:
             while index < len(lines):
                 body = lines[index]
                 stripped = body.strip()
-                if stripped and (len(body) - len(body.lstrip())) <= key_indent:
+                if stripped and (len(body) - len(body.lstrip())) <= key:
                     break
                 if stripped and not stripped.startswith("#"):
-                    commands.append(stripped)
+                    steps.append(RunStep(stripped, neutered))
                 index += 1
         elif value:
-            commands.append(value)
-    return commands
+            steps.append(RunStep(value, neutered))
+    return steps
 
 
-def is_enforcing(command: str) -> bool:
-    """False when the command reports success whatever the tool decided."""
-    return _NEUTERED.search(command) is None
+def workflow_run_commands(workflow_text: str) -> list[str]:
+    """Just the command text of every run step. See ``workflow_run_steps``."""
+    return [step.command for step in workflow_run_steps(workflow_text)]
+
+
+def is_enforcing(step: RunStep) -> bool:
+    """False when the step reports success whatever the tool decided.
+
+    Two switches, one meaning. `|| true` swallows the exit status inside the
+    shell; `continue-on-error: true` swallows it outside, on the step or on
+    the whole job. A check behind either one reports and does not gate.
+    """
+    return not step.continue_on_error and _NEUTERED.search(step.command) is None
 
 
 def local_hook_entries(pre_commit_text: str) -> list[str]:
@@ -291,6 +384,45 @@ def format_roots(makefile_text: str) -> list[str]:
     """The value of ``FORMAT_ROOTS``, however it is assigned."""
     match = re.search(r"^FORMAT_ROOTS\s*[:?]?=\s*(.+)$", makefile_text, re.MULTILINE)
     return match.group(1).split("#", 1)[0].split() if match else []
+
+
+# Directories that hold .py files nobody formats: vendored, generated, or not
+# ours. Everything else that contains a .py is a root CI format-checks.
+_NOT_OUR_SOURCE = frozenset(
+    {
+        ".git",
+        ".venv",
+        "venv",
+        "node_modules",
+        "build",
+        "dist",
+        ".seabone",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+    }
+)
+
+
+def python_roots(root: Path) -> set[str]:
+    """The first path component of every .py file in the tree."""
+    return {
+        path.relative_to(root).parts[0]
+        for path in root.rglob("*.py")
+        if not (set(path.relative_to(root).parts) & _NOT_OUR_SOURCE)
+    }
+
+
+def uncovered_python_roots(roots: list[str], present: set[str]) -> list[str]:
+    """Python roots ``ruff format`` would never be pointed at.
+
+    ``.`` is the whole tree and therefore covers everything; any other value
+    covers exactly the roots it names.
+    """
+    covered = {root.rstrip("/") for root in roots}
+    if "." in covered:
+        return []
+    return sorted(present - covered)
 
 
 # ─── the real repository ──────────────────────────────────────────────────
@@ -385,18 +517,16 @@ def test_a_workflow_actually_enforces_the_format_check() -> None:
     with `|| true`. This reads the `run:` steps and requires at least one that
     asks the question AND can fail the job.
     """
-    enforcing = {
-        path.name: [
-            command
-            for command in workflow_run_commands(path.read_text())
-            if (_FORMAT_CHECK.search(command) or _MAKE_FORMAT_CHECK.search(command))
-            and is_enforcing(command)
-        ]
-        for path in workflow_files()
-    }
-    assert any(enforcing.values()), (
+    enforcing: dict[str, list[str]] = {}
+    for path in workflow_files():
+        for step in workflow_run_steps(path.read_text()):
+            command = step.command
+            asks = _FORMAT_CHECK.search(command) or _MAKE_FORMAT_CHECK.search(command)
+            if asks and is_enforcing(step):
+                enforcing.setdefault(path.name, []).append(command)
+    assert enforcing, (
         "no workflow runs a format check that can fail; without one a "
-        f"differently-versioned formatter's output reaches main unnoticed: {enforcing}"
+        "differently-versioned formatter's output reaches main unnoticed"
     )
 
 
@@ -407,19 +537,18 @@ def test_format_roots_cover_every_python_root() -> None:
     pre-commit/action runs `--all-files`, so CI format-checks every tracked
     .py. FORMAT_ROOTS read `app/`, so `make check` passed on trees CI rejects —
     which is how eight blocks under tests/ reached a push.
+
+    The comparison runs whatever FORMAT_ROOTS says. An earlier version of this
+    test returned early on the `.` that is live today, so neither the walk nor
+    the coverage check ever executed: it was a check that passed by not
+    running. `.` covering everything is now a fact `uncovered_python_roots`
+    states and the sensitivity proof exercises, not a reason to skip.
     """
     roots = format_roots(MAKEFILE.read_text())
     assert roots, "Makefile defines no FORMAT_ROOTS"
-    if roots == ["."]:
-        return
-    covered = {root.rstrip("/") for root in roots}
-    ignored = {".git", ".venv", "venv", "node_modules", "build", "dist", ".seabone"}
-    python_roots = {
-        (path.relative_to(ROOT).parts[0])
-        for path in ROOT.rglob("*.py")
-        if not (set(path.relative_to(ROOT).parts) & ignored)
-    }
-    missing = sorted(python_roots - covered)
+    present = python_roots(ROOT)
+    assert present, f"no .py files found under {ROOT}, so this proved nothing"
+    missing = uncovered_python_roots(roots, present)
     assert not missing, (
         "CI's pre-commit job format-checks these roots and FORMAT_ROOTS does "
         f"not, so `make check` is weaker than CI: {missing}"
@@ -576,16 +705,42 @@ jobs:
           poetry run ruff check app/
 """
 
+_WORKFLOW_WITH_A_CONTINUE_ON_ERROR_STEP = """
+jobs:
+  lint:
+    steps:
+      - name: Ruff format check
+        run: poetry run ruff format --check app/
+        continue-on-error: true
+      - name: Tests
+        run: pytest -q
+"""
+
+_WORKFLOW_WITH_A_CONTINUE_ON_ERROR_JOB = """
+jobs:
+  lint:
+    continue-on-error: true
+    steps:
+      - name: Ruff format check
+        run: poetry run ruff format --check app/
+  test:
+    steps:
+      - name: Tests
+        run: pytest -q
+"""
+
 
 def test_sensitivity_a_commented_out_step_runs_nothing() -> None:
     assert workflow_run_commands(_WORKFLOW_WITH_A_COMMENTED_OUT_CHECK) == ["pytest -q"]
 
 
 def test_sensitivity_a_neutered_step_is_not_an_enforcing_one() -> None:
-    commands = workflow_run_commands(_WORKFLOW_WITH_A_NEUTERED_CHECK)
-    assert commands == ["poetry run ruff format --check app/ || true"]
-    assert _FORMAT_CHECK.search(commands[0]) is not None
-    assert is_enforcing(commands[0]) is False
+    steps = workflow_run_steps(_WORKFLOW_WITH_A_NEUTERED_CHECK)
+    assert [step.command for step in steps] == [
+        "poetry run ruff format --check app/ || true"
+    ]
+    assert _FORMAT_CHECK.search(steps[0].command) is not None
+    assert is_enforcing(steps[0]) is False
 
 
 def test_sensitivity_a_block_scalar_body_is_read() -> None:
@@ -595,8 +750,45 @@ def test_sensitivity_a_block_scalar_body_is_read() -> None:
     ]
 
 
+def test_sensitivity_a_continue_on_error_step_is_not_an_enforcing_one() -> None:
+    """Written AFTER the `run:` it neuters, which is the commoner order."""
+    steps = workflow_run_steps(_WORKFLOW_WITH_A_CONTINUE_ON_ERROR_STEP)
+    assert [step.command for step in steps] == [
+        "poetry run ruff format --check app/",
+        "pytest -q",
+    ]
+    assert _FORMAT_CHECK.search(steps[0].command) is not None
+    assert is_enforcing(steps[0]) is False
+    assert is_enforcing(steps[1]) is True, "the sibling step must stay enforcing"
+
+
+def test_sensitivity_a_continue_on_error_job_neuters_every_step_under_it() -> None:
+    """Job level is the switch ci.yml's comment records; it must reach steps."""
+    steps = workflow_run_steps(_WORKFLOW_WITH_A_CONTINUE_ON_ERROR_JOB)
+    assert [(step.command, is_enforcing(step)) for step in steps] == [
+        ("poetry run ruff format --check app/", False),
+        ("pytest -q", True),
+    ]
+
+
+def test_sensitivity_continue_on_error_false_leaves_the_step_enforcing() -> None:
+    disarmed = _WORKFLOW_WITH_A_CONTINUE_ON_ERROR_STEP.replace(
+        "continue-on-error: true", "continue-on-error: false"
+    )
+    assert is_enforcing(workflow_run_steps(disarmed)[0]) is True
+
+
+def test_sensitivity_an_unreadable_continue_on_error_counts_as_on() -> None:
+    """`${{ ... }}` cannot be evaluated from the file, so it may well be true."""
+    expression = _WORKFLOW_WITH_A_CONTINUE_ON_ERROR_STEP.replace(
+        "continue-on-error: true",
+        "continue-on-error: ${{ github.event_name == 'schedule' }}",
+    )
+    assert is_enforcing(workflow_run_steps(expression)[0]) is False
+
+
 def test_sensitivity_an_enforcing_check_is_recognised_in_both_forms() -> None:
-    assert is_enforcing("poetry run ruff format --check app/") is True
+    assert is_enforcing(RunStep("poetry run ruff format --check app/", False)) is True
     assert _MAKE_FORMAT_CHECK.search("make format-check") is not None
     assert _MAKE_FORMAT_CHECK.search("make check") is None
 
@@ -636,3 +828,17 @@ def test_sensitivity_narrow_format_roots_are_reported() -> None:
     assert format_roots("FORMAT_ROOTS ?= .") == ["."]
     assert format_roots("FORMAT_ROOTS ?= app/ tests/  # roots") == ["app/", "tests/"]
     assert format_roots("nothing here") == []
+
+
+def test_sensitivity_a_root_no_format_root_names_is_reported() -> None:
+    """The comparison the real test used to skip, driven against a narrow set."""
+    present = {"app", "tests", "scripts"}
+    assert uncovered_python_roots(["app/"], present) == ["scripts", "tests"]
+    assert uncovered_python_roots(["app/", "tests/"], present) == ["scripts"]
+    assert uncovered_python_roots(["app/", "tests/", "scripts/"], present) == []
+    assert uncovered_python_roots(["."], present) == []
+
+
+def test_sensitivity_the_python_root_walk_finds_this_very_file() -> None:
+    """A walk that matched nothing would make the coverage check vacuous."""
+    assert "tests" in python_roots(ROOT)
