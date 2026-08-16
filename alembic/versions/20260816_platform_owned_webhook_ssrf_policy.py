@@ -66,15 +66,45 @@ organization values it demotes. That union is exactly the broadening being
 removed, and performing it here would launder it into the ceiling.
 
 So: **a deployment whose only webhook allowlist lived in an organization row
-will deny outbound webhooks once this runs**, until an operator sets
-``WEBHOOK_ALLOWED_HOSTS`` / ``WEBHOOK_ALLOWED_DOMAINS`` or writes the platform
-rows (``PUT /settings/automation/<key>`` with no organization). That is not a
-regression — the previous behaviour was a tenant choosing its own SSRF
-boundary — but it is a live outage for such a deployment and must not be
-discovered in production. This migration ``RAISE NOTICE``s one line per moved
-``(organization, key, value)``, so the deploy log carries the values an
-operator composes a ceiling from, and one line per key that ends up with
-narrowing rows and no active platform row.
+will deny outbound webhooks once this runs**, until an operator writes the
+platform rows. That is not a regression — the previous behaviour was a tenant
+choosing its own SSRF boundary — but it is a live outage for such a deployment
+and must not be discovered in production. This migration ``RAISE NOTICE``s one
+line per moved ``(organization, key, value)``, so the deploy log carries the
+values an operator composes a ceiling from, and one line per key that ends up
+with narrowing rows and no active platform row.
+
+Recovery — the ONE supported operation
+--------------------------------------
+Write the platform row through the admin settings API. Exact route, exact
+keys, admin credentials (``require_admin_bypass``)::
+
+    PUT /settings/automation/webhook_allowed_hosts
+        {"value_text": "hooks.example.net,api.example.net"}
+
+    PUT /settings/automation/webhook_allowed_domains
+        {"value_text": "example.net"}
+
+``app/api/settings.py::upsert_automation_setting`` hands
+``organization_id=None`` to the service unconditionally, so this route writes
+the PLATFORM row and has no form in which it writes an organization one. The
+same route and body shape restore ``webhook_allow_localhost``,
+``webhook_allow_insecure`` and ``webhook_max_timeout_seconds``. The next
+``read_platform_webhook_ceiling`` sees it; no restart, no redeploy.
+
+Setting ``WEBHOOK_ALLOWED_HOSTS`` / ``WEBHOOK_ALLOWED_DOMAINS`` in the process
+environment does NOT end this outage, and an earlier draft of this paragraph
+wrongly offered it as an alternative. The environment is a BOOTSTRAP source
+only: ``app/services/settings_seed.py`` reads it once through ``ensure_by_key``,
+which is create-if-missing, and it has long seeded every one of these keys with
+``os.getenv(<VAR>, "")`` — so the platform row already exists, empty value and
+all, on every deployed database. ``read_platform_webhook_ceiling`` consults
+``os.getenv`` only where ``resolve_value`` returned ``None``, and an existing
+row never returns ``None``. On an already-seeded database the environment
+fallback is unreachable, and changing the variable changes nothing. Do not
+re-add a runtime environment fallback to make the old sentence true; it would
+put a second, unaudited writer on a control whose whole purpose is that only
+the platform may set it.
 
 That second notice is deliberately NOT one per unconfigured key: a key with no
 organization rows and no ceiling is the ordinary unconfigured state of a

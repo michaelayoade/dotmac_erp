@@ -65,9 +65,19 @@ from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
 
-# The platform ceiling's keys, and the process-environment fallback for each.
-# A deployment-level environment variable IS a platform-level source, so it
-# stays the fallback; it is never merged with an organization's value.
+# The platform ceiling's keys — the canonical five-key declaration. Every other
+# enumeration of the ceiling derives from this tuple rather than restating it
+# (`tests/services/test_webhook_call_site.py` builds its reader guard from it),
+# because the last hand-copied list held four of the five.
+#
+# The second element is a process-environment name, and it is a BOOTSTRAP
+# source, not a live fallback. `settings_seed` reads it once under
+# create-if-missing semantics; `_setting` below reaches `os.getenv` only where
+# `resolve_value` returned None, which an existing row never does — and the
+# seed has long created all five rows, empty value and all. So on any seeded
+# database this branch is unreachable and the environment is not a recovery
+# path. It is kept for the un-seeded case (`db is None`, a fresh process before
+# first seed) only, and is never merged with an organization's value.
 PLATFORM_KEYS: tuple[tuple[str, str | None], ...] = (
     ("webhook_allowed_hosts", "WEBHOOK_ALLOWED_HOSTS"),
     ("webhook_allowed_domains", "WEBHOOK_ALLOWED_DOMAINS"),
