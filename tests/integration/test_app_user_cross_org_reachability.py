@@ -9,16 +9,17 @@ relation the ledger's
 
 ## WHAT THIS TEST CANNOT PROVE  (design §7.4 — read this before trusting a green run)
 
-1. **A ``ready`` row is not proved reachable.**  ``app_user`` holds table
+1. **An unprotected row is not proved reachable.**  ``app_user`` holds table
    privileges on 1 of the 420 relations in the design catalog, and no migration
    under ``alembic/versions/`` issues a table-level ``GRANT ... TO app_user`` —
-   only ``EXECUTE`` on two functions.  Every ``ready`` row's targets therefore
-   measure ``denied-no-grant`` today.  Asserting reachability now would be 91
-   red rows on the first run, which is how a gate gets deleted rather than
-   fixed, so :func:`test_ready_rows_have_no_reachable_target_yet` records the
+   only ``EXECUTE`` on two functions.  Every ``protected_access == no`` row's
+   targets therefore measure ``denied-no-grant`` today.  Asserting reachability
+   now would be 91 red rows on the first run, which is how a gate gets deleted
+   rather than fixed, so
+   :func:`test_unprotected_rows_have_no_reachable_target_yet` records the
    number as a two-directional ratchet.  It becomes a real assertion in the
    change that adds the grants.
-2. **A ``blocked`` row is not proved refused.**  158 of the 224 relations in
+2. **A protected-target row is not proved refused.**  158 of the 224 relations in
    ``docs/rls-coverage-baseline.json`` carry no RLS at all.  Once grants land,
    those return EVERY organization's rows to ``app_user``; ``denied-no-grant``
    is the absence of a privilege, not the presence of a boundary.
@@ -217,9 +218,7 @@ def _ledger_target_relations() -> frozenset[str]:
             "and must be updated in the same change"
         )
         rows = [dict(row) for row in reader]
-    return frozenset(
-        relation for row in rows for relation in gate.row_relations(row)
-    )
+    return frozenset(relation for row in rows for relation in gate.row_relations(row))
 
 
 def _ledger_rows() -> list[dict[str, str]]:
@@ -318,8 +317,8 @@ def _probe(connection: Connection, relation: str) -> tuple[str, str, str]:
                 # from `_quoted`, which refuses anything that is not a bare
                 # identifier, and the names originate in a TSV the static gate
                 # validates against its RELATION pattern.
-                text(  # noqa: S608
-                    f"SELECT count(*) FROM (SELECT 1 FROM {qualified} LIMIT 1) probe"
+                text(
+                    f"SELECT count(*) FROM (SELECT 1 FROM {qualified} LIMIT 1) probe"  # noqa: S608
                 )
             ).scalar_one()
     except DBAPIError as error:
@@ -330,15 +329,19 @@ def _probe(connection: Connection, relation: str) -> tuple[str, str, str]:
     if rls != "true":
         return "visible-unprotected", rls, guc
     return (
-        "empty-no-org-context" if visible == 0 else "leaks-without-org-context"
-    ), rls, guc
+        ("empty-no-org-context" if visible == 0 else "leaks-without-org-context"),
+        rls,
+        guc,
+    )
 
 
 @pytest.fixture(scope="module")
 def measured(app_role_connection) -> dict[str, dict[str, str]]:
     return {
         relation: dict(
-            zip(COLUMNS, (relation, *_probe(app_role_connection, relation)), strict=True)
+            zip(
+                COLUMNS, (relation, *_probe(app_role_connection, relation)), strict=True
+            )
         )
         for relation in sorted(_ledger_target_relations())
     }
@@ -366,9 +369,7 @@ def test_the_proof_actually_runs_as_an_unprivileged_role(app_role_connection) ->
     )
 
     attributes = connection.execute(
-        text(
-            "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
-        )
+        text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
     ).first()
     assert attributes is not None, (
         f"{APP_ROLE!r} does not exist in pg_roles — has "
@@ -494,9 +495,7 @@ def test_the_expectation_is_derived_from_the_design_catalog() -> None:
     recorded = _recorded()
 
     uncheckable = {
-        relation
-        for relation in recorded
-        if relation.split(".", 1)[0] in SYSTEM_SCHEMAS
+        relation for relation in recorded if relation.split(".", 1)[0] in SYSTEM_SCHEMAS
     }
     assert uncheckable == set(recorded) - set(catalog), (
         "a recorded relation is absent from the design catalog without being a "
@@ -545,9 +544,10 @@ def test_the_expectation_is_derived_from_the_design_catalog() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_blocked_rows_targets_are_not_freely_readable(measured) -> None:
-    """A ``blocked`` row whose targets are all readable and unprotected is
-    bookkeeping: it blocks a cutover against tables that protect nothing.
+def test_a_protected_rows_targets_are_not_freely_readable(measured) -> None:
+    """A row that claims a protected target while every target is readable and
+    unprotected is bookkeeping: it blocks a cutover against tables that protect
+    nothing.
 
     Recorded as a shrink-only literal rather than asserted to zero, because the
     honest expectation for the 158 ``known_gaps`` relations with no RLS is
@@ -556,7 +556,7 @@ def test_a_blocked_rows_targets_are_not_freely_readable(measured) -> None:
     freely_readable = sorted(
         f"{row['path']}::{row['symbol']} -> {relation}"
         for row in _ledger_rows()
-        if row["cutover_state"] == "blocked"
+        if row["protected_access"] == "yes"
         for relation in gate.row_relations(row)
         if measured.get(relation, {}).get("outcome") == "visible-unprotected"
     )
@@ -566,17 +566,18 @@ def test_a_blocked_rows_targets_are_not_freely_readable(measured) -> None:
     # gate's UNBOUNDED_REACH rather than given an invented shape.
     baseline = 1
     assert len(freely_readable) == baseline, (
-        f"{len(freely_readable)} blocked-row targets are freely readable by "
+        f"{len(freely_readable)} protected-row targets are freely readable by "
         f"{APP_ROLE}; baseline is {baseline}. A rise means a block was recorded "
         "against a relation that protects nothing. A fall is progress that must "
         "lower the baseline in the same commit.\n" + "\n".join(freely_readable)
     )
 
 
-def test_ready_rows_have_no_reachable_target_yet(measured) -> None:
+def test_unprotected_rows_have_no_reachable_target_yet(measured) -> None:
     """Design §7.4.1 — a RECORDED MEASUREMENT, deliberately not a gate.
 
-    A ``ready`` row claims its caller survives the ``app_user`` cutover.  That
+    A ``protected_access == no`` row claims its caller survives the
+    ``app_user`` cutover.  That
     claim is unfalsifiable until ``app_user`` is granted the reads: no migration
     issues a table-level ``GRANT ... TO app_user``, so every ``ready`` target
     measures ``denied-no-grant``.  This ratchets the number DOWN as grants land
@@ -587,18 +588,19 @@ def test_ready_rows_have_no_reachable_target_yet(measured) -> None:
     unreachable = sorted(
         f"{row['path']}::{row['symbol']}"
         for row in _ledger_rows()
-        if row["cutover_state"] == "ready"
+        if row["protected_access"] == "no"
         and any(
             measured.get(relation, {}).get("outcome") == "denied-no-grant"
             for relation in gate.row_relations(row)
         )
     )
-    # 91 ready rows, all of them. app_user holds SELECT on 1 of 420 relations
-    # and none of the ledger's 48 application targets is that one.
+    # 91 unprotected rows, all of them. app_user holds SELECT on 1 of 420
+    # relations and none of the ledger's 48 application targets is that one.
     baseline = 91
     assert len(unreachable) == baseline, (
-        f"{len(unreachable)} ready rows still have an unreachable target; "
+        f"{len(unreachable)} unprotected rows still have an unreachable "
+        f"target; "
         f"baseline is {baseline}. A fall is the grants landing and must lower "
         "the baseline here in the same commit. A rise means a row was marked "
-        "ready over a relation app_user cannot read.\n" + "\n".join(unreachable)
+        "unprotected over a relation app_user cannot read.\n" + "\n".join(unreachable)
     )

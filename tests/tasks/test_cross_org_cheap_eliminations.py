@@ -114,9 +114,7 @@ def test_the_department_check_pins_the_organization_on_every_statement():
     db.scalar.side_effect = record
 
     assert (
-        DisciplineWebService._can_view_department_case(
-            db, org_id, auth, uuid.uuid4()
-        )
+        DisciplineWebService._can_view_department_case(db, org_id, auth, uuid.uuid4())
         is True
     )
     assert len(seen) == 2
