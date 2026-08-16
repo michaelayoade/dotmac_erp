@@ -419,6 +419,17 @@ def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
     # row: it is process startup with no request and no authenticated actor.
     # The three app/api/audit.py rows keep theirs: a cross-tenant operator API
     # has no tenant to iterate, because the cross-tenant query IS the question.
+    #
+    # The six app/api/auth.py api-key rows keep their states. `api_keys` is
+    # `inherited` in the checked catalog, so its api_keys-only rows stand at
+    # `ready`. That is only as strong as the inheriting column, and
+    # ApiKey.person_id is nullable while every sibling identity table's is NOT
+    # NULL. Reviewed as an accident of the initial schema (799a0ecebdd4) rather
+    # than a platform-key affordance: the rows keep their disposition, their
+    # evidence now carries the qualification, and the NOT NULL repair — which
+    # must fail loudly or quarantine, never backfill an owner it would have to
+    # invent — is a recorded follow-up in
+    # docs/architecture/rls-bypass-boundary.md.
     baseline = 57
     blocked = [
         f"{row['path']}::{row['symbol']}"

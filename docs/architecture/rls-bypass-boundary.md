@@ -102,25 +102,37 @@ disposition—not as a blanket replacement for the GUC.
 
 The post-removal audit is checked in at
 `docs/inventories/rls-cross-org-callers.tsv`. It records the exact runtime
-syntax under `app/` and active `scripts/`: 198 owning functions and 200
-boundary uses across 61 files. A table appearing in the migrated catalog and a
-caller appearing in this inventory are separate facts; neither is inferred
-from the other.
+syntax under `app/` and active `scripts/`. A table appearing in the migrated
+catalog and a caller appearing in this inventory are separate facts; neither
+is inferred from the other.
 
-The reviewed state at 2026-08-15 is:
+Per-contract and per-state counts are NOT restated here. The TSV moves with
+every converted slice, and the snapshot this section used to carry ("198 owning
+functions, 200 boundary uses across 61 files", and a five-row contract table)
+was four slices out of date before anyone noticed. Read the current state from
+the artifact itself:
 
-| Contract | Callers | Cutover meaning |
-|---|---:|---|
-| ordinary `app_user` | 91 | Ready only because the named target tables have no RLS at migration heads; this is least privilege, not tenant isolation |
-| narrow tenant-catalog definer, then `session_for_org` | 35 | Blocked; 36 of the original 71 converted |
-| narrow tenant-resolution definer, then `session_for_org` | 27 | Blocked |
-| isolated cross-tenant service | 8 | Blocked; no credential or service exists yet |
-| replace with the existing tenant session | 2 | Blocked |
+```
+awk -F'\t' 'NR > 1 {print $7, $8}' docs/inventories/rls-cross-org-callers.tsv \
+  | sort | uniq -c | sort -rn
+```
 
-The 72 blocked callers are a two-directional ratchet. A new caller fails the
-exact inventory; removing or converting one also fails until the inventory and
+The closed contract vocabulary and what each one means at cutover:
+
+| Contract | Cutover meaning |
+|---|---|
+| `ordinary_app_user` | Ready ONLY because the named target relations have no RLS at migration heads and each has a database-enforced tenant path. That is least privilege, not tenant isolation |
+| `tenant_catalog_definer` | Blocked; enumerate ids through the narrow catalogue definer, then one `session_for_org` per tenant |
+| `tenant_resolution_definer` | Blocked; resolve the owning tenant of one named row, then reopen scoped. The contract does not exist yet |
+| `isolated_cross_tenant_service` | Blocked; no credential and no service exists yet |
+
+The blocked callers are a two-directional ratchet. A new caller fails the exact
+inventory; removing or converting one also fails until the inventory and the
 baseline are lowered in the same review. A `ready` row is structurally refused
-when it claims access to an RLS-protected table.
+when it claims access to an RLS-protected table, and when its derived shape is
+unsettled. The baseline number lives in
+`tests/architecture/test_cross_org_caller_dispositions.py`, next to the
+assertion that enforces it, and nowhere else.
 
 The low-level ORM marker is a closed writer set, independent of the inventory:
 `allow_cross_org`, `cross_org_session`, and the API dependency session owner.
@@ -132,9 +144,12 @@ blocked.
 
 ## What each caller actually reaches (`target_relations`)
 
-The table above is a snapshot of the reviewed state at 2026-08-15. The
-inventory carries 148 rows, and every row names the schema-qualified relations
-its bypass region reaches.
+Every row names the schema-qualified relations its bypass region reaches. The
+row count and the disposition distribution are not copied into this paragraph:
+the TSV is the count of record, and each ratchet literal lives beside the
+assertion that enforces it in
+`tests/architecture/test_cross_org_caller_dispositions.py`. A second copy here
+would only be a number nothing keeps honest.
 
 That column exists because the disposition was previously unfalsifiable. A row
 could describe its own reach in prose and name a relation the caller never
@@ -181,7 +196,7 @@ Everything above is static: relations traced from source, dispositions written
 against them. Nothing had executed a statement as the role the whole programme
 is about. `tests/integration/test_app_user_cross_org_reachability.py` does, in
 the PostgreSQL lane, after `scripts/bootstrap_database_roles.py` and
-`alembic upgrade heads`. For each of the 48 relations the ledger's
+`alembic upgrade heads`. For each relation the ledger's
 `target_relations` column names, it ATTEMPTS the read and records the outcome in
 `tests/integration/app_user_reachability.tsv` — exact rows, not counts.
 
@@ -201,10 +216,10 @@ table-level `GRANT … TO app_user`, only `EXECUTE` on two functions, so
 `app_user` holds `SELECT` on 1 of 420 relations. That produces four honest
 limits the module's own docstring carries:
 
-- **A `ready` row is not proved reachable.** All 91 have an unreachable target,
-  recorded as a two-directional ratchet rather than asserted, because 91 red
-  rows on the first run is how a gate gets deleted. It becomes a real assertion
-  in the change that adds the grants.
+- **A `ready` row is not proved reachable.** Every one has an unreachable
+  target, recorded as a two-directional ratchet beside its own assertion rather
+  than asserted to zero, because a wall of red on the first run is how a gate
+  gets deleted. It becomes a real assertion in the change that adds the grants.
 - **A `blocked` row is not proved refused.** `denied-no-grant` is the absence of
   a privilege, not the presence of a boundary; 158 `known_gaps` relations carry
   no RLS at all and would return every organization's rows once granted.
@@ -260,16 +275,20 @@ session answer "what is due here". The grouping helper and the per-organization
 id re-fetch it fed both disappeared, because a tenant-scoped service query
 returns that organization's rows directly.
 
-That slice widened no definer and added no credential. 35 remain in this
-family, to be taken in coherent domain groups.
+That slice widened no definer and added no credential. The rest of the family
+is taken in coherent domain groups; how many remain is an `awk` over the TSV,
+not a number maintained by hand in this paragraph.
 
 Two practical notes for those groups.
 
 First, learned in #306: tests that monkeypatch `cross_org_session` on a
 converting module fail with `AttributeError` before asserting anything.
 Inventory the patch targets before moving a seam. `discipline.py` had none,
-which is part of why it went first; `app/tasks/data_health.py` has 17, and its
-single ledger row hides nine entry points, so it gets a dedicated slice.
+which is part of why it went first; `app/tasks/data_health.py` had 17, and its
+single ledger row hid nine entry points, so it got a dedicated slice. That
+slice has landed: seven of the nine now enumerate through the catalogue, and
+the one row that remains covers the two `platform.event_outbox` readers, which
+need a scope column rather than a fan-out.
 
 Second, and more important: **test-patch count is not a grouping key.**
 `audit.py`, `notifications.py` and `outbox_relay.py` carry the
@@ -289,24 +308,60 @@ both phases rather than two owners colliding in the same file. Group by the
    carrying it are resolution- or special-shaped, and reclassifying one does
    **not** lower the blocker count. The ratchet falls only when a caller is
    actually converted.
-3. **Resolution contracts.** Design the tenant-resolution contract, then convert
+3. **`api_keys.person_id` NOT NULL.** `api_keys` has no `organization_id`; the
+   checked inventory classes it `inherited`, so the gate derives
+   `inherited_tenant` and lets its rows stand at `ready`. That derivation is
+   only as strong as the inheriting column, and `ApiKey.person_id`
+   (`app/models/auth.py`) is `Mapped[uuid.UUID | None]` — nullable — so the
+   schema currently permits a key that inherits nothing, while
+   `user_credentials`, `mfa_methods` and `sessions` all declare the same column
+   NOT NULL. Note the shape derivation cannot see this: `SCOPE_COLUMNS` is
+   `organization_id`/`tenant_id`, so the generated `mixed_nullable` floor never
+   looks at an inheriting FK. Reviewed disposition: the nullability is an
+   accident of `799a0ecebdd4_initial_schema`, not a deliberate platform-key
+   affordance. The `app/api/auth.py` api-key rows therefore keep their state,
+   and the repair is:
+
+   ```sql
+   ALTER TABLE public.api_keys ALTER COLUMN person_id SET NOT NULL;
+   ```
+
+   **The migration must NOT backfill.** A person-less key in production is a
+   key whose blast radius nobody has established; picking an owner for it — the
+   first person in its organization, a service principal, the creating admin —
+   invents a tenancy claim and then makes it authoritative. The migration
+   therefore counts `WHERE person_id IS NULL` first and, if the count is
+   non-zero, `RAISE EXCEPTION` naming the offending `api_keys.id` values and the
+   resolution required, so the deploy stops rather than guesses. A key with no
+   person needs explicit platform ownership, and only an operator can state it.
+
+   If that set turns out to be large enough that a hard stop is impractical, the
+   alternative is quarantine, never inference: copy the offending rows to
+   `api_keys_orphaned` with the discovery timestamp, `UPDATE api_keys SET
+   is_active = false, revoked_at = now()` for them, and only then apply the
+   constraint. A quarantined key stops working loudly and is recoverable by an
+   operator who can state its owner; a backfilled key keeps working under an
+   owner that was never true. Note `20260131_add_audit_events_org_id` already
+   `JOIN`s through `person_id` and silently drops NULL rows, so any such key is
+   already invisible to audit tenancy — one more reason not to paper over it.
+4. **Resolution contracts.** Design the tenant-resolution contract, then convert
    the callers that resolve which organization owns one specific row. This is
    the gate for `audit.py`, `notifications.py`, `outbox_relay.py` and the
    execution half of `hooks.py`.
-4. **Isolated/offline boundaries** for the irreducible remainder.
-5. **Exact catalog classification.** Land the corrected 420/312/105 baseline and
+5. **Isolated/offline boundaries** for the irreducible remainder.
+6. **Exact catalog classification.** Land the corrected 420/312/105 baseline and
    make inherited tenant debt enforceable — 79 inherited tenant tables have no
    RLS and no ratchet watching them. Repairing policies against a catalog that
    under-counts the surface would certify the gap.
-6. **RLS/FORCE/GUC repair.** Forward-migrate every dependent policy to tenant
+7. **RLS/FORCE/GUC repair.** Forward-migrate every dependent policy to tenant
    predicates only, add FORCE where missing, prove `pg_depend` has no remaining
    reference, and drop `should_bypass_rls()`. Turn the strict GUC-policy xfail
    into a pass and prove tenant visibility and cross-tenant denial through a
    separate real `app_user` connection, never `SET ROLE`.
-7. **Production-only table disposition.**
-8. **Deployment preflight**, OpenBao-mediated secret injection, and a migration
+8. **Production-only table disposition.**
+9. **Deployment preflight**, OpenBao-mediated secret injection, and a migration
    rehearsal against a production clone.
-9. **Two deployment stages, deliberately separate.** First ship
+10. **Two deployment stages, deliberately separate.** First ship
    `app_user`-compatible code and migrations **while retaining the current
    runtime credential** — that release changes no identity and is revertible on
    its own. Then, after burn-in, cut the runtime over to `app_user` as its own
