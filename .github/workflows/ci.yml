@@ -53,11 +53,14 @@ jobs:
       - name: Install dependencies
         run: poetry install --only dev --no-interaction
 
+      # Both delegated to the Makefile so this job and `make check` cannot ask
+      # about different roots. LINT_ROOTS/FORMAT_ROOTS are defined in exactly
+      # one place.
       - name: Ruff check
-        run: poetry run ruff check app/
+        run: make lint
 
       - name: Ruff format check
-        run: poetry run ruff format --check app/
+        run: make format-check
 
       - name: Session-context guard (no raw SessionLocal() in tasks)
         run: python3 scripts/check_session_context.py

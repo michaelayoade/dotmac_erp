@@ -271,9 +271,7 @@ def test_sensitivity_a_caret_range_is_reported() -> None:
 def test_sensitivity_other_ranges_are_reported() -> None:
     for spec in ("~0.15.0", ">=0.15.0", ">=0.15,<0.16", "0.15.*", "*"):
         perturbed = _COHERENT_PYPROJECT.replace('"0.15.0"', f'"{spec}"')
-        failures = coherence_failures(
-            perturbed, _COHERENT_LOCK, _COHERENT_PRE_COMMIT
-        )
+        failures = coherence_failures(perturbed, _COHERENT_LOCK, _COHERENT_PRE_COMMIT)
         assert any("range" in f for f in failures), (spec, failures)
 
 
