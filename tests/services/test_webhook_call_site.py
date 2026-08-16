@@ -344,8 +344,8 @@ NOT_A_CEILING_KEY = {
     ),
 }
 
-# Every file under `app/` allowed to name one of the five ceiling keys, and
-# why. Two DECLARE them and one READS them; nothing else may, because a reader
+# Every file allowed to name one of the five ceiling keys, and why. Two DECLARE
+# them, one READS them, one MOVES them once; nothing else may, because a reader
 # of the ceiling that does not also compose the narrowing is a widening.
 # This list only shrinks. Adding to it means adding a second answer to "what
 # may this deployment send a webhook to".
@@ -356,10 +356,70 @@ ACCOUNTED_FOR = {
         "read_platform_webhook_ceiling — the one reader, and the only place "
         "the narrowing is composed onto them"
     ),
+    "alembic/versions/20260816_platform_owned_webhook_ssrf_policy.py": (
+        "the one-time demotion: moves the organization rows to the narrowing "
+        "keys. A writer that runs once at deploy, never a request-path reader"
+    ),
+}
+
+# `openbao_allow_insecure` is the remainder above, and a remainder with no
+# ledger is just an unwatched key: it is platform-owned precisely because a
+# tenant row for it disables TLS verification against the secret store, so a
+# second reader resolving it at whatever scope it was handed is the same
+# failure class the ceiling ledger exists for. Its readers are enumerated here
+# for the same reason and on the same shrink-only terms. `dependency_health`
+# is deliberately absent: it imports `secrets._openbao_allow_insecure` rather
+# than naming the key, which is what keeps the reader count at one.
+OPENBAO_ACCOUNTED_FOR = {
+    "app/services/settings_spec.py": "declares the spec, scope=PLATFORM",
+    "app/services/settings_seed.py": "seeds the platform row from the environment",
+    "app/services/secrets.py": (
+        "_openbao_allow_insecure — the one reader, pinned to "
+        "organization_id=None so no organization row can answer"
+    ),
 }
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+# Guards enumerate entry-point FAMILIES, not one directory. The previous scan
+# walked `app/` alone, so a ceiling reader added in a maintenance script, an
+# ops tool, a migration or a packaged module was invisible to it — and a
+# script that resolves the ceiling without the narrowing sends the widened
+# request just as effectively as a route does. Every root is asserted to exist
+# so a rename fails the guard instead of silently scanning nothing.
+SCAN_ROOTS = ("app", "alembic", "scripts", "tools", "src", "config", "deploy")
+
+
+def _files_naming(keys: frozenset[str] | set[str]) -> dict[str, set[str]]:
+    """Every scanned file holding one of `keys` as a string literal."""
+    found: dict[str, set[str]] = {}
+    scanned = 0
+    for root in SCAN_ROOTS:
+        base = REPO_ROOT / root
+        assert base.is_dir(), (
+            f"{root}/ is in SCAN_ROOTS but does not exist. A moved or renamed "
+            "entry-point family silently narrows this guard to the roots that "
+            "are left; point SCAN_ROOTS at the new location."
+        )
+        for path in sorted(base.rglob("*.py")):
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):  # pragma: no cover
+                continue
+            scanned += 1
+            hits = {
+                node.value
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and node.value in keys
+            }
+            if hits:
+                found[path.relative_to(REPO_ROOT).as_posix()] = hits
+
+    assert scanned > 0, "the scan parsed no files at all; it cannot find a reader"
+    return found
 
 
 def test_the_derived_ceiling_set_is_not_vacuous():
@@ -414,21 +474,7 @@ def test_every_platform_owned_key_is_in_exactly_one_enumeration():
 
 
 def test_only_the_policy_module_reads_the_ceiling_keys():
-    found: dict[str, set[str]] = {}
-    for path in sorted((REPO_ROOT / "app").rglob("*.py")):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError):  # pragma: no cover - defensive
-            continue
-        hits = {
-            node.value
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Constant)
-            and isinstance(node.value, str)
-            and node.value in CEILING_KEY_LITERALS
-        }
-        if hits:
-            found[path.relative_to(REPO_ROOT).as_posix()] = hits
+    found = _files_naming(CEILING_KEY_LITERALS)
 
     assert set(found) == set(ACCOUNTED_FOR), (
         "the set of files naming a webhook SSRF ceiling key changed. Every one "
@@ -437,6 +483,54 @@ def test_only_the_policy_module_reads_the_ceiling_keys():
         f"unaccounted: {sorted(set(found) - set(ACCOUNTED_FOR))}; "
         f"gone: {sorted(set(ACCOUNTED_FOR) - set(found))}"
     )
+
+
+def test_the_remainder_key_has_a_reader_ledger_of_its_own():
+    """`NOT_A_CEILING_KEY` states a key is elsewhere; this says where.
+
+    Naming a key as a remainder is only honest if the remainder is itself
+    watched. Without this, `openbao_allow_insecure` was platform-owned,
+    refused to organizations by the same write listener, and covered by no
+    scan at all — the exact gap the partition test was written to close, left
+    open on the other side of the partition.
+    """
+    found = _files_naming(set(NOT_A_CEILING_KEY))
+
+    assert set(found) == set(OPENBAO_ACCOUNTED_FOR), (
+        "the set of files naming a platform-owned remainder key changed. Each "
+        "is a potential second reader resolving it at a caller-supplied scope, "
+        "which is how an organization row would come to answer a control the "
+        "platform owns. "
+        f"unaccounted: {sorted(set(found) - set(OPENBAO_ACCOUNTED_FOR))}; "
+        f"gone: {sorted(set(OPENBAO_ACCOUNTED_FOR) - set(found))}"
+    )
+
+
+def test_the_reader_scan_would_notice_a_reader_outside_app():
+    """Sensitivity proof: the widened roots are searched, not merely listed.
+
+    A guard whose scan silently covers less than its ledger claims passes for
+    the wrong reason. This plants a literal in each non-`app` root, in a
+    module nothing imports, and requires the scan to surface every one.
+    """
+    planted: list[pathlib.Path] = []
+    key = sorted(CEILING_KEY_LITERALS)[0]
+    try:
+        for root in SCAN_ROOTS:
+            probe = REPO_ROOT / root / "_ceiling_scan_probe.py"
+            probe.write_text(f'SETTING = "{key}"\n', encoding="utf-8")
+            planted.append(probe)
+
+        found = _files_naming(CEILING_KEY_LITERALS)
+        missed = [
+            probe.relative_to(REPO_ROOT).as_posix()
+            for probe in planted
+            if probe.relative_to(REPO_ROOT).as_posix() not in found
+        ]
+        assert not missed, f"these roots are listed but not scanned: {missed}"
+    finally:
+        for probe in planted:
+            probe.unlink(missing_ok=True)
 
 
 def test_the_retired_readers_are_gone_not_merely_unused():
