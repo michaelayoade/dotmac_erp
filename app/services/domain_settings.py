@@ -608,6 +608,19 @@ class DomainSettings(ListResponseMixin):
         """
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
+
+        from app.services.setting_scopes import is_platform_owned
+
+        if is_platform_owned(self.domain, key):
+            # Platform-owned: exactly one scope exists, so an organization the
+            # caller passed — or one it merely inherited from the ambient
+            # session context — is discarded rather than honoured. Without
+            # this, a row created outside the ORM (raw SQL, a replica that has
+            # not run the migration) would still outrank the platform row on
+            # the `ORDER BY (organization_id = :org) DESC` below. See
+            # `app/services/setting_scopes.py`.
+            organization_id = None
+
         org_id = _resolve_scope(db, organization_id)
         stmt = select(DomainSetting).where(
             DomainSetting.domain == self.domain,

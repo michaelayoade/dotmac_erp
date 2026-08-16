@@ -385,8 +385,56 @@ def _require_declared_domain(
     registry().require(target.domain)
 
 
+class PlatformOwnedSettingError(ValueError):
+    """An organization-scoped row was written for a PLATFORM-owned setting.
+
+    Raised at the ORM boundary, not in ``DomainSettings``, for the reason
+    ``_require_declared_domain`` gives above: there are eight direct
+    ``DomainSetting(...)`` constructors across six modules and only two of them
+    are in that service, so a service-level check would miss six of them, the
+    settings import path and the history-restore path.
+
+    A ``ValueError`` rather than an ``HTTPException``: a model listener that
+    raised an HTTP status would invert the layering, and this fires in Celery
+    tasks, seed scripts and admin tooling as well as in routes.
+    """
+
+
+def _require_platform_scope(
+    _mapper: Mapper, _connection: Connection, target: "DomainSetting"
+) -> None:
+    """Refuse an organization row for a setting the platform owns.
+
+    This is the WRITE half of the platform-ownership mechanism. The READ half
+    lives in ``settings_spec.resolve_value``, ``DomainSettings.get_by_key`` and
+    ``SettingsCache``, each of which discards a caller-supplied organization
+    for such a key. Both halves are needed because ``public.domain_settings``
+    has no RLS policy: this listener covers every ORM writer, and the read-side
+    override is what makes a row inserted outside the ORM inert instead of
+    authoritative.
+
+    Imported lazily, and from the leaf ``setting_scopes`` module rather than
+    from ``settings_spec``, because ``settings_spec`` imports the service which
+    imports this module.
+    """
+    if target.organization_id is None:
+        return
+
+    from app.services.setting_scopes import is_platform_owned
+
+    if is_platform_owned(target.domain, target.key):
+        raise PlatformOwnedSettingError(
+            f"{target.domain}/{target.key} is platform-owned; an "
+            "organization-scoped row may not exist for it. Write the platform "
+            f"row through PUT /settings/{target.domain}/{target.key}, or "
+            "narrow it with the corresponding webhook_tenant_* setting."
+        )
+
+
 event.listen(DomainSetting, "before_insert", _require_declared_domain)
 event.listen(DomainSetting, "before_update", _require_declared_domain)
+event.listen(DomainSetting, "before_insert", _require_platform_scope)
+event.listen(DomainSetting, "before_update", _require_platform_scope)
 event.listen(DomainSetting, "before_insert", _encrypt_secret_before_write)
 event.listen(DomainSetting, "before_update", _encrypt_secret_before_write)
 event.listen(DomainSetting, "load", _decrypt_secret_on_load)

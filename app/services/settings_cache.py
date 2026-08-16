@@ -489,6 +489,16 @@ class SettingsCache:
         organization_id: uuid.UUID | None,
         default: Any,
     ) -> Any:
+        from app.services.setting_scopes import is_platform_owned
+
+        if is_platform_owned(domain, key):
+            # Platform-owned: one scope, therefore one cache entry. Collapsing
+            # the scope here also collapses the CACHE KEY below — otherwise N
+            # organizations would each cache the same platform value under
+            # their own key, and invalidating a platform write would have to
+            # sweep all N. See `app/services/setting_scopes.py`.
+            organization_id = None
+
         cache_key = self._make_key(domain, organization_id, key)
 
         # Check cache

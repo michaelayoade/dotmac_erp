@@ -1,3 +1,4 @@
+import enum
 import logging
 from dataclasses import dataclass
 from typing import cast
@@ -10,8 +11,29 @@ from app.models.domain_settings import SettingDomain, SettingValueType
 from app.services import domain_settings as settings_service
 from app.services.domain_settings import AMBIENT, _Ambient
 from app.services.response import ListResponseMixin
+from app.services.setting_scopes import register_platform_owned
 
 logger = logging.getLogger(__name__)
+
+
+class SettingScopeAuthority(str, enum.Enum):
+    """Who may own a row for this setting.
+
+    TENANT (the default, and what every pre-existing spec means): an
+    organization may hold its own row, and that row outranks the platform row
+    on read.
+
+    PLATFORM: no organization row may exist. The value is a deployment-level
+    control, and an organization-scoped row for it is refused at the ORM
+    boundary (``app.models.domain_settings._require_platform_scope``) and
+    discarded on read. Used for controls whose whole purpose is to CONSTRAIN a
+    tenant — an SSRF allowlist is not a preference.
+
+    Orthogonal to ``SettingSpec.inherits``; see ``app.services.setting_scopes``.
+    """
+
+    TENANT = "tenant"
+    PLATFORM = "platform"
 
 
 @dataclass(frozen=True)
@@ -39,6 +61,13 @@ class SettingSpec(ListResponseMixin):
     # Mirrors `dotmac_kernel.settings_resolver.SettingSpec.inherits` (ADR-0012)
     # so the kernel cutover is a swap rather than a redesign.
     inherits: bool = True
+    # Who may OWN a row for this setting. Orthogonal to `inherits` above, and
+    # conflating the two is how a platform control quietly acquires a tenant
+    # override: `inherits=False` says a LESS specific row is not a valid
+    # answer, while `scope=PLATFORM` says a MORE specific row may not exist at
+    # all. A PLATFORM spec therefore ignores `inherits` — there is only one
+    # scope left to read.
+    scope: SettingScopeAuthority = SettingScopeAuthority.TENANT
     label: str | None = None
     description: str | None = None
 
@@ -370,13 +399,20 @@ SETTINGS_SPECS: list[SettingSpec] = [
         min_value=1,
         max_value=100,
     ),
-    # Webhook Security Settings
+    # ── Webhook security: the PLATFORM ceiling ────────────────────────────
+    # These four are the outbound-SSRF boundary. They exist to CONSTRAIN an
+    # organization, so an organization may not hold a row for any of them:
+    # a constrained party that can rewrite its own constraint is not
+    # constrained. An organization narrows them through the
+    # `webhook_tenant_*` keys below, composed by conjunction in
+    # `app/services/finance/automation/webhook_policy.py`.
     SettingSpec(
         domain=SettingDomain.automation,
         key="webhook_allowed_hosts",
         env_var="WEBHOOK_ALLOWED_HOSTS",
         value_type=SettingValueType.string,
         default="",
+        scope=SettingScopeAuthority.PLATFORM,
     ),
     SettingSpec(
         domain=SettingDomain.automation,
@@ -384,6 +420,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var="WEBHOOK_ALLOWED_DOMAINS",
         value_type=SettingValueType.string,
         default="",
+        scope=SettingScopeAuthority.PLATFORM,
     ),
     SettingSpec(
         domain=SettingDomain.automation,
@@ -391,6 +428,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var="WEBHOOK_ALLOW_INSECURE",
         value_type=SettingValueType.boolean,
         default=False,
+        scope=SettingScopeAuthority.PLATFORM,
     ),
     SettingSpec(
         domain=SettingDomain.automation,
@@ -398,7 +436,66 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var="WEBHOOK_ALLOW_LOCALHOST",
         value_type=SettingValueType.boolean,
         default=False,
+        scope=SettingScopeAuthority.PLATFORM,
     ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_max_timeout_seconds",
+        env_var="WEBHOOK_MAX_TIMEOUT_SECONDS",
+        value_type=SettingValueType.integer,
+        # 300 because that is exactly `webhook_timeout_seconds`' existing
+        # max_value, so no deployment's effective timeout changes on the day
+        # this lands. An operator lowers it deliberately; the spec does not
+        # pick a tighter number on their behalf and silently shorten live
+        # outbound calls.
+        default=300,
+        min_value=1,
+        max_value=300,
+        scope=SettingScopeAuthority.PLATFORM,
+    ),
+    # ── Webhook security: the optional TENANT narrowing ───────────────────
+    # `default=None` on all four, because None is the IDENTITY element of the
+    # narrow-only conjunction. A default of "" or False would not be: it would
+    # make an organization that has never touched the setting look like one
+    # that had asked for an empty allowlist, or asked to force a platform
+    # `True` off. `inherits=False` for the same reason — a platform row for a
+    # `webhook_tenant_*` key would be a global narrowing masquerading as one
+    # organization's own choice.
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_tenant_allowed_hosts",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default=None,
+        inherits=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_tenant_allowed_domains",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default=None,
+        inherits=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_tenant_allow_insecure",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=None,
+        inherits=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_tenant_allow_localhost",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=None,
+        inherits=False,
+    ),
+    # A timeout is a preference, not an SSRF control, so this one stays
+    # organization-owned. It is bounded by `webhook_max_timeout_seconds`
+    # above at the point of use, in both outbound channels.
     SettingSpec(
         domain=SettingDomain.automation,
         key="webhook_timeout_seconds",
@@ -1103,6 +1200,18 @@ SETTINGS_SPECS: list[SettingSpec] = [
     ),
 ]
 
+
+# Index the PLATFORM declarations into the leaf registry the ORM listener asks.
+# At import time and unconditionally: the listener's question is a security
+# check, and a registry populated lazily by whoever happens to import this
+# module first would answer "not platform-owned" for every key in a process
+# that never imported it — a check that fails open.
+for _spec in SETTINGS_SPECS:
+    if _spec.scope is SettingScopeAuthority.PLATFORM:
+        register_platform_owned(str(_spec.domain), _spec.key)
+del _spec
+
+
 DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.auth: settings_service.auth_settings,
     SettingDomain.audit: settings_service.audit_settings,
@@ -1174,6 +1283,17 @@ def resolve_value(
         if strict:
             raise ValueError(f"Unknown setting: {domain.value}/{key}")
         return None
+
+    if spec.scope is SettingScopeAuthority.PLATFORM:
+        # A platform-owned setting has exactly one scope, so whatever
+        # organization the caller passed is DISCARDED rather than honoured.
+        # The ORM listener already refuses to create an organization row for
+        # such a key; this is the second half of that, and it is what makes a
+        # row created outside the ORM — raw SQL, a psql session, a replica
+        # that predates the migration — inert rather than merely irregular.
+        # `public.domain_settings` carries no RLS policy, so this application
+        # layer is the whole boundary; see `app/services/setting_scopes.py`.
+        organization_id = None
 
     service = DOMAIN_SETTINGS_SERVICE.get(domain)
     setting = None
