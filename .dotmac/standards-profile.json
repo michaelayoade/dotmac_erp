@@ -131,7 +131,7 @@
         "path": "tests/services/test_hook_registry.py",
         "symbol": "TestHookRegistry",
         "category": "webhook_surface",
-        "fingerprint": "6b7e7abe8c3de2a3c881c9a057b7f65afa4d8ec24984c04a6013953250987867"
+        "fingerprint": "3241007e58c4c3fd6974f234bc622472ac6ce8d84dfeb0235ae38bca818678aa"
       },
       {
         "path": "tests/services/test_mono_sync.py",
