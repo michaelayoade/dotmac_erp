@@ -24,6 +24,8 @@ Public API for callers
 Use the high-level context managers — they establish the applicable input and
 clean up:
 
+- :func:`tenant_scope_for_session` — bind an existing, newly-opened Session
+  (HTTP dependencies) and keep its database scope armed across commits.
 - :func:`session_for_org` — single-org tenant session (Celery tasks,
   CLI scripts, anything outside a web request).
 - :func:`for_each_organization` — every organization in turn, each in its own
@@ -36,9 +38,9 @@ clean up:
 
 The low-level primitives below (:func:`prime_session`,
 :func:`allow_cross_org`) exist for infrastructure code only — the web
-dependency at ``app/api/deps.py::get_db_for_org`` composes them with the RLS
-helpers because it owns the session-lifecycle contract for HTTP requests. New
-code should not compose primitives manually.
+dependencies and background-session helpers compose them through
+:func:`tenant_scope_for_session`, which owns the session-lifecycle contract.
+New code should not compose primitives manually.
 
 A note on ``SET LOCAL`` and commits
 ------------------------------------
@@ -49,8 +51,9 @@ middle of its work therefore lost its RLS GUC and silently started
 returning zero rows, while ``session.info`` kept the ORM-listener layer
 looking primed: it read as scoped and behaved as unscoped.
 
-``session_for_org`` re-arms its scope GUCs on SQLAlchemy's ``after_begin``,
-which fires as each new transaction opens.
+``tenant_scope_for_session`` re-arms its scope GUCs on SQLAlchemy's
+``after_begin``, which fires as each new transaction opens. Both the HTTP
+dependencies and ``session_for_org`` use that one lifecycle owner.
 Commit-and-continue inside a block is therefore safe, and the call site is
 no longer the contract owner for it.
 
@@ -93,8 +96,8 @@ def prime_session(session: Session, organization_id: UUID) -> None:
        :func:`session_for_org` instead — it sets both layers.
 
        Direct callers are limited to infrastructure code that already
-       composes both layers explicitly (notably ``app.api.deps.get_db_for_org``
-       and ``app.web.deps``). Application code should not import this.
+       composes both layers explicitly. Application code should not import
+       this.
 
     Calling on an already-primed session overwrites the previous value —
     useful for tasks that iterate orgs *within a single session*, though
@@ -170,6 +173,35 @@ def prime_tenant_context(session: Session, organization_id: UUID) -> None:
 
 
 @contextmanager
+def tenant_scope_for_session(
+    session: Session, organization_id: UUID
+) -> Iterator[Session]:
+    """Bind an existing Session to one tenant for its whole lifecycle.
+
+    ``SET LOCAL`` disappears at every commit or rollback. This context manager
+    owns the matching SQLAlchemy ``after_begin`` listener so the database GUCs
+    are present for the first transaction and automatically restored for every
+    later transaction. It also primes ``session.info`` for the ORM tenant
+    filter.
+
+    Use this only with a newly-opened session that is not already in a
+    transaction. The caller remains responsible for commit/rollback and close.
+    """
+
+    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
+        # Emitted on the Connection because the Session is still provisioning
+        # that connection while ``after_begin`` runs.
+        set_current_organization_on_connection(connection, organization_id)
+
+    prime_session(session, organization_id)
+    event.listen(session, "after_begin", _arm)
+    try:
+        yield session
+    finally:
+        event.remove(session, "after_begin", _arm)
+
+
+@contextmanager
 def session_for_org(organization_id: UUID) -> Iterator[Session]:
     """Canonical tenant-scoped session for non-HTTP entry points.
 
@@ -208,30 +240,10 @@ def session_for_org(organization_id: UUID) -> Iterator[Session]:
 
     session = SessionLocal()
 
-    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
-        # Both database scopes are transaction-local. A commit inside the
-        # caller's block would therefore drop the GUCs while `session.info`
-        # still looked primed — an
-        # asymmetry that reads as "scoped" and behaves as "unscoped".
-        # Re-arming on every new transaction removes the hazard here, rather
-        # than constraining every caller to commit exactly once forever.
-        #
-        # Emitted on the CONNECTION, not the Session: `after_begin` fires while
-        # the Session is still provisioning its connection, and going through
-        # the Session there raises InvalidRequestError.
-        set_current_organization_on_connection(connection, organization_id)
-
     try:
-        # Session layer: ORM listener + explicit module-scope identity.
-        prime_session(session, organization_id)
-        # Database layers: ERP and shared-module RLS GUCs.
-        # `after_begin` fires before the statement that opened the transaction
-        # runs, so the GUC is in place for the caller's very first query and
-        # for every query after every commit.
-        event.listen(session, "after_begin", _arm)
-        yield session
+        with tenant_scope_for_session(session, organization_id):
+            yield session
     finally:
-        event.remove(session, "after_begin", _arm)
         session.close()
 
 

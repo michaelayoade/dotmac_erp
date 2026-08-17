@@ -257,6 +257,22 @@
     </div>
 </div>
 
+<script>
+async function readJsonResponse(response, fallbackMessage) {
+    const body = await response.text();
+    if (!body.trim()) {
+        throw new Error(`${fallbackMessage} (HTTP ${response.status}: empty server response)`);
+    }
+
+    try {
+        return JSON.parse(body);
+    } catch (parseError) {
+        console.error('Invalid JSON response:', parseError);
+        throw new Error(`${fallbackMessage} (HTTP ${response.status}: invalid server response)`);
+    }
+}
+</script>
+
 {% if can_retry_transfer %}
 <script>
 async function retryTransfer(intentId) {
@@ -276,11 +292,11 @@ async function retryTransfer(intentId) {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to initiate transfer');
+            const error = await readJsonResponse(response, 'Failed to initiate transfer');
+            throw new Error(error.message || error.detail || 'Failed to initiate transfer');
         }
 
-        const result = await response.json();
+        const result = await readJsonResponse(response, 'Failed to initiate transfer');
 
         if (result.status === 'COMPLETED') {
             btnText.textContent = 'Payment Complete!';
@@ -340,7 +356,7 @@ async function loadBanks() {
         });
         if (!response.ok) throw new Error('Failed to load banks');
 
-        const banks = await response.json();
+        const banks = await readJsonResponse(response, 'Failed to load banks');
         select.innerHTML = '<option value="">Select a bank...</option>';
         banks.forEach(bank => {
             const opt = document.createElement('option');
@@ -411,11 +427,11 @@ async function resolveAccount() {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Account verification failed');
+            const error = await readJsonResponse(response, 'Account verification failed');
+            throw new Error(error.message || error.detail || 'Account verification failed');
         }
 
-        const data = await response.json();
+        const data = await readJsonResponse(response, 'Account verification failed');
 
         // Show account name
         document.getElementById('accountName').textContent = data.account_name;
@@ -471,11 +487,11 @@ async function initiateTransfer() {
         });
 
         if (!initResponse.ok) {
-            const error = await initResponse.json();
-            throw new Error(error.detail || 'Failed to initialize transfer');
+            const error = await readJsonResponse(initResponse, 'Failed to initialize transfer');
+            throw new Error(error.message || error.detail || 'Failed to initialize transfer');
         }
 
-        const intent = await initResponse.json();
+        const intent = await readJsonResponse(initResponse, 'Failed to initialize transfer');
         btnText.textContent = 'Initiating transfer...';
 
         // Step 2: Initiate the actual transfer
@@ -488,11 +504,11 @@ async function initiateTransfer() {
         });
 
         if (!transferResponse.ok) {
-            const error = await transferResponse.json();
-            throw new Error(error.detail || 'Failed to initiate transfer');
+            const error = await readJsonResponse(transferResponse, 'Failed to initiate transfer');
+            throw new Error(error.message || error.detail || 'Failed to initiate transfer');
         }
 
-        const result = await transferResponse.json();
+        const result = await readJsonResponse(transferResponse, 'Failed to initiate transfer');
 
         // Handle different statuses
         if (result.status === 'COMPLETED') {
