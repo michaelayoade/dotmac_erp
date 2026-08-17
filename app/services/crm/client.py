@@ -15,7 +15,7 @@ from typing import Any, cast
 import os
 
 import httpx
-from dotmac_integration import IntegrationHttpClient, ReachabilityCircuit
+from dotmac_integration_client import IntegrationHttpClient, ReachabilityCircuit
 
 from app.config import settings
 from app.metrics import categorize_http_status, observe_integration_request

@@ -27,7 +27,7 @@ from enum import Enum
 from typing import Any
 
 import httpx
-from dotmac_integration import (
+from dotmac_integration_client import (
     IntegrationHttpClient,
     ReachabilityCircuit,
     exponential_backoff,
