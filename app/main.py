@@ -343,8 +343,7 @@ def _is_no_response_runtime_error(exc: BaseException) -> bool:
         # swallowed the real exception and returned an empty 204. A group is a
         # disconnect only when every child is one.
         return all(
-            isinstance(child, BaseException)
-            and _is_no_response_runtime_error(child)
+            isinstance(child, BaseException) and _is_no_response_runtime_error(child)
             for child in children
         )
 
