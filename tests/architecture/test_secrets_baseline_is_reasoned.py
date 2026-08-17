@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+from typing import Any, cast
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASELINE = REPO_ROOT / ".secrets.baseline"
@@ -65,8 +66,9 @@ BASELINE = REPO_ROOT / ".secrets.baseline"
 # findings within a file are all the same kind of thing.
 REASONS = {
     ".dotmac/standards-profile.json": (
-        "A git commit SHA — the pinned governance revision (hard rule 15). "
-        "Hex by definition; the whole point is that it is an exact commit."
+        "Public integrity identifiers: the pinned governance commit (hard "
+        "rule 15) and schema-9 conservation fingerprints. Both are hex by "
+        "definition; neither authenticates an actor or grants access."
     ),
     ".github/workflows/ci.yml": (
         "`secrets: |` is a YAML KEY, not a value, and the DATABASE_URL is "
@@ -99,8 +101,8 @@ REASONS = {
 }
 
 
-def _baseline() -> dict:
-    return json.loads(BASELINE.read_text(encoding="utf-8"))
+def _baseline() -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads(BASELINE.read_text(encoding="utf-8")))
 
 
 def _files() -> set[str]:
@@ -141,13 +143,17 @@ def test_python_is_not_suppressed_here() -> None:
 
 
 def test_the_suppression_count_only_shrinks() -> None:
-    """A ceiling, not a target. It was 121; every entry above the current count
-    would be a new unexplained suppression, and the reason check above only
-    fires per FILE — a new finding in an already-listed file would otherwise
-    slip in silently."""
+    """A ceiling, not a target.
+
+    The prior floor was 18. Schema-9 conservation adds seven public integrity
+    fingerprints to the already-listed profile; its replaced Governance pin
+    remains one finding. Every entry above the new 25 would be unexplained,
+    and the reason check above only fires per FILE — a new finding in an
+    already-listed file would otherwise slip in silently.
+    """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total <= 19, (
-        f"{total} suppressed findings, up from 19. Fix the finding, or lower "
+    assert total <= 25, (
+        f"{total} suppressed findings, up from 25. Fix the finding, or lower "
         "this number in the same change that explains the new entry."
     )
 
