@@ -19,6 +19,7 @@ from app.models.finance.automation.workflow_rule import (
     WorkflowEntityType,
 )
 from app.services.finance.automation import workflow as workflow_module
+from app.services.finance.automation.webhook_policy import WebhookCeiling
 from app.services.finance.automation.workflow import (
     TriggerContext,
     WorkflowService,
@@ -271,13 +272,8 @@ class TestWebhookAllowlist:
         assert allowed is False
         assert reason == "Webhook host is not in the allowlist"
 
-    def test_domain_allowlist_matches_host_and_subdomain(self, monkeypatch):
-        from app.services.finance.automation.webhook_policy import effective_policy
-
-        monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
-        monkeypatch.setenv("WEBHOOK_ALLOWED_DOMAINS", "example.com")
-
-        policy = effective_policy(None, None)
+    def test_domain_allowlist_matches_host_and_subdomain(self):
+        policy = WebhookCeiling(allowed_domains=frozenset({"example.com"}))
         assert policy.permits_host("example.com") is True
         assert policy.permits_host("api.example.com") is True
         assert policy.permits_host("api.other.com") is False

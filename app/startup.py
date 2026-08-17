@@ -308,10 +308,11 @@ def warn_unconfigured_webhook_allowlist(db: Session | None = None) -> None:
                 "until an admin writes the platform rows: "
                 "PUT /api/v1/settings/automation/webhook_allowed_hosts and "
                 "PUT /api/v1/settings/automation/webhook_allowed_domains, body "
-                '{"value_text": "hooks.example.net,api.example.net"}. Setting '
+                '{"value_text": "hooks.example.net,api.example.net", '
+                '"is_active": true}. Setting '
                 "WEBHOOK_ALLOWED_HOSTS/WEBHOOK_ALLOWED_DOMAINS in the process "
-                "environment does NOT end this: the environment seeds these rows "
-                "once at first boot and is never read again once a row exists."
+                "environment does NOT end this after bootstrap: those values are "
+                "seed inputs only and never overwrite an existing row."
             )
     except (MissingOrgContextError, SQLAlchemyError):
         logger.debug(
@@ -349,9 +350,6 @@ def validate_startup(db: Session | None = None, exit_on_failure: bool = True) ->
     # its default stood in silently — so it belongs in the startup gate rather
     # than in whatever request first reads it.
     all_errors.extend(validate_setting_domains())
-
-    # Non-fatal security warning for potentially unsafe webhook automation config.
-    warn_unconfigured_webhook_allowlist(db)
 
     if all_errors:
         logger.error("=" * 60)

@@ -703,7 +703,7 @@ def has_live_admin_grant(db: Session, person_id: UUID | str | None) -> bool:
     if person_id is None:
         return False
     try:
-        person_uuid = coerce_uuid(person_id)
+        person_uuid = coerce_uuid(person_id, raise_http=False)
     except (TypeError, ValueError):
         return False
     if person_uuid is None:

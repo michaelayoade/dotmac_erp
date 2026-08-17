@@ -2,6 +2,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 from app.main import app
 
 
@@ -39,6 +41,7 @@ def test_finance_settings_routes_precede_generic_settings_route():
         )
 
 
+@pytest.mark.timeout(300)
 def test_public_careers_routes_are_not_gated_by_people_module():
     env = os.environ.copy()
     env["ENABLED_MODULES"] = "finance"

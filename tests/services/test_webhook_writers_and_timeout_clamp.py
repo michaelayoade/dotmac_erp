@@ -282,7 +282,9 @@ class TestChannelOneTheWorkflowWebhookAction:
 
         _clamped_ceiling(monkeypatch, maximum=maximum, requested=requested)
         monkeypatch.setattr(
-            workflow, "_validate_webhook_target", lambda url, db: (True, None)
+            workflow,
+            "_validate_webhook_target",
+            lambda url, db, organization_id=None: (True, None),
         )
 
         context = MagicMock()
@@ -355,7 +357,7 @@ class TestChannelTwoTheServiceHookDispatcher:
         monkeypatch.setattr(
             registry,
             "_validate_webhook_target",
-            lambda url, db, allow_localhost=False: (True, None),
+            lambda url, db, allow_localhost=False, organization_id=None: (True, None),
         )
 
         hook = ServiceHook(

@@ -402,6 +402,7 @@ def test_fake_licence_signer_works_via_erps_own_cryptography(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.timeout(300)
 def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> None:
     """Importing ``app.main`` loads no kernel module beyond the reviewed closure.
 

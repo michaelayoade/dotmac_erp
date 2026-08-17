@@ -56,7 +56,7 @@ recorded — but an operator has to go and look.
 
 Each move is recorded as an ``UPDATE`` row in ``public.domain_setting_history``
 with the OLD ``(domain, key)`` in the denormalised columns, so it surfaces in
-``GET /settings/history`` beside every other settings change. No side-channel
+``GET /api/v1/settings/history`` beside every other settings change. No side-channel
 report file.
 
 ANNOUNCED BEHAVIOUR CHANGE — read this before deploying
@@ -80,10 +80,10 @@ Write the platform row through the admin settings API. Exact route, exact
 keys, admin credentials (``require_admin_bypass``)::
 
     PUT /api/v1/settings/automation/webhook_allowed_hosts
-        {"value_text": "hooks.example.net,api.example.net"}
+        {"value_text": "hooks.example.net,api.example.net", "is_active": true}
 
     PUT /api/v1/settings/automation/webhook_allowed_domains
-        {"value_text": "example.net"}
+        {"value_text": "example.net", "is_active": true}
 
 The ``/api/v1`` prefix is load-bearing and is the whole route: ``app/main.py``
 mounts ``app.api.settings.router`` with ``prefix="/api/v1"`` directly, NOT
@@ -105,15 +105,12 @@ Setting ``WEBHOOK_ALLOWED_HOSTS`` / ``WEBHOOK_ALLOWED_DOMAINS`` in the process
 environment does NOT end this outage, and an earlier draft of this paragraph
 wrongly offered it as an alternative. The environment is a BOOTSTRAP source
 only: ``app/services/settings_seed.py`` reads it once through ``ensure_by_key``,
-which is create-if-missing, and it has long seeded every one of these keys with
-``os.getenv(<VAR>, "")`` — so the platform row already exists, empty value and
-all, on every deployed database. ``read_platform_webhook_ceiling`` consults
-``os.getenv`` only where ``resolve_value`` returned ``None``, and an existing
-row never returns ``None``. On an already-seeded database the environment
-fallback is unreachable, and changing the variable changes nothing. Do not
-re-add a runtime environment fallback to make the old sentence true; it would
-put a second, unaudited writer on a control whose whole purpose is that only
-the platform may set it.
+which is create-if-missing. On a database that has completed the normal seed,
+the platform row therefore already exists, empty value and all. The runtime
+reader never consults ``os.getenv``: changing a variable after bootstrap does
+nothing, and only the admin API changes the live ceiling. Do not add a runtime
+environment fallback; it would put a second, unaudited writer on a control
+whose whole purpose is that only the platform may set it.
 
 That second notice is deliberately NOT one per unconfigured key: a key with no
 organization rows and no ceiling is the ordinary unconfigured state of a
@@ -137,7 +134,7 @@ platform owns is a Python declaration indexed by
 ``app/services/setting_scopes.py``, deliberately not a column of the table it
 governs — a row that could change the rule is not a rule.
 
-Lossless in both directions, because no value is ever discarded, only
+No stored setting value is discarded in either direction; values are only
 reinterpreted. The rename collides only if an organization somehow already
 holds the narrowing key; the guard below aborts loudly rather than merging or
 skipping a row silently.
@@ -346,7 +343,7 @@ def _missing_ceiling_notice() -> str:
 
                 IF v_narrowed > 0 AND v_ceiling = 0 THEN
                     RAISE NOTICE
-                        'webhook SSRF policy: % organization row(s) now narrow %/%, but this deployment has NO platform row for it. The ceiling is NOT synthesised from them. Outbound webhooks stay denied for that key until an admin writes the platform row: PUT /api/v1/settings/automation/%, JSON body with a value_text field. The process environment cannot end this; it seeds the row once at first boot and is not read again.',
+                        'webhook SSRF policy: % organization row(s) now narrow %/%, but this deployment has NO active platform row for it. The ceiling is NOT synthesised from them. Outbound webhooks stay denied for that key until an admin writes and activates the platform row: PUT /api/v1/settings/automation/%, JSON body with value_text and is_active=true. Do not rely on the process environment: it is a bootstrap-only seed input and never overwrites an existing row.',
                         v_narrowed, '{_DOMAIN}', v_move.platform_key,
                         v_move.platform_key;
                 END IF;

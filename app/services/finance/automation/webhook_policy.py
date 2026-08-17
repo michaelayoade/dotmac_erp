@@ -54,7 +54,6 @@ counting the paths.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -70,20 +69,16 @@ logger = logging.getLogger(__name__)
 # (`tests/services/test_webhook_call_site.py` builds its reader guard from it),
 # because the last hand-copied list held four of the five.
 #
-# The second element is a process-environment name, and it is a BOOTSTRAP
-# source, not a live fallback. `settings_seed` reads it once under
-# create-if-missing semantics; `_setting` below reaches `os.getenv` only where
-# `resolve_value` returned None, which an existing row never does — and the
-# seed has long created all five rows, empty value and all. So on any seeded
-# database this branch is unreachable and the environment is not a recovery
-# path. It is kept for the un-seeded case (`db is None`, a fresh process before
-# first seed) only, and is never merged with an organization's value.
-PLATFORM_KEYS: tuple[tuple[str, str | None], ...] = (
-    ("webhook_allowed_hosts", "WEBHOOK_ALLOWED_HOSTS"),
-    ("webhook_allowed_domains", "WEBHOOK_ALLOWED_DOMAINS"),
-    ("webhook_allow_insecure", "WEBHOOK_ALLOW_INSECURE"),
-    ("webhook_allow_localhost", "WEBHOOK_ALLOW_LOCALHOST"),
-    ("webhook_max_timeout_seconds", "WEBHOOK_MAX_TIMEOUT_SECONDS"),
+# The process-environment names live only on the corresponding SettingSpecs,
+# where `settings_seed` consumes them once under create-if-missing semantics.
+# They are deliberately absent here: a request-path reader that consults them
+# would turn a bootstrap input into a second, unaudited live writer.
+PLATFORM_KEYS: tuple[str, ...] = (
+    "webhook_allowed_hosts",
+    "webhook_allowed_domains",
+    "webhook_allow_insecure",
+    "webhook_allow_localhost",
+    "webhook_max_timeout_seconds",
 )
 
 # The organization's optional narrowing. No environment fallback: a per-tenant
@@ -434,43 +429,37 @@ def read_platform_webhook_ceiling(db: Session | None) -> WebhookCeiling:
     read the platform row only because startup happened to have no ambient
     organization context, which is not the same thing.
 
-    The environment is consulted in THREE cases, not one: no session at all
-    (``db is None``), ``resolve_value`` returning ``None``, and the defensive
-    ``except`` below. It is the same platform-level source the seed reads, so
-    every one of them stays platform-scoped — no organization row can reach
-    it — but the second and third are worth stating because on a seeded
-    database they are effectively dead: ``settings_seed`` creates each of
-    these rows with ``os.getenv(<VAR>, "")`` under create-if-missing, and an
-    existing row never resolves to ``None``. An operator changing a variable
-    on a deployed database therefore changes nothing; the platform row is the
-    only live control. See the recovery section of migration
+    The environment is not consulted here. It is a bootstrap input consumed by
+    ``settings_seed`` only; once request handling begins, the stored platform
+    row is the only live control. With no session, or when a database read
+    fails, the result is the safe default: no permitted host and both network
+    relaxations disabled. See the recovery section of migration
     ``20260816_platform_owned_webhook_ssrf_policy``.
     """
 
-    def _setting(key: str, env: str | None) -> object | None:
-        if db is not None:
-            try:
-                value = resolve_value(
-                    db, SettingDomain.automation, key, organization_id=None
-                )
-            except Exception:  # pragma: no cover - defensive
-                logger.debug(
-                    "Falling back to the environment for automation/%s",
-                    key,
-                    exc_info=True,
-                )
-                value = None
-            if value is not None:
-                return value
-        return os.getenv(env) if env else None
+    def _setting(key: str) -> object | None:
+        if db is None:
+            return None
+        try:
+            return resolve_value(
+                db, SettingDomain.automation, key, organization_id=None
+            )
+        except Exception:  # pragma: no cover - defensive, fail closed
+            logger.debug(
+                "Using the deny-by-default webhook ceiling after the stored "
+                "automation/%s value could not be read",
+                key,
+                exc_info=True,
+            )
+            return None
 
     return WebhookCeiling(
-        allowed_hosts=_normalize_hosts(_setting(*PLATFORM_KEYS[0])),
-        allowed_domains=_normalize_domains(_setting(*PLATFORM_KEYS[1])),
-        allow_insecure=_coerce_bool(_setting(*PLATFORM_KEYS[2]), default=False),
-        allow_localhost=_coerce_bool(_setting(*PLATFORM_KEYS[3]), default=False),
+        allowed_hosts=_normalize_hosts(_setting(PLATFORM_KEYS[0])),
+        allowed_domains=_normalize_domains(_setting(PLATFORM_KEYS[1])),
+        allow_insecure=_coerce_bool(_setting(PLATFORM_KEYS[2]), default=False),
+        allow_localhost=_coerce_bool(_setting(PLATFORM_KEYS[3]), default=False),
         max_timeout_seconds=_coerce_float(
-            _setting(*PLATFORM_KEYS[4]), default=DEFAULT_MAX_TIMEOUT_SECONDS
+            _setting(PLATFORM_KEYS[4]), default=DEFAULT_MAX_TIMEOUT_SECONDS
         ),
     )
 

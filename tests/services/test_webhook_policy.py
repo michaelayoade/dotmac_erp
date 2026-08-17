@@ -396,19 +396,28 @@ def test_the_policy_object_carries_both_layers():
 
 
 class TestTheCeilingIsConfigured:
-    def test_an_unconfigured_ceiling_reports_itself_unconfigured(self, monkeypatch):
-        monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
-        monkeypatch.delenv("WEBHOOK_ALLOWED_DOMAINS", raising=False)
+    def test_an_unconfigured_ceiling_reports_itself_unconfigured(self):
+        assert read_platform_webhook_ceiling(None).is_configured is False
+
+    def test_process_environment_is_not_a_runtime_ceiling(self, monkeypatch):
+        monkeypatch.setenv("WEBHOOK_ALLOWED_HOSTS", "example.com")
+        monkeypatch.setenv("WEBHOOK_ALLOWED_DOMAINS", "example.net")
 
         assert read_platform_webhook_ceiling(None).is_configured is False
 
-    def test_a_domain_list_alone_configures_the_ceiling(self, monkeypatch):
-        monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
-        monkeypatch.setenv("WEBHOOK_ALLOWED_DOMAINS", "example.com")
+    def test_a_stored_read_failure_fails_closed_not_to_environment(self, monkeypatch):
+        monkeypatch.setenv("WEBHOOK_ALLOWED_HOSTS", "example.com")
 
-        ceiling = read_platform_webhook_ceiling(None)
+        def _read_fails(*args, **kwargs):
+            raise RuntimeError("db failed")
 
-        assert ceiling.is_configured is True
-        assert ceiling.permits_host("example.com") is True
-        assert ceiling.permits_host("api.example.com") is True
-        assert ceiling.permits_host("api.other.com") is False
+        monkeypatch.setattr(
+            "app.services.finance.automation.webhook_policy.resolve_value",
+            _read_fails,
+        )
+
+        ceiling = read_platform_webhook_ceiling(object())
+
+        assert ceiling.is_configured is False
+        assert ceiling.allow_insecure is False
+        assert ceiling.allow_localhost is False

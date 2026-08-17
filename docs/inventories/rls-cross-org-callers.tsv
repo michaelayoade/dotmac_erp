@@ -98,8 +98,8 @@ app/services/domain_settings.py	DomainSettings.ensure_by_key	allow_cross_org	1	n
 app/services/domain_settings.py	DomainSettings.get_by_key	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/domain_settings.py	DomainSettings.list	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/domain_settings.py	DomainSettings.upsert_by_key	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/domain_settings.py	_restore_target_organization	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/domain_settings.py	_restore_from_history	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
+app/services/domain_settings.py	_restore_target_organization	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/finance/banking/mono_sync.py	MonoSyncService._record_webhook_failure	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
 app/services/finance/banking/mono_sync.py	MonoSyncService.process_webhook	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
 app/services/finance/banking/mono_sync.py	MonoSyncService.sync_by_mono_account_id	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table

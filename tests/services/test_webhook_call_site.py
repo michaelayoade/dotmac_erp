@@ -24,6 +24,7 @@ this.
 from __future__ import annotations
 
 import ast
+import ipaddress
 import pathlib
 import uuid
 from unittest.mock import MagicMock, patch
@@ -48,7 +49,7 @@ NARROWED_HOST = "internal.example.com"
 # A public, non-private literal: `_is_private_address` must not be the reason a
 # target is refused, or a test meant to be about the allowlist would pass for
 # the wrong reason.
-_PUBLIC_IP = "203.0.113.10"
+_PUBLIC_IP = "8.8.8.8"
 
 
 @pytest.fixture(autouse=True)
@@ -79,6 +80,18 @@ def _resolve_every_host_to_one_public_address(monkeypatch):
         "socket.getaddrinfo",
         lambda *args, **kwargs: [(2, 1, 6, "", (_PUBLIC_IP, 443))],
     )
+
+
+def test_the_dns_fixture_address_is_not_itself_refused():
+    """A deny-all resolver makes every allowlist assertion vacuously pass."""
+    address = ipaddress.ip_address(_PUBLIC_IP)
+
+    assert address.is_private is False
+    assert address.is_loopback is False
+    assert address.is_link_local is False
+    assert address.is_multicast is False
+    assert address.is_reserved is False
+    assert address.is_unspecified is False
 
 
 @pytest.fixture()
@@ -327,7 +340,7 @@ class TestTheCallerArgumentIsNarrowingOnly:
 # Deriving is the only version of this guard that cannot drift: a sixth ceiling
 # key is scanned the moment it is declared, without anyone remembering to come
 # here.
-CEILING_KEY_LITERALS = frozenset(key for key, _env in webhook_policy.PLATFORM_KEYS)
+CEILING_KEY_LITERALS = frozenset(webhook_policy.PLATFORM_KEYS)
 
 # `platform_owned_keys()` is the WIDER registry — every `scope=PLATFORM` spec,
 # not just the webhook ceiling. Pinning the difference keeps a platform-owned
@@ -439,9 +452,7 @@ def test_the_derived_ceiling_set_is_not_vacuous():
         "the timeout ceiling bounds BOTH organization timeout channels "
         "(the setting and ServiceHook.handler_config); it is a ceiling key"
     )
-    assert CEILING_KEY_LITERALS == frozenset(
-        key for key, _env in webhook_policy.PLATFORM_KEYS
-    )
+    assert frozenset(webhook_policy.PLATFORM_KEYS) == CEILING_KEY_LITERALS
 
 
 def test_every_platform_owned_key_is_in_exactly_one_enumeration():
@@ -459,7 +470,7 @@ def test_every_platform_owned_key_is_in_exactly_one_enumeration():
         if domain == str(SettingDomain.automation)
     }
     assert automation, "no platform-owned keys registered — the check fails open"
-    assert CEILING_KEY_LITERALS <= automation, (
+    assert automation >= CEILING_KEY_LITERALS, (
         "a webhook ceiling key is not declared scope=PLATFORM, so an "
         "organization row for it would be accepted and would answer: "
         f"{sorted(CEILING_KEY_LITERALS - automation)}"

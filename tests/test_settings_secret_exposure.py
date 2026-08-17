@@ -12,6 +12,7 @@ the admin web surface requires an administrator.
 
 from datetime import datetime
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -101,7 +102,7 @@ class TestHistoryIsTenantScoped:
         entry = _history_entry(organization_id=uuid4())
 
         assert _can_read_history_entry(entry, auth) is False
-        assert _can_restore_history_entry(entry, auth) is False
+        assert _can_restore_history_entry(entry, auth, MagicMock()) is False
 
     def test_entry_from_the_callers_organization_is_owned(self):
         org = uuid4()
@@ -109,7 +110,7 @@ class TestHistoryIsTenantScoped:
         entry = _history_entry(organization_id=org)
 
         assert _can_read_history_entry(entry, auth) is True
-        assert _can_restore_history_entry(entry, auth) is True
+        assert _can_restore_history_entry(entry, auth, MagicMock()) is True
 
     def test_global_setting_is_readable(self):
         """Global settings carry a NULL organization_id and stay visible."""
@@ -126,24 +127,35 @@ class TestHistoryIsTenantScoped:
         permission; without this split a tenant admin could roll a
         platform-owned SSRF control back to any value it ever held.
         """
-        auth = {"organization_id": str(uuid4()), "roles": ["finance_manager"]}
+        person_id = uuid4()
+        auth = {"organization_id": str(uuid4()), "person_id": str(person_id)}
         entry = _history_entry(organization_id=None)
+        db = MagicMock()
 
         assert _can_read_history_entry(entry, auth) is True
-        assert _can_restore_history_entry(entry, auth) is False
+        with patch(
+            "app.api.settings.has_live_admin_grant", return_value=False
+        ) as grant:
+            assert _can_restore_history_entry(entry, auth, db) is False
+        grant.assert_called_once_with(db, str(person_id))
 
     def test_global_setting_is_restorable_by_a_platform_administrator(self):
-        auth = {"organization_id": str(uuid4()), "roles": ["admin"]}
+        person_id = uuid4()
+        auth = {"organization_id": str(uuid4()), "person_id": str(person_id)}
         entry = _history_entry(organization_id=None)
+        db = MagicMock()
 
-        assert _can_restore_history_entry(entry, auth) is True
+        with patch("app.api.settings.has_live_admin_grant", return_value=True) as grant:
+            assert _can_restore_history_entry(entry, auth, db) is True
+        grant.assert_called_once_with(db, str(person_id))
 
-    def test_missing_roles_key_denies_rather_than_raises(self):
-        """The auth dict is built elsewhere; absent `roles` must fail closed."""
+    def test_missing_person_id_denies_rather_than_raises(self):
+        """An unresolved actor cannot hold the live platform grant."""
         entry = _history_entry(organization_id=None)
+        db = MagicMock()
 
-        assert _can_restore_history_entry(entry, {}) is False
-        assert _can_restore_history_entry(entry, {"roles": None}) is False
+        assert _can_restore_history_entry(entry, {}, db) is False
+        assert _can_restore_history_entry(entry, {"person_id": None}, db) is False
 
 
 class TestAdminSurfaceRequiresAdmin:

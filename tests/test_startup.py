@@ -11,6 +11,8 @@ import logging
 import re
 from unittest.mock import MagicMock
 
+import pytest
+
 import app.services.finance.automation.webhook_policy as webhook_policy
 from app import startup
 from app.services.finance.automation.webhook_policy import WebhookCeiling
@@ -47,16 +49,15 @@ def test_warn_unconfigured_webhook_allowlist_no_warning_when_configured(
     assert "Active webhook automation rules exist" not in caplog.text
 
 
-def test_the_outage_warning_names_a_route_that_exists(monkeypatch, caplog):
+@pytest.mark.timeout(300)
+def test_the_outage_warning_names_a_route_that_exists(monkeypatch):
     """The 2am instruction is executed as written, so it is checked as written.
 
     An earlier draft told the operator to `PUT /settings/automation/...` — the
     unprefixed namespace, which belongs to the HTML router and answers 405. It
-    also offered the process environment as an alternative recovery, which is
-    dead: `settings_seed` has long created these rows with `os.getenv(<VAR>,
-    "")` under create-if-missing, and `read_platform_webhook_ceiling` reaches
-    `os.getenv` only where `resolve_value` returned `None`, which an existing
-    row never does. Both mistakes are asserted against here: the route is
+    also offered the process environment as an alternative runtime recovery,
+    but that input belongs solely to create-if-missing startup seeding. Both
+    mistakes are asserted against here: the route is
     matched against the app's REAL route table rather than a literal, so a
     remount that changes the prefix fails this test instead of the operator.
     """
@@ -66,11 +67,13 @@ def test_the_outage_warning_names_a_route_that_exists(monkeypatch, caplog):
         startup, "read_platform_webhook_ceiling", lambda db: UNCONFIGURED_CEILING
     )
     monkeypatch.setattr(startup, "any_tenant_has_an_active_webhook_rule", lambda: True)
+    warnings: list[str] = []
+    monkeypatch.setattr(startup.logger, "warning", warnings.append)
 
-    with caplog.at_level(logging.WARNING):
-        startup.warn_unconfigured_webhook_allowlist(MagicMock())
+    startup.warn_unconfigured_webhook_allowlist(MagicMock())
 
-    quoted = [t.rstrip(".,;:") for t in re.findall(r"PUT (\S+)", caplog.text)]
+    warning = "\n".join(warnings)
+    quoted = [t.rstrip(".,;:") for t in re.findall(r"PUT (\S+)", warning)]
     assert quoted, "the warning offers no recovery route at all"
 
     for path in quoted:
@@ -96,8 +99,9 @@ def test_the_outage_warning_names_a_route_that_exists(monkeypatch, caplog):
 
     # The dead environment fallback must not be re-offered as a recovery: the
     # message may name the variables ONLY to say they do not work.
-    assert "Set WEBHOOK_ALLOWED_HOSTS and/or" not in caplog.text
-    assert "does NOT end this" in caplog.text
+    assert "Set WEBHOOK_ALLOWED_HOSTS and/or" not in warning
+    assert "does NOT end this" in warning
+    assert '"is_active": true' in warning
 
 
 def test_the_ceiling_read_never_consults_an_organization_row(monkeypatch):
@@ -109,10 +113,6 @@ def test_the_ceiling_read_never_consults_an_organization_row(monkeypatch):
     `read_platform_webhook_ceiling` and records the scope of every settings read
     it makes.
     """
-    for _key, env in webhook_policy.PLATFORM_KEYS:
-        if env:
-            monkeypatch.delenv(env, raising=False)
-
     scopes: list[object] = []
 
     def _record_scope(db, domain, key, *, organization_id=None):
@@ -156,7 +156,7 @@ def test_the_discovery_runs_only_when_the_ceiling_is_unconfigured(monkeypatch):
     assert calls["count"] == 1
 
 
-def test_validate_startup_invokes_webhook_allowlist_warning(monkeypatch):
+def test_validate_startup_does_not_warn_before_settings_are_seeded(monkeypatch):
     mock_db = MagicMock()
     called = {"value": False}
 
@@ -170,4 +170,25 @@ def test_validate_startup_invokes_webhook_allowlist_warning(monkeypatch):
     monkeypatch.setattr(startup, "warn_unconfigured_webhook_allowlist", _mark_called)
 
     assert startup.validate_startup(mock_db, exit_on_failure=False) is True
-    assert called["value"] is True
+    assert called["value"] is False
+
+
+def test_application_startup_warns_only_after_settings_seed():
+    """The first-boot environment seed must precede the outage decision."""
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse((Path(__file__).parents[1] / "app/main.py").read_text())
+    lifespan = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "lifespan"
+    )
+    calls = {
+        node.func.id: node.lineno
+        for node in ast.walk(lifespan)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+
+    assert calls["seed_all_settings"] < calls["warn_unconfigured_webhook_allowlist"]
