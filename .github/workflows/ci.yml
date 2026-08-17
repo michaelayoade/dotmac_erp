@@ -16,6 +16,10 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
+  # Lock generation is not stable across Poetry releases. The current lock was
+  # produced by 2.2.0; 2.4.1 is the accepted exact generator for its next
+  # dependency update, and every CI reader is pinned to it now.
+  POETRY_VERSION: "2.4.1"
   DATABASE_URL: "sqlite:///./test.db"
   SECRET_KEY: "ci-test-secret-key-not-for-production"  # pragma: allowlist secret
   REDIS_URL: "redis://localhost:6379/0"
@@ -39,8 +43,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
@@ -53,11 +58,14 @@ jobs:
       - name: Install dependencies
         run: poetry install --only dev --no-interaction
 
+      # Both delegated to the Makefile so this job and `make check` cannot ask
+      # about different roots. LINT_ROOTS/FORMAT_ROOTS are defined in exactly
+      # one place.
       - name: Ruff check
-        run: poetry run ruff check app/
+        run: make lint
 
       - name: Ruff format check
-        run: poetry run ruff format --check app/
+        run: make format-check
 
       - name: Session-context guard (no raw SessionLocal() in tasks)
         run: python3 scripts/check_session_context.py
@@ -75,8 +83,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
@@ -105,8 +114,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
@@ -142,8 +152,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 
@@ -172,8 +183,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - uses: pre-commit/action@v3.0.1
-        env:
-          SKIP: semgrep  # semgrep needs poetry; covered by Security Scan job
 
   # This repo's detect-private-key hook is currently clean — no exclude list,
   # and pre-commit does run in CI. This job exists because that state is one
@@ -183,9 +192,9 @@ jobs:
   # removed. It stayed public for five months.
   #
   # Two off switches apply to the job above — an `exclude:` in
-  # .pre-commit-config.yaml, and the SKIP env var already in use on the line
-  # above for semgrep. Both are edits a hurried change can make without
-  # anyone reading them as "disable the secret guard".
+  # .pre-commit-config.yaml, and a newly introduced SKIP env var. Both are
+  # edits a hurried change can make without anyone reading them as "disable
+  # the secret guard".
   #
   # So this check is separate and keys on content, not paths: a PEM header
   # with no encoded body (fixtures, form hints, docs) passes; real key
@@ -388,8 +397,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
+          version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
           virtualenvs-in-project: true
 

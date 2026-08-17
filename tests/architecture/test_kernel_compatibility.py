@@ -402,6 +402,7 @@ def test_fake_licence_signer_works_via_erps_own_cryptography(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.timeout(300)
 def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> None:
     """Importing ``app.main`` loads no kernel module beyond the reviewed closure.
 
@@ -415,6 +416,10 @@ def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> N
     ``test_kernel_import_boundary.py``; this subprocess canary still proves
     app bootstrap adds no new DB/session/messaging/deps module beyond that
     reviewed closure.
+
+    The matching pytest-timeout marker is intentional: the suite-wide
+    60-second default must not kill the parent before this canary's explicit
+    300-second subprocess contract can report its own result.
 
     Runs in a fresh subprocess (mirroring the import bootstrap of
     ``scripts/update_openapi_contract.py``: same env pins, ``tests.conftest``

@@ -1,7 +1,35 @@
-.PHONY: help test lint type-check format security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
+.PHONY: help test lint type-check format format-check security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
 
 DB_CONTAINER ?= dotmac_erp_db
 DB_NAME ?= dotmac_erp
+
+# The roots ruff formats. `format` (writes) and `format-check` (verifies) must
+# read the SAME list, or the gate can pass over a root the writer never
+# touched.
+#
+# That list is the WHOLE REPOSITORY, and it has to be, because CI's pre-commit
+# job is the widest formatter gate this repo has: `pre-commit/action` runs
+# `--all-files`, and the ruff-format hook declares no `files:` and no
+# `exclude:`, so it format-checks every tracked .py — tests/, scripts/,
+# alembic/, tools/, .claude/hooks/ and gunicorn.conf.py included. While this
+# read `app/`, `make check` was a strictly weaker question than CI's, and a
+# tree could pass every local gate and still be rejected on push. It was: eight
+# blocks under tests/ collapsed to <= 88 columns and ruff rejoined them.
+#
+# `.` rather than an enumeration, so a new top-level Python directory is
+# covered the day it is added instead of the day someone remembers this line.
+# ruff honours .gitignore and its own default excludes, so `.` does not mean
+# .venv or node_modules. If .seabone/ ever carries Python, it needs a
+# [tool.ruff] extend-exclude entry to match pre-commit's `exclude:` — the
+# exclusion belongs in ruff's own config, not in a second root list here.
+FORMAT_ROOTS ?= .
+
+# The roots ruff LINTS, same argument and the same defect: pre-commit's
+# `- id: ruff` hook is equally unscoped, so CI already lints every tracked .py
+# while `make lint` asked about app/ alone. pyproject's per-file-ignores for
+# tests/, alembic/, scripts/, tools/ and .claude/hooks/ exist precisely because
+# ruff reaches them.
+LINT_ROOTS ?= .
 
 # Default target
 help: ## Show this help
@@ -10,11 +38,14 @@ help: ## Show this help
 # ─── Quality ──────────────────────────────────────────────
 
 lint: ## Run ruff linter
-	poetry run ruff check app/
+	poetry run ruff check $(LINT_ROOTS)
 
 format: ## Format code with ruff
-	poetry run ruff format app/
-	poetry run ruff check --fix app/
+	poetry run ruff format $(FORMAT_ROOTS)
+	poetry run ruff check --fix $(LINT_ROOTS)
+
+format-check: ## Verify formatting without writing (same check CI runs)
+	poetry run ruff format --check $(FORMAT_ROOTS)
 
 type-check: ## Run mypy type checker
 	poetry run mypy app/ --ignore-missing-imports
@@ -23,9 +54,9 @@ security: ## Run bandit security scan
 	poetry run bandit -r app/ -c pyproject.toml -q
 
 semgrep: ## Run semgrep custom rules (DotMac anti-patterns)
-	poetry run semgrep --config .semgrep/ app/ --exclude='tests/' --exclude='alembic/' --exclude='scripts/' --no-git-ignore
+	poetry run pre-commit run semgrep --all-files
 
-check: lint type-check security semgrep ## Run all quality checks (lint + type-check + security + semgrep)
+check: lint format-check type-check security semgrep ## Run all quality checks (lint + format + type-check + security + semgrep)
 
 # ─── Testing ──────────────────────────────────────────────
 
