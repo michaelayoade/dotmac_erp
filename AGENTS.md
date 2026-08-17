@@ -47,3 +47,8 @@ Follow those files as the authoritative guidance when implementing changes or re
   revision and be required on protected `main`.
 - Mutable tags/branches, copied rules, candidate mode, or a missing required
   check are not substitutes for the Governance-owned enforcement path.
+- The schema-9 external-connector ratchet is transitional migration evidence,
+  not runtime isolation. Its six baselines and conservation ledger match
+  `docs/external-connector-surface.md`; they only shrink with deletion or a
+  proved cutover behind Dotmac Integrator. The permanent boundary is
+  Integrator-only connector packages, secrets, ingress, and egress.
