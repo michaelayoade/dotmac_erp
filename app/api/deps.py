@@ -5,8 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.db.session_context import prime_session
-from app.rls import set_current_organization_sync
+from app.db.session_context import tenant_scope_for_session
 from app.services.auth_dependencies import (
     optional_web_session,
     require_admin_bypass,
@@ -103,10 +102,9 @@ def get_db_with_org(
 
     db = SessionLocal()
     try:
-        prime_session(db, organization_id)
-        set_current_organization_sync(db, organization_id)
-        yield db
-        db.commit()
+        with tenant_scope_for_session(db, organization_id):
+            yield db
+            db.commit()
     except Exception:
         db.rollback()
         raise

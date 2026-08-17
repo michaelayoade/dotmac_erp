@@ -321,16 +321,8 @@ def _friendly_redirect_error_message(error_value: str, status_code: int) -> str:
     return error_value
 
 
-def _is_no_response_runtime_error(
-    exc: BaseException, _seen: set[int] | None = None
-) -> bool:
-    """Return True when Starlette surfaces a client-disconnect style response gap."""
-    if _seen is None:
-        _seen = set()
-    if id(exc) in _seen:
-        return False
-    _seen.add(id(exc))
-
+def _is_no_response_runtime_error(exc: BaseException) -> bool:
+    """Return True only when the whole failure is a response-stream disconnect."""
     if isinstance(exc, RuntimeError) and str(exc) == "No response returned.":
         return True
 
@@ -346,21 +338,14 @@ def _is_no_response_runtime_error(
 
     children = getattr(exc, "exceptions", None)
     if children:
-        for child in children:
-            if isinstance(child, BaseException) and _is_no_response_runtime_error(
-                child, _seen
-            ):
-                return True
-
-    cause = getattr(exc, "__cause__", None)
-    if isinstance(cause, BaseException):
-        if _is_no_response_runtime_error(cause, _seen):
-            return True
-
-    context = getattr(exc, "__context__", None)
-    if isinstance(context, BaseException):
-        if _is_no_response_runtime_error(context, _seen):
-            return True
+        # BaseHTTPMiddleware can combine a real application error with an
+        # EndOfStream. Treating "any disconnect-shaped child" as a disconnect
+        # swallowed the real exception and returned an empty 204. A group is a
+        # disconnect only when every child is one.
+        return all(
+            isinstance(child, BaseException) and _is_no_response_runtime_error(child)
+            for child in children
+        )
 
     return False
 
