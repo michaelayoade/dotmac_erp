@@ -32,32 +32,59 @@ def test_get_db_with_org_primes_session_info():
 
 
 def test_get_db_with_org_sets_postgres_rls_guc(monkeypatch):
-    """The dependency must call set_current_organization_sync on the
-    *same* session it yields. This is the core Bug A fix — without it,
-    RLS-protected SELECTs on the route's session return zero rows.
-    """
+    """The dependency must arm the RLS GUC on the yielded session."""
+    from sqlalchemy import text
+
     from app.api import deps as api_deps
+    from app.db import session_context
 
     org_id = uuid4()
     auth = {"organization_id": str(org_id), "person_id": str(uuid4())}
     calls: list[tuple[object, object]] = []
 
     monkeypatch.setattr(
-        api_deps,
-        "set_current_organization_sync",
-        lambda db, org: calls.append((db, org)),
+        session_context,
+        "set_current_organization_on_connection",
+        lambda connection, org: calls.append((connection, org)),
     )
 
     gen = api_deps.get_db_with_org(auth=auth)
     db = next(gen)
     try:
+        db.execute(text("SELECT 1"))
         assert len(calls) == 1
-        called_db, called_org = calls[0]
-        assert called_db is db, (
-            "GUC must be set on the same session that's yielded — "
-            "calling it on a different session is the original Bug A"
-        )
+        _, called_org = calls[0]
         assert called_org == org_id
+    finally:
+        try:
+            next(gen)
+        except StopIteration:
+            pass
+
+
+def test_get_db_with_org_rearms_rls_guc_after_commit(monkeypatch):
+    """A route-level commit must not un-scope subsequent ORM reads."""
+    from sqlalchemy import text
+
+    from app.api import deps as api_deps
+    from app.db import session_context
+
+    org_id = uuid4()
+    auth = {"organization_id": str(org_id), "person_id": str(uuid4())}
+    calls: list[object] = []
+    monkeypatch.setattr(
+        session_context,
+        "set_current_organization_on_connection",
+        lambda connection, org: calls.append(org),
+    )
+
+    gen = api_deps.get_db_with_org(auth=auth)
+    db = next(gen)
+    try:
+        db.execute(text("SELECT 1"))
+        db.commit()
+        db.execute(text("SELECT 1"))
+        assert calls == [org_id, org_id]
     finally:
         try:
             next(gen)
@@ -89,12 +116,17 @@ def test_get_db_with_org_auto_commits_on_yield_completion(monkeypatch):
     """Preserves the auto-commit semantics of the per-module ``get_db``
     that this dependency replaces. Migrations would silently change
     route semantics if commit didn't run after the yield."""
+    from contextlib import nullcontext
+
     from app.api import deps as api_deps
 
     fake_session = MagicMock()
     monkeypatch.setattr(api_deps, "SessionLocal", lambda: fake_session)
-    monkeypatch.setattr(api_deps, "prime_session", lambda db, org: None)
-    monkeypatch.setattr(api_deps, "set_current_organization_sync", lambda db, org: None)
+    monkeypatch.setattr(
+        api_deps,
+        "tenant_scope_for_session",
+        lambda db, org: nullcontext(db),
+    )
 
     auth = {"organization_id": str(uuid4()), "person_id": str(uuid4())}
     gen = api_deps.get_db_with_org(auth=auth)
@@ -112,12 +144,17 @@ def test_get_db_with_org_auto_commits_on_yield_completion(monkeypatch):
 def test_get_db_with_org_rolls_back_on_exception(monkeypatch):
     """Mirrors the rollback-on-exception behavior of the per-module
     ``get_db`` it replaces. The migration must not change this."""
+    from contextlib import nullcontext
+
     from app.api import deps as api_deps
 
     fake_session = MagicMock()
     monkeypatch.setattr(api_deps, "SessionLocal", lambda: fake_session)
-    monkeypatch.setattr(api_deps, "prime_session", lambda db, org: None)
-    monkeypatch.setattr(api_deps, "set_current_organization_sync", lambda db, org: None)
+    monkeypatch.setattr(
+        api_deps,
+        "tenant_scope_for_session",
+        lambda db, org: nullcontext(db),
+    )
 
     auth = {"organization_id": str(uuid4()), "person_id": str(uuid4())}
     gen = api_deps.get_db_with_org(auth=auth)
