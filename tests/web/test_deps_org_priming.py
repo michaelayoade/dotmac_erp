@@ -29,12 +29,10 @@ def test_get_db_for_org_primes_session_with_auth_org_id():
 
 
 def test_get_db_for_org_sets_postgres_rls_guc(monkeypatch):
-    """The dependency must call set_current_organization_sync so the
-    PostgreSQL GUC (app.current_organization_id) is set on the *same*
-    session it yields. Without this, RLS-protected queries return empty
-    rows and audit_log INSERTs (pre Bug A's per-row pin) tripped
-    InsufficientPrivilege.
-    """
+    """The dependency must arm the PostgreSQL GUC on its session."""
+    from sqlalchemy import text
+
+    from app.db import session_context
     from app.web import deps as web_deps
 
     org_id = uuid4()
@@ -42,21 +40,48 @@ def test_get_db_for_org_sets_postgres_rls_guc(monkeypatch):
     calls: list[tuple[object, object]] = []
 
     monkeypatch.setattr(
-        web_deps,
-        "set_current_organization_sync",
-        lambda db, org: calls.append((db, org)),
+        session_context,
+        "set_current_organization_on_connection",
+        lambda connection, org: calls.append((connection, org)),
     )
 
     gen = web_deps.get_db_for_org(auth=auth)
     db = next(gen)
     try:
-        assert len(calls) == 1, "set_current_organization_sync must run once"
-        called_db, called_org = calls[0]
-        assert called_db is db, (
-            "GUC must be set on the same session that's yielded — "
-            "calling it on a different session is the original Bug A pattern"
-        )
+        db.execute(text("SELECT 1"))
+        assert len(calls) == 1
+        _, called_org = calls[0]
         assert called_org == org_id
+    finally:
+        try:
+            next(gen)
+        except StopIteration:
+            pass
+
+
+def test_get_db_for_org_rearms_postgres_rls_guc_after_commit(monkeypatch):
+    """Payment-style commit-and-continue keeps database tenant scope."""
+    from sqlalchemy import text
+
+    from app.db import session_context
+    from app.web import deps as web_deps
+
+    org_id = uuid4()
+    auth = MagicMock(organization_id=org_id)
+    calls: list[object] = []
+    monkeypatch.setattr(
+        session_context,
+        "set_current_organization_on_connection",
+        lambda connection, org: calls.append(org),
+    )
+
+    gen = web_deps.get_db_for_org(auth=auth)
+    db = next(gen)
+    try:
+        db.execute(text("SELECT 1"))
+        db.commit()
+        db.execute(text("SELECT 1"))
+        assert calls == [org_id, org_id]
     finally:
         try:
             next(gen)
@@ -86,14 +111,9 @@ def test_get_db_for_org_raises_when_no_org_context(monkeypatch):
     from app.web import deps as web_deps
 
     auth = MagicMock(organization_id=None)
-    calls: list[tuple[object, object]] = []
     sessions_opened: list[object] = []
-
-    monkeypatch.setattr(
-        web_deps,
-        "set_current_organization_sync",
-        lambda db, org: calls.append((db, org)),
-    )
+    scope = MagicMock()
+    monkeypatch.setattr(web_deps, "tenant_scope_for_session", scope)
 
     real_sessionlocal = web_deps.SessionLocal
 
@@ -110,7 +130,7 @@ def test_get_db_for_org_raises_when_no_org_context(monkeypatch):
 
     assert excinfo.value.status_code == 403
     assert "Organization" in excinfo.value.detail
-    assert calls == [], "GUC setter must not run when org is missing"
+    scope.assert_not_called()
     assert sessions_opened == [], (
         "No session should be opened before the guard fires — "
         "otherwise the finally-block would try to close a session that "
