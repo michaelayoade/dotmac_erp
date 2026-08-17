@@ -21,7 +21,7 @@ hook said 0.15.0, and work landed that had been formatted by a *system* ruff
 0.13.0 that never consulted any of them. Nothing in the gate noticed, because
 `make check` ran no format check at all.
 
-Two independent invariants are asserted here:
+Five independent invariants are asserted here:
 
   1. **Coherence.** The declaration is an exact version, and the lock and the
      pre-commit ``rev`` name that same version.
@@ -40,6 +40,14 @@ Two independent invariants are asserted here:
      on the step or on its whole job would satisfy. That last switch is not
      hypothetical here: ci.yml's `integration-test` job carries a comment
      recording that it once silenced every PostgreSQL-only check at once.
+  4. **Installability.** Every tool reached by ``make check`` through
+     ``poetry run`` is declared in the dev dependency group. A command in the
+     Makefile is not part of a reproducible toolchain when a clean checkout has
+     no package that provides it.
+  5. **Lock authority.** Every CI installation of Poetry names one accepted
+     exact version, including the action revision that installs it. The current
+     lock's 2.2.0 header is legacy evidence, not a request to float: 2.4.1 is
+     the accepted generator for its next dependency update.
 
 Everything below is a pure function over supplied text, with the real-file
 tests as thin callers. That is what lets the sensitivity proof at the bottom
@@ -69,11 +77,14 @@ PRE_COMMIT = ROOT / ".pre-commit-config.yaml"
 MAKEFILE = ROOT / "Makefile"
 WORKFLOW_DIR = ROOT / ".github/workflows"
 
-# Pre-commit hook ids whose whole job is to fail on formatter drift. Skipping
-# one is indistinguishable from deleting the gate, so `SKIP:` may not name them.
-GUARDED_HOOK_IDS = frozenset({"ruff", "ruff-format"})
+# Required checks whose skip is indistinguishable from deleting their gate.
+REQUIRED_PRE_COMMIT_HOOK_IDS = frozenset({"ruff", "ruff-format", "semgrep"})
 
 RUFF_PRE_COMMIT_REPO = "astral-sh/ruff-pre-commit"
+SEMGREP_PRE_COMMIT_REPO = "semgrep/pre-commit"
+SEMGREP_PRE_COMMIT_SHA = "c33ffee4d59183b43c9dac34963d1d74d430028e"
+POETRY_VERSION = "2.4.1"
+POETRY_INSTALL_ACTION_SHA = "a783c322200f0519c7926aa6faa857c4e23e9263"
 
 # An exact pin: three numeric components and nothing else. Anything carrying a
 # caret, tilde, inequality, wildcard or comma is a RANGE, and a range is what
@@ -131,6 +142,33 @@ def pre_commit_ruff_rev(pre_commit_text: str) -> str | None:
                 rev = line.split(":", 1)[1].strip().strip("\"'")
                 return rev[1:] if rev.startswith("v") else rev
     return None
+
+
+def pre_commit_repo_rev(pre_commit_text: str, repo_suffix: str) -> str | None:
+    """The raw revision of one hosted pre-commit repository."""
+    current_repo: str | None = None
+    for raw in pre_commit_text.splitlines():
+        line = raw.strip().lstrip("-").strip()
+        if line.startswith("repo:"):
+            current_repo = line.split(":", 1)[1].strip().strip("\"'")
+        elif line.startswith("rev:") and current_repo is not None:
+            if current_repo.rstrip("/").endswith(repo_suffix):
+                return line.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
+    return None
+
+
+def pre_commit_hook_ids(pre_commit_text: str, repo_suffix: str) -> set[str]:
+    """Hook ids declared beneath one hosted pre-commit repository."""
+    current_repo: str | None = None
+    found: set[str] = set()
+    for raw in pre_commit_text.splitlines():
+        line = raw.strip().lstrip("-").strip()
+        if line.startswith("repo:"):
+            current_repo = line.split(":", 1)[1].strip().strip("\"'")
+        elif line.startswith("id:") and current_repo is not None:
+            if current_repo.rstrip("/").endswith(repo_suffix):
+                found.add(line.split(":", 1)[1].split("#", 1)[0].strip())
+    return found
 
 
 def coherence_failures(
@@ -195,6 +233,26 @@ def make_target_prerequisites(makefile_text: str, target: str) -> list[str]:
         return []
     body = match.group(1).split("##", 1)[0]
     return body.split()
+
+
+def poetry_tools_for_make_target(makefile_text: str, target: str) -> set[str]:
+    """Executables invoked through ``poetry run`` by one Make target."""
+    pattern = re.compile(
+        rf"^{re.escape(target)}:[^\n]*\n((?:\t[^\n]*(?:\n|$))*)",
+        re.MULTILINE,
+    )
+    match = pattern.search(makefile_text)
+    if match is None:
+        return set()
+    return set(re.findall(r"\bpoetry\s+run\s+([\w-]+)", match.group(1)))
+
+
+def declared_dev_dependencies(pyproject_text: str) -> set[str]:
+    """Names Poetry installs for the development/checking environment."""
+    data = tomllib.loads(pyproject_text)
+    groups = data.get("tool", {}).get("poetry", {}).get("group", {})
+    dependencies = groups.get("dev", {}).get("dependencies", {})
+    return set(dependencies) if isinstance(dependencies, dict) else set()
 
 
 _RUN_KEY = re.compile(r"^run:\s*(.*)$")
@@ -269,6 +327,59 @@ def _mapping_region(lines: list[str], index: int, key_column: int) -> tuple[int,
             break
         end += 1
     return start, end
+
+
+def workflow_poetry_installer_versions(workflow_text: str) -> list[str | None]:
+    """The requested Poetry version of every live install-poetry step.
+
+    ``None`` means the action was asked to choose its own version. Comments do
+    not count as steps, and each ``version:`` must be a sibling input in the
+    same sequence-item mapping as the matching ``uses:`` line.
+    """
+    lines = workflow_text.splitlines()
+    versions: list[str | None] = []
+    for index, raw in enumerate(lines):
+        _block, key, content = _yaml_line(raw)
+        if _is_blank_or_comment(content):
+            continue
+        if not re.fullmatch(r"uses:\s*snok/install-poetry@[^\s#]+(?:\s+#.*)?", content):
+            continue
+        start, end = _mapping_region(lines, index, key)
+        version: str | None = None
+        for with_index in range(start, end):
+            _with_block, with_key, with_content = _yaml_line(lines[with_index])
+            if with_key != key or with_content != "with:":
+                continue
+            for candidate in lines[with_index + 1 : end]:
+                _candidate_block, candidate_key, candidate_content = _yaml_line(
+                    candidate
+                )
+                if _is_blank_or_comment(candidate_content):
+                    continue
+                if candidate_key <= with_key:
+                    break
+                match = re.fullmatch(r"version:\s*(.+?)\s*", candidate_content)
+                if match is not None:
+                    version = match.group(1).strip().strip("\"'")
+                    break
+            break
+        versions.append(version)
+    return versions
+
+
+def workflow_poetry_installer_revisions(workflow_text: str) -> list[str]:
+    """Action revisions of every live install-poetry step."""
+    revisions: list[str] = []
+    for raw in workflow_text.splitlines():
+        _block, _key, content = _yaml_line(raw)
+        if _is_blank_or_comment(content):
+            continue
+        match = re.fullmatch(
+            r"uses:\s*snok/install-poetry@([^\s#]+)(?:\s+#.*)?", content
+        )
+        if match is not None:
+            revisions.append(match.group(1))
+    return revisions
 
 
 def _swallowed_lines(lines: list[str]) -> set[int]:
@@ -448,6 +559,24 @@ def test_make_check_runs_the_format_check() -> None:
     assert "format-check:" in makefile, "no format-check target defined"
 
 
+def test_make_check_tools_are_declared_dev_dependencies() -> None:
+    """A prescribed command must be installable from the checked-in manifest."""
+    makefile = MAKEFILE.read_text()
+    targets = make_target_prerequisites(makefile, "check")
+    tools = {
+        tool
+        for target in targets
+        for tool in poetry_tools_for_make_target(makefile, target)
+    }
+    assert tools, "make check reaches no `poetry run` tools, so this proved nothing"
+    declared = declared_dev_dependencies(PYPROJECT.read_text())
+    missing = tools - declared
+    assert missing == set(), (
+        "make check executes tools a clean `poetry install` does not provide: "
+        f"{sorted(missing)}"
+    )
+
+
 def test_no_makefile_ruff_escapes_the_lock() -> None:
     offenders = bare_ruff_invocations(MAKEFILE.read_text())
     assert offenders == [], (
@@ -459,6 +588,67 @@ def test_no_makefile_ruff_escapes_the_lock() -> None:
 def test_the_workflow_family_is_not_empty() -> None:
     """A glob that matches nothing passes every check below for free."""
     assert workflow_files(), f"no workflows found under {WORKFLOW_DIR}"
+
+
+def test_every_ci_poetry_installer_uses_the_accepted_exact_version() -> None:
+    """Lock-generating tooling is part of the checked-in build contract."""
+    installers = {
+        path.name: workflow_poetry_installer_versions(path.read_text())
+        for path in workflow_files()
+    }
+    installers = {name: versions for name, versions in installers.items() if versions}
+    assert installers, "no workflow installs Poetry, so this proved nothing"
+    expected = "${{ env.POETRY_VERSION }}"
+    wrong = {
+        name: versions
+        for name, versions in installers.items()
+        if any(version != expected for version in versions)
+    }
+    assert wrong == {}, (
+        "every install-poetry step must use the repository's accepted "
+        f"Poetry {POETRY_VERSION} pin through {expected}: {wrong}"
+    )
+    revisions = {
+        path.name: workflow_poetry_installer_revisions(path.read_text())
+        for path in workflow_files()
+        if workflow_poetry_installer_revisions(path.read_text())
+    }
+    floating = {
+        name: refs
+        for name, refs in revisions.items()
+        if any(ref != POETRY_INSTALL_ACTION_SHA for ref in refs)
+    }
+    assert floating == {}, (
+        f"the Poetry installer itself must be immutable, not a mutable tag: {floating}"
+    )
+    for path in workflow_files():
+        if path.name not in installers:
+            continue
+        match = re.search(
+            r'^  POETRY_VERSION:\s*["\']?([^"\'\s#]+)["\']?(?:\s*#.*)?$',
+            path.read_text(),
+            re.MULTILINE,
+        )
+        assert match is not None, f"{path.name} declares no workflow Poetry pin"
+        assert match.group(1) == POETRY_VERSION, (
+            f"{path.name} pins Poetry {match.group(1)}, expected {POETRY_VERSION}"
+        )
+
+
+def test_semgrep_is_an_exact_isolated_required_hook() -> None:
+    """Semgrep cannot share ERP's older OpenTelemetry runtime environment."""
+    config = PRE_COMMIT.read_text()
+    assert (
+        pre_commit_repo_rev(config, SEMGREP_PRE_COMMIT_REPO) == SEMGREP_PRE_COMMIT_SHA
+    )
+    assert "semgrep" in pre_commit_hook_ids(config, SEMGREP_PRE_COMMIT_REPO)
+    assert all(
+        not re.search(r"(?:^|\s)semgrep(?:\s|$)", entry)
+        for entry in local_hook_entries(config)
+    ), "semgrep must not run from ERP's dependency environment"
+    assert poetry_tools_for_make_target(MAKEFILE.read_text(), "semgrep") == {
+        "pre-commit"
+    }
 
 
 def test_no_workflow_ruff_escapes_the_lock() -> None:
@@ -491,20 +681,21 @@ def test_no_pre_commit_local_hook_escapes_the_lock() -> None:
     )
 
 
-def test_no_workflow_skips_a_formatter_hook() -> None:
+def test_no_workflow_skips_a_required_hook() -> None:
     """`SKIP:` is an off switch with no reader. Give it one.
 
-    ci.yml already sets `SKIP: semgrep`. Appending `,ruff-format` is a
-    one-token edit that disables the only formatter check covering tests/ and
-    scripts/, and nothing anywhere would have noticed.
+    A one-token addition can disable a required hook while leaving its
+    declaration untouched, so the workflow family must refuse all such skips.
     """
     skipped = {
-        path.name: sorted(skipped_pre_commit_hooks(path.read_text()) & GUARDED_HOOK_IDS)
+        path.name: sorted(
+            skipped_pre_commit_hooks(path.read_text()) & REQUIRED_PRE_COMMIT_HOOK_IDS
+        )
         for path in workflow_files()
     }
     skipped = {name: hooks for name, hooks in skipped.items() if hooks}
     assert skipped == {}, (
-        "a workflow's pre-commit SKIP list disables a formatter hook, which is "
+        "a workflow's pre-commit SKIP list disables a required hook, which is "
         f"indistinguishable from deleting the gate: {skipped}"
     )
 
@@ -677,6 +868,77 @@ def test_sensitivity_a_check_target_without_format_check_is_visible() -> None:
     ]
 
 
+def test_sensitivity_an_undeclared_make_check_tool_is_visible() -> None:
+    makefile = """\
+check: lint semgrep
+lint:
+\tpoetry run ruff check .
+semgrep:
+\tpoetry run semgrep --config .semgrep/ app/
+"""
+    declared = declared_dev_dependencies(_COHERENT_PYPROJECT)
+    tools = {
+        tool
+        for target in make_target_prerequisites(makefile, "check")
+        for tool in poetry_tools_for_make_target(makefile, target)
+    }
+    assert tools == {"ruff", "semgrep"}
+    assert tools - declared == {"semgrep"}
+
+
+def test_sensitivity_an_unversioned_poetry_installer_is_visible() -> None:
+    floating = """\
+jobs:
+  lint:
+    steps:
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+"""
+    pinned = floating.replace(
+        "          virtualenvs-create: true",
+        "          version: ${{ env.POETRY_VERSION }}\n"
+        "          virtualenvs-create: true",
+    )
+    assert workflow_poetry_installer_versions(floating) == [None]
+    assert workflow_poetry_installer_versions(pinned) == ["${{ env.POETRY_VERSION }}"]
+    assert workflow_poetry_installer_revisions(floating) == ["v1"]
+    immutable = pinned.replace(
+        "snok/install-poetry@v1", f"snok/install-poetry@{POETRY_INSTALL_ACTION_SHA}"
+    )
+    assert workflow_poetry_installer_revisions(immutable) == [POETRY_INSTALL_ACTION_SHA]
+
+
+def test_sensitivity_a_local_or_unpinned_semgrep_hook_is_visible() -> None:
+    hosted = f"""\
+repos:
+  - repo: https://github.com/semgrep/pre-commit
+    rev: {SEMGREP_PRE_COMMIT_SHA}
+    hooks:
+      - id: semgrep
+"""
+    assert (
+        pre_commit_repo_rev(hosted, SEMGREP_PRE_COMMIT_REPO) == SEMGREP_PRE_COMMIT_SHA
+    )
+    assert pre_commit_hook_ids(hosted, SEMGREP_PRE_COMMIT_REPO) == {"semgrep"}
+    floating = hosted.replace(SEMGREP_PRE_COMMIT_SHA, "v1.173.0")
+    assert (
+        pre_commit_repo_rev(floating, SEMGREP_PRE_COMMIT_REPO) != SEMGREP_PRE_COMMIT_SHA
+    )
+    local = """\
+repos:
+  - repo: local
+    hooks:
+      - id: semgrep
+        entry: semgrep --config .semgrep/
+"""
+    assert any(
+        re.search(r"(?:^|\s)semgrep(?:\s|$)", entry)
+        for entry in local_hook_entries(local)
+    )
+
+
 _WORKFLOW_WITH_A_COMMENTED_OUT_CHECK = """
 jobs:
   lint:
@@ -812,15 +1074,17 @@ repos:
     ]
 
 
-def test_sensitivity_a_skip_list_naming_a_formatter_hook_is_reported() -> None:
-    assert skipped_pre_commit_hooks("        SKIP: semgrep") == {"semgrep"}
+def test_sensitivity_a_skip_list_naming_a_required_hook_is_reported() -> None:
+    assert skipped_pre_commit_hooks("        SKIP: detect-secrets") == {
+        "detect-secrets"
+    }
     assert skipped_pre_commit_hooks("        SKIP: semgrep,ruff-format") == {
         "semgrep",
         "ruff-format",
     }
     assert skipped_pre_commit_hooks("        SKIP: semgrep  # comment") == {"semgrep"}
     planted = skipped_pre_commit_hooks("        SKIP: semgrep,ruff-format")
-    assert planted & GUARDED_HOOK_IDS == {"ruff-format"}
+    assert planted & REQUIRED_PRE_COMMIT_HOOK_IDS == {"semgrep", "ruff-format"}
 
 
 def test_sensitivity_narrow_format_roots_are_reported() -> None:

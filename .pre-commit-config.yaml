@@ -33,16 +33,32 @@ repos:
         additional_dependencies: ["bandit[toml]"]
         exclude: (tests/|alembic/|scripts/)
 
-  # Semgrep: custom DotMac anti-pattern rules (uses poetry-installed semgrep)
-  - repo: local
+  # Semgrep has an isolated environment because its OpenTelemetry requirement
+  # conflicts with ERP's runtime pin. This immutable revision is tag v1.173.0;
+  # that hook's setup.py installs exactly semgrep==1.173.0.
+  - repo: https://github.com/semgrep/pre-commit
+    rev: c33ffee4d59183b43c9dac34963d1d74d430028e  # v1.173.0
     hooks:
       - id: semgrep
-        name: semgrep
-        language: system
-        entry: semgrep --config .semgrep/ --error --severity ERROR
+        args:
+          - --disable-version-check
+          - --quiet
+          - --skip-unknown-extensions
+          - --config
+          - .semgrep/
+          - --error
+          - --severity
+          - ERROR
+          - --no-git-ignore
+          - app/
+        # Preserve `make check`'s whole-app scan, including an untracked new
+        # Python file; pre-commit's tracked-file list is only the trigger.
+        pass_filenames: false
         types: [python]
         exclude: (tests/|alembic/|scripts/)
 
+  - repo: local
+    hooks:
       - id: session-context
         name: session-context (no raw SessionLocal() at non-HTTP entry points)
         language: system

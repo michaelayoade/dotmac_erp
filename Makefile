@@ -54,7 +54,7 @@ security: ## Run bandit security scan
 	poetry run bandit -r app/ -c pyproject.toml -q
 
 semgrep: ## Run semgrep custom rules (DotMac anti-patterns)
-	poetry run semgrep --config .semgrep/ app/ --exclude='tests/' --exclude='alembic/' --exclude='scripts/' --no-git-ignore
+	poetry run pre-commit run semgrep --all-files
 
 check: lint format-check type-check security semgrep ## Run all quality checks (lint + format + type-check + security + semgrep)
 
