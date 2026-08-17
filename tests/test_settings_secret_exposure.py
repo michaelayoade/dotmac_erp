@@ -12,12 +12,13 @@ the admin web surface requires an administrator.
 
 from datetime import datetime
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
 
-from app.api.settings import _owns_history_entry
+from app.api.settings import _can_read_history_entry, _can_restore_history_entry
 from app.schemas.settings import MASKED_VALUE, SettingHistoryRead
 from app.web.deps import require_admin_access
 
@@ -100,21 +101,61 @@ class TestHistoryIsTenantScoped:
         auth = {"organization_id": str(uuid4())}
         entry = _history_entry(organization_id=uuid4())
 
-        assert _owns_history_entry(entry, auth) is False
+        assert _can_read_history_entry(entry, auth) is False
+        assert _can_restore_history_entry(entry, auth, MagicMock()) is False
 
     def test_entry_from_the_callers_organization_is_owned(self):
         org = uuid4()
         auth = {"organization_id": str(org)}
         entry = _history_entry(organization_id=org)
 
-        assert _owns_history_entry(entry, auth) is True
+        assert _can_read_history_entry(entry, auth) is True
+        assert _can_restore_history_entry(entry, auth, MagicMock()) is True
 
     def test_global_setting_is_readable(self):
         """Global settings carry a NULL organization_id and stay visible."""
         auth = {"organization_id": str(uuid4())}
         entry = _history_entry(organization_id=None)
 
-        assert _owns_history_entry(entry, auth) is True
+        assert _can_read_history_entry(entry, auth) is True
+
+    def test_global_setting_is_not_restorable_by_a_tenant_administrator(self):
+        """Reading a platform row's history is not permission to rewrite it.
+
+        `restore_from_history` resolves its target scope from the entry, so a
+        NULL-org entry rewrites the platform row. `settings:manage` is a TENANT
+        permission; without this split a tenant admin could roll a
+        platform-owned SSRF control back to any value it ever held.
+        """
+        person_id = uuid4()
+        auth = {"organization_id": str(uuid4()), "person_id": str(person_id)}
+        entry = _history_entry(organization_id=None)
+        db = MagicMock()
+
+        assert _can_read_history_entry(entry, auth) is True
+        with patch(
+            "app.api.settings.has_live_admin_grant", return_value=False
+        ) as grant:
+            assert _can_restore_history_entry(entry, auth, db) is False
+        grant.assert_called_once_with(db, str(person_id))
+
+    def test_global_setting_is_restorable_by_a_platform_administrator(self):
+        person_id = uuid4()
+        auth = {"organization_id": str(uuid4()), "person_id": str(person_id)}
+        entry = _history_entry(organization_id=None)
+        db = MagicMock()
+
+        with patch("app.api.settings.has_live_admin_grant", return_value=True) as grant:
+            assert _can_restore_history_entry(entry, auth, db) is True
+        grant.assert_called_once_with(db, str(person_id))
+
+    def test_missing_person_id_denies_rather_than_raises(self):
+        """An unresolved actor cannot hold the live platform grant."""
+        entry = _history_entry(organization_id=None)
+        db = MagicMock()
+
+        assert _can_restore_history_entry(entry, {}, db) is False
+        assert _can_restore_history_entry(entry, {"person_id": None}, db) is False
 
 
 class TestAdminSurfaceRequiresAdmin:

@@ -123,13 +123,19 @@
         <!-- Webhook Security -->
         <div class="card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Webhook security</h2>
+            <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
+                The allowlist and protocol controls below are platform-owned: they exist to constrain this
+                organization, so this organization cannot change them here. An operator sets them through the
+                platform settings API or the environment. Values submitted for them from this form are ignored.
+            </p>
             <div class="grid gap-6 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label for="webhook_allowed_hosts" class="form-label">Allowed hosts</label>
                     <input type="text" id="webhook_allowed_hosts" name="webhook_allowed_hosts"
                            value="{{ settings.webhook_allowed_hosts.value or settings.webhook_allowed_hosts.default or '' }}"
                            placeholder="hooks.example.com, api.example.com"
-                           class="form-input">
+                           {{ 'disabled readonly' if settings.webhook_allowed_hosts.platform_owned else '' }}
+                           class="form-input disabled:opacity-60 disabled:cursor-not-allowed">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Comma-separated hostnames. Env: WEBHOOK_ALLOWED_HOSTS</p>
                 </div>
                 <div class="sm:col-span-2">
@@ -137,7 +143,8 @@
                     <input type="text" id="webhook_allowed_domains" name="webhook_allowed_domains"
                            value="{{ settings.webhook_allowed_domains.value or settings.webhook_allowed_domains.default or '' }}"
                            placeholder="example.com, integrations.example.org"
-                           class="form-input">
+                           {{ 'disabled readonly' if settings.webhook_allowed_domains.platform_owned else '' }}
+                           class="form-input disabled:opacity-60 disabled:cursor-not-allowed">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Comma-separated domains; subdomains allowed. Env: WEBHOOK_ALLOWED_DOMAINS</p>
                 </div>
                 <div>
@@ -151,8 +158,10 @@
                 </div>
                 <div class="flex flex-col gap-3">
                     <label class="flex items-start gap-3 cursor-pointer">
-                        <input type="hidden" name="webhook_allow_insecure" value="false">
+                        <input type="hidden" name="webhook_allow_insecure" value="false"
+                               {{ 'disabled' if settings.webhook_allow_insecure.platform_owned else '' }}>
                         <input type="checkbox" name="webhook_allow_insecure" value="true"
+                               {{ 'disabled' if settings.webhook_allow_insecure.platform_owned else '' }}
                                {{ 'checked' if settings.webhook_allow_insecure.value else '' }}
                                class="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800">
                         <div>
@@ -161,8 +170,10 @@
                         </div>
                     </label>
                     <label class="flex items-start gap-3 cursor-pointer">
-                        <input type="hidden" name="webhook_allow_localhost" value="false">
+                        <input type="hidden" name="webhook_allow_localhost" value="false"
+                               {{ 'disabled' if settings.webhook_allow_localhost.platform_owned else '' }}>
                         <input type="checkbox" name="webhook_allow_localhost" value="true"
+                               {{ 'disabled' if settings.webhook_allow_localhost.platform_owned else '' }}
                                {{ 'checked' if settings.webhook_allow_localhost.value else '' }}
                                class="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800">
                         <div>
@@ -177,9 +188,15 @@
         <!-- Secrets Provider -->
         <div class="card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Secrets provider</h2>
+            <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
+                Platform-owned, for the same reason as the webhook controls: it turns off TLS verification
+                against the store that holds every other secret.
+            </p>
             <label class="flex items-start gap-3 cursor-pointer">
-                <input type="hidden" name="openbao_allow_insecure" value="false">
+                <input type="hidden" name="openbao_allow_insecure" value="false"
+                       {{ 'disabled' if settings.openbao_allow_insecure.platform_owned else '' }}>
                 <input type="checkbox" name="openbao_allow_insecure" value="true"
+                       {{ 'disabled' if settings.openbao_allow_insecure.platform_owned else '' }}
                        {{ 'checked' if settings.openbao_allow_insecure.value else '' }}
                        class="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800">
                 <div>

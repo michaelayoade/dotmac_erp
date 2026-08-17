@@ -211,6 +211,7 @@ class TestHookRegistry:
             "https://example.com/webhook",
             db,
             allow_localhost=False,
+            organization_id=event.organization_id,
         )
         assert result["status_code"] == 202
         assert "accepted" in result["body"]
@@ -328,6 +329,7 @@ class TestHookRegistry:
             "http://127.0.0.1/webhook",
             db,
             allow_localhost=False,
+            organization_id=event.organization_id,
         )
         mock_client_cls.assert_not_called()
 

@@ -98,8 +98,8 @@ app/services/domain_settings.py	DomainSettings.ensure_by_key	allow_cross_org	1	n
 app/services/domain_settings.py	DomainSettings.get_by_key	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/domain_settings.py	DomainSettings.list	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/domain_settings.py	DomainSettings.upsert_by_key	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
+app/services/domain_settings.py	_restore_from_history	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/domain_settings.py	_restore_target_organization	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/domain_settings.py	restore_from_history	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
 app/services/finance/banking/mono_sync.py	MonoSyncService._record_webhook_failure	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
 app/services/finance/banking/mono_sync.py	MonoSyncService.process_webhook	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
 app/services/finance/banking/mono_sync.py	MonoSyncService.sync_by_mono_account_id	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
@@ -111,7 +111,6 @@ app/services/settings_cache.py	SettingsCache._load_setting_row	allow_cross_org	1
 app/services/settings_seed.py	_global_settings_seed.scoped_seed	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
 app/services/settings_seed.py	_sync_scheduler_connection	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
 app/services/settings_seed.py	seed_auth_settings	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
-app/startup.py	warn_unconfigured_webhook_allowlist	allow_cross_org	1	yes	tenant_catalog_definer	blocked	startup	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/audit.py	_write_audit_event	cross_org_session	1	yes	tenant_resolution_definer	blocked	audit	event identity must resolve one tenant before opening session_for_org
 app/tasks/audit_integrity.py	verify_audit_hash_chain	cross_org_session	1	yes	tenant_catalog_definer	blocked	audit_integrity	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
 app/tasks/automation.py	_resolve_workflow_rule_org	cross_org_session	1	yes	tenant_resolution_definer	blocked	automation	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path

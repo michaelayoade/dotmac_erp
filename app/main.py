@@ -84,7 +84,11 @@ from app.services.htmx import is_htmx_request
 from app.services.integration_config import seed_dotmac_sub_webhook_binding
 from app.services.settings_seed import seed_all_settings
 from app.ui import UI_ASSET_DIRECTORY, UI_ASSET_MOUNT
-from app.startup import log_startup_info, validate_startup
+from app.startup import (
+    log_startup_info,
+    validate_startup,
+    warn_unconfigured_webhook_allowlist,
+)
 from app.telemetry import setup_otel
 from app.templates import templates
 from app.web.admin import router as admin_web_router
@@ -190,6 +194,11 @@ async def lifespan(app: FastAPI):
             # IntegrationConfig(DOTMAC_SUB) binding (idempotent; the binding
             # rows are the webhook org-attribution authority).
             seed_dotmac_sub_webhook_binding(db)
+
+        # The warning must observe the post-seed state. Running it from
+        # `validate_startup` above produced a false outage warning on first
+        # boot immediately before the configured environment value was seeded.
+        warn_unconfigured_webhook_allowlist(db)
 
         # Register payroll lifecycle event handlers so posted runs/slips
         # can create notifications and queue payslip emails.

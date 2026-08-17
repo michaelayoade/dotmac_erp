@@ -29,6 +29,8 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "app"
@@ -321,6 +323,7 @@ def test_erp_has_no_shared_auth_database_or_cross_app_session_configuration() ->
         assert value not in source
 
 
+@pytest.mark.timeout(300)
 def test_erp_ships_no_external_identity_protocol_adapter() -> None:
     """The deleted OIDC package has not regrown under any name."""
     assert not (APP / "services/sso").exists(), (

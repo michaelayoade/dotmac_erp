@@ -352,42 +352,67 @@ def seed_automation_settings(db: Session) -> None:
         value_type=SettingValueType.integer,
         value_text="20",
     )
-    # Webhook security settings
+    # ── Webhook security: the PLATFORM ceiling ────────────────────────────
+    # `organization_id=None` is STATED on every platform-owned key below, not
+    # left to `@_global_settings_seed`'s ambient `allow_cross_org` branch. The
+    # ambient branch produces the same row today, but it is a property of the
+    # decorator rather than of the seed, and a future seed refactor that moved
+    # this call out of that decorator would silently start writing a tenant row
+    # for an SSRF control. `ensure_by_key` is create-if-missing, so the
+    # environment seeds the ceiling once and never overwrites a later operator
+    # change — the correct bootstrap semantic, unchanged.
     automation_settings.ensure_by_key(
         db,
         key="webhook_allowed_hosts",
         value_type=SettingValueType.string,
         value_text=os.getenv("WEBHOOK_ALLOWED_HOSTS", ""),
+        organization_id=None,
     )
     automation_settings.ensure_by_key(
         db,
         key="webhook_allowed_domains",
         value_type=SettingValueType.string,
         value_text=os.getenv("WEBHOOK_ALLOWED_DOMAINS", ""),
+        organization_id=None,
     )
     automation_settings.ensure_by_key(
         db,
         key="webhook_allow_insecure",
         value_type=SettingValueType.boolean,
         value_text=os.getenv("WEBHOOK_ALLOW_INSECURE", "false"),
+        organization_id=None,
     )
     automation_settings.ensure_by_key(
         db,
         key="webhook_allow_localhost",
         value_type=SettingValueType.boolean,
         value_text=os.getenv("WEBHOOK_ALLOW_LOCALHOST", "false"),
+        organization_id=None,
     )
+    automation_settings.ensure_by_key(
+        db,
+        key="webhook_max_timeout_seconds",
+        value_type=SettingValueType.integer,
+        value_text=os.getenv("WEBHOOK_MAX_TIMEOUT_SECONDS", "300"),
+        organization_id=None,
+    )
+    # Not platform-owned: a timeout is a preference, and this row is the
+    # deployment-wide default an organization may narrow. It is bounded at the
+    # point of use by the ceiling above, in BOTH outbound channels.
     automation_settings.ensure_by_key(
         db,
         key="webhook_timeout_seconds",
         value_type=SettingValueType.integer,
         value_text=os.getenv("WEBHOOK_TIMEOUT_SECONDS", "10"),
     )
+    # Platform-owned for the same reason as the webhook ceiling: it disables
+    # TLS verification against the secret store. See `settings_spec.py`.
     automation_settings.ensure_by_key(
         db,
         key="openbao_allow_insecure",
         value_type=SettingValueType.boolean,
         value_text=os.getenv("OPENBAO_ALLOW_INSECURE", "false"),
+        organization_id=None,
     )
     automation_settings.ensure_by_key(
         db,
