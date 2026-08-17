@@ -37,7 +37,7 @@ repos:
   # conflicts with ERP's runtime pin. This immutable revision is tag v1.173.0;
   # that hook's setup.py installs exactly semgrep==1.173.0.
   - repo: https://github.com/semgrep/pre-commit
-    rev: c33ffee4d59183b43c9dac34963d1d74d430028e  # v1.173.0
+    rev: c33ffee4d59183b43c9dac34963d1d74d430028e  # pragma: allowlist secret
     hooks:
       - id: semgrep
         args:
