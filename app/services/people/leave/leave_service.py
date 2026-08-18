@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover
 
 from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_org import Organization
@@ -51,6 +52,19 @@ logger = logging.getLogger(__name__)
 
 # Role names that should be notified when a leave application is submitted.
 LEAVE_NOTIFICATION_ROLES = ("hr_manager",)
+
+
+def _employee_search_predicate(pattern: str) -> ColumnElement[bool]:
+    """Build the shared employee identity search predicate."""
+    return or_(
+        Employee.employee_code.ilike(pattern),
+        Person.first_name.ilike(pattern),
+        Person.last_name.ilike(pattern),
+        Person.display_name.ilike(pattern),
+        Person.email.ilike(pattern),
+        func.concat(Person.first_name, " ", Person.last_name).ilike(pattern),
+    )
+
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -207,6 +221,54 @@ class LeaveService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    def resolve_employee_filter(
+        self,
+        org_id: UUID,
+        value: str | None,
+    ) -> tuple[UUID | None, list[UUID] | None]:
+        """Resolve an employee UUID, code, name, or email within one tenant."""
+        raw = (value or "").strip()
+        if not raw:
+            return None, None
+
+        try:
+            parsed_uuid = UUID(raw)
+        except ValueError:
+            parsed_uuid = None
+
+        if parsed_uuid:
+            employee_id = self.db.scalar(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.employee_id == parsed_uuid,
+                )
+            )
+            return (employee_id, None) if employee_id else (None, [])
+
+        employee_id = self.db.scalar(
+            select(Employee.employee_id).where(
+                Employee.organization_id == org_id,
+                Employee.employee_code.ilike(raw),
+            )
+        )
+        if employee_id:
+            return employee_id, None
+
+        pattern = f"%{raw}%"
+        employee_ids = list(
+            self.db.scalars(
+                select(Employee.employee_id)
+                .join(Person, Person.id == Employee.person_id)
+                .where(
+                    Employee.organization_id == org_id,
+                    Person.organization_id == org_id,
+                    _employee_search_predicate(pattern),
+                )
+                .limit(500)
+            ).all()
+        )
+        return None, employee_ids
 
     def get_org_today(self, org_id: UUID) -> date:
         """Return the current date in the organization's timezone."""
@@ -1065,6 +1127,7 @@ class LeaveService:
         org_id: UUID,
         *,
         employee_id: UUID | None = None,
+        employee_ids: Sequence[UUID] | None = None,
         leave_type_id: UUID | None = None,
         status: LeaveApplicationStatus | None = None,
         from_date: date | None = None,
@@ -1072,58 +1135,50 @@ class LeaveService:
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[LeaveApplication]:
         """List leave applications."""
+        if employee_ids is not None and not employee_ids:
+            return PaginatedResult(
+                items=[],
+                total=0,
+                offset=pagination.offset if pagination else 0,
+                limit=pagination.limit if pagination else 0,
+            )
+
+        filters: list[ColumnElement[bool]] = [
+            LeaveApplication.organization_id == org_id
+        ]
+        if employee_id:
+            filters.append(LeaveApplication.employee_id == employee_id)
+        elif employee_ids is not None:
+            filters.append(LeaveApplication.employee_id.in_(employee_ids))
+
+        if leave_type_id:
+            filters.append(LeaveApplication.leave_type_id == leave_type_id)
+
+        if status:
+            status_value = (
+                LeaveApplicationStatus(status) if isinstance(status, str) else status
+            )
+            filters.append(LeaveApplication.status == status_value)
+
+        if from_date:
+            filters.append(LeaveApplication.from_date >= from_date)
+
+        if to_date:
+            filters.append(LeaveApplication.to_date <= to_date)
+
         query = (
             select(LeaveApplication)
             .options(
                 joinedload(LeaveApplication.employee).joinedload(Employee.person),
                 joinedload(LeaveApplication.leave_type),
             )
-            .where(LeaveApplication.organization_id == org_id)
+            .where(*filters)
+            .order_by(LeaveApplication.from_date.desc())
         )
 
-        if employee_id:
-            query = query.where(LeaveApplication.employee_id == employee_id)
-
-        if leave_type_id:
-            query = query.where(LeaveApplication.leave_type_id == leave_type_id)
-
-        if status:
-            status_value = status
-            if isinstance(status, str):
-                status_value = LeaveApplicationStatus(status)
-            query = query.where(LeaveApplication.status == status_value)
-
-        if from_date:
-            query = query.where(LeaveApplication.from_date >= from_date)
-
-        if to_date:
-            query = query.where(LeaveApplication.to_date <= to_date)
-
-        query = query.order_by(LeaveApplication.from_date.desc())
-
-        # Count total (separate query without joinedload options)
         count_query = select(func.count(LeaveApplication.application_id)).where(
-            LeaveApplication.organization_id == org_id
+            *filters
         )
-        if employee_id:
-            count_query = count_query.where(LeaveApplication.employee_id == employee_id)
-        if leave_type_id:
-            count_query = count_query.where(
-                LeaveApplication.leave_type_id == leave_type_id
-            )
-        if status:
-            count_query = count_query.where(
-                LeaveApplication.status
-                == (
-                    LeaveApplicationStatus(status)
-                    if isinstance(status, str)
-                    else status
-                )
-            )
-        if from_date:
-            count_query = count_query.where(LeaveApplication.from_date >= from_date)
-        if to_date:
-            count_query = count_query.where(LeaveApplication.to_date <= to_date)
         total = self.db.scalar(count_query) or 0
 
         # Apply pagination
@@ -1778,6 +1833,7 @@ class LeaveService:
             .outerjoin(Department, Employee.department_id == Department.department_id)
             .where(
                 Employee.organization_id == org_id,
+                Person.organization_id == org_id,
                 func.extract("year", LeaveAllocation.from_date) == target_year,
             )
         )
@@ -1788,18 +1844,7 @@ class LeaveService:
         search_term = (employee_search or "").strip()
         if search_term:
             pattern = f"%{search_term}%"
-            alloc_query = alloc_query.where(
-                or_(
-                    Employee.employee_code.ilike(pattern),
-                    Person.first_name.ilike(pattern),
-                    Person.last_name.ilike(pattern),
-                    Person.display_name.ilike(pattern),
-                    Person.email.ilike(pattern),
-                    func.concat(Person.first_name, " ", Person.last_name).ilike(
-                        pattern
-                    ),
-                )
-            )
+            alloc_query = alloc_query.where(_employee_search_predicate(pattern))
 
         results = self.db.execute(
             alloc_query.group_by(
