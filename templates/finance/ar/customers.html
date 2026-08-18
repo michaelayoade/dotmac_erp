@@ -59,11 +59,19 @@
 {% block content %}
 <div class="space-y-6 page-enter">
     {# Stats Summary #}
-    <div class="grid gap-4 sm:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         {{ stats_card("Total Customers", total_count | default(0), icon="users", color="slate") }}
         {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Recurring", recurring_customers_count | default(0), icon="refresh-cw", color="blue") }}
+        {{ stats_card("Outstanding", total_outstanding | default("0.00"), icon="currency", color="amber") }}
+        {{ stats_card("Overdue", overdue_total | default("0.00"), icon="alert-circle", color="rose") }}
+        {{ stats_card("MRR", total_mrr | default("0.00"), icon="trending-up", color="emerald") }}
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("ARR", total_arr | default("0.00"), icon="bar-chart-3", color="teal") }}
+        {{ stats_card("Paid So Far", total_paid | default("0.00"), icon="receipt", color="slate") }}
         {{ stats_card("Inactive", inactive_count | default(0), icon="x-circle", color="rose") }}
-        {{ stats_card("With Balance", with_balance_count | default(0), icon="currency", color="amber") }}
+        {{ stats_card("With Balance", with_balance_count | default(0), icon="wallet", color="amber") }}
     </div>
 
     <div class="card" data-compact-filters data-live-search x-data="{ open: false }">
@@ -152,6 +160,11 @@
                         <select id="customer-status-filter" name="status" class="form-select w-full" aria-label="Status">
                             <option value="">All Status</option>
                             <option value="active" {{ "selected" if status == "active" else "" }}>Active</option>
+                            <option value="blocked" {{ "selected" if status == "blocked" else "" }}>Blocked</option>
+                            <option value="suspended" {{ "selected" if status == "suspended" else "" }}>Suspended</option>
+                            <option value="delinquent" {{ "selected" if status == "delinquent" else "" }}>Delinquent</option>
+                            <option value="disabled" {{ "selected" if status == "disabled" else "" }}>Disabled</option>
+                            <option value="canceled" {{ "selected" if status == "canceled" else "" }}>Canceled</option>
                             <option value="inactive" {{ "selected" if status == "inactive" else "" }}>Inactive</option>
                         </select>
                     </div>
@@ -192,10 +205,12 @@
                                 {{ bulk_select_header() }}
                                 {{ sortable_th("Customer Code", "customer_code", sort, sort_dir) }}
                                 {{ sortable_th("Customer Name", "legal_name", sort, sort_dir) }}
-                                <th class="hidden sm:table-cell" scope="col">Tax ID</th>
-                                <th class="hidden sm:table-cell" scope="col">Payment Terms</th>
-                                <th scope="col" class="text-right">Credit Limit</th>
-                                <th scope="col" class="text-right">Balance</th>
+                                <th class="hidden lg:table-cell" scope="col">Tax ID</th>
+                                <th scope="col" class="text-right">Paid</th>
+                                <th scope="col" class="text-right">Owed</th>
+                                <th class="hidden xl:table-cell text-right" scope="col">Overdue</th>
+                                <th class="hidden lg:table-cell" scope="col">Next Renewal</th>
+                                <th class="hidden xl:table-cell text-right" scope="col">MRR / ARR</th>
                                 {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
                                 <th class="hidden sm:table-cell" scope="col">Created</th>
                                 <th scope="col" class="text-right">Actions</th>
@@ -234,12 +249,28 @@
                                     </span>
                                     {% endif %}
                                 </td>
-                                <td class="hidden sm:table-cell text-slate-600 dark:text-slate-300">{{ customer.tax_id | default("—") }}</td>
-                                <td class="hidden sm:table-cell text-slate-600 dark:text-slate-300">Net {{ customer.payment_terms_days | default(30) }}</td>
-                                <td class="text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">{{ customer.credit_limit | default("—") }}</td>
+                                <td class="hidden lg:table-cell text-slate-600 dark:text-slate-300">{{ customer.tax_id | default("—") }}</td>
+                                <td class="text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">{{ customer.paid_total | default("—") }}</td>
                                 <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ customer.balance | default("—") }}</td>
+                                <td class="hidden xl:table-cell text-right">
+                                    <div class="font-mono tabular-nums text-sm text-slate-700 dark:text-slate-300">{{ customer.overdue_amount | default("—") }}</div>
+                                    {% if customer.oldest_overdue_days %}
+                                    <div class="text-xs text-rose-600 dark:text-rose-400">{{ customer.oldest_overdue_days }} days</div>
+                                    {% endif %}
+                                </td>
+                                <td class="hidden lg:table-cell text-slate-600 dark:text-slate-300">{{ customer.next_renewal_at | default("—", true) }}</td>
+                                <td class="hidden xl:table-cell text-right">
+                                    <div class="font-mono tabular-nums text-sm text-slate-700 dark:text-slate-300">{{ customer.mrr | default("—") }}</div>
+                                    <div class="font-mono tabular-nums text-xs text-slate-400 dark:text-slate-500">{{ customer.arr | default("—") }}</div>
+                                </td>
                                 <td class="text-center">
-                                    {{ status_badge('active' if customer.is_active else 'inactive', 'sm') }}
+                                    {{ status_badge(customer.subscriber_status or ('active' if customer.is_active else 'inactive'), 'sm') }}
+                                    {% if customer.service_status and customer.service_status != customer.subscriber_status %}
+                                    <div class="mt-1 text-xs text-slate-400 dark:text-slate-500">{{ customer.service_status }}</div>
+                                    {% endif %}
+                                    {% if customer.recurring_subscription_count %}
+                                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ customer.recurring_subscription_count }} recurring</div>
+                                    {% endif %}
                                 </td>
                                 <td class="hidden sm:table-cell">
                                     <div class="text-sm text-slate-600 dark:text-slate-300">
@@ -265,7 +296,7 @@
                             {% if customer.sub_accounts %}
                             <tr x-show="expanded" x-cloak class="bg-slate-50/60 dark:bg-slate-800/30">
                                 <td></td>
-                                <td colspan="9" class="py-2">
+                                <td colspan="11" class="py-2">
                                     <div class="space-y-1">
                                         {% for sub in customer.sub_accounts %}
                                         <div class="flex items-center justify-between gap-4 rounded px-2 py-1 hover:bg-white dark:hover:bg-slate-800">
@@ -273,9 +304,11 @@
                                                 <span class="text-slate-300 dark:text-slate-600">&crarr;</span>
                                                 <span class="font-mono text-xs text-slate-400 dark:text-slate-500">{{ sub.customer_code }}</span>
                                                 <a href="/finance/ar/customers/{{ sub.customer_id }}" class="truncate text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">{{ sub.customer_name }}</a>
-                                                {{ status_badge('active' if sub.is_active else 'inactive', 'sm') }}
+                                                {{ status_badge(sub.subscriber_status or ('active' if sub.is_active else 'inactive'), 'sm') }}
                                             </div>
                                             <span class="font-mono tabular-nums text-sm text-slate-600 dark:text-slate-300">{{ sub.balance }}</span>
+                                            <span class="hidden lg:inline text-sm text-slate-500 dark:text-slate-400">{{ sub.next_renewal_at | default("—", true) }}</span>
+                                            <span class="hidden xl:inline font-mono tabular-nums text-sm text-slate-600 dark:text-slate-300">{{ sub.mrr }}</span>
                                         </div>
                                         {% endfor %}
                                     </div>
@@ -286,7 +319,7 @@
                             {% else %}
                             <tbody>
                             <tr>
-                                <td colspan="10" class="py-12">
+                                <td colspan="12" class="py-12">
                                     {{ empty_state('No customers found', 'Get started by adding your first customer', 'users', 'Add Customer', '/finance/ar/customers/new') }}
                                 </td>
                             </tr>

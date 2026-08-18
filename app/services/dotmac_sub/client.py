@@ -288,6 +288,12 @@ class SubscriberRecord:
     region: str | None = None
     postal_code: str | None = None
     country_code: str | None = None
+    service_status: str | None = None
+    recurring_subscription_count: int = 0
+    next_renewal_at: datetime | None = None
+    billing_cycle: str | None = None
+    recurring_amount_monthly: Decimal | None = None
+    annualized_recurring_revenue: Decimal | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -1295,6 +1301,23 @@ class DotmacSubClient:
             region=item.get("region"),
             postal_code=item.get("postal_code"),
             country_code=item.get("country_code"),
+            service_status=item.get("service_status"),
+            recurring_subscription_count=int(
+                item.get("recurring_subscription_count") or 0
+            ),
+            next_renewal_at=_parse_wire_instant(
+                item.get("next_renewal_at"),
+                record=record,
+                field="next_renewal_at",
+                updated_at=updated_at,
+            ),
+            billing_cycle=item.get("billing_cycle"),
+            recurring_amount_monthly=_dec(item.get("recurring_amount_monthly"))
+            if item.get("recurring_amount_monthly") is not None
+            else None,
+            annualized_recurring_revenue=_dec(item.get("annualized_recurring_revenue"))
+            if item.get("annualized_recurring_revenue") is not None
+            else None,
             created_at=_parse_wire_instant(
                 item.get("created_at"),
                 record=record,
