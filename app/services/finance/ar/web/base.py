@@ -176,8 +176,8 @@ def customer_list_view(
     balance_trend: list[float] | None = None,
     child_count: int = 0,
     paid_total: Decimal | None = None,
-    aging: dict | None = None,
-    dotmac_sub_metrics: dict | None = None,
+    aging: Mapping[str, object] | None = None,
+    dotmac_sub_metrics: Mapping[str, object] | None = None,
 ) -> dict:
     """Transform customer to list view."""
     # Resolve parent name safely (parent may be eagerly loaded or None)
@@ -193,7 +193,7 @@ def customer_list_view(
     metrics = dotmac_sub_metrics or customer.dotmac_sub_metrics or {}
     mrr = Decimal(str(metrics.get("mrr") or "0"))
     arr = Decimal(str(metrics.get("arr") or "0"))
-    recurring_count = int(metrics.get("recurring_subscription_count") or 0)
+    recurring_count = int(str(metrics.get("recurring_subscription_count") or 0))
     next_renewal_at = metrics.get("next_renewal_at")
     if isinstance(next_renewal_at, str) and "T" in next_renewal_at:
         next_renewal_at = next_renewal_at.split("T", 1)[0]

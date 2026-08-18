@@ -1315,9 +1315,7 @@ class DotmacSubClient:
             recurring_amount_monthly=_dec(item.get("recurring_amount_monthly"))
             if item.get("recurring_amount_monthly") is not None
             else None,
-            annualized_recurring_revenue=_dec(
-                item.get("annualized_recurring_revenue")
-            )
+            annualized_recurring_revenue=_dec(item.get("annualized_recurring_revenue"))
             if item.get("annualized_recurring_revenue") is not None
             else None,
             created_at=_parse_wire_instant(

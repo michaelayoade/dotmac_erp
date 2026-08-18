@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal, TypedDict
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
@@ -49,6 +49,31 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
+
+
+_AgingAmountKey = Literal[
+    "current",
+    "days_1_30",
+    "days_31_60",
+    "days_61_90",
+    "over_90",
+]
+_AGING_AMOUNT_KEYS: tuple[_AgingAmountKey, ...] = (
+    "current",
+    "days_1_30",
+    "days_31_60",
+    "days_61_90",
+    "over_90",
+)
+
+
+class _AgingBucket(TypedDict):
+    current: Decimal
+    days_1_30: Decimal
+    days_31_60: Decimal
+    days_61_90: Decimal
+    over_90: Decimal
+    oldest_days: int | None
 
 
 class CustomerWebService:
@@ -178,7 +203,7 @@ class CustomerWebService:
         paid_map = {row.customer_id: row.paid_total for row in paid_rows}
 
         today = date.today()
-        aging_map: dict[UUID, dict[str, Decimal | int | None]] = {}
+        aging_map: dict[UUID, _AgingBucket] = {}
         invoice_rows = db.execute(
             select(Invoice.customer_id, Invoice.balance_due, Invoice.due_date).where(
                 Invoice.organization_id == org_id,
@@ -312,7 +337,7 @@ class CustomerWebService:
         sub_accounts_map: dict[UUID, list[dict]] = {}
         family_balance_map: dict[UUID, Decimal] = {}
         family_paid_map: dict[UUID, Decimal] = {}
-        family_aging_map: dict[UUID, dict[str, Decimal | int | None]] = {}
+        family_aging_map: dict[UUID, _AgingBucket] = {}
         family_metrics_map: dict[UUID, dict[str, Any]] = {}
         if collapsed:
             parent_ids_on_page = [
@@ -345,9 +370,7 @@ class CustomerWebService:
                             "paid_total": format_currency(
                                 child_paid, child.currency_code
                             ),
-                            "subscriber_status": child_metrics.get(
-                                "subscriber_status"
-                            ),
+                            "subscriber_status": child_metrics.get("subscriber_status"),
                             "next_renewal_at": child_metrics.get("next_renewal_at"),
                             "mrr": format_currency(
                                 Decimal(str(child_metrics.get("mrr") or "0")),
@@ -373,13 +396,7 @@ class CustomerWebService:
                                 "oldest_days": None,
                             },
                         )
-                        for key in (
-                            "current",
-                            "days_1_30",
-                            "days_31_60",
-                            "days_61_90",
-                            "over_90",
-                        ):
+                        for key in _AGING_AMOUNT_KEYS:
                             target[key] = target[key] + child_aging[key]
                         target["oldest_days"] = max(
                             int(target["oldest_days"] or 0),
