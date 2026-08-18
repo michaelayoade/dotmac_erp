@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr import Employee, EmployeeStatus
@@ -64,7 +64,7 @@ class LeaveWebService:
         if not value:
             return None
         try:
-            return cast(UUID, coerce_uuid(value))
+            return cast(UUID, coerce_uuid(value, raise_http=False))
         except (ValueError, TypeError, AttributeError):
             return None
 
@@ -128,61 +128,6 @@ class LeaveWebService:
             )
         return options
 
-    @staticmethod
-    def _resolve_employee_filter(
-        db: Session, org_id: UUID, value: str | None
-    ) -> tuple[UUID | None, list[UUID] | None]:
-        """Resolve employee filter from UUID, employee code, name, or email.
-
-        Returns:
-            - (employee_id, None) for exact UUID/code match
-            - (None, [ids...]) for name/email/code partial matches
-            - (None, [UUID(0)]) for non-empty unmatched terms (forces empty result)
-            - (None, None) when no filter value is provided
-        """
-        raw = (value or "").strip()
-        if not raw:
-            return None, None
-
-        parsed_uuid = LeaveWebService._parse_uuid(raw)
-        if parsed_uuid:
-            return parsed_uuid, None
-
-        employee = db.scalar(
-            select(Employee).where(
-                Employee.organization_id == org_id,
-                Employee.employee_code.ilike(raw),
-            )
-        )
-        if employee:
-            return employee.employee_id, None
-
-        term = f"%{raw}%"
-        matching_ids = list(
-            db.scalars(
-                select(Employee.employee_id)
-                .join(Person, Person.id == Employee.person_id)
-                .where(
-                    Employee.organization_id == org_id,
-                    or_(
-                        Employee.employee_code.ilike(term),
-                        Person.first_name.ilike(term),
-                        Person.last_name.ilike(term),
-                        Person.display_name.ilike(term),
-                        Person.email.ilike(term),
-                        func.concat(Person.first_name, " ", Person.last_name).ilike(
-                            term
-                        ),
-                    ),
-                )
-                .limit(500)
-            ).all()
-        )
-        if matching_ids:
-            return None, matching_ids
-
-        return None, [UUID(int=0)]
-
     def leave_overview_response(
         self,
         request: Request,
@@ -203,16 +148,17 @@ class LeaveWebService:
         auth: WebAuthContext,
         db: Session,
         search: str | None = None,
-        is_active: bool | None = None,
+        is_active: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Leave types list page."""
         org_id = coerce_uuid(auth.organization_id)
         pagination = PaginationParams.from_page(page, per_page=20)
         svc = LeaveService(db, auth)
+        parsed_is_active = self._parse_bool(is_active)
         result = svc.list_leave_types(
             org_id,
-            is_active=is_active,
+            is_active=parsed_is_active,
             search=search,
             pagination=pagination,
         )
@@ -221,7 +167,7 @@ class LeaveWebService:
             {
                 "types": result.items,
                 "search": search,
-                "is_active": is_active,
+                "is_active": parsed_is_active,
                 "page": result.page,
                 "total_pages": result.total_pages,
                 "total": result.total,
@@ -236,6 +182,7 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        employee_search: str | None = None,
         employee_id: str | None = None,
         leave_type_id: str | None = None,
         status: str | None = None,
@@ -255,9 +202,14 @@ class LeaveWebService:
             except ValueError:
                 status_enum = None
         svc = LeaveService(db, auth)
+        employee_filter = employee_search or employee_id
+        resolved_employee_id, resolved_employee_ids = svc.resolve_employee_filter(
+            org_id, employee_filter
+        )
         result = svc.list_applications(
             org_id,
-            employee_id=self._parse_uuid(employee_id),
+            employee_id=resolved_employee_id,
+            employee_ids=resolved_employee_ids,
             leave_type_id=self._parse_uuid(leave_type_id),
             status=status_enum,
             from_date=self._parse_date(start_date),
@@ -268,16 +220,22 @@ class LeaveWebService:
         active_filters = build_active_filters(
             params={
                 "status": status,
+                "employee_search": employee_search,
                 "employee_id": employee_id,
                 "leave_type_id": leave_type_id,
                 "start_date": start_date,
                 "end_date": end_date,
             },
-            labels={"start_date": "From", "end_date": "To"},
+            labels={
+                "employee_search": "Employee",
+                "start_date": "From",
+                "end_date": "To",
+            },
         )
         context.update(
             {
                 "applications": result.items,
+                "employee_search": employee_search,
                 "employee_id": employee_id,
                 "leave_type_id": leave_type_id,
                 "status": status,
@@ -322,8 +280,8 @@ class LeaveWebService:
         pagination = PaginationParams.from_page(page, per_page=effective_per_page)
         svc = LeaveService(db, auth)
         employee_filter = employee_search or employee_id
-        resolved_employee_id, resolved_employee_ids = self._resolve_employee_filter(
-            db, org_id, employee_filter
+        resolved_employee_id, resolved_employee_ids = svc.resolve_employee_filter(
+            org_id, employee_filter
         )
         result = svc.list_allocations(
             org_id,
