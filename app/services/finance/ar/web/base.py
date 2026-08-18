@@ -175,6 +175,9 @@ def customer_list_view(
     created_by_name: str | None = None,
     balance_trend: list[float] | None = None,
     child_count: int = 0,
+    paid_total: Decimal | None = None,
+    aging: dict | None = None,
+    dotmac_sub_metrics: dict | None = None,
 ) -> dict:
     """Transform customer to list view."""
     # Resolve parent name safely (parent may be eagerly loaded or None)
@@ -186,6 +189,20 @@ def customer_list_view(
             parent_name = customer_display_name(parent)
     except Exception:
         parent_name = None
+
+    metrics = dotmac_sub_metrics or customer.dotmac_sub_metrics or {}
+    mrr = Decimal(str(metrics.get("mrr") or "0"))
+    arr = Decimal(str(metrics.get("arr") or "0"))
+    recurring_count = int(metrics.get("recurring_subscription_count") or 0)
+    next_renewal_at = metrics.get("next_renewal_at")
+    if isinstance(next_renewal_at, str) and "T" in next_renewal_at:
+        next_renewal_at = next_renewal_at.split("T", 1)[0]
+
+    aging = aging or {}
+    overdue_amount = sum(
+        Decimal(str(aging.get(key) or "0"))
+        for key in ("days_1_30", "days_31_60", "days_61_90", "over_90")
+    )
 
     return {
         "customer_id": customer.customer_id,
@@ -200,6 +217,17 @@ def customer_list_view(
             customer.currency_code,
         ),
         "balance": format_currency(balance, customer.currency_code),
+        "paid_total": format_currency(
+            paid_total or Decimal("0"), customer.currency_code
+        ),
+        "overdue_amount": format_currency(overdue_amount, customer.currency_code),
+        "oldest_overdue_days": aging.get("oldest_days"),
+        "subscriber_status": metrics.get("subscriber_status"),
+        "service_status": metrics.get("service_status"),
+        "recurring_subscription_count": recurring_count,
+        "next_renewal_at": next_renewal_at,
+        "mrr": format_currency(mrr, customer.currency_code),
+        "arr": format_currency(arr, customer.currency_code),
         "balance_trend": balance_trend
         if balance_trend and any(v > 0 for v in balance_trend)
         else None,

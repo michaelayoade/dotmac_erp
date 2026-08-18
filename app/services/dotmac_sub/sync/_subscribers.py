@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 _COMPANY_CATEGORIES = {"business", "government", "ngo"}
 
 
+def _subscriber_metrics(sub: SubscriberRecord) -> dict[str, Any]:
+    return {
+        "subscriber_status": sub.status,
+        "service_status": sub.service_status,
+        "recurring_subscription_count": sub.recurring_subscription_count,
+        "next_renewal_at": sub.next_renewal_at.isoformat()
+        if sub.next_renewal_at
+        else None,
+        "billing_cycle": sub.billing_cycle,
+        "mrr": str(sub.recurring_amount_monthly or "0"),
+        "arr": str(sub.annualized_recurring_revenue or "0"),
+        "source_updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+    }
+
+
 class SubscriberSyncMixin:
     """Sync dotmac_sub subscribers → ERP customers (child of reseller, or house)."""
 
@@ -120,6 +135,14 @@ class SubscriberSyncMixin:
                 "reseller_id": sub.reseller_id,
                 "city": sub.city,
                 "postal_code": sub.postal_code,
+                "service_status": sub.service_status,
+                "recurring_subscription_count": sub.recurring_subscription_count,
+                "next_renewal_at": sub.next_renewal_at.isoformat()
+                if sub.next_renewal_at
+                else None,
+                "billing_cycle": sub.billing_cycle,
+                "mrr": str(sub.recurring_amount_monthly or "0"),
+                "arr": str(sub.annualized_recurring_revenue or "0"),
             }
         )
         if skip_unchanged and not self._has_changed(
@@ -142,6 +165,7 @@ class SubscriberSyncMixin:
             "country_code": sub.country_code,
         }
         is_company = (sub.category or "").lower() in _COMPANY_CATEGORIES
+        metrics = _subscriber_metrics(sub)
 
         # Serialize concurrent upserts for this subscriber (batch sync racing
         # the on-demand resolve) before the find, so only one customer is made.
@@ -157,6 +181,7 @@ class SubscriberSyncMixin:
             existing.is_active = sub.is_active
             existing.primary_contact = contact
             existing.billing_address = billing_address
+            existing.dotmac_sub_metrics = metrics
             if not existing.dotmac_sub_id:
                 existing.dotmac_sub_id = sub.id
             existing.dotmac_sub_reseller_id = sub.reseller_id
@@ -182,6 +207,7 @@ class SubscriberSyncMixin:
             default_revenue_account_id=self.default_revenue_account_id,
             primary_contact=contact,
             billing_address=billing_address,
+            dotmac_sub_metrics=metrics,
             dotmac_sub_id=sub.id,
             dotmac_sub_reseller_id=sub.reseller_id,
             parent_customer_id=parent_id,
