@@ -303,6 +303,7 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        employee_search: str | None = None,
         employee_id: str | None = None,
         leave_type_id: str | None = None,
         year: str | None = None,
@@ -320,8 +321,9 @@ class LeaveWebService:
         effective_per_page = per_page if per_page in allowed_sizes else 25
         pagination = PaginationParams.from_page(page, per_page=effective_per_page)
         svc = LeaveService(db, auth)
+        employee_filter = employee_search or employee_id
         resolved_employee_id, resolved_employee_ids = self._resolve_employee_filter(
-            db, org_id, employee_id
+            db, org_id, employee_filter
         )
         result = svc.list_allocations(
             org_id,
@@ -338,12 +340,22 @@ class LeaveWebService:
         leave_types = svc.list_leave_types(org_id, is_active=True).items
 
         context = base_context(request, auth, "Leave Allocations", "leave", db=db)
+        active_filters = build_active_filters(
+            params={
+                "employee_search": employee_search,
+                "leave_type_id": leave_type_id,
+                "year": year,
+                "is_active": is_active,
+            },
+            labels={"employee_search": "Employee"},
+        )
         context.update(
             {
                 "allocations": result.items,
                 "employees": employees,
                 "leave_types": leave_types,
                 "today": date.today(),
+                "employee_search": employee_search,
                 "employee_id": employee_id,
                 "leave_type_id": leave_type_id,
                 "year": parsed_year,
@@ -356,6 +368,7 @@ class LeaveWebService:
                 "has_next": result.has_next,
                 "success": success,
                 "error": error,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(
@@ -1574,6 +1587,7 @@ class LeaveWebService:
         db: Session,
         year: int | None = None,
         department_id: str | None = None,
+        employee_search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Leave balance report page."""
@@ -1587,6 +1601,7 @@ class LeaveWebService:
             org_id,
             year=year,
             department_id=self._parse_uuid(department_id),
+            employee_search=employee_search,
         )
 
         departments = org_svc.list_departments(
@@ -1607,8 +1622,13 @@ class LeaveWebService:
             params={
                 "year": str(year) if year else None,
                 "department_id": department_id,
+                "employee_search": employee_search,
             },
-            labels={"year": "Year", "department_id": "Department"},
+            labels={
+                "year": "Year",
+                "department_id": "Department",
+                "employee_search": "Employee",
+            },
         )
         context = base_context(request, auth, "Leave Balance Report", "leave", db=db)
         context.update(
@@ -1617,6 +1637,7 @@ class LeaveWebService:
                 "departments": departments,
                 "year": year or date.today().year,
                 "department_id": department_id,
+                "employee_search": employee_search,
                 "page": page,
                 "total_pages": total_pages,
                 "total_count": total_count,
