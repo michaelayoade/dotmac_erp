@@ -21,8 +21,9 @@ from uuid import UUID
 
 from celery import shared_task
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.services.common import coerce_uuid
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -71,26 +72,19 @@ def verify_audit_hash_chain(
     to_date = datetime.now(UTC)
     from_date = to_date - timedelta(days=days_back)
 
-    from sqlalchemy import distinct, select
-
-    from app.models.finance.audit.audit_log import AuditLog
-
-    # Determine which organizations to verify
+    # Determine which organizations to verify. Discovery goes through the
+    # narrow tenant catalog, never a cross-org read of `audit.audit_log`: that
+    # table is RLS-protected, so the old DISTINCT returned zero rows under
+    # `app_user` — an integrity check that verified nothing and exited 0.
+    # Enumerating the catalog also covers the case this job exists to catch:
+    # an organization whose audit rows were deleted wholesale disappears from
+    # a DISTINCT over the log itself. `include_inactive=True` because a
+    # deactivated tenant's audit history still has to verify.
     target_org_id = _resolve_org_id(organization_id)
-
-    if target_org_id:
-        org_ids = [target_org_id]
-    else:
-        # Get all organizations that have audit records in the period
-        stmt = select(distinct(AuditLog.organization_id)).where(
-            AuditLog.occurred_at >= from_date,
-            AuditLog.occurred_at <= to_date,
-        )
-        with cross_org_session() as db:
-            org_ids = list(db.scalars(stmt).all())
+    org_ids = organization_ids(include_inactive=True, only=target_org_id)
 
     if not org_ids:
-        logger.info("No audit records found in period — nothing to verify")
+        logger.info("No organizations to verify")
         return results
 
     from app.services.finance.platform.audit_log import AuditLogService

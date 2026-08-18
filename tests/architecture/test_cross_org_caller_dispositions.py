@@ -9,13 +9,32 @@ This inventory is generated from runtime syntax, then dispositioned by a
 human.  It is deliberately separate from the 418-table catalog: the catalog
 states what PostgreSQL protects; this file states how each application entry
 point will reach (or avoid) those protected rows.
+
+``target_relations`` is the column that makes a row checkable.  Before it
+existed, a row could describe its own reach in prose and name a relation the
+caller never queries; nothing compared the claim to anything.  The column
+carries the schema-qualified relations the bypass region actually reaches,
+traced from source one region at a time.  A caller whose reachable set is not
+fixed by its own body is not given an invented one: it goes in
+:data:`UNBOUNDED_REACH`, a named two-directional ratchet, and its recorded
+relations are read as a LOWER bound.
+
+WHAT THIS LEDGER IS FOR.  ERP is a bridge being retired, not a destination
+being built, so ``resolution`` records how a row gets RESOLVED — ``fix``,
+``isolate``, ``disable``, ``retire_with_domain_cutover`` — and never how the
+caller would be redesigned to make ERP look composable.  A row whose answer the
+evidence does not choose is ``undecided`` and named in :data:`UNDISPOSITIONED`;
+an honest backlog is the correct result and an invented disposition is not.
+See ``docs/architecture/rls-bypass-boundary.md``.
 """
 
 from __future__ import annotations
 
 import ast
 import csv
+import re
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -38,18 +57,105 @@ CONTRACTS = frozenset(
         "tenant_session",
     }
 )
-CUTOVER_STATES = frozenset({"blocked", "ready"})
+# How a row gets RESOLVED, not how it gets redesigned. ERP is a bridge being
+# retired, not a destination being built, so "what would make this caller
+# composable" is not a question this ledger asks any more.
+RESOLUTIONS = frozenset(
+    {
+        # The bypass comes out by a local change inside ERP: either it guards
+        # nothing (every target is unpolicied at migration heads), or one narrow
+        # definer resolves the owning tenant before a `session_for_org`.
+        "fix",
+        # The region is legitimately fleet-wide and has no tenant to resolve —
+        # an offline operator command, process startup, a platform-plane
+        # relation with no tenant column, or a cross-tenant operator API where
+        # the cross-tenant query IS the question. Contained behind an explicit
+        # privileged boundary, not converted.
+        "isolate",
+        # No production call site, or the function it serves is being switched
+        # off rather than fixed or migrated.
+        "disable",
+        # Containing it would mean redesigning a business-domain job around a
+        # tenant catalogue. Not done: authority for that domain moves to a
+        # released module and the row goes with it.
+        "retire_with_domain_cutover",
+    }
+)
+AWAITING_DISPOSITION = "undecided"
+"""The honest unknown. A row here is NOT resolved and must never be counted as
+though it were; it sits in :data:`UNDISPOSITIONED` with the reason its answer
+is not yet determined by the evidence in hand."""
+RESOLUTION_VALUES = RESOLUTIONS | {AWAITING_DISPOSITION}
 INVENTORY_FIELDS = (
     "path",
     "symbol",
     "mechanism",
     "occurrences",
+    "target_relations",
     "protected_access",
     "contract",
-    "cutover_state",
+    "resolution",
     "owner",
     "evidence",
 )
+
+# `|` cannot appear in the TSV's field separator and cannot appear inside an
+# unquoted PostgreSQL identifier. If ERP ever grows a quoted identifier that
+# contains one, the format check fails the build rather than mis-splitting it.
+RELATION = re.compile(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*")
+TARGET_RELATIONS = re.compile(rf"^{RELATION.pattern}(\|{RELATION.pattern})*$")
+NO_TARGETS = "-"
+"""The bypass region issues no statement at all. A legal value, never a legal
+disposition: the last such caller (``crm_inventory_health_check``) was deleted
+when its bypass turned out to guard nothing, and the sentinel stays so the
+guard bites on the next one rather than on the last one."""
+
+
+def row_relations(row: Mapping[str, str]) -> tuple[str, ...]:
+    value = row["target_relations"]
+    if value == NO_TARGETS:
+        return ()
+    return tuple(value.split("|"))
+
+
+# A caller whose reachable relation set is not fixed by its own body. No claim
+# of completeness is made for these rows; what they record is a LOWER bound.
+# Enumerated with the evidence that makes each one unbounded; two-directional
+# ratchet that shrinks by narrowing a caller, never by moving a row into it.
+UNBOUNDED_REACH: Mapping[tuple[str, str, str], str] = {
+    (
+        "app/services/settings_seed.py",
+        "_global_settings_seed.scoped_seed",
+        "allow_cross_org",
+    ): (
+        "the bypass region is a decorator body wrapping an arbitrary callable, "
+        "so its reach is fixed by the seven @_global_settings_seed call sites "
+        "and not by this symbol. target_relations records what those call sites "
+        "reach today; a new decorated seed widens it without touching this row."
+    ),
+    (
+        "app/tasks/data_health.py",
+        "_task_session",
+        "cross_org_session",
+    ): (
+        "the bypass region returns a session context to its caller instead of "
+        "issuing a statement, so its reach is the union of the ten data-health "
+        "tasks that pass organization_id=None. target_relations records that "
+        "union as it stands; a new task widens it without touching this row."
+    ),
+    (
+        "app/tasks/finance.py",
+        "refresh_analysis_cubes",
+        "cross_org_session",
+    ): (
+        "the None-organization branch issues REFRESH MATERIALIZED VIEW on a "
+        "name read out of rpt.analysis_cube.source_view and validated only by a "
+        "regex, so the refreshed relation is a row VALUE that cannot be "
+        "enumerated statically. It also reads pg_catalog.pg_matviews, which no "
+        "tenant catalog can ever contain: the extraction query filters "
+        "relkind='r' and excludes the system schemas."
+    ),
+}
 
 DIRECT_MARKER_WRITERS = frozenset(
     {
@@ -257,107 +363,196 @@ def test_every_disposition_uses_the_closed_contract_vocabulary() -> None:
     assert rows
     assert all(row["mechanism"] in MECHANISMS for row in rows)
     assert all(row["contract"] in CONTRACTS for row in rows)
-    assert all(row["cutover_state"] in CUTOVER_STATES for row in rows)
+    assert all(row["resolution"] in RESOLUTION_VALUES for row in rows)
     assert all(row["protected_access"] in {"no", "yes"} for row in rows)
     assert all(row["owner"].strip() for row in rows)
     assert all(row["evidence"].strip() for row in rows)
 
 
-def test_ready_callers_do_not_claim_access_to_an_rls_protected_table() -> None:
-    offenders = [
-        f"{row['path']}::{row['symbol']}"
+def test_target_relations_is_a_sorted_deduplicated_relation_list() -> None:
+    """The column is a machine-readable claim, so it is parsed, not read.
+
+    Sorting removes the reorder-to-dodge-a-diff move and makes two rows that
+    reach the same relations compare equal on sight.
+    """
+    malformed: list[str] = []
+    for row in _inventory_rows():
+        value = row["target_relations"]
+        where = f"{row['path']}::{row['symbol']} ({row['mechanism']})"
+        if value == NO_TARGETS:
+            continue
+        if not TARGET_RELATIONS.match(value):
+            malformed.append(f"{where}: {value!r} is not a `|`-joined relation list")
+            continue
+        parts = value.split("|")
+        if list(parts) != sorted(set(parts)):
+            malformed.append(f"{where}: {value!r} is not sorted and deduplicated")
+    assert malformed == []
+
+
+def test_the_unbounded_reach_backlog_is_a_two_directional_ratchet() -> None:
+    """Three callers whose relation set is not fixed by their own body.
+
+    A row lands here instead of receiving an invented reach.  The count is a
+    ratchet in both directions: a fourth unbounded caller fails until it is
+    enumerated and reviewed, and narrowing one of these three fails until the
+    count is lowered in the same change.
+    """
+    keys = {(row["path"], row["symbol"], row["mechanism"]) for row in _inventory_rows()}
+    assert set(UNBOUNDED_REACH) <= keys
+    assert all(evidence.strip() for evidence in UNBOUNDED_REACH.values())
+    # Each still records the relations it is known to reach: unbounded means
+    # the set is a LOWER bound, not that it is unknown.
+    recorded = {
+        (row["path"], row["symbol"], row["mechanism"]): row_relations(row)
         for row in _inventory_rows()
-        if row["cutover_state"] == "ready" and row["protected_access"] != "no"
+    }
+    assert all(recorded[key] for key in UNBOUNDED_REACH)
+    assert len(UNBOUNDED_REACH) == 3, (
+        "the unbounded-reach backlog is enumerated and shrink-only; a new entry "
+        "is new debt and a removed one must lower this count in the same change"
+    )
+
+
+# Rows whose resolution the evidence in hand does not choose. NOT a fifth
+# resolution and never counted as one: each entry is a question, with the fact
+# that makes it a question. Two-directional and shrink-only — an entry leaves
+# only by being resolved into RESOLUTIONS in a reviewed change that lowers the
+# literal below, and an entry arrives only the same way.
+UNDISPOSITIONED: Mapping[tuple[str, str], str] = {
+    (
+        "app/tasks/data_health.py",
+        "_task_session",
+    ): (
+        "the region returns a session context rather than issuing a statement, "
+        "and its ten callers straddle three answers: the ar/ap/gl repairs are a "
+        "domain cutover, platform.event_outbox has no tenant column to fan out "
+        "on, and public.notification is neither. One row cannot carry three "
+        "resolutions and splitting it is a change to app/, not to this ledger."
+    ),
+    (
+        "app/tasks/dotmac_sub.py",
+        "cleanup_stale_dotmac_sub_sync_history",
+    ): (
+        "sync.sync_history is the ERP side of the Sub integration, and whether "
+        "that transport is retired with a domain or outlives every domain as "
+        "the bridge's own plumbing is not decided by anything checked in. "
+        "Guessing either way would make this ledger assert a roadmap."
+    ),
+    (
+        "app/tasks/finance.py",
+        "refresh_analysis_cubes",
+    ): (
+        "the refreshed relation is a row VALUE out of rpt.analysis_cube."
+        "source_view, so the region is already in UNBOUNDED_REACH. A fleet-wide "
+        "materialized view has no per-tenant form to fan out to and no owner to "
+        "hand to a module until the reporting surface itself is dispositioned."
+    ),
+}
+
+# Two-directional, per value. A rise in `undecided` is new debt. A fall in any
+# resolved value is a claim being withdrawn, which must be as loud as a claim
+# being made — that is the whole point of asserting the distribution rather
+# than only the backlog.
+RESOLUTION_CENSUS: Mapping[str, int] = {
+    "fix": 117,
+    "isolate": 18,
+    "retire_with_domain_cutover": 9,
+    "disable": 0,
+    "undecided": 3,
+}
+
+
+def test_the_resolution_census_is_a_two_directional_ratchet() -> None:
+    """Every value's count is a checked literal, including the empty one.
+
+    ``disable`` stands at 0 deliberately, and is asserted rather than omitted:
+    a vocabulary member with no member is exactly how a value quietly stops
+    being reviewed.  The four rows whose bypass turned out to guard nothing
+    were DELETED rather than dispositioned, which is why none of them is here.
+    """
+    assert set(RESOLUTION_CENSUS) == RESOLUTION_VALUES
+    census = Counter(row["resolution"] for row in _inventory_rows())
+    observed = {value: census.get(value, 0) for value in RESOLUTION_VALUES}
+    assert observed == dict(RESOLUTION_CENSUS), (
+        f"the resolution distribution moved: recorded={dict(RESOLUTION_CENSUS)} "
+        f"observed={observed}. A rise in `undecided` is new debt. A fall in a "
+        "resolved value is a withdrawn claim. Either way the literal moves in "
+        "the same reviewed change, never silently."
+    )
+    assert sum(RESOLUTION_CENSUS.values()) == len(_inventory_rows())
+
+
+def test_the_awaiting_disposition_backlog_is_named_and_shrink_only() -> None:
+    """An honest unknown is a named row with a reason, not a blank column."""
+    undecided = {
+        (row["path"], row["symbol"])
+        for row in _inventory_rows()
+        if row["resolution"] == AWAITING_DISPOSITION
+    }
+    assert undecided == set(UNDISPOSITIONED), (
+        "the `undecided` rows and the named backlog disagree: "
+        f"rows-only={sorted(undecided - set(UNDISPOSITIONED))}, "
+        f"backlog-only={sorted(set(UNDISPOSITIONED) - undecided)}. A row may "
+        "not be undecided anonymously."
+    )
+    assert all(reason.strip() for reason in UNDISPOSITIONED.values())
+    assert len(UNDISPOSITIONED) == RESOLUTION_CENSUS[AWAITING_DISPOSITION]
+
+
+def test_a_caller_that_guards_nothing_is_resolved_by_a_fix() -> None:
+    """The one rule that is mechanically checkable, so it is checked.
+
+    A region whose every target is unpolicied at migration heads
+    (``protected_access == no``) is not waiting on a domain cutover and needs no
+    privileged boundary: the bypass guards nothing and comes out locally.  A
+    row that claims otherwise is claiming a retirement dependency it does not
+    have, which is how a bridge gets kept alive by its own ledger.
+    """
+    offenders = [
+        f"{row['path']}::{row['symbol']} -> {row['resolution']}"
+        for row in _inventory_rows()
+        if row["protected_access"] == "no" and row["resolution"] != "fix"
     ]
     assert offenders == []
 
 
-def test_app_user_cutover_blocker_count_is_a_two_directional_ratchet() -> None:
-    # 108 at disposition (#305) -> 75 (#306, 33 catalog enumerations) -> 72
-    # (#307, three discipline domain scans) -> 69 (#302, three obsolete OIDC
-    # callers). This change converts eight workforce fan-outs.
-    #
-    # It ALSO reclassifies five rows from tenant_catalog_definer to
-    # tenant_resolution_definer. That moves nothing here on purpose:
-    # reclassification corrects what a caller needs, not whether it blocks.
-    # The count falls only when a caller is actually converted.
-    #
-    # The webhook SSRF hardening (webhook_policy becomes platform-owned) moves
-    # no caller in its first two halves: 61, unchanged. It declares `SettingSpec.scope`,
-    # builds the write refusal plus the read-side scope override, closes the
-    # tenant writers and clamps both outbound timeout channels. It touches
-    # app/ in eight files and adds no `allow_cross_org`, `cross_org_session`
-    # or bypass-session dependency of its own -- deliberately so.
-    # app/services/secrets.py::_openbao_allow_insecure needed a
-    # platform-scoped read, and the obvious way to get one was a local
-    # `allow_cross_org` around its hand-written query; it was instead routed
-    # through DomainSettingService.get_by_key, which already owns that bypass
-    # and already discards a caller's organization for a platform-owned key.
-    # A hardening step that grew the bypass surface to hold a scope override in
-    # a second place would have been the wrong trade twice over.
-    #
-    # The startup split deletes one row: 152 -> 151, blocked 61 -> 60.
-    # app/startup.py::warn_unconfigured_webhook_allowlist asked two
-    # questions of different scopes inside one allow_cross_org block, and the
-    # block was doing almost no work. Its settings read reaches
-    # DomainSettingService.get_by_key, which opens its own cross-org block
-    # around the SELECT, so the outer wrapper added nothing there. Its rule
-    # count was select(func.count()).select_from(WorkflowRule) — a shape
-    # app.db.org_listener._add_org_filter resolves no target class from,
-    # because bind_mapper is None and func.count() puts no entity in
-    # column_descriptions — so the listener returned before injecting anything
-    # and the count was fleet-wide with or without the wrapper, on a table
-    # (automation.workflow_rule) that appears in
-    # docs/rls-coverage-baseline.json known_gaps and has no policy to catch it.
-    #
-    # That is why deleting the wrapper alone would have been a regression
-    # rather than a fix: it would have left a fleet-wide count reading as
-    # though it were tenant-scoped. Both questions changed shape. The ceiling
-    # is now read at STATED platform scope
-    # (webhook_policy.read_platform_webhook_ceiling, organization_id=None),
-    # where the old path got the platform row only by accident of startup
-    # carrying no ambient organization; the discovery is now
-    # any_tenant_has_an_active_webhook_rule, which enumerates the catalogue
-    # definer via for_each_organization and asks each organization inside its
-    # own session_for_org with an explicit organization_id predicate. This
-    # count falls because the caller was genuinely converted and narrowed.
-    #
-    # The deleted row's evidence string named core_org.organization, a relation
-    # that caller never read — the same class of inaccuracy already recorded
-    # against the three app/api/audit.py rows. It described the remedy, not the
-    # access. Recorded here rather than corrected in place, because the row is
-    # gone.
-    #
-    # No new row replaces it. webhook_policy uses for_each_organization,
-    # session_for_org and resolve_value; none is a scanned mechanism, and
-    # resolve_value's descent into get_by_key's own allow_cross_org is an
-    # existing ready row on app/services/domain_settings.py, which rows key on
-    # (path, symbol, mechanism) and so does not grow.
-    #
-    # The §4.5 call-site cutover and the platform-row door repairs that follow
-    # move nothing again: 151 rows, blocked 60. They add no allow_cross_org,
-    # cross_org_session or bypass-session dependency. One row is RENAMED --
-    # app/services/domain_settings.py::restore_from_history became
-    # ::_restore_from_history when the platform-owned refusal was wrapped
-    # around it -- and a rename is not a delta: same path, same mechanism, same
-    # occurrence, same `ready` disposition, so both counts stand. The row was
-    # edited rather than left to drift, because the scan keys on
-    # (path, symbol, mechanism) and a stale symbol would present as one row
-    # appearing and one disappearing.
-    #
-    # Reclassification never moves this number. It corrects what a caller
-    # needs, not whether it blocks; the count falls only when a caller is
-    # actually converted or deleted.
-    baseline = 60
+def test_the_app_user_blocker_count_is_a_two_directional_ratchet() -> None:
+    """What still blocks the live bridge's `app_user` cutover.
+
+    This is containment evidence and is deliberately NOT the retirement axis: a
+    row can be resolved by a domain cutover years from now and still block the
+    cutover today.  It counts ``protected_access``, a fact about relations, so
+    it cannot be moved by relabelling a resolution.
+
+    108 at disposition (#305) -> 75 (#306, 33 catalog enumerations) -> 72
+    (#307, three discipline domain scans) -> 69 (#302, three obsolete OIDC
+    callers) -> 57 (four bypasses deleted for guarding nothing: 61 -> 57, in
+    the same change that took 152 rows to 148) -> 56 (#315 converted the
+    webhook startup scan, taking the ledger to 147 rows).
+
+    Three candidates examined in that pass were REFUTED and are recorded
+    because a refutation is a finding, not an omission.
+    ``cleanup_old_hook_executions`` keeps its row: platform.service_hook_
+    execution is a known RLS gap with a nullable organization_id, so a fan-out
+    would permanently orphan every NULL-org row. ``app/main.py::lifespan``
+    keeps its row: it is process startup with no request and no authenticated
+    actor. The three ``app/api/audit.py`` rows keep theirs: a cross-tenant
+    operator API has no tenant to iterate, because the cross-tenant query IS
+    the question. All four are now ``isolate``, which is what that refutation
+    was always saying.
+    """
+    baseline = 56
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()
-        if row["cutover_state"] == "blocked"
+        if row["protected_access"] == "yes"
     ]
     assert len(blocked) == baseline, (
-        f"{len(blocked)} cross-org callers block app_user cutover; baseline is "
-        f"{baseline}. A rise is new debt. A fall is progress that must lower the "
-        "baseline in the same reviewed change."
+        f"{len(blocked)} cross-org callers reach an RLS-protected relation and "
+        f"block the app_user cutover; baseline is {baseline}. A rise is new "
+        "debt. A fall is progress that must lower the baseline in the same "
+        "reviewed change."
     )
 
 

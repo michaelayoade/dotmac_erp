@@ -1,152 +1,148 @@
-path	symbol	mechanism	occurrences	protected_access	contract	cutover_state	owner	evidence
-app/api/audit.py	delete_audit_event	get_db_admin_bypass	1	yes	isolated_cross_tenant_service	blocked	audit	cross-tenant API targets RLS-protected audit.audit_log
-app/api/audit.py	get_audit_event	get_db_admin_bypass	1	yes	isolated_cross_tenant_service	blocked	audit	cross-tenant API targets RLS-protected audit.audit_log
-app/api/audit.py	list_audit_events	get_db_admin_bypass	1	yes	isolated_cross_tenant_service	blocked	audit	cross-tenant API targets RLS-protected audit.audit_log
-app/api/auth.py	create_api_key	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	create_mfa_method	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	create_session	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	create_user_credential	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	delete_api_key	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	delete_mfa_method	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	delete_session	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	delete_user_credential	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	generate_api_key	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	get_api_key	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	get_mfa_method	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	get_session	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	get_user_credential	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	list_api_keys	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	list_mfa_methods	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	list_sessions	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	list_user_credentials	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	update_api_key	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	update_mfa_method	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	update_session	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth.py	update_user_credential	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public auth CRUD tables are RLS=false at migration heads
-app/api/auth_flow.py	forgot_password	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	login	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	logout	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	mfa_confirm	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	mfa_setup	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	mfa_verify	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	refresh	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	reset_password_endpoint	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/auth_flow.py	reset_password_required	get_db_auth_bypass	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/finance/payments.py	paystack_webhook	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
-app/api/rbac.py	create_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	create_person_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	create_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	create_role_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	delete_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	delete_person_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	delete_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	delete_role_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	get_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	get_person_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	get_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	get_role_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	list_permissions	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	list_person_roles	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	list_role_permissions	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	list_roles	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	update_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	update_person_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	update_role	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/rbac.py	update_role_permission	get_db_admin_bypass	1	no	ordinary_app_user	ready	identity	public RBAC tables are RLS=false at migration heads
-app/api/service_principal.py	require_service_auth	allow_cross_org	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/api/settings.py	create_branding	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	delete_branding	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	export_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_audit_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_auth_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_automation_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_branding	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_branding_css	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_branding_fonts_url	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_email_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_features_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_history	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_or_create_branding	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_payments_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_reporting_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	get_scheduler_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	import_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_audit_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_auth_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_automation_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_email_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_features_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_history	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_payments_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_reporting_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	list_scheduler_settings	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	restore_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	update_branding	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_audit_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_auth_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_automation_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_email_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_features_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_payments_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_reporting_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/api/settings.py	upsert_scheduler_setting	get_db_admin_bypass	1	no	ordinary_app_user	ready	settings	settings history and branding tables are RLS=false at migration heads
-app/main.py	_load_audit_settings	allow_cross_org	1	no	ordinary_app_user	ready	settings	audit configuration reads RLS=false domain_settings
-app/main.py	lifespan	allow_cross_org	1	yes	tenant_session	blocked	platform	split global settings seed from default-tenant integration binding seed
-app/services/auth_dependencies.py	require_tenant_auth	allow_cross_org	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/services/auth_dependencies.py	require_user_auth	allow_cross_org	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-app/services/domain_settings.py	DomainSettings.ensure_by_key	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/domain_settings.py	DomainSettings.get_by_key	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/domain_settings.py	DomainSettings.list	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/domain_settings.py	DomainSettings.upsert_by_key	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/domain_settings.py	_restore_from_history	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/domain_settings.py	_restore_target_organization	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false settings tables
-app/services/finance/banking/mono_sync.py	MonoSyncService._record_webhook_failure	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
-app/services/finance/banking/mono_sync.py	MonoSyncService.process_webhook	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
-app/services/finance/banking/mono_sync.py	MonoSyncService.sync_by_mono_account_id	allow_cross_org	1	yes	tenant_resolution_definer	blocked	finance	external identifier resolution reaches an RLS-protected finance table
-app/services/infrastructure_health.py	InfrastructureHealthService._monitoring_recipients	allow_cross_org	1	yes	tenant_catalog_definer	blocked	infrastructure_health	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/services/people/discipline/web/discipline_web.py	DisciplineWebService._can_view_department_case	allow_cross_org	1	yes	tenant_session	blocked	people	authenticated request must use its existing tenant context
-app/services/scheduler_config.py	_get_setting_value	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
-app/services/settings_cache.py	SettingsCache._load_domain_rows	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
-app/services/settings_cache.py	SettingsCache._load_setting_row	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
-app/services/settings_seed.py	_global_settings_seed.scoped_seed	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
-app/services/settings_seed.py	_sync_scheduler_connection	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
-app/services/settings_seed.py	seed_auth_settings	allow_cross_org	1	no	ordinary_app_user	ready	settings	explicit scope predicates target RLS=false domain_settings
-app/tasks/audit.py	_write_audit_event	cross_org_session	1	yes	tenant_resolution_definer	blocked	audit	event identity must resolve one tenant before opening session_for_org
-app/tasks/audit_integrity.py	verify_audit_hash_chain	cross_org_session	1	yes	tenant_catalog_definer	blocked	audit_integrity	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/automation.py	_resolve_workflow_rule_org	cross_org_session	1	yes	tenant_resolution_definer	blocked	automation	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
-app/tasks/banking.py	auto_match_unreconciled_statements	cross_org_session	1	yes	tenant_catalog_definer	blocked	banking	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/crm.py	crm_inventory_health_check	cross_org_session	1	yes	tenant_catalog_definer	blocked	crm	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/data_health.py	_task_session	cross_org_session	1	yes	tenant_catalog_definer	blocked	data_health	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/dotmac_sub.py	cleanup_stale_dotmac_sub_sync_history	cross_org_session	1	yes	tenant_catalog_definer	blocked	dotmac_sub	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/email.py	send_email_async	cross_org_session	1	yes	tenant_resolution_definer	blocked	email	event identity must resolve one tenant before opening session_for_org
-app/tasks/expense.py	poll_stuck_expense_transfers	cross_org_session	2	yes	tenant_catalog_definer	blocked	expense	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/expense.py	process_expense_approval_reminders	cross_org_session	1	yes	tenant_catalog_definer	blocked	expense	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/feature_flags.py	archive_expired_feature_flags	cross_org_session	1	yes	tenant_catalog_definer	blocked	feature_flags	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/finance.py	_resolve_report_instance_org	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/finance.py	process_monthly_depreciation_runs	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/finance.py	refresh_analysis_cubes	cross_org_session	2	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/finance.py	refresh_stale_balances	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/finance.py	release_expired_stock_reservations	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/finance.py	sync_mono_account	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/finance.py	sync_mono_transactions	cross_org_session	1	yes	tenant_catalog_definer	blocked	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/hooks.py	cleanup_old_hook_executions	cross_org_session	1	yes	tenant_catalog_definer	blocked	hooks	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/hooks.py	execute_async_hook	cross_org_session	1	yes	tenant_resolution_definer	blocked	hooks	event identity must resolve one tenant before opening session_for_org
-app/tasks/hr.py	send_welcome_email	cross_org_session	1	yes	tenant_catalog_definer	blocked	hr	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
-app/tasks/notifications.py	_task_db_session	cross_org_session	1	yes	tenant_resolution_definer	blocked	notifications	event identity must resolve one tenant before opening session_for_org
-app/tasks/outbox_relay.py	_task_db_session	cross_org_session	1	yes	tenant_resolution_definer	blocked	outbox_relay	event identity must resolve one tenant before opening session_for_org
-app/tasks/performance.py	activate_cycle	cross_org_session	1	yes	tenant_resolution_definer	blocked	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
-app/tasks/performance.py	calculate_cycle_progress	cross_org_session	1	yes	tenant_resolution_definer	blocked	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
-app/tasks/performance.py	complete_cycle	cross_org_session	1	yes	tenant_resolution_definer	blocked	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
-app/tasks/performance.py	generate_cycle_appraisals	cross_org_session	1	yes	tenant_resolution_definer	blocked	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
-app/tenant_catalog.py	_discover_sqlite	allow_cross_org	1	no	ordinary_app_user	ready	platform	SQLite unit lane only; the PostgreSQL branch calls the tenant_catalog definer and never reaches this code
-app/tools/backfill_mono_lagos_date.py	run	cross_org_session	1	yes	tenant_resolution_definer	blocked	operations	resolve the target row tenant narrowly then reopen with session_for_org
-app/tools/reset_expense_payment_intent.py	main	cross_org_session	1	yes	tenant_resolution_definer	blocked	operations	resolve the target row tenant narrowly then reopen with session_for_org
-app/web/deps.py	_get_person_for_web_session	allow_cross_org	1	yes	tenant_resolution_definer	blocked	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
-scripts/backfill_mailcow_offboarding.py	_list_org_ids	cross_org_session	1	yes	tenant_catalog_definer	blocked	operations	active maintenance script must enumerate ids narrowly then use session_for_org
-scripts/create_org.py	main	cross_org_session	1	yes	isolated_cross_tenant_service	blocked	operations	bootstrap or seed command needs an explicit offline privileged boundary
-scripts/seed_e2e_data.py	main	cross_org_session	1	yes	isolated_cross_tenant_service	blocked	operations	bootstrap or seed command needs an explicit offline privileged boundary
-scripts/seed_nigeria.py	main	cross_org_session	1	yes	isolated_cross_tenant_service	blocked	operations	bootstrap or seed command needs an explicit offline privileged boundary
-scripts/seed_rbac.py	main	cross_org_session	1	yes	isolated_cross_tenant_service	blocked	operations	bootstrap or seed command needs an explicit offline privileged boundary
-scripts/settings_validate.py	main	cross_org_session	1	yes	tenant_catalog_definer	blocked	operations	active maintenance script must enumerate ids narrowly then use session_for_org
-scripts/setup_e2e_user.py	check_organization_exists	cross_org_session	1	yes	isolated_cross_tenant_service	blocked	operations	bootstrap or seed command needs an explicit offline privileged boundary
-scripts/update_user_credentials.py	main	cross_org_session	1	yes	tenant_catalog_definer	blocked	operations	active maintenance script must enumerate ids narrowly then use session_for_org
+path	symbol	mechanism	occurrences	target_relations	protected_access	contract	resolution	owner	evidence
+app/api/audit.py	delete_audit_event	get_db_admin_bypass	1	public.audit_events	yes	isolated_cross_tenant_service	isolate	audit	cross-tenant API targets RLS-protected audit.audit_log
+app/api/audit.py	get_audit_event	get_db_admin_bypass	1	public.audit_events	yes	isolated_cross_tenant_service	isolate	audit	cross-tenant API targets RLS-protected audit.audit_log
+app/api/audit.py	list_audit_events	get_db_admin_bypass	1	public.audit_events	yes	isolated_cross_tenant_service	isolate	audit	cross-tenant API targets RLS-protected audit.audit_log
+app/api/auth.py	create_api_key	get_db_admin_bypass	1	public.api_keys|public.people	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	create_mfa_method	get_db_admin_bypass	1	public.mfa_methods|public.people	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	create_session	get_db_admin_bypass	1	public.people|public.sessions	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	create_user_credential	get_db_admin_bypass	1	public.domain_settings|public.people|public.user_credentials	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	delete_api_key	get_db_admin_bypass	1	public.api_keys	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads; api_keys inherits its tenant through person_id, which is nullable only by accident of 799a0ecebdd4 while every sibling identity table is NOT NULL, so the inherited path is enforced in practice and the NOT NULL repair is a recorded follow-up (docs/architecture/rls-bypass-boundary.md)
+app/api/auth.py	delete_mfa_method	get_db_admin_bypass	1	public.mfa_methods	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	delete_session	get_db_admin_bypass	1	public.sessions	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	delete_user_credential	get_db_admin_bypass	1	public.user_credentials	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	generate_api_key	get_db_admin_bypass	1	public.api_keys|public.domain_settings|public.people	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	get_api_key	get_db_admin_bypass	1	public.api_keys	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads; api_keys inherits its tenant through person_id, which is nullable only by accident of 799a0ecebdd4 while every sibling identity table is NOT NULL, so the inherited path is enforced in practice and the NOT NULL repair is a recorded follow-up (docs/architecture/rls-bypass-boundary.md)
+app/api/auth.py	get_mfa_method	get_db_admin_bypass	1	public.mfa_methods	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	get_session	get_db_admin_bypass	1	public.sessions	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	get_user_credential	get_db_admin_bypass	1	public.user_credentials	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	list_api_keys	get_db_admin_bypass	1	public.api_keys	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads; api_keys inherits its tenant through person_id, which is nullable only by accident of 799a0ecebdd4 while every sibling identity table is NOT NULL, so the inherited path is enforced in practice and the NOT NULL repair is a recorded follow-up (docs/architecture/rls-bypass-boundary.md)
+app/api/auth.py	list_mfa_methods	get_db_admin_bypass	1	public.mfa_methods	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	list_sessions	get_db_admin_bypass	1	public.sessions	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	list_user_credentials	get_db_admin_bypass	1	public.user_credentials	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	update_api_key	get_db_admin_bypass	1	public.api_keys|public.people	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	update_mfa_method	get_db_admin_bypass	1	public.mfa_methods|public.people	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	update_session	get_db_admin_bypass	1	public.people|public.sessions	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth.py	update_user_credential	get_db_admin_bypass	1	public.people|public.user_credentials	no	ordinary_app_user	fix	identity	public auth CRUD tables are RLS=false at migration heads
+app/api/auth_flow.py	forgot_password	get_db_auth_bypass	1	public.domain_settings|public.email_profile|public.module_email_routing|public.people|public.user_credentials	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	login	get_db_auth_bypass	1	audit.audit_log|public.domain_settings|public.mfa_methods|public.people|public.permissions|public.person_roles|public.role_permissions|public.roles|public.sessions|public.user_credentials	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	logout	get_db_auth_bypass	1	audit.audit_log|public.domain_settings|public.people|public.sessions	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	mfa_confirm	get_db_auth_bypass	1	audit.audit_log|public.domain_settings|public.mfa_methods|public.people	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	mfa_setup	get_db_auth_bypass	1	public.domain_settings|public.mfa_methods|public.people|public.user_credentials	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	mfa_verify	get_db_auth_bypass	1	public.domain_settings|public.mfa_methods|public.permissions|public.person_roles|public.role_permissions|public.roles|public.sessions	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	refresh	get_db_auth_bypass	1	public.domain_settings|public.permissions|public.person_roles|public.role_permissions|public.roles|public.sessions	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	reset_password_endpoint	get_db_auth_bypass	1	audit.audit_log|public.domain_settings|public.people|public.sessions|public.user_credentials	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/auth_flow.py	reset_password_required	get_db_auth_bypass	1	public.user_credentials	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/finance/payments.py	paystack_webhook	allow_cross_org	1	payments.payment_intent	yes	tenant_resolution_definer	fix	finance	external identifier resolution reaches an RLS-protected finance table
+app/api/rbac.py	create_permission	get_db_admin_bypass	1	public.permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	create_person_role	get_db_admin_bypass	1	public.people|public.person_roles|public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	create_role	get_db_admin_bypass	1	public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	create_role_permission	get_db_admin_bypass	1	public.permissions|public.role_permissions|public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	delete_permission	get_db_admin_bypass	1	public.permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	delete_person_role	get_db_admin_bypass	1	public.person_roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	delete_role	get_db_admin_bypass	1	public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	delete_role_permission	get_db_admin_bypass	1	public.role_permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	get_permission	get_db_admin_bypass	1	public.permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	get_person_role	get_db_admin_bypass	1	public.person_roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	get_role	get_db_admin_bypass	1	public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	get_role_permission	get_db_admin_bypass	1	public.role_permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	list_permissions	get_db_admin_bypass	1	public.permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	list_person_roles	get_db_admin_bypass	1	public.person_roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	list_role_permissions	get_db_admin_bypass	1	public.role_permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	list_roles	get_db_admin_bypass	1	public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	update_permission	get_db_admin_bypass	1	public.permissions	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	update_person_role	get_db_admin_bypass	1	public.people|public.person_roles|public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	update_role	get_db_admin_bypass	1	public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/rbac.py	update_role_permission	get_db_admin_bypass	1	public.permissions|public.role_permissions|public.roles	no	ordinary_app_user	fix	identity	public RBAC tables are RLS=false at migration heads
+app/api/service_principal.py	require_service_auth	allow_cross_org	1	public.people	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/api/settings.py	create_branding	get_db_admin_bypass	1	core_org.organization_branding	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	delete_branding	get_db_admin_bypass	1	core_org.organization_branding	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	export_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_audit_setting	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_auth_setting	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_automation_setting	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_branding	get_db_admin_bypass	1	core_org.organization_branding	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_branding_css	get_db_admin_bypass	1	core_org.organization_branding	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_branding_fonts_url	get_db_admin_bypass	1	core_org.organization_branding	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_email_setting	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_features_setting	get_db_admin_bypass	1	public.domain_settings|public.feature_flag_registry	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_history	get_db_admin_bypass	1	public.domain_setting_history	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_or_create_branding	get_db_admin_bypass	1	core_org.organization|core_org.organization_branding	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_payments_setting	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_reporting_setting	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	get_scheduler_setting	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	import_settings	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_audit_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_auth_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_automation_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_email_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_features_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_history	get_db_admin_bypass	1	public.domain_setting_history	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_payments_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_reporting_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	list_scheduler_settings	get_db_admin_bypass	1	public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	restore_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	update_branding	get_db_admin_bypass	1	core_org.organization_branding	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_audit_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_auth_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_automation_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_email_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_features_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings|public.feature_flag_registry	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_payments_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_reporting_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/api/settings.py	upsert_scheduler_setting	get_db_admin_bypass	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	settings history and branding tables are RLS=false at migration heads
+app/main.py	_load_audit_settings	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	audit configuration reads RLS=false domain_settings
+app/main.py	lifespan	allow_cross_org	1	public.domain_setting_history|public.domain_settings|public.feature_flag_registry|public.scheduled_tasks|sync.integration_config	yes	tenant_session	isolate	platform	split global settings seed from default-tenant integration binding seed
+app/services/auth_dependencies.py	require_tenant_auth	allow_cross_org	1	public.people	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/services/auth_dependencies.py	require_user_auth	allow_cross_org	1	public.sessions	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+app/services/domain_settings.py	DomainSettings.ensure_by_key	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false settings tables
+app/services/domain_settings.py	DomainSettings.get_by_key	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false settings tables
+app/services/domain_settings.py	DomainSettings.list	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false settings tables
+app/services/domain_settings.py	DomainSettings.upsert_by_key	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false settings tables
+app/services/domain_settings.py	_restore_from_history	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false settings tables
+app/services/domain_settings.py	_restore_target_organization	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false settings tables
+app/services/finance/banking/mono_sync.py	MonoSyncService._record_webhook_failure	allow_cross_org	1	banking.bank_accounts	yes	tenant_resolution_definer	fix	finance	external identifier resolution reaches an RLS-protected finance table
+app/services/finance/banking/mono_sync.py	MonoSyncService.process_webhook	allow_cross_org	1	public.domain_settings	yes	tenant_resolution_definer	fix	finance	external identifier resolution reaches an RLS-protected finance table
+app/services/finance/banking/mono_sync.py	MonoSyncService.sync_by_mono_account_id	allow_cross_org	1	banking.bank_accounts	yes	tenant_resolution_definer	fix	finance	external identifier resolution reaches an RLS-protected finance table
+app/services/infrastructure_health.py	InfrastructureHealthService._monitoring_recipients	allow_cross_org	1	public.people	yes	tenant_catalog_definer	isolate	infrastructure_health	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/services/scheduler_config.py	_get_setting_value	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false domain_settings
+app/services/settings_cache.py	SettingsCache._load_domain_rows	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false domain_settings
+app/services/settings_cache.py	SettingsCache._load_setting_row	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false domain_settings
+app/services/settings_seed.py	_global_settings_seed.scoped_seed	allow_cross_org	1	public.domain_setting_history|public.domain_settings|public.feature_flag_registry	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false domain_settings
+app/services/settings_seed.py	_sync_scheduler_connection	allow_cross_org	1	public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false domain_settings
+app/services/settings_seed.py	seed_auth_settings	allow_cross_org	1	public.domain_setting_history|public.domain_settings	no	ordinary_app_user	fix	settings	explicit scope predicates target RLS=false domain_settings
+app/tasks/audit.py	_write_audit_event	cross_org_session	1	public.audit_events	yes	tenant_resolution_definer	fix	audit	event identity must resolve one tenant before opening session_for_org
+app/tasks/automation.py	_resolve_workflow_rule_org	cross_org_session	1	automation.workflow_rule	yes	tenant_resolution_definer	fix	automation	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
+app/tasks/banking.py	auto_match_unreconciled_statements	cross_org_session	1	banking.bank_statements	yes	tenant_catalog_definer	retire_with_domain_cutover	banking	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/data_health.py	_task_session	cross_org_session	1	ap.supplier_invoice|ar.customer_payment|ar.invoice|ar.payment_allocation|gl.account_balance|gl.journal_entry|gl.journal_entry_line|gl.posted_ledger_line|platform.event_outbox|public.notification	yes	tenant_catalog_definer	undecided	data_health	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/dotmac_sub.py	cleanup_stale_dotmac_sub_sync_history	cross_org_session	1	sync.sync_history	yes	tenant_catalog_definer	undecided	dotmac_sub	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/email.py	send_email_async	cross_org_session	1	public.domain_settings|public.email_profile	yes	tenant_resolution_definer	fix	email	event identity must resolve one tenant before opening session_for_org
+app/tasks/expense.py	poll_stuck_expense_transfers	cross_org_session	2	payments.payment_intent	yes	tenant_catalog_definer	retire_with_domain_cutover	expense	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/expense.py	process_expense_approval_reminders	cross_org_session	1	expense.expense_claim	yes	tenant_catalog_definer	retire_with_domain_cutover	expense	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/feature_flags.py	archive_expired_feature_flags	cross_org_session	1	public.feature_flag_registry	yes	tenant_catalog_definer	isolate	feature_flags	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/finance.py	_resolve_report_instance_org	cross_org_session	1	rpt.report_instance	yes	tenant_catalog_definer	fix	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/finance.py	process_monthly_depreciation_runs	cross_org_session	1	core_org.organization|public.domain_settings	yes	tenant_catalog_definer	retire_with_domain_cutover	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/finance.py	refresh_analysis_cubes	cross_org_session	2	pg_catalog.pg_matviews|rpt.analysis_cube	yes	tenant_catalog_definer	undecided	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/finance.py	refresh_stale_balances	cross_org_session	1	gl.balance_refresh_queue	yes	tenant_catalog_definer	retire_with_domain_cutover	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/finance.py	release_expired_stock_reservations	cross_org_session	1	inv.stock_reservation	yes	tenant_catalog_definer	retire_with_domain_cutover	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/finance.py	sync_mono_account	cross_org_session	1	banking.bank_accounts	yes	tenant_catalog_definer	retire_with_domain_cutover	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/finance.py	sync_mono_transactions	cross_org_session	1	banking.bank_accounts	yes	tenant_catalog_definer	retire_with_domain_cutover	finance	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/hooks.py	cleanup_old_hook_executions	cross_org_session	1	platform.service_hook_execution	yes	tenant_catalog_definer	isolate	hooks	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/hr.py	send_welcome_email	cross_org_session	1	hr.employee_onboarding	yes	tenant_catalog_definer	retire_with_domain_cutover	hr	core_org.organization is RLS-protected; enumerate ids narrowly then use session_for_org
+app/tasks/notifications.py	_task_db_session	cross_org_session	1	public.device_token|public.domain_settings|public.email_profile|public.module_email_routing|public.notification|public.people	yes	tenant_resolution_definer	fix	notifications	event identity must resolve one tenant before opening session_for_org
+app/tasks/outbox_relay.py	_task_db_session	cross_org_session	1	platform.event_outbox	yes	tenant_resolution_definer	isolate	outbox_relay	event identity must resolve one tenant before opening session_for_org
+app/tasks/performance.py	activate_cycle	cross_org_session	1	perf.appraisal_cycle	yes	tenant_resolution_definer	fix	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
+app/tasks/performance.py	calculate_cycle_progress	cross_org_session	1	perf.appraisal_cycle	yes	tenant_resolution_definer	fix	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
+app/tasks/performance.py	complete_cycle	cross_org_session	1	perf.appraisal_cycle	yes	tenant_resolution_definer	fix	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
+app/tasks/performance.py	generate_cycle_appraisals	cross_org_session	1	perf.appraisal_cycle	yes	tenant_resolution_definer	fix	performance	resolves the owning organization of one named row; the SETOF uuid definer cannot answer this and widening it would make it a cross-tenant read path
+app/tenant_catalog.py	_discover_sqlite	allow_cross_org	1	core_org.organization	no	ordinary_app_user	fix	platform	SQLite unit lane only; the PostgreSQL branch calls the tenant_catalog definer and never reaches this code
+app/tools/backfill_mono_lagos_date.py	run	cross_org_session	1	banking.bank_statement_lines	yes	tenant_resolution_definer	isolate	operations	resolve the target row tenant narrowly then reopen with session_for_org
+app/tools/reset_expense_payment_intent.py	main	cross_org_session	1	expense.expense_claim	yes	tenant_resolution_definer	isolate	operations	resolve the target row tenant narrowly then reopen with session_for_org
+app/web/deps.py	_get_person_for_web_session	allow_cross_org	1	public.people	yes	tenant_resolution_definer	fix	identity	identity bootstrap reaches RLS-protected public.people or core_org.organization
+scripts/backfill_mailcow_offboarding.py	_list_org_ids	cross_org_session	1	hr.employee	yes	tenant_catalog_definer	isolate	operations	active maintenance script must enumerate ids narrowly then use session_for_org
+scripts/create_org.py	main	cross_org_session	1	core_org.organization|public.tenants	yes	isolated_cross_tenant_service	isolate	operations	bootstrap or seed command needs an explicit offline privileged boundary
+scripts/seed_e2e_data.py	main	cross_org_session	1	core_org.organization|public.people|public.tenants|public.user_credentials	yes	isolated_cross_tenant_service	isolate	operations	bootstrap or seed command needs an explicit offline privileged boundary
+scripts/seed_nigeria.py	main	cross_org_session	1	core_org.organization	yes	isolated_cross_tenant_service	isolate	operations	bootstrap or seed command needs an explicit offline privileged boundary
+scripts/seed_rbac.py	main	cross_org_session	1	public.permissions|public.role_permissions|public.roles	yes	isolated_cross_tenant_service	isolate	operations	bootstrap or seed command needs an explicit offline privileged boundary
+scripts/settings_validate.py	main	cross_org_session	1	public.domain_settings	yes	tenant_catalog_definer	isolate	operations	active maintenance script must enumerate ids narrowly then use session_for_org
+scripts/setup_e2e_user.py	check_organization_exists	cross_org_session	1	core_org.organization	yes	isolated_cross_tenant_service	isolate	operations	bootstrap or seed command needs an explicit offline privileged boundary
+scripts/update_user_credentials.py	main	cross_org_session	1	public.people|public.user_credentials	yes	tenant_catalog_definer	isolate	operations	active maintenance script must enumerate ids narrowly then use session_for_org
