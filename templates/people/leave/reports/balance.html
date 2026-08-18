@@ -32,7 +32,11 @@
     {# Filters #}
     {% call(filter_attrs) compact_filters(
         base_url="/people/leave/reports/balance",
-        active_filters=active_filters | default([])
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=employee_search,
+        search_name="employee_search",
+        search_placeholder="Search employees by name, code, or email..."
     ) %}
     <div>
                 <div class="w-36">
@@ -177,7 +181,7 @@
     {% endif %}
     </div>
 
-    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'year': year|default(''), 'department_id': department_id|default('')}) }}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'year': year|default(''), 'department_id': department_id|default(''), 'employee_search': employee_search|default('')}) }}
 
     <!-- Quick Links -->
     <div class="flex gap-4">

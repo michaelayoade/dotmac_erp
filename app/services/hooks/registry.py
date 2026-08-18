@@ -102,6 +102,7 @@ class HookRegistry:
                 execute_async_hook.delay(
                     execution_id=str(execution.execution_id),
                     hook_id=str(hook.hook_id),
+                    organization_id=str(event.organization_id),
                 )
 
         logger.info(

@@ -1739,6 +1739,7 @@ class LeaveService:
         *,
         department_id: UUID | None = None,
         year: int | None = None,
+        employee_search: str | None = None,
     ) -> dict:
         """
         Get leave balance report by employee.
@@ -1783,6 +1784,22 @@ class LeaveService:
 
         if department_id:
             alloc_query = alloc_query.where(Employee.department_id == department_id)
+
+        search_term = (employee_search or "").strip()
+        if search_term:
+            pattern = f"%{search_term}%"
+            alloc_query = alloc_query.where(
+                or_(
+                    Employee.employee_code.ilike(pattern),
+                    Person.first_name.ilike(pattern),
+                    Person.last_name.ilike(pattern),
+                    Person.display_name.ilike(pattern),
+                    Person.email.ilike(pattern),
+                    func.concat(Person.first_name, " ", Person.last_name).ilike(
+                        pattern
+                    ),
+                )
+            )
 
         results = self.db.execute(
             alloc_query.group_by(
