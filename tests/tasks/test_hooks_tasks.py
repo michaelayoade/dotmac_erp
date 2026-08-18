@@ -121,17 +121,14 @@ class TestExecuteAsyncHook:
         )
 
         mock_db = MagicMock()
-        mock_db.get.side_effect = [execution, hook, execution, hook]
+        mock_db.get.side_effect = [execution, hook]
         request = httpx.Request("POST", "https://example.com/hook")
         retryable_error = httpx.ConnectError("boom", request=request)
 
         with (
-            patch("app.tasks.hooks.cross_org_session") as mock_session,
             patch("app.tasks.hooks.session_for_org") as mock_org_session,
             patch("app.tasks.hooks._execute_hook_handler", side_effect=retryable_error),
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
             mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
             from app.tasks.hooks import execute_async_hook
@@ -144,6 +141,7 @@ class TestExecuteAsyncHook:
                     execute_async_hook.run(
                         execution_id=str(execution_id),
                         hook_id=str(hook_id),
+                        organization_id=str(org_id),
                     )
 
         assert execution.status == ExecutionStatus.RETRYING
@@ -185,18 +183,15 @@ class TestExecuteAsyncHook:
         )
 
         mock_db = MagicMock()
-        mock_db.get.side_effect = [execution, hook, execution, hook]
+        mock_db.get.side_effect = [execution, hook]
         mock_db.scalars.return_value.all.return_value = [ExecutionStatus.DEAD]
         request = httpx.Request("POST", "https://example.com/hook")
         retryable_error = httpx.ConnectError("boom", request=request)
 
         with (
-            patch("app.tasks.hooks.cross_org_session") as mock_session,
             patch("app.tasks.hooks.session_for_org") as mock_org_session,
             patch("app.tasks.hooks._execute_hook_handler", side_effect=retryable_error),
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
             mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
             from app.tasks.hooks import execute_async_hook
@@ -205,6 +200,7 @@ class TestExecuteAsyncHook:
                 result = execute_async_hook.run(
                     execution_id=str(execution_id),
                     hook_id=str(hook_id),
+                    organization_id=str(org_id),
                 )
 
         assert result["ok"] is False
@@ -249,15 +245,12 @@ class TestExecuteAsyncHook:
         )
 
         mock_db = MagicMock()
-        mock_db.get.side_effect = [execution, hook, execution, hook]
+        mock_db.get.side_effect = [execution, hook]
 
         with (
-            patch("app.tasks.hooks.cross_org_session") as mock_session,
             patch("app.tasks.hooks.session_for_org") as mock_org_session,
             patch("app.tasks.hooks._execute_hook_handler", side_effect=error),
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
             mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
             from app.tasks.hooks import execute_async_hook
@@ -266,6 +259,7 @@ class TestExecuteAsyncHook:
                 result = execute_async_hook.run(
                     execution_id=str(execution_id),
                     hook_id=str(hook_id),
+                    organization_id=str(org_id),
                 )
 
         assert result["ok"] is False
@@ -309,15 +303,12 @@ class TestExecuteAsyncHook:
         )
 
         mock_db = MagicMock()
-        mock_db.get.side_effect = [execution, hook, execution, hook]
+        mock_db.get.side_effect = [execution, hook]
 
         with (
-            patch("app.tasks.hooks.cross_org_session") as mock_session,
             patch("app.tasks.hooks.session_for_org") as mock_org_session,
             patch("app.tasks.hooks._execute_hook_handler", side_effect=error),
         ):
-            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-            mock_session.return_value.__exit__ = MagicMock(return_value=False)
             mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
             from app.tasks.hooks import execute_async_hook
@@ -330,6 +321,7 @@ class TestExecuteAsyncHook:
                     execute_async_hook.run(
                         execution_id=str(execution_id),
                         hook_id=str(hook_id),
+                        organization_id=str(org_id),
                     )
 
         assert execution.status == ExecutionStatus.RETRYING

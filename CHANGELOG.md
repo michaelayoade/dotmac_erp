@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-08-18
+
+### Added
+- Employee search by name, employee code, or email on Leave Allocations and the Leave Balance Report.
+- Executable PostgreSQL reachability evidence for the cross-organization retirement ledger.
+
+### Changed
+- Cross-organization callers are classified by explicit retirement disposition and protected-relation reach.
+- Engineering standards are pinned to the accepted connector runtime authority revision.
+
+### Fixed
+- Removed four cross-organization bypass regions that did not guard protected relations.
+
 ## [1.32.0] - 2026-08-15
 
 ### Added

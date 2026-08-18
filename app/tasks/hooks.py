@@ -137,28 +137,30 @@ def execute_async_hook(
     self,
     execution_id: str,
     hook_id: str,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
-    """Execute queued service hook and persist execution result."""
-    with cross_org_session() as db:
-        execution = db.get(ServiceHookExecution, UUID(execution_id))
-        hook = db.get(ServiceHook, UUID(hook_id))
+    """Execute queued service hook and persist execution result.
 
-        if execution is None or hook is None:
-            logger.error(
-                "Async hook references missing entities (execution=%s, hook=%s)",
-                execution_id,
-                hook_id,
-            )
-            return {"ok": False, "error": "missing entities"}
+    The enqueuing caller already holds the organization: ``HookEvent`` carries
+    a non-optional ``organization_id``, and ``retry_execution`` takes it as a
+    required keyword. Passing it through removes the fleet-wide session this
+    task used to open purely to read it back off the execution row.
 
-        org_id = execution.organization_id or hook.organization_id
-        if org_id is None:
-            logger.error("Async hook missing organization context: %s", execution_id)
-            execution.status = ExecutionStatus.DEAD
-            execution.error_message = "Missing organization context"
-            db.flush()
-            db.commit()
-            return {"ok": False, "error": "missing organization context"}
+    The argument stays optional for one release so that messages enqueued
+    before this deploy are rejected loudly instead of raising a TypeError in
+    the worker; they stay PENDING and are re-queued from the admin retry
+    action, which supplies the organization.
+    """
+    if organization_id is None:
+        logger.error(
+            "Async hook enqueued without organization context "
+            "(execution=%s, hook=%s); re-queue it from the admin retry action",
+            execution_id,
+            hook_id,
+        )
+        return {"ok": False, "error": "missing organization context"}
+
+    org_id = UUID(organization_id)
 
     with session_for_org(org_id) as db:
         execution = db.get(ServiceHookExecution, UUID(execution_id))

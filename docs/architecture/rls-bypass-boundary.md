@@ -3,6 +3,34 @@
 **Status:** Accepted; corrected against migration heads on 2026-08-15
 **Decision owner:** Michael
 
+## What this document is now
+
+**This ledger tracks the retirement of a bridge, not the design of a
+destination.** ERP is the extraction source and a temporary production bridge;
+the destination is a `dotmac-backoffice` assembly composed from the starter's
+kernel, UI and released domain modules, replaced vertically one owned domain at
+a time. Knowledge entry
+`erp-hardening-is-containment-backoffice-is-the-destination` is the canonical
+statement of that frame.
+
+Two consequences, and they govern every row below:
+
+- Work here is **containment** — bounded fixes, security fixes required while
+  legacy ERP is live, and honest records of what the bridge can still reach.
+  Redesigning an obsolete ERP job so that ERP would look composable is not
+  containment; it is destination work spent on an application we intend to
+  retire, and it is out of scope.
+- A row is therefore resolved by **`fix`**, **`isolate`**, **`disable`**, or
+  **`retire_with_domain_cutover`** — not by a cutover-readiness state. Where the
+  evidence in hand does not choose between the four, the row is **`undecided`**
+  and named in the shrink-only backlog. An honest backlog is the correct
+  result; an invented disposition is not.
+
+What survives from the earlier programme is what is *evidence*: the
+`target_relations` column, the `app_user` reachability measurement, and the
+per-caller detector. What does not survive is the derived contract/shape rule
+machinery, which existed to make ERP composable.
+
 ## Measured state
 
 ERP has two mechanisms that must not be conflated:
@@ -102,25 +130,58 @@ disposition—not as a blanket replacement for the GUC.
 
 The post-removal audit is checked in at
 `docs/inventories/rls-cross-org-callers.tsv`. It records the exact runtime
-syntax under `app/` and active `scripts/`: 198 owning functions and 200
-boundary uses across 61 files. A table appearing in the migrated catalog and a
-caller appearing in this inventory are separate facts; neither is inferred
-from the other.
+syntax under `app/` and active `scripts/`. A table appearing in the migrated
+catalog and a caller appearing in this inventory are separate facts; neither
+is inferred from the other.
 
-The reviewed state at 2026-08-15 is:
+Per-contract and per-resolution counts are NOT restated here. The TSV moves with
+every resolved slice, and the snapshot this section used to carry ("198 owning
+functions, 200 boundary uses across 61 files", and a five-row contract table)
+was four slices out of date before anyone noticed.
 
-| Contract | Callers | Cutover meaning |
-|---|---:|---|
-| ordinary `app_user` | 91 | Ready only because the named target tables have no RLS at migration heads; this is least privilege, not tenant isolation |
-| narrow tenant-catalog definer, then `session_for_org` | 35 | Blocked; 36 of the original 71 converted |
-| narrow tenant-resolution definer, then `session_for_org` | 27 | Blocked |
-| isolated cross-tenant service | 8 | Blocked; no credential or service exists yet |
-| replace with the existing tenant session | 2 | Blocked |
+The `contract` column is retained as measured evidence about what a caller
+needs from the database. It is no longer the axis the ledger is resolved on:
 
-The 72 blocked callers are a two-directional ratchet. A new caller fails the
-exact inventory; removing or converting one also fails until the inventory and
-baseline are lowered in the same review. A `ready` row is structurally refused
-when it claims access to an RLS-protected table.
+| Contract | What the caller needs from the database |
+|---|---|
+| `ordinary_app_user` | Nothing privileged. The named targets have no RLS at migration heads and each has a database-enforced tenant path. That is least privilege, not tenant isolation |
+| `tenant_catalog_definer` | To enumerate tenants, then one `session_for_org` per tenant |
+| `tenant_resolution_definer` | To resolve the owning tenant of one named row, then reopen scoped |
+| `isolated_cross_tenant_service` | A genuinely fleet-wide read, with no tenant to resolve |
+
+The `resolution` column is the axis. Its closed vocabulary:
+
+| Resolution | Meaning |
+|---|---|
+| `fix` | The bypass comes out by a local change inside ERP: it guards nothing (every target unpolicied at migration heads), or one narrow definer resolves the owning tenant before a `session_for_org` |
+| `isolate` | Legitimately fleet-wide with no tenant to resolve — offline operator commands, process startup, platform-plane relations with no tenant column, cross-tenant operator APIs. Contained behind an explicit privileged boundary, not converted |
+| `disable` | No production call site, or the function is switched off rather than fixed or migrated |
+| `retire_with_domain_cutover` | Containing it would mean redesigning a business-domain job around a tenant catalogue. Not done: authority for that domain moves to a released module and the row goes with it |
+| `undecided` | The evidence in hand does not choose. Named in `UNDISPOSITIONED` with the reason, and never counted as resolved |
+
+Three ratchets, all two-directional, all living beside their own assertions in
+`tests/architecture/test_cross_org_caller_dispositions.py` and nowhere else:
+
+- the **resolution census**, asserted per value including the empty one, so a
+  rise in `undecided` is new debt and a fall in any resolved value is a
+  withdrawn claim — both loud;
+- the **`app_user` blocker count**, which counts `protected_access` rather than
+  a resolution, because a row can be resolved by a domain cutover years from
+  now and still block the live bridge today. It cannot be moved by relabelling;
+- the **unbounded-reach backlog**, for callers whose relation set is not fixed
+  by their own body.
+
+One rule is mechanically checkable and is checked: a region whose every target
+is unpolicied (`protected_access == no`) must be `fix`. It is waiting on
+nothing, and a row claiming otherwise is claiming a retirement dependency it
+does not have — which is how a bridge gets kept alive by its own ledger.
+
+Read the current distribution from the artifact rather than from prose:
+
+```
+awk -F'\t' 'NR > 1 {print $8}' docs/inventories/rls-cross-org-callers.tsv \
+  | sort | uniq -c | sort -rn
+```
 
 The low-level ORM marker is a closed writer set, independent of the inventory:
 `allow_cross_org`, `cross_org_session`, and the API dependency session owner.
@@ -128,7 +189,103 @@ A sensitivity proof covers aliased helpers, FastAPI dependencies, and a direct
 marker write. The inventory therefore cannot be bypassed by adding a wrapper.
 
 This completes disposition, not remediation. The `app_user` cutover remains
-blocked.
+blocked, and blocked is the expected steady state for a bridge: the point of
+the ledger is that nothing about that state is silent.
+
+## What each caller actually reaches (`target_relations`)
+
+Every row names the schema-qualified relations its bypass region reaches. The
+row count and the disposition distribution are not copied into this paragraph:
+the TSV is the count of record, and each ratchet literal lives beside the
+assertion that enforces it in
+`tests/architecture/test_cross_org_caller_dispositions.py`. A second copy here
+would only be a number nothing keeps honest.
+
+That column exists because the disposition was previously unfalsifiable. A row
+could describe its own reach in prose and name a relation the caller never
+queries — `app/startup.py::warn_unconfigured_webhook_allowlist` claimed
+`core_org.organization` and touches `public.domain_settings` and
+`automation.workflow_rule`; all three `app/api/audit.py` rows named
+`audit.audit_log` where the caller reads `public.audit_events`. Nothing
+compared either claim to anything, because there was nothing to compare it to.
+
+`target_relations` is a sorted, deduplicated, `|`-joined list of
+`schema.table` names, traced from source one bypass region at a time. `-` is
+the sentinel for a region that issues no statement — a legal value and never a
+legal disposition, kept so the guard bites on the next such caller rather than
+on the last one. The format is parsed by
+`tests/architecture/test_cross_org_caller_dispositions.py`, so a name that is
+not a relation, or a list that is unsorted or duplicated, fails the build.
+
+### Unbounded reach
+
+Three callers' relation sets are not fixed by their own bodies, and none is
+given an invented one. They sit in a named two-directional ratchet in
+`tests/architecture/test_cross_org_caller_dispositions.py`:
+
+- `app/services/settings_seed.py::_global_settings_seed.scoped_seed` — the
+  bypass region is a decorator body wrapping an arbitrary callable, so its
+  reach is fixed by the seven `@_global_settings_seed` call sites. A new
+  decorated seed widens it without touching the row.
+- `app/tasks/data_health.py::_task_session` — the bypass region returns a
+  session context to its caller rather than issuing a statement, so its reach
+  is the union of the ten data-health tasks that pass `organization_id=None`.
+  A new task widens it without touching the row.
+- `app/tasks/finance.py::refresh_analysis_cubes` — the None-organization
+  branch issues `REFRESH MATERIALIZED VIEW` on a name read out of
+  `rpt.analysis_cube.source_view`, so the refreshed relation is a row *value*.
+  It also reads `pg_catalog.pg_matviews`, which no tenant catalog can contain.
+
+Their `target_relations` is still populated: unbounded means the recorded set
+is a lower bound, not that it is unknown. The backlog shrinks by narrowing a
+caller, never by moving a row into it.
+
+## The `app_user` proof, and what it does not prove
+
+Everything above is static: relations traced from source, dispositions written
+against them. Nothing had executed a statement as the role the whole programme
+is about. `tests/integration/test_app_user_cross_org_reachability.py` does, in
+the PostgreSQL lane, after `scripts/bootstrap_database_roles.py` and
+`alembic upgrade heads`. For each relation the ledger's
+`target_relations` column names, it ATTEMPTS the read and records the outcome in
+`tests/integration/app_user_reachability.tsv` — exact rows, not counts.
+
+Becoming the role. The bootstrap deliberately sets no password, so no direct
+`app_user` DSN generally exists and the lane connects as the superuser and
+issues `SET LOCAL ROLE`. That is sound for what is asserted here: PostgreSQL
+evaluates both the superuser exemption and `rolbypassrls` against
+`current_user`, and the test asserts `current_user`, `(rolsuper, rolbypassrls)
+= (false, false)`, `should_bypass_rls()` false, and no organization GUC — the
+precondition, not an assumption. An `APP_USER_DATABASE_URL` knob selects a
+direct login where a deployment provides one, and refuses a URL carrying a
+password: credentials go in `PGPASSWORD`, as the CI bootstrap step already
+does.
+
+Today's measurement is almost entirely `denied-no-grant`: no migration issues a
+table-level `GRANT … TO app_user`, only `EXECUTE` on two functions, so
+`app_user` holds `SELECT` on 1 of 420 relations. That produces four honest
+limits the module's own docstring carries:
+
+- **An unprotected row is not proved reachable.** Every one has an unreachable
+  target, recorded as a two-directional ratchet beside its own assertion rather
+  than asserted to zero, because a wall of red on the first run is how a gate
+  gets deleted. It becomes a real assertion in the change that adds the grants.
+- **A protected-target row is not proved refused.** `denied-no-grant` is the absence of
+  a privilege, not the presence of a boundary; 158 `known_gaps` relations carry
+  no RLS at all and would return every organization's rows once granted.
+- **Reachability is not isolation.** Every policy's first disjunct is
+  `should_bypass_rls()`, and `app.bypass_rls` is `PGC_USERSET` — `app_user` can
+  set it itself. The measurement is conditional on that GUC being unset, which
+  is why the test asserts it.
+- **It measures relations, not callers**, and the design catalog, not
+  production.
+
+The expectation file is a DERIVATION, not a typed claim: `app_user_priv`
+decides granted-or-not and `rls_enabled` decides the rest, both read out of
+`tests/integration/tenant_table_inventory.tsv`, and a test asserts that every
+recorded row reproduces from it. This is the one part of the bridge programme
+that is real evidence about the live system rather than intent, which is why it
+survives the retirement reframing below.
 
 ## The tenant-catalog discovery contract
 
@@ -168,16 +325,20 @@ session answer "what is due here". The grouping helper and the per-organization
 id re-fetch it fed both disappeared, because a tenant-scoped service query
 returns that organization's rows directly.
 
-That slice widened no definer and added no credential. 35 remain in this
-family, to be taken in coherent domain groups.
+That slice widened no definer and added no credential. The rest of the family
+is taken in coherent domain groups; how many remain is an `awk` over the TSV,
+not a number maintained by hand in this paragraph.
 
 Two practical notes for those groups.
 
 First, learned in #306: tests that monkeypatch `cross_org_session` on a
 converting module fail with `AttributeError` before asserting anything.
 Inventory the patch targets before moving a seam. `discipline.py` had none,
-which is part of why it went first; `app/tasks/data_health.py` has 17, and its
-single ledger row hides nine entry points, so it gets a dedicated slice.
+which is part of why it went first; `app/tasks/data_health.py` had 17, and its
+single ledger row hid nine entry points, so it got a dedicated slice. That
+slice has landed: seven of the nine now enumerate through the catalogue, and
+the one row that remains covers the two `platform.event_outbox` readers, which
+need a scope column rather than a fan-out.
 
 Second, and more important: **test-patch count is not a grouping key.**
 `audit.py`, `notifications.py` and `outbox_relay.py` carry the
@@ -192,29 +353,69 @@ both phases rather than two owners colliding in the same file. Group by the
 
 1. The migrated catalog inventory is the policy/caller audit input; the stale
    production snapshot remains a deployment-drift report only.
-2. **Caller dispositions.** Convert the remaining catalog fan-outs. A
-   `tenant_catalog_definer` label is a first pass, not a verdict: several rows
-   carrying it are resolution- or special-shaped, and reclassifying one does
-   **not** lower the blocker count. The ratchet falls only when a caller is
-   actually converted.
-3. **Resolution contracts.** Design the tenant-resolution contract, then convert
+2. **Caller resolutions.** Retire the `undecided` backlog, three rows today,
+   by deciding each one rather than by giving it a plausible label. Note what
+   this follow-up no longer says: it used to read "convert the remaining
+   catalog fan-outs", and that conversion work is exactly what the retirement
+   framing withdraws. A `tenant_catalog_definer` label is evidence about what a
+   caller needs, not an instruction to build it; nine such rows are now
+   `retire_with_domain_cutover` and are resolved by their domain moving, not by
+   an ERP redesign. Reclassifying a contract does **not** move the `app_user`
+   blocker count, which counts `protected_access`.
+3. **`api_keys.person_id` NOT NULL.** `api_keys` has no `organization_id`; the
+   checked inventory classes it `inherited`, so the gate derives
+   `inherited_tenant` and lets its rows stand unprotected. That derivation is
+   only as strong as the inheriting column, and `ApiKey.person_id`
+   (`app/models/auth.py`) is `Mapped[uuid.UUID | None]` — nullable — so the
+   schema currently permits a key that inherits nothing, while
+   `user_credentials`, `mfa_methods` and `sessions` all declare the same column
+   NOT NULL. Note that no column-shaped check can see this: the catalog's
+   `tenant_class` looks at `organization_id`/`tenant_id`, never at an
+   inheriting FK. Reviewed disposition: the nullability is an
+   accident of `799a0ecebdd4_initial_schema`, not a deliberate platform-key
+   affordance. The `app/api/auth.py` api-key rows therefore keep their
+   resolution, and the repair is:
+
+   ```sql
+   ALTER TABLE public.api_keys ALTER COLUMN person_id SET NOT NULL;
+   ```
+
+   **The migration must NOT backfill.** A person-less key in production is a
+   key whose blast radius nobody has established; picking an owner for it — the
+   first person in its organization, a service principal, the creating admin —
+   invents a tenancy claim and then makes it authoritative. The migration
+   therefore counts `WHERE person_id IS NULL` first and, if the count is
+   non-zero, `RAISE EXCEPTION` naming the offending `api_keys.id` values and the
+   resolution required, so the deploy stops rather than guesses. A key with no
+   person needs explicit platform ownership, and only an operator can state it.
+
+   If that set turns out to be large enough that a hard stop is impractical, the
+   alternative is quarantine, never inference: copy the offending rows to
+   `api_keys_orphaned` with the discovery timestamp, `UPDATE api_keys SET
+   is_active = false, revoked_at = now()` for them, and only then apply the
+   constraint. A quarantined key stops working loudly and is recoverable by an
+   operator who can state its owner; a backfilled key keeps working under an
+   owner that was never true. Note `20260131_add_audit_events_org_id` already
+   `JOIN`s through `person_id` and silently drops NULL rows, so any such key is
+   already invisible to audit tenancy — one more reason not to paper over it.
+4. **Resolution contracts.** Design the tenant-resolution contract, then convert
    the callers that resolve which organization owns one specific row. This is
    the gate for `audit.py`, `notifications.py`, `outbox_relay.py` and the
    execution half of `hooks.py`.
-4. **Isolated/offline boundaries** for the irreducible remainder.
-5. **Exact catalog classification.** Land the corrected 420/312/105 baseline and
+5. **Isolated/offline boundaries** for the irreducible remainder.
+6. **Exact catalog classification.** Land the corrected 420/312/105 baseline and
    make inherited tenant debt enforceable — 79 inherited tenant tables have no
    RLS and no ratchet watching them. Repairing policies against a catalog that
    under-counts the surface would certify the gap.
-6. **RLS/FORCE/GUC repair.** Forward-migrate every dependent policy to tenant
+7. **RLS/FORCE/GUC repair.** Forward-migrate every dependent policy to tenant
    predicates only, add FORCE where missing, prove `pg_depend` has no remaining
    reference, and drop `should_bypass_rls()`. Turn the strict GUC-policy xfail
    into a pass and prove tenant visibility and cross-tenant denial through a
    separate real `app_user` connection, never `SET ROLE`.
-7. **Production-only table disposition.**
-8. **Deployment preflight**, OpenBao-mediated secret injection, and a migration
+8. **Production-only table disposition.**
+9. **Deployment preflight**, OpenBao-mediated secret injection, and a migration
    rehearsal against a production clone.
-9. **Two deployment stages, deliberately separate.** First ship
+10. **Two deployment stages, deliberately separate.** First ship
    `app_user`-compatible code and migrations **while retaining the current
    runtime credential** — that release changes no identity and is revertible on
    its own. Then, after burn-in, cut the runtime over to `app_user` as its own

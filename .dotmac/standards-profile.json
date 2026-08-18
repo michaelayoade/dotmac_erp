@@ -8,7 +8,7 @@
   "governance_model": {
     "kind": "pinned",
     "canonical_url": "https://github.com/michaelayoade/dotmac_governance",
-    "revision": "4f6fbf98c25f7cfbb3dacc4f3d2f5fd7e473f193",
+    "revision": "a19259b10568d29dc0a9617347498fea7f1e7a97",
     "source": "docs/adr/0006-cross-repository-engineering-conformance.md",
     "status": "accepted"
   },
@@ -143,7 +143,7 @@
         "path": "tests/tasks/test_hooks_tasks.py",
         "symbol": "TestExecuteAsyncHook",
         "category": "delivery_retry",
-        "fingerprint": "0abede456b6e17bce710955383e72de832c3ef054df410936942c316cfc67035"
+        "fingerprint": "ced43bd99de9a2af6ac3d9d4be8e3bb3a254f17d4b7435bb8eedb1c29a399ff6"
       },
       {
         "path": "tests/test_email_services.py",
