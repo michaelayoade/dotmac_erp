@@ -456,7 +456,7 @@ UNDISPOSITIONED: Mapping[tuple[str, str], str] = {
 # than only the backlog.
 RESOLUTION_CENSUS: Mapping[str, int] = {
     "fix": 117,
-    "isolate": 19,
+    "isolate": 18,
     "retire_with_domain_cutover": 9,
     "disable": 0,
     "undecided": 3,
@@ -528,7 +528,8 @@ def test_the_app_user_blocker_count_is_a_two_directional_ratchet() -> None:
     108 at disposition (#305) -> 75 (#306, 33 catalog enumerations) -> 72
     (#307, three discipline domain scans) -> 69 (#302, three obsolete OIDC
     callers) -> 57 (four bypasses deleted for guarding nothing: 61 -> 57, in
-    the same change that took 152 rows to 148).
+    the same change that took 152 rows to 148) -> 56 (#315 converted the
+    webhook startup scan, taking the ledger to 147 rows).
 
     Three candidates examined in that pass were REFUTED and are recorded
     because a refutation is a finding, not an omission.
@@ -541,7 +542,7 @@ def test_the_app_user_blocker_count_is_a_two_directional_ratchet() -> None:
     the question. All four are now ``isolate``, which is what that refutation
     was always saying.
     """
-    baseline = 57
+    baseline = 56
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

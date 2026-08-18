@@ -187,13 +187,34 @@ def _validate_webhook_target(
     db: Session,
     *,
     allow_localhost: bool = False,
+    organization_id: UUID | None = None,
 ) -> tuple[bool, str | None]:
-    """Lazy-import wrapper to avoid circular import with workflow module."""
+    """Lazy-import wrapper to avoid circular import with workflow module.
+
+    ``organization_id`` is threaded through so channel 2 asks the same
+    conjunction channel 1 does. Without it this dispatcher would resolve the
+    ceiling alone and reach hosts the organization's own narrowing forbids —
+    the two channels would then disagree about the same target.
+    """
     from app.services.finance.automation.workflow import (
         _validate_webhook_target as _inner,
     )
 
-    return _inner(url, db, allow_localhost=allow_localhost)
+    return _inner(
+        url, db, allow_localhost=allow_localhost, organization_id=organization_id
+    )
+
+
+def _webhook_policy(db: Session, organization_id: UUID | None):
+    """Lazy-import wrapper, for the same circular-import reason as above.
+
+    Importing the policy submodule executes
+    ``app.services.finance.automation.__init__``, which imports the workflow
+    module, which is what the wrapper above already exists to defer.
+    """
+    from app.services.finance.automation.webhook_policy import effective_policy
+
+    return effective_policy(db, organization_id)
 
 
 def _execute_hook_handler(
@@ -381,12 +402,23 @@ def _execute_hook_handler(
             url,
             db,
             allow_localhost=False,
+            organization_id=event.organization_id,
         )
         if not is_valid:
             raise ValueError(error_message or "Webhook target is not allowed")
 
         method = str(hook.handler_config.get("method", "POST")).upper()
-        timeout_s = float(hook.handler_config.get("timeout_seconds", 15))
+        # Timeout channel 2 of 2, and the reason the platform maximum cannot be
+        # applied only where `webhook_timeout_seconds` is read. This value is
+        # not a setting at all: it is tenant-authored JSON on the hook row
+        # (`app/api/service_hooks.py` bounds it with a Pydantic `le=300` and
+        # nothing else), a different store with a different owner. Clamped here,
+        # at the point the request is made, against the same ceiling the
+        # workflow webhook action uses — a maximum honoured by one of two
+        # channels is not a maximum.
+        policy = _webhook_policy(db, event.organization_id)
+        requested = float(hook.handler_config.get("timeout_seconds", 15))
+        timeout_s = policy.clamp_timeout(requested)
         headers = dict(hook.handler_config.get("headers", {}))
         body = (
             event.payload

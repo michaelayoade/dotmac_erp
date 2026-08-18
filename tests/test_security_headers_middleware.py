@@ -11,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 import anyio
 
-from app.main import csp_middleware
+from app.main import _is_no_response_runtime_error, csp_middleware
 
 
 @pytest.mark.asyncio
@@ -112,3 +112,36 @@ async def test_csp_middleware_returns_204_for_end_of_stream_exception_group():
     response = await csp_middleware(request, call_next)
 
     assert response.status_code == 204
+
+
+def test_application_error_with_end_of_stream_context_is_not_a_disconnect():
+    """A real endpoint failure must not be hidden by Starlette stream context."""
+    application_error: ValueError | None = None
+    try:
+        raise anyio.EndOfStream
+    except anyio.EndOfStream:
+        try:
+            raise ValueError("database query failed")
+        except ValueError as exc:
+            application_error = exc
+
+    assert application_error is not None
+    assert application_error.__context__ is not None
+    assert _is_no_response_runtime_error(application_error) is False
+
+
+@pytest.mark.asyncio
+async def test_csp_middleware_does_not_swallow_mixed_exception_group():
+    request = MagicMock(spec=Request)
+    request.method = "POST"
+    request.url.path = "/api/v1/payments/transfers/id/initiate"
+    failure = ExceptionGroup(
+        "request failed",
+        [anyio.EndOfStream(), ValueError("database query failed")],
+    )
+    call_next = AsyncMock(side_effect=failure)
+
+    with pytest.raises(ExceptionGroup) as exc_info:
+        await csp_middleware(request, call_next)
+
+    assert exc_info.value is failure
