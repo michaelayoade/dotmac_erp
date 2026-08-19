@@ -31,6 +31,7 @@ from app.api.service_principal import (
     require_service_auth,
     require_service_scope,
 )
+from app.models.sync.integration_config import IntegrationConfig, IntegrationType
 from app.rls import set_current_organization_sync
 from app.schemas.sync.dotmac_crm import (
     BulkSyncRequest,
@@ -86,7 +87,30 @@ def require_crm_material_sync_retired() -> None:
     )
 
 
-router = APIRouter(prefix="/sync/crm", tags=["crm-sync"])
+def require_crm_sync_enabled(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> dict:
+    """Fail closed when the org has disabled the CRM sync integration."""
+    config = db.scalar(
+        select(IntegrationConfig).where(
+            IntegrationConfig.organization_id == auth["organization_id"],
+            IntegrationConfig.integration_type == IntegrationType.DOTMAC_CRM,
+        )
+    )
+    if config is not None and not config.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="CRM sync integration is disabled for this organization.",
+        )
+    return auth
+
+
+router = APIRouter(
+    prefix="/sync/crm",
+    tags=["crm-sync"],
+    dependencies=[Depends(require_crm_sync_enabled)],
+)
 
 # Maximum error detail length to avoid leaking internals
 _MAX_ERROR_LEN = 200
