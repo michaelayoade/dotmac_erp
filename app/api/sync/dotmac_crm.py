@@ -106,11 +106,7 @@ def require_crm_sync_enabled(
     return auth
 
 
-router = APIRouter(
-    prefix="/sync/crm",
-    tags=["crm-sync"],
-    dependencies=[Depends(require_crm_sync_enabled)],
-)
+router = APIRouter(prefix="/sync/crm", tags=["crm-sync"])
 
 # Maximum error detail length to avoid leaking internals
 _MAX_ERROR_LEN = 200
@@ -130,7 +126,7 @@ def _sanitize_error(e: Exception) -> str:
 @router.post("/bulk", response_model=BulkSyncResponse, status_code=200)
 def bulk_sync(
     payload: BulkSyncRequest,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> BulkSyncResponse:
     """
@@ -257,7 +253,7 @@ def bulk_sync(
 )
 def reconcile_orphans(
     payload: ReconcileOrphansRequest,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> ReconcileOrphansResponse:
     """
@@ -305,7 +301,7 @@ def handle_webhook(
         | CRMWorkOrderPayload
         | CRMInventoryItemPayload
     ),
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> dict:
     """
@@ -417,7 +413,7 @@ def list_crm_work_orders(
 )
 def upsert_inventory_item(
     payload: CRMInventoryItemPayload,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMInventoryItemResponse:
     """Create or update an ERP inventory item from CRM."""
@@ -444,7 +440,7 @@ def upsert_inventory_item(
 @router.post("/expense-totals", response_model=ExpenseTotalsResponse)
 def get_expense_totals(
     payload: ExpenseTotalsRequest,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> ExpenseTotalsResponse:
     """
@@ -476,7 +472,7 @@ def get_expense_totals(
     dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def list_inventory_categories(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> list[dict]:
     """
@@ -494,7 +490,7 @@ def list_inventory_categories(
     dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def list_warehouses(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> list[dict]:
     """
@@ -513,7 +509,7 @@ def list_warehouses(
     dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def list_available_inventory_serials(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
     item_code: str = Query(..., min_length=1, max_length=50),
     warehouse_code: str = Query(..., min_length=1, max_length=100),
@@ -547,7 +543,7 @@ def list_available_inventory_serials(
 )
 def get_inventory_item(
     item_id: UUID,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> InventoryItemDetail:
     """
@@ -571,7 +567,7 @@ def get_inventory_item(
     dependencies=[Depends(require_crm_material_sync_retired)],
 )
 def list_inventory(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
     search: str | None = None,
     category_code: str | None = None,
@@ -613,7 +609,7 @@ def list_inventory(
     dependencies=[Depends(require_service_scope("crm:workforce:read"))],
 )
 def list_workforce_employees(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
     include_inactive: bool = False,
     limit: int = Query(100, ge=1, le=500),
@@ -636,7 +632,7 @@ def list_workforce_employees(
 
 @router.get("/workforce/departments", response_model=DepartmentListResponse)
 def list_departments(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
     include_inactive: bool = False,
     limit: int = Query(100, ge=1, le=500),
@@ -662,7 +658,7 @@ def list_departments(
 
 @router.get("/contacts/companies", response_model=CompanyListResponse)
 def list_companies(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
     updated_since: datetime | None = None,
     include_inactive: bool = False,
@@ -687,7 +683,7 @@ def list_companies(
 
 @router.get("/contacts/people", response_model=PersonListResponse)
 def list_people_contacts(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
     updated_since: datetime | None = None,
     include_inactive: bool = False,
@@ -722,7 +718,7 @@ def list_people_contacts(
 def create_material_request(
     payload: CRMMaterialRequestPayload,
     response: Response,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMMaterialRequestResponse:
     """
@@ -773,7 +769,7 @@ def create_material_request(
 )
 def get_material_request_status(
     omni_id: str,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMMaterialRequestStatusRead:
     """
@@ -804,7 +800,7 @@ def get_material_request_status(
 def create_expense_claim(
     payload: CRMExpenseClaimPayload,
     response: Response,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMExpenseClaimResponse:
     """
@@ -854,7 +850,7 @@ def create_expense_claim(
 )
 def get_expense_claim_status(
     omni_id: str,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMExpenseClaimStatusResponse:
     """
@@ -879,7 +875,7 @@ def get_expense_claim_status(
     response_model=CRMExpenseCategoriesResponse,
 )
 def list_expense_categories(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMExpenseCategoriesResponse:
     """
@@ -904,7 +900,7 @@ def list_expense_categories(
 )
 def create_purchase_order(
     payload: CRMPurchaseOrderPayload,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMPurchaseOrderResponse:
     """
@@ -940,7 +936,7 @@ def create_purchase_order(
 )
 def create_purchase_invoice(
     payload: CRMPurchaseInvoicePayload,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMPurchaseInvoiceResponse:
     """Create an idempotent DRAFT AP invoice matched to an existing PO."""
@@ -969,7 +965,7 @@ def create_purchase_invoice(
 def upload_purchase_invoice_attachment(
     purchase_invoice_id: UUID,
     payload: CRMPurchaseInvoiceAttachmentPayload,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMPurchaseInvoiceAttachmentResponse:
     """Attach one source document; content checksum makes retries idempotent."""
@@ -1041,7 +1037,7 @@ def upload_purchase_invoice_attachment(
 )
 def create_purchase_order_variation(
     payload: CRMPurchaseOrderVariationPayload,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> CRMPurchaseOrderResponse:
     """
@@ -1104,7 +1100,7 @@ def ncc_financials(
     start_date: str | None = None,
     end_date: str | None = None,
     as_of_date: str | None = None,
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> NccFinancialsResponse:
     """NCC Section F financials for the CRM aggregator.
@@ -1129,7 +1125,7 @@ def ncc_financials(
     dependencies=[Depends(require_service_scope("crm:ncc:read"))],
 )
 def ncc_staff_headcount(
-    auth: dict = Depends(require_service_auth),
+    auth: dict = Depends(require_crm_sync_enabled),
     db: Session = Depends(get_db_with_service_org),
 ) -> NccStaffHeadcountResponse:
     """NCC Section G active-staff head-count for the CRM aggregator.

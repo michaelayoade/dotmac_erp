@@ -440,18 +440,8 @@ class SettingsWebService:
         prefix = f"module_{module_key}_"
         raw_use_default = data.get(f"{prefix}use_default", "false")
         if _coerce_bool(raw_use_default):
-            config, error = self._global_smtp_candidate(db, data)
-            return f"{label} (default)", config, error
-
-        routing = db.scalar(
-            select(ModuleEmailRouting).where(
-                ModuleEmailRouting.organization_id == organization_id,
-                ModuleEmailRouting.module == module_def["module"],
-            )
-        )
-        profile = None
-        if routing and routing.email_profile_id:
-            profile = db.get(EmailProfile, routing.email_profile_id)
+            smtp_config, error = self._global_smtp_candidate(db, data)
+            return f"{label} (default)", smtp_config, error
 
         smtp_host = str(data.get(f"{prefix}smtp_host", "")).strip()
         if not smtp_host:
@@ -468,10 +458,23 @@ class SettingsWebService:
 
         smtp_username = str(data.get(f"{prefix}smtp_username", "")).strip() or None
         smtp_password = str(data.get(f"{prefix}smtp_password", "")).strip() or None
-        if smtp_password is None and profile is not None:
-            smtp_password = profile.smtp_password
+        if smtp_password is None:
+            routing = db.scalar(
+                select(ModuleEmailRouting).where(
+                    ModuleEmailRouting.organization_id == organization_id,
+                    ModuleEmailRouting.module == module_def["module"],
+                )
+            )
+            if routing and routing.email_profile_id:
+                profile = db.get(EmailProfile, routing.email_profile_id)
+                if profile is not None:
+                    smtp_password = profile.smtp_password
         if smtp_username and not smtp_password:
-            return label, None, f"{label}: SMTP password is required when username is set."
+            return (
+                label,
+                None,
+                f"{label}: SMTP password is required when username is set.",
+            )
 
         config: SMTPConfig = {
             "host": smtp_host,
