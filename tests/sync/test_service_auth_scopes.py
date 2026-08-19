@@ -10,8 +10,9 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from app.api.sync.dotmac_crm import require_service_scope
+from app.api.sync.dotmac_crm import require_crm_sync_enabled, require_service_scope
 from app.models.auth import ApiKey
+from app.models.sync.integration_config import IntegrationConfig, IntegrationType
 
 
 def test_apikey_has_scope_grandfathers_unscoped_keys():
@@ -48,3 +49,27 @@ def test_require_service_scope_rejects_key_missing_scope():
         dep(auth=auth)
     assert exc.value.status_code == 403
     assert "crm:ncc:read" in exc.value.detail
+
+
+def test_require_crm_sync_enabled_rejects_inactive_config(db_session):
+    import uuid
+
+    org_id = uuid.uuid4()
+    db_session.add(
+        IntegrationConfig(
+            organization_id=org_id,
+            integration_type=IntegrationType.DOTMAC_CRM,
+            base_url="https://crm.dotmac.io",
+            is_active=False,
+        )
+    )
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        require_crm_sync_enabled(
+            auth={"organization_id": org_id},
+            db=db_session,
+        )
+
+    assert exc.value.status_code == 403
+    assert "disabled" in exc.value.detail

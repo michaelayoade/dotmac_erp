@@ -479,6 +479,20 @@ class AdminSettingsWebService:
 
         return settings_web_service.update_email_settings(db, organization_id, data)
 
+    def test_email(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+        target: str,
+    ) -> tuple[bool, str]:
+        """Test email settings without saving form changes."""
+        from app.services.finance.settings_web import settings_web_service
+
+        return settings_web_service.test_email_settings(
+            db, organization_id, data, target
+        )
+
     # ========== Feature Flags ==========
 
     def get_features_context(
