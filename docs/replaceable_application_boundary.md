@@ -49,3 +49,16 @@ The boundary is acceptable only if Dotmac ERP can be replaced without changing
 Sub's core domain services or database schema beyond provider-neutral
 correlation data. Equally, ERP must remain usable for its own backoffice and
 accounting functions when Sub is unavailable.
+
+## Active vertical replacement programme
+
+ERP is being replaced one domain at a time by released Starter-owned modules
+composed by the thin `dotmac_backoffice` application. Composition alone does
+not move authority. Each domain must expose a versioned source projection,
+backfill into Backoffice, shadow and reconcile, switch one sole writer, and
+then remove the matching ERP writer before it counts as retired.
+
+People is the first vertical slice. Its read-only source contract, exact writer
+retirement ledger, ownership boundary and cutover gates are recorded in
+`docs/architecture/people-replacement-boundary.md`. ERP remains the sole People
+writer at the state documented here.

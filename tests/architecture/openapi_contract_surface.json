@@ -4223,6 +4223,19 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/backoffice/people/projection": {
+   "params": [
+    "header:x-api-key!",
+    "query:after",
+    "query:entity!",
+    "query:limit"
+   ],
+   "request": null,
+   "responses": {
+    "200": "b143dab394e4",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/sync/crm/contacts/companies": {
    "params": [
     "header:x-api-key!",
@@ -9617,12 +9630,14 @@
   "DeferredTaxSummaryRead": "cbcae224272a",
   "DepartmentListResponse": "bfe86160ba4a",
   "DepartmentMemberRead": "ee7259d8e388",
+  "DepartmentProjection": "a01f5291ccc9",
   "DepartmentRead": "5bdd337eb016",
   "DepartmentWithCount": "976efdc942c7",
   "DependencyType": "b0dfc94abce3",
   "DepreciationRunCreate": "264f36cf3aab",
   "DepreciationRunRead": "58a7c1d04517",
   "DepreciationScheduleRead": "feb6baa9231a",
+  "DesignationProjection": "106a3a49ad28",
   "DeviceRegisterRequest": "a5059796ac48",
   "DeviceUnregisterRequest": "e9bc5bf17e3f",
   "DimensionFilters": "ac56ef5ab02f",
@@ -9649,7 +9664,9 @@
   "EliminationEntryRead": "ef62a2fccb14",
   "EliminationType": "e6da4566722b",
   "EmployeeExpenseSummary": "150e7a3b52f5",
+  "EmployeeProjection": "114bac9a0b64",
   "EmployeeUsageSummary": "3a455032bf2e",
+  "EmploymentTypeProjection": "1a01f85d429d",
   "EndAllocationRequest": "0128885efa7c",
   "EntityType-Output": "d3be49e32e01",
   "ErrorDetail": "baaa77850daa",
@@ -9898,6 +9915,7 @@
   "POCreate": "8433574cbae7",
   "POLineCreate": "28c4cb996e76",
   "PORead": "b96ac2faba6d",
+  "PartyPersonProjection": "919aa122844c",
   "PasswordChangeRequest": "5ba9a185f0ca",
   "PasswordChangeResponse": "17414c83f867",
   "PasswordResetRequiredRequest": "5f6b4f57bb51",
@@ -9907,6 +9925,8 @@
   "PaymentBatchRead": "a60d93ec64ce",
   "PaymentScheduleRead": "b21a356ad95d",
   "PaymentStatusResponse": "b9d2e86e5dfc",
+  "PeopleProjectionEntity": "1cf97d0bf56a",
+  "PeopleProjectionPage": "43cfee6aee3d",
   "PerformanceObligationCreate": "731a3ed93c8c",
   "PermissionCreate": "9fb6db789888",
   "PermissionRead": "00e265d0ec99",
@@ -9922,6 +9942,8 @@
   "PlanItemCreate": "b693d7dc9eb0",
   "PlanItemResponse": "92bd7726d82e",
   "PlanItemStatus": "d02190f59e17",
+  "PositionAssignmentProjection": "3780cec7cfee",
+  "PositionProjection": "46a99d0e75a3",
   "PostingResultSchema": "577405ca07e5",
   "PrequalificationCreate": "5c5affe19409",
   "PrequalificationResponse": "19a76cd190e7",
