@@ -1924,18 +1924,39 @@ if (typeof window.searchAutosuggest === 'undefined') {
               notifications: {{ notifications | default([]) | tojson }},
               unreadCount: 0,
               markInFlight: false,
+              knownNotificationIds: new Set(),
+              notificationPollTimer: null,
+              notificationVisibilityHandler: null,
               syncUnreadCount() {
                 this.unreadCount = (this.notifications || []).filter(n => !n.read).length;
               },
-              async refreshNotifications() {
+              showNewMentionPopups(incoming) {
+                incoming
+                  .filter(n => n && !n.read && n.notification_type === "MENTION" && !this.knownNotificationIds.has(String(n.id)))
+                  .forEach(n => {
+                    if (typeof window.showToast === "function") {
+                      window.showToast(`${n.title}: ${n.message}`, "info");
+                    }
+                  });
+              },
+              rememberNotifications(incoming) {
+                incoming.forEach(n => {
+                  if (n && n.id) this.knownNotificationIds.add(String(n.id));
+                });
+              },
+              async refreshNotifications(showPopups = false) {
                 try {
-                  const response = await fetch("/notifications/context?limit=5", {
+                  const response = await fetch("/notifications/context?limit=20", {
                     headers: { "Accept": "application/json" },
                     cache: "no-store"
                   });
                   if (!response.ok) return;
                   const data = await response.json();
-                  if (Array.isArray(data.notifications)) this.notifications = data.notifications;
+                  if (Array.isArray(data.notifications)) {
+                    if (showPopups) this.showNewMentionPopups(data.notifications);
+                    this.rememberNotifications(data.notifications);
+                    this.notifications = data.notifications.slice(0, 5);
+                  }
                   if (typeof data.unread_count === "number") this.unreadCount = data.unread_count;
                 } catch (_error) {
                   // Keep current UI state if refresh fails.
@@ -1992,8 +2013,22 @@ if (typeof window.searchAutosuggest === 'undefined') {
                 window.location.href = notification.url || "#";
               },
               async init() {
+                this.rememberNotifications(this.notifications || []);
                 this.syncUnreadCount();
-                await this.refreshNotifications();
+                await this.refreshNotifications(false);
+                this.notificationPollTimer = window.setInterval(() => {
+                  if (!document.hidden) this.refreshNotifications(true);
+                }, 30000);
+                this.notificationVisibilityHandler = () => {
+                  if (!document.hidden) this.refreshNotifications(true);
+                };
+                document.addEventListener("visibilitychange", this.notificationVisibilityHandler);
+              },
+              destroy() {
+                if (this.notificationPollTimer) window.clearInterval(this.notificationPollTimer);
+                if (this.notificationVisibilityHandler) {
+                  document.removeEventListener("visibilitychange", this.notificationVisibilityHandler);
+                }
               }
             }' class="relative">
         <button @click="open = !open"
