@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Versioned, tenant-bound read projection for Backoffice People backfill and
+  reconciliation, protected by an explicit service-principal scope.
+- Exact two-directional retirement ledger for ERP writers of projected People
+  fields across runtime services, workers, scripts, and tools.
+
 ## [1.33.0] - 2026-08-18
 
 ### Added
