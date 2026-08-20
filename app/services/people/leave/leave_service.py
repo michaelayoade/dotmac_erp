@@ -159,6 +159,10 @@ class LeaveApplicationStatusError(LeaveServiceError):
         super().__init__(f"Cannot transition from {current} to {target}")
 
 
+class LeaveEligibilityError(LeaveServiceError):
+    """Raised when an employee is not eligible for a leave request."""
+
+
 class OverlappingLeaveApplicationError(ConflictError, LeaveServiceError):
     """Raised when a leave request overlaps an existing submitted/approved request."""
 
@@ -278,6 +282,67 @@ class LeaveService:
             return datetime.now(tz=ZoneInfo(tz_name)).date()
         except Exception:
             return datetime.now(tz=UTC).date()
+
+    @staticmethod
+    def _leave_type_tokens(leave_type: LeaveType) -> set[str]:
+        """Return stable tokens for policy matching across code/name variants."""
+        code = getattr(leave_type, "leave_type_code", "") or ""
+        name = getattr(leave_type, "leave_type_name", "") or ""
+        text = f"{code} {name}".upper()
+        for separator in ("-", "_", "/"):
+            text = text.replace(separator, " ")
+        return set(text.split())
+
+    @classmethod
+    def _is_annual_leave_type(cls, leave_type: LeaveType) -> bool:
+        return "ANNUAL" in cls._leave_type_tokens(leave_type)
+
+    @classmethod
+    def _is_sick_leave_type(cls, leave_type: LeaveType) -> bool:
+        return "SICK" in cls._leave_type_tokens(leave_type)
+
+    @staticmethod
+    def _one_year_service_date(date_of_joining: date) -> date:
+        """Return the date the employee completes one calendar year of service."""
+        try:
+            return date_of_joining.replace(year=date_of_joining.year + 1)
+        except ValueError:
+            return date(date_of_joining.year + 1, 3, 1)
+
+    def _get_application_employee(self, org_id: UUID, employee_id: UUID) -> Employee:
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == employee_id,
+            )
+        )
+        if not employee:
+            raise LeaveServiceError("Employee not found")
+        return employee
+
+    def _validate_service_eligibility(
+        self,
+        org_id: UUID,
+        *,
+        employee_id: UUID,
+        leave_type: LeaveType,
+        total_days: Decimal,
+    ) -> None:
+        """Enforce HR Manual leave eligibility for staff under one year."""
+        employee = self._get_application_employee(org_id, employee_id)
+        service_date = self._one_year_service_date(employee.date_of_joining)
+        if self.get_org_today(org_id) >= service_date:
+            return
+
+        if self._is_annual_leave_type(leave_type):
+            raise LeaveEligibilityError(
+                "Annual leave is only available after completing one year of service."
+            )
+
+        if self._is_sick_leave_type(leave_type) and total_days > Decimal("2"):
+            raise LeaveEligibilityError(
+                "Staff with less than one year of service may request up to 2 days of sick leave."
+            )
 
     @staticmethod
     def _status_managed_by_leave(status: EmployeeStatus) -> bool:
@@ -1327,6 +1392,13 @@ class LeaveService:
             half_day=half_day,
             include_holidays=leave_type.include_holidays,
             holiday_list_id=holiday_list_id,
+        )
+
+        self._validate_service_eligibility(
+            org_id,
+            employee_id=employee_id,
+            leave_type=leave_type,
+            total_days=total_days,
         )
 
         # Check balance (skip for LWP)

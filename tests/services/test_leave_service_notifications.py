@@ -161,6 +161,7 @@ def test_create_application_triggers_hr_manager_notifications():
     with (
         patch.object(service, "get_leave_type", return_value=leave_type),
         patch.object(service, "calculate_leave_days", return_value=Decimal("3")),
+        patch.object(service, "_validate_service_eligibility"),
         patch.object(service, "get_employee_balance", return_value=Decimal("10")),
         patch("app.services.people.discipline.DisciplineService") as discipline_service,
         patch.object(
