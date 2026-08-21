@@ -47,11 +47,13 @@ pymysql = "^1.1.1"
 # Kernel adoption slice E2 (docs/PLATFORM_ADOPTION_LEDGER.md): EXACT pin, no
 # range — the dependency-update gate in
 # tests/architecture/test_kernel_compatibility.py rejects any ^/~/>=/* drift.
-# Consume-pure contracts only; app/ imports are bounded by
-# tests/architecture/test_kernel_import_boundary.py. No extras: [testing]'s
-# only pull (httpx) and [licensing]'s (cryptography) are already ERP main
-# dependencies at compatible versions.
-dotmac-kernel = {version = "0.1.0a56", source = "forgejo"}
+# Runtime app/ imports remain bounded by
+# tests/architecture/test_kernel_import_boundary.py. The ERP lineage also uses
+# the published prerequisite vocabulary/verifier to host
+# idempotency_ledger.v1 without composing the kernel lineage. No extras:
+# [testing]'s only pull (httpx) and [licensing]'s (cryptography) are already ERP
+# main dependencies at compatible versions.
+dotmac-kernel = {version = "0.1.0a83", source = "forgejo"}
 
 # Shared presentation contract: compiled assets and inert Jinja package data.
 # ERP supplies the host loader and never vendors or recompiles this package.

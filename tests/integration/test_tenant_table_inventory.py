@@ -103,7 +103,9 @@ WITH t AS (
   FROM pg_policy GROUP BY polrelid
 )
 SELECT t.sch, t.tbl,
-       CASE WHEN (t.sch = 'public' AND t.tbl IN ('tenants', 'tenant_domains'))
+       CASE WHEN (t.sch = 'public' AND t.tbl IN (
+                    'tenants', 'tenant_domains', 'platform_idempotency_records'
+                  ))
                   OR (t.sch = 'mod_files' AND t.tbl = 'platform_stored_files')
               THEN 'platform'
             WHEN t.oid IN (SELECT attrelid FROM scoped) THEN 'direct'

@@ -1,7 +1,8 @@
 # Platform Adoption Ledger — dotmac_erp
 
-**Status:** UI consumer slice added 2026-08-13; kernel adoption remains on its
-independent E8 track. Supersedes the
+**Status:** UI consumption and three ERP-hosted kernel prerequisites are
+composed; runtime idempotency cutover remains blocked by the non-superuser role
+gate and the per-operation retirement plan. Supersedes the
 Phase-0 draft (recon pin 318a6e0d, surveyed 2026-07-19), which predated this
 repo's checked-in SOT map, the executable SOT registry, and the released kernel.
 This ledger records boundaries and evidence; it does not authorize a production
@@ -9,14 +10,13 @@ deployment.
 
 **Evidence pins:**
 
-- E8 slices 3 and 4: `dotmac_erp` `origin/main` at
-  `2f33a448b8394fc5c28564bb4a785bfea7c3b0ba`.
-- E8 slice 5 is an uncommitted working-tree continuation from that same pin;
-  its evidence is local until normal review and CI promotion occur.
-- Current lock: `dotmac-kernel==0.1.0a24` (source of record:
+- This composition slice starts from `dotmac_erp` `origin/main` at
+  `61e0bf3e4c6a2d3e19706d251c3811bd4362d5c7`; its final evidence is the
+  reviewed commit and CI result, not this prose.
+- Current declared pin: `dotmac-kernel==0.1.0a83` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
-  The dependency **is installed** at this exact pin; E8's migration inventory
-  and compatibility tests inspect this installed distribution dynamically.
+  The lock must resolve this exact published artifact; dependency, installed
+  wheel, prerequisite vocabulary and verifier are checked dynamically.
 - UI slice baseline: `dotmac_erp` `origin/main` at
   `c5f933d9be758c1ae70167cc030326877d9b27f7`; exact target
   `dotmac-ui==0.1.0a7`, UI contract `1` (source of record:
@@ -157,9 +157,23 @@ tenancy, permissions, settings, database schema or migration lineage.
 
 ## Pin history
 
-**Current E8 measurement — `0.1.0a24`.** The a24 dependency and lock were
+**2026-08-20 — `0.1.0a56` → `0.1.0a83`.** This is the first DB-provider use
+of the pinned kernel without composing its lineage. ERP revision
+`20260820_idempotency_ledger` creates both planes required by
+`idempotency_ledger.v1`, binds the effect to that ERP revision, and calls the
+published verifier before the migration may succeed. The app still imports no
+kernel idempotency model or execution service, and no legacy operation moves:
+the exact caller ratchet and ADR-0001 keep runtime cutover separate.
+
+The floor is a83 because it is the latest published kernel already validated
+by Starter before this slice; Accounting's prepared package floor is a85 and
+therefore remains uncomposable until a85 and Accounting a1 are separately
+authorized and registry-verified. This pin supplies the prerequisite contract,
+not authorization to publish either artifact.
+
+**Historical E8 measurement — `0.1.0a24`.** The a24 dependency and lock were
 already present at the E8 slice baseline; this slice does not claim to perform
-that upgrade. The current distribution has 17 kernel migration revisions and
+that upgrade. That distribution had 17 kernel migration revisions and
 E8's 0001 disposition test derives its table inventory from the installed
 revision rather than copying an a13-era count.
 
@@ -473,8 +487,10 @@ migration tests, and a rollback/retirement plan.
 
 Classes: **consume-pure** (DB-free contract, importable once the pin lands in
 E2) · **adapt-existing** (kernel contract adapted behind an existing ERP
-owner, no kernel table) · **defer-db** (kernel persistence/session/migration
-surface; gated on the E8 Organization→Tenant + migration ADR) ·
+owner, no kernel table) · **hosted-db** (ERP's own lineage truthfully supplies
+a named kernel database effect while runtime callers remain separately gated) ·
+**defer-db** (kernel persistence/session/migration surface still awaiting its
+named ownership and composition decision) ·
 **prohibited** (out of scope for this program; never imported under `app/`).
 
 Only **consume-pure** modules are in the architecture-test import allowlist
@@ -489,12 +505,12 @@ slice that adopts them, in the same change that updates this table.
 | `dotmac_kernel.profiles` | consume-pure | Early (E7) | `DeploymentProfileSpec`/registry for release preflight; never branch business logic on profile strings |
 | `dotmac_kernel.assembly` | consume-pure | Early (E7) | `ProductAssemblySpec` as metadata/release validation; does not replace ERP app startup |
 | `dotmac_kernel.providers` | consume-pure | Early (E7) | Provider seam interfaces consumed by profile preflight only |
-| `dotmac_kernel.prerequisites` | consume-pure | E8 (kernel `0.1.0a56`) | Vocabulary + `PrerequisiteBinding` + `resolve_depends_on` for ADR-0006 D1's logical migration prerequisites. Pure — no I/O, no ORM, no web framework — so it is consume-pure rather than an exact-symbol adoption like `models.Tenant`. ERP declares its bindings in `app/migration_bindings.py` and installs them from `alembic/env.py`; both effects are supplied by ERP's OWN revisions (`20260813_tenant_projection`, `20260814_database_roles`), never by a kernel revision, because ERP hosts `public.tenants` itself and can never run kernel `0001`. `dotmac_kernel.migrations.verify` is deliberately NOT admitted: only a REQUIRING module calls it, and ERP requires nothing yet |
+| `dotmac_kernel.prerequisites` | consume-pure | E8 (kernel `0.1.0a83`) | Vocabulary + `PrerequisiteBinding` + `resolve_depends_on` for ADR-0006 D1's logical migration prerequisites. Pure — no I/O, no ORM, no web framework — so it is consume-pure rather than an exact-symbol adoption like `models.Tenant`. ERP declares its bindings in `app/migration_bindings.py` and installs them from `alembic/env.py`; all three effects are supplied by ERP's OWN revisions (`20260813_tenant_projection`, `20260814_database_roles`, `20260820_idempotency_ledger`), never by a kernel revision, because ERP hosts `public.tenants` itself and can never run kernel `0001` |
 | `dotmac_kernel.testing` | consume-pure | Early (E2+) | Pure fakes/clock/licence kit for compatibility tests. The a7 wheel defect (eager `harness` → `deps` → `db` import made the subtree DB-bound) is FIXED in 0.1.0a8; DB-free import of the full subtree is asserted by `tests/architecture/test_kernel_compatibility.py::test_every_consume_pure_module_imports_without_db`. `FakeLicenceSigner` works without kernel extras because cryptography is an ERP main dependency |
 | `dotmac_kernel.licensing` | consume-pure (types/verifier); cutover deferred-but-required | E9 (after E8) | Value types + `verify_licence` are DB-free and importable; enforcement cutover replaces the placeholder-key path (`app/licensing/validator.py:32`) through one explicit shadow-compare + cutover. No second enforcement owner meanwhile |
 | `dotmac_kernel.messaging` (behavior: envelope/outcome semantics) | adapt-existing | Early (E3) | Target semantics for the existing ERP outbox (`events.outbox` owner): claim/deliver/settle, fail-closed unknown events, no service-internal commits. Semantics are matched, not imported wholesale |
 | `dotmac_kernel.messaging` (storage/relay/worker: `messaging.models`, `relay`, `worker`, `platform_*`, `inbox`) | defer-db | After E8 ADR | Kernel `outbox_events`/`inbox_records`/`platform_*` tables would stand beside `platform.event_outbox` — a prohibited second outbox until the ADR decides migration/tenancy compatibility |
-| `dotmac_kernel.idempotency` (+ `.idempotency_models`) | defer-db | Decided by [ADR-0001](adr/0001-kernel-idempotency-is-erps-only-at-most-once-owner.md); status changes in the composition slice | Kernel `0.1.0a31` (ADR-0014) makes at-most-once execution one owner and renames the inbox ledgers to `idempotency_records` / `platform_idempotency_records`. **Rationale corrected 2026-08-15:** this row previously also said the ledger's `tenant_id` FK targets kernel `tenants`, "which ERP neither has nor migrates" — stale since 2026-08-13, when `20260813_tenant_projection` gave ERP `public.tenants` in its OWN lineage. The surviving reason is the second-owner question: the kernel tables would stand beside `platform.idempotency_record`. **ADR-0001 answers it** — the kernel is the sole durable at-most-once owner, the legacy table coexists only as transitional legacy state under a no-new-callers ratchet, and ERP supplies `idempotency_ledger.v1` through its own truthful lineage (never running or stamping the kernel root), creating BOTH kernel-shaped tables because the prerequisite is common. The class stays `defer-db` until the composition slice lands the tables, the binding, a passing `require_prerequisites`, and PostgreSQL proofs — and cutover stays blocked while the runtime connects as `postgres` (RLS acceptance needs a non-BYPASSRLS role). `dotmac-numbering 0.1.0a2` cannot be composed until that slice: it declares `idempotency_ledger.v1` in `requires`, unconditionally |
+| `dotmac_kernel.idempotency` (+ `.idempotency_models`) | hosted-db; runtime import/cutover deferred | Storage composed 2026-08-20 under [ADR-0001](adr/0001-kernel-idempotency-is-erps-only-at-most-once-owner.md) | ERP revision `20260820_idempotency_ledger` creates BOTH kernel-shaped tables in ERP's own lineage, binds `idempotency_ledger.v1`, and proves the exact columns, unique keys, retention indexes and RLS plane posture through the pinned verifier. It never runs or stamps the kernel root. `platform.idempotency_record` remains transitional legacy state under `tests/architecture/idempotency_legacy_callers.txt`; no operation is cut over or dual-written by this storage slice. Runtime adoption requires a disjoint operation-scope/replay-window mapping and stays blocked while production connects as `postgres`, because an RLS proof on a superuser proves nothing. Accounting also remains disabled until its exact kernel/package pins are published and its own requiring migration re-verifies this effect |
 | `dotmac_kernel.config` | adapt-existing | Mid-program (E6+) | Typed settings contract adapted behind ERP's canonical settings owner only after direct `DomainSetting` writers are removed. Env-name collision: both define `DATABASE_URL`; kernel additionally wants `PLATFORM_DATABASE_URL`. Kernel builds a module-level `settings` singleton on import |
 | `dotmac_kernel.settings_resolver` | adapt-existing | Mid-program (E6+) | Spec registry / tenant→platform→default resolution adapted behind `control.settings`; ERP DB remains runtime-authoritative |
 | `dotmac_kernel.settings_models` | defer-db | After E8 | Kernel `DomainSetting` table name `domain_settings` **collides exactly** with ERP `public.domain_settings` (different columns: `tenant_id` vs `organization_id`, no ERP history table on the kernel side) |
@@ -502,7 +518,7 @@ slice that adopts them, in the same change that updates this table.
 | `dotmac_kernel.audit` | defer-db | After E6 consolidation | `write_audit_event` targets table `audit_events` — **collides exactly** with ERP `public.audit_events` (`app/models/audit.py:26`). No kernel audit table beside ERP's four unconsolidated writers |
 | `dotmac_kernel.entitlements` | defer-db | After E8 | `tenant_entitlement_grants` table; local grants only after Organization→Tenant mapping + module catalogue |
 | `dotmac_kernel.db` | defer-db | After E8 | Import constructs TWO engines + `SessionLocal`/`PlatformSessionLocal` from env at import time and primes RLS via GUC `app.current_tenant` — a different GUC than ERP's `app.current_organization_id`. Importing it violates the no-second-session-factory exclusion and would half-initialize tenancy |
-| `dotmac_kernel.migrations` | defer-db | After E8 | 17 revisions designed to compose into the consumer's Alembic `version_locations`; composing them into ERP's single-root, 372-revision graph (shared `public.alembic_version`) is an ADR-gated migration decision |
+| `dotmac_kernel.migrations` | defer-db (full lineage); exact verifier adopted by provider revision | After E8 | ERP imports `migrations.verify.require_prerequisites` only from its idempotency provider revision, as a proof over ERP-owned DDL. The kernel revision lineage itself remains absent and permanently unstampable: composing it into ERP's graph would collide on `public.tenants` and assert unrelated identity/RBAC/audit effects |
 | `dotmac_kernel.models` | partial persisted adoption: exact `Tenant` symbol only; identity/RBAC prohibited | E8 slice 4 | `app.services.tenant_projection` is the only admitted importer and writer. `TenantDomain` has a hosted table but no runtime import. `Party`/`Role`/`UserCredential`/`AuthSession` remain prohibited; Party never replaces `Person` in this program |
 | `dotmac_kernel.models_platform` | prohibited | — | Platform actor identity (`platform_admins`/`platform_sessions`/`platform_audit_events`); ERP has no platform-actor concept and identity stays local |
 | `dotmac_kernel.security` | prohibited | — | Kernel credential hashing/token machinery; ERP `auth.flow` owner stays |
@@ -541,6 +557,7 @@ across classes, defeating per-module review. Import the classified submodule.
 | `user_credentials` | **EXACT COLLISION** — ERP `public.user_credentials` (`app/models/auth.py:47`) | Kernel identity prohibited anyway |
 | `auth_sessions` | Near-miss — ERP uses `public.sessions` (`app/models/auth.py:190`); no name clash but same concern | Prohibited surface |
 | `tenants`, `tenant_domains` | Hosted kernel-compatible catalogue. `tenants` is a same-UUID projection of authoritative `core_org.organization`; `tenant_domains` has no ERP writer yet | E8 slice 4; full kernel lineage still gated |
+| `idempotency_records`, `platform_idempotency_records` | Hosted at the a83 contract by ERP revision `20260820_idempotency_ledger`; the legacy response cache remains separately named `platform.idempotency_record` | Storage provider adopted; runtime operation cutover blocked by ADR-0001 gates |
 | `parties`, `party_persons`, `party_organizations`, `party_roles` | No name clash with `public.people` (`app/models/person.py:50`) | Prohibited surface |
 | `outbox_events`, `inbox_records`, `platform_outbox_events`, `platform_inbox_records` | No name clash — ERP outbox is `platform.event_outbox` (`app/models/finance/platform/event_outbox.py:42`, schema `platform`) — but a second outbox beside it is prohibited by boundary 5 | Defer-db |
 | `platform_admins`, `platform_sessions`, `platform_audit_events` | No name clash; note ERP already uses a *schema* named `platform` — kernel `platform_*` tables in `public` would be confusable | Prohibited surface |
@@ -559,8 +576,8 @@ incl. `hr`, `lease`, `core_org`, `tax`, `rpt`, `pm`, `fa`, `support`,
   (`alembic/env.py` — `version_table_schema="public"`, `include_schemas=True`).
   Production migrates via `scripts/deploy.sh:93` →
   `poetry run alembic upgrade heads` (plural heads is a lived habit).
-- Kernel: 17 revisions under `dotmac_kernel/migrations/versions/`
-  (`…0001_initial_tenant_schema` … `…0017_history_actor`), designed to be
+- Kernel a83: 26 revisions under `dotmac_kernel/migrations/versions/`
+  (`…0001_initial_tenant_schema` … `…0026_platform_audit_log`), designed to be
   composed via the consuming app's `version_locations`. Composition would put
   a **second root** into ERP's revision graph sharing the same
   `public.alembic_version` table → guaranteed extra head, and `upgrade heads`
