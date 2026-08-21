@@ -53,7 +53,7 @@ pymysql = "^1.1.1"
 # idempotency_ledger.v1 without composing the kernel lineage. No extras:
 # [testing]'s only pull (httpx) and [licensing]'s (cryptography) are already ERP
 # main dependencies at compatible versions.
-dotmac-kernel = {version = "0.1.0a83", source = "forgejo"}
+dotmac-kernel = {version = "0.1.0a85", source = "forgejo"}
 
 # Shared presentation contract: compiled assets and inert Jinja package data.
 # ERP supplies the host loader and never vendors or recompiles this package.
@@ -70,6 +70,24 @@ dotmac-ui = {version = "0.1.0a7", source = "forgejo"}
 # revisions it actually runs (`app/migration_bindings.py`), because kernel
 # `0001` can never run in ERP — it creates `public.tenants`, which ERP owns.
 dotmac-files = {version = "0.1.0a2", source = "forgejo"}
+
+# Balanced general-ledger decisions and immutable posted-ledger evidence
+# (Starter ADR-0041). ERP is the product-first source and remains the LIVE
+# authority: this pin COMPOSES the `mod_accounting` lineage so it can be applied
+# and proven, and does nothing else. `ACCOUNTING_COMPOSITION_ENABLED` stays
+# false, no ERP writer is repointed, and no authority has moved — see
+# `docs/architecture/accounting-adoption-boundary.md` gate C.
+#
+# `ac_0001_accounting` is a second foreign lineage beside `dotmac-files`. Both
+# are independent roots carrying their own branch label, so ERP's revision graph
+# has MULTIPLE heads by design and `alembic upgrade heads` (plural) is the
+# deploy path. Acceptance is "exactly the expected branch heads and no
+# unintended ones", never "one global head".
+#
+# The kernel repin above (a83 -> a85) is DEMANDED by this pin, not bundled with
+# it: `dotmac-accounting 0.1.0a1` floors at `dotmac-kernel >= 0.1.0a85`, so the
+# lock cannot resolve at a83. `dotmac-files` needs no repin and stays at a2.
+dotmac-accounting = {version = "0.1.0a1", source = "forgejo"}
 
 # Private Forgejo PyPI index (Dotmac packages). Explicit priority: only
 # dependencies that name this source resolve from it; PyPI stays the default.
