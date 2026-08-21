@@ -407,5 +407,14 @@ Each gate is a separate authorized change. None is implied by the one before it.
   they were tracking. Reaching that state is checkable — it is what the two
   ledgers reduce to, not a judgement call.
 
+  **Additional blocking condition: every remaining APPROVED-but-unposted journal
+  must carry an explicit disposition.** At the 2026-08-21 survey there were
+  14,263, of which at least 2,038 belong to the known stranded repost cohort.
+  Retiring ERP's GL writers while any remain undisposed would strand live
+  workflow state inside a retired system — work someone approved, that was never
+  posted, and that no longer has a system able to post it. The remediation track
+  is described in `accounting-gate-d-plan.md`; it runs in parallel with gate D
+  and blocks here.
+
 Production deployment and any authority move are separate authorizations, and
 neither is granted by this document.

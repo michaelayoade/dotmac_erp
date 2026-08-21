@@ -38,20 +38,36 @@ The measurement was worth taking before writing code. Four things it decided:
 
 `docs/inventories/accounting-backfill-survey-2026-08-21.md`.
 
-### D1 — clear the four defects
+### D1 — clear the four defects. ALL FOUR ARE EXECUTION BLOCKERS
 
-None is a code change; all are data or a decision, and all are ERP-side.
+An earlier draft called only defect 1 a hard blocker. **The ruling makes all
+four blockers**, and the reason is worth stating: a defect that the backfill
+merely tolerates is a defect that survives into the module's permanent ledger,
+where it is far more expensive to reason about than it is in ERP today.
+
+None is a code change. All are ERP-side data or adjudication, and all are for
+**Finance, through ordinary reviewed ERP processes** — not folded into an
+adoption commit by whoever is running the migration.
 
 | # | Defect | Disposition |
 | --- | --- | --- |
-| 1 | Three journals unbalanced by `-0.000001` (`JE202604-40818`, `JE202604-40653`, `JE202604-42111`, all 2026-04-18) | Correct in ERP. The module enforces balanced posting and will refuse them. They fully explain the ledger's `-0.000003` trial-balance difference, so correcting them also makes the acceptance baseline exact. |
-| 2 | One journal flagged `is_reversal` with no `reversed_journal_id` | Identify and either link or unflag. A reversal with no original cannot be replayed through `reverse_journal`. |
-| 3 | Six journals with no provenance at all | No action required for the backfill — provenance rides in `description`/`reference`, not in identity. Recorded so it is not rediscovered. |
+| 1 | Three journals unbalanced by `-0.000001` (`JE202604-40818`, `JE202604-40653`, `JE202604-42111`, all 2026-04-18) | **Finance corrects in ERP.** The module enforces balanced posting and will refuse them. They fully explain the ledger's `-0.000003` trial-balance difference, so correcting them also makes the acceptance baseline exact. |
+| 2 | One journal flagged `is_reversal` with no `reversed_journal_id` | **Finance adjudicates** — link it, unflag it, or explicitly quarantine it. A reversal with no original cannot be replayed through `reverse_journal`. |
+| 3 | Six journals with no provenance at all | Recorded. Provenance rides in `description`/`reference`, not in identity, so this does not block — but it is resolved as part of the same review rather than rediscovered later. |
 | 4 | Source-module casing inconsistent (`AR`/`ar`, …) | Normalise **on read**, in the extractor. Do not rewrite ERP data for a migration's convenience. |
 
-Defect 1 is the only hard blocker. Until it is fixed the backfill cannot
-complete, and it should be fixed as ordinary ERP finance work with its own
-review — not folded into an adoption commit.
+**Do not hide defect 2 through importer exclusion.** Skipping the malformed
+reversal in the loader would make the run green while leaving the ledger's
+reversal structure quietly wrong, and would move an accounting decision from
+Finance into a migration script. The only acceptable exclusion is one **Finance
+explicitly quarantines**, recorded as such.
+
+#### Exit criterion
+
+Re-run `scripts/accounting_backfill_survey.sql` after the repairs and require
+**zero unresolved balance defects and zero unresolved reversal defects**. The
+survey is the gate, not an assurance that the repairs were attempted: it reads
+the database rather than the change log.
 
 ### D2 — implement the two seams
 
@@ -69,7 +85,7 @@ sensitivity proof.
 | ERP `PeriodStatus` → module `PeriodStatus` | Identity for FUTURE / OPEN / SOFT_CLOSED / REOPENED; ERP `HARD_CLOSED` → module `LOCKED`. Zero instances today; the mapping exists so the zero is checked rather than assumed. |
 | ERP `JournalStatus` → in-scope or not | Only POSTED and REVERSED are in scope. The rule is derived from posted-line presence, and asserted against the status split so the two cannot silently diverge. |
 
-#### SourceIdentity — key on the GL journal, not the source document
+#### SourceIdentity — RULED 2026-08-21
 
 The module's journal uniqueness is
 `(tenant, source_owner, source_document_kind, source_document_id, source_version)`.
@@ -78,28 +94,50 @@ The backfill sets:
 ```
 owner         = "erp.gl"
 document_kind = "journal_entry"
-document_id   = <ERP journal_entry_id>
-version       = "erp-backfill.v1"
-fingerprint   = <hash of the journal content>
+document_id   = <ERP journal_entry UUID>
+version       = "1"
+fingerprint   = <canonical digest of the journal and its ordered lines>
 ```
 
-**Why not the source document it came from.** If a backfilled journal claimed
-the source document's identity, then after cutover a *new* journal legitimately
-arising from that same document could never be created — the unique constraint
-would refuse it. That is exactly backwards: the whole point of the cutover is
-that those documents go on producing accounting consequences.
+**Why the GL journal and not the source document it came from.** If a
+backfilled journal claimed the source document's identity, then after cutover a
+*new* journal legitimately arising from that same document could never be
+created — the unique constraint would refuse it. That is exactly backwards: the
+point of the cutover is that those documents go on producing accounting
+consequences.
 
 The survey supports this independently. `source_document_id` is present on only
 101,465 of 206,071 journals, and the module names that do exist are
-case-inconsistent — keying on them would bake a data-quality defect into
-permanent identity.
+case-inconsistent (`AR`/`ar`, `EXPENSE`/`expense`). Keying on them would bake a
+data-quality defect into permanent identity.
 
 The source document still travels, in `description`/`reference`, where it is
 provenance rather than identity.
 
-`version` carries the run. A corrected re-backfill is `erp-backfill.v2` — a
-deliberate, reviewed act producing new rows, not a silent no-op against the old
-ones.
+**Why `version = "1"` and NOT a run identifier.** An earlier draft of this plan
+proposed `erp-backfill.v1`, with a corrected re-run using `.v2` as "a
+deliberate, reviewed act producing new rows". **That was wrong, and the ruling
+corrects it.**
+
+Putting the run identifier in `source_version` makes the run part of the
+identity, so a second run under `.v2` is a DIFFERENT identity for the same ERP
+journal. Accounting's uniqueness boundary would not refuse it — it would create
+a second journal, and posting it would **duplicate ledger effect**. The very
+mechanism meant to make a correction reviewable would instead route around the
+guard that exists to prevent double-posting.
+
+These are immutable legacy journals. Their identity is the ERP journal, once, so
+the version is `"1"` and stays `"1"`. The correct behaviour for the same
+identity carrying changed content is to **fail closed** — the fingerprint
+differs, the module refuses, and a human looks at why.
+
+A correction after data has landed is therefore not a re-identified re-import.
+It is what the ledger already provides for: a **linked reversal or correcting
+journal**, which leaves both the original and the correction visible and
+auditable, exactly as any other post-hoc accounting change would.
+
+The backfill run identifier belongs in **import and rehearsal evidence** — the
+run's own record of what it did — not in the identity of the thing it imported.
 
 #### Period close evidence — real, not a placeholder
 
@@ -183,11 +221,56 @@ Effectively all the work is journals.
 - Touch production, or run against the standby beyond the read-only survey.
 - Retire `gl.posting_batch`, or any relation in the writer ledger.
 
+## The APPROVED backlog — a separate Finance remediation track
+
+**14,263 journals sit APPROVED-but-not-posted**, spanning 2026-01-15 to
+2026-07-22. They carry no ledger effect, so they are outside gate D's backfill
+scope and gate D proceeds without waiting for them.
+
+That is not the same as ignoring them. A **separate Finance remediation track
+starts now, in parallel.**
+
+### It is not one homogeneous backlog
+
+At least **2,038 belong to the already-known stranded repost cohort** — a
+distinct population with a distinct cause. Treating all 14,263 as "a backlog to
+post" would mass-post journals whose business documents may no longer justify
+them.
+
+So the track classifies before it acts:
+
+1. **By producer.** Which code path created each journal. ERP's stranded-fee and
+   GL posting surfaces (`app/services/finance/gl/stranded_fee_posting.py`,
+   `app/tasks/gl_posting.py`) are the first places to look, alongside the
+   `source_module` / `source_document_type` breakdown the survey already
+   produced.
+2. **By business-document state.** Whether the underlying invoice, payment or
+   claim still supports posting, has been superseded, or has been voided
+   downstream.
+
+**Only then** is each classified journal disposed of: post, void, or quarantine.
+Deciding the disposition before the classification would be guessing at scale.
+
+### The retirement gate this creates
+
+Gate D may proceed while the classification runs, but the constraint it creates
+lands later and must not be lost:
+
+> **Final legacy-writer retirement requires an explicit disposition for every
+> remaining APPROVED journal.**
+
+Retiring ERP's GL writers while APPROVED journals remain undisposed would strand
+live workflow state inside a retired system — work that someone approved, that
+was never posted, and that no longer has a system able to post it. That is
+recorded against gate G in `accounting-adoption-boundary.md`, not left to
+memory.
+
 ## Open decisions
 
 | Decision | State |
 | --- | --- |
-| SourceIdentity keyed on the GL journal | Recommended above; needs Michael's ruling before data lands, because it is permanent provenance. |
-| Gate D stops before dual write | Stated in `accounting-adoption-boundary.md`; restated here for the avoidance of doubt. |
-| The 14,263 APPROVED-but-unposted journals | Operational question raised by the survey. Not a gate D blocker — they carry no ledger effect — but unresolved. |
+| SourceIdentity keyed on the GL journal, `version = "1"` | **RULED 2026-08-21.** See above — the run identifier belongs in import/rehearsal evidence, not identity. |
+| Gate D stops before dual write | **Confirmed.** Dual write is gate E. |
+| All four data defects are execution blockers | **RULED 2026-08-21.** Finance corrects and adjudicates through ordinary reviewed ERP process; the survey re-run is the gate. |
+| The 14,263 APPROVED-but-unposted journals | **Separate Finance remediation track, started now.** Classify by producer and business-document state before disposing. Gate D proceeds in parallel; gate G blocks on complete disposition. |
 | RECURRING / REVALUATION / CONSOLIDATION writers | Must retire, or the module must gain the kinds, before gate E. Not gate D's problem; recorded so it is not discovered at gate E. |

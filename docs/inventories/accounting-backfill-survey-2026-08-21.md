@@ -135,17 +135,25 @@ Ten of the twelve fiscal years hold no periods at all.
 
 ## Four defects that block the backfill
 
-Small, and all tractable.
+Small, and all tractable. **All four are gate D execution blockers** (ruled
+2026-08-21): a defect the backfill merely tolerates survives into the module's
+permanent ledger, where it is far more expensive to reason about than it is in
+ERP today. Finance corrects and adjudicates them through ordinary reviewed ERP
+process, and this survey is re-run afterwards to prove zero unresolved balance
+and reversal defects.
 
 1. **Three unbalanced journals.** Each off by exactly `-0.000001` — one
    micro-unit at the `NUMERIC(20,6)` scale limit. All POSTED, all dated
    2026-04-18, all `135375.000000` debit vs `135375.000001` credit:
    `JE202604-40818`, `JE202604-40653`, `JE202604-42111`. They fully account for
    the ledger's `-0.000003` trial-balance difference. The module enforces
-   balanced posting, so these need a data correction in ERP first.
+   balanced posting, so Finance corrects these in ERP first.
 2. **One journal flagged `is_reversal` with no `reversed_journal_id`.** The
    other 2,197 reversal pairs are symmetric: no dangling targets, no journal
-   reversed twice.
+   reversed twice. Finance adjudicates: link, unflag, or explicitly quarantine.
+   **It must not be hidden by excluding it in the importer** — that would make
+   the run green while leaving the ledger's reversal structure wrong, and would
+   move an accounting decision into a migration script.
 3. **Six journals with no provenance at all** — no `source_module`,
    `source_document_type` or `source_document_id`.
 4. **Source module casing is inconsistent.** `AR`/`ar`, `EXPENSE`/`expense`,
@@ -189,11 +197,25 @@ opening-balance repair wave.
 | FY2026 | 8 | OPEN | 880 | 434 |
 | FY2026 | 9–12 | OPEN | 0 | 0 |
 
-## Raised, but not this programme's to decide
+## The APPROVED backlog — now a tracked Finance remediation track
 
 **14,263 journals sit APPROVED-but-not-posted, spanning 2026-01-15 to
-2026-07-22.** A six-month-old approved-but-unposted backlog is an operational
-question that exists independently of the Accounting adoption. It does not block
-gate D — those journals carry no ledger effect and are out of backfill scope —
-but it should not pass unexamined merely because this programme does not need it
-resolved.
+2026-07-22.** They carry no ledger effect, so they are outside gate D's backfill
+scope — but they are not left unexamined.
+
+Ruled 2026-08-21: a **separate Finance remediation track starts now**, in
+parallel with gate D. It is **not one homogeneous backlog** — at least **2,038
+belong to the already-known stranded repost cohort**. The track classifies by
+producer and by business-document state *before* anything is posted, voided or
+quarantined; deciding disposition ahead of classification would be guessing at
+scale.
+
+`app/services/finance/gl/stranded_fee_posting.py` and `app/tasks/gl_posting.py`
+are the first ERP surfaces to examine for the producer classification, alongside
+the `source_module` / `source_document_type` breakdown above.
+
+**This creates a gate G blocking condition**: final legacy-writer retirement
+requires an explicit disposition for every remaining APPROVED journal, because
+retiring ERP's GL writers while any remain undisposed would strand live workflow
+state inside a retired system. Recorded in
+`docs/architecture/accounting-adoption-boundary.md`.
