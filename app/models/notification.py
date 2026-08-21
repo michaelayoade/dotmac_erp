@@ -169,7 +169,9 @@ class Notification(Base):
     email_retry_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
-    email_next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    email_next_retry_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     email_dead_lettered: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

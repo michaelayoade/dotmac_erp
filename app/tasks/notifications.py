@@ -79,9 +79,9 @@ def _record_email_delivery_failure(notification: Notification, now: datetime) ->
         notification.email_next_retry_at = None
         return True
 
-    notification.email_next_retry_at = now + _EMAIL_RETRY_DELAYS[
-        notification.email_retry_count - 1
-    ]
+    notification.email_next_retry_at = (
+        now + _EMAIL_RETRY_DELAYS[notification.email_retry_count - 1]
+    )
     return False
 
 
