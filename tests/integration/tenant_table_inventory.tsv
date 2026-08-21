@@ -335,6 +335,7 @@ public	help_article_feedback	direct	false	false	app_admin	0	false	--	--
 public	help_article_override	direct	false	false	app_admin	0	false	--	--
 public	help_search_event	direct	false	false	app_admin	0	false	--	--
 public	help_user_progress	direct	false	false	app_admin	0	false	--	--
+public	idempotency_records	direct	true	true	app_admin	1	false	rw	rw
 public	infrastructure_alert	unclassified	false	false	app_admin	0	false	--	--
 public	infrastructure_health_status	unclassified	false	false	app_admin	0	false	--	--
 public	mfa_methods	inherited	false	false	app_admin	0	false	--	--
@@ -342,6 +343,7 @@ public	module_email_routing	direct	false	false	app_admin	0	false	--	--
 public	notification	direct	false	false	app_admin	0	false	--	--
 public	org_metric_snapshot	direct	false	false	app_admin	0	false	--	--
 public	people	direct	true	true	app_admin	4	true	--	--
+public	platform_idempotency_records	platform	false	false	app_admin	0	false	--	rw
 public	permissions	unclassified	false	false	app_admin	0	false	--	--
 public	person_roles	inherited	false	false	app_admin	0	false	--	--
 public	role_permissions	unclassified	false	false	app_admin	0	false	--	--

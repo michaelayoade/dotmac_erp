@@ -17,7 +17,7 @@ Under the old physical-edge model, `dotmac-files` declaring
 un-installable in ERP unless ERP first converged its entire identity, RBAC and
 audit estate onto the kernel's — an enormous amount of coupling to obtain one
 foreign-key target. Starter's ADR-0006 D1 amendment replaced that edge with
-logical prerequisites, and these two bindings are how ERP supplies them from
+logical prerequisites, and these bindings are how ERP supplies them from
 revisions it actually runs.
 
 ## These are claims, and they are checked
@@ -35,6 +35,7 @@ from __future__ import annotations
 from typing import Final
 
 from dotmac_kernel.prerequisites import (
+    IDEMPOTENCY_LEDGER_V1,
     MODULE_DATABASE_ROLES_V1,
     TENANT_SCOPE_CATALOG_V1,
     PrerequisiteBinding,
@@ -46,6 +47,9 @@ from dotmac_kernel.prerequisites import (
 #: `app_admin`, `app_user` and `platform_api` — it never creates them, because
 #: `CREATE ROLE` needs privileges an ordinary migration must not hold; the
 #: explicitly elevated `scripts/bootstrap_database_roles.py` does that.
+#: `20260820_idempotency_ledger` hosts both planes of the kernel at-most-once
+#: ledger while ADR-0001 keeps ERP's endpoint-response cache as ratcheted
+#: transitional state; no operation is cut over merely by supplying storage.
 ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
     PrerequisiteBinding(
         prerequisite=TENANT_SCOPE_CATALOG_V1.name,
@@ -55,6 +59,11 @@ ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
     PrerequisiteBinding(
         prerequisite=MODULE_DATABASE_ROLES_V1.name,
         provider_revision="20260814_database_roles",
+        provider_owner="assembly",
+    ),
+    PrerequisiteBinding(
+        prerequisite=IDEMPOTENCY_LEDGER_V1.name,
+        provider_revision="20260820_idempotency_ledger",
         provider_owner="assembly",
     ),
 )
