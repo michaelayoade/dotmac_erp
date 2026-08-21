@@ -561,7 +561,12 @@ def _load_inventory() -> set[Writer]:
         rows = list(reader)
     assert all(row["disposition"] in DISPOSITIONS for row in rows)
     assert all(row["retire_with"] == "people" for row in rows)
-    assert all(row["next_owner"] == "dotmac_backoffice/dotmac-people" for row in rows)
+    # `next_owner` is an AUTHORITY field, so it carries the assembly id
+    # `asm-dotmac-erp` — not the product/repository slug `dotmac-erp` used for
+    # consumers, and not the legacy source repository `dotmac_erp`. Corrected
+    # 2026-08-19; the four names are set out in
+    # `docs/architecture/people-replacement-boundary.md`.
+    assert all(row["next_owner"] == "asm-dotmac-erp/dotmac-people" for row in rows)
     writers = {
         Writer(
             path=row["path"],

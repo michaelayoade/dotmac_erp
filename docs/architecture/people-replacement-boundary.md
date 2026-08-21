@@ -2,12 +2,40 @@
 
 Status: **backfill contract installed; authority remains in ERP**.
 
+> **Destination naming.** The replacement target is the commercial **Dotmac
+> ERP** product assembly, not an internally framed `dotmac_backoffice`
+> application — Michael corrected that on 2026-08-19
+> (`dotmac-erp-recomposition-into-domain-modules`; the earlier
+> `erp-hardening-is-containment-backoffice-is-the-destination` entry is
+> superseded on naming and retained only for its cutover mechanics).
+>
+> **Four names, and only four** — do not introduce a fifth:
+>
+> | Role | Name |
+> | --- | --- |
+> | Product / repository slug | `dotmac-erp` |
+> | Authority / assembly id | `asm-dotmac-erp` |
+> | Historical source repository | `dotmac_erp` |
+> | Human name | Dotmac ERP |
+>
+> The writer ledger's `next_owner` is an AUTHORITY field, so it reads
+> `asm-dotmac-erp/dotmac-people`. Starter dossier `candidate_consumers` name
+> the product slug `dotmac-erp`. The legacy `dotmac_erp` repository is the
+> extraction SOURCE and is archived or renamed at final retirement.
+>
+> The `backoffice:people:read` scope, the
+> `/api/v1/sync/backoffice/people/projection` route and the
+> `backoffice.people.projection.v1` contract keep their names deliberately.
+> They are shipped wire identifiers held by a live consumer; renaming them is a
+> breaking API change, not a documentation correction, and it is out of scope
+> here.
+
 ## Ownership
 
 | Concern | Current owner | Intended owner after an authorized cutover |
 | --- | --- | --- |
-| Person identity used by employment | `public.people` in Dotmac ERP | kernel `Party` + `PartyPerson` in Dotmac Backoffice |
-| Employment directory, positions and assignments | Dotmac ERP HR services and `hr.*` tables | released `dotmac-people`, composed by Dotmac Backoffice |
+| Person identity used by employment | `public.people` in Dotmac ERP | kernel `Party` + `PartyPerson` in the composed Dotmac ERP product |
+| Employment directory, positions and assignments | Dotmac ERP HR services and `hr.*` tables | released `dotmac-people`, composed by the Dotmac ERP product |
 | Credentials, sessions, roles and permissions | Dotmac ERP | Not part of this slice |
 | Payroll, bank, compensation, attendance and location data | Their existing ERP domains | Not part of `dotmac-people` |
 
@@ -17,7 +45,7 @@ reconciliation and has disabled the corresponding ERP writer paths.
 
 ## Versioned source projection
 
-Backoffice may read one tenant at a time through:
+The composed product may read one tenant at a time through:
 
 `GET /api/v1/sync/backoffice/people/projection`
 
@@ -88,14 +116,14 @@ case prevents model references from being classified as writes.
 Authority may move only when all of these are evidenced in checked-in cutover
 artifacts and the irreversible switch is explicitly authorized:
 
-1. Backoffice pins the released kernel and `dotmac-people` distributions and
-   migrates their lineages successfully.
+1. The composed product pins the released kernel and `dotmac-people`
+   distributions and migrates their lineages successfully.
 2. Backfill preserves source IDs and records source fingerprints.
 3. Shadow reads and a repeatable reconciler show no unexplained row or field
    differences for every entity and tenant.
-4. Every runtime row in the writer ledger is replaced by a Backoffice command
-   path or explicitly retired; every operator-script row is disabled.
-5. Backoffice becomes the sole writer in one cutover and ERP compatibility is
-   read-only.
+4. Every runtime row in the writer ledger is replaced by a composed-product
+   command path or explicitly retired; every operator-script row is disabled.
+5. The composed product becomes the sole writer in one cutover and ERP
+   compatibility is read-only.
 6. ERP tables remain until downstream foreign-key consumers have moved; table
    deletion is a later, separately authorized production operation.
