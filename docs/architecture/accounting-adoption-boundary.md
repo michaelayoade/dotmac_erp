@@ -380,6 +380,17 @@ Each gate is a separate authorized change. None is implied by the one before it.
 - **Gate D — backfill and shadow.** Backfill masters, then periods oldest first,
   comparing each as it lands. Acceptance is `ShadowComparison.matches` at all
   three levels for every period, with the unbalanced-period list empty.
+
+  **Planned in detail: `docs/architecture/accounting-gate-d-plan.md`**, on
+  measured evidence in
+  `docs/inventories/accounting-backfill-survey-2026-08-21.md`. The survey
+  settled the scope rule — backfill exactly the journals that carry posted
+  ledger lines, 190,179 of 206,071 — and cleared the one thing that could have
+  blocked the gate behind a Starter release: ERP's four journal types with no
+  module counterpart have zero rows. Four small data defects are the first work,
+  and with one organization the rehearsal must manufacture a second tenant,
+  because a mis-scoped write would otherwise have no observable symptom.
+
 - **Gate E — dual write and parity.** Both sides post; every posting is compared.
   Divergence is a stop, not a warning.
 - **Gate F — cutover.** One writer at a time, in the order the writer ledger
