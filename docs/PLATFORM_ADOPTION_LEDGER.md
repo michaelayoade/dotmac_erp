@@ -155,6 +155,78 @@ itself promote the component slice to reuse-proven; that requires the planned
 independent Sub cutover on an exact released pin. It changes no accounting,
 tenancy, permissions, settings, database schema or migration lineage.
 
+## Adoption slices
+
+**2026-08-21 — Accounting readiness (gate A). No pin.** ERP prepares the five
+artifacts a sealed `dotmac-accounting` cutover needs, and pins nothing: the
+module has no release tag, and
+`tests/architecture/test_accounting_composition_disabled.py` enforces its
+absence four independent ways (no dependency, no import under `app/`, no
+`version_locations` entry, `ACCOUNTING_COMPOSITION_ENABLED` defaulting off).
+
+What landed, and what each is for:
+
+- **The map.** `docs/inventories/accounting-gl-writers.tsv` (74 rows) and
+  `docs/inventories/accounting-gl-callers.tsv` (168 rows), each an exact
+  two-directional ratchet with a per-shape sensitivity proof
+  (`tests/architecture/test_accounting_gl_boundary.py`). Every row carries both a
+  disposition and a `final_state`, and each pair carries an invariant checked
+  against the code rather than the label — a `keep_local` writer must touch only
+  retained relations, a `tool_repointed` entry point must be Python, a
+  `gl_internal` caller must really live in the GL owner. Writer final states:
+  36 `writer_removed`, 20 `tool_repointed`, 12 `tool_archived`, 6
+  `retained_erp_writer`. Caller final states: 106 `caller_repointed`, 58
+  `retired_with_gl_owner`, 4 `retained_erp_caller`. The 106 repointed callers
+  are the real size of this cutover.
+- **The disabled composition, proven inert.** `app/accounting_adoption.py`
+  states the composition as data — names, version location, required effects, and
+  a THREE-way partition of every GL relation: seven migrate, four are retained
+  ERP writers (`gl.account_balance`, `gl.balance_refresh_queue`, `gl.budget`,
+  `gl.budget_line`), and `gl.posting_batch` ends with its writer, having neither
+  a module table nor a surviving ERP writer once the poster is sealed. The
+  two-way version of that partition mis-filed
+  `LedgerPostingService._retire_superseded_batch_key` as `keep_local`; the
+  writer ledger's invariant is what caught it. It imports nothing from the
+  module, and `require_composition_ready()` refuses rather than degrading,
+  distinguishing "not installed" from "not enabled".
+  `tests/architecture/test_accounting_scaffold_is_inert.py` proves the scaffold
+  changes no deployment: booting `app.main` imports none of it, it registers no
+  route/task/beat entry/ORM table, it reads exactly one environment variable,
+  and importing it with every outbound socket poisoned reaches no network. Both
+  probes carry sensitivity proofs, since both pass by finding nothing.
+- **Migrations: prerequisites bound and resolving; nothing further proven.** The
+  module declares `tenant_scope_catalog.v1`, `module_database_roles.v1` and
+  `idempotency_ledger.v1`; ERP binds all three to its own revisions, the last of
+  them by PR #328, and resolution yields exactly those three and nothing
+  beginning `0001_`. That is a check over declarations and bindings — the only
+  one possible without the wheel. It does NOT prove the effects hold in a
+  database (`require_prerequisites` verifies that against the live catalog at
+  migration time, and has not run for Accounting), nor that `ac_0001` applies
+  onto ERP's revision graph with a single head. The accurate claim is that no
+  ERP migration is currently known to be outstanding; whether any is needed is a
+  gate C question answered by running the lineage against a real non-production
+  database.
+- **The backfill.** `app/services/finance/gl/accounting_backfill.py` plus
+  `scripts/backfill_accounting.py`. Masters row by row; transactions as a
+  per-period work list carrying ERP's acceptance digest, so a divergence is
+  attributable to a period rather than to "the backfill". Three shape changes
+  are performed rather than copied — fixed dimension columns to a generic
+  registry, a period status column to an event stream, and ERP's
+  category-IFRS-class / account-type split onto the module's `account_class` /
+  `kind`. Both classification tables are checked against the ERP enums they map,
+  so a new enum member fails the build instead of the run.
+- **The shadow comparison.**
+  `app/services/finance/gl/accounting_shadow.py` — a pure comparator over exact
+  `Decimal`s at three levels (control totals, per account, ordered line digest),
+  because a missing document, a mis-mapped account and the same position reached
+  by different entries fail differently and a single boolean hides which. Both
+  sides produce the same `LedgerFact` values, so the comparison logic is
+  unit-tested today and unchanged at cutover.
+
+No writer moved, no authority moved, no production work was performed. The
+ordered gates B–G are in `docs/architecture/accounting-adoption-boundary.md`;
+each is a separate authorization.
+
 ## Pin history
 
 **2026-08-20 — `0.1.0a56` → `0.1.0a83`.** This is the first DB-provider use
