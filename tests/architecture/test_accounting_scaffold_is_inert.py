@@ -21,9 +21,12 @@ from __future__ import annotations
 
 import ast
 import importlib
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCAFFOLD_MODULES = (
@@ -41,6 +44,26 @@ SCAFFOLD_PATHS = (
 ALLOWED_ENV_READS = frozenset({"ACCOUNTING_COMPOSITION_ENABLED"})
 
 
+def _boot_env() -> dict[str, str]:
+    """The environment ERP's other subprocess-boot tests use.
+
+    Importing `app.main` mounts ~40 routers and, left to itself, arms the
+    runtime observability stack — which on a CI runner with no collector reaches
+    for the network and blows the 60s `pytest-timeout`.  `test_startup.py` and
+    `test_main_route_precedence.py` boot the app the same way for the same
+    reason.
+
+    Neither flag narrows what gets IMPORTED, which is the only thing this file
+    asserts: `ENABLED_MODULES` is deliberately left alone so the full router set
+    still mounts, and the scaffold lives under `finance/gl` — the subtree most
+    likely to pull it in.
+    """
+    env = os.environ.copy()
+    env["DOTMAC_DEV_MODE"] = "true"
+    env["DOTMAC_DEFER_RUNTIME_OBSERVABILITY"] = "1"
+    return env
+
+
 def _scaffold_sources() -> list[tuple[str, ast.Module]]:
     return [
         (path, ast.parse((REPO_ROOT / path).read_text(encoding="utf-8"), filename=path))
@@ -55,6 +78,7 @@ def test_the_scaffold_files_all_exist() -> None:
     assert not missing, f"scaffold files moved or were renamed: {missing}"
 
 
+@pytest.mark.timeout(300)
 def test_booting_the_app_does_not_import_the_scaffold() -> None:
     """The strongest inertness proof available: import the real application and
     see whether any scaffold module came with it.
@@ -72,7 +96,8 @@ def test_booting_the_app_does_not_import_the_scaffold() -> None:
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=280,
+        env=_boot_env(),
     )
     assert result.returncode == 0, result.stderr[-4000:]
     loaded = [name for name in result.stdout.strip().split(",") if name]
@@ -84,7 +109,12 @@ def test_booting_the_app_does_not_import_the_scaffold() -> None:
 
 def test_the_probe_would_notice_an_import() -> None:
     """Sensitivity proof for the check above (ADR-0018): it passes by finding an
-    empty list, which is also what a broken probe returns."""
+    empty list, which is also what a broken probe returns.
+
+    Deliberately the SAME harness — same interpreter, same environment, same
+    `sys.modules` question — with only the thing being imported changed.  A
+    proof run through a different harness proves something about that harness.
+    """
     probe = (
         "import sys; import app.accounting_adoption; "
         f"print(','.join(m for m in {SCAFFOLD_MODULES!r} if m in sys.modules))"
@@ -94,7 +124,8 @@ def test_the_probe_would_notice_an_import() -> None:
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=280,
+        env=_boot_env(),
     )
     assert result.returncode == 0, result.stderr[-4000:]
     assert "app.accounting_adoption" in result.stdout
