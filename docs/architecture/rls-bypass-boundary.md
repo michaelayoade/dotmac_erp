@@ -7,11 +7,21 @@
 
 **This ledger tracks the retirement of a bridge, not the design of a
 destination.** ERP is the extraction source and a temporary production bridge;
-the destination is a `dotmac-backoffice` assembly composed from the starter's
-kernel, UI and released domain modules, replaced vertically one owned domain at
-a time. Knowledge entry
-`erp-hardening-is-containment-backoffice-is-the-destination` is the canonical
-statement of that frame.
+the destination is the commercial **Dotmac ERP** product — a thin assembly
+composed from the starter's kernel, UI and released domain modules, replaced
+vertically one owned domain at a time. Dotmac's internal deployment, shared
+SaaS, dedicated managed and future on-premise deployments are profiles of that
+one product release, not separate applications.
+
+The destination is NOT an internally framed `dotmac-backoffice` application.
+Michael corrected that naming on 2026-08-19: the product identity stays Dotmac
+ERP. Knowledge entry `dotmac-erp-recomposition-into-domain-modules` is the
+canonical statement of the frame;
+`erp-hardening-is-containment-backoffice-is-the-destination` is **superseded**
+and retains only its containment and vertical-cutover mechanics, never its
+target naming. At final retirement this legacy repository is archived or
+renamed and the composed product becomes the canonical Dotmac ERP; no parallel
+business implementation survives.
 
 Two consequences, and they govern every row below:
 
