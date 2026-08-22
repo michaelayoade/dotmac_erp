@@ -122,6 +122,9 @@ class BankFeeState(str, Enum):
     LEGACY_BATCH_ONLY = "LEGACY_BATCH_ONLY"
     #: A concurrent caller won the create; that caller's journal is canonical.
     LOST_RACE = "LOST_RACE"
+    #: The ledger replayed against an existing batch, so nothing was posted and
+    #: the journal this call was working on is still unposted.
+    REPLAY_LEFT_UNPOSTED = "REPLAY_LEFT_UNPOSTED"
     #: A DRAFT journal exists but its content no longer matches the statement
     #: line. NOT re-posted — posting stale content under a live identity is
     #: worse than posting nothing.
@@ -171,6 +174,7 @@ class BankFeeOutcome:
     def needs_attention(self) -> bool:
         return self.state in {
             BankFeeState.APPROVED_ORPHAN,
+            BankFeeState.REPLAY_LEFT_UNPOSTED,
             BankFeeState.NOT_LIVE,
             BankFeeState.CONTENT_MISMATCH,
             BankFeeState.AMBIGUOUS,
@@ -187,6 +191,25 @@ class BankFeeOutcome:
         }:
             return self.journal
         return None
+
+
+IDENTITY_INDEX_NAME = "uq_journal_entry_bank_fee_source"
+
+
+def _is_fee_identity_violation(exc: IntegrityError) -> bool:
+    """Whether THIS integrity error is the source-identity index refusing a duplicate.
+
+    Checked by constraint name, with the message as a fallback for drivers that
+    do not populate `diag`. Anything else — a foreign key, a check, a different
+    unique index — must propagate: a caller that reports every `IntegrityError`
+    as "someone else won" converts real write failures into success.
+    """
+    orig = getattr(exc, "orig", None)
+    diag = getattr(orig, "diag", None)
+    constraint = getattr(diag, "constraint_name", None)
+    if constraint:
+        return bool(constraint == IDENTITY_INDEX_NAME)
+    return IDENTITY_INDEX_NAME in str(exc)
 
 
 def find_fee_journals(
@@ -269,14 +292,14 @@ def fee_idempotency_key(organization_id: uuid.UUID, line_id: uuid.UUID) -> str:
 def existing_posting_batch(
     db: Session, *, organization_id: uuid.UUID, line_id: uuid.UUID
 ) -> PostingBatch | None:
-    """A SUCCESSFULLY POSTED ledger batch for this line.
+    """A batch for this line whose effect is STILL LIVE, or None.
 
     Covers legacy journals whose `source_document_id` is NULL: their identity
     survives only in the idempotency key, and this is what reads it.
 
-    Restricted to `BatchStatus.POSTED` deliberately — see the comment below.
+    Two filters, and the second is the one that is easy to miss — see below.
     """
-    return db.scalars(
+    batch = db.scalars(
         select(PostingBatch).where(
             PostingBatch.idempotency_key
             == fee_idempotency_key(organization_id, line_id),
@@ -287,6 +310,28 @@ def existing_posting_batch(
             PostingBatch.status == BatchStatus.POSTED,
         )
     ).first()
+    if batch is None:
+        return None
+
+    # NOR is a POSTED batch a live effect. **Reversing a journal leaves its
+    # original batch POSTED** — the batch records that a posting happened, not
+    # that its effect still stands. So follow the batch to the ledger rows it
+    # wrote, and those rows to their journals, and require at least one journal
+    # whose effect is live.
+    journal_ids = set(
+        db.scalars(
+            select(PostedLedgerLine.journal_entry_id).where(
+                PostedLedgerLine.posting_batch_id == batch.batch_id
+            )
+        ).all()
+    )
+    if not journal_ids:
+        return None
+    for journal_id in journal_ids:
+        journal = db.get(JournalEntry, journal_id)
+        if journal is not None and is_effect_live(db, journal):
+            return batch
+    return None
 
 
 def _existing_journal_outcome(
@@ -296,6 +341,8 @@ def _existing_journal_outcome(
     organization_id: uuid.UUID,
     line: Any,
     line_id: uuid.UUID,
+    bank_gl_account_id: uuid.UUID,
+    finance_cost_account_id: uuid.UUID,
     posted_by_user_id: uuid.UUID,
     poster: _Poster | None,
 ) -> BankFeeOutcome:
@@ -344,7 +391,13 @@ def _existing_journal_outcome(
         )
 
     if status == JournalStatus.DRAFT:
-        mismatch = _content_mismatch(db, existing, line=line)
+        mismatch = _content_mismatch(
+            db,
+            existing,
+            line=line,
+            debit_account_id=finance_cost_account_id,
+            credit_account_id=bank_gl_account_id,
+        )
         if mismatch is not None:
             # Re-posting is a recovery, not a rewrite. If the DRAFT no longer
             # says what the statement line says, posting it would put stale
@@ -378,6 +431,22 @@ def _existing_journal_outcome(
                 ),
                 error=posting_result.message,
             )
+        if getattr(posting_result, "idempotent_replay", False):
+            # `success=True` with a replay means the ledger found an existing
+            # batch and posted NOTHING. This journal is still unposted, and
+            # calling that a successful re-post is the same false success the
+            # whole module exists to remove — here it would also strand the
+            # DRAFT forever, because the next run would find it and replay again.
+            return BankFeeOutcome(
+                state=BankFeeState.REPLAY_LEFT_UNPOSTED,
+                journal=existing,
+                message=(
+                    f"Re-post of bank-fee journal {number} replayed against an "
+                    f"existing batch; nothing was posted and the journal is "
+                    f"still {existing.status.value}."
+                ),
+                error="idempotent replay left the journal unposted",
+            )
         return BankFeeOutcome(
             state=BankFeeState.REPOSTED_DRAFT,
             journal=existing,
@@ -406,14 +475,41 @@ def _existing_journal_outcome(
     )
 
 
-def _content_mismatch(db: Session, journal: JournalEntry, *, line: Any) -> str | None:
+#: Journals permitted to differ from the expected chart of accounts, each named
+#: with the reason. An audited exception list, NOT a blanket omission.
+#:
+#: `JE202603-0227` and `JE202603-0230` (₦25.00 and ₦10.00, 2026-01-15) credit the
+#: legacy `Paystack OPEX - DT` code where their statement line's bank account is
+#: Paystack OPEX — a chart-of-accounts duplication, verified in ERP PR #335
+#: appendix B5. They are exempt from the ACCOUNT comparison only; amounts, line
+#: count and direction are still checked, and every other journal is compared in
+#: full.
+#:
+#: Removing a row from this list is the goal. Adding one requires evidence that
+#: the difference is a chart remap and not a wrong posting.
+LEGACY_ACCOUNT_EXEMPTIONS: frozenset[str] = frozenset(
+    {"JE202603-0227", "JE202603-0230"}
+)
+
+
+def _content_mismatch(
+    db: Session,
+    journal: JournalEntry,
+    *,
+    line: Any,
+    debit_account_id: uuid.UUID,
+    credit_account_id: uuid.UUID,
+) -> str | None:
     """Describe how a DRAFT journal differs from its statement line, or None.
 
-    Compares the economic content the line implies — one debit and one credit,
-    each of the line's absolute amount — against what the journal actually
-    holds. It does not compare accounts: a chart-of-accounts remap is a
-    legitimate reason for them to differ, and the two legacy `Paystack OPEX - DT`
-    rows are exactly that case.
+    Compares SHAPE and ACCOUNTS, not just totals. An earlier version compared
+    only aggregate debit and credit, which a journal with the right money on the
+    WRONG accounts passes — and re-posting that writes a wrong posting into the
+    ledger under the line's identity, where it is hard to correct afterwards.
+
+    A bank fee is two lines: the fee debited to the finance-cost account, the
+    same amount credited to the statement line's bank account. Anything else is
+    not this fee.
     """
     expected = quantize_amount(abs(Decimal(line.amount)))
     rows = list(
@@ -425,6 +521,8 @@ def _content_mismatch(db: Session, journal: JournalEntry, *, line: Any) -> str |
     )
     if not rows:
         return "the journal has no lines"
+    if len(rows) != 2:
+        return f"the journal has {len(rows)} lines; a bank fee has 2"
 
     debit = quantize_amount(
         sum((r.debit_amount_functional or Decimal("0") for r in rows), Decimal("0"))
@@ -436,6 +534,29 @@ def _content_mismatch(db: Session, journal: JournalEntry, *, line: Any) -> str |
         return (
             f"journal totals are debit {debit} / credit {credit}, "
             f"the line implies {expected}"
+        )
+
+    if journal.journal_number in LEGACY_ACCOUNT_EXEMPTIONS:
+        # Amounts, shape and direction were all checked above; only the account
+        # comparison is waived, for the reason recorded beside the list.
+        return None
+
+    by_account = {
+        r.account_id: (
+            quantize_amount(r.debit_amount_functional or Decimal("0")),
+            quantize_amount(r.credit_amount_functional or Decimal("0")),
+        )
+        for r in rows
+    }
+    if by_account.get(debit_account_id, (Decimal("0"), Decimal("0")))[0] != expected:
+        return (
+            f"the fee is not debited to the expected finance-cost account "
+            f"{debit_account_id}"
+        )
+    if by_account.get(credit_account_id, (Decimal("0"), Decimal("0")))[1] != expected:
+        return (
+            f"the fee is not credited to the statement line's bank account "
+            f"{credit_account_id}"
         )
     return None
 
@@ -543,6 +664,8 @@ def post_bank_fee(
             organization_id=organization_id,
             line=line,
             line_id=line_id,
+            bank_gl_account_id=bank_gl_account_id,
+            finance_cost_account_id=finance_cost_account_id,
             posted_by_user_id=posted_by_user_id,
             poster=poster,
         )
@@ -620,22 +743,76 @@ def post_bank_fee(
                     posted_by_user_id,
                     error_prefix="Fee journal creation failed",
                 )
-    except IntegrityError:
-        # The partial unique index refused a second journal for this line. A
-        # concurrent caller won; report its journal rather than ours.
-        winner = find_existing_fee_journal(
+    except IntegrityError as exc:
+        # ONLY the source-identity index means "someone else won this line". Any
+        # other constraint failure — a bad account foreign key, a duplicate
+        # journal number — is a real error, and reporting it as a lost race
+        # would turn a broken write into a success.
+        if not _is_fee_identity_violation(exc):
+            raise
+
+        # And winning the race is not the same as having a live effect. The
+        # winner is classified exactly as any pre-existing journal would be:
+        # POSTED-and-live, DRAFT to be re-posted, an unposted orphan, or
+        # reversed. Assuming LOST_RACE means "fine, someone else did it" is the
+        # false-success this handler used to produce.
+        winners = find_fee_journals(
             db, organization_id=organization_id, line_id=line_id
         )
+        if not winners:
+            message = (
+                f"The source-identity index refused a bank-fee journal for line "
+                f"{line_id}, but no journal for that line is visible. The write "
+                f"was refused and nothing explains it."
+            )
+            logger.error("%s", message)
+            return BankFeeOutcome(
+                state=BankFeeState.FAILED,
+                journal=None,
+                message=message,
+                error="identity violation with no visible winner",
+            )
+        if len(winners) > 1:
+            numbers = ", ".join(j.journal_number for j in winners)
+            return BankFeeOutcome(
+                state=BankFeeState.AMBIGUOUS,
+                journal=None,
+                message=(
+                    f"{len(winners)} primary bank-fee journals carry line "
+                    f"{line_id} ({numbers}) after a collision. Resolve "
+                    f"deliberately — do not guess."
+                ),
+                error="multiple primary journals for one statement line",
+            )
+
+        winner = winners[0]
         logger.info(
             "Bank fee for line %s was created concurrently; deferring to %s",
             line_id,
-            getattr(winner, "journal_number", "<unknown>"),
+            winner.journal_number,
         )
-        return BankFeeOutcome(
-            state=BankFeeState.LOST_RACE,
-            journal=winner,
-            message=f"Bank fee created concurrently for line {line_id}",
+        outcome = _existing_journal_outcome(
+            db,
+            winner,
+            organization_id=organization_id,
+            line=line,
+            line_id=line_id,
+            bank_gl_account_id=bank_gl_account_id,
+            finance_cost_account_id=finance_cost_account_id,
+            posted_by_user_id=posted_by_user_id,
+            poster=poster,
         )
+        if outcome.state is BankFeeState.ALREADY_POSTED:
+            # The one case that really is a clean lost race.
+            return BankFeeOutcome(
+                state=BankFeeState.LOST_RACE,
+                journal=outcome.journal,
+                message=(
+                    f"Bank fee created concurrently for line {line_id}; "
+                    f"{winner.journal_number} holds the live effect"
+                ),
+            )
+        return outcome
 
     if journal is None:
         # Both helpers are typed as possibly returning no journal. If that
@@ -694,11 +871,12 @@ def post_bank_fee(
             journal.journal_number,
         )
         return BankFeeOutcome(
-            state=BankFeeState.APPROVED_ORPHAN,
+            state=BankFeeState.REPLAY_LEFT_UNPOSTED,
             journal=journal,
             message=(
                 f"Bank fee for line {line_id} replayed against an existing batch; "
-                f"journal {journal.journal_number} is APPROVED and unposted"
+                f"journal {journal.journal_number} is {journal.status.value} and "
+                f"unposted"
             ),
             error="idempotent replay after a clean pre-check",
         )

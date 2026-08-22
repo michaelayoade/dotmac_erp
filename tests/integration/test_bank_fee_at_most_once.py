@@ -782,8 +782,14 @@ class TestACrashBeforeMatchingIsRepairable:
         assert outcome.posted_journal.journal_number == "POSTED-NO-MATCH"
 
 
-class TestTheServiceLosesTheRaceGracefully:
-    """The `IntegrityError` handler in `post_bank_fee`, exercised for real.
+class TestTheCollisionHandler:
+    """The `IntegrityError` handler in `post_bank_fee`, exercised directly.
+
+    **This is not a concurrency canary.** It drives the handler by simulating
+    the window with a stub; the genuine two-session proof is
+    `TestTwoSessionsRaceForOneLine` below. The earlier name claimed concurrency
+    it did not exercise, and a test that overstates what it proves is a false
+    success of its own.
 
     An earlier version of this test committed the winner BEFORE calling
     `post_bank_fee`, so the loser returned at pre-check 1 and the handler was
@@ -803,9 +809,7 @@ class TestTheServiceLosesTheRaceGracefully:
     `IntegrityError`, the real re-read.
     """
 
-    def test_the_losing_caller_returns_the_winners_journal(
-        self, engine, monkeypatch
-    ) -> None:
+    def test_the_handler_returns_the_winners_journal(self, engine, monkeypatch) -> None:
         from sqlalchemy.orm import sessionmaker as _sessionmaker
 
         from app.models.finance.core_org.organization import Organization
@@ -1132,4 +1136,346 @@ class TestMultiplePrimariesAreNeverResolvedByGuessing:
         assert not outcome.ok, "ambiguity is an error, not a quiet outcome"
         assert "ONE" in outcome.message and "TWO" in outcome.message, (
             "both journals must be named so the operator can resolve it"
+        )
+
+
+class TestTwoSessionsRaceForOneLine:
+    """The directed two-session proof, with real concurrency.
+
+    Two independent connections both call `post_bank_fee` for one statement
+    line, overlapping in time. PostgreSQL BLOCKS the second inserter on the
+    unique index until the first transaction resolves, so this needs two threads
+    — a single-threaded test would deadlock itself, which is why the earlier
+    version simulated the window instead.
+
+    The loser must come back with the winner's journal and having created
+    nothing. Nothing is stubbed: real sessions, real index, real block, real
+    `IntegrityError`.
+    """
+
+    def test_exactly_one_of_two_concurrent_callers_creates(self, engine) -> None:
+        import threading
+
+        from sqlalchemy.orm import sessionmaker as _sessionmaker
+
+        from app.models.finance.core_org.organization import Organization
+        from app.services.finance.banking.bank_fee_posting import (
+            BankFeeState,
+            post_bank_fee,
+        )
+
+        Session_ = _sessionmaker(bind=engine)
+        org_id = uuid.uuid4()
+        line_id = uuid.uuid4()
+
+        setup = Session_()
+        try:
+            setup.execute(text("SET app.bypass_rls = 'true'"))
+            setup.add(
+                Organization(
+                    organization_id=org_id,
+                    organization_code=f"RACE2-{uuid.uuid4().hex[:8].upper()}",
+                    legal_name="Two Session Race",
+                    functional_currency_code="NGN",
+                    presentation_currency_code="NGN",
+                    fiscal_year_end_month=12,
+                    fiscal_year_end_day=31,
+                    is_active=True,
+                )
+            )
+            setup.flush()
+            _fiscal_period_id(setup, org_id)
+            cost = _account(setup, org_id, "6080", "Finance Cost")
+            bank = _account(setup, org_id, "1204", "Bank")
+            cost_id, bank_id = cost.account_id, bank.account_id
+            setup.commit()
+        finally:
+            setup.close()
+
+        results: dict[str, object] = {}
+        both_ready = threading.Barrier(2, timeout=30)
+
+        def _attempt(name: str) -> None:
+            session = Session_()
+            try:
+                session.execute(text("SET app.bypass_rls = 'true'"))
+                # Both callers pass their pre-checks before either commits —
+                # the overlap that a database constraint exists to arbitrate.
+                both_ready.wait()
+                results[name] = post_bank_fee(
+                    session,
+                    organization_id=org_id,
+                    line=_fee_line(line_id),
+                    bank_gl_account_id=bank_id,
+                    finance_cost_account_id=cost_id,
+                    posted_by_user_id=uuid.uuid4(),
+                    poster=lambda **_: SimpleNamespace(
+                        success=True, message="posted", idempotent_replay=False
+                    ),
+                )
+                session.commit()
+            except BaseException as exc:  # noqa: BLE001 - recorded, asserted below
+                session.rollback()
+                results[name] = exc
+            finally:
+                session.close()
+
+        threads = [
+            threading.Thread(target=_attempt, args=(name,), daemon=True)
+            for name in ("A", "B")
+        ]
+        try:
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=60)
+                assert not thread.is_alive(), "a caller blocked indefinitely"
+
+            outcomes = [results.get("A"), results.get("B")]
+            for outcome in outcomes:
+                assert not isinstance(outcome, BaseException), (
+                    f"a concurrent caller raised instead of resolving: {outcome!r}"
+                )
+
+            states = [o.state for o in outcomes]  # type: ignore[union-attr]
+            created = [s for s in states if s is BankFeeState.CREATED]
+            deferred = [
+                s
+                for s in states
+                if s
+                in {
+                    BankFeeState.LOST_RACE,
+                    BankFeeState.ALREADY_POSTED,
+                    BankFeeState.REPLAY_LEFT_UNPOSTED,
+                }
+            ]
+            assert len(created) == 1, f"expected exactly one create, got {states}"
+            assert len(deferred) == 1, f"expected exactly one deferral, got {states}"
+
+            check = Session_()
+            try:
+                check.execute(text("SET app.bypass_rls = 'true'"))
+                surviving = check.scalars(
+                    select(JournalEntry).where(
+                        JournalEntry.organization_id == org_id,
+                        JournalEntry.source_document_id == line_id,
+                        JournalEntry.is_reversal.is_(False),
+                    )
+                ).all()
+                assert len(surviving) == 1, (
+                    f"{len(surviving)} primary journals survived a race that must "
+                    f"leave exactly one"
+                )
+            finally:
+                check.close()
+        finally:
+            with engine.begin() as cleanup:
+                cleanup.execute(text("SET LOCAL app.bypass_rls = 'true'"))
+                for stmt in (
+                    "DELETE FROM gl.posted_ledger_line WHERE organization_id = :o",
+                    "DELETE FROM gl.journal_entry_line WHERE journal_entry_id IN "
+                    "(SELECT journal_entry_id FROM gl.journal_entry WHERE organization_id = :o)",
+                    "UPDATE gl.journal_entry SET posting_batch_id = NULL WHERE organization_id = :o",
+                    "DELETE FROM gl.posting_batch WHERE organization_id = :o",
+                    "DELETE FROM gl.journal_entry WHERE organization_id = :o",
+                    "DELETE FROM gl.account WHERE organization_id = :o",
+                    "DELETE FROM gl.account_category WHERE organization_id = :o",
+                    "DELETE FROM gl.fiscal_period WHERE organization_id = :o",
+                    "DELETE FROM gl.fiscal_year WHERE organization_id = :o",
+                    "DELETE FROM core_org.organization WHERE organization_id = :o",
+                ):
+                    cleanup.execute(text(stmt), {"o": org_id})
+
+
+class TestAnUnrelatedIntegrityErrorIsNotALostRace:
+    """The handler must classify the failure, not assume it."""
+
+    def test_a_foreign_key_violation_propagates(
+        self, db: Session, org_id: uuid.UUID, monkeypatch
+    ) -> None:
+        """A bad account id is a broken write, not a concurrent winner.
+
+        Reporting it as LOST_RACE would turn a failed posting into a success and
+        return a journal that does not exist.
+        """
+        from app.services.finance.banking import bank_fee_posting
+
+        monkeypatch.setattr(bank_fee_posting, "find_fee_journals", lambda *a, **k: [])
+        monkeypatch.setattr(
+            bank_fee_posting, "existing_posting_batch", lambda *a, **k: None
+        )
+
+        with pytest.raises(IntegrityError) as exc:
+            bank_fee_posting.post_bank_fee(
+                db,
+                organization_id=org_id,
+                line=_fee_line(uuid.uuid4()),
+                # No such account: the FK, not the identity index, refuses this.
+                bank_gl_account_id=uuid.uuid4(),
+                finance_cost_account_id=uuid.uuid4(),
+                posted_by_user_id=uuid.uuid4(),
+                poster=lambda **_: SimpleNamespace(
+                    success=True, message="", idempotent_replay=False
+                ),
+            )
+        assert _sqlstate(exc.value) != "23505" or (
+            "uq_journal_entry_bank_fee_source" not in str(exc.value)
+        )
+
+    def test_the_predicate_only_matches_the_identity_index(self) -> None:
+        from app.services.finance.banking.bank_fee_posting import (
+            _is_fee_identity_violation,
+        )
+
+        identity = IntegrityError(
+            "stmt",
+            {},
+            Exception(
+                "duplicate key value violates unique constraint "
+                '"uq_journal_entry_bank_fee_source"'
+            ),
+        )
+        other = IntegrityError(
+            "stmt",
+            {},
+            Exception(
+                'duplicate key value violates unique constraint "uq_journal_number"'
+            ),
+        )
+        assert _is_fee_identity_violation(identity)
+        assert not _is_fee_identity_violation(other)
+
+
+class TestAReplayIsNeverASuccessfulPost:
+    """`success=True` with `idempotent_replay=True` means NOTHING was posted."""
+
+    def test_a_replayed_draft_repost_is_not_reported_as_posted(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+
+        stranded = _fee_journal(org_id, period_id, line_id, number="REPLAYED")
+        stranded.status = JournalStatus.DRAFT
+        db.add(stranded)
+        db.flush()
+        _with_lines(db, stranded, cost, bank, Decimal("10"))
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: SimpleNamespace(
+                success=True, message="Already posted", idempotent_replay=True
+            ),
+        )
+
+        assert outcome.state is BankFeeState.REPLAY_LEFT_UNPOSTED, (
+            "a replay posted nothing; reporting REPOSTED_DRAFT strands the DRAFT"
+        )
+        assert outcome.needs_attention
+        assert not outcome.ok
+
+
+class TestAPostedBatchIsNotALiveEffect:
+    """Reversing a journal leaves its original batch POSTED.
+
+    The batch records that a posting happened, not that its effect stands.
+    """
+
+    def test_a_batch_whose_journal_was_reversed_does_not_block(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import (
+            existing_posting_batch,
+            fee_idempotency_key,
+        )
+        from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+
+        journal = _fee_journal(org_id, period_id, line_id, number="LEGACY-REVERSED")
+        journal.status = JournalStatus.POSTED
+        journal.source_document_id = None  # legacy: identity only in the key
+        db.add(journal)
+        db.flush()
+        _with_lines(db, journal, cost, bank, Decimal("10"))
+        _post_to_ledger(db, journal, period_id, org_id)
+
+        # Point the batch at this line's key, then reverse the journal.
+        batch_id = db.scalar(
+            select(PostedLedgerLine.posting_batch_id).where(
+                PostedLedgerLine.journal_entry_id == journal.journal_entry_id
+            )
+        )
+        db.execute(
+            text(
+                "UPDATE gl.posting_batch SET idempotency_key = :k WHERE batch_id = :b"
+            ),
+            {"k": fee_idempotency_key(org_id, line_id), "b": batch_id},
+        )
+        reversal = _fee_journal(org_id, period_id, uuid.uuid4(), number="THE-REVERSAL")
+        reversal.is_reversal = True
+        reversal.status = JournalStatus.POSTED
+        db.add(reversal)
+        db.flush()
+        journal.reversal_journal_id = reversal.journal_entry_id
+        db.flush()
+
+        assert (
+            existing_posting_batch(db, organization_id=org_id, line_id=line_id) is None
+        ), "a POSTED batch whose journal was reversed is not a live effect"
+
+
+class TestContentComparisonChecksAccounts:
+    """Matching totals on the WRONG accounts is not matching content."""
+
+    def test_right_amount_wrong_accounts_is_refused(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        wrong = _account(db, org_id, "9999", "Not The Bank")
+
+        stale = _fee_journal(org_id, period_id, line_id, number="WRONG-ACCOUNTS")
+        stale.status = JournalStatus.DRAFT
+        db.add(stale)
+        db.flush()
+        # Correct amount and direction, wrong credit account.
+        _with_lines(db, stale, cost, wrong, Decimal("10"))
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("a wrong-account journal must not post"),
+        )
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert "bank account" in outcome.message
+
+    def test_the_legacy_exemption_is_a_named_list(self) -> None:
+        """The chart-remap allowance must be two audited rows, not a global hole."""
+        from app.services.finance.banking.bank_fee_posting import (
+            LEGACY_ACCOUNT_EXEMPTIONS,
+        )
+
+        assert frozenset({"JE202603-0227", "JE202603-0230"}) == (
+            LEGACY_ACCOUNT_EXEMPTIONS
         )
