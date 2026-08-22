@@ -131,9 +131,8 @@ def test_process_pending_invoice_mention_email_uses_admin_profile() -> None:
         mock_session_local.return_value.__enter__.return_value = db
         mock_session_local.return_value.__exit__.return_value = False
         execute_result = MagicMock()
-        execute_result.scalars.return_value.all.side_effect = [
-            [],
-            [_build_notification(entity_type=EntityType.INVOICE)],
+        execute_result.scalars.return_value.all.return_value = [
+            _build_notification(entity_type=EntityType.INVOICE)
         ]
         db.execute.return_value = execute_result
 
