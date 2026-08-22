@@ -34,6 +34,7 @@ takes no meaningful lock time.
 
 from __future__ import annotations
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "20260822_bank_fee_source_identity"
@@ -51,7 +52,7 @@ def upgrade() -> None:
         ["organization_id", "source_document_id"],
         unique=True,
         schema="gl",
-        postgresql_where="source_document_type = 'BANK_FEE'",
+        postgresql_where=sa.text("source_document_type = 'BANK_FEE'"),
     )
 
 

@@ -275,6 +275,21 @@ def post_bank_fee(
             message=f"Bank fee created concurrently for line {line_id}",
         )
 
+    if journal is None:
+        # Both helpers are typed as possibly returning no journal. If that
+        # happens there is nothing to post and nothing to report, and going on
+        # would dereference None at exactly the point this module exists to make
+        # reliable.
+        message = create_error.message if create_error else "no journal was created"
+        return BankFeeOutcome(
+            journal=None,
+            created=False,
+            already_present=False,
+            lost_a_race=False,
+            message=message,
+            error=message,
+        )
+
     if create_error:
         return BankFeeOutcome(
             journal=None,

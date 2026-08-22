@@ -119,6 +119,15 @@ class AutoReconciliationSpecialService:
                     continue
 
                 journal = outcome.journal
+                if journal is None:
+                    # `ok` and not `already_present` means the owner created and
+                    # posted, so a journal exists. Narrowed explicitly rather
+                    # than asserted away: if it is ever None the fee silently
+                    # would not be matched, which is how it went wrong before.
+                    result.errors.append(
+                        f"Line {line.line_number}: fee posted without a journal"
+                    )
+                    continue
                 correlation_id = f"bank-fee-{line.line_id}"
                 posting_result = SimpleNamespace(success=True, message=outcome.message)
 

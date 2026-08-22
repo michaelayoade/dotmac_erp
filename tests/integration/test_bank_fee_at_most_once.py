@@ -26,7 +26,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
@@ -41,28 +41,39 @@ pytestmark = pytest.mark.integration
 
 
 def _fiscal_period_id(db: Session, org_id: uuid.UUID) -> uuid.UUID:
-    """A fiscal period to hang the journals on; `fiscal_period_id` is NOT NULL."""
-    year_id = uuid.uuid4()
-    db.execute(
-        text("""
-            INSERT INTO gl.fiscal_year
-              (fiscal_year_id, organization_id, year_code, start_date, end_date, status)
-            VALUES (:y, :o, :code, DATE '2026-01-01', DATE '2026-12-31', 'OPEN')
-        """),
-        {"y": year_id, "o": org_id, "code": f"FY{uuid.uuid4().hex[:6]}"},
+    """A fiscal period to hang the journals on; `fiscal_period_id` is NOT NULL.
+
+    Built through the ORM rather than hand-written SQL. The first version of
+    this helper guessed a `status` column on `gl.fiscal_year` that does not
+    exist — the models are the schema, so use them.
+    """
+    from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+    from app.models.finance.gl.fiscal_year import FiscalYear
+
+    year = FiscalYear(
+        fiscal_year_id=uuid.uuid4(),
+        organization_id=org_id,
+        year_code=f"FY{uuid.uuid4().hex[:6]}",
+        year_name="Canary Year",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
     )
-    period_id = uuid.uuid4()
-    db.execute(
-        text("""
-            INSERT INTO gl.fiscal_period
-              (fiscal_period_id, organization_id, fiscal_year_id, period_number,
-               period_name, start_date, end_date, status)
-            VALUES (:p, :o, :y, 1, 'Canary', DATE '2026-01-01', DATE '2026-01-31', 'OPEN')
-        """),
-        {"p": period_id, "o": org_id, "y": year_id},
-    )
+    db.add(year)
     db.flush()
-    return period_id
+
+    period = FiscalPeriod(
+        fiscal_period_id=uuid.uuid4(),
+        organization_id=org_id,
+        fiscal_year_id=year.fiscal_year_id,
+        period_number=1,
+        period_name="Canary",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+        status=PeriodStatus.OPEN,
+    )
+    db.add(period)
+    db.flush()
+    return uuid.UUID(str(period.fiscal_period_id))
 
 
 def _fee_journal(
@@ -323,55 +334,57 @@ class TestConcurrentInvocation:
 
         Session_ = sessionmaker(bind=engine)
         s1, s2 = Session_(), Session_()
-        period_ids = []
+        period_ids: list[uuid.UUID] = []
         try:
-            with engine.begin() as setup:
-                setup.execute(text("SET LOCAL app.bypass_rls = 'true'"))
-                setup.execute(
-                    text("""
-                        INSERT INTO core_org.organization
-                          (organization_id, organization_code, legal_name,
-                           functional_currency_code, presentation_currency_code,
-                           fiscal_year_end_month, fiscal_year_end_day, is_active)
-                        VALUES (:o, :c, 'Concurrency Canary', 'NGN', 'NGN', 12, 31, true)
-                    """),
-                    {"o": org_id, "c": f"CANARY-{uuid.uuid4().hex[:8].upper()}"},
-                )
-                year_id, period_id = uuid.uuid4(), uuid.uuid4()
-                setup.execute(
-                    text("""
-                        INSERT INTO gl.fiscal_year
-                          (fiscal_year_id, organization_id, year_code, start_date, end_date, status)
-                        VALUES (:y, :o, :code, DATE '2026-01-01', DATE '2026-12-31', 'OPEN')
-                    """),
-                    {"y": year_id, "o": org_id, "code": f"FY{uuid.uuid4().hex[:6]}"},
-                )
-                setup.execute(
-                    text("""
-                        INSERT INTO gl.fiscal_period
-                          (fiscal_period_id, organization_id, fiscal_year_id, period_number,
-                           period_name, start_date, end_date, status)
-                        VALUES (:p, :o, :y, 1, 'Canary', DATE '2026-01-01', DATE '2026-01-31', 'OPEN')
-                    """),
-                    {"p": period_id, "o": org_id, "y": year_id},
-                )
-                period_ids.append(period_id)
+            from app.models.finance.core_org.organization import Organization
 
-            for session, number in ((s1, "RACER-A"), (s2, "RACER-B")):
-                session.execute(text("SET app.bypass_rls = 'true'"))
-                session.add(_fee_journal(org_id, period_ids[0], line_id, number=number))
-
-            # Both flush before either commits — the overlap a pre-check misses.
-            s1.flush()
+            setup = Session_()
             try:
+                setup.execute(text("SET app.bypass_rls = 'true'"))
+                org = Organization(
+                    organization_id=org_id,
+                    organization_code=f"CANARY-{uuid.uuid4().hex[:8].upper()}",
+                    legal_name="Concurrency Canary",
+                    functional_currency_code="NGN",
+                    presentation_currency_code="NGN",
+                    fiscal_year_end_month=12,
+                    fiscal_year_end_day=31,
+                    is_active=True,
+                )
+                setup.add(org)
+                setup.flush()
+                period_ids.append(_fiscal_period_id(setup, org_id))
+                setup.commit()
+            finally:
+                setup.close()
+
+            for session in (s1, s2):
+                session.execute(text("SET app.bypass_rls = 'true'"))
+
+            # RACER-A inserts and holds the row uncommitted.
+            s1.add(_fee_journal(org_id, period_ids[0], line_id, number="RACER-A"))
+            s1.flush()
+
+            # RACER-B tries the same line while A still holds it. PostgreSQL
+            # BLOCKS the second inserter on a unique index until the first
+            # transaction resolves — so the canary asserts the block rather than
+            # waiting for it, which is both the real behaviour and terminating.
+            s2.execute(text("SET LOCAL lock_timeout = '2s'"))
+            s2.add(_fee_journal(org_id, period_ids[0], line_id, number="RACER-B"))
+            with pytest.raises((OperationalError, IntegrityError)):
                 s2.flush()
-                s2.commit()
-                created.append("RACER-B")
-            except IntegrityError:
-                refused += 1
-                s2.rollback()
+            s2.rollback()
+            refused += 1
+
             s1.commit()
             created.append("RACER-A")
+
+            # And once A is committed, B's retry is refused outright.
+            s2.execute(text("SET app.bypass_rls = 'true'"))
+            s2.add(_fee_journal(org_id, period_ids[0], line_id, number="RACER-B-RETRY"))
+            with pytest.raises(IntegrityError):
+                s2.flush()
+            s2.rollback()
 
             assert refused == 1, "both concurrent creates were accepted"
             assert len(created) == 1, f"expected one survivor, got {created}"
