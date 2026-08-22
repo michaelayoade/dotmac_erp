@@ -32,6 +32,7 @@ from app.models.finance.gl.posting_batch import BatchStatus, PostingBatch
 from app.services.common import coerce_uuid
 from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.outbox_publisher import OutboxPublisher
+from app.services.finance.posting.residue import sum_at_persisted_scale
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -127,8 +128,25 @@ class LedgerPostingService(ListResponseMixin):
     6. All postings emit events via outbox
     """
 
-    # Tolerance for balance check (accounts for floating point)
-    BALANCE_TOLERANCE = Decimal("0.000001")
+    #: The scale at which ledger amounts are persisted (`NUMERIC(20, 6)`).
+    #:
+    #: A journal is balanced when its debits equal its credits AT THIS SCALE.
+    #: There is no tolerance, because there is nothing for a tolerance to absorb:
+    #: these are exact `Decimal` values at a fixed scale, not floats.
+    #:
+    #: This replaced `BALANCE_TOLERANCE = Decimal("0.000001")`, compared with
+    #: `>` rather than `>=`, and justified by a comment reading "accounts for
+    #: floating point". Two things were wrong with it. There is no
+    #: floating-point error in exact decimal arithmetic; and one micro-unit is
+    #: the SMALLEST amount the column can hold, so the tolerance admitted the
+    #: largest imbalance representable below a hundredth of a kobo — including,
+    #: exactly, the residue the AR revenue allocator produced.
+    #:
+    #: `JE202604-40653`, `JE202604-40818` and `JE202604-42111` each posted one
+    #: micro-unit out of balance through that gap. `dotmac-accounting` refuses
+    #: such a journal outright, so the old boundary was also incompatible with
+    #: the module ERP is adopting.
+    PERSISTED_SCALE = Decimal("0.000001")
 
     @staticmethod
     def post_journal_entry(
@@ -530,14 +548,30 @@ class LedgerPostingService(ListResponseMixin):
 
     @staticmethod
     def _validate_balance(entries: list[PostingEntry]) -> None:
-        """Validate that debits equal credits."""
-        total_debit = sum((e.debit_amount_functional for e in entries), Decimal("0"))
-        total_credit = sum((e.credit_amount_functional for e in entries), Decimal("0"))
+        """Require debits to equal credits EXACTLY at persisted precision.
 
-        if abs(total_debit - total_credit) > LedgerPostingService.BALANCE_TOLERANCE:
+        Each ENTRY is quantised to the scale the ledger stores
+        (`NUMERIC(20, 6)`) and the quantised values are then added, because that
+        is what the database holds — quantising the total instead would answer a
+        question about an intermediate precision no column preserves.
+
+        Any difference at all is a refusal. A journal that does not balance is
+        not "nearly balanced"; it is unbalanced, and a ledger that accepts it
+        cannot produce a trial balance that adds up.
+        """
+        total_debit = sum_at_persisted_scale(e.debit_amount_functional for e in entries)
+        total_credit = sum_at_persisted_scale(
+            e.credit_amount_functional for e in entries
+        )
+
+        if total_debit != total_credit:
+            difference = total_debit - total_credit
             raise HTTPException(
                 status_code=400,
-                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}",
+                detail=(
+                    f"Journal is unbalanced: debits={total_debit}, "
+                    f"credits={total_credit}, difference={difference}"
+                ),
             )
 
     @staticmethod

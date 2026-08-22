@@ -32,6 +32,13 @@ from app.services.finance.gl.journal import (
     JournalLineInput,
 )
 from app.services.finance.posting.base import BasePostingAdapter
+from app.services.finance.posting.residue import (
+    PERSISTED_SCALE,
+    ResidueAllocationError,
+    allocate_residue,
+    quantize,
+    sum_at_persisted_scale,
+)
 from app.services.finance.posting.idempotency import PostingIdempotencyService
 
 logger = logging.getLogger(__name__)
@@ -68,6 +75,91 @@ def _allocate_delta_across_lines(
         allocated.append(part)
 
     return allocated
+
+
+def _absorb_rounding_residue(
+    journal_lines: list[JournalLineInput],
+    revenue_indexes: list[int],
+) -> None:
+    """Quantise every line to persisted scale and place the residue on ONE line.
+
+    A document total that splits into non-terminating fractions cannot be
+    represented exactly by fixed-scale lines. Rounding each line independently
+    leaves them summing to something other than the total, and the difference —
+    however small — is an unbalanced journal. `JE202604-40653`, `JE202604-40818`
+    and `JE202604-42111` are the same recurring invoice whose revenue split was
+    three seventeenths: each line rounded UP at six places, so the credits came
+    to one micro-unit over and nothing rebalanced them.
+
+    The residue goes to the largest-absolute revenue line (earliest index on a
+    tie) — the line least distorted by carrying it — via `allocate_residue`,
+    which owns that policy for the whole codebase.
+
+    **This is not a tolerance and not a plug.** The only difference it will
+    absorb is one the rounding itself could have produced: at most one
+    micro-unit per line. Anything larger is a real imbalance, and raising is
+    the point — a journal that is wrong by a kobo must not be quietly closed by
+    moving a kobo onto a revenue account.
+    """
+    for debit_field, credit_field in (
+        ("debit_amount", "credit_amount"),
+        ("debit_amount_functional", "credit_amount_functional"),
+    ):
+        # `JournalService` derives functional amounts for any line that leaves
+        # them unset. Half-derived totals would compare two different things, so
+        # this pass only runs when every line states its own.
+        if any(
+            getattr(line, debit_field) is None or getattr(line, credit_field) is None
+            for line in journal_lines
+        ):
+            continue
+
+        for line in journal_lines:
+            for name in (debit_field, credit_field):
+                value = getattr(line, name)
+                if value is not None:
+                    setattr(line, name, quantize(value))
+
+        total_debit = sum_at_persisted_scale(
+            (getattr(line, debit_field) or Decimal("0")) for line in journal_lines
+        )
+        total_credit = sum_at_persisted_scale(
+            (getattr(line, credit_field) or Decimal("0")) for line in journal_lines
+        )
+        residue = total_debit - total_credit
+        if residue == Decimal("0"):
+            continue
+
+        bound = len(journal_lines) * PERSISTED_SCALE
+        if abs(residue) > bound:
+            raise ResidueAllocationError(
+                f"imbalance of {residue} exceeds what rounding {len(journal_lines)} "
+                f"lines could produce ({bound}) — this is a data defect, "
+                f"not a rounding residue"
+            )
+        if not revenue_indexes:
+            raise ResidueAllocationError(
+                f"imbalance of {residue} with no revenue line to carry it"
+            )
+
+        # Net, credit-positive: a discount or credit-note line is negative here,
+        # and `allocate_residue` ranks by magnitude, so direction never decides
+        # which line absorbs.
+        nets = [
+            (getattr(journal_lines[i], credit_field) or Decimal("0"))
+            - (getattr(journal_lines[i], debit_field) or Decimal("0"))
+            for i in revenue_indexes
+        ]
+        allocated = allocate_residue(nets, sum(nets, Decimal("0")) + residue)
+
+        for index, net in zip(revenue_indexes, allocated, strict=True):
+            line = journal_lines[index]
+            if net >= Decimal("0"):
+                setattr(line, credit_field, net)
+                setattr(line, debit_field, Decimal("0"))
+            else:
+                setattr(line, credit_field, Decimal("0"))
+                setattr(line, debit_field, -net)
 
 
 def _resolve_tax_accounts(
@@ -225,6 +317,9 @@ def post_invoice(
 
     # Build journal entry lines
     journal_lines: list[JournalLineInput] = []
+    # Positions of the revenue lines, so the rounding residue can be placed on
+    # one of them rather than on a suspense or rounding account.
+    revenue_indexes: list[int] = []
     exchange_rate = invoice.exchange_rate or Decimal("1.0")
     tax_accounts_by_code = _resolve_tax_accounts(db, org_id, lines)
 
@@ -442,6 +537,8 @@ def post_invoice(
             continue  # Skip zero-amount lines (e.g. bundled equipment at no charge)
         functional_revenue = revenue_total * exchange_rate
 
+        revenue_indexes.append(len(journal_lines))
+
         if invoice.invoice_type == InvoiceType.CREDIT_NOTE:
             # Credit note: debit revenue (reduce revenue)
             journal_lines.append(
@@ -532,6 +629,20 @@ def post_invoice(
         # Add COGS journal lines to the entry
         if inventory_result.cogs_journal_lines:
             journal_lines.extend(inventory_result.cogs_journal_lines)
+
+    # Round to persisted scale and place the rounding residue on one revenue
+    # line, so the journal balances EXACTLY as stored. Bounded: an imbalance
+    # larger than rounding could produce is refused, not absorbed.
+    try:
+        _absorb_rounding_residue(journal_lines, revenue_indexes)
+    except ResidueAllocationError as exc:
+        logger.error(
+            "Refusing to post AR invoice %s: %s", invoice.invoice_id, exc
+        )
+        return ARPostingResult(
+            success=False,
+            message=f"Invoice does not balance: {exc}",
+        )
 
     # Create journal entry
     journal_input = JournalInput(

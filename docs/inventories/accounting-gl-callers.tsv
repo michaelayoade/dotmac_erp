@@ -34,6 +34,7 @@ app/services/finance/ar/ar_posting_saga.py	ARInvoicePostingSaga._step_post_to_le
 app/services/finance/ar/customer_payment.py	CustomerPaymentService.mark_bounced	gl.reversal	repoint_to_module	caller_repointed
 app/services/finance/ar/customer_payment.py	CustomerPaymentService.void_payment	gl.reversal	repoint_to_module	caller_repointed
 app/services/finance/ar/customer_payment.py	_reverse_vat_cash_basis_for_payment	gl.reversal	repoint_to_module	caller_repointed
+app/services/finance/ar/posting/invoice.py	_absorb_rounding_residue	gl.journal	repoint_to_module	caller_repointed
 app/services/finance/ar/posting/invoice.py	post_invoice	gl.journal|gl.period_guard|gl.posting_adapter|gl.posting_idempotency	repoint_to_module	caller_repointed
 app/services/finance/ar/posting/payment.py	post_payment	gl.journal|gl.period_guard|gl.posting_accounts|gl.posting_adapter|gl.posting_idempotency	repoint_to_module	caller_repointed
 app/services/finance/ar/posting/payment.py	post_vat_reclass_for_payment	gl.journal|gl.posting_adapter|gl.posting_idempotency	repoint_to_module	caller_repointed
@@ -69,7 +70,6 @@ app/services/finance/gl/journal.py	JournalService.reverse_entry	gl.reversal	gl_i
 app/services/finance/gl/journal.py	JournalService.update_journal	gl.period_guard	gl_internal	retired_with_gl_owner
 app/services/finance/gl/ledger_posting.py	LedgerPostingService.post_entry	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/gl/ledger_posting.py	LedgerPostingService.post_journal_entry	gl.balances|gl.period_guard	gl_internal	retired_with_gl_owner
-app/services/finance/gl/period_close.py	PeriodReadiness.blockers	gl.posting_backlog	gl_internal	retired_with_gl_owner
 app/services/finance/gl/period_close.py	close_periods	gl.calendar	gl_internal	retired_with_gl_owner
 app/services/finance/gl/posting_backlog.py	post_approved_journals	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/gl/reversal.py	ReversalService.create_reversal	gl.period_guard|gl.poster	gl_internal	retired_with_gl_owner
