@@ -73,16 +73,29 @@ It credits account **1400 Trade Receivables by ₦2,841,816.25**. That figure is
 Those six originals now carry status `REVERSED`. `REV-SYNC-OB-001` is still
 `POSTED` and has never itself been reversed.
 
-### Effect
+### Effect — what is unconditional, and what is not
 
-The six originals were `Dr 1400 / Cr 3100`. Reversing them twice credits 1400
-twice and debits 3100 twice:
+The six originals were `Dr 1400 / Cr 3100`. They have been reversed twice.
 
-- **Trade Receivables (1400) understated by ₦1,619,218.75**
-- **Retained Earnings (3100) correspondingly misstated by ₦1,619,218.75**
+**Unconditional:** relative to a **single-reversal position**, the effect is
+duplicated by ₦1,619,218.75 — 1400 credited twice, 3100 debited twice. No
+compensating correction exists; a search for any journal after 2026-04-19
+touching 1400 for ~1,619,218.75 returns zero rows.
 
-**No compensating correction exists.** A search for any journal after 2026-04-19
-touching account 1400 for ~1,619,218.75 returns zero rows.
+**Conditional, and NOT yet established:** whether that duplication is a
+*misstatement of the correct position*. That depends on whether
+`REV-SYNC-OB-001` was itself economically correct — which the signed audited
+evidence has not yet been obtained to confirm (§1a).
+
+- If the composite was intended, the correct position is one reversal, and
+  1400 is understated / 3100 misstated by ₦1,619,218.75.
+- If the composite improperly removed genuine AR/AP opening balances, the
+  required correction is **broader** than these six journals, and reversing them
+  alone would be wrong.
+
+An earlier draft asserted "Trade Receivables understated by ₦1,619,218.75"
+unconditionally. **That was premature.** The duplicate effect is proven; the
+misstatement is not, until the bridge in §1a resolves it.
 
 ### Complete account-by-account matrix
 
@@ -154,17 +167,64 @@ findings**:
    OB-000001 and the sync set covering different populations — but it has not
    been traced.
 
-### Indicated treatment, if the audited opening balance confirms the composite was intended
+### §1a. Finance evidence package REQUIRED — the source, not the description
 
-1. **Preserve `REV-SYNC-OB-001` as a plain adjustment**, not a 16-to-1 reversal.
-2. **Reverse each later duplicate reversal individually** — the six
-   `JE202604-43275…43280`.
-3. For the six proven cases that produces the required correction: **debit Trade
-   Receivables and credit Retained Earnings by ₦1,619,218.75**.
-4. Apply the same treatment to other accounts **only where the matrix proves
-   duplication** — which, on this evidence, is nowhere else.
+Nothing above may be actioned on the strength of `REV-SYNC-OB-001`'s own
+description. That description is the *assertion under test*. Obtain the actual
+source package:
+
+- signed **2024 audited trial balance**;
+- **OB-000001 supporting schedule**;
+- **customer-level AR opening ageing**;
+- **supplier-level AP opening ageing**;
+- **WHT receivable / payable opening schedules**;
+- **retained-earnings roll-forward**.
+
+Then build this bridge, end to end:
+
+```
+signed audited closing TB
+  → OB-000001
+    → ERPNext-sync opening journals
+      → REV-SYNC-OB-001
+        → later individual reversals (JE202604-43275…43280)
+          → current GL and AR/AP subledgers
+```
+
+#### Question 2 is the priority
+
+OB-000001 carries **no 1400 and no 2000 line**. If the AR and AP opening
+schedules do contain the ₦2,841,816.25 and ₦3,040,000 balances, then **identify
+the GL control-account entry that represents them**.
+
+> **A subledger balance without its GL control counterpart is not a
+> replacement.**
+
+That is the question that decides whether the composite was economically correct
+or improperly removed genuine opening balances.
+
+#### The retained-earnings difference must reconcile, not plug
+
+The ₦5,651,696.84 difference on 3100 must reconcile **through the same bridge**.
+It must not become a balancing plug: a plug would conceal exactly the kind of
+gap the bridge exists to find.
+
+### Indicated treatment, CONDITIONAL on the signed evidence
+
+**If the signed evidence confirms `REV-SYNC-OB-001` was intended:**
+
+1. **Preserve it as a plain adjustment**, not a 16-to-1 reversal.
+2. **Reverse `JE202604-43275…43280` individually.**
+3. That debits 1400 and credits 3100 by **₦1,619,218.75**.
+4. **Leave 1420 and 2110 untouched**, apart from documenting the ₦0.16 source
+   difference on 1420.
 5. **Preserve every historical journal.** Add correction chains; never delete or
    rewrite economic history.
+
+**If the signed evidence shows the composite improperly removed genuine AR/AP
+opening balances — STOP.** The required correction is broader than reversing
+those six journals, and reversing them alone would entrench the error rather
+than fix it.
 
 ### Accounting can represent this
 
@@ -394,7 +454,7 @@ remaining expense and balance-sheet:
 | 4 | payroll/PAYROLL_ENTRY | 1 | ₦12.15M | single high-value record |
 | 5 | expense/EXPENSE_REIMBURSEMENT | 2 | ₦0.03M | residual |
 
-## 4. Treatment of the stranded AR cohort (2,039 candidates)
+## 4. Treatment of the AR/INVOICE candidate population (2,039)
 
 Objective: restore each still-valid invoice's missing GL effect **exactly once**.
 
@@ -461,11 +521,15 @@ Specific exposures this memorandum raises:
   invoices whose output VAT was never posted. This cannot be asserted until the
   detector runs; what is required now is that VAT return periods covering
   2026-01 to 2026-07 be **checked**, not that a missing VAT effect be assumed.
-- **WHT** — `REV-SYNC-OB-001` moves ₦68,308,470.18 on account 1420 and
-  ₦14,536,448.13 on 2110. **The matrix in §1 shows no duplicate reversal on
-  either account, so neither is a misstatement.** The only WHT item outstanding
-  is the ₦0.16 difference between the sync opening balance and OB-000001 on
-  1420.
+- **WHT** — `REV-SYNC-OB-001` moves ₦68,308,470.18 on 1420 and ₦14,536,448.13 on
+  2110. The matrix in §1 shows **no duplicate reversal** on either account, so
+  neither carries the duplication defect.
+
+  **That is not a clean bill of health.** "No duplicate reversal" is a narrower
+  statement than "WHT is correct". The WHT opening-balance reconciliation
+  remains **open** and is part of the §1a bridge: the ₦0.16 difference between
+  the sync opening balance and OB-000001 on 1420 is unexplained, and the WHT
+  receivable/payable opening schedules have not been obtained.
 
 These are 2026 errors in currently open fiscal periods (FY2026 periods 1–12 are
 all OPEN), so they should normally be corrected before the related annual
@@ -484,21 +548,35 @@ constraint.
 
 ## 7. Sign-off — TO BE COMPLETED BY FINANCE
 
+**Split deliberately.** The 14,263-journal backlog must **not** silently become
+a gate D blocker. Gate D needs the three balance repairs, the composite-reversal
+treatment and a clean survey; the backlog classification belongs to gate G,
+where it already blocks legacy-writer retirement.
+
+### 7a. Gate D sign-off — blocks the backfill
+
 | Item | Value |
 | --- | --- |
-| Population and financial exposure | §3 above — 14,263 journals, ₦76,495,739.50 |
-| Root cause and source evidence | §1, §2 above |
-| Treatment: three unbalanced journals | *pending Finance decision* |
-| Treatment: malformed reversal | *pending Finance decision* |
-| Treatment: six journals with no provenance | *pending Finance decision* |
-| Treatment: source-module casing | Normalise on read; no ERP data rewrite |
-| Approved classification policy for the 14,263 | §5 above — *pending approval* |
-| Reporting and tax assessment | §6 — *not yet performed* |
+| Three balance repairs (`JE202604-40653/40818/42111`) | *pending Finance decision* — §2 |
+| Composite-reversal treatment (`REV-SYNC-OB-001` + the six duplicates) | *pending Finance decision, conditional on §1a evidence* |
+| §1a audited-opening bridge complete | *not started* |
+| Recurrence fix landed (allocator + posting boundary + backlog tolerance) | *engineering, in progress — §2* |
+| Reporting assessment **for these corrections only** | *not yet performed* — §6 |
+| Clean survey re-run: zero unresolved balance and reversal defects | *pending repairs* |
 | Named approver | *pending* |
 | Named operator | *pending* |
-| Before/after reconciliation requirements | §8 below |
 
----
+### 7b. Gate G sign-off — blocks legacy-writer retirement, NOT gate D
+
+| Item | Value |
+| --- | --- |
+| Population and gross unposted debit under review | §3 — 14,263 journals, ₦76,495,739.50 |
+| AR/INVOICE candidate detector run on a restored database (2,039) | *not started — cannot run on the standby, §3* |
+| One-row delta (2,039 candidates vs 2,038 previously proven) explained | *unexplained* |
+| Approved classification policy for the 14,263 | §5 — *pending approval* |
+| Disposition recorded for **every** remaining APPROVED journal | *not started* |
+| Payroll journal (₦12,148,709.68) individually adjudicated | *pending* |
+| Reporting and tax assessment for the backlog cohorts | *not yet performed* |
 
 ## 8. Execution requirements
 

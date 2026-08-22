@@ -62,23 +62,45 @@ reversal structure quietly wrong, and would move an accounting decision from
 Finance into a migration script. The only acceptable exclusion is one **Finance
 explicitly quarantines**, recorded as such.
 
-#### Forensics complete — see the Finance correction memorandum
+#### Initial forensics — see the Finance correction memorandum (INCOMPLETE)
 
 `docs/inventories/accounting-finance-correction-memorandum.md` carries the
-read-only evidence for all four defects, and it **overturns the framing of
-defect 2**: the "malformed reversal" is not a labelling problem but an
-uncorrected double-reversal of **₦1,619,218.75** on Trade Receivables and
-Retained Earnings, still in effect. It is materially larger than everything
-else on this list, and it was found only because the adjudication was required
-to work from source evidence rather than from the `is_reversal` flag.
+read-only evidence gathered so far. It is **not complete**: the audited-opening
+bridge, the candidate-population detector, Finance's decisions, the reporting
+and tax assessment, approver and operator all remain outstanding.
 
-The memorandum also finds that defect 1 has a **code root cause** — the AR
-posting adapter rounds each revenue line independently instead of forcing the
-last line to absorb the allocation residue — so repairing the three rows without
-a linked engineering fix leaves the defect free to recur.
+What it establishes:
 
-Decisions, approver and operator in that memorandum are Finance's and are not
-filled in. Gate D stays blocked until they are.
+- **Defect 2 is not a labelling problem.** `REV-SYNC-OB-001` and six later
+  journals reverse the same six originals twice. Relative to a single-reversal
+  position the effect is duplicated by **₦1,619,218.75** on accounts 1400 and
+  3100, with no compensating correction.
+
+  **Whether that duplication is a misstatement is conditional** on whether the
+  composite reversal was itself economically correct — which requires the signed
+  2024 audited trial balance and the AR/AP/WHT opening schedules, none of which
+  has been obtained. If the composite improperly removed genuine AR/AP opening
+  balances, the required correction is broader than reversing those six.
+
+- **The duplication is bounded to 1400 and 3100.** A complete account-by-account
+  matrix found no duplicate reversal on 1211, 1220, 1420, 2000 or 2110. The
+  ₦68,308,470.18 on 1420 is a reversal performed once, as intended — not a
+  misstatement. An earlier draft inferred otherwise from the composite amount;
+  that inference is disproven. It is **not** a clean bill of health for WHT: the
+  opening-balance reconciliation stays open.
+
+- **Defect 1 has TWO code causes.** The AR allocator rounds each revenue line
+  independently, and `LedgerPostingService` admits an imbalance of *exactly* one
+  micro-unit because it rejects only on `abs(debit - credit) > Decimal("0.000001")`.
+  A third, larger instance sits in `posting_backlog.py` at `Decimal("0.01")`.
+  Repairing the rows fixes none of them.
+
+  The allocation policy is: round normally, apply the residue to the **largest
+  absolute revenue line**, break ties by stable line number. For these journals
+  that is line 2.
+
+Decisions, approver and operator are Finance's. Gate D stays blocked on content
+completeness, not on CI.
 
 #### Exit criterion
 
