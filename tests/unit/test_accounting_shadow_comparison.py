@@ -224,11 +224,19 @@ def test_scale_normalisation_is_not_rounding() -> None:
     assert normalise_amount(Decimal("1.500000")) == normalise_amount(Decimal("1.5"))
 
 
-def test_the_module_side_refuses_while_the_module_is_absent() -> None:
-    """A shadow run that quietly compared ERP against ERP would report perfect
-    agreement and mean nothing."""
+def test_the_module_side_refuses_while_composition_is_disabled() -> None:
+    """At gate C the wheel is INSTALLED and the tables exist, which makes this
+    refusal more important than it was, not less.
+
+    Storage is not authority.  A shadow run that reached for module tables
+    holding nothing — because no backfill has run — would compare a populated
+    ledger against an empty one and report a catastrophic false divergence; one
+    that quietly fell back to ERP would report perfect agreement and mean
+    nothing. The flag is what refuses, and the message names it.
+    """
     from app.accounting_adoption import AccountingCompositionNotReady
     from app.services.finance.gl.accounting_shadow import build_module_digest
 
-    with pytest.raises(AccountingCompositionNotReady):
+    with pytest.raises(AccountingCompositionNotReady) as excinfo:
         build_module_digest(SCOPE)
+    assert "ACCOUNTING_COMPOSITION_ENABLED is false" in str(excinfo.value)

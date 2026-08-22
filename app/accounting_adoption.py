@@ -6,30 +6,38 @@ linked reversals, period open/close/reopen/lock, and immutable posted-ledger
 evidence.  ERP is the qualifying product-first source for all of it, and ERP
 remains the LIVE authority for every one of those decisions today.
 
-Nothing here composes anything.  The module is not pinned, not installed, not in
-`version_locations`, and not imported — deliberately, because its release tag
-does not exist yet, and pinning an unreleased artifact is how a deploy resolves a
-lineage nobody reviewed.  What this module does is state the composition in
-advance, as data, so that:
+## State: COMPOSED AND DISABLED (gate C)
 
-- the backfill extractor and the shadow comparator have ONE place to read the
-  relation mapping from, instead of each carrying its own copy;
-- `tests/architecture/test_accounting_composition_disabled.py` can assert that
-  the composition really is absent, rather than assuming it;
-- when the tag lands, the diff that adopts it is a pin plus a flag, and the
-  claims below become checkable against the installed distribution instead of
-  being re-derived under time pressure.
+The distribution is now pinned exactly (`0.1.0a1`) and its lineage is listed in
+`alembic.ini`'s `version_locations`, so `mod_accounting` is created by
+`alembic upgrade heads` and its prerequisites are verified against the live
+catalog.  **That is storage, and storage alone.**
+
+`COMPOSITION_ENABLED` stays false, nothing under `app/` imports the package, no
+ERP writer has been repointed, no backfill has run, and no decision has moved.
+Supplying a module's tables does not cut anything over — the same rule ERP
+already applies to `idempotency_ledger.v1`, whose storage has existed since
+`20260820_idempotency_ledger` while ADR-0001 keeps the endpoint-response cache
+as ratcheted transitional state.
+
+What this module is for:
+
+- the backfill extractor and the shadow comparator read the relation mapping
+  from ONE place instead of each carrying a copy;
+- `tests/architecture/test_accounting_composition.py` asserts the composition is
+  real (exact pin, installed manifest, composed lineage) and still inert;
+- the claims below are checked against the installed distribution rather than
+  taken on trust.
 
 Read `docs/architecture/accounting-adoption-boundary.md` for the ordered gates.
 
 ## The one thing this file must not become
 
 A second opinion about what Accounting owns.  Every table name under
-`EXPECTED_MODULE_TABLES` is a CLAIM about an artifact ERP has not installed.
-The composition test treats them as claims: while the distribution is absent it
-checks only that ERP is not composing it, and once the distribution is present
-it checks the claims against `dotmac_accounting`'s own manifest.  A claim that
-turns out wrong is a failing test, not a silent divergence.
+`EXPECTED_MODULE_TABLES` is a claim about someone else's artifact, and now that
+the artifact is installed those claims are checked against
+`dotmac_accounting`'s own manifest on every run.  A claim that turns out wrong
+is a failing test, not a silent divergence.
 """
 
 from __future__ import annotations
@@ -49,20 +57,26 @@ DISTRIBUTION: Final = "dotmac-accounting"
 IMPORT_PACKAGE: Final = "dotmac_accounting"
 MODULE_CODE: Final = "accounting"
 
+#: The exact version ERP pins and expects to have installed.  Declared here so
+#: the pin, the lock and the running environment are checked against ONE literal
+#: rather than three that drift apart.  Gate B is settled by the annotated tag
+#: `dotmac-accounting-v0.1.0a1`, which peels to Starter `20d24703`.
+EXPECTED_VERSION: Final = "0.1.0a1"
+
 #: The single knob that turns composition on, with a prod-safe default.  It is
 #: read at import and never per-request: composition is a deploy-time fact, and a
 #: value that can change under a running process would mean two answers to "who
 #: owns posting?" inside one deployment.
 #:
-#: Setting it to true WITHOUT the pin, the migration lineage and a completed
-#: backfill does nothing useful and is refused by `require_composition_ready`.
+#: The pin and the lineage are now in place; the flag is what still separates
+#: "the tables exist" from "the module decides anything", and it stays false
+#: until a backfill, a shadow comparison and an authorized cutover say otherwise.
 COMPOSITION_ENABLED: Final[bool] = (
     os.getenv("ACCOUNTING_COMPOSITION_ENABLED", "false").lower() == "true"
 )
 
-#: The Alembic version location ERP will add when the tag exists.  Recorded here
-#: so the "not composed yet" assertion has a literal to look for rather than a
-#: substring guess.
+#: The Alembic version location ERP composes.  Recorded here so the assertion
+#: has a literal to look for rather than a substring guess.
 MIGRATION_VERSION_LOCATION: Final = "dotmac_accounting.migrations:versions"
 
 #: The database effects the module's lineage declares it needs.  ERP binds all
@@ -269,6 +283,7 @@ __all__ = [
     "COMPOSITION_ENABLED",
     "DISTRIBUTION",
     "EXPECTED_MODULE_TABLES",
+    "EXPECTED_VERSION",
     "IMPORT_PACKAGE",
     "MIGRATION_VERSION_LOCATION",
     "MODULE_CODE",
