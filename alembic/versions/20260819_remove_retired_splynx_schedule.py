@@ -1,7 +1,7 @@
 """Remove retired Splynx scheduled task.
 
 Revision ID: 20260819_remove_retired_splynx_schedule
-Revises: 20260814_database_roles
+Revises: 20260820_idempotency_ledger
 Create Date: 2026-08-19
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260819_remove_retired_splynx_schedule"
-down_revision = "20260814_database_roles"
+down_revision = "20260820_idempotency_ledger"
 branch_labels = None
 depends_on = None
 
