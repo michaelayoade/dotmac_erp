@@ -657,7 +657,7 @@ superseded wherever they disagree with anything here.
 | Replay LSN at export end | `BF/EDEA58F0` (2026-08-22 10:25:13Z) |
 | Server version | PostgreSQL 16.4, source and target |
 | Migration revisions (source heads) | `20260815_academy_learning_sync`, `fi_0001_stored_files`, `20260815_academy_course_projection`, `20260816_platform_owned_webhook_ssrf_policy`, `20260818_dotmac_sub_customer_metrics` |
-| Detector commit | `9f21c0b912947ed5bd821f3315db52bee118a686` (superseded by the commit that carries this table — see the PR's commit list) |
+| Detector commit | `35de9ced8add403038a3ad6085cf903d5d30b2e3` |
 | Detector query hash (sha256) | `44c48998cf3d290bd4b28e06a1d5d35df93b29818d6e6afb74c67d6a6de4fa6e` |
 | Target | `erp-forensic-20260822c` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (**§A12**). |
 
