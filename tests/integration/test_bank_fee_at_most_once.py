@@ -199,6 +199,46 @@ def _post_to_ledger(db: Session, journal, period_id: uuid.UUID, org_id: uuid.UUI
     return journal
 
 
+def _legacy_live_batch(
+    db: Session,
+    org_id: uuid.UUID,
+    period_id: uuid.UUID,
+    line_id: uuid.UUID,
+    cost,
+    bank,
+):
+    """A legacy fee: POSTED journal with NULL source id, real lines, real ledger
+    rows, and a batch keyed on the statement line.
+
+    A batch row alone is no longer enough to block a create — the lookup follows
+    it to a live effect — so a fixture that wants to block must build one.
+    """
+    from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+    from app.services.finance.banking.bank_fee_posting import fee_idempotency_key
+
+    journal = _fee_journal(
+        org_id, period_id, line_id, number=f"LEGACY-{uuid.uuid4().hex[:6]}"
+    )
+    journal.status = JournalStatus.POSTED
+    journal.source_document_id = None  # legacy: identity only in the key
+    db.add(journal)
+    db.flush()
+    _with_lines(db, journal, cost, bank, Decimal("10"))
+    _post_to_ledger(db, journal, period_id, org_id)
+
+    batch_id = db.scalar(
+        select(PostedLedgerLine.posting_batch_id).where(
+            PostedLedgerLine.journal_entry_id == journal.journal_entry_id
+        )
+    )
+    db.execute(
+        text("UPDATE gl.posting_batch SET idempotency_key = :k WHERE batch_id = :b"),
+        {"k": fee_idempotency_key(org_id, line_id), "b": batch_id},
+    )
+    db.flush()
+    return journal
+
+
 def _sqlstate(exc: BaseException) -> str | None:
     """The SQLSTATE the driver reported, not the message text.
 
@@ -444,40 +484,27 @@ class TestTheOwnerRefusesToCreateTwice:
 
         Without this second pre-check the first run of the new code would look
         at 149 already-posted statement lines, find no typed identity, and mint
-        149 fresh journals.
+        149 fresh journals. The legacy effect has to be LIVE for the check to
+        fire, which is why this builds ledger rows rather than a bare batch.
         """
+        period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
-        _posting_batch(
-            db,
-            org_id,
-            _fiscal_period_id(db, org_id),
-            fee_idempotency_key(org_id, line_id),
-        )
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        _legacy_live_batch(db, org_id, period_id, line_id, cost, bank)
 
         before = db.scalar(
             select(func.count(JournalEntry.journal_entry_id)).where(
                 JournalEntry.organization_id == org_id
             )
         )
-        line = type(
-            "_Line",
-            (),
-            {
-                "line_id": line_id,
-                "amount": Decimal("-10"),
-                "transaction_date": date(2026, 1, 15),
-                "description": "Bank charge",
-                "reference": "CANARY",
-                "line_number": 1,
-            },
-        )()
 
         outcome = post_bank_fee(
             db,
             organization_id=org_id,
-            line=line,
-            bank_gl_account_id=uuid.uuid4(),
-            finance_cost_account_id=uuid.uuid4(),
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
             posted_by_user_id=uuid.uuid4(),
             poster=lambda **_: pytest.fail("posting attempted"),
         )
@@ -693,8 +720,8 @@ class TestAFailedPostIsRetried:
             db,
             organization_id=org_id,
             line=_fee_line(line_id),
-            bank_gl_account_id=uuid.uuid4(),
-            finance_cost_account_id=uuid.uuid4(),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
             posted_by_user_id=uuid.uuid4(),
             poster=_poster,
         )
@@ -914,6 +941,9 @@ class TestTheCollisionHandler:
                     "DELETE FROM gl.account_category WHERE organization_id = :o",
                     "DELETE FROM gl.fiscal_period WHERE organization_id = :o",
                     "DELETE FROM gl.fiscal_year WHERE organization_id = :o",
+                    # Creating a journal allocates a document number, which
+                    # leaves a numbering_sequence row referencing the org.
+                    "DELETE FROM core_config.numbering_sequence WHERE organization_id = :o",
                     "DELETE FROM core_org.organization WHERE organization_id = :o",
                 ):
                     cleanup.execute(text(stmt), {"o": org_id})
@@ -1025,7 +1055,28 @@ class TestABatchRowIsNotAPostedEffect:
             existing_posting_batch(db, organization_id=org_id, line_id=line_id) is None
         ), f"a {status} batch is not a posted effect"
 
-    def test_a_posted_batch_still_blocks(self, db: Session, org_id: uuid.UUID) -> None:
+    def test_a_posted_batch_with_a_live_effect_blocks(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        """A batch ROW is not enough — it must lead to a live effect."""
+        from app.services.finance.banking.bank_fee_posting import (
+            existing_posting_batch,
+        )
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        _legacy_live_batch(db, org_id, period_id, line_id, cost, bank)
+
+        assert (
+            existing_posting_batch(db, organization_id=org_id, line_id=line_id)
+            is not None
+        )
+
+    def test_a_posted_batch_with_no_ledger_rows_does_not_block(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
         from app.services.finance.banking.bank_fee_posting import (
             existing_posting_batch,
             fee_idempotency_key,
@@ -1039,9 +1090,8 @@ class TestABatchRowIsNotAPostedEffect:
             fee_idempotency_key(org_id, line_id),
         )
         assert (
-            existing_posting_batch(db, organization_id=org_id, line_id=line_id)
-            is not None
-        )
+            existing_posting_batch(db, organization_id=org_id, line_id=line_id) is None
+        ), "a batch that wrote no ledger rows is not a live effect"
 
 
 class TestStaleDraftContentIsNotReposted:
@@ -1282,6 +1332,9 @@ class TestTwoSessionsRaceForOneLine:
                     "DELETE FROM gl.account_category WHERE organization_id = :o",
                     "DELETE FROM gl.fiscal_period WHERE organization_id = :o",
                     "DELETE FROM gl.fiscal_year WHERE organization_id = :o",
+                    # Creating a journal allocates a document number, which
+                    # leaves a numbering_sequence row referencing the org.
+                    "DELETE FROM core_config.numbering_sequence WHERE organization_id = :o",
                     "DELETE FROM core_org.organization WHERE organization_id = :o",
                 ):
                     cleanup.execute(text(stmt), {"o": org_id})
@@ -1290,23 +1343,27 @@ class TestTwoSessionsRaceForOneLine:
 class TestAnUnrelatedIntegrityErrorIsNotALostRace:
     """The handler must classify the failure, not assume it."""
 
-    def test_a_foreign_key_violation_propagates(
+    def test_a_bad_account_never_reports_a_lost_race(
         self, db: Session, org_id: uuid.UUID, monkeypatch
     ) -> None:
-        """A bad account id is a broken write, not a concurrent winner.
+        """A broken write must not be reported as "someone else won".
 
-        Reporting it as LOST_RACE would turn a failed posting into a success and
-        return a journal that does not exist.
+        `create_and_approve_journal` converts the database error into a creation
+        failure rather than letting it reach the collision handler, so the
+        observable requirement is the same either way: the outcome is FAILED and
+        never LOST_RACE, and no journal is claimed.
         """
         from app.services.finance.banking import bank_fee_posting
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
 
+        _fiscal_period_id(db, org_id)
         monkeypatch.setattr(bank_fee_posting, "find_fee_journals", lambda *a, **k: [])
         monkeypatch.setattr(
             bank_fee_posting, "existing_posting_batch", lambda *a, **k: None
         )
 
-        with pytest.raises(IntegrityError) as exc:
-            bank_fee_posting.post_bank_fee(
+        try:
+            outcome = bank_fee_posting.post_bank_fee(
                 db,
                 organization_id=org_id,
                 line=_fee_line(uuid.uuid4()),
@@ -1318,9 +1375,16 @@ class TestAnUnrelatedIntegrityErrorIsNotALostRace:
                     success=True, message="", idempotent_replay=False
                 ),
             )
-        assert _sqlstate(exc.value) != "23505" or (
-            "uq_journal_entry_bank_fee_source" not in str(exc.value)
+        except IntegrityError:
+            # Propagating is also correct — what must never happen is a
+            # success-shaped answer.
+            return
+
+        assert outcome.state is not BankFeeState.LOST_RACE, (
+            "an unrelated constraint failure was reported as a lost race"
         )
+        assert not outcome.ok
+        assert outcome.state is BankFeeState.FAILED
 
     def test_the_predicate_only_matches_the_identity_index(self) -> None:
         from app.services.finance.banking.bank_fee_posting import (
