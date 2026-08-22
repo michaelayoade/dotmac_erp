@@ -61,7 +61,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Protocol
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -70,7 +70,9 @@ from app.models.finance.gl.journal_entry import (
     JournalStatus,
     JournalType,
 )
-from app.models.finance.gl.posting_batch import PostingBatch
+from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+from app.models.finance.gl.posting_batch import BatchStatus, PostingBatch
 from app.services.finance.gl.journal import JournalInput, JournalLineInput
 
 logger = logging.getLogger(__name__)
@@ -120,6 +122,13 @@ class BankFeeState(str, Enum):
     LEGACY_BATCH_ONLY = "LEGACY_BATCH_ONLY"
     #: A concurrent caller won the create; that caller's journal is canonical.
     LOST_RACE = "LOST_RACE"
+    #: A DRAFT journal exists but its content no longer matches the statement
+    #: line. NOT re-posted — posting stale content under a live identity is
+    #: worse than posting nothing.
+    CONTENT_MISMATCH = "CONTENT_MISMATCH"
+    #: More than one primary journal carries this line. Only possible before
+    #: the unique index is deployed, and it must never be resolved by guessing.
+    AMBIGUOUS = "AMBIGUOUS"
     #: Creation or posting failed.
     FAILED = "FAILED"
 
@@ -160,7 +169,12 @@ class BankFeeOutcome:
 
     @property
     def needs_attention(self) -> bool:
-        return self.state in {BankFeeState.APPROVED_ORPHAN, BankFeeState.NOT_LIVE}
+        return self.state in {
+            BankFeeState.APPROVED_ORPHAN,
+            BankFeeState.NOT_LIVE,
+            BankFeeState.CONTENT_MISMATCH,
+            BankFeeState.AMBIGUOUS,
+        }
 
     @property
     def posted_journal(self) -> JournalEntry | None:
@@ -175,17 +189,68 @@ class BankFeeOutcome:
         return None
 
 
+def find_fee_journals(
+    db: Session, *, organization_id: uuid.UUID, line_id: uuid.UUID
+) -> list[JournalEntry]:
+    """Every PRIMARY journal carrying this statement line as typed identity.
+
+    **Reversals are excluded, and that exclusion is required for correctness,
+    not tidiness.** The unique index deliberately exempts `is_reversal = true`,
+    because an ERP reversal PRESERVES its original's source identity — so once a
+    bank fee has been reversed, two or more journals carry this `line_id`. A
+    lookup that did not filter, and took `.first()` off an unordered query,
+    could return the REVERSAL and then read its status as though it were the
+    original's. The reversal is POSTED, so the answer would be "already posted"
+    at exactly the moment no live effect exists.
+
+    Returns a list rather than one row so the caller can SEE multiplicity. The
+    index permits at most one primary per line, but only once it is deployed;
+    before that a race could leave two, and silently picking one would hide it.
+    Ordered by creation so any report is stable.
+    """
+    return list(
+        db.scalars(
+            select(JournalEntry)
+            .where(
+                JournalEntry.organization_id == organization_id,
+                JournalEntry.source_document_type == SOURCE_DOCUMENT_TYPE,
+                JournalEntry.source_document_id == line_id,
+                JournalEntry.is_reversal.is_(False),
+            )
+            .order_by(JournalEntry.created_at, JournalEntry.journal_number)
+        ).all()
+    )
+
+
 def find_existing_fee_journal(
     db: Session, *, organization_id: uuid.UUID, line_id: uuid.UUID
 ) -> JournalEntry | None:
-    """A journal already carrying this statement line as typed identity."""
-    return db.scalars(
-        select(JournalEntry).where(
-            JournalEntry.organization_id == organization_id,
-            JournalEntry.source_document_type == SOURCE_DOCUMENT_TYPE,
-            JournalEntry.source_document_id == line_id,
+    """The single primary journal for this line, or None."""
+    journals = find_fee_journals(db, organization_id=organization_id, line_id=line_id)
+    return journals[0] if journals else None
+
+
+def is_effect_live(db: Session, journal: JournalEntry) -> bool:
+    """Whether this journal's effect is in the ledger RIGHT NOW.
+
+    Three conditions, and none of them is implied by the others:
+
+    * it is POSTED — not DRAFT, APPROVED, VOID or REVERSED;
+    * it has not since been reversed (`reversal_journal_id`), because a reversed
+      journal keeps its POSTED status while its effect is cancelled;
+    * it actually has rows in `gl.posted_ledger_line`.
+    """
+    if journal.status != JournalStatus.POSTED:
+        return False
+    if journal.reversal_journal_id is not None:
+        return False
+    return bool(
+        db.scalar(
+            select(func.count(PostedLedgerLine.ledger_line_id)).where(
+                PostedLedgerLine.journal_entry_id == journal.journal_entry_id
+            )
         )
-    ).first()
+    )
 
 
 def fee_idempotency_key(organization_id: uuid.UUID, line_id: uuid.UUID) -> str:
@@ -204,15 +269,22 @@ def fee_idempotency_key(organization_id: uuid.UUID, line_id: uuid.UUID) -> str:
 def existing_posting_batch(
     db: Session, *, organization_id: uuid.UUID, line_id: uuid.UUID
 ) -> PostingBatch | None:
-    """A ledger batch already posted for this line.
+    """A SUCCESSFULLY POSTED ledger batch for this line.
 
     Covers legacy journals whose `source_document_id` is NULL: their identity
     survives only in the idempotency key, and this is what reads it.
+
+    Restricted to `BatchStatus.POSTED` deliberately — see the comment below.
     """
     return db.scalars(
         select(PostingBatch).where(
             PostingBatch.idempotency_key
-            == fee_idempotency_key(organization_id, line_id)
+            == fee_idempotency_key(organization_id, line_id),
+            # A batch ROW is not a posted effect. PENDING, PROCESSING, FAILED
+            # and PARTIALLY_POSTED batches all exist without one, and treating
+            # any of them as "already posted" would strand the fee permanently:
+            # nothing would ever create the journal, and nothing would say why.
+            PostingBatch.status == BatchStatus.POSTED,
         )
     ).first()
 
@@ -251,6 +323,20 @@ def _existing_journal_outcome(
     number = existing.journal_number
 
     if status == JournalStatus.POSTED:
+        if not is_effect_live(db, existing):
+            # POSTED is not the same as effective. A reversed journal keeps its
+            # POSTED status while its effect is cancelled, and a journal with no
+            # `posted_ledger_line` rows never had one.
+            return BankFeeOutcome(
+                state=BankFeeState.NOT_LIVE,
+                journal=existing,
+                message=(
+                    f"Bank-fee journal {number} for line {line_id} is POSTED but "
+                    f"its effect is not live (reversed, or no ledger rows). A "
+                    f"replacement cannot be created automatically while it holds "
+                    f"the identity."
+                ),
+            )
         return BankFeeOutcome(
             state=BankFeeState.ALREADY_POSTED,
             journal=existing,
@@ -258,6 +344,21 @@ def _existing_journal_outcome(
         )
 
     if status == JournalStatus.DRAFT:
+        mismatch = _content_mismatch(db, existing, line=line)
+        if mismatch is not None:
+            # Re-posting is a recovery, not a rewrite. If the DRAFT no longer
+            # says what the statement line says, posting it would put stale
+            # content into the ledger under the line's identity — and the
+            # identity is what makes it un-correctable later.
+            return BankFeeOutcome(
+                state=BankFeeState.CONTENT_MISMATCH,
+                journal=existing,
+                message=(
+                    f"DRAFT bank-fee journal {number} no longer matches line "
+                    f"{line_id}: {mismatch}. Not re-posted."
+                ),
+                error=mismatch,
+            )
         posting_result = _post_existing(
             db,
             existing,
@@ -305,6 +406,47 @@ def _existing_journal_outcome(
     )
 
 
+def _content_mismatch(db: Session, journal: JournalEntry, *, line: Any) -> str | None:
+    """Describe how a DRAFT journal differs from its statement line, or None.
+
+    Compares the economic content the line implies — one debit and one credit,
+    each of the line's absolute amount — against what the journal actually
+    holds. It does not compare accounts: a chart-of-accounts remap is a
+    legitimate reason for them to differ, and the two legacy `Paystack OPEX - DT`
+    rows are exactly that case.
+    """
+    expected = quantize_amount(abs(Decimal(line.amount)))
+    rows = list(
+        db.scalars(
+            select(JournalEntryLine).where(
+                JournalEntryLine.journal_entry_id == journal.journal_entry_id
+            )
+        ).all()
+    )
+    if not rows:
+        return "the journal has no lines"
+
+    debit = quantize_amount(
+        sum((r.debit_amount_functional or Decimal("0") for r in rows), Decimal("0"))
+    )
+    credit = quantize_amount(
+        sum((r.credit_amount_functional or Decimal("0") for r in rows), Decimal("0"))
+    )
+    if debit != expected or credit != expected:
+        return (
+            f"journal totals are debit {debit} / credit {credit}, "
+            f"the line implies {expected}"
+        )
+    return None
+
+
+def quantize_amount(amount: Decimal) -> Decimal:
+    """Round to the scale the ledger stores, matching PostgreSQL's rounding."""
+    from app.services.finance.posting.residue import quantize
+
+    return quantize(amount)
+
+
 def _post_existing(
     db: Session,
     journal: JournalEntry,
@@ -316,14 +458,15 @@ def _post_existing(
     poster: _Poster | None,
 ) -> Any:
     """Drive an existing DRAFT journal back through submit → approve → post."""
-    from app.services.finance.gl.journal import JournalService
     from app.services.finance.posting.base import BasePostingAdapter
 
-    JournalService.submit_journal(
-        db, organization_id, journal.journal_entry_id, posted_by_user_id
-    )
-    JournalService.approve_journal(
-        db, organization_id, journal.journal_entry_id, posted_by_user_id
+    # The SAME submit/approve path the create route uses, including its
+    # segregation-of-duties bypass for system actors. Calling
+    # `JournalService.approve_journal` directly here raised an uncaught
+    # HTTPException the first time SoD fired — which for an automated actor
+    # that both creates and approves is every time.
+    BasePostingAdapter.submit_and_approve_as_system(
+        db, organization_id, journal, posted_by_user_id
     )
 
     idempotency_key = fee_idempotency_key(organization_id, line_id)
@@ -379,10 +522,21 @@ def post_bank_fee(
     correlation_id = f"bank-fee-{line_id}"
 
     # ---- Pre-check 1: typed identity already used -------------------------
-    existing = find_existing_fee_journal(
-        db, organization_id=organization_id, line_id=line_id
-    )
-    if existing is not None:
+    primaries = find_fee_journals(db, organization_id=organization_id, line_id=line_id)
+    if len(primaries) > 1:
+        numbers = ", ".join(j.journal_number for j in primaries)
+        return BankFeeOutcome(
+            state=BankFeeState.AMBIGUOUS,
+            journal=None,
+            message=(
+                f"{len(primaries)} primary bank-fee journals carry line {line_id} "
+                f"({numbers}). The unique index permits one; this predates it or "
+                f"it is missing. Resolve deliberately — do not guess."
+            ),
+            error="multiple primary journals for one statement line",
+        )
+    if primaries:
+        existing = primaries[0]
         return _existing_journal_outcome(
             db,
             existing,

@@ -649,17 +649,33 @@ class TestACrashBeforeMatchingIsRepairable:
 
 
 class TestTheServiceLosesTheRaceGracefully:
-    """The direct-insert canary proves the INDEX. This proves the SERVICE.
+    """The `IntegrityError` handler in `post_bank_fee`, exercised for real.
 
-    Two sessions both call `post_bank_fee`; the loser must catch the violation,
-    re-read, and return the WINNER's journal — not raise, and not report that it
-    created something.
+    An earlier version of this test committed the winner BEFORE calling
+    `post_bank_fee`, so the loser returned at pre-check 1 and the handler was
+    never reached. It asserted a true thing about the wrong code path and was a
+    duplicate of `test_an_already_posted_line_still_yields_its_journal` wearing
+    a race's name.
+
+    A genuine two-thread race against a unique index is not deterministic: the
+    second inserter BLOCKS until the first transaction resolves, so the outcome
+    depends on commit timing. What IS deterministic — and is what the handler
+    actually has to survive — is the interleaving where the pre-checks ran
+    before the winner committed and the create then collides.
+
+    So the winner is committed, and the loser's PRE-CHECKS are stubbed to return
+    nothing, reproducing exactly that window. Everything after the pre-checks is
+    the real code path: the real INSERT, the real index, the real
+    `IntegrityError`, the real re-read.
     """
 
-    def test_the_losing_caller_returns_the_winners_journal(self, engine) -> None:
+    def test_the_losing_caller_returns_the_winners_journal(
+        self, engine, monkeypatch
+    ) -> None:
         from sqlalchemy.orm import sessionmaker as _sessionmaker
 
         from app.models.finance.core_org.organization import Organization
+        from app.services.finance.banking import bank_fee_posting
         from app.services.finance.banking.bank_fee_posting import BankFeeState
 
         Session_ = _sessionmaker(bind=engine)
@@ -690,21 +706,53 @@ class TestTheServiceLosesTheRaceGracefully:
             loser = Session_()
             try:
                 loser.execute(text("SET app.bypass_rls = 'true'"))
-                outcome = post_bank_fee(
+
+                # The race window, modelled exactly: the PRE-CHECK sees nothing
+                # (the winner had not committed when it ran), and the handler's
+                # RE-READ after the violation sees the winner (it has by then).
+                # A stub that always returned nothing would break the re-read
+                # too, and the test would assert against its own scaffolding.
+                real_find = bank_fee_posting.find_fee_journals
+                calls = {"n": 0}
+
+                def _first_call_sees_nothing(*args, **kwargs):
+                    calls["n"] += 1
+                    if calls["n"] == 1:
+                        return []
+                    return real_find(*args, **kwargs)
+
+                monkeypatch.setattr(
+                    bank_fee_posting, "find_fee_journals", _first_call_sees_nothing
+                )
+                monkeypatch.setattr(
+                    bank_fee_posting, "existing_posting_batch", lambda *a, **k: None
+                )
+
+                outcome = bank_fee_posting.post_bank_fee(
                     loser,
                     organization_id=org_id,
                     line=_fee_line(line_id),
                     bank_gl_account_id=uuid.uuid4(),
                     finance_cost_account_id=uuid.uuid4(),
                     posted_by_user_id=uuid.uuid4(),
-                    poster=lambda **_: pytest.fail("must not post over the winner"),
+                    poster=lambda **_: pytest.fail(
+                        "the create must fail before anything is posted"
+                    ),
                 )
-                assert outcome.state is BankFeeState.ALREADY_POSTED
-                assert outcome.journal is not None
-                assert outcome.journal.journal_number == "WINNER", (
-                    "the losing caller must report the winner's journal"
+
+                assert outcome.state is BankFeeState.LOST_RACE, (
+                    f"expected the IntegrityError handler, got {outcome.state}: "
+                    f"{outcome.message}"
                 )
                 assert not outcome.created
+                assert outcome.journal is not None, (
+                    "the loser must re-read and report the winner's journal"
+                )
+                assert outcome.journal.journal_number == "WINNER"
+                assert calls["n"] >= 2, (
+                    "the handler must RE-READ after the violation; one lookup "
+                    "means the collision path never ran"
+                )
             finally:
                 loser.rollback()
                 loser.close()
@@ -719,3 +767,209 @@ class TestTheServiceLosesTheRaceGracefully:
                     "DELETE FROM core_org.organization WHERE organization_id = :o",
                 ):
                     cleanup.execute(text(stmt), {"o": org_id})
+
+
+class TestAReversedFeeIsNotReportedAsPosted:
+    """The reversal lookup ambiguity, pinned.
+
+    Because the index exempts reversals, a reversed bank fee leaves TWO journals
+    carrying one `line_id`. An unfiltered `.first()` off an unordered query could
+    return the REVERSAL — which is POSTED — and report "already posted" at
+    exactly the moment no live effect exists.
+    """
+
+    def test_the_lookup_ignores_the_reversal(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import find_fee_journals
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+
+        original = _fee_journal(org_id, period_id, line_id, number="ORIGINAL")
+        original.status = JournalStatus.REVERSED
+        db.add(original)
+        db.flush()
+
+        reversal = _fee_journal(org_id, period_id, line_id, number="THE-REVERSAL")
+        reversal.is_reversal = True
+        reversal.reversed_journal_id = original.journal_entry_id
+        reversal.status = JournalStatus.POSTED
+        db.add(reversal)
+        db.flush()
+
+        found = find_fee_journals(db, organization_id=org_id, line_id=line_id)
+        assert [j.journal_number for j in found] == ["ORIGINAL"], (
+            "the reversal must never be mistaken for the primary journal"
+        )
+
+    def test_a_reversed_fee_reports_not_live_not_already_posted(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+
+        original = _fee_journal(org_id, period_id, line_id, number="WAS-POSTED")
+        original.status = JournalStatus.POSTED
+        db.add(original)
+        db.flush()
+
+        reversal = _fee_journal(org_id, period_id, line_id, number="REVERSAL")
+        reversal.is_reversal = True
+        reversal.reversed_journal_id = original.journal_entry_id
+        reversal.status = JournalStatus.POSTED
+        db.add(reversal)
+        db.flush()
+        original.reversal_journal_id = reversal.journal_entry_id
+        db.flush()
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=uuid.uuid4(),
+            finance_cost_account_id=uuid.uuid4(),
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("must not post"),
+        )
+        assert outcome.state is BankFeeState.NOT_LIVE
+        assert not outcome.already_present, (
+            "a reversed fee has no live effect; calling it present hides that"
+        )
+
+
+class TestABatchRowIsNotAPostedEffect:
+    """PENDING, PROCESSING, FAILED and PARTIALLY_POSTED batches all exist
+    without a posted effect. Treating any of them as "already posted" would
+    strand the fee permanently and say nothing."""
+
+    @pytest.mark.parametrize(
+        "status", ["PENDING", "PROCESSING", "FAILED", "PARTIALLY_POSTED"]
+    )
+    def test_an_unposted_batch_does_not_block_creation(
+        self, db: Session, org_id: uuid.UUID, status: str
+    ) -> None:
+        from app.models.finance.gl.posting_batch import BatchStatus
+        from app.services.finance.banking.bank_fee_posting import (
+            existing_posting_batch,
+            fee_idempotency_key,
+        )
+
+        line_id = uuid.uuid4()
+        batch = _posting_batch(
+            db,
+            org_id,
+            _fiscal_period_id(db, org_id),
+            fee_idempotency_key(org_id, line_id),
+        )
+        batch.status = BatchStatus[status]
+        db.flush()
+
+        assert (
+            existing_posting_batch(db, organization_id=org_id, line_id=line_id) is None
+        ), f"a {status} batch is not a posted effect"
+
+    def test_a_posted_batch_still_blocks(self, db: Session, org_id: uuid.UUID) -> None:
+        from app.services.finance.banking.bank_fee_posting import (
+            existing_posting_batch,
+            fee_idempotency_key,
+        )
+
+        line_id = uuid.uuid4()
+        _posting_batch(
+            db,
+            org_id,
+            _fiscal_period_id(db, org_id),
+            fee_idempotency_key(org_id, line_id),
+        )
+        assert (
+            existing_posting_batch(db, organization_id=org_id, line_id=line_id)
+            is not None
+        )
+
+
+class TestStaleDraftContentIsNotReposted:
+    """Re-posting a DRAFT is a recovery, not a rewrite.
+
+    If the DRAFT no longer says what the statement line says, posting it puts
+    stale content into the ledger under the line's identity — and the identity
+    is what makes it hard to correct afterwards.
+    """
+
+    def test_a_draft_whose_amount_drifted_is_refused(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.models.finance.gl.journal_entry_line import JournalEntryLine
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        stale = _fee_journal(org_id, period_id, line_id, number="STALE-DRAFT")
+        stale.status = JournalStatus.DRAFT
+        db.add(stale)
+        db.flush()
+
+        # The statement line says 10; this DRAFT says 99.
+        for amounts in ((Decimal("99"), Decimal("0")), (Decimal("0"), Decimal("99"))):
+            db.add(
+                JournalEntryLine(
+                    line_id=uuid.uuid4(),
+                    journal_entry_id=stale.journal_entry_id,
+                    line_number=1,
+                    account_id=uuid.uuid4(),
+                    debit_amount=amounts[0],
+                    credit_amount=amounts[1],
+                    debit_amount_functional=amounts[0],
+                    credit_amount_functional=amounts[1],
+                )
+            )
+        db.flush()
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=uuid.uuid4(),
+            finance_cost_account_id=uuid.uuid4(),
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("stale content must not be posted"),
+        )
+
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert outcome.needs_attention
+        assert "99" in outcome.message
+
+
+class TestMultiplePrimariesAreNeverResolvedByGuessing:
+    def test_two_primaries_report_ambiguous(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        """Only reachable before the index is deployed — which is precisely when
+        an adapter must not pick one and carry on."""
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        db.execute(text("ALTER TABLE gl.journal_entry DISABLE TRIGGER ALL"))
+        db.execute(text("DROP INDEX IF EXISTS gl.uq_journal_entry_bank_fee_source"))
+        try:
+            db.add(_fee_journal(org_id, period_id, line_id, number="ONE"))
+            db.add(_fee_journal(org_id, period_id, line_id, number="TWO"))
+            db.flush()
+
+            outcome = post_bank_fee(
+                db,
+                organization_id=org_id,
+                line=_fee_line(line_id),
+                bank_gl_account_id=uuid.uuid4(),
+                finance_cost_account_id=uuid.uuid4(),
+                posted_by_user_id=uuid.uuid4(),
+                poster=lambda **_: pytest.fail("must not post while ambiguous"),
+            )
+            assert outcome.state is BankFeeState.AMBIGUOUS
+            assert outcome.needs_attention
+            assert "ONE" in outcome.message and "TWO" in outcome.message
+        finally:
+            db.execute(text("ALTER TABLE gl.journal_entry ENABLE TRIGGER ALL"))
