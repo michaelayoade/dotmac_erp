@@ -191,6 +191,7 @@ def _post_to_ledger(db: Session, journal, period_id: uuid.UUID, org_id: uuid.UUI
                 posting_date=journal.posting_date,
                 debit_amount=row.debit_amount,
                 credit_amount=row.credit_amount,
+                posted_by_user_id=uuid.uuid4(),
             )
         )
     journal.posting_batch_id = batch.batch_id
