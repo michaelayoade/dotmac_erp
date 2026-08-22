@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 from app.services.finance.banking.reconciliation_engine_parts.base import (
     Any,
     BankAccount,
@@ -293,12 +294,10 @@ class ReconciliationEngineHandlers:
     ) -> None:
         """Create GL journals for bank fee lines and auto-match."""
         from app.models.finance.gl.account import Account
-        from app.models.finance.gl.journal_entry import JournalType
-        from app.services.finance.gl.journal import (
-            JournalInput,
-            JournalLineInput,
+        from app.services.finance.banking.bank_fee_posting import (
+            BankFeeState,
+            post_bank_fee,
         )
-        from app.services.finance.posting.base import BasePostingAdapter
 
         # Determine writeoff account from rule or default
         if rule.writeoff_account_id:
@@ -323,7 +322,6 @@ class ReconciliationEngineHandlers:
                 continue
 
             try:
-                amount = abs(line.amount)
                 correlation_id = f"bank-fee-{line.line_id}"
 
                 # Build journal label from template or default
@@ -333,54 +331,42 @@ class ReconciliationEngineHandlers:
                     default=f"Bank charge - {line.description}",
                 )
 
-                journal_input = JournalInput(
-                    journal_type=JournalType.STANDARD,
-                    entry_date=line.transaction_date,
-                    posting_date=line.transaction_date,
+                # Delegated to the one bank-fee owner (see `bank_fee_posting`).
+                # This adapter posts through the combined create-and-post helper,
+                # so it passes no `poster`; what changes is that the CREATE is
+                # now guarded by a pre-check and a unique index.
+                outcome = post_bank_fee(
+                    self.db,  # type: ignore[attr-defined]
+                    organization_id=ctx.organization_id,
+                    line=line,
+                    bank_gl_account_id=ctx.bank_account.gl_account_id,
+                    finance_cost_account_id=finance_cost_account.account_id,
+                    posted_by_user_id=_SYSTEM_USER_ID,
                     description=label,
-                    reference=line.reference,
-                    source_module="BANKING",
-                    source_document_type="BANK_FEE",
-                    correlation_id=correlation_id,
-                    lines=[
-                        JournalLineInput(
-                            account_id=finance_cost_account.account_id,
-                            debit_amount=amount,
-                            description=label,
-                        ),
-                        JournalLineInput(
-                            account_id=ctx.bank_account.gl_account_id,
-                            credit_amount=amount,
-                            description=label,
-                        ),
-                    ],
                 )
 
-                idempotency_key = BasePostingAdapter.make_idempotency_key(
-                    ctx.organization_id,
-                    "BANKING",
-                    line.line_id,
-                    action="bank-fee",
-                )
-                journal, posting = BasePostingAdapter.create_approve_and_post_journal(
-                    self.db,  # type: ignore[attr-defined]
-                    ctx.organization_id,
-                    journal_input,
-                    _SYSTEM_USER_ID,
-                    posting_date=line.transaction_date,
-                    idempotency_key=idempotency_key,
-                    source_module="BANKING",
-                    correlation_id=correlation_id,
-                    success_message="Bank fee posted",
-                    creation_error_prefix="Fee journal creation failed",
-                    ledger_error_prefix="Fee journal posting failed",
-                )
-                if not posting.success:
+                if outcome.needs_attention:
+                    # Something exists but no ledger effect does. Surfaced, not
+                    # skipped: counting this shape as done is what let 12,117
+                    # orphan journals accumulate unnoticed.
                     ctx.result.errors.append(
-                        f"Line {line.line_number}: {posting.message}"
+                        f"Line {line.line_number}: {outcome.message}"
                     )
                     continue
 
+                if outcome.state is BankFeeState.LEGACY_BATCH_ONLY:
+                    continue
+
+                if not outcome.ok:
+                    ctx.result.errors.append(
+                        f"Line {line.line_number}: {outcome.message}"
+                    )
+                    continue
+
+                # Matching runs whether or not this call created the journal —
+                # see the note in `bank_fee_posting`: a crash between posting and
+                # matching leaves the line unmatched, and this lookup is
+                # idempotent.
                 journal_line = self._find_journal_line(  # type: ignore[attr-defined]
                     ctx,
                     correlation_id,
