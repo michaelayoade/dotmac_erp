@@ -62,12 +62,30 @@ reversal structure quietly wrong, and would move an accounting decision from
 Finance into a migration script. The only acceptable exclusion is one **Finance
 explicitly quarantines**, recorded as such.
 
-#### Initial forensics — see the Finance correction memorandum (INCOMPLETE)
+#### Forensics — see the Finance correction memorandum (PARTIALLY COMPLETE)
 
 `docs/inventories/accounting-finance-correction-memorandum.md` carries the
-read-only evidence gathered so far. It is **not complete**: the audited-opening
-bridge, the candidate-population detector, Finance's decisions, the reporting
-and tax assessment, approver and operator all remain outstanding.
+read-only evidence. It is **not complete**, but one part of it now is.
+
+**Done.** The ar/INVOICE candidate-population detector has run against an
+isolated restored database (`scripts/accounting_stranded_repost_detector.sql`;
+results in Appendix A). 2,033 of 2,039 candidates have a proven ledger chain,
+the population is 98.6% CREDIT NOTES rather than invoices, the one-row delta is
+explained as a duplicate of an already-posted journal, and the cohort splits
+into **four separate dispositions** that must not be approved as one net batch
+(Appendix A §A5). Appendix A is the only operative instruction for that
+population.
+
+**Also done, and not a data repair.** The recurrence fix for defect 1 — the
+residue allocator, exact persisted-precision balance enforcement at all four
+boundaries, and removal of the `Decimal("0.01")` backlog tolerance — merged as
+**ERP PR #336 / `0e40d799`** on 2026-08-22. It stops new occurrences; it repairs
+nothing historical.
+
+**Still outstanding:** the §1a audited-opening bridge, the composite-reversal
+treatment, Finance's approval of the three micro repairs, the per-document
+proof 6 reconciliation for the ar/INVOICE cohort, the reporting and tax
+assessment, approver and operator.
 
 What it establishes:
 
