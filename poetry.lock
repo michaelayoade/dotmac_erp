@@ -1053,6 +1053,27 @@ trio = ["trio (>=0.30)"]
 wmi = ["wmi (>=1.5.1) ; platform_system == \"Windows\""]
 
 [[package]]
+name = "dotmac-accounting"
+version = "0.1.0a1"
+description = "Tenant chart, fiscal-period and immutable balanced-ledger authority"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_accounting-0.1.0a1-py3-none-any.whl", hash = "sha256:79fc97fefb224e0e6e1da8e6d773a38dfce82aeccba767bb7e04bba15965dbc9"},
+    {file = "dotmac_accounting-0.1.0a1.tar.gz", hash = "sha256:7a669d5e84e88935173b3d9a3a0e23cb5e1305739e76c2557ed9497b68591362"},
+]
+
+[package.dependencies]
+dotmac-kernel = ">=0.1.0a85"
+sqlalchemy = ">=2.0,<3.0"
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
 name = "dotmac-files"
 version = "0.1.0a2"
 description = "DotMac dual-plane stored-object lifecycle and validation"
@@ -1094,14 +1115,14 @@ resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"
 
 [[package]]
 name = "dotmac-kernel"
-version = "0.1.0a83"
+version = "0.1.0a85"
 description = "DotMac platform kernel — multi-tenant FastAPI foundation (config, RLS db, identity/tenancy models, security, platform auth, middleware, settings, features registry, audit)"
 optional = false
 python-versions = ">=3.11,<3.14"
 groups = ["main"]
 files = [
-    {file = "dotmac_kernel-0.1.0a83-py3-none-any.whl", hash = "sha256:7ce9ac83314f77acb1520af0828401ffb7fc8dc9e43f78badbad97d4259ebabc"},
-    {file = "dotmac_kernel-0.1.0a83.tar.gz", hash = "sha256:75c72dc16509c0dc8c502425ab10990e32c53ea22ce5f02db4c5242c19707b16"},
+    {file = "dotmac_kernel-0.1.0a85-py3-none-any.whl", hash = "sha256:5691678b1af179c47d95cf22ba4915133667945658c3a7d6fadae2033c29347c"},
+    {file = "dotmac_kernel-0.1.0a85.tar.gz", hash = "sha256:b6d171a6a0d8f6df830a5bc9c2268867297061a1feac14d6c5788502d2a1d720"},
 ]
 
 [package.dependencies]
@@ -5074,4 +5095,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "8542f7bcee8d497f1a1aed5c5c53fb871fdb4892956b11cf06263982d703707d"
+content-hash = "0c3a35d360271c163876527b77700c6fe46eebbfe8ab2ccfd4979265154d2e6c"

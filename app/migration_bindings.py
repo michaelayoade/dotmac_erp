@@ -68,4 +68,32 @@ ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
     ),
 )
 
-__all__ = ["ASSEMBLY_PREREQUISITE_BINDINGS"]
+#: The module lineages ERP COMPOSES, and the head each one is expected to be at.
+#:
+#: ## ERP does not have one Alembic head, and must not expect one
+#:
+#: Every composed module lineage is an independent ROOT carrying its own branch
+#: label (`fi_0001_stored_files` -> `files`, `ac_0001_accounting` ->
+#: `accounting`).  That is the design, not an accident: a module owns its own
+#: revision history so it can be released, pinned and upgraded without ERP
+#: rewriting its graph.  ERP's revision map therefore has as many heads as it
+#: has composed lineages, plus one for its own — which is exactly why
+#: `scripts/deploy.sh` and the Makefile run `alembic upgrade heads` (plural).
+#:
+#: "One global head" is the WRONG acceptance criterion.  The right one, which
+#: `tests/integration/test_accounting_lineage_composition.py` enforces, is:
+#: exactly one head per composed module branch, at the revision named here,
+#: plus exactly one ERP head, and NO unintended heads.  An unintended head is
+#: the real defect this guards — a second ERP root, a stray revision whose
+#: `down_revision` does not reach the tip, or a module lineage that grew a head
+#: nobody reviewed.
+#:
+#: The values are stable because they are properties of PINNED artifacts: a
+#: module head moves only when its distribution is repinned, which is a reviewed
+#: change that must update this map in the same commit.
+COMPOSED_MODULE_LINEAGES: Final[dict[str, str]] = {
+    "files": "fi_0001_stored_files",
+    "accounting": "ac_0001_accounting",
+}
+
+__all__ = ["ASSEMBLY_PREREQUISITE_BINDINGS", "COMPOSED_MODULE_LINEAGES"]
