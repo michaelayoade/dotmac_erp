@@ -42,6 +42,7 @@ app/services/finance/ar/posting/result.py	ARPostingResult	gl.posting_adapter	rep
 app/services/finance/automation/recurring.py	RecurringService.generate_journal	gl.period_guard	repoint_to_module	caller_repointed
 app/services/finance/banking/auto_reconciliation_parts/core.py	AutoReconciliationCoreService._post_with_period_fallback	gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/auto_reconciliation_parts/special.py	AutoReconciliationSpecialService._match_settlements	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
+app/services/finance/banking/bank_fee_posting.py	_post_existing	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/bank_fee_posting.py	fee_idempotency_key	gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/bank_fee_posting.py	post_bank_fee	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/programmatic_parts/special_strategies.py	InterbankCounterpartStrategy.run	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
