@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover
 from typing import TypedDict
 
 from celery import shared_task
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.db.session_context import cross_org_session
@@ -40,6 +40,13 @@ def _task_db_session():
 # be retried.  They remain in the database with email_sent=False for operator
 # inspection but are excluded from the processing query.
 _DEAD_LETTER_AGE = timedelta(days=3)
+_EMAIL_RETRY_DELAYS = (
+    timedelta(minutes=5),
+    timedelta(minutes=15),
+    timedelta(hours=1),
+    timedelta(hours=6),
+)
+_EMAIL_MAX_ATTEMPTS = len(_EMAIL_RETRY_DELAYS)
 
 
 class NotificationEmailDispatchResults(TypedDict):
@@ -62,6 +69,20 @@ def _email_action_label_for_notification(notification: Notification) -> str:
     if notification.entity_type == EntityType.LEAVE:
         return "Review leave"
     return "Open notification"
+
+
+def _record_email_delivery_failure(notification: Notification, now: datetime) -> bool:
+    """Schedule a bounded retry and return whether delivery is terminal."""
+    notification.email_retry_count += 1
+    if notification.email_retry_count >= _EMAIL_MAX_ATTEMPTS:
+        notification.email_dead_lettered = True
+        notification.email_next_retry_at = None
+        return True
+
+    notification.email_next_retry_at = (
+        now + _EMAIL_RETRY_DELAYS[notification.email_retry_count - 1]
+    )
+    return False
 
 
 @shared_task(
@@ -92,12 +113,16 @@ def process_pending_notification_emails(
 
     try:
         with _task_db_session() as db:
-            cutoff = datetime.now(UTC) - _DEAD_LETTER_AGE
+            now = datetime.now(UTC)
+            cutoff = now - _DEAD_LETTER_AGE
 
-            # Count dead-lettered notifications for observability (lightweight).
-            dead_letter_count_stmt = (
-                select(Notification.notification_id)
+            # Move stale pending deliveries to a terminal state once. This
+            # prevents the scheduler from logging the same dead-letter backlog
+            # every minute while keeping the records available for review.
+            dead_letter_result = db.execute(
+                update(Notification)
                 .where(Notification.email_sent == False)  # noqa: E712
+                .where(Notification.email_dead_lettered == False)  # noqa: E712
                 .where(
                     Notification.channel.in_(
                         [
@@ -108,19 +133,25 @@ def process_pending_notification_emails(
                     )
                 )
                 .where(Notification.created_at < cutoff)
+                .values(email_dead_lettered=True, email_next_retry_at=None)
             )
-            dead_letter_ids = list(db.execute(dead_letter_count_stmt).scalars().all())
-            results["dead_letter"] = len(dead_letter_ids)
-            if dead_letter_ids:
+            rowcount = dead_letter_result.rowcount
+            results["dead_letter"] = rowcount if isinstance(rowcount, int) else 0
+            if results["dead_letter"]:
                 logger.warning(
                     "Dead-letter: %d notification emails older than %s days will not be retried",
-                    len(dead_letter_ids),
+                    results["dead_letter"],
                     _DEAD_LETTER_AGE.days,
                 )
 
             stmt = (
                 select(Notification)
                 .where(Notification.email_sent == False)  # noqa: E712
+                .where(Notification.email_dead_lettered == False)  # noqa: E712
+                .where(
+                    (Notification.email_next_retry_at.is_(None))
+                    | (Notification.email_next_retry_at <= now)
+                )
                 .where(
                     Notification.channel.in_(
                         [
@@ -201,12 +232,26 @@ def process_pending_notification_emails(
                         results["sent"] += 1
                     else:
                         results["failed"] += 1
+                        if _record_email_delivery_failure(notification, now):
+                            results["dead_letter"] += 1
+                            logger.error(
+                                "Dead-lettered notification email %s after %d attempts",
+                                notification.notification_id,
+                                notification.email_retry_count,
+                            )
                 except Exception:
                     logger.exception(
                         "Failed sending notification email %s",
                         notification.notification_id,
                     )
                     results["failed"] += 1
+                    if _record_email_delivery_failure(notification, now):
+                        results["dead_letter"] += 1
+                        logger.error(
+                            "Dead-lettered notification email %s after %d attempts",
+                            notification.notification_id,
+                            notification.email_retry_count,
+                        )
 
             db.commit()
     except _DB_RETRYABLE_ERRORS as exc:

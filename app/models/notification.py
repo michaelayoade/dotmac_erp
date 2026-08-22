@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Integer,
     Index,
     String,
     Text,
@@ -162,6 +163,18 @@ class Notification(Base):
     # Email status
     email_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Delivery retry state. A failed email is retried with a bounded backoff;
+    # terminal failures remain visible to operators without being dispatched
+    # again on every scheduler tick.
+    email_retry_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    email_next_retry_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    email_dead_lettered: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Nextcloud Talk status
     nextcloud_sent: Mapped[bool] = mapped_column(
