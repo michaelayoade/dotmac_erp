@@ -60,7 +60,9 @@ class TestResidueAllocation:
         assert allocated[2] == D("2466.911765")
 
     def test_the_residue_goes_to_the_largest_absolute_line(self) -> None:
-        allocated = allocate_residue([D("1.000000"), D("50.000000"), D("3.000000")], D("54.000001"))
+        allocated = allocate_residue(
+            [D("1.000000"), D("50.000000"), D("3.000000")], D("54.000001")
+        )
         assert allocated == [D("1.000000"), D("50.000001"), D("3.000000")]
 
     def test_largest_absolute_counts_sign_correctly(self) -> None:
@@ -388,9 +390,9 @@ class TestTheAllocatorIsActuallyWired:
         assert sum((line.debit_amount for line in lines), D(0)) == sum(
             (line.credit_amount for line in lines), D(0)
         )
-        assert sum(
-            (line.debit_amount_functional for line in lines), D(0)
-        ) == sum((line.credit_amount_functional for line in lines), D(0))
+        assert sum((line.debit_amount_functional for line in lines), D(0)) == sum(
+            (line.credit_amount_functional for line in lines), D(0)
+        )
 
     def test_the_largest_revenue_line_carries_it(self) -> None:
         from app.services.finance.ar.posting.invoice import _absorb_rounding_residue
@@ -405,7 +407,10 @@ class TestTheAllocatorIsActuallyWired:
     def test_a_journal_that_already_balances_is_untouched(self) -> None:
         from app.services.finance.ar.posting.invoice import _absorb_rounding_residue
 
-        lines = [self._line(D("100.000000"), D("0")), self._line(D("0"), D("100.000000"))]
+        lines = [
+            self._line(D("100.000000"), D("0")),
+            self._line(D("0"), D("100.000000")),
+        ]
         _absorb_rounding_residue(lines, [1])
         assert lines[1].credit_amount == D("100.000000")
 
@@ -419,7 +424,10 @@ class TestTheAllocatorIsActuallyWired:
         from app.services.finance.ar.posting.invoice import _absorb_rounding_residue
         from app.services.finance.posting.residue import ResidueAllocationError
 
-        lines = [self._line(D("100.010000"), D("0")), self._line(D("0"), D("100.000000"))]
+        lines = [
+            self._line(D("100.010000"), D("0")),
+            self._line(D("0"), D("100.000000")),
+        ]
         with pytest.raises(ResidueAllocationError):
             _absorb_rounding_residue(lines, [1])
 

@@ -636,9 +636,7 @@ def post_invoice(
     try:
         _absorb_rounding_residue(journal_lines, revenue_indexes)
     except ResidueAllocationError as exc:
-        logger.error(
-            "Refusing to post AR invoice %s: %s", invoice.invoice_id, exc
-        )
+        logger.error("Refusing to post AR invoice %s: %s", invoice.invoice_id, exc)
         return ARPostingResult(
             success=False,
             message=f"Invoice does not balance: {exc}",
