@@ -73,6 +73,47 @@ class BasePostingAdapter:
         )
 
     @staticmethod
+    def submit_and_approve_as_system(
+        db: Session,
+        organization_id: UUID,
+        journal: JournalEntry,
+        posted_by_user_id: UUID,
+    ) -> None:
+        """Submit and approve a journal on behalf of an automated actor.
+
+        For system postings (sync, reconciliation, backfill) the same actor
+        creates and approves, which segregation of duties refuses by design.
+        The bypass is deliberate and is recorded on the journal.
+
+        Extracted so there is ONE implementation. It previously lived inline in
+        `create_and_approve_journal`, and any other path that needed to approve
+        an existing journal — recovering a DRAFT left by a failed post, for
+        instance — either duplicated the `except` block or, worse, called
+        `approve_journal` directly and raised an uncaught `HTTPException` the
+        first time SoD fired.
+        """
+        JournalService.submit_journal(
+            db, organization_id, journal.journal_entry_id, posted_by_user_id
+        )
+        try:
+            JournalService.approve_journal(
+                db, organization_id, journal.journal_entry_id, posted_by_user_id
+            )
+        except HTTPException as sod_exc:
+            if "Segregation of duties" not in str(sod_exc.detail):
+                raise
+            from app.models.finance.gl.journal_entry import JournalStatus
+
+            journal.status = JournalStatus.APPROVED
+            journal.approved_by_user_id = posted_by_user_id
+            journal.approved_at = datetime.now(UTC)
+            db.flush()
+            logger.info(
+                "Auto-approved journal %s (SoD bypass for system posting)",
+                journal.journal_entry_id,
+            )
+
+    @staticmethod
     def create_and_approve_journal(
         db: Session,
         organization_id: UUID,
@@ -85,30 +126,9 @@ class BasePostingAdapter:
             journal = JournalService.create_journal(
                 db, organization_id, journal_input, posted_by_user_id
             )
-            JournalService.submit_journal(
-                db, organization_id, journal.journal_entry_id, posted_by_user_id
+            BasePostingAdapter.submit_and_approve_as_system(
+                db, organization_id, journal, posted_by_user_id
             )
-            try:
-                JournalService.approve_journal(
-                    db, organization_id, journal.journal_entry_id, posted_by_user_id
-                )
-            except HTTPException as sod_exc:
-                if "Segregation of duties" in str(sod_exc.detail):
-                    # For automated/system postings (sync, backfill), the
-                    # same user creates and approves.  Bypass the SoD check
-                    # by setting journal status directly.
-                    from app.models.finance.gl.journal_entry import JournalStatus
-
-                    journal.status = JournalStatus.APPROVED
-                    journal.approved_by_user_id = posted_by_user_id
-                    journal.approved_at = datetime.now(UTC)
-                    db.flush()
-                    logger.info(
-                        "Auto-approved journal %s (SoD bypass for system posting)",
-                        journal.journal_entry_id,
-                    )
-                else:
-                    raise
             return journal, None
         except HTTPException as exc:
             return cast(JournalEntry, None), PostingResult(
