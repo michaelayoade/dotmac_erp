@@ -12,7 +12,7 @@ from sqlalchemy import inspect
 from alembic import op
 
 revision = "20260821_add_notification_email_retry_state"
-down_revision = "20260802_add_outbox_claim_lease_columns"
+down_revision = "20260819_repair_stale_admin_email_routing"
 branch_labels = None
 depends_on = None
 
