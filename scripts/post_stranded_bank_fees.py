@@ -87,6 +87,26 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.execute:
+        import os
+
+        from app.tasks.gl_posting import BULK_POSTING_ENV_FLAG
+
+        if os.getenv(BULK_POSTING_ENV_FLAG, "").strip().lower() not in {
+            "1",
+            "true",
+            "yes",
+        }:
+            logger.error(
+                "Refused: --execute requires %s=true. This script's idempotency key is "
+                "per-journal (backfill-stranded-bank-fees-<journal_number>), which "
+                "bypasses the ledger's per-statement-line boundary — it has already "
+                "produced 429 duplicate bank-fee postings in production. See ERP PR "
+                "#335 appendix B5.4 before setting it.",
+                BULK_POSTING_ENV_FLAG,
+            )
+            return 2
+
     mode = "EXECUTE" if args.execute else "DRY RUN"
     logger.info(
         "=== Post stranded %s/%s journals (%s) — org %s, %s ===",

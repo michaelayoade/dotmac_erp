@@ -269,6 +269,13 @@ def scalars_by_entity(mock_db: MagicMock, **queues: list) -> None:
         items = queue.pop(0) if queue else []
         result = MagicMock()
         result.all.return_value = items
+        # `.first()` and `.one_or_none()` must agree with `.all()`. Left to
+        # MagicMock they return a fresh mock object, which is TRUTHY — so a
+        # caller asking "does a row already exist?" is told yes by an empty
+        # queue. That is not a hypothetical: it silently made every bank-fee
+        # test look like the fee was already recorded.
+        result.first.return_value = items[0] if items else None
+        result.one_or_none.return_value = items[0] if items else None
         return result
 
     mock_db.scalars.side_effect = _scalars
@@ -297,6 +304,13 @@ def setup_db_scalars(
         PaymentIntent=[intents],
         SupplierPayment=[ap_payments or []],
         CustomerPayment=[ar_payments or splynx_payments or []],
+        # Bank-fee creation now CHECKS before it creates: is there already a
+        # journal carrying this statement line as typed identity, or a posting
+        # batch under its idempotency key? Empty means "no fee recorded yet",
+        # which is the precondition every test in this file assumes. A test that
+        # wants the opposite says so by overriding these.
+        JournalEntry=[[]],
+        PostingBatch=[[]],
     )
 
 
