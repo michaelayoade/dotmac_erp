@@ -15,22 +15,29 @@
 -- WHY IT IS NOT ONE QUERY
 --
 -- These five cohorts are not one population and must never be dispositioned as
--- one. They differ in the only thing that matters here — WHETHER THE JOURNAL CAN
--- BE TIED TO A SOURCE DOCUMENT AT ALL:
+-- one. They differ in how the journal is tied to its source:
 --
 --   CUSTOMER_PAYMENT / EXPENSE_REIMBURSEMENT / PAYROLL_ENTRY (101 journals)
---       carry `source_document_id`. Real document identity. Strong evidence.
+--       carry `source_document_id`. Real document identity.
 --
 --   BANK_FEE (12,117 journals)
---       carry NO `source_document_id`. They can only be grouped by a HEURISTIC
---       KEY — reference + entry date + amount + bank account — corroborated by
---       the reference resolving to a `banking.bank_statement_lines` row. That is
---       weaker, and section 12 quantifies how much weaker.
+--       carry NO `source_document_id` — but the writers DO record the exact
+--       statement line as `correlation_id = "bank-fee-<line_id>"`. This script
+--       parses that UUID and joins `banking.bank_statement_lines`. Exact
+--       identity, not a heuristic.
 --
 --   BANK_RECONCILIATION (6 journals)
---       carry no document id, no reference and no correlation id. They cannot be
---       tied to anything by any ledger query. They are UNDECIDABLE here, and
---       saying so is the finding.
+--       carry no document id, no reference and no correlation id. They are
+--       HEADER-unlinked. `bank_statement_line_matches` is searched on the
+--       JOURNAL LINE id before any of them is called unlinkable.
+--
+-- A HEURISTIC KEY WAS TRIED FIRST AND IS WITHDRAWN. An earlier version grouped
+-- fees by reference + date + amount + bank account and reported "111 fee
+-- events" and a "V2 VOID" disposition. Those buckets merged distinct statement
+-- lines — 111 buckets covered 149 real lines — and the merge manufactured a
+-- false duplicate-posting finding. No heuristic grouping survives in this
+-- script. If exact identity is unavailable for a row, the row is quarantined,
+-- not bucketed.
 --
 -- WHAT IT DELIBERATELY DOES NOT DO
 --
@@ -198,108 +205,110 @@ WHERE NOT posted_effect_is_identical
 ORDER BY total_debit_functional DESC;
 
 -- ---------------------------------------------------------------------------
--- HEURISTIC EVIDENCE: bank fees, grouped by fee event.
+-- EXACT EVIDENCE: bank fees, by statement-line identity.
 -- ---------------------------------------------------------------------------
 CREATE TEMP TABLE fee AS
-SELECT c.journal_entry_id, c.journal_number, c.reference, c.entry_date,
-       c.total_debit_functional,
-       (SELECT min(a.account_code) FROM gl.journal_entry_line l
-          JOIN gl.account a ON a.account_id = l.account_id
-         WHERE l.journal_entry_id = c.journal_entry_id
-           AND l.credit_amount_functional > 0)                           AS bank_account
+SELECT c.journal_entry_id, c.journal_number, c.total_debit_functional,
+       CASE WHEN c.correlation_id ~ '^bank-fee-[0-9a-fA-F-]{36}$'
+            THEN substring(c.correlation_id from 10)::uuid END AS line_id
 FROM candidate c
 WHERE c.source_document_type = 'BANK_FEE';
-CREATE INDEX ON fee (reference, entry_date, total_debit_functional, bank_account);
+CREATE INDEX ON fee (line_id);
 
+-- The POSTED journal on each line, with everything needed to judge whether its
+-- effect is CURRENTLY EFFECTIVE — not merely present.
 CREATE TEMP TABLE posted_fee AS
-SELECT je.journal_entry_id, je.reference, je.entry_date, je.total_debit_functional,
-       (SELECT min(a.account_code) FROM gl.journal_entry_line l
-          JOIN gl.account a ON a.account_id = l.account_id
-         WHERE l.journal_entry_id = je.journal_entry_id
-           AND l.credit_amount_functional > 0)                           AS bank_account
+SELECT je.journal_entry_id, je.journal_number, je.currency_code,
+       je.fiscal_period_id, je.is_reversal, je.reversal_journal_id,
+       substring(je.correlation_id from 10)::uuid AS line_id,
+       (SELECT count(*) FROM gl.posted_ledger_line p
+         WHERE p.journal_entry_id = je.journal_entry_id) AS ledger_rows
 FROM gl.journal_entry je
 WHERE je.organization_id = :'ORG'::uuid AND je.status = 'POSTED'
-  AND je.source_document_type = 'BANK_FEE';
-CREATE INDEX ON posted_fee (reference, entry_date, total_debit_functional, bank_account);
+  AND je.source_document_type = 'BANK_FEE'
+  AND je.correlation_id ~ '^bank-fee-[0-9a-fA-F-]{36}$';
+CREATE INDEX ON posted_fee (line_id);
 
 \echo ''
-\echo '===== 3. BANK_FEE — how many distinct fee events are these journals about? ====='
+\echo '===== 3. BANK_FEE — statement-line identity health ====='
 SELECT count(*) AS approved_journals,
-       count(DISTINCT (reference, entry_date, total_debit_functional, bank_account)) AS distinct_fee_events,
-       sum(total_debit_functional) AS gross_if_every_journal_posted,
-       (SELECT sum(t.total_debit_functional)
-          FROM (SELECT DISTINCT reference, entry_date, total_debit_functional, bank_account
-                FROM fee) t)                                            AS value_of_the_events_themselves
+       count(line_id) AS parsed_a_line_uuid,
+       count(*) FILTER (WHERE line_id IS NULL) AS unparseable_correlation_id,
+       count(DISTINCT line_id) AS distinct_statement_lines,
+       count(DISTINCT line_id) FILTER (WHERE EXISTS (
+         SELECT 1 FROM banking.bank_statement_lines sl WHERE sl.line_id = fee.line_id)) AS lines_that_resolve
 FROM fee;
 
 \echo ''
-\echo '===== 3b. Multiplicity — approved journals per fee event ====='
-WITH g AS (SELECT reference, entry_date, total_debit_functional, bank_account, count(*) AS n
-           FROM fee GROUP BY 1,2,3,4)
-SELECT n AS approved_journals_on_one_event, count(*) AS events, sum(n) AS journals
-FROM g GROUP BY 1 ORDER BY 1 DESC LIMIT 12;
+\echo '===== 3b. The true fee value of those lines, against what posting would book ====='
+WITH l AS (SELECT DISTINCT line_id FROM fee WHERE line_id IS NOT NULL)
+SELECT count(*) AS statement_lines,
+       sum(abs(sl.amount)) AS true_fee_value_once,
+       (SELECT sum(total_debit_functional) FROM fee) AS gross_if_every_journal_posted,
+       round((SELECT sum(total_debit_functional) FROM fee) / sum(abs(sl.amount)), 1) AS inflation_factor
+FROM l JOIN banking.bank_statement_lines sl ON sl.line_id = l.line_id;
 
 \echo ''
-\echo '===== 4. BANK_FEE — is the event already posted? ====='
+\echo '===== 4. H1 ECONOMIC EQUIVALENCE — APPROVED vs the POSTED journal on its line ====='
+\echo '-- Exact line identity proves ASSOCIATION and CARDINALITY. It does not prove'
+\echo '-- the two journals have the same effect. That is what this section tests.'
+CREATE TEMP TABLE h1 AS
+SELECT f.journal_entry_id, f.journal_number, f.total_debit_functional, f.line_id,
+       fs.fwd  AS approved_sig, ps.fwd AS posted_sig,
+       aj.currency_code AS approved_ccy, p.currency_code AS posted_ccy,
+       aj.fiscal_period_id AS approved_period, p.fiscal_period_id AS posted_period,
+       p.journal_entry_id AS posted_id, p.is_reversal AS posted_is_reversal,
+       p.reversal_journal_id AS posted_has_reversal, p.ledger_rows
+FROM fee f
+JOIN gl.journal_entry aj ON aj.journal_entry_id = f.journal_entry_id
+LEFT JOIN je_sig fs ON fs.journal_entry_id = f.journal_entry_id
+LEFT JOIN posted_fee p ON p.line_id = f.line_id
+LEFT JOIN je_sig ps ON ps.journal_entry_id = p.journal_entry_id;
+
 SELECT count(*) AS approved_journals,
-       count(*) FILTER (WHERE EXISTS (
-         SELECT 1 FROM posted_fee p
-         WHERE p.reference = f.reference AND p.entry_date = f.entry_date
-           AND p.total_debit_functional = f.total_debit_functional
-           AND p.bank_account IS NOT DISTINCT FROM f.bank_account))      AS event_already_posted,
-       sum(f.total_debit_functional) FILTER (WHERE EXISTS (
-         SELECT 1 FROM posted_fee p
-         WHERE p.reference = f.reference AND p.entry_date = f.entry_date
-           AND p.total_debit_functional = f.total_debit_functional
-           AND p.bank_account IS NOT DISTINCT FROM f.bank_account))      AS gross_already_posted
-FROM fee f;
+       count(posted_id)                                              AS have_a_posted_journal_on_their_line,
+       count(*) FILTER (WHERE approved_sig = posted_sig)              AS same_net_effect_by_account,
+       count(*) FILTER (WHERE approved_ccy = posted_ccy)              AS same_currency,
+       count(*) FILTER (WHERE approved_period = posted_period)        AS same_fiscal_period,
+       count(*) FILTER (WHERE NOT posted_is_reversal)                 AS posted_is_not_a_reversal,
+       count(*) FILTER (WHERE posted_has_reversal IS NULL)            AS posted_not_since_reversed,
+       count(*) FILTER (WHERE ledger_rows > 0)                        AS posted_has_ledger_rows
+FROM h1;
 
-\echo ''
-\echo '===== 4b. Corroboration — do the fee references resolve to a statement line? ====='
-\echo '-- The fees carry no document id. If the reference resolves to the banking'
-\echo '-- subledger the grouping is at least anchored to a real bank event.'
-SELECT count(*) AS distinct_references,
-       count(*) FILTER (WHERE EXISTS (
-         SELECT 1 FROM banking.bank_statement_lines sl
-         WHERE sl.reference = r.reference OR sl.description = r.reference)) AS resolve_to_a_statement_line
-FROM (SELECT DISTINCT reference FROM fee WHERE reference IS NOT NULL) r;
-
-\echo ''
-\echo '===== 4c. Pre-existing duplication in the POSTED bank fees ====='
-\echo '-- A separate finding: the POSTED side is not clean either.'
-WITH ev AS (SELECT DISTINCT reference, entry_date, total_debit_functional, bank_account FROM fee)
-SELECT count(*) AS fee_events,
-       sum((SELECT count(*) FROM posted_fee p
-            WHERE p.reference = ev.reference AND p.entry_date = ev.entry_date
-              AND p.total_debit_functional = ev.total_debit_functional
-              AND p.bank_account IS NOT DISTINCT FROM ev.bank_account)) AS posted_journals_on_them
-FROM ev;
-
-\echo ''
-\echo '===== 5. THE DISPOSITION — every one of the 12,224 classified ====='
+-- ---------------------------------------------------------------------------
+-- THE DISPOSITION. Exact identity only; no heuristic bucket anywhere.
+-- ---------------------------------------------------------------------------
 CREATE TEMP TABLE disposition AS
 SELECT c.journal_entry_id, c.journal_number, c.source_document_type,
        c.total_debit_functional,
        CASE
          WHEN l.journal_entry_id IS NOT NULL AND l.posted_effect_is_identical
-           THEN 'V1 VOID - identical effect already posted on the same document'
+           THEN 'V1 VOID candidate - identical effect already posted on the same document'
          WHEN l.journal_entry_id IS NOT NULL AND l.document_has_posted_journal
            THEN 'Q1 QUARANTINE - document already posted but the effect differs'
          WHEN l.journal_entry_id IS NOT NULL
            THEN 'P1 POST CANDIDATE - document linked, nothing posted yet'
-         WHEN c.source_document_type = 'BANK_FEE' AND EXISTS (
-                SELECT 1 FROM posted_fee p JOIN fee f ON f.journal_entry_id = c.journal_entry_id
-                WHERE p.reference = f.reference AND p.entry_date = f.entry_date
-                  AND p.total_debit_functional = f.total_debit_functional
-                  AND p.bank_account IS NOT DISTINCT FROM f.bank_account)
-           THEN 'V2 VOID - fee event already posted (HEURISTIC key, see s12)'
+         WHEN h.journal_entry_id IS NOT NULL AND h.posted_id IS NULL
+           THEN 'Q3 QUARANTINE - statement line has no POSTED journal'
+         WHEN h.journal_entry_id IS NOT NULL
+              AND h.approved_sig = h.posted_sig
+              AND h.approved_ccy = h.posted_ccy
+              AND NOT h.posted_is_reversal
+              AND h.posted_has_reversal IS NULL
+              AND h.ledger_rows > 0
+           THEN 'H1A VOID candidate - same line, same effect, currently effective'
+         WHEN h.journal_entry_id IS NOT NULL
+           THEN 'H1B QUARANTINE - same line, effect or effectiveness differs'
          WHEN c.source_document_type = 'BANK_FEE'
-           THEN 'P2 POST CANDIDATE - fee event not posted (HEURISTIC key)'
-         ELSE 'Q2 QUARANTINE - no linkage of any kind; not decidable from the ledger'
+           THEN 'Q4 QUARANTINE - bank fee with no parseable statement-line id'
+         ELSE 'Q2 QUARANTINE - header-unlinked; follow bank_statement_line_matches first'
        END AS disposition
 FROM candidate c
-LEFT JOIN linked l ON l.journal_entry_id = c.journal_entry_id;
+LEFT JOIN linked l ON l.journal_entry_id = c.journal_entry_id
+LEFT JOIN h1 h ON h.journal_entry_id = c.journal_entry_id;
 
+\echo ''
+\echo '===== 5. THE DISPOSITION — every candidate classified on exact identity ====='
 SELECT disposition, count(*) AS journals, sum(total_debit_functional) AS gross_debit
 FROM disposition GROUP BY 1
 UNION ALL SELECT 'TOTAL', count(*), sum(total_debit_functional) FROM candidate
@@ -310,6 +319,13 @@ ORDER BY 1;
 SELECT source_document_type, disposition, count(*) AS journals,
        sum(total_debit_functional) AS gross_debit
 FROM disposition GROUP BY 1,2 ORDER BY 3 DESC;
+
+\echo ''
+\echo '===== 5c. The two legacy Paystack-account rows, held out ====='
+\echo '-- Their line''s bank account is Paystack OPEX; the journals credit the legacy'
+\echo '-- `Paystack OPEX - DT` code. Dispose of them separately from the rest.'
+SELECT d.journal_number, d.total_debit_functional, d.disposition
+FROM disposition d WHERE d.journal_number IN ('JE202603-0227','JE202603-0230');
 
 \echo ''
 \echo '===== 6. Effect on the ledger if the whole population were posted ====='
@@ -335,13 +351,4 @@ FROM disposition WHERE disposition LIKE 'P%'
 ORDER BY total_debit_functional DESC LIMIT 50;
 
 \echo ''
-\echo '===== 12. EVIDENCE STRENGTH — the heuristic key, quantified ====='
-\echo '-- `reference` ALONE is not a document key. This is why the key used above'
-\echo '-- is reference + date + amount + bank account, and why V2 is still weaker'
-\echo '-- than V1.'
-WITH t AS (SELECT reference, count(*) AS n FROM fee GROUP BY 1)
-SELECT count(*) AS distinct_references, sum(n) AS approved_fee_journals,
-       max(n) AS most_journals_on_one_reference, round(avg(n),1) AS mean_per_reference
-FROM t;
-
 ROLLBACK;

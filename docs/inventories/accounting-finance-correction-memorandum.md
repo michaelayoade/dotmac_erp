@@ -610,7 +610,7 @@ where it already blocks legacy-writer retirement.
 | §1a audited-opening bridge complete | *not started* |
 | Recurrence fix landed (allocator + posting boundary + backlog tolerance) | **DONE — ERP PR #336 merged to `main` as `0e40d799` on 2026-08-22T08:06Z**, `version:patch`, all checks green. Not a data repair. |
 | Reporting assessment **for these corrections only** | *not yet performed* — §6 |
-| **352 excess POSTED bank-fee journals (₦6,160.00) on 32 statement lines** | ***PROMOTED INTO GATE D* — Appendix B5.4.** Already inside the posted backfill population; requires Finance-approved correcting reversals before cutover. |
+| **429 duplicate POSTED bank-fee journals (₦7,764.68) on 39 statement lines** | ***PROMOTED INTO GATE D* — Appendix B5.4.** Proven duplicate CURRENT effect; cause is the `backfill-stranded-bank-fees-<journal_number>` key namespace bypassing the line-keyed ledger boundary. All 429 individually identifiable; one-to-one correcting reversals possible. Finance approval required before cutover. |
 | POSTED bank-fee anomalies: 95 journals with dangling line ids; 875 of 1,743 crediting their line's bank GL account | ***not started* — Appendix B5.4.** |
 | Clean survey re-run: zero unresolved balance and reversal defects | *pending repairs* |
 | Named approver | *pending* |
@@ -629,7 +629,8 @@ where it already blocks legacy-writer retirement.
 | Reporting and tax assessment for the backlog cohorts | *not yet performed* |
 | Generating defect behind 12,117 journals for 149 statement lines | **IDENTIFIED IN CODE — Appendix B8** (create-then-check; `idempotent_replay` discarded by all three writers). ***Two-invocation canary NOT YET RUN.*** Gate G must not close on an unconfirmed cause. |
 | Permanent fix: one bank-fee owner, typed `source_document_id`, at-most-once create+post in one transaction | ***not started* — Appendix B8** |
-| Non-dry-run generic backlog mutators removed or gated | ***not started* — Appendix B2.** Blast radius is the full 14,263 / ₦76,495,739.50, not Appendix B's 12,224. |
+| Non-dry-run generic backlog mutators removed or gated | ***not started* — Appendix B2.** Blast radius is the full 14,263 / ₦76,495,739.50. `post_stranded_source_journals` is not merely risky — it has **already** produced 429 duplicate postings (§B5.4). |
+| Pre-cleanup controls agreed (§B12) | ***not started*** |
 
 ## 8. Execution requirements
 
@@ -1020,7 +1021,8 @@ database.
 | Replay LSN at export end | `BF/EEB3F850` (2026-08-22 10:49:56Z) |
 | Server version | PostgreSQL 16.4, source and target |
 | Detector query hash (sha256) | `d5c834d8d66b0d17064654b31bd5d40dc33f0c41600c674e4cd1126402897eec` |
-| Line-identity analysis | `scripts/accounting_bank_fee_line_identity.sql`, run against `erp-forensic-lineid-20260822`, LSN range `BF/EF2A6400`..`BF/EF2ADCD0` (2026-08-22 11:06Z). This is what §B5 and §B6 rest on; §B1's H1 disposition supersedes the heuristic V2. |
+| Detector, as re-run on exact identity | `scripts/accounting_gate_g_detector.sql`, sha256 `f53f814273a8526f951aed999ac6553e9de8b379cda58db9c19dd27dd22b556b`, against `erp-forensic-verify-20260822`, LSN range `BF/EFB66430`..`BF/EFB705E8` (2026-08-22 11:30Z). Canary passed; produces H1A/Q dispositions directly, with no heuristic logic in the executable. |
+| Duplicate POSTED effects (Gate D) | `scripts/accounting_bank_fee_duplicate_postings.sql`, sha256 `f97bd8e3c6a34579a9ff322fbe105781d1f0d118c449607fb107e074e5ad5e49`. Evidence gathered against `erp-forensic-equiv-20260822`, LSN range `BF/EF546DA0`..`BF/EF54FBB8` (2026-08-22 11:25Z). |
 | Target | `erp-forensic-gateg-20260822` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (§B9). |
 | Organization scope | Dotmac Technologies Ltd, with the same fail-closed canary as Appendix A — 12,225 unscoped against 12,224 scoped, `sensitivity proof PASSED`. |
 
@@ -1036,7 +1038,8 @@ effect already in the ledger, or one the ledger cannot decide.
 | disposition | journals | gross debit |
 | --- | ---: | ---: |
 | **V1** VOID candidate — identical effect already posted on the same document | 100 | ₦24,669,066.37 |
-| **H1** HOLD — exact statement-line identity shows the effect is already posted **exactly once**; VOID recommended, Finance to approve (§B5) | 12,117 | ₦11,813,979.50 |
+| **H1A** VOID candidate — same statement line, **same net effect by account, same currency, same period, posted journal currently effective** (§B5) | 12,117 | ₦11,813,979.50 |
+| **H1B** QUARANTINE — same line but effect or effectiveness differs | **0** | — |
 | **Q1** QUARANTINE — document posted but the effect differs | 1 | ₦75,250.00 |
 | **Q2** QUARANTINE — header-unlinked reconciliations, partial linkage only (§B6) | 6 | ₦726,322.87 |
 | **P** POST CANDIDATE | **0** | **₦0.00** |
@@ -1046,10 +1049,15 @@ Counted a second way, without the classification logic: 0 document-linked
 journals have nothing posted against their document; 0 bank-fee statement lines
 are unposted; 6 reconciliations are header-unlinked. The two methods agree.
 
-**H1 is not V2.** An earlier version of this appendix classified the 12,117 as
-`V2 VOID` on a heuristic key. That was overstated, and §B10 records what it got
-wrong. The disposition is now built on the exact statement-line id the writers
-already record, and it is a HOLD carrying a recommendation, not a void.
+**H1A is not V2.** An earlier version classified the 12,117 as `V2 VOID` on a
+heuristic key; a second called them `H1 HOLD` on exact identity but had only
+proved *association and cardinality*. §B5.2 now proves **economic equivalence**
+as well, which is what a void candidate requires. §B10 records both supersessions.
+
+`accounting_gate_g_detector.sql` produces these dispositions **directly** — the
+heuristic bucket logic is removed from the executable, not merely annotated in
+prose. Re-run 2026-08-22 against a fresh restore: canary passed, H1A = 12,117,
+H1B = 0, identical to the table above.
 
 ## B2. THE RISK — and its blast radius is larger than this appendix
 
@@ -1189,9 +1197,35 @@ wrong bank — but they should not be dispositioned with the rest.
 | posted exactly once | **149** |
 | posted more than once | **0** |
 
-**Every one of the 149 lines already carries exactly one POSTED journal.** The
-12,117 APPROVED journals are duplicate creations against lines whose effect is
-already in the ledger, correctly and once.
+**Every one of the 149 lines carries exactly one POSTED BANK_FEE journal.**
+Stated that way deliberately: cardinality is not equivalence, and §B5.2 is what
+licenses any stronger claim.
+
+### B5.2 Economic equivalence — H1A / H1B
+
+Exact line identity proves **association and cardinality**. It does not prove the
+APPROVED journal and the POSTED journal on that line have the same effect. Each
+APPROVED journal was therefore compared against the POSTED journal on **its own**
+line:
+
+| test | passes |
+| --- | ---: |
+| A POSTED journal exists on the line | 12,117 / 12,117 |
+| Same functional-currency net effect by account | **12,117 / 12,117** |
+| Same transaction currency | 12,117 / 12,117 |
+| Same fiscal period | 12,117 / 12,117 |
+| The POSTED journal is not itself a reversal | 12,117 / 12,117 |
+| The POSTED journal has not since been reversed | 12,117 / 12,117 |
+| The POSTED journal has rows in `gl.posted_ledger_line` | 12,117 / 12,117 |
+
+**H1A = 12,117. H1B = 0.** Every APPROVED bank-fee journal duplicates an effect
+that is on its line, identical in every dimension tested, and currently
+effective. That is what makes them void candidates rather than holds.
+
+The two legacy Paystack rows (`JE202603-0227`, `JE202603-0230`) also satisfy
+every test, but their journals credit the legacy `Paystack OPEX - DT` code where
+the line's bank account is Paystack OPEX. **Dispose of them separately** — the
+detector holds them out in its own section for that purpose.
 
 ### B5.3 What exact identity DISPROVED
 
@@ -1204,30 +1238,74 @@ Two claims in the heuristic version do not survive:
    identity the 149 lines carry **exactly 149 POSTED journals — zero excess.**
    The apparent duplication was entirely an artefact of bucket merging.
 
-### B5.4 What exact identity FOUND instead
+### B5.4 The duplicate POSTED effects — cause proven, figure corrected
 
-Across the full bank-fee population (all 1,391 resolvable lines, not just the
-149):
+The earlier calculation was `(posted row count − 1) × source fee`. That proves
+excess **rows**, not excess **effect**: a second posted row is not a duplicate if
+it is a reversal, was itself reversed, or never reached the ledger. Every row was
+therefore tested for current effectiveness, and the cause was traced.
+
+**The cause is a second idempotency namespace.** POSTED bank-fee journals split
+cleanly in two:
+
+| namespace | postings | statement lines | in the ledger | reversed |
+| --- | ---: | ---: | ---: | ---: |
+| `<org>:BANKING:<line_id>:bank-fee:v1` | 1,409 | 1,409 | 1,409 | 0 |
+| `backfill-stranded-bank-fees-<journal_number>` | **429** | 39 | 429 | 0 |
+
+The ledger's at-most-once boundary is keyed on the **statement line**. The second
+key is keyed on the **journal**, so it bypasses that boundary completely: every
+stranded APPROVED journal for a line posted under its own key and succeeded.
+
+Per line the pattern is exact — **1,370 lines have 1 canonical posting and 0
+bypassed; 39 lines have 1 canonical and exactly 11 bypassed.** 39 × 11 = 429.
+
+That namespace is `DEFAULT_IDEMPOTENCY_PREFIX = "backfill-stranded"` in
+`app/services/finance/gl/stranded_fee_posting.py`, reached through
+`app.tasks.gl_posting.post_stranded_source_journals` and
+`scripts/post_stranded_bank_fees.py`. **The remediation path for stranded fees is
+what created the duplicate postings.** The standing instruction not to retry the
+prior standalone script is now evidenced rather than precautionary.
+
+**Proven duplicate current effect:**
 
 | measure | value |
 | --- | ---: |
-| Lines posted exactly once | 1,359 |
-| Lines posted more than once | **32** |
-| **Excess POSTED journals** | **352** |
-| **Excess posted amount** | **₦6,160.00** |
-| Posting batches across 1,391 lines | 1,398 |
+| Affected statement lines | 39 |
+| Duplicate postings, all currently effective | **429** |
+| **Duplicate effect amount** | **₦7,764.68** |
+| …of which on lines that resolve to a statement line | ₦6,160.00 |
+| …on 7 lines whose id does not resolve | ₦1,604.68 |
 
-**These 352 are already in the posted ledger.** They are inside the Gate D
-backfill population and require Finance-approved correcting reversals before
-cutover — they are not a Gate G backlog item. Promoted accordingly in §7a.
+The earlier ₦6,160.00 was the resolvable subset quoted as the whole. All 429 are
+individually identifiable by their key prefix, each with its own posting batch,
+so **one-to-one correcting reversals are possible without guessing** — and the
+canonical posting to keep is the line-keyed one, identified rather than assumed.
 
-Two further POSTED-side anomalies, out of scope here but recorded:
+**Zero APPROVED journals sit on the 39 affected lines**, so the Gate G backlog
+and this Gate D defect are disjoint populations and can be dispositioned
+independently.
 
-- **95 POSTED journals carry a line id that resolves to nothing** (18 distinct
-  ids).
+### B5.5 The 1,743-vs-1,398 question, answered — and the earlier count withdrawn
+
+The earlier appendix reported "1,398 posting batches across 1,391 lines" and
+asked why 1,743 POSTED rows corresponded to fewer batches. **That count was
+wrong.** It matched batches with `idempotency_key LIKE '%' || line_id || '%'`,
+which finds line-keyed batches only and silently misses the journal-keyed ones.
+
+The true figures: **1,838 POSTED bank-fee journals, 1,838 distinct posting
+batches** — 1,409 line-keyed plus 429 journal-keyed. There is no shortfall. There
+were two key namespaces, and the query could only see one of them.
+
+### B5.6 POSTED-side anomalies still open
+
+- **95 POSTED journals carry a statement-line id that resolves to nothing** (18
+  distinct ids).
 - Of 1,743 POSTED journals whose line resolves, only **875** credit the line's
   bank GL account and **1,670** match its date. The APPROVED population is clean
-  on both; the POSTED population is not.
+  on both.
+
+Neither is addressed by any disposition here.
 
 ## B6. Q2 — the six reconciliation journals are HEADER-unlinked, not unlinked
 
@@ -1276,8 +1354,8 @@ should not be assumed either way.
    §5. Voiding is a Finance decision.
 2. **It says nothing about business validity** — whether a source document should
    have produced an effect at all is outside the ledger.
-3. **The 352 excess POSTED bank-fee journals (₦6,160.00) are not fixed here.**
-   They are already in the posted ledger and belong to Gate D.
+3. **The 429 duplicate POSTED bank-fee journals (₦7,764.68) are not fixed here.**
+   They are already in the posted ledger and belong to Gate D (§B5.4).
 4. **The POSTED-side anomalies are not resolved** — 95 journals with dangling
    line ids, and only 875 of 1,743 crediting their line's bank GL account.
 5. **Cross-document effect matching was never used as evidence.** 96% of journals
@@ -1344,8 +1422,11 @@ It does not close Gate G. Outstanding:
   cause is unconfirmed, because the population regrows.
 - The permanent single-owner fix and its at-most-once boundary.
 - Removal or gating of the non-dry-run generic backlog mutators (§B2).
-- Gate D treatment of the 352 excess POSTED journals (₦6,160.00) and the
-  POSTED-side anomalies.
+- Gate D treatment of the **429 duplicate POSTED journals (₦7,764.68)** and the
+  POSTED-side anomalies (§B5.4, §B5.6).
+- **Gating `post_stranded_source_journals` and `scripts/post_stranded_bank_fees.py`
+  — the path that CAUSED those duplicates** (§B5.4). This is remedial, not
+  precautionary.
 
 ## B10. What this appendix corrected about itself
 
@@ -1359,13 +1440,36 @@ rather than quietly replaced:
 | "111 real fee events" | **WRONG.** 111 were buckets; there are **149** statement lines. 36 buckets merged 2 lines, 1 merged 3. |
 | "79× inflation" | **PROVISIONAL, now exact: 77.8×** (₦11,813,979.50 against ₦151,829.22). |
 | "149 POSTED journals across 111 buckets → ~38 duplicate postings" | **DISPROVEN.** The 149 lines carry exactly 149 POSTED journals, zero excess. The real excess is elsewhere: 352 journals, ₦6,160.00, on 32 other lines. |
-| "V2 VOID" | **Downgraded to H1 HOLD** with a recommendation, pending Finance. |
+| "V2 VOID" | **Superseded twice.** First downgraded to `H1 HOLD` on exact identity; now **`H1A VOID candidate`** once economic equivalence was proved (§B5.2). |
+| "effect already posted correctly and once" | **Overstated when written** — cardinality is not equivalence. Now earned: §B5.2 tests effect, currency, period, reversal state and ledger presence. |
+| "352 excess rows, ₦6,160.00 misstatement" | **Corrected to 429 postings, ₦7,764.68**, and the earlier figure was the resolvable subset quoted as the whole. More importantly the CAUSE is now proven (§B5.4): a second idempotency namespace, not accidental duplication. |
+| "1,398 posting batches across 1,391 lines" | **WRONG.** The query matched line-keyed batches only. True: 1,838 journals, 1,838 batches, in two namespaces (§B5.5). |
 | "no linkage of any kind" for the six reconciliations | **WRONG.** They are header-unlinked; **four have a statement-line match.** The original check joined on the journal id instead of the journal LINE id and returned a zero that read as a finding. |
 
 The pattern in two of those five is the same one this memorandum has now hit
 three times: **a query that cannot distinguish its answer from its own defect.**
 The sanity check added in §B6 — proving the corrected join finds 41,496 matches
 overall — exists so a zero there can be trusted next time.
+
+## B12. Controls required BEFORE any cleanup
+
+Not recommendations — preconditions. In order:
+
+1. **Gate every generic non-dry-run backlog mutator.** `post_approved_journal_backlog`,
+   `post_stranded_source_journals`, `scripts/post_stranded_bank_fees.py`. The
+   second has already caused 429 duplicate postings; `dry_run=False` is a
+   parameter, not a safeguard.
+2. **Revalidate every disposition against current authoritative state**
+   immediately before executing it. This appendix rests on a copy spanning an
+   LSN range (§B0).
+3. **VOID approved duplicates — never delete them.** The APPROVED rows are
+   evidence of the defect and of the decision taken about them.
+4. **Reverse only PROVEN duplicate current effects** — the 429 of §B5.4, one
+   correcting reversal each, keeping the line-keyed canonical posting. No bulk
+   reversal, and nothing reversed on the strength of a row count.
+5. **Keep the seven undecided journals quarantined with named Finance owners**
+   and deadlines: Q1 `JE202607-9427`, and the six Q2 reconciliations — four of
+   which have a statement-line match to follow first (§B6).
 
 ## B11. Cleanup record
 
