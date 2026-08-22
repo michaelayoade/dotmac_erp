@@ -58,13 +58,18 @@ import logging
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import Enum
 from typing import Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.finance.gl.journal_entry import JournalEntry, JournalType
+from app.models.finance.gl.journal_entry import (
+    JournalEntry,
+    JournalStatus,
+    JournalType,
+)
 from app.models.finance.gl.posting_batch import PostingBatch
 from app.services.finance.gl.journal import JournalInput, JournalLineInput
 
@@ -86,22 +91,88 @@ class _Poster(Protocol):
     def __call__(self, **kwargs: Any) -> Any: ...
 
 
+class BankFeeState(str, Enum):
+    """Every distinct thing that can be true of a statement line's fee.
+
+    A single `already_present` boolean was not enough, and the gap was not
+    cosmetic: a failed post leaves the journal in DRAFT (see
+    `BasePostingAdapter._revert_unposted_journal`) while it still carries the
+    typed source id, so "a row exists" would make every later invocation report
+    success and skip the line **forever**. Status has to be part of the answer.
+    """
+
+    #: Created and posted by this call.
+    CREATED = "CREATED"
+    #: A POSTED, non-reversed journal already carries this line. Nothing to
+    #: create — but the caller should still repair a missing statement match.
+    ALREADY_POSTED = "ALREADY_POSTED"
+    #: A previous post failed and left the journal in DRAFT. Re-posted here
+    #: rather than creating a second journal.
+    REPOSTED_DRAFT = "REPOSTED_DRAFT"
+    #: APPROVED with no ledger batch — the stranded-orphan shape. NOT posted
+    #: automatically: that is a Finance disposition, not an adapter's call.
+    APPROVED_ORPHAN = "APPROVED_ORPHAN"
+    #: The journal was voided or reversed. The effect is not live, and the
+    #: unique index still holds the identity, so this needs a human.
+    NOT_LIVE = "NOT_LIVE"
+    #: A ledger batch exists under this line's key but no journal carries the
+    #: typed id — legacy rows written before the identity was typed.
+    LEGACY_BATCH_ONLY = "LEGACY_BATCH_ONLY"
+    #: A concurrent caller won the create; that caller's journal is canonical.
+    LOST_RACE = "LOST_RACE"
+    #: Creation or posting failed.
+    FAILED = "FAILED"
+
+
 @dataclass(frozen=True)
 class BankFeeOutcome:
     """What happened, stated so a caller cannot mistake one case for another."""
 
+    state: BankFeeState
+    #: The CANONICAL journal for this line where one exists — returned even when
+    #: nothing was created, because the caller may still need to repair a
+    #: statement-line match that a crash left behind.
     journal: JournalEntry | None
-    created: bool
-    #: An effect for this statement line already existed; nothing was written.
-    already_present: bool
-    #: The create lost a race to a concurrent caller; that caller's journal wins.
-    lost_a_race: bool
     message: str
     error: str | None = None
 
     @property
     def ok(self) -> bool:
         return self.error is None
+
+    @property
+    def created(self) -> bool:
+        return self.state is BankFeeState.CREATED
+
+    @property
+    def already_present(self) -> bool:
+        """An effect for this line is already in the ledger.
+
+        Deliberately NOT true for APPROVED_ORPHAN or NOT_LIVE: in those cases
+        something exists but the ledger effect does not, and treating them as
+        "present" is what makes a defect invisible.
+        """
+        return self.state in {
+            BankFeeState.ALREADY_POSTED,
+            BankFeeState.LEGACY_BATCH_ONLY,
+            BankFeeState.LOST_RACE,
+        }
+
+    @property
+    def needs_attention(self) -> bool:
+        return self.state in {BankFeeState.APPROVED_ORPHAN, BankFeeState.NOT_LIVE}
+
+    @property
+    def posted_journal(self) -> JournalEntry | None:
+        """The journal whose effect is live, for statement-match repair."""
+        if self.state in {
+            BankFeeState.CREATED,
+            BankFeeState.ALREADY_POSTED,
+            BankFeeState.REPOSTED_DRAFT,
+            BankFeeState.LOST_RACE,
+        }:
+            return self.journal
+        return None
 
 
 def find_existing_fee_journal(
@@ -146,6 +217,144 @@ def existing_posting_batch(
     ).first()
 
 
+def _existing_journal_outcome(
+    db: Session,
+    existing: JournalEntry,
+    *,
+    organization_id: uuid.UUID,
+    line: Any,
+    line_id: uuid.UUID,
+    posted_by_user_id: uuid.UUID,
+    poster: _Poster | None,
+) -> BankFeeOutcome:
+    """Decide what an EXISTING journal for this line means.
+
+    "A row exists" is not an answer. The five statuses mean five different
+    things, and collapsing them is what turns a transient posting failure into a
+    line that is skipped forever:
+
+    * **POSTED** — the effect is live. Nothing to create. The journal is still
+      returned, because a crash between posting and matching leaves the
+      statement line unmatched and the caller has to be able to repair that.
+    * **DRAFT** — a previous post failed and `_revert_unposted_journal` put it
+      back. RE-POST this journal. Creating a second one is forbidden by the
+      index, and skipping it strands the fee permanently.
+    * **SUBMITTED / APPROVED** — created but never posted: the stranded-orphan
+      shape that produced 12,117 rows. NOT posted automatically — whether a
+      backlog journal should post is a Finance disposition, not an adapter's.
+      Reported so it is visible rather than silently counted as done.
+    * **VOID / REVERSED** — the effect is not live, and the unique index still
+      holds this identity, so no replacement can be created here. A human has to
+      decide; saying so is the only honest outcome.
+    """
+    status = existing.status
+    number = existing.journal_number
+
+    if status == JournalStatus.POSTED:
+        return BankFeeOutcome(
+            state=BankFeeState.ALREADY_POSTED,
+            journal=existing,
+            message=f"Bank fee already posted for line {line_id} ({number})",
+        )
+
+    if status == JournalStatus.DRAFT:
+        posting_result = _post_existing(
+            db,
+            existing,
+            organization_id=organization_id,
+            line=line,
+            line_id=line_id,
+            posted_by_user_id=posted_by_user_id,
+            poster=poster,
+        )
+        if not posting_result.success:
+            return BankFeeOutcome(
+                state=BankFeeState.FAILED,
+                journal=existing,
+                message=(
+                    f"Re-post of DRAFT bank-fee journal {number} failed: "
+                    f"{posting_result.message}"
+                ),
+                error=posting_result.message,
+            )
+        return BankFeeOutcome(
+            state=BankFeeState.REPOSTED_DRAFT,
+            journal=existing,
+            message=f"Re-posted previously failed bank-fee journal {number}",
+        )
+
+    if status in {JournalStatus.SUBMITTED, JournalStatus.APPROVED}:
+        return BankFeeOutcome(
+            state=BankFeeState.APPROVED_ORPHAN,
+            journal=existing,
+            message=(
+                f"Bank-fee journal {number} for line {line_id} is {status.value} "
+                f"and unposted. Not posted automatically — its disposition is a "
+                f"Finance decision."
+            ),
+        )
+
+    return BankFeeOutcome(
+        state=BankFeeState.NOT_LIVE,
+        journal=existing,
+        message=(
+            f"Bank-fee journal {number} for line {line_id} is {status.value}, so "
+            f"no effect is live; the unique identity is still held by that "
+            f"journal, so a replacement cannot be created automatically."
+        ),
+    )
+
+
+def _post_existing(
+    db: Session,
+    journal: JournalEntry,
+    *,
+    organization_id: uuid.UUID,
+    line: Any,
+    line_id: uuid.UUID,
+    posted_by_user_id: uuid.UUID,
+    poster: _Poster | None,
+) -> Any:
+    """Drive an existing DRAFT journal back through submit → approve → post."""
+    from app.services.finance.gl.journal import JournalService
+    from app.services.finance.posting.base import BasePostingAdapter
+
+    JournalService.submit_journal(
+        db, organization_id, journal.journal_entry_id, posted_by_user_id
+    )
+    JournalService.approve_journal(
+        db, organization_id, journal.journal_entry_id, posted_by_user_id
+    )
+
+    idempotency_key = fee_idempotency_key(organization_id, line_id)
+    correlation_id = f"bank-fee-{line_id}"
+    if poster is not None:
+        return poster(
+            db=db,
+            organization_id=organization_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=line.transaction_date,
+            idempotency_key=idempotency_key,
+            source_module=SOURCE_MODULE,
+            correlation_id=correlation_id,
+            posted_by_user_id=posted_by_user_id,
+            success_message="Bank fee posted",
+            error_prefix="Fee journal posting failed",
+        )
+    return BasePostingAdapter.post_to_ledger(
+        db,
+        organization_id=organization_id,
+        journal_entry_id=journal.journal_entry_id,
+        posting_date=line.transaction_date,
+        idempotency_key=idempotency_key,
+        source_module=SOURCE_MODULE,
+        correlation_id=correlation_id,
+        posted_by_user_id=posted_by_user_id,
+        success_message="Bank fee posted",
+        error_prefix="Fee journal posting failed",
+    )
+
+
 def post_bank_fee(
     db: Session,
     *,
@@ -174,25 +383,26 @@ def post_bank_fee(
         db, organization_id=organization_id, line_id=line_id
     )
     if existing is not None:
-        return BankFeeOutcome(
-            journal=existing,
-            created=False,
-            already_present=True,
-            lost_a_race=False,
-            message=f"Bank fee already recorded for line {line_id} ({existing.journal_number})",
+        return _existing_journal_outcome(
+            db,
+            existing,
+            organization_id=organization_id,
+            line=line,
+            line_id=line_id,
+            posted_by_user_id=posted_by_user_id,
+            poster=poster,
         )
 
     # ---- Pre-check 2: the ledger already posted this line ------------------
     batch = existing_posting_batch(db, organization_id=organization_id, line_id=line_id)
     if batch is not None:
         return BankFeeOutcome(
+            state=BankFeeState.LEGACY_BATCH_ONLY,
             journal=None,
-            created=False,
-            already_present=True,
-            lost_a_race=False,
             message=(
                 f"Bank fee already posted for line {line_id} under batch "
-                f"{batch.batch_id}; no journal created"
+                f"{batch.batch_id}; no journal carries the typed identity "
+                f"(legacy row). Nothing created."
             ),
         )
 
@@ -268,10 +478,8 @@ def post_bank_fee(
             getattr(winner, "journal_number", "<unknown>"),
         )
         return BankFeeOutcome(
+            state=BankFeeState.LOST_RACE,
             journal=winner,
-            created=False,
-            already_present=True,
-            lost_a_race=True,
             message=f"Bank fee created concurrently for line {line_id}",
         )
 
@@ -282,20 +490,13 @@ def post_bank_fee(
         # reliable.
         message = create_error.message if create_error else "no journal was created"
         return BankFeeOutcome(
-            journal=None,
-            created=False,
-            already_present=False,
-            lost_a_race=False,
-            message=message,
-            error=message,
+            state=BankFeeState.FAILED, journal=None, message=message, error=message
         )
 
     if create_error:
         return BankFeeOutcome(
+            state=BankFeeState.FAILED,
             journal=None,
-            created=False,
-            already_present=False,
-            lost_a_race=False,
             message=create_error.message,
             error=create_error.message,
         )
@@ -317,18 +518,20 @@ def post_bank_fee(
         )
 
     if not posting_result.success:
+        # `_revert_unposted_journal` has just put this journal back to DRAFT
+        # while it still carries the typed source id. The next invocation must
+        # RE-POST it, not skip it and not create a second one — which is what
+        # `_existing_journal_outcome` does for a DRAFT.
         return BankFeeOutcome(
+            state=BankFeeState.FAILED,
             journal=journal,
-            created=True,
-            already_present=False,
-            lost_a_race=False,
             message=posting_result.message,
             error=posting_result.message,
         )
 
     # The pre-checks make this unreachable; it is surfaced rather than dropped
     # because discarding exactly this signal is what produced 12,117 orphans.
-    if getattr(posting_result, "idempotent_replay", False):
+    if posting_result.idempotent_replay:
         logger.warning(
             "Bank fee for line %s posted as an idempotent replay even though no "
             "prior journal or batch was found. Journal %s is APPROVED and "
@@ -337,23 +540,17 @@ def post_bank_fee(
             journal.journal_number,
         )
         return BankFeeOutcome(
+            state=BankFeeState.APPROVED_ORPHAN,
             journal=journal,
-            created=True,
-            already_present=True,
-            lost_a_race=False,
             message=(
                 f"Bank fee for line {line_id} replayed against an existing batch; "
-                f"journal {journal.journal_number} left APPROVED"
+                f"journal {journal.journal_number} is APPROVED and unposted"
             ),
             error="idempotent replay after a clean pre-check",
         )
 
     return BankFeeOutcome(
-        journal=journal,
-        created=True,
-        already_present=False,
-        lost_a_race=False,
-        message="Bank fee posted",
+        state=BankFeeState.CREATED, journal=journal, message="Bank fee posted"
     )
 
 

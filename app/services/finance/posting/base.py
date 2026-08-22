@@ -28,12 +28,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PostingResult:
-    """Result of a posting operation."""
+    """Result of a posting operation.
+
+    `idempotent_replay` is carried deliberately. `LedgerPostingService` sets it
+    when a batch already exists for the idempotency key, and this wrapper used
+    to drop it — so every adapter saw `success=True` and could not tell "I
+    posted" from "someone already had". Callers that create a journal before
+    posting need that distinction: without it the journal they just created is
+    left stranded and nothing says so. Losing exactly this signal is how 12,117
+    APPROVED bank-fee journals accumulated.
+    """
 
     success: bool
     journal_entry_id: UUID | None = None
     posting_batch_id: UUID | None = None
     message: str = ""
+    idempotent_replay: bool = False
 
 
 class BasePostingAdapter:
@@ -150,6 +160,9 @@ class BasePostingAdapter:
                 journal_entry_id=journal_entry_id,
                 posting_batch_id=posting_result.posting_batch_id,
                 message=success_message,
+                idempotent_replay=bool(
+                    getattr(posting_result, "idempotent_replay", False)
+                ),
             )
         except Exception as exc:
             BasePostingAdapter._revert_unposted_journal(db, journal_entry_id, str(exc))

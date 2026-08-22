@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 from app.services.finance.banking.reconciliation_engine_parts.base import (
     Any,
@@ -295,7 +294,10 @@ class ReconciliationEngineHandlers:
     ) -> None:
         """Create GL journals for bank fee lines and auto-match."""
         from app.models.finance.gl.account import Account
-        from app.services.finance.banking.bank_fee_posting import post_bank_fee
+        from app.services.finance.banking.bank_fee_posting import (
+            BankFeeState,
+            post_bank_fee,
+        )
 
         # Determine writeoff account from rule or default
         if rule.writeoff_account_id:
@@ -343,7 +345,16 @@ class ReconciliationEngineHandlers:
                     description=label,
                 )
 
-                if outcome.already_present:
+                if outcome.needs_attention:
+                    # Something exists but no ledger effect does. Surfaced, not
+                    # skipped: counting this shape as done is what let 12,117
+                    # orphan journals accumulate unnoticed.
+                    ctx.result.errors.append(
+                        f"Line {line.line_number}: {outcome.message}"
+                    )
+                    continue
+
+                if outcome.state is BankFeeState.LEGACY_BATCH_ONLY:
                     continue
 
                 if not outcome.ok:
@@ -352,14 +363,10 @@ class ReconciliationEngineHandlers:
                     )
                     continue
 
-                posting = SimpleNamespace(success=True, message=outcome.message)
-
-                if not posting.success:
-                    ctx.result.errors.append(
-                        f"Line {line.line_number}: {posting.message}"
-                    )
-                    continue
-
+                # Matching runs whether or not this call created the journal —
+                # see the note in `bank_fee_posting`: a crash between posting and
+                # matching leaves the line unmatched, and this lookup is
+                # idempotent.
                 journal_line = self._find_journal_line(  # type: ignore[attr-defined]
                     ctx,
                     correlation_id,

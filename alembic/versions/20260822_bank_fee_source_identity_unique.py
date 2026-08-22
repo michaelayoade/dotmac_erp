@@ -13,15 +13,22 @@ at-most-once. **Creation was not** — and creation ran first. An application-le
 check cannot close that on its own, because two concurrent callers both pass it.
 This index is what makes the loser fail.
 
-Partial, and deliberately so:
+The predicate is narrowed to the PRIMARY effect, and each clause earns its place:
 
-* ``WHERE source_document_type = 'BANK_FEE'`` — this constraint is a statement
-  about bank fees, not about every source document. Other producers legitimately
-  post several journals against one document.
-* ``source_document_id IS NOT NULL`` is implied by the b-tree, and matters here:
-  **every existing bank-fee journal has a NULL source_document_id**, so all
-  13,955 of them are outside the index and this migration cannot fail on
-  historical data. It constrains new writes only.
+* ``source_module = 'BANKING' AND source_document_type = 'BANK_FEE'`` — this is a
+  statement about bank fees, not about every source document. Other producers
+  legitimately post several journals against one document.
+* ``source_document_id IS NOT NULL`` — **not implied.** A partial b-tree still
+  INDEXES null rows; it merely treats NULLs as distinct so they never conflict.
+  Without this clause all 13,955 legacy bank-fee journals (every one of which has
+  a NULL source id) would sit inside the index for no benefit. Excluding them is
+  what keeps the index to the rows it actually constrains.
+* ``is_reversal = false`` — **this one is load-bearing.** ERP reversals PRESERVE
+  the original journal's source identity, so a linked reversal of a bank-fee
+  journal carries the same `source_document_id`. Without this clause the
+  constraint would refuse to let anyone reverse a bank fee, which is both wrong
+  and the opposite of what it is for: the reversal is the correcting entry the
+  Gate D remediation depends on.
 
 No backfill. Populating `source_document_id` from the correlation string would
 make the 12,117 duplicates collide and the migration unrunnable — and those rows
@@ -52,7 +59,12 @@ def upgrade() -> None:
         ["organization_id", "source_document_id"],
         unique=True,
         schema="gl",
-        postgresql_where=sa.text("source_document_type = 'BANK_FEE'"),
+        postgresql_where=sa.text(
+            "source_module = 'BANKING' "
+            "AND source_document_type = 'BANK_FEE' "
+            "AND source_document_id IS NOT NULL "
+            "AND is_reversal = false"
+        ),
     )
 
 

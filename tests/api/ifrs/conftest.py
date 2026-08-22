@@ -661,6 +661,7 @@ class MockPostingResult:
         entry_number: str = "JE-0001",
         message: str = "Posted successfully",
         errors: list = None,
+        idempotent_replay: bool = False,
         **kwargs,
     ):
         self.success = success
@@ -668,6 +669,9 @@ class MockPostingResult:
         self.entry_number = entry_number
         self.message = message
         self.errors = errors or []
+        # Mirrors the real `PostingResult`. A double that omits a field the
+        # real class carries is how the propagation gap stayed invisible.
+        self.idempotent_replay = idempotent_replay
         for k, v in kwargs.items():
             setattr(self, k, v)
 

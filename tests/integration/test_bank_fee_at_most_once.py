@@ -23,6 +23,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import func, select, text
@@ -74,6 +75,44 @@ def _fiscal_period_id(db: Session, org_id: uuid.UUID) -> uuid.UUID:
     db.add(period)
     db.flush()
     return uuid.UUID(str(period.fiscal_period_id))
+
+
+def _sqlstate(exc: BaseException) -> str | None:
+    """The SQLSTATE the driver reported, not the message text.
+
+    Asserting on a message is asserting on prose. `55P03` (lock_not_available)
+    and `23505` (unique_violation) are the two facts these canaries are about.
+    """
+    orig = getattr(exc, "orig", exc)
+    return getattr(orig, "sqlstate", None) or getattr(
+        getattr(orig, "diag", None), "sqlstate", None
+    )
+
+
+def _posting_batch(db: Session, org_id: uuid.UUID, period_id: uuid.UUID, key: str):
+    """A POSTED batch under `key`, built through the ORM.
+
+    The first version of this helper hand-wrote the INSERT and omitted TWO
+    NOT NULL columns. The model is the schema.
+    """
+    from app.models.finance.gl.posting_batch import BatchStatus, PostingBatch
+
+    batch = PostingBatch(
+        batch_id=uuid.uuid4(),
+        organization_id=org_id,
+        fiscal_period_id=period_id,
+        idempotency_key=key,
+        source_module="BANKING",
+        batch_description="legacy canary",
+        total_entries=2,
+        posted_entries=2,
+        failed_entries=0,
+        status=BatchStatus.POSTED,
+        submitted_by_user_id=uuid.uuid4(),
+    )
+    db.add(batch)
+    db.flush()
+    return batch
 
 
 def _fee_journal(
@@ -269,17 +308,12 @@ class TestTheOwnerRefusesToCreateTwice:
         149 fresh journals.
         """
         line_id = uuid.uuid4()
-        db.execute(
-            text("""
-                INSERT INTO gl.posting_batch
-                  (batch_id, organization_id, idempotency_key, source_module,
-                   batch_description, total_entries, posted_entries, failed_entries,
-                   status, submitted_at)
-                VALUES (:b, :o, :k, 'BANKING', 'legacy', 2, 2, 0, 'POSTED', now())
-            """),
-            {"b": uuid.uuid4(), "o": org_id, "k": fee_idempotency_key(org_id, line_id)},
+        _posting_batch(
+            db,
+            org_id,
+            _fiscal_period_id(db, org_id),
+            fee_idempotency_key(org_id, line_id),
         )
-        db.flush()
 
         before = db.scalar(
             select(func.count(JournalEntry.journal_entry_id)).where(
@@ -371,8 +405,12 @@ class TestConcurrentInvocation:
             # waiting for it, which is both the real behaviour and terminating.
             s2.execute(text("SET LOCAL lock_timeout = '2s'"))
             s2.add(_fee_journal(org_id, period_ids[0], line_id, number="RACER-B"))
-            with pytest.raises((OperationalError, IntegrityError)):
+            with pytest.raises((OperationalError, IntegrityError)) as blocked:
                 s2.flush()
+            assert _sqlstate(blocked.value) == "55P03", (
+                "expected lock_not_available: the second inserter must be BLOCKED "
+                f"by the first, got SQLSTATE {_sqlstate(blocked.value)}"
+            )
             s2.rollback()
             refused += 1
 
@@ -382,8 +420,15 @@ class TestConcurrentInvocation:
             # And once A is committed, B's retry is refused outright.
             s2.execute(text("SET app.bypass_rls = 'true'"))
             s2.add(_fee_journal(org_id, period_ids[0], line_id, number="RACER-B-RETRY"))
-            with pytest.raises(IntegrityError):
+            with pytest.raises(IntegrityError) as violated:
                 s2.flush()
+            assert _sqlstate(violated.value) == "23505", (
+                f"expected unique_violation, got {_sqlstate(violated.value)}"
+            )
+            assert "uq_journal_entry_bank_fee_source" in str(violated.value), (
+                "the refusal must come from the bank-fee identity index, not from "
+                "some other constraint that happens to fire"
+            )
             s2.rollback()
 
             assert refused == 1, "both concurrent creates were accepted"
@@ -411,3 +456,253 @@ class TestConcurrentInvocation:
                     ),
                     {"o": org_id},
                 )
+
+
+def _fee_line(line_id: uuid.UUID):
+    """The minimal statement-line shape `post_bank_fee` reads."""
+    return type(
+        "_Line",
+        (),
+        {
+            "line_id": line_id,
+            "amount": Decimal("-10"),
+            "transaction_date": date(2026, 1, 15),
+            "description": "Bank charge",
+            "reference": "CANARY",
+            "line_number": 1,
+        },
+    )()
+
+
+class TestAReversalIsNotADuplicate:
+    """ERP reversals PRESERVE the original's source identity.
+
+    So a linked reversal of a bank-fee journal carries the same
+    `source_document_id`. If the unique index did not exclude
+    `is_reversal = true` it would refuse to let anyone reverse a bank fee —
+    which is not a safety property, it is a bug: the correcting reversal is
+    exactly what the Gate D remediation of the 429 duplicate postings needs.
+    """
+
+    def test_a_linked_reversal_of_a_bank_fee_is_allowed(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+
+        original = _fee_journal(org_id, period_id, line_id, number="ORIGINAL")
+        original.status = JournalStatus.POSTED
+        db.add(original)
+        db.flush()
+
+        reversal = _fee_journal(org_id, period_id, line_id, number="REVERSAL")
+        reversal.is_reversal = True
+        reversal.reversed_journal_id = original.journal_entry_id
+        reversal.status = JournalStatus.POSTED
+        db.add(reversal)
+        db.flush()  # must not raise
+
+    def test_two_non_reversal_journals_are_still_refused(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        """The reversal exemption must not become a hole: only `is_reversal`
+        rows are outside the index."""
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        db.add(_fee_journal(org_id, period_id, line_id, number="ONE"))
+        db.flush()
+        db.add(_fee_journal(org_id, period_id, line_id, number="TWO"))
+        with pytest.raises(IntegrityError):
+            db.flush()
+
+
+class TestAFailedPostIsRetried:
+    """A failed post reverts the journal to DRAFT while it keeps the typed id.
+
+    `BasePostingAdapter._revert_unposted_journal` does that deliberately. The
+    danger is the NEXT invocation: if it only asks "does a row exist?" it
+    reports success and skips the line forever. The fee never posts and nothing
+    says so.
+    """
+
+    def test_a_draft_journal_is_reposted_not_skipped(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+
+        stranded = _fee_journal(org_id, period_id, line_id, number="FAILED-POST")
+        stranded.status = JournalStatus.DRAFT
+        db.add(stranded)
+        db.flush()
+
+        posted: list[uuid.UUID] = []
+
+        def _poster(**kwargs):
+            posted.append(kwargs["journal_entry_id"])
+            return SimpleNamespace(
+                success=True, message="posted", idempotent_replay=False
+            )
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=uuid.uuid4(),
+            finance_cost_account_id=uuid.uuid4(),
+            posted_by_user_id=uuid.uuid4(),
+            poster=_poster,
+        )
+
+        assert outcome.state is BankFeeState.REPOSTED_DRAFT, outcome.message
+        assert posted == [stranded.journal_entry_id], (
+            "the DRAFT journal must be re-posted, not skipped and not duplicated"
+        )
+        assert outcome.posted_journal is not None
+
+    def test_an_approved_orphan_is_surfaced_not_silently_skipped(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        """APPROVED-and-unposted is the shape that produced 12,117 rows.
+
+        It must not be auto-posted — that is a Finance disposition — and it must
+        not be reported as done either.
+        """
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        db.add(_fee_journal(org_id, period_id, line_id, number="ORPHAN"))
+        db.flush()
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=uuid.uuid4(),
+            finance_cost_account_id=uuid.uuid4(),
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("an APPROVED orphan must not be posted"),
+        )
+
+        assert outcome.state is BankFeeState.APPROVED_ORPHAN
+        assert outcome.needs_attention
+        assert not outcome.already_present, (
+            "an unposted orphan is not an effect that is already present"
+        )
+        assert outcome.posted_journal is None
+
+
+class TestACrashBeforeMatchingIsRepairable:
+    """Posting and statement matching are two steps, and a crash can land
+    between them.
+
+    If the second invocation stops at "a journal exists", the statement line is
+    never matched — permanently. The owner therefore returns the CANONICAL
+    posted journal even when it creates nothing, so the caller can redo the
+    match.
+    """
+
+    def test_an_already_posted_line_still_yields_its_journal(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        journal = _fee_journal(org_id, period_id, line_id, number="POSTED-NO-MATCH")
+        journal.status = JournalStatus.POSTED
+        db.add(journal)
+        db.flush()
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=uuid.uuid4(),
+            finance_cost_account_id=uuid.uuid4(),
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("must not post over a live effect"),
+        )
+
+        assert outcome.state is BankFeeState.ALREADY_POSTED
+        assert outcome.already_present
+        assert outcome.posted_journal is not None, (
+            "the caller needs the canonical journal to repair a missing match"
+        )
+        assert outcome.posted_journal.journal_number == "POSTED-NO-MATCH"
+
+
+class TestTheServiceLosesTheRaceGracefully:
+    """The direct-insert canary proves the INDEX. This proves the SERVICE.
+
+    Two sessions both call `post_bank_fee`; the loser must catch the violation,
+    re-read, and return the WINNER's journal — not raise, and not report that it
+    created something.
+    """
+
+    def test_the_losing_caller_returns_the_winners_journal(self, engine) -> None:
+        from sqlalchemy.orm import sessionmaker as _sessionmaker
+
+        from app.models.finance.core_org.organization import Organization
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        Session_ = _sessionmaker(bind=engine)
+        org_id = uuid.uuid4()
+        line_id = uuid.uuid4()
+        setup = Session_()
+        try:
+            setup.execute(text("SET app.bypass_rls = 'true'"))
+            setup.add(
+                Organization(
+                    organization_id=org_id,
+                    organization_code=f"RACE-{uuid.uuid4().hex[:8].upper()}",
+                    legal_name="Service Race Canary",
+                    functional_currency_code="NGN",
+                    presentation_currency_code="NGN",
+                    fiscal_year_end_month=12,
+                    fiscal_year_end_day=31,
+                    is_active=True,
+                )
+            )
+            setup.flush()
+            period_id = _fiscal_period_id(setup, org_id)
+            winner = _fee_journal(org_id, period_id, line_id, number="WINNER")
+            winner.status = JournalStatus.POSTED
+            setup.add(winner)
+            setup.commit()
+
+            loser = Session_()
+            try:
+                loser.execute(text("SET app.bypass_rls = 'true'"))
+                outcome = post_bank_fee(
+                    loser,
+                    organization_id=org_id,
+                    line=_fee_line(line_id),
+                    bank_gl_account_id=uuid.uuid4(),
+                    finance_cost_account_id=uuid.uuid4(),
+                    posted_by_user_id=uuid.uuid4(),
+                    poster=lambda **_: pytest.fail("must not post over the winner"),
+                )
+                assert outcome.state is BankFeeState.ALREADY_POSTED
+                assert outcome.journal is not None
+                assert outcome.journal.journal_number == "WINNER", (
+                    "the losing caller must report the winner's journal"
+                )
+                assert not outcome.created
+            finally:
+                loser.rollback()
+                loser.close()
+        finally:
+            setup.close()
+            with engine.begin() as cleanup:
+                cleanup.execute(text("SET LOCAL app.bypass_rls = 'true'"))
+                for stmt in (
+                    "DELETE FROM gl.journal_entry WHERE organization_id = :o",
+                    "DELETE FROM gl.fiscal_period WHERE organization_id = :o",
+                    "DELETE FROM gl.fiscal_year WHERE organization_id = :o",
+                    "DELETE FROM core_org.organization WHERE organization_id = :o",
+                ):
+                    cleanup.execute(text(stmt), {"o": org_id})

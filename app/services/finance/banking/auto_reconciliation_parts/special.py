@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 from app.services.finance.banking.auto_reconciliation_parts.base import (
     AutoMatchDefaults,
@@ -48,7 +47,10 @@ class AutoReconciliationSpecialService:
         3. Matches the statement line to the credit journal line.
         """
         from app.models.finance.gl.account import Account
-        from app.services.finance.banking.bank_fee_posting import post_bank_fee
+        from app.services.finance.banking.bank_fee_posting import (
+            BankFeeState,
+            post_bank_fee,
+        )
 
         # Look up Finance Cost GL account (configurable, default 6080) once
         account_code = (
@@ -101,9 +103,22 @@ class AutoReconciliationSpecialService:
                     poster=self._post_with_period_fallback,  # type: ignore[attr-defined]
                 )
 
-                if outcome.already_present:
+                if outcome.needs_attention:
+                    # APPROVED-but-unposted, or voided/reversed. Something
+                    # exists and the ledger effect does not. Surfaced rather
+                    # than counted as done — silently skipping this shape is
+                    # what let 12,117 orphans accumulate unnoticed.
+                    logger.warning(
+                        "Bank fee for line %s needs attention: %s",
+                        line.line_id,
+                        outcome.message,
+                    )
+                    result.errors.append(f"Line {line.line_number}: {outcome.message}")
+                    continue
+
+                if outcome.state is BankFeeState.LEGACY_BATCH_ONLY:
                     logger.info(
-                        "Bank fee for line %s already recorded: %s",
+                        "Bank fee for line %s already posted (legacy): %s",
                         line.line_id,
                         outcome.message,
                     )
@@ -118,29 +133,21 @@ class AutoReconciliationSpecialService:
                     result.errors.append(f"Line {line.line_number}: {outcome.message}")
                     continue
 
-                journal = outcome.journal
+                # Falls through to matching even when nothing was created. A
+                # crash between posting and matching leaves the statement line
+                # unmatched forever otherwise, and the match step below is
+                # idempotent — it looks the line up before writing.
+                journal = outcome.posted_journal
                 if journal is None:
-                    # `ok` and not `already_present` means the owner created and
-                    # posted, so a journal exists. Narrowed explicitly rather
-                    # than asserted away: if it is ever None the fee silently
-                    # would not be matched, which is how it went wrong before.
+                    # A live effect without a journal to match against. Reported
+                    # rather than asserted away: if it ever happens the fee is
+                    # silently unmatched, which is how this went wrong before.
                     result.errors.append(
                         f"Line {line.line_number}: fee posted without a journal"
                     )
                     continue
-                correlation_id = f"bank-fee-{line.line_id}"
-                posting_result = SimpleNamespace(success=True, message=outcome.message)
 
-                if not posting_result.success:
-                    logger.warning(
-                        "Failed to post fee journal for line %s: %s",
-                        line.line_id,
-                        posting_result.message,
-                    )
-                    result.errors.append(
-                        f"Line {line.line_number}: {posting_result.message}"
-                    )
-                    continue
+                correlation_id = f"bank-fee-{line.line_id}"
 
                 # Find the credit line on the bank GL account
                 journal_line = self._find_journal_line(  # type: ignore[attr-defined]

@@ -9,28 +9,12 @@ the general ledger the first time it runs is not a safe default, and these
 were hand-run scripts until now — nobody has yet decided they should post
 unattended.
 
-## `dry_run=False` is gated, and the reason is not hypothetical
+## `dry_run=False` is gated
 
-A default is not a safeguard: `dry_run=False` is one keyword argument away, and
-these tasks post to the ledger without deciding whether the effect is already
-there. Two measured facts make that dangerous today:
-
-* **`post_approved_journals` does not filter by source.** Its query selects
-  every APPROVED journal for the organization, so its blast radius is the whole
-  backlog — 14,263 journals, ₦76,495,739.50 — of which the detector in ERP PR
-  #335 finds **zero** that should be posted.
-* **`post_stranded_source_journals` has already caused duplicate postings.** It
-  keys idempotency on `backfill-stranded-bank-fees-<journal_number>`, a
-  per-journal namespace that bypasses the ledger's per-statement-line boundary
-  entirely. 429 duplicate bank-fee postings (₦7,764.68) in production came from
-  exactly that path.
-
-So a live run now requires `ALLOW_BULK_JOURNAL_BACKLOG_POSTING=true` in the
-environment as well. The point is not that an environment variable is hard to
-set — it is that setting it is a deliberate act by someone who went looking for
-this comment, rather than a default someone inherited.
-
-Remove the gate when every journal in the backlog has an approved disposition.
+Live bulk posting is refused unless a kill switch is set. The rule, the reasons
+and the explicit warning that the flag is NOT Finance authorization all live in
+`app.services.finance.gl.bulk_posting_policy` — one owner, so the task and
+`scripts/post_stranded_bank_fees.py` cannot drift apart.
 """
 
 from __future__ import annotations
@@ -44,6 +28,9 @@ from app.db.session_context import session_for_org
 from app.models.batch_operation import BatchOperationType
 from app.services.batch_operation import batch_operation
 from app.services.expense.posting_backlog import post_unposted_claims
+from app.services.finance.gl.bulk_posting_policy import (
+    require_bulk_posting_allowed,
+)
 from app.services.finance.gl.posting_backlog import post_approved_journals
 from app.services.finance.gl.stranded_fee_posting import (
     StrandedPostingResult,
@@ -53,31 +40,6 @@ from app.services.finance.gl.stranded_fee_posting import (
 from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
-
-#: Set to `true` to allow a live (non-dry-run) bulk backlog post. See the module
-#: docstring for why this exists rather than trusting the `dry_run` default.
-BULK_POSTING_ENV_FLAG = "ALLOW_BULK_JOURNAL_BACKLOG_POSTING"
-
-
-def _require_bulk_posting_allowed(task_name: str, dry_run: bool) -> None:
-    """Refuse a live bulk post unless it was explicitly enabled.
-
-    Raises rather than silently downgrading to a dry run: an operator who asked
-    for a live run and got a quiet no-op would believe the work was done.
-    """
-    if dry_run:
-        return
-    import os
-
-    if os.getenv(BULK_POSTING_ENV_FLAG, "").strip().lower() not in {"1", "true", "yes"}:
-        raise RuntimeError(
-            f"{task_name} refused: a live bulk backlog post requires "
-            f"{BULK_POSTING_ENV_FLAG}=true. The backlog currently contains no "
-            f"journal that should be posted (ERP PR #335), and one of these "
-            f"paths has already produced duplicate postings. Run with "
-            f"dry_run=True, or set the flag deliberately."
-        )
-
 
 # Recorded as `started_by_id` when nothing human triggered the run. A schedule
 # has no actor, and naming a real user would be a lie.
@@ -100,7 +62,7 @@ def post_approved_journal_backlog(
     nothing about whether the effect is already in the ledger — and for the
     current backlog, it always is. See `_require_bulk_posting_allowed`.
     """
-    _require_bulk_posting_allowed("post_approved_journal_backlog", dry_run)
+    require_bulk_posting_allowed("post_approved_journal_backlog", dry_run)
 
     summary: dict[str, dict] = {}
     for org_id in _organization_ids(organization_id):
@@ -202,7 +164,7 @@ def post_stranded_source_journals(
     if not year_code:
         raise ValueError("year_code is required (e.g. 'FY2025')")
 
-    _require_bulk_posting_allowed("post_stranded_source_journals", dry_run)
+    require_bulk_posting_allowed("post_stranded_source_journals", dry_run)
 
     summary: dict[str, dict] = {}
     for org_id in _organization_ids(organization_id):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 from app.services.finance.banking.programmatic_parts.base import (
     Any,
@@ -36,7 +35,10 @@ class BankFeeStrategy(MatchStrategy):
         if not still_unmatched:
             return
         from app.models.finance.gl.account import Account
-        from app.services.finance.banking.bank_fee_posting import post_bank_fee
+        from app.services.finance.banking.bank_fee_posting import (
+            BankFeeState,
+            post_bank_fee,
+        )
 
         account_code = ctx.policy.gl_mappings.get(
             "fee_expense_account_code",
@@ -74,7 +76,16 @@ class BankFeeStrategy(MatchStrategy):
                     poster=service._post_with_period_fallback,
                 )
 
-                if outcome.already_present:
+                if outcome.needs_attention:
+                    # Something exists but no ledger effect does. Surfaced, not
+                    # skipped: counting this shape as done is what let 12,117
+                    # orphan journals accumulate unnoticed.
+                    ctx.result.errors.append(
+                        f"Line {line.line_number}: {outcome.message}"
+                    )
+                    continue
+
+                if outcome.state is BankFeeState.LEGACY_BATCH_ONLY:
                     continue
 
                 if not outcome.ok:
@@ -83,14 +94,11 @@ class BankFeeStrategy(MatchStrategy):
                     )
                     continue
 
+                # Matching runs whether or not this call created the journal:
+                # a crash between posting and matching would otherwise leave the
+                # statement line unmatched forever. `_find_journal_line` looks
+                # the line up by correlation id, so repeating it is harmless.
                 correlation_id = f"bank-fee-{line.line_id}"
-                posting_result = SimpleNamespace(success=True, message=outcome.message)
-
-                if not posting_result.success:
-                    ctx.result.errors.append(
-                        f"Line {line.line_number}: {posting_result.message}"
-                    )
-                    continue
 
                 journal_line = service._find_journal_line(
                     ctx.db,

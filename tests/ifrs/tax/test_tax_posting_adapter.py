@@ -114,10 +114,13 @@ class MockJournalResult:
 class MockPostingResult:
     """Mock posting result."""
 
-    def __init__(self, success=True, message=""):
+    def __init__(self, success=True, message="", idempotent_replay=False):
         self.success = success
         self.message = message
         self.posting_batch_id = uuid4() if success else None
+        # Mirrors the real `PostingResult`. A double that omits a field the real
+        # class carries is how the propagation gap stayed invisible.
+        self.idempotent_replay = idempotent_replay
 
 
 class TestTAXPostingAdapterPostTaxTransaction:

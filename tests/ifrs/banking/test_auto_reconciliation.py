@@ -1411,10 +1411,14 @@ class MockPostingResult:
         success: bool = True,
         journal_entry_id: uuid.UUID | None = None,
         message: str = "",
+        idempotent_replay: bool = False,
     ):
         self.success = success
         self.journal_entry_id = journal_entry_id or uuid.uuid4()
         self.message = message
+        # Mirrors the real `PostingResult`. A double that omits a field the
+        # real class carries is how the propagation gap stayed invisible.
+        self.idempotent_replay = idempotent_replay
 
 
 # ── Tests: Bank fee matching (pass 4) ──────────────────────────────

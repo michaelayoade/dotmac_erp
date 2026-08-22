@@ -88,23 +88,17 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.execute:
-        import os
+        from app.services.finance.gl.bulk_posting_policy import (
+            BulkPostingDisabled,
+            require_bulk_posting_allowed,
+        )
 
-        from app.tasks.gl_posting import BULK_POSTING_ENV_FLAG
+        try:
+            require_bulk_posting_allowed("post_stranded_bank_fees.py", dry_run=False)
 
-        if os.getenv(BULK_POSTING_ENV_FLAG, "").strip().lower() not in {
-            "1",
-            "true",
-            "yes",
-        }:
-            logger.error(
-                "Refused: --execute requires %s=true. This script's idempotency key is "
-                "per-journal (backfill-stranded-bank-fees-<journal_number>), which "
-                "bypasses the ledger's per-statement-line boundary — it has already "
-                "produced 429 duplicate bank-fee postings in production. See ERP PR "
-                "#335 appendix B5.4 before setting it.",
-                BULK_POSTING_ENV_FLAG,
-            )
+        except BulkPostingDisabled as exc:
+            logger.error("%s", exc)
+
             return 2
 
     mode = "EXECUTE" if args.execute else "DRY RUN"
