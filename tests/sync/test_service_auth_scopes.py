@@ -7,10 +7,13 @@ require_service_scope dependency enforces this per endpoint.
 
 from __future__ import annotations
 
+import types
+import uuid
+
 import pytest
 from fastapi import HTTPException
 
-from app.api.sync.dotmac_crm import require_service_scope
+from app.api.sync.dotmac_crm import require_crm_sync_enabled, require_service_scope
 from app.models.auth import ApiKey
 
 
@@ -48,3 +51,19 @@ def test_require_service_scope_rejects_key_missing_scope():
         dep(auth=auth)
     assert exc.value.status_code == 403
     assert "crm:ncc:read" in exc.value.detail
+
+
+def test_require_crm_sync_enabled_rejects_inactive_config():
+    org_id = uuid.uuid4()
+    db = types.SimpleNamespace(
+        scalar=lambda _stmt: types.SimpleNamespace(is_active=False)
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        require_crm_sync_enabled(
+            auth={"organization_id": org_id},
+            db=db,
+        )
+
+    assert exc.value.status_code == 403
+    assert "disabled" in exc.value.detail
