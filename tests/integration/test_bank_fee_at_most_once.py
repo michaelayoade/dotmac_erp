@@ -1231,7 +1231,7 @@ class TestTwoSessionsRaceForOneLine:
                 )
             )
             setup.flush()
-            _fiscal_period_id(setup, org_id)
+            period_id = _fiscal_period_id(setup, org_id)
             cost = _account(setup, org_id, "6080", "Finance Cost")
             bank = _account(setup, org_id, "1204", "Bank")
             cost_id, bank_id = cost.account_id, bank.account_id
@@ -1264,6 +1264,23 @@ class TestTwoSessionsRaceForOneLine:
         results: dict[str, object] = {}
         both_ready = threading.Barrier(2, timeout=30)
 
+        def _really_post(**kwargs):
+            """Post for real, rather than claiming to.
+
+            A stub that returns `success=True` while leaving the journal
+            unposted makes the WINNER look like an orphan to the loser — which
+            is correct classification of an incorrect fixture. The winner has to
+            end up genuinely live for the loser's outcome to mean anything.
+            """
+            session = kwargs["db"]
+            journal = session.get(JournalEntry, kwargs["journal_entry_id"])
+            journal.status = JournalStatus.POSTED
+            session.flush()
+            _post_to_ledger(session, journal, period_id, org_id)
+            return SimpleNamespace(
+                success=True, message="posted", idempotent_replay=False
+            )
+
         def _attempt(name: str) -> None:
             session = Session_()
             try:
@@ -1278,9 +1295,7 @@ class TestTwoSessionsRaceForOneLine:
                     bank_gl_account_id=bank_id,
                     finance_cost_account_id=cost_id,
                     posted_by_user_id=uuid.uuid4(),
-                    poster=lambda **_: SimpleNamespace(
-                        success=True, message="posted", idempotent_replay=False
-                    ),
+                    poster=_really_post,
                 )
                 session.commit()
             except BaseException as exc:  # noqa: BLE001 - recorded, asserted below
