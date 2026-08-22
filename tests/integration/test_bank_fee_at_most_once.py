@@ -247,10 +247,19 @@ class TestTheOwnerRefusesToCreateTwice:
         self, db: Session, org_id: uuid.UUID
     ) -> None:
         """Sequential canary: invoke twice for one line, and the second must
-        create nothing at all — not an extra journal, not a match."""
+        create nothing at all — not an extra journal, not a match.
+
+        The first journal is POSTED deliberately. An APPROVED one would be an
+        orphan, which is a DIFFERENT outcome on purpose (see
+        `test_an_approved_orphan_is_surfaced_not_silently_skipped`) — treating
+        an unposted orphan as "already present" is exactly the conflation this
+        module exists to remove.
+        """
         period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
-        db.add(_fee_journal(org_id, period_id, line_id, number="FIRST"))
+        first = _fee_journal(org_id, period_id, line_id, number="FIRST")
+        first.status = JournalStatus.POSTED
+        db.add(first)
         db.flush()
 
         before = db.scalar(
@@ -289,6 +298,10 @@ class TestTheOwnerRefusesToCreateTwice:
         assert not outcome.created
         assert outcome.journal is not None
         assert outcome.journal.journal_number == "FIRST"
+        assert outcome.posted_journal is not None, (
+            "the canonical journal must come back so a missing statement match "
+            "can still be repaired"
+        )
 
         after = db.scalar(
             select(func.count(JournalEntry.journal_entry_id)).where(
