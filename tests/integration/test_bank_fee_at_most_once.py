@@ -77,6 +77,127 @@ def _fiscal_period_id(db: Session, org_id: uuid.UUID) -> uuid.UUID:
     return uuid.UUID(str(period.fiscal_period_id))
 
 
+def _account(db: Session, org_id: uuid.UUID, code: str, name: str):
+    """A real chart-of-accounts row.
+
+    `journal_entry_line.account_id` and `posted_ledger_line.account_id` are
+    foreign keys. Passing a random UUID makes the INSERT fail, which is a test
+    defect masquerading as a behaviour finding.
+    """
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+
+    category = AccountCategory(
+        category_id=uuid.uuid4(),
+        organization_id=org_id,
+        category_code=f"CAT-{uuid.uuid4().hex[:6]}",
+        category_name="Canary Category",
+        ifrs_category=IFRSCategory.EXPENSES,
+        hierarchy_level=1,
+        display_order=1,
+    )
+    db.add(category)
+    db.flush()
+
+    account = Account(
+        account_id=uuid.uuid4(),
+        organization_id=org_id,
+        category_id=category.category_id,
+        account_code=code,
+        account_name=name,
+        account_type=AccountType.POSTING,
+        normal_balance=NormalBalance.DEBIT,
+    )
+    db.add(account)
+    db.flush()
+    return account
+
+
+def _with_lines(db: Session, journal, debit_account, credit_account, amount: Decimal):
+    """Give a journal the two lines a bank fee actually has.
+
+    Header-only journals were what the first canaries used, and the content and
+    liveness checks rightly refused them — a POSTED bank fee with no lines
+    cannot exist in production, so a fixture that builds one is testing a shape
+    the system does not have.
+    """
+    from app.models.finance.gl.journal_entry_line import JournalEntryLine
+
+    for number, account, dr, cr in (
+        (1, debit_account, amount, Decimal("0")),
+        (2, credit_account, Decimal("0"), amount),
+    ):
+        db.add(
+            JournalEntryLine(
+                line_id=uuid.uuid4(),
+                journal_entry_id=journal.journal_entry_id,
+                line_number=number,
+                account_id=account.account_id,
+                debit_amount=dr,
+                credit_amount=cr,
+                debit_amount_functional=dr,
+                credit_amount_functional=cr,
+            )
+        )
+    db.flush()
+    return journal
+
+
+def _post_to_ledger(db: Session, journal, period_id: uuid.UUID, org_id: uuid.UUID):
+    """Give a POSTED journal the ledger rows that make its effect LIVE.
+
+    `is_effect_live` requires them deliberately: a journal can carry POSTED
+    status and have nothing in `gl.posted_ledger_line`, and that is not an
+    effect.
+    """
+    from app.models.finance.gl.journal_entry_line import JournalEntryLine
+    from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+    from app.models.finance.gl.posting_batch import BatchStatus, PostingBatch
+
+    batch = PostingBatch(
+        batch_id=uuid.uuid4(),
+        organization_id=org_id,
+        fiscal_period_id=period_id,
+        idempotency_key=f"canary-{uuid.uuid4()}",
+        source_module="BANKING",
+        batch_description="canary",
+        total_entries=2,
+        posted_entries=2,
+        failed_entries=0,
+        status=BatchStatus.POSTED,
+        submitted_by_user_id=uuid.uuid4(),
+    )
+    db.add(batch)
+    db.flush()
+
+    rows = db.scalars(
+        select(JournalEntryLine).where(
+            JournalEntryLine.journal_entry_id == journal.journal_entry_id
+        )
+    ).all()
+    for row in rows:
+        db.add(
+            PostedLedgerLine(
+                ledger_line_id=uuid.uuid4(),
+                posting_year=journal.posting_date.year,
+                organization_id=org_id,
+                journal_entry_id=journal.journal_entry_id,
+                journal_line_id=row.line_id,
+                posting_batch_id=batch.batch_id,
+                fiscal_period_id=period_id,
+                account_id=row.account_id,
+                account_code="6080",
+                entry_date=journal.entry_date,
+                posting_date=journal.posting_date,
+                debit_amount=row.debit_amount,
+                credit_amount=row.credit_amount,
+            )
+        )
+    journal.posting_batch_id = batch.batch_id
+    db.flush()
+    return journal
+
+
 def _sqlstate(exc: BaseException) -> str | None:
     """The SQLSTATE the driver reported, not the message text.
 
@@ -257,10 +378,14 @@ class TestTheOwnerRefusesToCreateTwice:
         """
         period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
         first = _fee_journal(org_id, period_id, line_id, number="FIRST")
         first.status = JournalStatus.POSTED
         db.add(first)
         db.flush()
+        _with_lines(db, first, cost, bank, Decimal("10"))
+        _post_to_ledger(db, first, period_id, org_id)
 
         before = db.scalar(
             select(func.count(JournalEntry.journal_entry_id)).where(
@@ -545,11 +670,15 @@ class TestAFailedPostIsRetried:
 
         period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
 
         stranded = _fee_journal(org_id, period_id, line_id, number="FAILED-POST")
         stranded.status = JournalStatus.DRAFT
         db.add(stranded)
         db.flush()
+        # Content that still MATCHES the line — the drift case has its own canary.
+        _with_lines(db, stranded, cost, bank, Decimal("10"))
 
         posted: list[uuid.UUID] = []
 
@@ -625,10 +754,14 @@ class TestACrashBeforeMatchingIsRepairable:
 
         period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
         journal = _fee_journal(org_id, period_id, line_id, number="POSTED-NO-MATCH")
         journal.status = JournalStatus.POSTED
         db.add(journal)
         db.flush()
+        _with_lines(db, journal, cost, bank, Decimal("10"))
+        _post_to_ledger(db, journal, period_id, org_id)
 
         outcome = post_bank_fee(
             db,
@@ -698,9 +831,14 @@ class TestTheServiceLosesTheRaceGracefully:
             )
             setup.flush()
             period_id = _fiscal_period_id(setup, org_id)
+            cost = _account(setup, org_id, "6080", "Finance Cost")
+            bank = _account(setup, org_id, "1204", "Bank")
             winner = _fee_journal(org_id, period_id, line_id, number="WINNER")
             winner.status = JournalStatus.POSTED
             setup.add(winner)
+            setup.flush()
+            _with_lines(setup, winner, cost, bank, Decimal("10"))
+            _post_to_ledger(setup, winner, period_id, org_id)
             setup.commit()
 
             loser = Session_()
@@ -761,7 +899,14 @@ class TestTheServiceLosesTheRaceGracefully:
             with engine.begin() as cleanup:
                 cleanup.execute(text("SET LOCAL app.bypass_rls = 'true'"))
                 for stmt in (
+                    "DELETE FROM gl.posted_ledger_line WHERE organization_id = :o",
+                    "DELETE FROM gl.journal_entry_line WHERE journal_entry_id IN "
+                    "(SELECT journal_entry_id FROM gl.journal_entry WHERE organization_id = :o)",
+                    "UPDATE gl.journal_entry SET posting_batch_id = NULL WHERE organization_id = :o",
+                    "DELETE FROM gl.posting_batch WHERE organization_id = :o",
                     "DELETE FROM gl.journal_entry WHERE organization_id = :o",
+                    "DELETE FROM gl.account WHERE organization_id = :o",
+                    "DELETE FROM gl.account_category WHERE organization_id = :o",
                     "DELETE FROM gl.fiscal_period WHERE organization_id = :o",
                     "DELETE FROM gl.fiscal_year WHERE organization_id = :o",
                     "DELETE FROM core_org.organization WHERE organization_id = :o",
@@ -811,10 +956,14 @@ class TestAReversedFeeIsNotReportedAsPosted:
         period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
 
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
         original = _fee_journal(org_id, period_id, line_id, number="WAS-POSTED")
         original.status = JournalStatus.POSTED
         db.add(original)
         db.flush()
+        _with_lines(db, original, cost, bank, Decimal("10"))
+        _post_to_ledger(db, original, period_id, org_id)
 
         reversal = _fee_journal(org_id, period_id, line_id, number="REVERSAL")
         reversal.is_reversal = True
@@ -901,31 +1050,19 @@ class TestStaleDraftContentIsNotReposted:
     def test_a_draft_whose_amount_drifted_is_refused(
         self, db: Session, org_id: uuid.UUID
     ) -> None:
-        from app.models.finance.gl.journal_entry_line import JournalEntryLine
         from app.services.finance.banking.bank_fee_posting import BankFeeState
 
         period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
         stale = _fee_journal(org_id, period_id, line_id, number="STALE-DRAFT")
         stale.status = JournalStatus.DRAFT
         db.add(stale)
         db.flush()
 
         # The statement line says 10; this DRAFT says 99.
-        for amounts in ((Decimal("99"), Decimal("0")), (Decimal("0"), Decimal("99"))):
-            db.add(
-                JournalEntryLine(
-                    line_id=uuid.uuid4(),
-                    journal_entry_id=stale.journal_entry_id,
-                    line_number=1,
-                    account_id=uuid.uuid4(),
-                    debit_amount=amounts[0],
-                    credit_amount=amounts[1],
-                    debit_amount_functional=amounts[0],
-                    credit_amount_functional=amounts[1],
-                )
-            )
-        db.flush()
+        _with_lines(db, stale, cost, bank, Decimal("99"))
 
         outcome = post_bank_fee(
             db,
@@ -943,33 +1080,55 @@ class TestStaleDraftContentIsNotReposted:
 
 
 class TestMultiplePrimariesAreNeverResolvedByGuessing:
+    """Two primaries for one line must report AMBIGUOUS, never a guess.
+
+    This state is only reachable when the unique index is ABSENT — before the
+    migration is deployed, or if someone drops it. The first version of this
+    test tried to reproduce that faithfully by disabling triggers and dropping
+    the index inside the test transaction. That was wrong twice over: it needs
+    privileges the test role should not need, and a test that mutates schema to
+    reach a branch is testing the schema, not the branch.
+
+    The decision is what matters here, and it lives in `post_bank_fee`. The
+    index is already proven by `TestTheDatabaseBoundary`, so this stubs the
+    lookup to present the multiplicity and asserts the decision — no DDL.
+    """
+
     def test_two_primaries_report_ambiguous(
-        self, db: Session, org_id: uuid.UUID
+        self, db: Session, org_id: uuid.UUID, monkeypatch
     ) -> None:
-        """Only reachable before the index is deployed — which is precisely when
-        an adapter must not pick one and carry on."""
+        from app.services.finance.banking import bank_fee_posting
         from app.services.finance.banking.bank_fee_posting import BankFeeState
 
         period_id = _fiscal_period_id(db, org_id)
         line_id = uuid.uuid4()
-        db.execute(text("ALTER TABLE gl.journal_entry DISABLE TRIGGER ALL"))
-        db.execute(text("DROP INDEX IF EXISTS gl.uq_journal_entry_bank_fee_source"))
-        try:
-            db.add(_fee_journal(org_id, period_id, line_id, number="ONE"))
-            db.add(_fee_journal(org_id, period_id, line_id, number="TWO"))
-            db.flush()
+        one = _fee_journal(org_id, period_id, line_id, number="ONE")
+        db.add(one)
+        db.flush()
 
-            outcome = post_bank_fee(
-                db,
-                organization_id=org_id,
-                line=_fee_line(line_id),
-                bank_gl_account_id=uuid.uuid4(),
-                finance_cost_account_id=uuid.uuid4(),
-                posted_by_user_id=uuid.uuid4(),
-                poster=lambda **_: pytest.fail("must not post while ambiguous"),
-            )
-            assert outcome.state is BankFeeState.AMBIGUOUS
-            assert outcome.needs_attention
-            assert "ONE" in outcome.message and "TWO" in outcome.message
-        finally:
-            db.execute(text("ALTER TABLE gl.journal_entry ENABLE TRIGGER ALL"))
+        # A second primary that the index would refuse — presented to the
+        # decision the way an un-migrated database would present it.
+        two = _fee_journal(org_id, period_id, uuid.uuid4(), number="TWO")
+        db.add(two)
+        db.flush()
+
+        monkeypatch.setattr(
+            bank_fee_posting, "find_fee_journals", lambda *a, **k: [one, two]
+        )
+
+        outcome = bank_fee_posting.post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=uuid.uuid4(),
+            finance_cost_account_id=uuid.uuid4(),
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("must not post while ambiguous"),
+        )
+
+        assert outcome.state is BankFeeState.AMBIGUOUS
+        assert outcome.needs_attention
+        assert not outcome.ok, "ambiguity is an error, not a quiet outcome"
+        assert "ONE" in outcome.message and "TWO" in outcome.message, (
+            "both journals must be named so the operator can resolve it"
+        )
