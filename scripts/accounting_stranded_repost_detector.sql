@@ -79,6 +79,30 @@ FROM je_net WHERE net <> 0 GROUP BY 1;
 CREATE UNIQUE INDEX ON je_sig (journal_entry_id);
 CREATE INDEX ON je_sig (fwd);
 
+-- ---------------------------------------------------------------------------
+-- SENSITIVITY CANARY — inserted BEFORE `candidate` is materialized, so that the
+-- assertion below tests THE DETECTOR'S OWN PREDICATE rather than two ad-hoc
+-- queries written beside it.
+--
+-- An earlier version inserted this AFTER `candidate` was built. That version
+-- displayed a passing-looking 2,040-vs-2,039 result even though `candidate`
+-- could not have seen the canary either way — so removing the organization
+-- predicate from `candidate` would not have changed the output. It proved
+-- nothing. This ordering is the whole point.
+--
+-- Written inside the transaction this script rolls back; nothing persists.
+-- ---------------------------------------------------------------------------
+INSERT INTO gl.journal_entry
+  (journal_entry_id, organization_id, journal_number, entry_date, posting_date,
+   status, is_reversal, source_module, source_document_type, source_document_id,
+   total_debit_functional)
+VALUES
+  ('00000000-0000-0000-0000-0000000000ff'::uuid,
+   '00000000-0000-0000-0000-0000000000aa'::uuid,
+   'SENSITIVITY-CANARY', DATE '2026-01-01', DATE '2026-01-01',
+   'APPROVED', false, 'AR', 'INVOICE',
+   '00000000-0000-0000-0000-0000000000fe'::uuid, 1.000000);
+
 CREATE TEMP TABLE candidate AS
 SELECT je.journal_entry_id, je.journal_number, je.source_document_id AS invoice_id,
        je.entry_date, je.posting_date, je.total_debit_functional,
@@ -94,42 +118,70 @@ WHERE je.organization_id = :'ORG'::uuid
 CREATE INDEX ON candidate (invoice_id);
 
 \echo ''
+\echo '===== 0b. SENSITIVITY PROOF: the organization predicate actually bites ====='
+CREATE TEMP TABLE canary_check AS
+SELECT
+  (SELECT count(*) FROM gl.journal_entry
+     WHERE journal_number = 'SENSITIVITY-CANARY')                  AS canary_in_source,
+  (SELECT count(*) FROM candidate
+     WHERE journal_number = 'SENSITIVITY-CANARY')                  AS canary_in_candidate,
+  (SELECT count(*) FROM gl.journal_entry
+     WHERE status='APPROVED' AND source_module='AR'
+       AND source_document_type='INVOICE')                         AS unscoped_count,
+  (SELECT count(*) FROM candidate)                                 AS detector_population;
+
+SELECT * FROM canary_check;
+
+-- FAIL-CLOSED. A comment saying "MUST" and a displayed SELECT are not an
+-- assertion — nothing reads them. This raises, and `ON_ERROR_STOP` aborts the
+-- run, so a detector whose organization predicate has been removed or broken
+-- CANNOT produce output at all.
+DO $canary$
+DECLARE c record;
+BEGIN
+  SELECT * INTO c FROM canary_check;
+
+  IF c.canary_in_source <> 1 THEN
+    RAISE EXCEPTION
+      'sensitivity proof INVALID: the canary is not in the source (found %). The proof cannot run.',
+      c.canary_in_source;
+  END IF;
+
+  IF c.canary_in_candidate <> 0 THEN
+    RAISE EXCEPTION
+      'ORGANIZATION PREDICATE FAILED: the second-tenant canary reached `candidate` (% rows). Every count in this run would be cross-tenant.',
+      c.canary_in_candidate;
+  END IF;
+
+  IF c.unscoped_count <> c.detector_population + 1 THEN
+    RAISE EXCEPTION
+      'ORGANIZATION PREDICATE NOT EXERCISED: unscoped=% but detector population=%; expected exactly one more. The predicate is not discriminating.',
+      c.unscoped_count, c.detector_population;
+  END IF;
+
+  RAISE NOTICE 'sensitivity proof PASSED: canary present in source, absent from candidate, unscoped = scoped + 1';
+END
+$canary$;
+
+DELETE FROM gl.journal_entry WHERE journal_number = 'SENSITIVITY-CANARY';
+
+DO $gone$
+DECLARE n integer;
+BEGIN
+  SELECT count(*) INTO n FROM gl.journal_entry WHERE journal_number = 'SENSITIVITY-CANARY';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'canary was not removed (% rows remain)', n;
+  END IF;
+END
+$gone$;
+
+\echo ''
 \echo '===== 0. Candidate population, scoped to one organization ====='
 SELECT count(*) AS candidates, count(DISTINCT invoice_id) AS distinct_invoices,
        count(*) FILTER (WHERE invoice_id IS NULL) AS no_source_document,
        count(DISTINCT currency_code) AS transaction_currencies,
        sum(total_debit_functional) AS gross_debit
 FROM candidate;
-
-\echo ''
-\echo '===== 0b. SENSITIVITY PROOF: the organization predicate actually bites ====='
-\echo '-- Inserts one synthetic second-tenant journal that would otherwise qualify,'
-\echo '-- then shows the scoped count ignores it and the unscoped count does not.'
-\echo '-- Written inside the transaction this script rolls back; nothing persists.'
-INSERT INTO gl.journal_entry
-  (journal_entry_id, organization_id, journal_number, entry_date, posting_date,
-   status, is_reversal, source_module, source_document_type, source_document_id,
-   total_debit_functional)
-VALUES
-  ('00000000-0000-0000-0000-0000000000ff'::uuid,
-   '00000000-0000-0000-0000-0000000000aa'::uuid,
-   'SENSITIVITY-CANARY', DATE '2026-01-01', DATE '2026-01-01',
-   'APPROVED', false, 'AR', 'INVOICE',
-   '00000000-0000-0000-0000-0000000000fe'::uuid, 1.000000);
-
-SELECT
-  (SELECT count(*) FROM gl.journal_entry
-    WHERE status='APPROVED' AND source_module='AR' AND source_document_type='INVOICE')
-      AS unscoped_now_includes_the_canary,
-  (SELECT count(*) FROM gl.journal_entry
-    WHERE organization_id = :'ORG'::uuid
-      AND status='APPROVED' AND source_module='AR' AND source_document_type='INVOICE')
-      AS scoped_excludes_the_canary,
-  (SELECT count(*) FROM candidate) AS detector_population;
-
-\echo '-- The first number MUST exceed the other two by exactly 1. If it does not,'
-\echo '-- the predicate is not doing anything and every count below is unscoped.'
-DELETE FROM gl.journal_entry WHERE journal_number = 'SENSITIVITY-CANARY';
 
 CREATE TEMP TABLE invoice_journal AS
 SELECT je.journal_entry_id, je.source_document_id AS invoice_id, je.status,

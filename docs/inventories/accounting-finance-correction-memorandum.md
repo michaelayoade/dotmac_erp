@@ -545,8 +545,15 @@ balances or other issued reports relied on the incorrect ledger state.
 
 Specific exposures this memorandum raises:
 
-- **Trade Receivables understated by ₦1,619,218.75** since 2026-04-19 —
-  affects customer balances, AR ageing and any balance sheet issued since.
+- **Trade Receivables potentially understated by ₦1,619,218.75** since
+  2026-04-19 — **CONDITIONAL, per §1.** What is unconditional is that six
+  originals are reversed twice, so the effect is duplicated relative to a
+  single-reversal position. Whether that duplication is a *misstatement* depends
+  on whether `REV-SYNC-OB-001` was itself economically correct, which only the
+  §1a audited-opening bridge can establish. Until it does, this is an exposure to
+  assess, not a confirmed understatement — and it must not be quoted as one. If
+  the bridge confirms the composite was correct, it affects customer balances, AR
+  ageing and any balance sheet issued since.
 - **VAT** — the detector has run (Appendix A). The orphan journals themselves
   carry **no VAT lines at all**: the whole cohort touches only 1400 and 4000.
 
@@ -646,13 +653,13 @@ superseded wherever they disagree with anything here.
 | item | value |
 | --- | --- |
 | Source | `dotmac_erp_standby` on `dotmac-db-primary` — hot standby, `pg_is_in_recovery() = t`, read-only. The production primary was **not** used, and no standby recovery setting was changed (`max_standby_streaming_delay` remains `30s`). |
-| Replay LSN at export start | `BF/ED151350` (2026-08-22 09:44:46Z) |
-| Replay LSN at export end | `BF/ED15F0B8` (2026-08-22 09:45:16Z) |
+| Replay LSN at export start | `BF/EDEA5778` (2026-08-22 10:25:04Z) |
+| Replay LSN at export end | `BF/EDEA58F0` (2026-08-22 10:25:13Z) |
 | Server version | PostgreSQL 16.4, source and target |
 | Migration revisions (source heads) | `20260815_academy_learning_sync`, `fi_0001_stored_files`, `20260815_academy_course_projection`, `20260816_platform_owned_webhook_ssrf_policy`, `20260818_dotmac_sub_customer_metrics` |
-| Detector commit | `d24d8820b7b36a64d88b0290c09fbeefe503d42d` |
-| Detector query hash (sha256) | `402edb3c4633496b2d2fea3432824409e1f02db78ce36cddf36ba1cb4aedb70e` |
-| Target | `erp-forensic-20260822b` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (§A10). |
+| Detector commit | `9f21c0b912947ed5bd821f3315db52bee118a686` (superseded by the commit that carries this table — see the PR's commit list) |
+| Detector query hash (sha256) | `44c48998cf3d290bd4b28e06a1d5d35df93b29818d6e6afb74c67d6a6de4fa6e` |
+| Target | `erp-forensic-20260822c` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (**§A12**). |
 
 **This copy spans an LSN RANGE and is NOT an atomic snapshot.** The four tables
 were exported as separate statements. Row counts and the candidate population
@@ -680,18 +687,52 @@ deployment today (206,075 of 206,075 journals). That is precisely why the
 predicate is explicit: a query that is accidentally correct because there is one
 tenant becomes silently wrong when there are two.
 
-**Sensitivity proof (detector §0b).** The run inserts one synthetic
-second-tenant journal that would otherwise qualify as a candidate, inside the
-transaction it rolls back, then counts both ways:
+**Sensitivity proof (detector §0b) — and a defect that had to be fixed first.**
+
+The first version of this proof was worthless, and the failure is worth stating
+because it is the kind that looks like evidence. It inserted the canary *after*
+`candidate` had already been materialized, then displayed two ad-hoc counts
+beside it. `candidate` could not have seen the canary either way, so **removing
+the organization predicate from `candidate` would have produced exactly the same
+reassuring 2,040-vs-2,039 output.** It tested two queries written next to the
+detector, not the detector.
+
+Two things changed:
+
+1. **The canary is inserted BEFORE `candidate` is built**, so the detector's own
+   predicate is what decides whether it appears.
+2. **The check is an assertion, not a display.** A `DO` block raises, and
+   `ON_ERROR_STOP` aborts the run. A comment saying "MUST" and a `SELECT` are not
+   an assertion — nothing reads them. A detector whose organization predicate has
+   been removed or broken now cannot produce output at all.
+
+Three conditions must all hold or the run aborts: the canary exists in the
+unscoped source; the canary is **absent from `candidate`**; and the unscoped
+count equals the detector population plus exactly one.
 
 | measure | value |
 | --- | ---: |
-| Unscoped count, with the canary present | 2,040 |
-| Organization-scoped count, same moment | 2,039 |
+| Canary present in the unscoped source | 1 |
+| Canary present in `candidate` | 0 |
+| Unscoped count | 2,040 |
 | Detector population | 2,039 |
 
-The predicate bites. Had the first number equalled the others, every count in
-this appendix would have been unscoped and the test says so in the script.
+Result: `NOTICE: sensitivity proof PASSED`.
+
+**Negative control.** The same script with the organization predicate stripped
+from `candidate` was run against the same restore. It aborted:
+
+```
+ERROR:  ORGANIZATION PREDICATE FAILED: the second-tenant canary reached
+        `candidate` (1 rows). Every count in this run would be cross-tenant.
+```
+
+psql exited 3 and produced no results. The assertion is therefore proven to bite,
+rather than merely proven to pass.
+
+**None of this disturbs the 2,039 figure.** The predicate in the real query was
+correct throughout; what was defective was the proof of it. The counts below were
+identical before and after the fix.
 
 All 2,039 candidate invoices are **NGN**; there is one transaction currency in
 the cohort.
@@ -786,9 +827,26 @@ opposite decisions behind one number.
 | cohort | count | gross | disposition |
 | --- | ---: | ---: | --- |
 | Credit notes, ledger chain proven | 2,010 | ₦29,891,761.62 | **HOLD** pending proof that the credit notes remain valid, that they affect customer balances, and that no equivalent GL effect exists |
-| Standard invoices, ledger chain proven | 23 | ₦8,355,546.64 | **SEPARATE APPROVAL.** Verify tax status, customer balance, currency and period per document |
+| Standard invoices, ledger chain proven | 23 | ₦8,355,546.64 | **SEPARATE APPROVAL, AND FOUR SEPARATE PERIOD ASSESSMENTS** — see below. Verify tax status, customer balance, currency and period per document |
 | Incomplete standard-invoice orphans | 5 | ₦945,000.00 | **QUARANTINE — never post as written.** If valid, void and regenerate through the owning service with the complete VAT/revenue structure |
 | `JE202607-20448` | 1 | ₦18,812.50 | **VOID**, subject to Finance approval after a final current-state duplicate verification |
+
+### The 23 standard invoices are FOUR assessments, not one cohort
+
+They span four originating periods, and each needs its own source-document,
+VAT-return, customer-subledger and GL-control reconciliation. **Do not approve
+them as a combined ₦8.36M cohort.**
+
+| originating period | journals | gross debit |
+| --- | ---: | ---: |
+| 2026-04 | 3 | ₦1,300,000.00 |
+| 2026-05 | 3 | ₦1,126,435.48 |
+| 2026-06 | 8 | ₦2,834,500.00 |
+| 2026-07 | 9 | ₦3,094,611.16 |
+| **total** | **23** | **₦8,355,546.64** |
+
+The credit-note cohort is concentrated differently — 1,970 of 2,010 in 2026-03 —
+so the two cohorts do not even share a reporting-impact shape.
 
 ## A6. The one-row delta is explained
 
@@ -907,20 +965,24 @@ same set — exactly as §3 warned.
    authoritative state immediately before executing any disposition.
 4. **No data was repaired.** No candidate was posted, voided or altered. The
    detector runs in a transaction ending in `ROLLBACK`, against a copy.
-5. **A defect was found in the detector while running it**, and is recorded in
-   the script rather than quietly fixed: an earlier version required the
-   original to be `POSTED` and returned ZERO chains for all 2,039. Reversed
-   originals move to `REVERSED`, so that zero was a query defect, not a
-   finding. Every number here comes from the corrected version, and each was
-   re-derived by a second query using no signatures.
+5. **Two defects were found in the detector while running it**, both recorded in
+   the script rather than quietly fixed.
+   - An early version required the original to be `POSTED` and returned ZERO
+     chains for all 2,039. Reversed originals move to `REVERSED`, so that zero
+     was a query defect, not a finding.
+   - The organization sensitivity proof was initially ordered so that it could
+     not fail (§A1). It is now fail-closed and has a negative control.
+
+   Every number here comes from the corrected version, and each was re-derived
+   by a second query using no signatures.
 
 ## A12. Cleanup record
 
 | step | evidence |
 | --- | --- |
-| Container `erp-forensic-20260822b` removed | `docker rm -f`; `docker ps -a --filter name=erp-forensic` returns 0 rows |
-| Volume `erp-forensic-20260822b-data` removed | `docker volume rm`; `docker volume ls --filter name=erp-forensic` returns 0 rows |
-| Earlier instance `erp-forensic-20260822a` and its volume | removed the same way, earlier the same day |
+| Container `erp-forensic-20260822c` removed | `docker rm -f`; `docker ps -a --filter name=erp-forensic` returns 0 rows |
+| Volume `erp-forensic-20260822c-data` removed | `docker volume rm`; `docker volume ls --filter name=erp-forensic` returns 0 rows |
+| Earlier instances `erp-forensic-20260822a` and `-20260822b`, and their volumes | removed the same way, earlier the same day |
 | SQL and output removed from `dotmac-db-primary` | all `/tmp` detector, diagnostic and output files — `No such file or directory` |
 | No dump file ever written | tables were streamed container-to-container; no export file existed on either host at any point |
 | Standby unchanged | `pg_is_in_recovery() = t`, `max_standby_streaming_delay = 30s` (untouched — and the reason the earlier correlated query was cancelled), replay advancing normally |
