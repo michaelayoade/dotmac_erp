@@ -408,6 +408,12 @@ earlier draft called it "total exposure" — that was wrong.
 
 ### `ar/INVOICE = 2,039` identifies CANDIDATES, not a proven cohort
 
+> **SUPERSEDED BY APPENDIX A.** The detector has since run on an isolated
+> restored database. 2,033 of the 2,039 pass every ledger-decidable proof; the
+> remaining 6 are itemised in A2 and A6. Two findings in Appendix A change what
+> this section and §4 assume: the cohort is **98.6% credit notes**, not
+> invoices, and it carries **no VAT effect at all**.
+
 The 2,039 are journals matching the stranded cohort's *producer*. They are not
 yet proven stranded. **None may be called stranded, and no claim may be made
 that their VAT effect is missing, until each passes the exact detector**:
@@ -415,6 +421,10 @@ that their VAT effect is missing, until each passes the exact detector**:
 > original → reversal → orphan → no later replacement
 
 ### The one-row delta (2,039 candidates vs 2,038 proven) is UNEXPLAINED
+
+> **RESOLVED — see Appendix A6.** Kept as written because the reasoning below
+> about not assuming the two counts describe the same set is what produced the
+> answer.
 
 The prior exact investigation proved **2,038** cases. This memorandum counts
 **2,039** candidates by producer. The single-row difference is not yet
@@ -455,6 +465,14 @@ remaining expense and balance-sheet:
 | 5 | expense/EXPENSE_REIMBURSEMENT | 2 | ₦0.03M | residual |
 
 ## 4. Treatment of the AR/INVOICE candidate population (2,039)
+
+> **THE OBJECTIVE BELOW IS WRONG FOR 2,010 OF THE 2,039 — see Appendix A3.**
+> 98.6% of this population is CREDIT NOTES. Restoring a credit note reduces
+> receivables and revenue; it does not restore missing income. The two
+> directions are opposite economic acts and cannot share one approval. The
+> per-invoice proofs below still stand and have been run (Appendix A1); it is
+> the framing of the objective that must be corrected before any remediation
+> path is designed.
 
 Objective: restore each still-valid invoice's missing GL effect **exactly once**.
 
@@ -571,8 +589,8 @@ where it already blocks legacy-writer retirement.
 | Item | Value |
 | --- | --- |
 | Population and gross unposted debit under review | §3 — 14,263 journals, ₦76,495,739.50 |
-| AR/INVOICE candidate detector run on a restored database (2,039) | *not started — cannot run on the standby, §3* |
-| One-row delta (2,039 candidates vs 2,038 previously proven) explained | *unexplained* |
+| AR/INVOICE candidate detector run on a restored database (2,039) | **RUN — Appendix A.** 2,033 of 2,039 pass every ledger-decidable proof. Proof 6 remains a Finance determination and is NOT discharged. |
+| One-row delta (2,039 candidates vs 2,038 previously proven) explained | **EXPLAINED — Appendix A6.** `JE202607-20448` has no reversed original; it duplicates already-posted `JE202607-9550`. Indicated disposition VOID, pending Finance. |
 | Approved classification policy for the 14,263 | §5 — *pending approval* |
 | Disposition recorded for **every** remaining APPROVED journal | *not started* |
 | Payroll journal (₦12,148,709.68) individually adjudicated | *pending* |
@@ -596,3 +614,205 @@ The survey is the gate because it reads the database rather than the change log.
 
 Gate D backfill execution remains blocked until every item in §7 is completed
 and the re-run survey is clean.
+
+---
+
+# Appendix A — Stranded-repost detector: results
+
+**This appendix supersedes §3's "candidates, not a proven cohort" caveat and
+§4's framing. Read it before acting on either.** §3 and §4 are left as written
+so the change in understanding is visible; where they now say something this
+evidence contradicts, this appendix governs.
+
+## A0. Provenance
+
+| item | value |
+| --- | --- |
+| Source | `dotmac_erp_standby` on `dotmac-db-primary` — hot standby, `pg_is_in_recovery() = t`, read-only. The production primary was **not** used, and no standby recovery setting was changed. |
+| Replay LSN at export start | `BF/EBE4B5C0` (2026-08-22 09:02:58Z) |
+| Replay LSN at export end | `BF/EBE8DA50` (2026-08-22 09:05:30Z) |
+| Replay LSN at detector run | `BF/EC128148` (2026-08-22 09:14:02Z) |
+| Server version | PostgreSQL 16.4 (source and target) |
+| Migration revisions (source heads) | `20260815_academy_learning_sync`, `fi_0001_stored_files`, `20260815_academy_course_projection`, `20260816_platform_owned_webhook_ssrf_policy`, `20260818_dotmac_sub_customer_metrics` |
+| Detector commit | `0fe3e49951e3faeaef87c36b5a0b6b85726585b4` |
+| Detector query hash (sha256) | `d804178781d7a5657c735d12003cf713118ecb375c3ecb53c98b410dc007beef` |
+| Target | `erp-forensic-20260822a`, ephemeral, `--network none`, no published port, no application attached. Destroyed after verification — see A7. |
+
+**Snapshot integrity.** The three tables were exported as separate statements, so
+the copy spans an LSN range rather than one snapshot. The candidate population,
+its gross debit, and the row counts of all three tables were re-checked against
+the standby after loading and matched exactly, and the cohort is 2026-03 to
+2026-07 data that is not being written. The range is recorded rather than
+claimed to be a point-in-time snapshot.
+
+**What was copied.** Only the columns the proofs read, from four tables:
+`gl.journal_entry` (14 columns), `gl.journal_entry_line` (4), `ar.invoice`
+(4), `gl.account` (4). No description, no reference, no customer, no payload,
+no credential. Nothing was written to disk on either host — each table was
+streamed `COPY TO STDOUT` → `COPY FROM STDIN` directly between containers.
+
+## A1. Counts at each proof stage
+
+| stage | count | gross debit |
+| --- | ---: | ---: |
+| Candidates by producer (§3) | **2,039** | ₦39,211,120.76 |
+| …with an original+reversal chain | 2,038 | — |
+| …ambiguous (more than one chain) | 0 | — |
+| Proof 1 — invoice still valid | 2,038 | — |
+| Proof 2 — original was reversed | 2,038 | — |
+| Proof 3 — reversal exactly eliminated the original | 2,038 | — |
+| Proof 4 — orphan is the original's replacement | **2,033** | — |
+| Proof 5 — nothing later already restored it | 2,038 | — |
+| **Passing every ledger-decidable proof** | **2,033** | **₦38,247,308.26** |
+
+Every candidate invoice is `PAID` (1,628), `POSTED` (406) or
+`PARTIALLY_PAID` (5); none is void or cancelled, so proof 1 excludes nobody.
+Every original a reversal points at is in status `REVERSED` — 2,038 of 2,038.
+
+## A2. Disposition of all 2,039 candidates
+
+| disposition | candidates | gross debit |
+| --- | ---: | ---: |
+| A — proven stranded | 2,033 | ₦38,247,308.26 |
+| D — orphan is not the original's replacement | 5 | ₦945,000.00 |
+| E — no original+reversal chain | 1 | ₦18,812.50 |
+| **total** | **2,039** | **₦39,211,120.76** |
+
+## A3. THE POPULATION IS CREDIT NOTES, NOT INVOICES
+
+| document type | disposition | candidates | gross debit |
+| --- | --- | ---: | ---: |
+| CREDIT_NOTE | proven stranded | **2,010** | ₦29,891,761.62 |
+| STANDARD | proven stranded | 23 | ₦8,355,546.64 |
+| STANDARD | not proven (D) | 5 | ₦945,000.00 |
+| STANDARD | no chain (E) | 1 | ₦18,812.50 |
+
+**98.6% of this cohort is credit notes.** Posting direction confirms it
+independently: all 2,010 credit-note candidates credit 1400 and debit 4000; all
+29 standard-invoice candidates do the reverse. Type and direction agree on every
+single row.
+
+§4 says the objective is to "restore each still-valid **invoice's** missing GL
+effect". For 2,010 of 2,039 that is the wrong economic act: restoring a credit
+note **reduces** receivables and revenue. §4's framing must be corrected before
+any remediation path is designed, and the two directions cannot share one
+approval.
+
+## A4. THERE IS NO MISSING VAT EFFECT IN THIS COHORT
+
+§3 required that no claim of a missing VAT effect be made until tested. It is now
+tested, and the answer is negative.
+
+Every account touched by any of the 2,039 candidates — unfiltered, so an account
+touched equally on both sides would still appear:
+
+| account | journals | total debit | total credit |
+| --- | ---: | ---: | ---: |
+| 1400 Trade Receivables | 2,039 | ₦9,319,359.14 | ₦29,891,761.62 |
+| 4000 Internet Revenue | 2,039 | ₦29,891,761.62 | ₦9,319,359.14 |
+
+No VAT account (2125) appears on any candidate. **The VAT concern is closed for
+this cohort.**
+
+It is precisely the five proof-4 failures that make this legible: their
+*originals* carry 2125 VAT lines and a second 4000 revenue line, while their
+orphans carry only 1400 and 4000. That is why they fail proof 4 — the orphan
+would post an incomplete replacement, dropping VAT.
+
+## A5. Net effect if the proven cohort were posted
+
+| account | net debit effect |
+| --- | ---: |
+| 1400 Trade Receivables | (₦21,536,214.98) |
+| 4000 Internet Revenue | ₦21,536,214.98 |
+
+The headline "₦39.21M" in §3 is the sum of absolute header debits across both
+directions. **The net effect of posting the proven cohort is a ₦21,536,214.98
+reduction in receivables and an equal reduction in revenue** — not ₦38.2M of
+restored income. Section §6's reporting and tax assessment must use the net
+figure and the direction, not the gross.
+
+### By posting period
+
+| period | type | journals | gross debit |
+| --- | --- | ---: | ---: |
+| 2026-03 | CREDIT_NOTE | 1,970 | ₦28,258,256.05 |
+| 2026-04 | STANDARD | 3 | ₦1,300,000.00 |
+| 2026-05 | CREDIT_NOTE | 29 | ₦1,465,019.82 |
+| 2026-05 | STANDARD | 3 | ₦1,126,435.48 |
+| 2026-06 | CREDIT_NOTE | 10 | ₦165,985.75 |
+| 2026-06 | STANDARD | 8 | ₦2,834,500.00 |
+| 2026-07 | CREDIT_NOTE | 1 | ₦2,500.00 |
+| 2026-07 | STANDARD | 9 | ₦3,094,611.16 |
+
+2026-03 carries 1,970 of 2,033 — the cohort is overwhelmingly one month.
+
+## A6. The one-row delta is EXPLAINED
+
+§3 recorded 2,039 candidates against a prior investigation's 2,038 and required
+the difference be resolved by running the detector. It is:
+
+**`JE202607-20448` (2026-03-05, ₦18,812.50) has no reversed original.** Its
+invoice carries one other journal, `JE202607-9550`, which is `POSTED`, is not
+a reversal, and posts the identical two lines — 1400 debit ₦18,812.50, 4000
+credit ₦18,812.50 — on the identical date.
+
+It is not a stranded repost. It is an **exact duplicate of an already-posted
+journal**, and posting it would double-count ₦18,812.50.
+
+Structural counts confirm the shape without using the detector's signatures at
+all: 2,039 APPROVED orphans, 2,038 `REVERSED` originals, 2,038 `POSTED`
+reversals, and exactly 1 `POSTED` non-reversal.
+
+**Indicated disposition: VOID, not post.** That is a Finance determination, not
+an engineering one.
+
+### The five proof-4 failures, identified
+
+| orphan | invoice | invoice status | orphan debit | why it fails |
+| --- | --- | --- | ---: | --- |
+| JE202607-21559 | INV202606-154298 | POSTED | ₦350,000.00 | orphan omits the original's VAT and second revenue line |
+| JE202607-21557 | INV202605-155374 | POSTED | ₦350,000.00 | same |
+| JE202607-21563 | INV202606-154300 | POSTED | ₦105,000.00 | same |
+| JE202607-21565 | INV202606-154299 | POSTED | ₦70,000.00 | same |
+| JE202607-21561 | INV202606-154297 | POSTED | ₦70,000.00 | same |
+
+Each original posts 1400, 2125 (two VAT lines) and 4000 (two revenue lines); each
+orphan posts only 1400 and 4000 for the base amount. **Posting these five as they
+stand would understate output VAT and revenue.** They must not be included in any
+bulk pass.
+
+## A7. Limits on this result, stated plainly
+
+1. **Proof 6 of §4 is not discharged.** Customer balance, tax treatment,
+   currency and period correctness are not decidable from the ledger. "Proven
+   stranded" here means *the ledger chain is proven*, nothing more. No candidate
+   is approved for posting by this appendix.
+2. **Proof 5 is necessary, not sufficient.** A replacement posted as a manual
+   journal carrying no `source_document_id` cannot be linked to its invoice by
+   any ledger query.
+3. **No data was repaired.** No Gate D defect is corrected, and no candidate was
+   posted, voided or altered. The detector runs in a transaction that ends in
+   `ROLLBACK`, against a copy.
+4. **A defect was found in the detector itself while running it**, and is
+   recorded in the script rather than quietly fixed: an earlier version required
+   the original to be `POSTED` and returned ZERO chains for all 2,039
+   candidates. Reversed originals move to `REVERSED`, so that zero was a query
+   defect, not a finding. Every number above comes from the corrected version,
+   and each was re-derived by a second query that uses no signatures.
+5. **Cleanup.** `erp-forensic-20260822a` and its volume
+   `erp-forensic-20260822a-data` were destroyed after these results were
+   verified; the detector and diagnostic SQL were removed from both hosts. No
+   copy of the data survives. See the cleanup record below.
+
+## A8. Cleanup record
+
+| step | evidence |
+| --- | --- |
+| Container `erp-forensic-20260822a` removed | `docker rm -f` — `docker ps -a --filter name=erp-forensic-20260822a` returns 0 rows |
+| Volume `erp-forensic-20260822a-data` removed | `docker volume rm` — `docker volume ls --filter name=erp-forensic-20260822a` returns 0 rows |
+| Detector, diagnostic and output files removed from `dotmac-db-primary` | `/tmp/detector.sql`, `/tmp/detector-out.txt`, `/tmp/diag.sql`, `/tmp/verify.sql`, `/tmp/types.sql` — all `No such file or directory` |
+| No dump file ever written | The tables were streamed container-to-container (`COPY TO STDOUT` → `COPY FROM STDIN`); no export file existed on either host at any point |
+| Standby unchanged | `pg_is_in_recovery() = t`, `max_standby_streaming_delay = 30s` (untouched — and the reason the earlier correlated query was cancelled), replay advancing normally |
+| Production primary | never connected to |
+
