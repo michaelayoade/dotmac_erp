@@ -62,6 +62,24 @@ reversal structure quietly wrong, and would move an accounting decision from
 Finance into a migration script. The only acceptable exclusion is one **Finance
 explicitly quarantines**, recorded as such.
 
+#### Forensics complete — see the Finance correction memorandum
+
+`docs/inventories/accounting-finance-correction-memorandum.md` carries the
+read-only evidence for all four defects, and it **overturns the framing of
+defect 2**: the "malformed reversal" is not a labelling problem but an
+uncorrected double-reversal of **₦1,619,218.75** on Trade Receivables and
+Retained Earnings, still in effect. It is materially larger than everything
+else on this list, and it was found only because the adjudication was required
+to work from source evidence rather than from the `is_reversal` flag.
+
+The memorandum also finds that defect 1 has a **code root cause** — the AR
+posting adapter rounds each revenue line independently instead of forcing the
+last line to absorb the allocation residue — so repairing the three rows without
+a linked engineering fix leaves the defect free to recur.
+
+Decisions, approver and operator in that memorandum are Finance's and are not
+filled in. Gate D stays blocked until they are.
+
 #### Exit criterion
 
 Re-run `scripts/accounting_backfill_survey.sql` after the repairs and require
