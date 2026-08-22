@@ -509,6 +509,11 @@ Until it runs, the 2,039 are candidates, the one-row delta against the prior
 
 ## 5. Classification policy for the remaining 12,224
 
+> **APPLIED — see Appendix B.** The Gate G detector has run this policy against
+> all 12,224. Result: **no post candidates at all** — 12,217 are already-posted
+> effect and 7 are undecidable from the ledger. The policy below is unchanged
+> and still governs; Appendix B is its evidence.
+
 | condition | disposition |
 | --- | --- |
 | Valid source document, required ledger effect absent | Post through the owning service |
@@ -617,9 +622,11 @@ where it already blocks legacy-writer retirement.
 | AR/INVOICE candidate detector run on a restored database (2,039) | **RUN — Appendix A.** 2,033 of 2,039 pass every ledger-decidable proof. Proof 6 remains a Finance determination and is NOT discharged. |
 | One-row delta (2,039 candidates vs 2,038 previously proven) explained | **EXPLAINED — Appendix A6.** `JE202607-20448` has no reversed original; it duplicates already-posted `JE202607-9550`. Indicated disposition VOID, pending Finance. |
 | Approved classification policy for the 14,263 | §5 — *pending approval* |
-| Disposition recorded for **every** remaining APPROVED journal | *not started* |
-| Payroll journal (₦12,148,709.68) individually adjudicated | *pending* |
+| Disposition recorded for **every** remaining APPROVED journal | **LEDGER EVIDENCE COMPLETE — Appendix B.** 12,217 of 12,224 evidenced (void recommendations); 7 quarantined as undecidable. Finance approval, V2 bank-statement sampling and owners for the 7 outstanding. |
+| Payroll journal (₦12,148,709.68) individually adjudicated | *pending* — Appendix B4 finds its payroll entry already carries a POSTED journal with an identical effect. Evidence for the adjudication, not a substitute for it. |
 | Reporting and tax assessment for the backlog cohorts | *not yet performed* |
+| Generating defect behind 12,117 journals for 111 fee events identified | ***not started* — Appendix B7. Gate G cannot close on a cleanup whose cause is unknown, because the population can regrow.** |
+| Pre-existing duplication in POSTED bank fees (149 journals on 111 events) | ***not started* — Appendix B5. A ledger defect today, untouched by any Gate G disposition.** |
 
 ## 8. Execution requirements
 
@@ -986,4 +993,213 @@ same set — exactly as §3 warned.
 | SQL and output removed from `dotmac-db-primary` | all `/tmp` detector, diagnostic and output files — `No such file or directory` |
 | No dump file ever written | tables were streamed container-to-container; no export file existed on either host at any point |
 | Standby unchanged | `pg_is_in_recovery() = t`, `max_standby_streaming_delay = 30s` (untouched — and the reason the earlier correlated query was cancelled), replay advancing normally |
+| Production primary | never connected to |
+
+---
+
+# Appendix B — Gate G: the remaining 12,224 APPROVED journals
+
+**This appendix is the operative text for the 12,224 APPROVED journals outside
+the ar/INVOICE cohort.** It supersedes any earlier assumption that they are
+work waiting to be posted. §5's classification policy is what it applies; §5
+itself is unchanged and still governs.
+
+Produced by `scripts/accounting_gate_g_detector.sql` — read-only, one
+transaction, temp tables, ending in `ROLLBACK`, run against an isolated restored
+database.
+
+## B0. Provenance
+
+| item | value |
+| --- | --- |
+| Source | `dotmac_erp_standby` on `dotmac-db-primary` — hot standby, `pg_is_in_recovery() = t`, read-only. Production primary never connected to; no standby setting changed. |
+| Replay LSN at export start | `BF/EEB3F748` (2026-08-22 10:49:47Z) |
+| Replay LSN at export end | `BF/EEB3F850` (2026-08-22 10:49:56Z) |
+| Server version | PostgreSQL 16.4, source and target |
+| Detector query hash (sha256) | `d5c834d8d66b0d17064654b31bd5d40dc33f0c41600c674e4cd1126402897eec` |
+| Target | `erp-forensic-gateg-20260822` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (§B9). |
+| Organization scope | Dotmac Technologies Ltd, with the same fail-closed canary as Appendix A — 12,225 unscoped against 12,224 scoped, `sensitivity proof PASSED`. |
+
+**Corroborative evidence, not an atomic snapshot** — the copy spans an LSN
+range. **Every disposition must be revalidated against current authoritative
+state immediately before execution.**
+
+## B1. THE HEADLINE
+
+**Not one of the 12,224 is a candidate to post.** Every journal is either an
+effect that is already in the ledger, or one that cannot be decided from the
+ledger at all.
+
+| disposition | journals | gross debit |
+| --- | ---: | ---: |
+| **V1** VOID — identical effect already posted on the same document | 100 | ₦24,669,066.37 |
+| **V2** VOID — fee event already posted (heuristic key, §B5) | 12,117 | ₦11,813,979.50 |
+| **Q1** QUARANTINE — document posted but the effect differs | 1 | ₦75,250.00 |
+| **Q2** QUARANTINE — no linkage of any kind; not decidable | 6 | ₦726,322.87 |
+| **P** POST CANDIDATE | **0** | **₦0.00** |
+| **total** | **12,224** | **₦37,284,618.74** |
+
+Counted a second way, without the classification logic: 0 document-linked
+journals have nothing posted against their document; 0 bank fees have an
+unposted event; 6 reconciliations are unlinkable. The two methods agree.
+
+## B2. THE RISK THIS QUANTIFIES
+
+`gl.posting_backlog.post_approved_journals` decides whether to post an APPROVED
+journal on two tests: **is it balanced, and does its period accept posting.**
+That is the entire test.
+
+| cohort | journals | balanced | period accepts | **it would post** | gross |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| BANK_FEE | 12,117 | 12,117 | 12,117 | 12,117 | ₦11,813,979.50 |
+| CUSTOMER_PAYMENT | 98 | 98 | 98 | 98 | ₦12,564,606.69 |
+| BANK_RECONCILIATION | 6 | 6 | 6 | 6 | ₦726,322.87 |
+| EXPENSE_REIMBURSEMENT | 2 | 2 | 2 | 2 | ₦31,000.00 |
+| PAYROLL_ENTRY | 1 | 1 | 1 | 1 | ₦12,148,709.68 |
+| **total** | **12,224** | **12,224** | **12,224** | **12,224** | **₦37,284,618.74** |
+
+**Every one of the 12,224 passes both tests today.** Run against this
+organization, that service would post ₦37,284,618.74 of duplicate and
+undecidable effect, and report success. Balance and period tell you a journal
+*can* be posted; they say nothing about whether it *should* be.
+
+**No bulk posting path may be pointed at this population.** That is the finding.
+
+## B3. Why the cohorts cannot share one decision
+
+They differ in the only thing that matters here — whether the journal can be
+tied to a source document at all.
+
+| cohort | journals | source_document_id | evidence strength |
+| --- | ---: | --- | --- |
+| CUSTOMER_PAYMENT | 98 | present | **strong** — real document identity |
+| EXPENSE_REIMBURSEMENT | 2 | present | **strong** |
+| PAYROLL_ENTRY | 1 | present | **strong** |
+| BANK_FEE | 12,117 | **absent** | **heuristic** — see §B5 |
+| BANK_RECONCILIATION | 6 | **absent**, and no reference or correlation id either | **none** — undecidable |
+
+## B4. The document-linked cohorts (101) — strong evidence
+
+| cohort | journals | document already posted | posted effect identical | effect differs |
+| --- | ---: | ---: | ---: | ---: |
+| CUSTOMER_PAYMENT | 98 | 98 | 97 | 1 |
+| EXPENSE_REIMBURSEMENT | 2 | 2 | 2 | 0 |
+| PAYROLL_ENTRY | 1 | 1 | 1 | 0 |
+
+**All 101 documents already carry a POSTED journal.** 100 of them carry one with
+an identical net effect by account. Confirmed by a second, independent test
+comparing header totals rather than signatures: same 97 / 2 / 1 split.
+
+The `PAYROLL_ENTRY` journal (₦12,148,709.68) was flagged in §3 for individual
+adjudication. Its payroll entry already has a POSTED journal with an identical
+effect. It remains an individual adjudication; this is evidence for it, not a
+substitute.
+
+### Q1 — the one that differs
+
+`JE202607-9427` (CUSTOMER_PAYMENT, 2026-07-13, ₦75,250.00). Its payment already
+has a POSTED journal, but that journal's effect is not identical. **Quarantine
+with a named owner.** It is neither safely voidable as a duplicate nor safely
+postable.
+
+## B5. BANK_FEE (12,117) — 111 real events, inflated 79×
+
+The fees carry no `source_document_id`, so they can only be grouped by a
+**heuristic key**: reference + entry date + amount + bank account.
+
+| measure | value |
+| --- | ---: |
+| APPROVED bank-fee journals | 12,117 |
+| Distinct fee events they describe | **111** |
+| Value of those 111 events | **₦149,917.97** |
+| Gross if every journal were posted | **₦11,813,979.50** |
+| Inflation factor | **78.8×** |
+| Events with more than one APPROVED journal | 109 |
+| Most APPROVED journals on a single event | **252** |
+
+**Every one of the 12,117 has a POSTED journal on its event** — same reference,
+same date, same amount, same bank account. All ₦11,813,979.50 of it.
+
+Posting them would book ₦11,813,979.50 to **6080 Finance Cost** against ₦149,917.97
+of actual bank charges, and credit the bank accounts by the same — 1204 Zenith 523
+by ₦7,250,116.66, 1205 Zenith 461 by ₦3,267,613.00, 1202 UBA by ₦1,296,213.24.
+
+### Corroboration, and its limit
+
+All **70 of 70** distinct fee references resolve to a `banking.bank_statement_lines`
+row, so the grouping is anchored to real bank events rather than to a string
+alone.
+
+**But the key is still heuristic, and V2 is weaker than V1.** `reference` alone
+is not a document key: 12,117 journals carry only 70 distinct references, up to
+504 on one, a mean of 173. That is why the key adds date, amount and bank
+account. Before executing V2, Finance should confirm the disposition against the
+bank statement itself for at least a sample, and for every event whose value is
+material.
+
+### A separate finding: the POSTED side is not clean either
+
+Those 111 events already carry **149** POSTED journals. Roughly 38 duplicate
+postings exist in the ledger *today*, independent of anything in this backlog.
+That is a Gate D-adjacent defect and is **not** addressed by any disposition
+here.
+
+## B6. Q2 — the six undecidable reconciliations
+
+| journal | entry date | gross debit |
+| --- | --- | ---: |
+| JE202607-24872 | 2026-07-22 | ₦464,631.89 |
+| JE202606-10330 | 2026-06-18 | ₦200,346.98 |
+| JE202607-0044 | 2026-06-02 | ₦18,812.50 |
+| JE202607-0065 | 2026-06-02 | ₦18,812.50 |
+| JE202607-24999 | 2026-07-06 | ₦18,719.00 |
+| JE202607-24972 | 2026-03-27 | ₦5,000.00 |
+
+All six carry **no `source_document_id`, no `reference` and no `correlation_id`**.
+They cannot be tied to a bank reconciliation, a statement or anything else by any
+ledger query. **No ledger evidence can classify them.** They require the
+reconciliation records themselves, and until someone produces those they are
+quarantined with a named owner and a deadline, per §5.
+
+Two of them post ₦18,812.50 — the same amount as `JE202607-20448` in Appendix A6.
+Whether that is coincidence or a shared cause is **not established here** and
+should not be assumed either way.
+
+## B7. What this appendix does NOT establish
+
+1. **It does not approve a single void.** V1 and V2 are ledger-evidenced
+   *recommendations* under §5. Voiding is a Finance decision, and for V2 it rests
+   on a heuristic key that should be sampled against bank statements first.
+2. **It says nothing about business validity.** Whether a source document should
+   have produced an effect at all is outside the ledger.
+3. **It does not explain WHY 12,117 journals exist for 111 events.** The
+   generating defect is not identified here. Until it is, the same population can
+   regrow — and Gate G cannot close on a cleanup whose cause is unknown.
+4. **The 149 posted journals on 111 events are untouched** by any disposition
+   here.
+5. **Cross-document effect matching was never used as evidence.** In this ledger
+   96% of journals share a net-effect signature with another (Appendix A2), so
+   signatures here only ever compare journals already tied to the same document
+   or the same fee event.
+
+## B8. Consequence for Gate G
+
+Gate G requires an owned disposition for every remaining APPROVED journal. This
+appendix supplies ledger evidence for **12,217 of 12,224** (V1 + V2) and
+identifies the **7** that ledger evidence cannot decide (Q1 + Q2).
+
+It does not close Gate G. Outstanding: Finance's approval of the void
+recommendations, the sampling of V2 against bank statements, owners and deadlines
+for the seven quarantined journals, and — the item most likely to reopen this —
+identification of the defect that produced 12,117 journals for 111 events.
+
+## B9. Cleanup record
+
+| step | evidence |
+| --- | --- |
+| Container `erp-forensic-gateg-20260822` removed | `docker rm -f`; `docker ps -a --filter name=erp-forensic` returns 0 rows |
+| Volume `erp-forensic-gateg-20260822-data` removed | `docker volume rm`; `docker volume ls --filter name=erp-forensic` returns 0 rows |
+| Detector, discovery and verification SQL removed from `dotmac-db-primary` and from the standby container | all `No such file or directory` |
+| No dump file ever written | tables streamed container-to-container; no export file existed on either host |
+| Standby unchanged | `pg_is_in_recovery() = t`, `max_standby_streaming_delay = 30s`, replay advancing |
 | Production primary | never connected to |
