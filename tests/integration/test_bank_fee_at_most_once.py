@@ -1235,6 +1235,28 @@ class TestTwoSessionsRaceForOneLine:
             cost = _account(setup, org_id, "6080", "Finance Cost")
             bank = _account(setup, org_id, "1204", "Bank")
             cost_id, bank_id = cost.account_id, bank.account_id
+
+            # Pre-allocate the JOURNAL numbering sequence. Without it BOTH
+            # callers try to create it and one loses on `uq_sequence_type`
+            # BEFORE reaching the bank-fee index — a real race, but a different
+            # one, and only reachable for an organization that has never posted
+            # a journal. Production orgs have had this row for thousands of
+            # journals; leaving it out would make this test assert the wrong
+            # collision.
+            from app.models.finance.core_config.numbering_sequence import (
+                NumberingSequence,
+                SequenceType,
+            )
+
+            setup.add(
+                NumberingSequence(
+                    sequence_id=uuid.uuid4(),
+                    organization_id=org_id,
+                    sequence_type=SequenceType.JOURNAL,
+                    prefix="JE",
+                    current_number=0,
+                )
+            )
             setup.commit()
         finally:
             setup.close()
