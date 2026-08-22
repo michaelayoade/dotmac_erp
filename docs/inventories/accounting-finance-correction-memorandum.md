@@ -805,6 +805,41 @@ bulk pass.
    verified; the detector and diagnostic SQL were removed from both hosts. No
    copy of the data survives. See the cleanup record below.
 
+## A9. Reconciliation against the July 2026 investigation
+
+The prior investigation (2026-07-20, `erp.dotmac.io`) recorded a **net
+understatement of ₦20,591,214.98** across its 2,038. This appendix computes
+**₦21,536,214.98** across the 2,033 proven. They reconcile exactly:
+
+```
+21,536,214.98  net over the 2,033 proven (credit to 1400)
+  -945,000.00  the five proof-4 failures, which DEBIT 1400
+= 20,591,214.98  net over all 2,038 chained candidates
+```
+
+₦945,000.00 is precisely the gross of the five itemised in A6. Two independent
+investigations, four months apart, over the same ledger, agree to the kobo. That
+is strong corroboration of both.
+
+**What does NOT reconcile, and is left open:** the July figure for "gross
+balanced line volume" was ₦39,348,870.76 against this appendix's ₦39,211,120.76
+gross header debit — a difference of ₦137,750.00 over a smaller population. The
+two are different measures (line volume vs header total), so the gap is not
+necessarily an error, but it is **not explained here and should not be treated as
+reconciled.**
+
+**A contradiction in the earlier record, now settled.** The July entry described
+the orphans as `STANDARD` in its body while calling them credit notes in its
+summary. This appendix settles it from the data: **2,010 `CREDIT_NOTE` and 29
+`STANDARD`**, with posting direction agreeing with document type on every row.
+The summary was right and the body was wrong, and it is the body's reading that
+appears to have carried into §4's framing of this memorandum.
+
+**The one-row delta from the other direction.** July's population was 2,038
+because its detector required a reversed original — which correctly excluded
+`JE202607-20448`. §3's 2,039 came from counting by producer, which does not. The
+two counts never described the same set, exactly as §3 warned they might not.
+
 ## A8. Cleanup record
 
 | step | evidence |
