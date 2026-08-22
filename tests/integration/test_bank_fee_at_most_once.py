@@ -214,7 +214,6 @@ def _legacy_live_batch(
     it to a live effect — so a fixture that wants to block must build one.
     """
     from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
-    from app.services.finance.banking.bank_fee_posting import fee_idempotency_key
 
     journal = _fee_journal(
         org_id, period_id, line_id, number=f"LEGACY-{uuid.uuid4().hex[:6]}"
@@ -1038,7 +1037,6 @@ class TestABatchRowIsNotAPostedEffect:
         from app.models.finance.gl.posting_batch import BatchStatus
         from app.services.finance.banking.bank_fee_posting import (
             existing_posting_batch,
-            fee_idempotency_key,
         )
 
         line_id = uuid.uuid4()
@@ -1079,7 +1077,6 @@ class TestABatchRowIsNotAPostedEffect:
     ) -> None:
         from app.services.finance.banking.bank_fee_posting import (
             existing_posting_batch,
-            fee_idempotency_key,
         )
 
         line_id = uuid.uuid4()
@@ -1459,7 +1456,6 @@ class TestAPostedBatchIsNotALiveEffect:
     ) -> None:
         from app.services.finance.banking.bank_fee_posting import (
             existing_posting_batch,
-            fee_idempotency_key,
         )
         from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 
