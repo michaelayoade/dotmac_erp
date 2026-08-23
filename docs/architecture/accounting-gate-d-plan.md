@@ -110,11 +110,20 @@ canonical / August 2026 reversal timing, simulated 429 balanced linked
 reversals with every target/account all-time net zero, and emitted the same
 429-row SHA-256 plan digest twice:
 `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
-No production accounting row changed. Exact-plan Finance approval, a guarded
-operator and execution proof remain Gate D work.
+No production accounting row changed. A guarded operator and execution proof
+remain Gate D work.
 
-**Still outstanding:** exact-plan approval and execution of the 429
-wrong-account corrections, the
+Michael subsequently approved that exact digest and named the production
+application/database hosts. The focused guarded operator now binds execution to
+both approved digests, explicit database identity, the exact aggregate and
+mapping counts, current immutable-effect hashes and journal-line parity. It
+locks the target set, calls the ordinary linked-reversal service 429 times in
+one caller-owned transaction, and checks zero target/account nets plus retained
+canonicals before commit. It is dry-run by default and is not wired into deploy.
+Production execution and its evidence are still pending.
+
+**Still outstanding:** deployment and execution proof for the 429 wrong-account
+corrections, the
 §1a audited-opening bridge, the composite-reversal treatment, Finance's approval
 of the three micro repairs, the per-document proof 6 reconciliation for the
 ar/INVOICE cohort, the reporting and tax assessment, approver and operator.
