@@ -1095,6 +1095,27 @@ url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
 reference = "forgejo"
 
 [[package]]
+name = "dotmac-imports"
+version = "0.1.0a2"
+description = "DotMac bulk-import run ledger, dry-run/apply promotion and column mapping"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_imports-0.1.0a2-py3-none-any.whl", hash = "sha256:cd4056426f300c001c784f3675704991f12ff3fc98174c17575bbaefda79200a"},
+    {file = "dotmac_imports-0.1.0a2.tar.gz", hash = "sha256:f1617a06fc206221109f514ab374d002174f2e42b7c95e4bb3d6e7e83f3d82fd"},
+]
+
+[package.dependencies]
+dotmac-kernel = ">=0.1.0a56"
+sqlalchemy = ">=2.0,<3.0"
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
 name = "dotmac-integration-client"
 version = "0.2.0"
 description = "Canonical HTTP transport for Dotmac inter-service integration edges: policy-driven retry with jitter, Retry-After, reachability circuit, idempotency keys, request-id propagation, and metrics hooks."
@@ -5095,4 +5116,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "0c3a35d360271c163876527b77700c6fe46eebbfe8ab2ccfd4979265154d2e6c"
+content-hash = "9ab9729cc9de5a346b19d0e574af5fca1f30e088f5f7f9803964bfb3c57c9703"

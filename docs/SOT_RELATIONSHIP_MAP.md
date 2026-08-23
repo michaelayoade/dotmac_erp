@@ -35,7 +35,24 @@ semantics.
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
 | `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
+| `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
+
+## Durable customer imports
+
+`dotmac-imports` owns the durable run, immutable partition plan, bounded claim,
+checkpoint and minimised row outcome. ERP owns customer vocabulary, validation,
+duplicate policy and mutation in
+`app.services.finance.import_export.durable_customers`; valid rows reach only
+`customer_service.create_customer`. `dotmac-files` owns stored-object identity
+and physical lifecycle, while `app.services.storage.DotmacFilesS3Provider` is
+the provider adapter. Neither shared module decides customer state.
+
+The first cutover is deliberately shadowed: the durable dry run refuses a
+partition if its row verdict differs from the retiring `CustomerImporter`.
+Apply is unavailable until the durable dry run is complete and error-free.
+Provider reads occur between the claim transaction and the settlement
+transaction, so storage latency never extends a partition lease transaction.
 
 ## Sub service workflows and ERP backoffice support
 

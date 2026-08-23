@@ -103,6 +103,7 @@ from app.tasks.inventory import (
     auto_issue_pending_stock_material_requests,
     send_low_stock_notifications,
 )
+from app.tasks.imports import process_customer_import_partitions
 from app.tasks.license import revalidate_license
 from app.tasks.notifications import (
     process_pending_nextcloud_notifications,
@@ -218,6 +219,8 @@ __all__ = [
     # Inventory tasks
     "auto_issue_pending_stock_material_requests",
     "send_low_stock_notifications",
+    # Durable import tasks
+    "process_customer_import_partitions",
     # Analytics tasks
     "refresh_cash_flow_metrics",
     "refresh_compliance_metrics",

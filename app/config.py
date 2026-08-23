@@ -141,6 +141,19 @@ class Settings:
     s3_connect_timeout_s: float = float(os.getenv("S3_CONNECT_TIMEOUT_S", "3.0"))
     s3_read_timeout_s: float = float(os.getenv("S3_READ_TIMEOUT_S", "10.0"))
 
+    # Durable bulk imports.  Files spool to disk before the dotmac-files
+    # provider streams them, so this ceiling is an admission limit rather than
+    # a process-memory allocation.  Partition bounds are passed explicitly to
+    # dotmac-imports and therefore remain deployment policy, not module policy.
+    import_max_file_size_bytes: int = int(
+        os.getenv("IMPORT_MAX_FILE_SIZE_BYTES", str(512 * 1024 * 1024))
+    )
+    import_partition_rows: int = int(os.getenv("IMPORT_PARTITION_ROWS", "200"))
+    import_partition_max_bytes: int = int(
+        os.getenv("IMPORT_PARTITION_MAX_BYTES", str(8 * 1024 * 1024))
+    )
+    import_validation_workers: int = int(os.getenv("IMPORT_VALIDATION_WORKERS", "2"))
+
     # ==========================================================================
     # CRM Integration (crm.dotmac.io)
     # ==========================================================================

@@ -71,6 +71,13 @@ dotmac-ui = {version = "0.1.0a7", source = "forgejo"}
 # `0001` can never run in ERP — it creates `public.tenants`, which ERP owns.
 dotmac-files = {version = "0.1.0a2", source = "forgejo"}
 
+# Durable import run, partition, claim and per-row outcome ownership. ERP keeps
+# customer vocabulary, validation and mutation in its own adapter; the module
+# owns only reusable mechanics and its independently composed `mod_imports`
+# lineage. The pin is released only after this first adopter proves the a2
+# contract against PostgreSQL.
+dotmac-imports = {version = "0.1.0a2", source = "forgejo"}
+
 # Balanced general-ledger decisions and immutable posted-ledger evidence
 # (Starter ADR-0041). ERP is the product-first source and remains the LIVE
 # authority: this pin COMPOSES the `mod_accounting` lineage so it can be applied
