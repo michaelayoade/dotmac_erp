@@ -393,6 +393,14 @@ Each gate is a separate authorized change. None is implied by the one before it.
   and with one organization the rehearsal must manufacture a second tenant,
   because a mis-scoped write would otherwise have no observable symptom.
 
+  Gate G forensics added a fifth Gate D population: 429 currently effective
+  journal-keyed bank-fee postings over 39 statement-line identities. The
+  namespace and ₦7,764.68 gross population are measured; reversal authorization
+  additionally requires exact immutable-effect parity with the one line-keyed
+  canonical per identity, Finance approval bound to the resulting schedule
+  digest, one-to-one corrections, and a zero-target detector re-run. Aggregate
+  count or amount is not authorization.
+
 - **Gate E — dual write and parity.** Both sides post; every posting is compared.
   Divergence is a stop, not a warning.
 - **Gate F — cutover.** One writer at a time, in the order the writer ledger

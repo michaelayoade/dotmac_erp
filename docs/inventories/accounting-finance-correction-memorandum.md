@@ -1,9 +1,13 @@
 # Finance correction memorandum — Accounting gate D defects
 
 **Status: DRAFT — the ar/INVOICE cohort proof is COMPLETE at the ledger level
-(Appendix A). Still outstanding: the §1a audited-opening bridge, the composite
-reversal, the three micro repairs, the per-document proof 6 reconciliation, the
-reporting/tax assessment, and every Finance decision, approver and operator.**
+(Appendix A). Bank-fee recurrence prevention is merged but not deployed. The
+429-row reversal population now has a fail-closed exact-effect detector, but it
+has NOT been re-run; the earlier run proved namespace, identity, liveness and
+amount, not exact effect equivalence. Still outstanding: that re-run, the §1a
+audited-opening bridge, the composite reversal, the three micro repairs, the
+per-document proof 6 reconciliation, the reporting/tax assessment, and every
+Finance decision, approver and operator.**
 
 **One operative instruction governs the ar/INVOICE population: Appendix A §A5.**
 Earlier text in §3 and §4 is preserved as the historical hypothesis and is
@@ -610,7 +614,8 @@ where it already blocks legacy-writer retirement.
 | §1a audited-opening bridge complete | *not started* |
 | Recurrence fix landed (allocator + posting boundary + backlog tolerance) | **DONE — ERP PR #336 merged to `main` as `0e40d799` on 2026-08-22T08:06Z**, `version:patch`, all checks green. Not a data repair. |
 | Reporting assessment **for these corrections only** | *not yet performed* — §6 |
-| **429 duplicate POSTED bank-fee journals (₦7,764.68) on 39 statement lines** | ***PROMOTED INTO GATE D* — Appendix B5.4.** Proven duplicate CURRENT effect; cause is the `backfill-stranded-bank-fees-<journal_number>` key namespace bypassing the line-keyed ledger boundary. All 429 individually identifiable; one-to-one correcting reversals possible. Finance approval required before cutover. |
+| Bank-fee recurrence prevention | **MERGED, NOT DEPLOYED.** ERP PRs #337–#339 establish the one-owner, typed-source, at-most-once boundary, fail-closed effect verification and bulk-mutator kill switch. Main contains the controls; production does not yet. None is a data repair. |
+| **429 journal-keyed POSTED bank-fee reversal candidates (₦7,764.68) on 39 statement lines** | ***PROMOTED INTO GATE D* — Appendix B5.4.** The second namespace, current effectiveness and exact target identities are proven. The earlier detector did **not** compare every target's immutable ledger effect with its line-keyed canonical. The revised detector does so and emits an approval-bound schedule, but has **not yet run**. No row is approved to reverse until that run reports 429/429 exact matches (or segregates mismatches) and Finance signs the resulting digest. |
 | POSTED bank-fee anomalies: 95 journals with dangling line ids; 875 of 1,743 crediting their line's bank GL account | ***not started* — Appendix B5.4.** |
 | Clean survey re-run: zero unresolved balance and reversal defects | *pending repairs* |
 | Named approver | *pending* |
@@ -627,10 +632,10 @@ where it already blocks legacy-writer retirement.
 | Disposition recorded for **every** remaining APPROVED journal | **LEDGER EVIDENCE COMPLETE — Appendix B.** 12,217 of 12,224 evidenced (void recommendations); 7 quarantined as undecidable. Finance approval, V2 bank-statement sampling and owners for the 7 outstanding. |
 | Payroll journal (₦12,148,709.68) individually adjudicated | *pending* — Appendix B4 finds its payroll entry already carries a POSTED journal with an identical effect. Evidence for the adjudication, not a substitute for it. |
 | Reporting and tax assessment for the backlog cohorts | *not yet performed* |
-| Generating defect behind 12,117 journals for 149 statement lines | **IDENTIFIED IN CODE — Appendix B8** (create-then-check; `idempotent_replay` discarded by all three writers). ***Two-invocation canary NOT YET RUN.*** Gate G must not close on an unconfirmed cause. |
-| Permanent fix: one bank-fee owner, typed `source_document_id`, at-most-once create+post in one transaction | ***not started* — Appendix B8** |
-| Non-dry-run generic backlog mutators removed or gated | ***not started* — Appendix B2.** Blast radius is the full 14,263 / ₦76,495,739.50. `post_stranded_source_journals` is not merely risky — it has **already** produced 429 duplicate postings (§B5.4). |
-| Pre-cleanup controls agreed (§B12) | ***not started*** |
+| Generating defect behind 12,117 journals for 149 statement lines | **PROVEN AND FIXED IN MAIN — Appendix B8.** ERP PRs #337–#339 carry the two-invocation and database-race canaries and the exact-effect recovery checks. Not deployed. |
+| Permanent fix: one bank-fee owner, typed `source_document_id`, at-most-once create+post in one transaction | **MERGED — ERP PRs #337–#339.** Not deployed; deployment is a separate authorization. |
+| Non-dry-run generic backlog mutators removed or gated | **GATED — ERP PR #338.** Blast radius remains the full 14,263 / ₦76,495,739.50; the kill switch is not Finance authorization. Not deployed. |
+| Pre-cleanup controls agreed (§B12) | **ENGINEERING CONTROLS MERGED; operational preconditions pending.** Deploy and verify the controls, re-run current-state detectors, obtain Finance dispositions/approval and name the operator before any cleanup. |
 
 ## 8. Execution requirements
 
@@ -1022,7 +1027,8 @@ database.
 | Server version | PostgreSQL 16.4, source and target |
 | Detector query hash (sha256) | `d5c834d8d66b0d17064654b31bd5d40dc33f0c41600c674e4cd1126402897eec` |
 | Detector, as re-run on exact identity | `scripts/accounting_gate_g_detector.sql`, sha256 `f53f814273a8526f951aed999ac6553e9de8b379cda58db9c19dd27dd22b556b`, against `erp-forensic-verify-20260822`, LSN range `BF/EFB66430`..`BF/EFB705E8` (2026-08-22 11:30Z). Canary passed; produces H1A/Q dispositions directly, with no heuristic logic in the executable. |
-| Duplicate POSTED effects (Gate D) | `scripts/accounting_bank_fee_duplicate_postings.sql`, sha256 `f97bd8e3c6a34579a9ff322fbe105781d1f0d118c449607fb107e074e5ad5e49`. Evidence gathered against `erp-forensic-equiv-20260822`, LSN range `BF/EF546DA0`..`BF/EF54FBB8` (2026-08-22 11:25Z). |
+| Journal-keyed POSTED candidates (Gate D) | The 2026-08-22 run of `scripts/accounting_bank_fee_duplicate_postings.sql`, sha256 `f97bd8e3c6a34579a9ff322fbe105781d1f0d118c449607fb107e074e5ad5e49`, against `erp-forensic-equiv-20260822`, LSN range `BF/EF546DA0`..`BF/EF54FBB8`, proves the second namespace, current liveness, target identity and ₦7,764.68 total. It did **not** prove target-to-canonical exact effect equivalence. |
+| Exact one-to-one reversal schedule | The revised `scripts/accounting_bank_fee_duplicate_postings.sql` compares immutable ledger account, direction, amount, transaction currency/rate, dates, period, source metadata and dimensions; fails on an unknown key, non-single canonical or mismatch; and emits a schedule digest. **NOT YET RUN.** Its commit, query hash, restore LSN and result belong here only after the run. |
 | Target | `erp-forensic-gateg-20260822` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (§B9). |
 | Organization scope | Dotmac Technologies Ltd, with the same fail-closed canary as Appendix A — 12,225 unscoped against 12,224 scoped, `sensitivity proof PASSED`. |
 
@@ -1238,12 +1244,15 @@ Two claims in the heuristic version do not survive:
    identity the 149 lines carry **exactly 149 POSTED journals — zero excess.**
    The apparent duplication was entirely an artefact of bucket merging.
 
-### B5.4 The duplicate POSTED effects — cause proven, figure corrected
+### B5.4 The journal-keyed POSTED effects — cause proven, reversal equivalence pending
 
 The earlier calculation was `(posted row count − 1) × source fee`. That proves
 excess **rows**, not excess **effect**: a second posted row is not a duplicate if
-it is a reversal, was itself reversed, or never reached the ledger. Every row was
-therefore tested for current effectiveness, and the cause was traced.
+it is a reversal, was itself reversed, never reached the ledger, or posts a
+different account, direction, currency, period or dimension. The 2026-08-22 run
+tested current effectiveness and traced the namespace cause, but did not compare
+each target's complete immutable effect with its canonical. Calling all 429
+"proven duplicate effects" was therefore one proof too early.
 
 **The cause is a second idempotency namespace.** POSTED bank-fee journals split
 cleanly in two:
@@ -1267,20 +1276,30 @@ That namespace is `DEFAULT_IDEMPOTENCY_PREFIX = "backfill-stranded"` in
 what created the duplicate postings.** The standing instruction not to retry the
 prior standalone script is now evidenced rather than precautionary.
 
-**Proven duplicate current effect:**
+**Proven journal-keyed current-effect population:**
 
 | measure | value |
 | --- | ---: |
 | Affected statement lines | 39 |
-| Duplicate postings, all currently effective | **429** |
-| **Duplicate effect amount** | **₦7,764.68** |
+| Journal-keyed postings, all currently effective | **429** |
+| **Gross debit of the reversal candidates** | **₦7,764.68** |
 | …of which on lines that resolve to a statement line | ₦6,160.00 |
 | …on 7 lines whose id does not resolve | ₦1,604.68 |
 
 The earlier ₦6,160.00 was the resolvable subset quoted as the whole. All 429 are
-individually identifiable by their key prefix, each with its own posting batch,
-so **one-to-one correcting reversals are possible without guessing** — and the
-canonical posting to keep is the line-keyed one, identified rather than assumed.
+individually identifiable by their complete journal-keyed idempotency key and
+each has its own posting batch. That proves a one-to-one **candidate schedule**;
+it does not yet authorize a one-to-one correcting reversal.
+
+The revised detector now builds the complete immutable-ledger signature for
+each target and its one line-keyed canonical: account and direction, functional
+and transaction amounts, currency and rate, dates and fiscal period, source
+metadata and every accounting dimension. It fails closed on an unknown complete
+key, anything other than one live canonical per affected line, an incomplete
+schedule or any signature mismatch. It emits the 429 target ids only inside the
+Finance boundary and binds the set with a count, gross amount and stable schedule
+digest. **That detector has not yet run.** Finance approval must cite the output
+of that run, not the 2026-08-22 aggregate.
 
 **Zero APPROVED journals sit on the 39 affected lines**, so the Gate G backlog
 and this Gate D defect are disjoint populations and can be dispositioned
@@ -1354,14 +1373,16 @@ should not be assumed either way.
    §5. Voiding is a Finance decision.
 2. **It says nothing about business validity** — whether a source document should
    have produced an effect at all is outside the ledger.
-3. **The 429 duplicate POSTED bank-fee journals (₦7,764.68) are not fixed here.**
-   They are already in the posted ledger and belong to Gate D (§B5.4).
+3. **The 429 journal-keyed POSTED bank-fee candidates (₦7,764.68) are not fixed
+   here.** They are already in the posted ledger and belong to Gate D (§B5.4).
+   Exact target-to-canonical effect verification must pass before Finance may
+   call any one of them a reversal target.
 4. **The POSTED-side anomalies are not resolved** — 95 journals with dangling
    line ids, and only 875 of 1,743 crediting their line's bank GL account.
 5. **Cross-document effect matching was never used as evidence.** 96% of journals
    in this ledger share a net-effect signature (Appendix A2).
 
-## B8. THE GENERATING DEFECT — identified in code, canary not yet run
+## B8. THE GENERATING DEFECT — proven and fixed in main, not deployed
 
 All three bank-fee writers —
 `banking/auto_reconciliation_parts/special.py:92`,
@@ -1390,19 +1411,21 @@ re-run of a reconciliation pass over the same statement line mints another
 APPROVED journal, which is why 149 lines carry 12,117 of them and one line
 carries 85.
 
-**This is a code reading, not a proof.** The confirming test is a row-level
-canary: invoke a bank-fee writer twice for one statement line and assert the
-second invocation creates **no** journal. **That canary has not been run**, and
-until it is, the mechanism above is the best-supported explanation rather than an
-established one.
+That diagnosis is now proved by the row-level, two-invocation and database-race
+canaries merged in ERP PRs #337–#339. They prove that a second invocation creates
+no journal, two transactions racing after both prechecks produce exactly one
+effect, a collision re-reads the winner, and a wrong live effect is an attention
+state rather than replay success. Unrelated integrity failures still propagate.
 
 ### The permanent fix
 
-One bank-fee posting owner, which all three reconciliation adapters delegate to;
-`bank_statement_line.line_id` carried as **typed source identity**
-(`source_document_id`), not as a formatted string; and at-most-once creation and
-posting enforced together in one transaction, so the create cannot outlive a
-failed or replayed post.
+One bank-fee posting owner now serves all three reconciliation adapters;
+`bank_statement_line.line_id` is carried as **typed source identity**
+(`source_document_id`), not merely as a formatted string; and at-most-once
+creation and posting are enforced together in one transaction. ERP PR #337
+introduced the owner and database boundary, #338 gated the dangerous bulk paths,
+and #339 made every success/recovery path verify the exact live effect. All are
+merged to `main`; none is deployed to production at the date of this draft.
 
 ## B9. Consequence for Gate G
 
@@ -1417,16 +1440,12 @@ It does not close Gate G. Outstanding:
   verification for V1's 100 rows.
 - Owners and deadlines for the seven quarantined journals; the four Q2 rows with
   a statement-line match should be followed to that line first.
-- **The two-invocation canary confirming the generating defect (§B8).** Until it
-  runs, the cause is a code reading. Gate G should not close on a cleanup whose
-  cause is unconfirmed, because the population regrows.
-- The permanent single-owner fix and its at-most-once boundary.
-- Removal or gating of the non-dry-run generic backlog mutators (§B2).
-- Gate D treatment of the **429 duplicate POSTED journals (₦7,764.68)** and the
-  POSTED-side anomalies (§B5.4, §B5.6).
-- **Gating `post_stranded_source_journals` and `scripts/post_stranded_bank_fees.py`
-  — the path that CAUSED those duplicates** (§B5.4). This is remedial, not
-  precautionary.
+- Deployment and production verification of the merged single-owner,
+  at-most-once and bulk-mutator controls. Merged code is not an operational
+  control until it is live.
+- Gate D exact-effect revalidation and Finance treatment of the **429
+  journal-keyed POSTED candidates (₦7,764.68)**, plus the POSTED-side anomalies
+  (§B5.4, §B5.6).
 
 ## B10. What this appendix corrected about itself
 
@@ -1442,7 +1461,7 @@ rather than quietly replaced:
 | "149 POSTED journals across 111 buckets → ~38 duplicate postings" | **DISPROVEN.** The 149 lines carry exactly 149 POSTED journals, zero excess. The real excess is elsewhere: 352 journals, ₦6,160.00, on 32 other lines. |
 | "V2 VOID" | **Superseded twice.** First downgraded to `H1 HOLD` on exact identity; now **`H1A VOID candidate`** once economic equivalence was proved (§B5.2). |
 | "effect already posted correctly and once" | **Overstated when written** — cardinality is not equivalence. Now earned: §B5.2 tests effect, currency, period, reversal state and ledger presence. |
-| "352 excess rows, ₦6,160.00 misstatement" | **Corrected to 429 postings, ₦7,764.68**, and the earlier figure was the resolvable subset quoted as the whole. More importantly the CAUSE is now proven (§B5.4): a second idempotency namespace, not accidental duplication. |
+| "352 excess rows, ₦6,160.00 misstatement" | **Corrected to 429 journal-keyed current effects with ₦7,764.68 gross debit**; the earlier figure was the resolvable subset quoted as the whole. The second namespace is proven. Exact target-to-canonical effect equivalence is now an explicit pending gate, not inferred from namespace and amount (§B5.4). |
 | "1,398 posting batches across 1,391 lines" | **WRONG.** The query matched line-keyed batches only. True: 1,838 journals, 1,838 batches, in two namespaces (§B5.5). |
 | "no linkage of any kind" for the six reconciliations | **WRONG.** They are header-unlinked; **four have a statement-line match.** The original check joined on the journal id instead of the journal LINE id and returned a zero that read as a finding. |
 
@@ -1455,18 +1474,24 @@ overall — exists so a zero there can be trusted next time.
 
 Not recommendations — preconditions. In order:
 
-1. **Gate every generic non-dry-run backlog mutator.** `post_approved_journal_backlog`,
-   `post_stranded_source_journals`, `scripts/post_stranded_bank_fees.py`. The
-   second has already caused 429 duplicate postings; `dry_run=False` is a
-   parameter, not a safeguard.
+1. **Deploy and verify the merged controls before cleanup.** ERP PRs #337–#339
+   gate every generic non-dry-run backlog mutator and install the exact
+   statement-line boundary. `post_approved_journal_backlog`,
+   `post_stranded_source_journals` and `scripts/post_stranded_bank_fees.py` must
+   refuse a live run by default in the deployed revision. A merge is not proof
+   that production has the control.
 2. **Revalidate every disposition against current authoritative state**
    immediately before executing it. This appendix rests on a copy spanning an
    LSN range (§B0).
 3. **VOID approved duplicates — never delete them.** The APPROVED rows are
    evidence of the defect and of the decision taken about them.
-4. **Reverse only PROVEN duplicate current effects** — the 429 of §B5.4, one
-   correcting reversal each, keeping the line-keyed canonical posting. No bulk
-   reversal, and nothing reversed on the strength of a row count.
+4. **Reverse only exact-effect schedule rows approved by Finance.** Re-run the
+   revised §B5.4 detector against current authoritative state. Every target must
+   exactly match its one live line-keyed canonical; any mismatch is quarantined,
+   not rounded into the population. Finance approval cites the schedule count,
+   gross and digest. Re-run immediately before execution and require the same
+   digest. Keep the canonical posting. No bulk reversal, and nothing reversed on
+   the strength of a row count.
 5. **Keep the seven undecided journals quarantined with named Finance owners**
    and deadlines: Q1 `JE202607-9427`, and the six Q2 reconciliations — four of
    which have a statement-line match to follow first (§B6).

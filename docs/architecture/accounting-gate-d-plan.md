@@ -38,7 +38,7 @@ The measurement was worth taking before writing code. Four things it decided:
 
 `docs/inventories/accounting-backfill-survey-2026-08-21.md`.
 
-### D1 — clear the four defects. ALL FOUR ARE EXECUTION BLOCKERS
+### D1 — clear the defects. ALL SURVEY DEFECTS ARE EXECUTION BLOCKERS
 
 An earlier draft called only defect 1 a hard blocker. **The ruling makes all
 four blockers**, and the reason is worth stating: a defect that the backfill
@@ -82,10 +82,25 @@ boundaries, and removal of the `Decimal("0.01")` backlog tolerance — merged as
 **ERP PR #336 / `0e40d799`** on 2026-08-22. It stops new occurrences; it repairs
 nothing historical.
 
-**Still outstanding:** the §1a audited-opening bridge, the composite-reversal
-treatment, Finance's approval of the three micro repairs, the per-document
-proof 6 reconciliation for the ar/INVOICE cohort, the reporting and tax
-assessment, approver and operator.
+**A fifth Gate D population was found during Gate G forensics.** A journal-keyed
+backfill namespace produced 429 currently effective POSTED bank-fee journals
+over 39 statement-line identities, with ₦7,764.68 gross debit. ERP PRs #337–#339
+merge the single owner, database at-most-once boundary, exact live-effect
+verification and bulk-mutator gate. They are not deployed and repair no data.
+
+The first duplicate detector proved the second namespace, current liveness,
+target identities and aggregate amount; it did not compare each target's full
+immutable ledger effect with its line-keyed canonical. The revised
+`scripts/accounting_bank_fee_duplicate_postings.sql` fails closed on unknown
+keys, non-single canonicals and any account/direction/amount/currency/rate/date/
+period/source/dimension mismatch, then emits a one-to-one schedule digest for
+Finance approval. **It has not yet run.** No correcting reversal is authorized
+by the earlier aggregate.
+
+**Still outstanding:** the exact bank-fee schedule run and Finance approval, the
+§1a audited-opening bridge, the composite-reversal treatment, Finance's approval
+of the three micro repairs, the per-document proof 6 reconciliation for the
+ar/INVOICE cohort, the reporting and tax assessment, approver and operator.
 
 What it establishes:
 
@@ -123,9 +138,12 @@ completeness, not on CI.
 #### Exit criterion
 
 Re-run `scripts/accounting_backfill_survey.sql` after the repairs and require
-**zero unresolved balance defects and zero unresolved reversal defects**. The
-survey is the gate, not an assurance that the repairs were attempted: it reads
-the database rather than the change log.
+**zero unresolved balance defects and zero unresolved reversal defects**. Also
+re-run `scripts/accounting_bank_fee_duplicate_postings.sql`: before execution
+its count/gross/digest must equal the Finance-approved schedule; after the
+one-to-one corrections it must report zero live journal-keyed reversal targets.
+The database detectors are the gate, not an assurance that repairs were
+attempted: they read current effects rather than the change log.
 
 ### D2 — implement the two seams
 
@@ -330,5 +348,6 @@ memory.
 | SourceIdentity keyed on the GL journal, `version = "1"` | **RULED 2026-08-21.** See above — the run identifier belongs in import/rehearsal evidence, not identity. |
 | Gate D stops before dual write | **Confirmed.** Dual write is gate E. |
 | All four data defects are execution blockers | **RULED 2026-08-21.** Finance corrects and adjudicates through ordinary reviewed ERP process; the survey re-run is the gate. |
+| The 429 journal-keyed POSTED bank-fee candidates | **Additional Gate D population.** Exact target-to-canonical immutable-effect comparison, Finance approval bound to the schedule digest, one-to-one corrections and a zero-target re-run are required. The earlier aggregate does not authorize reversal. |
 | The 14,263 APPROVED-but-unposted journals | **Separate Finance remediation track, started now.** Classify by producer and business-document state before disposing. Gate D proceeds in parallel; gate G blocks on complete disposition. |
 | RECURRING / REVALUATION / CONSOLIDATION writers | Must retire, or the module must gain the kinds, before gate E. Not gate D's problem; recorded so it is not discovered at gate E. |
