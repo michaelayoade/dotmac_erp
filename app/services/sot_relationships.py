@@ -401,6 +401,41 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         ),
     ),
     DomainSOT(
+        domain="bulk_imports",
+        services=(
+            SOTService(
+                name="imports.run_ledger",
+                module="dotmac_imports",
+                owns=(
+                    "durable import runs, partition claims and checkpoints",
+                    "minimised per-row outcomes and promotion lifecycle",
+                ),
+                notes=(
+                    "Reusable mechanism only; it never owns ERP field meaning, "
+                    "validation, duplicate policy or domain mutation."
+                ),
+            ),
+            SOTService(
+                name="imports.customer_port",
+                module="app.services.finance.import_export.durable_customers",
+                owns=(
+                    "customer CSV field vocabulary and typed validation",
+                    "customer import duplicate policy and canonical mutation port",
+                    "legacy-to-durable dry-run parity refusal",
+                ),
+                depends_on=("imports.run_ledger", "platform.storage"),
+            ),
+        ),
+        entrypoints=(
+            "app.api.finance.import_export",
+            "app.tasks.imports",
+        ),
+        rule=(
+            "The module owns resumable mechanics; ERP owns what a customer row "
+            "means and applies it only through the canonical customer service."
+        ),
+    ),
+    DomainSOT(
         domain="platform_services",
         services=(
             SOTService(

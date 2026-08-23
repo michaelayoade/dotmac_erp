@@ -1944,6 +1944,30 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/import/durable/customers/{run_id}": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "c71190d8a9dd",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/import/durable/customers/{run_id}/outcomes": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "2e406e05a93d",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/import/supported-types": {
    "params": [
     "cookie:access_token",
@@ -7037,6 +7061,41 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/import/durable/customers/dry-run": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization"
+   ],
+   "request": "3fe5093e014d",
+   "responses": {
+    "202": "c71190d8a9dd",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/import/durable/customers/{run_id}/apply": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "202": "c71190d8a9dd",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/import/durable/customers/{run_id}/process": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "202": "c71190d8a9dd",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/import/preview/{entity_type}": {
    "params": [
     "cookie:access_token",
@@ -9522,6 +9581,7 @@
   "BankStatementStatus": "d919a636c23b",
   "BankStatementWithLines": "55150e02193c",
   "BillingStatus": "d353049ef871",
+  "Body_create_durable_customer_dry_run_api_v1_import_durable_customers_dry_run_post": "66bd5dd68168",
   "Body_import_data_api_v1_fixed_assets_import__entity_type__post": "539c8b507be4",
   "Body_import_data_api_v1_fleet_import__entity_type__post": "b77cd95a4a8e",
   "Body_import_data_api_v1_import__entity_type__post": "9f1af258405f",
@@ -9658,6 +9718,8 @@
   "DocumentUpdate": "768cc3611e9c",
   "DomainSettingRead": "12b17dd329b2",
   "DomainSettingUpdate": "8612ead70c8f",
+  "DurableCustomerRunResponse": "d72eb4e0a5e1",
+  "DurableRowOutcomeResponse": "44a84494b89e",
   "DynamicApplicationSubmitRequest": "5e01493f9ef9",
   "EligibleApprover": "f8c2dfe67e7f",
   "EliminationEntryCreate": "6bcf8084475d",

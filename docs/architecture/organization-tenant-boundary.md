@@ -21,7 +21,9 @@ Organization and uses the same UUID; it is not a parallel tenant writer.
 
 The adapter is persistence-free. It accepts an already-validated UUID and
 returns the two typed names for that one identity. Transport strings are parsed
-before this boundary.
+before this boundary. It is also the assembly's only constructor for the
+kernel's typed `TenantScope`; product services ask the adapter for that scope
+instead of importing or recreating the shared-module identity mapping.
 
 ## Tenant catalogue projection
 

@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
+from dotmac_kernel.cache import TenantScope
+
 
 @dataclass(frozen=True, slots=True)
 class OrganizationTenantContext:
@@ -30,6 +32,11 @@ class OrganizationTenantContext:
         if not isinstance(organization_id, UUID):
             raise TypeError("organization_id must be a UUID")
         return cls(organization_id=organization_id, tenant_id=organization_id)
+
+    @property
+    def tenant_scope(self) -> TenantScope:
+        """Return the shared-module scope for this ERP organization."""
+        return TenantScope(self.tenant_id)
 
 
 __all__ = ["OrganizationTenantContext"]
