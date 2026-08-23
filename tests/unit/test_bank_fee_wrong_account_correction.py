@@ -99,8 +99,12 @@ def _row(
 
 def _approved_plan() -> tuple[CorrectionPlan, CorrectionApproval]:
     rows = [
-        _row(target_number=1, statement_number=1, canonical_number=1, amount="17.500000"),
-        _row(target_number=2, statement_number=1, canonical_number=1, amount="17.500000"),
+        _row(
+            target_number=1, statement_number=1, canonical_number=1, amount="17.500000"
+        ),
+        _row(
+            target_number=2, statement_number=1, canonical_number=1, amount="17.500000"
+        ),
     ]
     payload = ("\n".join("|".join(row) for row in rows) + "\n").encode()
     schedule_digest = hashlib.md5(  # noqa: S324 - matches PostgreSQL evidence
@@ -136,7 +140,9 @@ def test_one_byte_of_plan_drift_is_refused() -> None:
 
 
 def test_duplicate_target_is_refused_even_with_a_reapproved_file_digest() -> None:
-    row = _row(target_number=1, statement_number=1, canonical_number=1, amount="17.500000")
+    row = _row(
+        target_number=1, statement_number=1, canonical_number=1, amount="17.500000"
+    )
     payload = (("|".join(row) + "\n") * 2).encode()
     approval = CorrectionApproval(
         plan_sha256=hashlib.sha256(payload).hexdigest(),
@@ -223,8 +229,7 @@ def test_execute_uses_linked_reversal_service_for_every_target() -> None:
     assert reverse.call_count == 2
     assert all(call.kwargs["auto_post"] is True for call in reverse.call_args_list)
     assert all(
-        call.kwargs["reversal_date"] == REVERSAL_DATE
-        for call in reverse.call_args_list
+        call.kwargs["reversal_date"] == REVERSAL_DATE for call in reverse.call_args_list
     )
     postconditions.assert_called_once_with(organization_id=ORG_ID, plan=plan)
     assert result.executed is True

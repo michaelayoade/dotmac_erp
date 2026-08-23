@@ -52,9 +52,7 @@ def _require_confirmations(args: argparse.Namespace) -> None:
     if args.plan_sha256 != approval.plan_sha256:
         raise CorrectionRefused("--plan-sha256 is not the Finance-approved digest")
     if args.schedule_digest != approval.schedule_digest:
-        raise CorrectionRefused(
-            "--schedule-digest is not the Finance-approved digest"
-        )
+        raise CorrectionRefused("--schedule-digest is not the Finance-approved digest")
     if args.confirm_target_count != approval.target_count:
         raise CorrectionRefused("--confirm-target-count does not match approval")
     if args.confirm_gross != approval.gross:

@@ -200,9 +200,7 @@ class CorrectionPlanRow:
                 fields[18], field="canonical ledger period"
             ),
             reversal_date=_parse_date(fields[19], field="reversal date"),
-            reversal_fiscal_period_id=_parse_uuid(
-                fields[20], field="reversal period"
-            ),
+            reversal_fiscal_period_id=_parse_uuid(fields[20], field="reversal period"),
             schedule_row_hash=fields[21],
         )
         row._validate_closed_vocabulary()
@@ -217,8 +215,7 @@ class CorrectionPlanRow:
             or self.legacy_bank_code != mapping.legacy_bank_code
             or self.expected_statement_line_resolves
             is not mapping.expected_statement_line_resolves
-            or self.statement_line_resolves
-            is not self.expected_statement_line_resolves
+            or self.statement_line_resolves is not self.expected_statement_line_resolves
         ):
             raise CorrectionRefused("plan account mapping or source state drifted")
         if not self.target_journal_number or not self.canonical_journal_number:
@@ -287,9 +284,7 @@ class CorrectionPlan:
             raise CorrectionRefused("plan contains a blank row")
         rows = tuple(CorrectionPlanRow.from_fields(line.split("|")) for line in lines)
         cls._validate_rows(rows, approval=approval)
-        schedule_digest = _md5(
-            ",".join(row.schedule_row_hash for row in rows)
-        )
+        schedule_digest = _md5(",".join(row.schedule_row_hash for row in rows))
         if schedule_digest != approval.schedule_digest:
             raise CorrectionRefused("plan schedule digest does not match approval")
         return cls(
@@ -330,8 +325,7 @@ class CorrectionPlan:
             raise CorrectionRefused("plan mapping cardinality does not match approval")
         if any(
             row.reversal_date != approval.reversal_date
-            or row.reversal_fiscal_period_id
-            != approval.reversal_fiscal_period_id
+            or row.reversal_fiscal_period_id != approval.reversal_fiscal_period_id
             for row in rows
         ):
             raise CorrectionRefused("plan reversal timing does not match approval")
@@ -458,8 +452,7 @@ class BankFeeWrongAccountCorrectionService:
             != Counter(approval.mapping_counts)
             or any(
                 row.reversal_date != approval.reversal_date
-                or row.reversal_fiscal_period_id
-                != approval.reversal_fiscal_period_id
+                or row.reversal_fiscal_period_id != approval.reversal_fiscal_period_id
                 for row in plan.rows
             )
         ):
@@ -571,7 +564,9 @@ class BankFeeWrongAccountCorrectionService:
             statement = statement.with_for_update()
         journals = list(self.db.scalars(statement).all())
         if len(journals) != len(journal_ids):
-            raise CorrectionRefused("an approved target or canonical journal is missing")
+            raise CorrectionRefused(
+                "an approved target or canonical journal is missing"
+            )
         return {journal.journal_entry_id: journal for journal in journals}
 
     @staticmethod
@@ -743,15 +738,15 @@ class BankFeeWrongAccountCorrectionService:
             )
             if existing != row.canonical_effect_hash:
                 raise CorrectionRefused("canonical effect hashes disagree in the plan")
-        effect_hashes = dict(
-            self.db.execute(
-                _EFFECT_HASH_SQL,
-                {
-                    "organization_id": organization_id,
-                    "journal_ids": sorted(expected_hashes),
-                },
-            ).all()
-        )
+        effect_hashes: dict[UUID, str] = {}
+        for journal_id, effect_hash in self.db.execute(
+            _EFFECT_HASH_SQL,
+            {
+                "organization_id": organization_id,
+                "journal_ids": sorted(expected_hashes),
+            },
+        ):
+            effect_hashes[journal_id] = effect_hash
         if effect_hashes != expected_hashes:
             raise CorrectionRefused("an immutable target or canonical effect drifted")
 
@@ -761,8 +756,7 @@ class BankFeeWrongAccountCorrectionService:
                 select(JournalEntryLine)
                 .join(
                     JournalEntry,
-                    JournalEntry.journal_entry_id
-                    == JournalEntryLine.journal_entry_id,
+                    JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
                 )
                 .where(
                     JournalEntry.organization_id == organization_id,
@@ -782,12 +776,16 @@ class BankFeeWrongAccountCorrectionService:
         if len(source_by_id) != len(journal_lines) or len(journal_lines) != len(
             ledger_lines
         ):
-            raise CorrectionRefused("journal-line to immutable-ledger cardinality drifted")
+            raise CorrectionRefused(
+                "journal-line to immutable-ledger cardinality drifted"
+            )
         account_codes: defaultdict[UUID, list[str]] = defaultdict(list)
         for ledger in ledger_lines:
             source = source_by_id.get(ledger.journal_line_id)
             if source is None or not self._journal_line_matches_ledger(source, ledger):
-                raise CorrectionRefused("journal lines no longer reproduce target effects")
+                raise CorrectionRefused(
+                    "journal lines no longer reproduce target effects"
+                )
             account_codes[ledger.journal_entry_id].append(ledger.account_code)
         expected_legacy = {
             row.target_journal_entry_id: row.legacy_bank_code for row in plan.rows
@@ -906,7 +904,9 @@ class BankFeeWrongAccountCorrectionService:
         net: defaultdict[tuple[UUID, UUID], Decimal] = defaultdict(Decimal)
         row_counts: Counter[UUID] = Counter()
         for line in ledger_lines:
-            target_id = reversal_target.get(line.journal_entry_id, line.journal_entry_id)
+            target_id = reversal_target.get(
+                line.journal_entry_id, line.journal_entry_id
+            )
             net[(target_id, line.account_id)] += line.debit_amount - line.credit_amount
             row_counts[line.journal_entry_id] += 1
         if any(value != 0 for value in net.values()):
@@ -916,7 +916,9 @@ class BankFeeWrongAccountCorrectionService:
             != row_counts[reversal_by_target[target_id].journal_entry_id]
             for target_id in target_ids
         ):
-            raise CorrectionRefused("a reversal ledger row count differs from its target")
+            raise CorrectionRefused(
+                "a reversal ledger row count differs from its target"
+            )
 
         canonical_ids = {row.canonical_journal_entry_id for row in plan.rows}
         retained = self.db.scalar(
@@ -928,7 +930,8 @@ class BankFeeWrongAccountCorrectionService:
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.reversal_journal_id.is_(None),
             )
-            .count()
         )
         if retained != len(canonical_ids):
-            raise CorrectionRefused("a retained canonical journal changed during correction")
+            raise CorrectionRefused(
+                "a retained canonical journal changed during correction"
+            )
