@@ -34,17 +34,18 @@ app/services/finance/ar/ar_posting_saga.py	ARInvoicePostingSaga._step_post_to_le
 app/services/finance/ar/customer_payment.py	CustomerPaymentService.mark_bounced	gl.reversal	repoint_to_module	caller_repointed
 app/services/finance/ar/customer_payment.py	CustomerPaymentService.void_payment	gl.reversal	repoint_to_module	caller_repointed
 app/services/finance/ar/customer_payment.py	_reverse_vat_cash_basis_for_payment	gl.reversal	repoint_to_module	caller_repointed
+app/services/finance/ar/posting/invoice.py	_absorb_rounding_residue	gl.journal	repoint_to_module	caller_repointed
 app/services/finance/ar/posting/invoice.py	post_invoice	gl.journal|gl.period_guard|gl.posting_adapter|gl.posting_idempotency	repoint_to_module	caller_repointed
 app/services/finance/ar/posting/payment.py	post_payment	gl.journal|gl.period_guard|gl.posting_accounts|gl.posting_adapter|gl.posting_idempotency	repoint_to_module	caller_repointed
 app/services/finance/ar/posting/payment.py	post_vat_reclass_for_payment	gl.journal|gl.posting_adapter|gl.posting_idempotency	repoint_to_module	caller_repointed
 app/services/finance/ar/posting/result.py	ARPostingResult	gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/automation/recurring.py	RecurringService.generate_journal	gl.period_guard	repoint_to_module	caller_repointed
 app/services/finance/banking/auto_reconciliation_parts/core.py	AutoReconciliationCoreService._post_with_period_fallback	gl.posting_adapter	repoint_to_module	caller_repointed
-app/services/finance/banking/auto_reconciliation_parts/special.py	AutoReconciliationSpecialService._match_bank_fees	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/auto_reconciliation_parts/special.py	AutoReconciliationSpecialService._match_settlements	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
-app/services/finance/banking/programmatic_parts/special_strategies.py	BankFeeStrategy.run	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
+app/services/finance/banking/bank_fee_posting.py	_post_existing	gl.posting_adapter	repoint_to_module	caller_repointed
+app/services/finance/banking/bank_fee_posting.py	fee_idempotency_key	gl.posting_adapter	repoint_to_module	caller_repointed
+app/services/finance/banking/bank_fee_posting.py	post_bank_fee	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/programmatic_parts/special_strategies.py	InterbankCounterpartStrategy.run	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
-app/services/finance/banking/reconciliation_engine_parts/handlers.py	ReconciliationEngineHandlers._handle_bank_fee	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/reconciliation_engine_parts/handlers.py	ReconciliationEngineHandlers._handle_inter_bank	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/reconciliation_parts/matching.py	ReconciliationMatchingService.create_journal_and_match	gl.journal	repoint_to_module	caller_repointed
 app/services/finance/cons/cons_posting_adapter.py	CONSPostingAdapter.post_elimination_entry	gl.journal	repoint_to_module	caller_repointed
@@ -69,7 +70,6 @@ app/services/finance/gl/journal.py	JournalService.reverse_entry	gl.reversal	gl_i
 app/services/finance/gl/journal.py	JournalService.update_journal	gl.period_guard	gl_internal	retired_with_gl_owner
 app/services/finance/gl/ledger_posting.py	LedgerPostingService.post_entry	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/gl/ledger_posting.py	LedgerPostingService.post_journal_entry	gl.balances|gl.period_guard	gl_internal	retired_with_gl_owner
-app/services/finance/gl/period_close.py	PeriodReadiness.blockers	gl.posting_backlog	gl_internal	retired_with_gl_owner
 app/services/finance/gl/period_close.py	close_periods	gl.calendar	gl_internal	retired_with_gl_owner
 app/services/finance/gl/posting_backlog.py	post_approved_journals	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/gl/reversal.py	ReversalService.create_reversal	gl.period_guard|gl.poster	gl_internal	retired_with_gl_owner
@@ -117,6 +117,7 @@ app/services/finance/platform/outbox_reconciler.py	OutboxBalanceReconciler.recon
 app/services/finance/posting/base.py	BasePostingAdapter.create_and_approve_journal	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/posting/base.py	BasePostingAdapter.create_approve_and_post_journal	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/posting/base.py	BasePostingAdapter.post_to_ledger	gl.poster	gl_internal	retired_with_gl_owner
+app/services/finance/posting/base.py	BasePostingAdapter.submit_and_approve_as_system	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/rpt/day_books.py	journal_day_book_context	gl.journal_query	repoint_to_module	caller_repointed
 app/services/finance/tax/tax_posting_adapter.py	TAXPostingAdapter.post_current_tax_provision	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/tax/tax_posting_adapter.py	TAXPostingAdapter.post_deferred_tax_movement	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed

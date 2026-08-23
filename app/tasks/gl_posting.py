@@ -8,6 +8,13 @@ Both tasks default to `dry_run=True`. A scheduled job that silently posts to
 the general ledger the first time it runs is not a safe default, and these
 were hand-run scripts until now — nobody has yet decided they should post
 unattended.
+
+## `dry_run=False` is gated
+
+Live bulk posting is refused unless a kill switch is set. The rule, the reasons
+and the explicit warning that the flag is NOT Finance authorization all live in
+`app.services.finance.gl.bulk_posting_policy` — one owner, so the task and
+`scripts/post_stranded_bank_fees.py` cannot drift apart.
 """
 
 from __future__ import annotations
@@ -21,6 +28,9 @@ from app.db.session_context import session_for_org
 from app.models.batch_operation import BatchOperationType
 from app.services.batch_operation import batch_operation
 from app.services.expense.posting_backlog import post_unposted_claims
+from app.services.finance.gl.bulk_posting_policy import (
+    require_bulk_posting_allowed,
+)
 from app.services.finance.gl.posting_backlog import post_approved_journals
 from app.services.finance.gl.stranded_fee_posting import (
     StrandedPostingResult,
@@ -46,7 +56,14 @@ def _organization_ids(organization_id: str | None) -> list[uuid.UUID]:
 def post_approved_journal_backlog(
     organization_id: str | None = None, dry_run: bool = True
 ) -> dict:
-    """Post APPROVED journals that are balanced and in an open period."""
+    """Post APPROVED journals that are balanced and in an open period.
+
+    Balanced and in an open period is the ENTIRE test this applies. It says
+    nothing about whether the effect is already in the ledger — and for the
+    current backlog, it always is. See `_require_bulk_posting_allowed`.
+    """
+    require_bulk_posting_allowed("post_approved_journal_backlog", dry_run)
+
     summary: dict[str, dict] = {}
     for org_id in _organization_ids(organization_id):
         with (
@@ -146,6 +163,8 @@ def post_stranded_source_journals(
     """
     if not year_code:
         raise ValueError("year_code is required (e.g. 'FY2025')")
+
+    require_bulk_posting_allowed("post_stranded_source_journals", dry_run)
 
     summary: dict[str, dict] = {}
     for org_id in _organization_ids(organization_id):
