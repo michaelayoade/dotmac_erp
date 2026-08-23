@@ -1,9 +1,11 @@
 -- ===========================================================================
 -- Bank-fee wrong-account correction schedule — Gate D evidence only.
 --
--- Read-only: one REPEATABLE READ transaction, temp tables, ending in ROLLBACK.
--- Run only against an ISOLATED RESTORED DATABASE. This script does not create
--- a reversal, update a journal, or write an accounting row.
+-- Accounting-row read-only: one REPEATABLE READ transaction, temp tables,
+-- ending in ROLLBACK. Run against an isolated restore for rehearsal. After the
+-- plan is approved, an explicitly authorized run against the named production
+-- database may export the current private plan with PLAN_OUTPUT. This script
+-- does not create a reversal, update a journal, or write an accounting row.
 --
 -- The exact-duplicate detector correctly refused these 429 journals: their
 -- money and dimensions match the line-keyed canonical postings, but their bank
@@ -684,6 +686,33 @@ SELECT target_journal_entry_id, target_journal_number,
        reversal_date, reversal_fiscal_period_id, schedule_row_hash
 FROM reversal_schedule
 ORDER BY target_journal_entry_id;
+
+-- Optional machine-readable form of exactly W3a. The resulting file is the
+-- private input to execute_bank_fee_wrong_account_correction.py. Keep it out of
+-- Git and logs, chmod 0600, and delete it after Finance captures execution
+-- evidence. A caller supplies an absolute no-whitespace path with
+-- `psql -v PLAN_OUTPUT=/run/...`.
+\if :{?PLAN_OUTPUT}
+\pset format unaligned
+\pset fieldsep '|'
+\pset tuples_only on
+\o :PLAN_OUTPUT
+SELECT target_journal_entry_id, target_journal_number,
+       target_posting_batch_id, target_idempotency_key,
+       statement_line_id, canonical_journal_entry_id,
+       canonical_journal_number, mapping_name,
+       legacy_bank_code, canonical_bank_code,
+       statement_line_resolves, expected_statement_line_resolves,
+       total_debit_functional, target_effect_hash, canonical_effect_hash,
+       target_ledger_posting_date, target_ledger_period_id,
+       canonical_ledger_posting_date, canonical_ledger_period_id,
+       reversal_date, reversal_fiscal_period_id, schedule_row_hash
+FROM reversal_schedule
+ORDER BY target_journal_entry_id;
+\o
+\pset tuples_only off
+\pset format aligned
+\endif
 
 \echo ''
 \echo '===== W4. Simulated correcting-reversal effect by account ====='

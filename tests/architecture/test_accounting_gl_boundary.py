@@ -165,6 +165,9 @@ GL_SERVICES = {
     "app.services.finance.gl.fiscal_year": "gl.calendar",
     "app.services.finance.gl.fiscal_period": "gl.calendar",
     "app.services.finance.gl.account_balance": "gl.balances",
+    "app.services.finance.gl.bank_fee_wrong_account_correction": (
+        "gl.bank_fee_wrong_account_correction"
+    ),
     "app.services.finance.gl.balance_refresh": "gl.balances",
     "app.services.finance.gl.balance_invalidation": "gl.balances",
     "app.services.finance.gl.journal_query": "gl.journal_query",

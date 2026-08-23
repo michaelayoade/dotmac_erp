@@ -1334,11 +1334,12 @@ do not make different accounts the same accounting effect. These 429 rows are
 therefore not an exact-duplicate reversal schedule. That refusal remains true
 and is not weakened by the purpose-built correction below.
 
-#### B5.4a Purpose-built wrong-account correction — schedule rehearsed, not executed
+#### B5.4a Purpose-built wrong-account correction — guarded execution pending
 
 Michael authorized construction and rehearsal of the separate wrong-account
-correction on 2026-08-23. The authorization did not name an unknown plan digest
-in advance and is **not recorded as production execution approval**. The new
+correction on 2026-08-23, then approved the exact reproduced plan digest and
+named the production application and database hosts. That authorization does
+not bypass the remaining code/deploy/current-state guards. The
 `scripts/accounting_bank_fee_wrong_account_correction.sql` keeps the duplicate
 detector's refusal intact and asks a narrower question: does each target differ
 from its canonical by exactly one of the two measured account substitutions,
@@ -1385,11 +1386,16 @@ repeatable-read standby snapshot. Both runs emitted the same 429 rows:
 | Reversal simulation | 429 balanced linked reversals; all 858 target/account all-time nets become zero; all 39 canonicals remain live |
 | Production writes | **zero** |
 
-This establishes an exact correction plan, not its execution. Before any
-production write, the current state must reproduce the same plan and digest,
-Finance must approve that exact timing-aware plan, and a guarded operator must
-use the normal one-to-one linked-reversal service in one transaction with
-postconditions. A bulk reversal or an aggregate journal is still forbidden.
+This establishes an exact correction plan, not its execution. The guarded
+operator added after that approval consumes only the private W3a file with the
+two approved digests, requires the database name and server address, validates
+the exact 429/39/₦7,764.68 and 352/77 bindings, locks and revalidates every
+target/canonical/effect/source identity, and delegates each write to the normal
+one-to-one linked-reversal service. It defaults to a non-writing dry run and
+commits only after all 429 posted reversals and postconditions succeed. Before
+any production write, that operator must be merged and deployed and the current
+production state must reproduce the same private plan. A bulk reversal or an
+aggregate journal is still forbidden.
 
 **Zero APPROVED journals sit on the 39 affected lines**, so the Gate G backlog
 and this Gate D defect are disjoint populations and can be dispositioned

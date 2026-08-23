@@ -54,6 +54,7 @@ app/services/finance/cons/cons_posting_adapter.py	CONSPostingAdapter.post_transl
 app/services/finance/exp/expense.py	ExpenseService.post	gl.journal|gl.period_guard|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/gl/__init__.py	__getattr__	gl.balances	gl_internal	retired_with_gl_owner
 app/services/finance/gl/account_balance.py	AccountBalanceService.get_account_balance_read	gl.coa	gl_internal	retired_with_gl_owner
+app/services/finance/gl/bank_fee_wrong_account_correction.py	BankFeeWrongAccountCorrectionService.run	gl.reversal	gl_internal	retired_with_gl_owner
 app/services/finance/gl/bulk.py	AccountBulkService.export_all	gl.coa	gl_internal	retired_with_gl_owner
 app/services/finance/gl/bulk.py	JournalBulkService.bulk_approve	gl.journal	gl_internal	retired_with_gl_owner
 app/services/finance/gl/bulk.py	JournalBulkService.bulk_post	gl.journal	gl_internal	retired_with_gl_owner
@@ -158,6 +159,7 @@ app/tools/fix_unmatched_2025_paystack_opex_acc_pay_lines.py	_ensure_extra_reimbu
 app/tools/reclass_expense_wht_balance.py	main	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/web/finance/gl.py	suggest_account_code	gl.coa	repoint_to_module	caller_repointed
 scripts/close_fiscal_periods.py	main	gl.period_close	repoint_to_module	caller_repointed
+scripts/execute_bank_fee_wrong_account_correction.py	run	gl.bank_fee_wrong_account_correction	repoint_to_module	caller_repointed
 scripts/fix_duplicate_ar_journals.py	run	gl.reversal	repoint_to_module	caller_repointed
 scripts/import_tb_audit.py	post_journal	gl.poster	repoint_to_module	caller_repointed
 scripts/migration/2026-04-30_backfill_deferred_vat.py	_backfill_ap_invoices	gl.journal	repoint_to_module	caller_repointed
