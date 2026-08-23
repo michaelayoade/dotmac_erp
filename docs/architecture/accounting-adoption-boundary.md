@@ -395,11 +395,11 @@ Each gate is a separate authorized change. None is implied by the one before it.
 
   Gate G forensics added a fifth Gate D population: 429 currently effective
   journal-keyed bank-fee postings over 39 statement-line identities. The
-  namespace and ₦7,764.68 gross population are measured; reversal authorization
-  additionally requires exact immutable-effect parity with the one line-keyed
-  canonical per identity, Finance approval bound to the resulting schedule
-  digest, one-to-one corrections, and a zero-target detector re-run. Aggregate
-  count or amount is not authorization.
+  namespace and ₦7,764.68 gross population are measured. The 2026-08-23 exact
+  detector refused all 429 because their ledger account sets differ from the one
+  line-keyed canonical per identity; it emitted no schedule or digest. They are
+  a Gate D wrong-account quarantine requiring a Finance-approved correction
+  design and before/after proof. Aggregate count or amount is not authorization.
 
 - **Gate E — dual write and parity.** Both sides post; every posting is compared.
   Divergence is a stop, not a warning.

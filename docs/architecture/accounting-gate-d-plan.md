@@ -86,18 +86,23 @@ nothing historical.
 backfill namespace produced 429 currently effective POSTED bank-fee journals
 over 39 statement-line identities, with ₦7,764.68 gross debit. ERP PRs #337–#339
 merge the single owner, database at-most-once boundary, exact live-effect
-verification and bulk-mutator gate. They are not deployed and repair no data.
+verification and bulk-mutator gate; production was observed healthy on their
+merge revision `sha-0dc07e4` on 2026-08-23. They repair no historical data.
 
 The first duplicate detector proved the second namespace, current liveness,
 target identities and aggregate amount; it did not compare each target's full
 immutable ledger effect with its line-keyed canonical. The revised
 `scripts/accounting_bank_fee_duplicate_postings.sql` fails closed on unknown
 keys, non-single canonicals and any account/direction/amount/currency/rate/date/
-period/source/dimension mismatch, then emits a one-to-one schedule digest for
-Finance approval. **It has not yet run.** No correcting reversal is authorized
-by the earlier aggregate.
+period/source/dimension mismatch, then emits a one-to-one schedule digest only
+if every target passes. The 2026-08-23 run at commit `ed83989b`, sha256
+`2988835df245f1e1ed67faf4c6e855e95324de93ae2f6b003fe0a552f956586c`,
+**refused all 429 targets**: header and unkeyed monetary shapes match, but none
+of the ledger account sets matches its canonical. No schedule or digest was
+emitted; the population is quarantined for a Finance-designed wrong-account
+correction, not an exact-duplicate reversal.
 
-**Still outstanding:** the exact bank-fee schedule run and Finance approval, the
+**Still outstanding:** Finance treatment of the 429 wrong-account effects, the
 §1a audited-opening bridge, the composite-reversal treatment, Finance's approval
 of the three micro repairs, the per-document proof 6 reconciliation for the
 ar/INVOICE cohort, the reporting and tax assessment, approver and operator.
@@ -348,6 +353,6 @@ memory.
 | SourceIdentity keyed on the GL journal, `version = "1"` | **RULED 2026-08-21.** See above — the run identifier belongs in import/rehearsal evidence, not identity. |
 | Gate D stops before dual write | **Confirmed.** Dual write is gate E. |
 | All four data defects are execution blockers | **RULED 2026-08-21.** Finance corrects and adjudicates through ordinary reviewed ERP process; the survey re-run is the gate. |
-| The 429 journal-keyed POSTED bank-fee candidates | **Additional Gate D population.** Exact target-to-canonical immutable-effect comparison, Finance approval bound to the schedule digest, one-to-one corrections and a zero-target re-run are required. The earlier aggregate does not authorize reversal. |
+| The 429 journal-keyed POSTED bank-fee effects | **Additional Gate D quarantine.** The exact comparison ran twice and refused all 429 because their ledger account sets differ from the canonicals (`352`: canonical `1211/6080`, target `6080/Paystack OPEX - DT`; `77`: canonical `1207/6080`, target `6080/Zenith USD - DT`). No duplicate-reversal schedule or digest exists. Finance must approve a purpose-built wrong-account correction and its proof. |
 | The 14,263 APPROVED-but-unposted journals | **Separate Finance remediation track, started now.** Classify by producer and business-document state before disposing. Gate D proceeds in parallel; gate G blocks on complete disposition. |
 | RECURRING / REVALUATION / CONSOLIDATION writers | Must retire, or the module must gain the kinds, before gate E. Not gate D's problem; recorded so it is not discovered at gate E. |

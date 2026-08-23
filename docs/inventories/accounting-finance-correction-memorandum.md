@@ -1,13 +1,15 @@
 # Finance correction memorandum — Accounting gate D defects
 
 **Status: DRAFT — the ar/INVOICE cohort proof is COMPLETE at the ledger level
-(Appendix A). Bank-fee recurrence prevention is merged but not deployed. The
-429-row reversal population now has a fail-closed exact-effect detector, but it
-has NOT been re-run; the earlier run proved namespace, identity, liveness and
-amount, not exact effect equivalence. Still outstanding: that re-run, the §1a
-audited-opening bridge, the composite reversal, the three micro repairs, the
-per-document proof 6 reconciliation, the reporting/tax assessment, and every
-Finance decision, approver and operator.**
+(Appendix A). Bank-fee recurrence prevention is deployed at production revision
+`sha-0dc07e4`. The exact-effect detector was run on 2026-08-23 and refused all
+429 journal-keyed candidates: every header and unkeyed monetary shape agrees,
+but every immutable ledger account set differs from its line-keyed canonical.
+No reversal schedule or approval digest exists. Still outstanding: Finance's
+treatment of those account-routed effects, the §1a audited-opening bridge, the
+composite reversal, the three micro repairs, the per-document proof 6
+reconciliation, the reporting/tax assessment, and every Finance decision,
+approver and operator.**
 
 **One operative instruction governs the ar/INVOICE population: Appendix A §A5.**
 Earlier text in §3 and §4 is preserved as the historical hypothesis and is
@@ -17,10 +19,11 @@ Decisions, approver and operator are Finance's and are not filled in.
 Engineering produced the forensics and must not resolve any item here. Gate D
 execution stays blocked on content completeness, not on CI.
 
-Evidence taken read-only 2026-08-21/22 against `dotmac_erp_standby` (hot
-standby, writes physically impossible). Reproducible via
-`scripts/accounting_backfill_survey.sql` plus the queries quoted below. Nothing
-was written to any production system.
+Evidence taken read-only 2026-08-21/22/23 against `dotmac_erp_standby` (hot
+standby, database writes physically impossible). Reproducible via
+`scripts/accounting_backfill_survey.sql` plus the queries quoted below. No
+production application or database row was written; the 2026-08-23 run used an
+isolated host-local container and root-only temporary files, all destroyed.
 
 Organization: **Dotmac Technologies Ltd**,
 `00000000-0000-0000-0000-000000000001`, NGN.
@@ -614,8 +617,8 @@ where it already blocks legacy-writer retirement.
 | §1a audited-opening bridge complete | *not started* |
 | Recurrence fix landed (allocator + posting boundary + backlog tolerance) | **DONE — ERP PR #336 merged to `main` as `0e40d799` on 2026-08-22T08:06Z**, `version:patch`, all checks green. Not a data repair. |
 | Reporting assessment **for these corrections only** | *not yet performed* — §6 |
-| Bank-fee recurrence prevention | **MERGED, NOT DEPLOYED.** ERP PRs #337–#339 establish the one-owner, typed-source, at-most-once boundary, fail-closed effect verification and bulk-mutator kill switch. Main contains the controls; production does not yet. None is a data repair. |
-| **429 journal-keyed POSTED bank-fee reversal candidates (₦7,764.68) on 39 statement lines** | ***PROMOTED INTO GATE D* — Appendix B5.4.** The second namespace, current effectiveness and exact target identities are proven. The earlier detector did **not** compare every target's immutable ledger effect with its line-keyed canonical. The revised detector does so and emits an approval-bound schedule, but has **not yet run**. No row is approved to reverse until that run reports 429/429 exact matches (or segregates mismatches) and Finance signs the resulting digest. |
+| Bank-fee recurrence prevention | **DEPLOYED.** ERP PRs #337–#339 establish the one-owner, typed-source, at-most-once boundary, fail-closed effect verification and bulk-mutator kill switch. Production was observed healthy on `sha-0dc07e4` on 2026-08-23; this evidence run deployed nothing. None of those controls is a data repair. |
+| **429 journal-keyed POSTED bank-fee account-effect mismatches (₦7,764.68 gross) on 39 statement lines** | ***GATE D QUARANTINE* — Appendix B5.4.** The 2026-08-23 exact detector refused all 429: `0/429` immutable ledger account sets match their canonical. There is therefore no exact-duplicate reversal schedule and no digest for Finance to approve. Finance must adjudicate the wrong-account effects and approve a purpose-built correction; the old aggregate does not authorize reversal. |
 | POSTED bank-fee anomalies: 95 journals with dangling line ids; 875 of 1,743 crediting their line's bank GL account | ***not started* — Appendix B5.4.** |
 | Clean survey re-run: zero unresolved balance and reversal defects | *pending repairs* |
 | Named approver | *pending* |
@@ -632,10 +635,10 @@ where it already blocks legacy-writer retirement.
 | Disposition recorded for **every** remaining APPROVED journal | **LEDGER EVIDENCE COMPLETE — Appendix B.** 12,217 of 12,224 evidenced (void recommendations); 7 quarantined as undecidable. Finance approval, V2 bank-statement sampling and owners for the 7 outstanding. |
 | Payroll journal (₦12,148,709.68) individually adjudicated | *pending* — Appendix B4 finds its payroll entry already carries a POSTED journal with an identical effect. Evidence for the adjudication, not a substitute for it. |
 | Reporting and tax assessment for the backlog cohorts | *not yet performed* |
-| Generating defect behind 12,117 journals for 149 statement lines | **PROVEN AND FIXED IN MAIN — Appendix B8.** ERP PRs #337–#339 carry the two-invocation and database-race canaries and the exact-effect recovery checks. Not deployed. |
-| Permanent fix: one bank-fee owner, typed `source_document_id`, at-most-once create+post in one transaction | **MERGED — ERP PRs #337–#339.** Not deployed; deployment is a separate authorization. |
-| Non-dry-run generic backlog mutators removed or gated | **GATED — ERP PR #338.** Blast radius remains the full 14,263 / ₦76,495,739.50; the kill switch is not Finance authorization. Not deployed. |
-| Pre-cleanup controls agreed (§B12) | **ENGINEERING CONTROLS MERGED; operational preconditions pending.** Deploy and verify the controls, re-run current-state detectors, obtain Finance dispositions/approval and name the operator before any cleanup. |
+| Generating defect behind 12,117 journals for 149 statement lines | **PROVEN, FIXED AND DEPLOYED — Appendix B8.** ERP PRs #337–#339 carry the two-invocation and database-race canaries and the exact-effect recovery checks; production was observed on their merge revision `0dc07e4`. |
+| Permanent fix: one bank-fee owner, typed `source_document_id`, at-most-once create+post in one transaction | **DEPLOYED — ERP PRs #337–#339 / `sha-0dc07e4`.** Deployment prevents recurrence; it does not repair historical rows. |
+| Non-dry-run generic backlog mutators removed or gated | **DEPLOYED — ERP PR #338.** Blast radius remains the full 14,263 / ₦76,495,739.50; the kill switch is not Finance authorization. |
+| Pre-cleanup controls agreed (§B12) | **ENGINEERING CONTROLS DEPLOYED; accounting preconditions pending.** Current-state detectors, Finance dispositions/approval and a named operator remain mandatory before any cleanup. |
 
 ## 8. Execution requirements
 
@@ -1021,14 +1024,15 @@ database.
 
 | item | value |
 | --- | --- |
-| Source | `dotmac_erp_standby` on `dotmac-db-primary` — hot standby, `pg_is_in_recovery() = t`, read-only. Production primary never connected to; no standby setting changed. |
+| Source | `dotmac_erp_standby` on `dotmac-db-primary` — hot standby, `pg_is_in_recovery() = t`, `transaction_read_only = on`. The exact detector exported only its required columns from this standby; no primary accounting row was queried or changed, and no standby setting changed. |
 | Replay LSN at export start | `BF/EEB3F748` (2026-08-22 10:49:47Z) |
 | Replay LSN at export end | `BF/EEB3F850` (2026-08-22 10:49:56Z) |
 | Server version | PostgreSQL 16.4, source and target |
 | Detector query hash (sha256) | `d5c834d8d66b0d17064654b31bd5d40dc33f0c41600c674e4cd1126402897eec` |
 | Detector, as re-run on exact identity | `scripts/accounting_gate_g_detector.sql`, sha256 `f53f814273a8526f951aed999ac6553e9de8b379cda58db9c19dd27dd22b556b`, against `erp-forensic-verify-20260822`, LSN range `BF/EFB66430`..`BF/EFB705E8` (2026-08-22 11:30Z). Canary passed; produces H1A/Q dispositions directly, with no heuristic logic in the executable. |
 | Journal-keyed POSTED candidates (Gate D) | The 2026-08-22 run of `scripts/accounting_bank_fee_duplicate_postings.sql`, sha256 `f97bd8e3c6a34579a9ff322fbe105781d1f0d118c449607fb107e074e5ad5e49`, against `erp-forensic-equiv-20260822`, LSN range `BF/EF546DA0`..`BF/EF54FBB8`, proves the second namespace, current liveness, target identity and ₦7,764.68 total. It did **not** prove target-to-canonical exact effect equivalence. |
-| Exact one-to-one reversal schedule | The revised `scripts/accounting_bank_fee_duplicate_postings.sql` compares immutable ledger account, direction, amount, transaction currency/rate, dates, period, source metadata and dimensions; fails on an unknown key, non-single canonical or mismatch; and emits a schedule digest. **NOT YET RUN.** Its commit, query hash, restore LSN and result belong here only after the run. |
+| Exact one-to-one reversal schedule | **RUN AND REFUSED, twice, with the same result.** Commit `ed83989b5744b01d61ac9f0b54dc06ab7172a0af`, sha256 `2988835df245f1e1ed67faf4c6e855e95324de93ae2f6b003fe0a552f956586c`; repeatable-read snapshot `19017326:19018685:`, replay LSN `C0/6D6524A0`..`C0/6D790900`, PostgreSQL 16.4. All **429** targets failed exact immutable-effect equality. No D6 schedule or digest was emitted. |
+| Exact-run isolated target | `erp-forensic-fee-exact-20260823` — source-image-identical PostgreSQL, memory-backed data directory, `--network none`, no published port and no application attached. Source subset counts were `13,955` fee journals, `1,838` batches, `3,676` ledger lines, `53` statements and `1,391` statement lines. Detector logs, copied columns and container were destroyed; `cleanup=complete`. |
 | Target | `erp-forensic-gateg-20260822` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (§B9). |
 | Organization scope | Dotmac Technologies Ltd, with the same fail-closed canary as Appendix A — 12,225 unscoped against 12,224 scoped, `sensitivity proof PASSED`. |
 
@@ -1244,7 +1248,7 @@ Two claims in the heuristic version do not survive:
    identity the 149 lines carry **exactly 149 POSTED journals — zero excess.**
    The apparent duplication was entirely an artefact of bucket merging.
 
-### B5.4 The journal-keyed POSTED effects — cause proven, reversal equivalence pending
+### B5.4 The journal-keyed POSTED effects — cause proven, exact-duplicate equivalence refused
 
 The earlier calculation was `(posted row count − 1) × source fee`. That proves
 excess **rows**, not excess **effect**: a second posted row is not a duplicate if
@@ -1282,14 +1286,14 @@ prior standalone script is now evidenced rather than precautionary.
 | --- | ---: |
 | Affected statement lines | 39 |
 | Journal-keyed postings, all currently effective | **429** |
-| **Gross debit of the reversal candidates** | **₦7,764.68** |
+| **Gross debit of the journal-keyed current effects** | **₦7,764.68** |
 | …of which on lines that resolve to a statement line | ₦6,160.00 |
 | …on 7 lines whose id does not resolve | ₦1,604.68 |
 
 The earlier ₦6,160.00 was the resolvable subset quoted as the whole. All 429 are
 individually identifiable by their complete journal-keyed idempotency key and
-each has its own posting batch. That proves a one-to-one **candidate schedule**;
-it does not yet authorize a one-to-one correcting reversal.
+each has its own posting batch. That proves identity and cardinality; it does
+not prove a duplicate economic effect or authorize a correcting reversal.
 
 The revised detector now builds the complete immutable-ledger signature for
 each target and its one line-keyed canonical: account and direction, functional
@@ -1298,8 +1302,33 @@ metadata and every accounting dimension. It fails closed on an unknown complete
 key, anything other than one live canonical per affected line, an incomplete
 schedule or any signature mismatch. It emits the 429 target ids only inside the
 Finance boundary and binds the set with a count, gross amount and stable schedule
-digest. **That detector has not yet run.** Finance approval must cite the output
-of that run, not the 2026-08-22 aggregate.
+digest only after every comparison passes.
+
+**The 2026-08-23 run refused before D6.** Both identical runs found 429 target
+pairs and 429 immutable-effect mismatches, so there is no schedule digest for
+Finance to sign:
+
+| exact comparison | matches |
+| --- | ---: |
+| Header dates, period, currency/rate and totals | 429 / 429 |
+| Ledger row count | 429 / 429 |
+| Unkeyed functional/original amount shapes | 429 / 429 |
+| Unkeyed dimension and source-metadata shapes | 429 / 429 |
+| Ledger account ids and codes | **0 / 429** |
+| Complete immutable ledger effect | **0 / 429** |
+
+The account-set split is systematic:
+
+| pairs | canonical account codes | journal-keyed account codes |
+| ---: | --- | --- |
+| 352 | `1211`, `6080` | `6080`, `Paystack OPEX - DT` |
+| 77 | `1207`, `6080` | `6080`, `Zenith USD - DT` |
+
+The two sides have the same ₦7,764.68 gross, but equal gross and line identity
+do not make different accounts the same accounting effect. These 429 rows are
+now a **wrong-account Gate D quarantine**, not an exact-duplicate reversal
+schedule. Finance must decide the intended account treatment and approve a
+purpose-built correction with its own before/after proof.
 
 **Zero APPROVED journals sit on the 39 affected lines**, so the Gate G backlog
 and this Gate D defect are disjoint populations and can be dispositioned
@@ -1373,16 +1402,16 @@ should not be assumed either way.
    §5. Voiding is a Finance decision.
 2. **It says nothing about business validity** — whether a source document should
    have produced an effect at all is outside the ledger.
-3. **The 429 journal-keyed POSTED bank-fee candidates (₦7,764.68) are not fixed
+3. **The 429 journal-keyed POSTED bank-fee effects (₦7,764.68) are not fixed
    here.** They are already in the posted ledger and belong to Gate D (§B5.4).
-   Exact target-to-canonical effect verification must pass before Finance may
-   call any one of them a reversal target.
+   Exact target-to-canonical verification ran and refused all 429 because their
+   account sets differ. None is an approved reversal target.
 4. **The POSTED-side anomalies are not resolved** — 95 journals with dangling
    line ids, and only 875 of 1,743 crediting their line's bank GL account.
 5. **Cross-document effect matching was never used as evidence.** 96% of journals
    in this ledger share a net-effect signature (Appendix A2).
 
-## B8. THE GENERATING DEFECT — proven and fixed in main, not deployed
+## B8. THE GENERATING DEFECT — proven, fixed and deployed
 
 All three bank-fee writers —
 `banking/auto_reconciliation_parts/special.py:92`,
@@ -1425,7 +1454,8 @@ One bank-fee posting owner now serves all three reconciliation adapters;
 creation and posting are enforced together in one transaction. ERP PR #337
 introduced the owner and database boundary, #338 gated the dangerous bulk paths,
 and #339 made every success/recovery path verify the exact live effect. All are
-merged to `main`; none is deployed to production at the date of this draft.
+merged to `main` and production was observed healthy on their merge revision
+`sha-0dc07e4` on 2026-08-23. This forensic run performed no deployment.
 
 ## B9. Consequence for Gate G
 
@@ -1440,12 +1470,10 @@ It does not close Gate G. Outstanding:
   verification for V1's 100 rows.
 - Owners and deadlines for the seven quarantined journals; the four Q2 rows with
   a statement-line match should be followed to that line first.
-- Deployment and production verification of the merged single-owner,
-  at-most-once and bulk-mutator controls. Merged code is not an operational
-  control until it is live.
-- Gate D exact-effect revalidation and Finance treatment of the **429
-  journal-keyed POSTED candidates (₦7,764.68)**, plus the POSTED-side anomalies
-  (§B5.4, §B5.6).
+- Continued production verification of the deployed single-owner, at-most-once
+  and bulk-mutator controls at `sha-0dc07e4`.
+- Finance treatment of the **429 journal-keyed wrong-account POSTED effects
+  (₦7,764.68)**, plus the POSTED-side anomalies (§B5.4, §B5.6).
 
 ## B10. What this appendix corrected about itself
 
@@ -1461,7 +1489,7 @@ rather than quietly replaced:
 | "149 POSTED journals across 111 buckets → ~38 duplicate postings" | **DISPROVEN.** The 149 lines carry exactly 149 POSTED journals, zero excess. The real excess is elsewhere: 352 journals, ₦6,160.00, on 32 other lines. |
 | "V2 VOID" | **Superseded twice.** First downgraded to `H1 HOLD` on exact identity; now **`H1A VOID candidate`** once economic equivalence was proved (§B5.2). |
 | "effect already posted correctly and once" | **Overstated when written** — cardinality is not equivalence. Now earned: §B5.2 tests effect, currency, period, reversal state and ledger presence. |
-| "352 excess rows, ₦6,160.00 misstatement" | **Corrected to 429 journal-keyed current effects with ₦7,764.68 gross debit**; the earlier figure was the resolvable subset quoted as the whole. The second namespace is proven. Exact target-to-canonical effect equivalence is now an explicit pending gate, not inferred from namespace and amount (§B5.4). |
+| "352 excess rows, ₦6,160.00 misstatement" | **Corrected to 429 journal-keyed current effects with ₦7,764.68 gross debit**; the earlier figure was the resolvable subset quoted as the whole. The exact detector then **refused all 429** because the journal-keyed and canonical account sets differ (§B5.4). |
 | "1,398 posting batches across 1,391 lines" | **WRONG.** The query matched line-keyed batches only. True: 1,838 journals, 1,838 batches, in two namespaces (§B5.5). |
 | "no linkage of any kind" for the six reconciliations | **WRONG.** They are header-unlinked; **four have a statement-line match.** The original check joined on the journal id instead of the journal LINE id and returned a zero that read as a finding. |
 
@@ -1474,9 +1502,10 @@ overall — exists so a zero there can be trusted next time.
 
 Not recommendations — preconditions. In order:
 
-1. **Deploy and verify the merged controls before cleanup.** ERP PRs #337–#339
-   gate every generic non-dry-run backlog mutator and install the exact
-   statement-line boundary. `post_approved_journal_backlog`,
+1. **Keep the deployed controls verified before cleanup.** ERP PRs #337–#339,
+   observed in production at `sha-0dc07e4`, gate every generic non-dry-run
+   backlog mutator and install the exact statement-line boundary.
+   `post_approved_journal_backlog`,
    `post_stranded_source_journals` and `scripts/post_stranded_bank_fees.py` must
    refuse a live run by default in the deployed revision. A merge is not proof
    that production has the control.
@@ -1485,13 +1514,12 @@ Not recommendations — preconditions. In order:
    LSN range (§B0).
 3. **VOID approved duplicates — never delete them.** The APPROVED rows are
    evidence of the defect and of the decision taken about them.
-4. **Reverse only exact-effect schedule rows approved by Finance.** Re-run the
-   revised §B5.4 detector against current authoritative state. Every target must
-   exactly match its one live line-keyed canonical; any mismatch is quarantined,
-   not rounded into the population. Finance approval cites the schedule count,
-   gross and digest. Re-run immediately before execution and require the same
-   digest. Keep the canonical posting. No bulk reversal, and nothing reversed on
-   the strength of a row count.
+4. **Do not use the duplicate-reversal path for the 429.** The revised §B5.4
+   detector ran twice and quarantined every target on account mismatch; no
+   schedule or digest exists. Finance must approve a separate wrong-account
+   correction design, including exact target rows, intended accounts and
+   before/after proof. Re-run immediately before any eventual execution. No
+   bulk reversal, and nothing reversed on the strength of a row count or gross.
 5. **Keep the seven undecided journals quarantined with named Finance owners**
    and deadlines: Q1 `JE202607-9427`, and the six Q2 reconciliations — four of
    which have a statement-line match to follow first (§B6).
