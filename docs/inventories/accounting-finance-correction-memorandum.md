@@ -1,32 +1,33 @@
 # Finance correction memorandum — Accounting gate D defects
 
 **Status: DRAFT — the ar/INVOICE cohort proof is COMPLETE at the ledger level
-(Appendix A). Bank-fee recurrence prevention is deployed at production revision
-`sha-0dc07e4`. The exact-effect detector was run on 2026-08-23 and refused all
-429 journal-keyed candidates: every header and unkeyed monetary shape agrees,
-but every immutable ledger account set differs from its line-keyed canonical.
-A purpose-built wrong-account schedule has now run twice on an isolated copy:
-429 one-to-one linked reversals, SHA-256 plan digest
-`dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
-It is rehearsal evidence, not production execution approval; nothing was
-reversed. Still outstanding: approval and guarded execution of that exact plan,
-the §1a audited-opening bridge, the composite reversal, the three micro repairs,
-the per-document proof 6 reconciliation, the reporting/tax assessment, and
-every named Finance approver and operator.**
+(Appendix A). Bank-fee recurrence prevention and the guarded wrong-account
+correction are deployed at production revision `sha-8290c7d`. On 2026-08-23
+the writable primary reproduced the approved 429-row plan at SHA-256
+`dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`;
+the dry run passed and the operator committed 429 one-to-one linked reversals.
+Persisted verification proved 429 linked REVERSED targets, 858 reversal ledger
+rows, zero non-zero target/account nets, zero row-parity failures, all 39
+canonicals retained, and ₦7,764.680000 gross. Still outstanding: the §1a
+audited-opening bridge, the composite reversal, the three micro repairs, the
+per-document proof 6 reconciliation, the reporting/tax assessment, and named
+Finance approvers/operators for those remaining corrections.**
 
 **One operative instruction governs the ar/INVOICE population: Appendix A §A5.**
 Earlier text in §3 and §4 is preserved as the historical hypothesis and is
 superseded wherever the two disagree.
 
-Decisions, approver and operator are Finance's and are not filled in.
-Engineering produced the forensics and must not resolve any item here. Gate D
-execution stays blocked on content completeness, not on CI.
+Except for the completed bank-fee correction explicitly recorded in §B5.4a,
+decisions, approvers and operators are Finance's and are not filled in.
+Engineering produced the forensics and must not resolve those remaining items.
+Their Gate D execution stays blocked on content completeness, not on CI.
 
-Evidence taken read-only 2026-08-21/22/23 against `dotmac_erp_standby` (hot
+Initial evidence was taken read-only 2026-08-21/22/23 against
+`dotmac_erp_standby` (hot
 standby, database writes physically impossible). Reproducible via
 `scripts/accounting_backfill_survey.sql` plus the queries quoted below. No
-production application or database row was written; the 2026-08-23 run used an
-isolated host-local container and root-only temporary files, all destroyed.
+production application or database row was written by those evidence runs; the
+separate, later production execution is recorded in §B5.4a.
 
 Organization: **Dotmac Technologies Ltd**,
 `00000000-0000-0000-0000-000000000001`, NGN.
@@ -620,12 +621,12 @@ where it already blocks legacy-writer retirement.
 | §1a audited-opening bridge complete | *not started* |
 | Recurrence fix landed (allocator + posting boundary + backlog tolerance) | **DONE — ERP PR #336 merged to `main` as `0e40d799` on 2026-08-22T08:06Z**, `version:patch`, all checks green. Not a data repair. |
 | Reporting assessment **for these corrections only** | *not yet performed* — §6 |
-| Bank-fee recurrence prevention | **DEPLOYED.** ERP PRs #337–#339 establish the one-owner, typed-source, at-most-once boundary, fail-closed effect verification and bulk-mutator kill switch. Production was observed healthy on `sha-0dc07e4` on 2026-08-23; this evidence run deployed nothing. None of those controls is a data repair. |
-| **429 journal-keyed POSTED bank-fee account-effect mismatches (₦7,764.68 gross) on 39 statement-line identities** | ***CORRECTION DESIGNED AND REHEARSED; PRODUCTION EXECUTION PENDING* — Appendix B5.4.** The exact-duplicate detector still correctly refuses all 429. The separate wrong-account detector admits exactly the two 352/77 account substitutions, proves 858/858 journal-line parity, binds the 2025 target / March 2026 canonical / August 2026 reversal timing, and produced the same 429-row SHA-256 plan digest twice. No production accounting row changed; exact-plan approval, a guarded operator and execution proof remain pending. |
+| Bank-fee recurrence prevention | **DEPLOYED.** ERP PRs #337–#339 establish the one-owner, typed-source, at-most-once boundary, fail-closed effect verification and bulk-mutator kill switch. Production is healthy on `sha-8290c7d`; those controls prevent recurrence and remain distinct from the completed historical correction below. |
+| **429 journal-keyed POSTED bank-fee account-effect mismatches (₦7,764.68 gross) on 39 statement-line identities** | **CORRECTED IN PRODUCTION — Appendix B5.4.** The 2026-08-23 current-state export reproduced the approved 429-row digest; the non-writing dry run passed; the guarded operator posted 429 linked reversals in one transaction. Persisted aggregate verification returned `429|429|429|858|0|0|39|7764.680000` for reversals, distinct targets, linked REVERSED targets, reversal ledger rows, non-zero target/account nets, row-parity failures, retained canonicals and gross respectively. |
 | POSTED bank-fee anomalies: 95 journals with dangling line ids; 875 of 1,743 crediting their line's bank GL account | ***not started* — Appendix B5.4.** |
 | Clean survey re-run: zero unresolved balance and reversal defects | *pending repairs* |
-| Named approver | *pending* |
-| Named operator | *pending* |
+| Named approver | **Bank-fee correction: Michael, explicit authorization on 2026-08-23.** Remaining corrections: *pending*. |
+| Named operator | **Bank-fee correction: Codex production operator via `root@erp.dotmac.io`, audit-attributed to the standard system UUID.** Remaining corrections: *pending*. |
 
 ### 7b. Gate G sign-off — blocks legacy-writer retirement, NOT gate D
 
@@ -638,8 +639,8 @@ where it already blocks legacy-writer retirement.
 | Disposition recorded for **every** remaining APPROVED journal | **LEDGER EVIDENCE COMPLETE — Appendix B.** 12,217 of 12,224 evidenced (void recommendations); 7 quarantined as undecidable. Finance approval, V2 bank-statement sampling and owners for the 7 outstanding. |
 | Payroll journal (₦12,148,709.68) individually adjudicated | *pending* — Appendix B4 finds its payroll entry already carries a POSTED journal with an identical effect. Evidence for the adjudication, not a substitute for it. |
 | Reporting and tax assessment for the backlog cohorts | *not yet performed* |
-| Generating defect behind 12,117 journals for 149 statement lines | **PROVEN, FIXED AND DEPLOYED — Appendix B8.** ERP PRs #337–#339 carry the two-invocation and database-race canaries and the exact-effect recovery checks; production was observed on their merge revision `0dc07e4`. |
-| Permanent fix: one bank-fee owner, typed `source_document_id`, at-most-once create+post in one transaction | **DEPLOYED — ERP PRs #337–#339 / `sha-0dc07e4`.** Deployment prevents recurrence; it does not repair historical rows. |
+| Generating defect behind 12,117 journals for 149 statement lines | **PROVEN, FIXED AND DEPLOYED — Appendix B8.** ERP PRs #337–#339 carry the two-invocation and database-race canaries and the exact-effect recovery checks; production is currently healthy with those controls on `sha-8290c7d`. |
+| Permanent fix: one bank-fee owner, typed `source_document_id`, at-most-once create+post in one transaction | **DEPLOYED — ERP PRs #337–#339, currently `sha-8290c7d`.** This control prevents recurrence; the separate historical repair is recorded in §B5.4a. |
 | Non-dry-run generic backlog mutators removed or gated | **DEPLOYED — ERP PR #338.** Blast radius remains the full 14,263 / ₦76,495,739.50; the kill switch is not Finance authorization. |
 | Pre-cleanup controls agreed (§B12) | **ENGINEERING CONTROLS DEPLOYED; accounting preconditions pending.** Current-state detectors, Finance dispositions/approval and a named operator remain mandatory before any cleanup. |
 
@@ -1006,9 +1007,9 @@ same set — exactly as §3 warned.
 | Volume `erp-forensic-20260822c-data` removed | `docker volume rm`; `docker volume ls --filter name=erp-forensic` returns 0 rows |
 | Earlier instances `erp-forensic-20260822a` and `-20260822b`, and their volumes | removed the same way, earlier the same day |
 | SQL and output removed from `dotmac-db-primary` | all `/tmp` detector, diagnostic and output files — `No such file or directory` |
-| No dump file ever written | tables were streamed container-to-container; no export file existed on either host at any point |
+| Appendix A dump handling | tables were streamed container-to-container; no export file existed on either host during this evidence run. The later normal production deployment backup is separate (§B5.4a). |
 | Standby unchanged | `pg_is_in_recovery() = t`, `max_standby_streaming_delay = 30s` (untouched — and the reason the earlier correlated query was cancelled), replay advancing normally |
-| Production primary | never connected to |
+| Production primary | not connected for Appendix A. The later, separately authorized §B5.4a correction connected to it under its own guards and evidence. |
 
 ---
 
@@ -1334,7 +1335,7 @@ do not make different accounts the same accounting effect. These 429 rows are
 therefore not an exact-duplicate reversal schedule. That refusal remains true
 and is not weakened by the purpose-built correction below.
 
-#### B5.4a Purpose-built wrong-account correction — guarded execution pending
+#### B5.4a Purpose-built wrong-account correction — guarded execution complete
 
 Michael authorized construction and rehearsal of the separate wrong-account
 correction on 2026-08-23, then approved the exact reproduced plan digest and
@@ -1384,18 +1385,30 @@ repeatable-read standby snapshot. Both runs emitted the same 429 rows:
 | Internal schedule digest | `a5e1776785856c579bd3ed6bc0d68308` |
 | Canonical 429-row plan sha256 | `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148` |
 | Reversal simulation | 429 balanced linked reversals; all 858 target/account all-time nets become zero; all 39 canonicals remain live |
-| Production writes | **zero** |
+| Production writes during rehearsal | **zero** |
 
-This establishes an exact correction plan, not its execution. The guarded
-operator added after that approval consumes only the private W3a file with the
+That rehearsal established the exact correction plan. The guarded operator
+added after approval consumes only the private W3a file with the
 two approved digests, requires the database name and server address, validates
 the exact 429/39/₦7,764.68 and 352/77 bindings, locks and revalidates every
 target/canonical/effect/source identity, and delegates each write to the normal
 one-to-one linked-reversal service. It defaults to a non-writing dry run and
-commits only after all 429 posted reversals and postconditions succeed. Before
-any production write, that operator must be merged and deployed and the current
-production state must reproduce the same private plan. A bulk reversal or an
-aggregate journal is still forbidden.
+commits only after all 429 posted reversals and postconditions succeed. A bulk
+reversal or an aggregate journal remains forbidden.
+
+Production execution on 2026-08-23 followed that path:
+
+| execution gate | result |
+| --- | --- |
+| Guarded operator | ERP PR #341, with production identity normalization in fully green PR #343 |
+| Deployment | `erp.dotmac.io` fast-forwarded from `sha-0dc07e4` to fully green/published `sha-8290c7d`; pre-migration backup completed; `im_0001_import_runs` applied; app healthy after 73 seconds |
+| Database identity | `dotmac_erp`, application-path primary `172.18.0.2/32`, `pg_is_in_recovery = false`, transaction read-only off |
+| Current-state private plan | 429 rows, mode `0600`, exact approved SHA-256 and internal schedule digest; admission sensitivity proof passed |
+| Non-writing dry run | **PASSED** — 429 targets, 39 affected statement lines, ₦7,764.680000, zero reversals |
+| Committed result | **EXECUTED** — 429 targets, 429 linked reversals, 39 affected statement lines, ₦7,764.680000 |
+| Persisted aggregate proof | 429 reversals; 429 distinct/linked REVERSED targets; 858 reversal ledger rows; zero non-zero target/account nets; zero row-parity failures; 39 retained canonicals; ₦7,764.680000 gross |
+| Privacy cleanup | Private plan and copied schedule deleted from both production containers; absence verified |
+| Post-execution health | App healthy on `sha-8290c7d`, restart count zero |
 
 **Zero APPROVED journals sit on the 39 affected lines**, so the Gate G backlog
 and this Gate D defect are disjoint populations and can be dispositioned
@@ -1469,12 +1482,11 @@ should not be assumed either way.
    §5. Voiding is a Finance decision.
 2. **It says nothing about business validity** — whether a source document should
    have produced an effect at all is outside the ledger.
-3. **The 429 journal-keyed POSTED bank-fee effects (₦7,764.68) are not fixed
-   here.** They are already in the posted ledger and belong to Gate D (§B5.4).
-   Exact target-to-canonical verification ran and refused all 429 because their
-   account sets differ. A separate timing-aware wrong-account schedule now
-   names and rehearses all 429 linked-reversal targets, but no production
-   reversal has been approved or written.
+3. **The appendix's Gate G evidence did not itself fix the 429 journal-keyed
+   POSTED bank-fee effects (₦7,764.68).** They belonged to Gate D (§B5.4), where
+   the exact-duplicate path correctly refused them on account mismatch. The
+   separate timing-aware wrong-account path subsequently corrected all 429 in
+   production as recorded in §B5.4a.
 4. **The POSTED-side anomalies are not resolved** — 95 journals with dangling
    line ids, and only 875 of 1,743 crediting their line's bank GL account.
 5. **Cross-document effect matching was never used as evidence.** 96% of journals
@@ -1523,8 +1535,8 @@ One bank-fee posting owner now serves all three reconciliation adapters;
 creation and posting are enforced together in one transaction. ERP PR #337
 introduced the owner and database boundary, #338 gated the dangerous bulk paths,
 and #339 made every success/recovery path verify the exact live effect. All are
-merged to `main` and production was observed healthy on their merge revision
-`sha-0dc07e4` on 2026-08-23. This forensic run performed no deployment.
+merged to `main`; production remains healthy with those controls on
+`sha-8290c7d`. The original forensic run performed no deployment.
 
 ## B9. Consequence for Gate G
 
@@ -1540,10 +1552,10 @@ It does not close Gate G. Outstanding:
 - Owners and deadlines for the seven quarantined journals; the four Q2 rows with
   a statement-line match should be followed to that line first.
 - Continued production verification of the deployed single-owner, at-most-once
-  and bulk-mutator controls at `sha-0dc07e4`.
-- Exact-plan Finance approval, a named guarded operator and production
-  execution proof for the **429 journal-keyed wrong-account POSTED effects
-  (₦7,764.68)**, plus the remaining POSTED-side anomalies (§B5.4, §B5.6).
+  and bulk-mutator controls at `sha-8290c7d`.
+- The remaining POSTED-side anomalies in §B5.6. The 429 journal-keyed
+  wrong-account effects are complete and no longer part of this outstanding
+  list (§B5.4a).
 
 ## B10. What this appendix corrected about itself
 
@@ -1573,7 +1585,7 @@ overall — exists so a zero there can be trusted next time.
 Not recommendations — preconditions. In order:
 
 1. **Keep the deployed controls verified before cleanup.** ERP PRs #337–#339,
-   observed in production at `sha-0dc07e4`, gate every generic non-dry-run
+   currently observed in production at `sha-8290c7d`, gate every generic non-dry-run
    backlog mutator and install the exact statement-line boundary.
    `post_approved_journal_backlog`,
    `post_stranded_source_journals` and `scripts/post_stranded_bank_fees.py` must
@@ -1584,13 +1596,12 @@ Not recommendations — preconditions. In order:
    LSN range (§B0).
 3. **VOID approved duplicates — never delete them.** The APPROVED rows are
    evidence of the defect and of the decision taken about them.
-4. **Do not use the exact-duplicate path for the 429.** That detector still
-   refuses every target on account mismatch. Use only the separate §B5.4a
-   wrong-account plan: re-run immediately before execution, require the exact
-   429-row SHA-256 digest, the 2025/March/August timing proof, 858/858 journal
-   parity and Finance approval of that exact plan. Execute one normal linked
-   reversal per target in one transaction with postconditions. No bulk or
-   aggregate journal, and nothing reversed on the strength of a count or gross.
+4. **Do not re-run or reinterpret the completed 429 correction.** The
+   exact-duplicate detector correctly refused the original account-mismatched
+   targets; §B5.4a records the only approved wrong-account execution. Any new
+   live journal-keyed population is new drift requiring new evidence and
+   approval. No bulk or aggregate journal, and nothing reversed on the strength
+   of a count or gross.
 5. **Keep the seven undecided journals quarantined with named Finance owners**
    and deadlines: Q1 `JE202607-9427`, and the six Q2 reconciliations — four of
    which have a statement-line match to follow first (§B6).
@@ -1603,6 +1614,6 @@ Not recommendations — preconditions. In order:
 | Volumes `erp-forensic-gateg-20260822-data` and `erp-forensic-lineid-20260822-data` removed | `docker volume rm`; `docker volume ls --filter name=erp-forensic` returns 0 rows |
 | Detector, discovery and verification SQL removed from `dotmac-db-primary` and from the standby container | all `No such file or directory` |
 | Wrong-account rehearsal `erp-fee-correction-rehearsal-20260823`, copied subset and `/tmp/codex-erp-fee-correction-20260823` removed | explicit container, source-container file and staging-path checks returned `cleanup=verified` |
-| No full database dump ever written | Earlier tables streamed container-to-container. The wrong-account rehearsal wrote only the enumerated, column-limited non-PII CSV subset into temporary container/host paths; cleanup checks proved every file absent afterward. |
+| Forensic/rehearsal data handling | Earlier tables streamed container-to-container. The rehearsal wrote only the enumerated, column-limited non-PII subset and destroyed it. The later normal production deployment created and uploaded its required private pre-migration backup separately. |
 | Standby unchanged | `pg_is_in_recovery() = t`, `max_standby_streaming_delay = 30s`, replay advancing |
-| Production primary | never connected to |
+| Production primary | Connected only for the separately authorized §B5.4a current-state plan, dry run, guarded execution and aggregate verification; private temporary files deleted and absence verified |
