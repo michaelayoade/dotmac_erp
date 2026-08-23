@@ -35,10 +35,7 @@ class BankFeeStrategy(MatchStrategy):
         if not still_unmatched:
             return
         from app.models.finance.gl.account import Account
-        from app.services.finance.banking.bank_fee_posting import (
-            BankFeeState,
-            post_bank_fee,
-        )
+        from app.services.finance.banking.bank_fee_posting import post_bank_fee
 
         account_code = ctx.policy.gl_mappings.get(
             "fee_expense_account_code",
@@ -83,9 +80,6 @@ class BankFeeStrategy(MatchStrategy):
                     ctx.result.errors.append(
                         f"Line {line.line_number}: {outcome.message}"
                     )
-                    continue
-
-                if outcome.state is BankFeeState.LEGACY_BATCH_ONLY:
                     continue
 
                 if not outcome.ok:

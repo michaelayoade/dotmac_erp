@@ -137,6 +137,8 @@ def _with_lines(db: Session, journal, debit_account, credit_account, amount: Dec
                 credit_amount=cr,
                 debit_amount_functional=dr,
                 credit_amount_functional=cr,
+                currency_code=journal.currency_code,
+                exchange_rate=journal.exchange_rate,
             )
         )
     db.flush()
@@ -154,11 +156,16 @@ def _post_to_ledger(db: Session, journal, period_id: uuid.UUID, org_id: uuid.UUI
     from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
     from app.models.finance.gl.posting_batch import BatchStatus, PostingBatch
 
+    idempotency_key = (
+        fee_idempotency_key(org_id, journal.source_document_id)
+        if journal.source_document_id is not None
+        else f"canary-{uuid.uuid4()}"
+    )
     batch = PostingBatch(
         batch_id=uuid.uuid4(),
         organization_id=org_id,
         fiscal_period_id=period_id,
-        idempotency_key=f"canary-{uuid.uuid4()}",
+        idempotency_key=idempotency_key,
         source_module="BANKING",
         batch_description="canary",
         total_entries=2,
@@ -166,6 +173,7 @@ def _post_to_ledger(db: Session, journal, period_id: uuid.UUID, org_id: uuid.UUI
         failed_entries=0,
         status=BatchStatus.POSTED,
         submitted_by_user_id=uuid.uuid4(),
+        correlation_id=journal.correlation_id,
     )
     db.add(batch)
     db.flush()
@@ -189,9 +197,21 @@ def _post_to_ledger(db: Session, journal, period_id: uuid.UUID, org_id: uuid.UUI
                 account_code="6080",
                 entry_date=journal.entry_date,
                 posting_date=journal.posting_date,
-                debit_amount=row.debit_amount,
-                credit_amount=row.credit_amount,
+                debit_amount=row.debit_amount_functional,
+                credit_amount=row.credit_amount_functional,
+                original_currency_code=row.currency_code,
+                original_debit_amount=row.debit_amount,
+                original_credit_amount=row.credit_amount,
+                exchange_rate=row.exchange_rate,
+                business_unit_id=row.business_unit_id,
+                cost_center_id=row.cost_center_id,
+                project_id=row.project_id,
+                segment_id=row.segment_id,
+                source_module=journal.source_module,
+                source_document_type=journal.source_document_type,
+                source_document_id=journal.source_document_id,
                 posted_by_user_id=uuid.uuid4(),
+                correlation_id=journal.correlation_id,
             )
         )
     journal.posting_batch_id = batch.batch_id
@@ -214,6 +234,7 @@ def _legacy_live_batch(
     it to a live effect — so a fixture that wants to block must build one.
     """
     from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+    from app.models.finance.gl.posting_batch import PostingBatch
 
     journal = _fee_journal(
         org_id, period_id, line_id, number=f"LEGACY-{uuid.uuid4().hex[:6]}"
@@ -230,10 +251,10 @@ def _legacy_live_batch(
             PostedLedgerLine.journal_entry_id == journal.journal_entry_id
         )
     )
-    db.execute(
-        text("UPDATE gl.posting_batch SET idempotency_key = :k WHERE batch_id = :b"),
-        {"k": fee_idempotency_key(org_id, line_id), "b": batch_id},
-    )
+    batch = db.get(PostingBatch, batch_id)
+    assert batch is not None
+    batch.idempotency_key = fee_idempotency_key(org_id, line_id)
+    batch.correlation_id = f"bank-fee-{line_id}"
     db.flush()
     return journal
 
@@ -453,8 +474,8 @@ class TestTheOwnerRefusesToCreateTwice:
             db,
             organization_id=org_id,
             line=line,
-            bank_gl_account_id=uuid.uuid4(),
-            finance_cost_account_id=uuid.uuid4(),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
             posted_by_user_id=uuid.uuid4(),
             poster=_poster,
         )
@@ -490,7 +511,7 @@ class TestTheOwnerRefusesToCreateTwice:
         line_id = uuid.uuid4()
         cost = _account(db, org_id, "6080", "Finance Cost")
         bank = _account(db, org_id, "1204", "Bank")
-        _legacy_live_batch(db, org_id, period_id, line_id, cost, bank)
+        legacy = _legacy_live_batch(db, org_id, period_id, line_id, cost, bank)
 
         before = db.scalar(
             select(func.count(JournalEntry.journal_entry_id)).where(
@@ -510,6 +531,10 @@ class TestTheOwnerRefusesToCreateTwice:
 
         assert outcome.already_present
         assert not outcome.created
+        assert outcome.posted_journal is legacy, (
+            "the canonical legacy journal must come back so matching can be "
+            "repaired after a crash"
+        )
         after = db.scalar(
             select(func.count(JournalEntry.journal_entry_id)).where(
                 JournalEntry.organization_id == org_id
@@ -711,6 +736,10 @@ class TestAFailedPostIsRetried:
 
         def _poster(**kwargs):
             posted.append(kwargs["journal_entry_id"])
+            journal = kwargs["db"].get(JournalEntry, kwargs["journal_entry_id"])
+            journal.status = JournalStatus.POSTED
+            kwargs["db"].flush()
+            _post_to_ledger(kwargs["db"], journal, period_id, org_id)
             return SimpleNamespace(
                 success=True, message="posted", idempotent_replay=False
             )
@@ -730,6 +759,39 @@ class TestAFailedPostIsRetried:
             "the DRAFT journal must be re-posted, not skipped and not duplicated"
         )
         assert outcome.posted_journal is not None
+
+    def test_a_success_result_without_a_live_effect_is_not_success(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        stranded = _fee_journal(org_id, period_id, line_id, number="FALSE-SUCCESS")
+        stranded.status = JournalStatus.DRAFT
+        db.add(stranded)
+        db.flush()
+        _with_lines(db, stranded, cost, bank, Decimal("10"))
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: SimpleNamespace(
+                success=True,
+                message="posted",
+                idempotent_replay=False,
+            ),
+        )
+
+        assert outcome.state is BankFeeState.FAILED
+        assert not outcome.ok
+        assert outcome.posted_journal is None
 
     def test_an_approved_orphan_is_surfaced_not_silently_skipped(
         self, db: Session, org_id: uuid.UUID
@@ -758,6 +820,7 @@ class TestAFailedPostIsRetried:
 
         assert outcome.state is BankFeeState.APPROVED_ORPHAN
         assert outcome.needs_attention
+        assert not outcome.ok, "an unposted orphan is not a successful outcome"
         assert not outcome.already_present, (
             "an unposted orphan is not an effect that is already present"
         )
@@ -794,8 +857,8 @@ class TestACrashBeforeMatchingIsRepairable:
             db,
             organization_id=org_id,
             line=_fee_line(line_id),
-            bank_gl_account_id=uuid.uuid4(),
-            finance_cost_account_id=uuid.uuid4(),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
             posted_by_user_id=uuid.uuid4(),
             poster=lambda **_: pytest.fail("must not post over a live effect"),
         )
@@ -894,15 +957,17 @@ class TestTheCollisionHandler:
                     bank_fee_posting, "find_fee_journals", _first_call_sees_nothing
                 )
                 monkeypatch.setattr(
-                    bank_fee_posting, "existing_posting_batch", lambda *a, **k: None
+                    bank_fee_posting,
+                    "find_existing_posting_effect",
+                    lambda *a, **k: None,
                 )
 
                 outcome = bank_fee_posting.post_bank_fee(
                     loser,
                     organization_id=org_id,
                     line=_fee_line(line_id),
-                    bank_gl_account_id=uuid.uuid4(),
-                    finance_cost_account_id=uuid.uuid4(),
+                    bank_gl_account_id=bank.account_id,
+                    finance_cost_account_id=cost.account_id,
                     posted_by_user_id=uuid.uuid4(),
                     poster=lambda **_: pytest.fail(
                         "the create must fail before anything is posted"
@@ -1018,6 +1083,7 @@ class TestAReversedFeeIsNotReportedAsPosted:
             poster=lambda **_: pytest.fail("must not post"),
         )
         assert outcome.state is BankFeeState.NOT_LIVE
+        assert not outcome.ok, "a reversed effect is not a successful outcome"
         assert not outcome.already_present, (
             "a reversed fee has no live effect; calling it present hides that"
         )
@@ -1200,16 +1266,18 @@ class TestTwoSessionsRaceForOneLine:
     `IntegrityError`.
     """
 
-    def test_exactly_one_of_two_concurrent_callers_creates(self, engine) -> None:
+    def test_exactly_one_of_two_concurrent_callers_creates(
+        self, engine, monkeypatch
+    ) -> None:
         import threading
 
         from sqlalchemy.orm import sessionmaker as _sessionmaker
 
         from app.models.finance.core_org.organization import Organization
-        from app.services.finance.banking.bank_fee_posting import (
-            BankFeeState,
-            post_bank_fee,
-        )
+        from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+        from app.models.finance.gl.posting_batch import PostingBatch
+        from app.services.finance.banking import bank_fee_posting
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
 
         Session_ = _sessionmaker(bind=engine)
         org_id = uuid.uuid4()
@@ -1262,7 +1330,22 @@ class TestTwoSessionsRaceForOneLine:
             setup.close()
 
         results: dict[str, object] = {}
-        both_ready = threading.Barrier(2, timeout=30)
+        both_prechecks_empty = threading.Barrier(2, timeout=30)
+        real_effect_lookup = bank_fee_posting.find_existing_posting_effect
+
+        def _synchronize_after_both_prechecks(*args, **kwargs):
+            effect = real_effect_lookup(*args, **kwargs)
+            if effect is None:
+                # This is pre-check 2. Both callers can return only after each
+                # has already observed no typed journal and no legacy effect.
+                both_prechecks_empty.wait()
+            return effect
+
+        monkeypatch.setattr(
+            bank_fee_posting,
+            "find_existing_posting_effect",
+            _synchronize_after_both_prechecks,
+        )
 
         def _really_post(**kwargs):
             """Post for real, rather than claiming to.
@@ -1285,10 +1368,7 @@ class TestTwoSessionsRaceForOneLine:
             session = Session_()
             try:
                 session.execute(text("SET app.bypass_rls = 'true'"))
-                # Both callers pass their pre-checks before either commits —
-                # the overlap that a database constraint exists to arbitrate.
-                both_ready.wait()
-                results[name] = post_bank_fee(
+                results[name] = bank_fee_posting.post_bank_fee(
                     session,
                     organization_id=org_id,
                     line=_fee_line(line_id),
@@ -1321,20 +1401,11 @@ class TestTwoSessionsRaceForOneLine:
                     f"a concurrent caller raised instead of resolving: {outcome!r}"
                 )
 
-            states = [o.state for o in outcomes]  # type: ignore[union-attr]
-            created = [s for s in states if s is BankFeeState.CREATED]
-            deferred = [
-                s
-                for s in states
-                if s
-                in {
-                    BankFeeState.LOST_RACE,
-                    BankFeeState.ALREADY_POSTED,
-                    BankFeeState.REPLAY_LEFT_UNPOSTED,
-                }
-            ]
-            assert len(created) == 1, f"expected exactly one create, got {states}"
-            assert len(deferred) == 1, f"expected exactly one deferral, got {states}"
+            states = {o.state for o in outcomes}  # type: ignore[union-attr]
+            assert states == {BankFeeState.CREATED, BankFeeState.LOST_RACE}, (
+                "both callers passed both prechecks, so the only admissible "
+                f"states are one create and one index loser; got {states}"
+            )
 
             check = Session_()
             try:
@@ -1350,6 +1421,26 @@ class TestTwoSessionsRaceForOneLine:
                     f"{len(surviving)} primary journals survived a race that must "
                     f"leave exactly one"
                 )
+                live_rows = check.scalars(
+                    select(PostedLedgerLine).where(
+                        PostedLedgerLine.organization_id == org_id,
+                        PostedLedgerLine.journal_entry_id
+                        == surviving[0].journal_entry_id,
+                    )
+                ).all()
+                assert len(live_rows) == 2, (
+                    "one two-line journal effect, not merely one identity row, "
+                    "must survive the collision"
+                )
+                assert len({row.posting_batch_id for row in live_rows}) == 1
+                batch_count = check.scalar(
+                    select(func.count(PostingBatch.batch_id)).where(
+                        PostingBatch.organization_id == org_id,
+                        PostingBatch.idempotency_key
+                        == fee_idempotency_key(org_id, line_id),
+                    )
+                )
+                assert batch_count == 1, "the race produced more than one effect batch"
             finally:
                 check.close()
         finally:
@@ -1377,31 +1468,41 @@ class TestTwoSessionsRaceForOneLine:
 class TestAnUnrelatedIntegrityErrorIsNotALostRace:
     """The handler must classify the failure, not assume it."""
 
-    def test_a_bad_account_never_reports_a_lost_race(
+    def test_a_named_non_identity_violation_escapes_the_outer_handler(
         self, db: Session, org_id: uuid.UUID, monkeypatch
     ) -> None:
-        """A broken write must not be reported as "someone else won".
-
-        `create_and_approve_journal` converts the database error into a creation
-        failure rather than letting it reach the collision handler, so the
-        observable requirement is the same either way: the outcome is FAILED and
-        never LOST_RACE, and no journal is claimed.
-        """
+        """Drive the real outer handler with a faithful named DB violation."""
         from app.services.finance.banking import bank_fee_posting
-        from app.services.finance.banking.bank_fee_posting import BankFeeState
+        from app.services.finance.posting.base import BasePostingAdapter
 
         _fiscal_period_id(db, org_id)
         monkeypatch.setattr(bank_fee_posting, "find_fee_journals", lambda *a, **k: [])
         monkeypatch.setattr(
-            bank_fee_posting, "existing_posting_batch", lambda *a, **k: None
+            bank_fee_posting, "find_existing_posting_effect", lambda *a, **k: None
         )
 
-        try:
-            outcome = bank_fee_posting.post_bank_fee(
+        unrelated = IntegrityError(
+            "INSERT INTO gl.journal_entry ...",
+            {},
+            SimpleNamespace(
+                diag=SimpleNamespace(constraint_name="uq_journal_number")
+            ),
+        )
+
+        def _raise_unrelated(*_args, **_kwargs):
+            raise unrelated
+
+        monkeypatch.setattr(
+            BasePostingAdapter,
+            "create_and_approve_journal",
+            _raise_unrelated,
+        )
+
+        with pytest.raises(IntegrityError) as raised:
+            bank_fee_posting.post_bank_fee(
                 db,
                 organization_id=org_id,
                 line=_fee_line(uuid.uuid4()),
-                # No such account: the FK, not the identity index, refuses this.
                 bank_gl_account_id=uuid.uuid4(),
                 finance_cost_account_id=uuid.uuid4(),
                 posted_by_user_id=uuid.uuid4(),
@@ -1409,16 +1510,10 @@ class TestAnUnrelatedIntegrityErrorIsNotALostRace:
                     success=True, message="", idempotent_replay=False
                 ),
             )
-        except IntegrityError:
-            # Propagating is also correct — what must never happen is a
-            # success-shaped answer.
-            return
 
-        assert outcome.state is not BankFeeState.LOST_RACE, (
-            "an unrelated constraint failure was reported as a lost race"
+        assert raised.value is unrelated, (
+            "the outer handler must propagate the original non-identity error"
         )
-        assert not outcome.ok
-        assert outcome.state is BankFeeState.FAILED
 
     def test_the_predicate_only_matches_the_identity_index(self) -> None:
         from app.services.finance.banking.bank_fee_posting import (
@@ -1567,12 +1662,221 @@ class TestContentComparisonChecksAccounts:
         assert outcome.state is BankFeeState.CONTENT_MISMATCH
         assert "bank account" in outcome.message
 
-    def test_the_legacy_exemption_is_a_named_list(self) -> None:
-        """The chart-remap allowance must be two audited rows, not a global hole."""
-        from app.services.finance.banking.bank_fee_posting import (
-            LEGACY_ACCOUNT_EXEMPTIONS,
+    @pytest.mark.parametrize("journal_number", ["JE202603-0227", "JE202603-0230"])
+    def test_a_finance_disposition_journal_number_never_waives_accounts(
+        self, db: Session, org_id: uuid.UUID, journal_number: str
+    ) -> None:
+        """Journal numbers repeat by tenant and are never runtime exemptions."""
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        wrong = _account(db, org_id, "9999", "Not The Bank")
+        stale = _fee_journal(org_id, period_id, line_id, number=journal_number)
+        stale.status = JournalStatus.DRAFT
+        db.add(stale)
+        db.flush()
+        _with_lines(db, stale, cost, wrong, Decimal("10"))
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("a journal number must not waive accounts"),
         )
 
-        assert frozenset({"JE202603-0227", "JE202603-0230"}) == (
-            LEGACY_ACCOUNT_EXEMPTIONS
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert not outcome.ok
+
+
+class TestPostedEffectEquivalence:
+    """Identity and liveness are necessary, but never economic equivalence."""
+
+    def test_a_typed_posted_journal_on_the_wrong_account_is_not_success(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        wrong = _account(db, org_id, "9999", "Not The Bank")
+        journal = _fee_journal(org_id, period_id, line_id, number="POSTED-WRONG")
+        journal.status = JournalStatus.POSTED
+        db.add(journal)
+        db.flush()
+        _with_lines(db, journal, cost, wrong, Decimal("10"))
+        _post_to_ledger(db, journal, period_id, org_id)
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("an existing POSTED row must not post"),
         )
+
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert outcome.needs_attention
+        assert not outcome.ok
+
+    def test_a_typed_posted_journal_for_the_wrong_source_date_is_not_success(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        journal = _fee_journal(org_id, period_id, line_id, number="POSTED-WRONG-DATE")
+        journal.entry_date = date(2026, 1, 14)
+        journal.posting_date = date(2026, 1, 14)
+        journal.status = JournalStatus.POSTED
+        db.add(journal)
+        db.flush()
+        _with_lines(db, journal, cost, bank, Decimal("10"))
+        _post_to_ledger(db, journal, period_id, org_id)
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("an existing POSTED row must not post"),
+        )
+
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert "line date" in outcome.message
+        assert not outcome.ok
+
+    def test_a_typed_posted_journal_in_the_wrong_bank_currency_is_not_success(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.models.finance.banking.bank_account import (
+            BankAccount,
+            BankAccountType,
+        )
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        db.add(
+            BankAccount(
+                organization_id=org_id,
+                bank_name="Canary Bank",
+                account_number=uuid.uuid4().hex,
+                account_name="USD Canary",
+                account_type=BankAccountType.checking,
+                currency_code="USD",
+                gl_account_id=bank.account_id,
+            )
+        )
+        journal = _fee_journal(org_id, period_id, line_id, number="POSTED-NGN")
+        journal.status = JournalStatus.POSTED
+        db.add(journal)
+        db.flush()
+        _with_lines(db, journal, cost, bank, Decimal("10"))
+        _post_to_ledger(db, journal, period_id, org_id)
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("an existing POSTED row must not post"),
+        )
+
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert "bank account currency is USD" in outcome.message
+        assert not outcome.ok
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("credit_amount", Decimal("9")),
+            ("original_currency_code", "USD"),
+            ("posting_date", date(2026, 2, 1)),
+        ],
+    )
+    def test_posted_ledger_drift_is_not_success(
+        self,
+        db: Session,
+        org_id: uuid.UUID,
+        field: str,
+        value: object,
+    ) -> None:
+        from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        journal = _fee_journal(org_id, period_id, line_id, number=f"DRIFT-{field}")
+        journal.status = JournalStatus.POSTED
+        db.add(journal)
+        db.flush()
+        _with_lines(db, journal, cost, bank, Decimal("10"))
+        _post_to_ledger(db, journal, period_id, org_id)
+        credit = db.scalars(
+            select(PostedLedgerLine).where(
+                PostedLedgerLine.journal_entry_id == journal.journal_entry_id,
+                PostedLedgerLine.credit_amount > 0,
+            )
+        ).one()
+        setattr(credit, field, value)
+        db.flush()
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("drift must not cause a new post"),
+        )
+
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert not outcome.ok
+
+    def test_a_legacy_batch_with_the_wrong_effect_is_not_success(
+        self, db: Session, org_id: uuid.UUID
+    ) -> None:
+        from app.services.finance.banking.bank_fee_posting import BankFeeState
+
+        period_id = _fiscal_period_id(db, org_id)
+        line_id = uuid.uuid4()
+        cost = _account(db, org_id, "6080", "Finance Cost")
+        bank = _account(db, org_id, "1204", "Bank")
+        wrong = _account(db, org_id, "9999", "Not The Bank")
+        _legacy_live_batch(db, org_id, period_id, line_id, cost, wrong)
+
+        outcome = post_bank_fee(
+            db,
+            organization_id=org_id,
+            line=_fee_line(line_id),
+            bank_gl_account_id=bank.account_id,
+            finance_cost_account_id=cost.account_id,
+            posted_by_user_id=uuid.uuid4(),
+            poster=lambda **_: pytest.fail("a legacy effect must not be duplicated"),
+        )
+
+        assert outcome.state is BankFeeState.CONTENT_MISMATCH
+        assert outcome.needs_attention
+        assert not outcome.ok

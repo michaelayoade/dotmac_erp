@@ -294,10 +294,7 @@ class ReconciliationEngineHandlers:
     ) -> None:
         """Create GL journals for bank fee lines and auto-match."""
         from app.models.finance.gl.account import Account
-        from app.services.finance.banking.bank_fee_posting import (
-            BankFeeState,
-            post_bank_fee,
-        )
+        from app.services.finance.banking.bank_fee_posting import post_bank_fee
 
         # Determine writeoff account from rule or default
         if rule.writeoff_account_id:
@@ -352,9 +349,6 @@ class ReconciliationEngineHandlers:
                     ctx.result.errors.append(
                         f"Line {line.line_number}: {outcome.message}"
                     )
-                    continue
-
-                if outcome.state is BankFeeState.LEGACY_BATCH_ONLY:
                     continue
 
                 if not outcome.ok:
