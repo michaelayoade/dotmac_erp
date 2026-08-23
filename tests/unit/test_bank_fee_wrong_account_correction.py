@@ -139,6 +139,19 @@ def test_one_byte_of_plan_drift_is_refused() -> None:
         CorrectionPlan.from_bytes(changed, approval=approval)
 
 
+def test_database_identity_accepts_postgres_inet_host_mask() -> None:
+    db = MagicMock()
+    db.execute.return_value.one.return_value = (
+        "dotmac_erp",
+        "172.18.0.2/32",
+    )
+
+    BankFeeWrongAccountCorrectionService(db)._validate_database_identity(
+        expected_database="dotmac_erp",
+        expected_server_address="172.18.0.2",
+    )
+
+
 def test_duplicate_target_is_refused_even_with_a_reapproved_file_digest() -> None:
     row = _row(
         target_number=1, statement_number=1, canonical_number=1, amount="17.500000"
