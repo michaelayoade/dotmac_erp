@@ -397,9 +397,15 @@ Each gate is a separate authorized change. None is implied by the one before it.
   journal-keyed bank-fee postings over 39 statement-line identities. The
   namespace and ₦7,764.68 gross population are measured. The 2026-08-23 exact
   detector refused all 429 because their ledger account sets differ from the one
-  line-keyed canonical per identity; it emitted no schedule or digest. They are
-  a Gate D wrong-account quarantine requiring a Finance-approved correction
-  design and before/after proof. Aggregate count or amount is not authorization.
+  line-keyed canonical per identity; it emitted no exact-duplicate schedule.
+  The separate wrong-account detector subsequently proved 858/858 target
+  journal-line parity, bound the 2025 target / March 2026 canonical / August
+  2026 reversal timing, and rehearsed 429 balanced linked reversals twice with
+  identical SHA-256 plan digest
+  `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
+  No production row changed. Exact-plan Finance approval, a guarded operator
+  and post-write proof remain Gate D requirements; aggregate count or amount is
+  not authorization.
 
 - **Gate E — dual write and parity.** Both sides post; every posting is compared.
   Divergence is a stop, not a warning.

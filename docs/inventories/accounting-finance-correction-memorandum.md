@@ -5,11 +5,14 @@
 `sha-0dc07e4`. The exact-effect detector was run on 2026-08-23 and refused all
 429 journal-keyed candidates: every header and unkeyed monetary shape agrees,
 but every immutable ledger account set differs from its line-keyed canonical.
-No reversal schedule or approval digest exists. Still outstanding: Finance's
-treatment of those account-routed effects, the §1a audited-opening bridge, the
-composite reversal, the three micro repairs, the per-document proof 6
-reconciliation, the reporting/tax assessment, and every Finance decision,
-approver and operator.**
+A purpose-built wrong-account schedule has now run twice on an isolated copy:
+429 one-to-one linked reversals, SHA-256 plan digest
+`dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
+It is rehearsal evidence, not production execution approval; nothing was
+reversed. Still outstanding: approval and guarded execution of that exact plan,
+the §1a audited-opening bridge, the composite reversal, the three micro repairs,
+the per-document proof 6 reconciliation, the reporting/tax assessment, and
+every named Finance approver and operator.**
 
 **One operative instruction governs the ar/INVOICE population: Appendix A §A5.**
 Earlier text in §3 and §4 is preserved as the historical hypothesis and is
@@ -618,7 +621,7 @@ where it already blocks legacy-writer retirement.
 | Recurrence fix landed (allocator + posting boundary + backlog tolerance) | **DONE — ERP PR #336 merged to `main` as `0e40d799` on 2026-08-22T08:06Z**, `version:patch`, all checks green. Not a data repair. |
 | Reporting assessment **for these corrections only** | *not yet performed* — §6 |
 | Bank-fee recurrence prevention | **DEPLOYED.** ERP PRs #337–#339 establish the one-owner, typed-source, at-most-once boundary, fail-closed effect verification and bulk-mutator kill switch. Production was observed healthy on `sha-0dc07e4` on 2026-08-23; this evidence run deployed nothing. None of those controls is a data repair. |
-| **429 journal-keyed POSTED bank-fee account-effect mismatches (₦7,764.68 gross) on 39 statement lines** | ***GATE D QUARANTINE* — Appendix B5.4.** The 2026-08-23 exact detector refused all 429: `0/429` immutable ledger account sets match their canonical. There is therefore no exact-duplicate reversal schedule and no digest for Finance to approve. Finance must adjudicate the wrong-account effects and approve a purpose-built correction; the old aggregate does not authorize reversal. |
+| **429 journal-keyed POSTED bank-fee account-effect mismatches (₦7,764.68 gross) on 39 statement-line identities** | ***CORRECTION DESIGNED AND REHEARSED; PRODUCTION EXECUTION PENDING* — Appendix B5.4.** The exact-duplicate detector still correctly refuses all 429. The separate wrong-account detector admits exactly the two 352/77 account substitutions, proves 858/858 journal-line parity, binds the 2025 target / March 2026 canonical / August 2026 reversal timing, and produced the same 429-row SHA-256 plan digest twice. No production accounting row changed; exact-plan approval, a guarded operator and execution proof remain pending. |
 | POSTED bank-fee anomalies: 95 journals with dangling line ids; 875 of 1,743 crediting their line's bank GL account | ***not started* — Appendix B5.4.** |
 | Clean survey re-run: zero unresolved balance and reversal defects | *pending repairs* |
 | Named approver | *pending* |
@@ -1031,8 +1034,10 @@ database.
 | Detector query hash (sha256) | `d5c834d8d66b0d17064654b31bd5d40dc33f0c41600c674e4cd1126402897eec` |
 | Detector, as re-run on exact identity | `scripts/accounting_gate_g_detector.sql`, sha256 `f53f814273a8526f951aed999ac6553e9de8b379cda58db9c19dd27dd22b556b`, against `erp-forensic-verify-20260822`, LSN range `BF/EFB66430`..`BF/EFB705E8` (2026-08-22 11:30Z). Canary passed; produces H1A/Q dispositions directly, with no heuristic logic in the executable. |
 | Journal-keyed POSTED candidates (Gate D) | The 2026-08-22 run of `scripts/accounting_bank_fee_duplicate_postings.sql`, sha256 `f97bd8e3c6a34579a9ff322fbe105781d1f0d118c449607fb107e074e5ad5e49`, against `erp-forensic-equiv-20260822`, LSN range `BF/EF546DA0`..`BF/EF54FBB8`, proves the second namespace, current liveness, target identity and ₦7,764.68 total. It did **not** prove target-to-canonical exact effect equivalence. |
-| Exact one-to-one reversal schedule | **RUN AND REFUSED, twice, with the same result.** Commit `ed83989b5744b01d61ac9f0b54dc06ab7172a0af`, sha256 `2988835df245f1e1ed67faf4c6e855e95324de93ae2f6b003fe0a552f956586c`; repeatable-read snapshot `19017326:19018685:`, replay LSN `C0/6D6524A0`..`C0/6D790900`, PostgreSQL 16.4. All **429** targets failed exact immutable-effect equality. No D6 schedule or digest was emitted. |
+| Exact-duplicate one-to-one schedule | **RUN AND REFUSED, twice, with the same result.** Commit `ed83989b5744b01d61ac9f0b54dc06ab7172a0af`, sha256 `2988835df245f1e1ed67faf4c6e855e95324de93ae2f6b003fe0a552f956586c`; repeatable-read snapshot `19017326:19018685:`, replay LSN `C0/6D6524A0`..`C0/6D790900`, PostgreSQL 16.4. All **429** targets failed exact immutable-effect equality. No D6 schedule or digest was emitted. |
 | Exact-run isolated target | `erp-forensic-fee-exact-20260823` — source-image-identical PostgreSQL, memory-backed data directory, `--network none`, no published port and no application attached. Source subset counts were `13,955` fee journals, `1,838` batches, `3,676` ledger lines, `53` statements and `1,391` statement lines. Detector logs, copied columns and container were destroyed; `cleanup=complete`. |
+| Purpose-built wrong-account schedule | **RUN AND PASSED twice.** `scripts/accounting_bank_fee_wrong_account_correction.sql`, sha256 `ae98776af6cc9496dd198d11cf340ce0b64d783626167ea283625d3b5d1d5432`; repeatable-read source snapshot `19051585:19051585:`, replay LSN at export start `C0/76C97728`, PostgreSQL 16.4. Both runs emitted 429 identical plan rows: internal schedule digest `a5e1776785856c579bd3ed6bc0d68308`; canonical plan-output sha256 `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`. |
+| Wrong-account isolated target | `erp-fee-correction-rehearsal-20260823` — source-image-identical PostgreSQL, tmpfs data directory, `--network none`, no published port and no application attached. Source subset: 13,955 fee journals, 1,838 batches, 27,910 journal lines, 3,676 ledger lines, 24 fiscal periods, 53 statements and 1,391 statement lines. The copied columns excluded narrations and customer data. Container, copied rows, logs and staging directory were destroyed; `cleanup=verified`. |
 | Target | `erp-forensic-gateg-20260822` — ephemeral, `--network none`, no published port, no application attached. Destroyed after verification (§B9). |
 | Organization scope | Dotmac Technologies Ltd, with the same fail-closed canary as Appendix A — 12,225 unscoped against 12,224 scoped, `sensitivity proof PASSED`. |
 
@@ -1326,9 +1331,65 @@ The account-set split is systematic:
 
 The two sides have the same ₦7,764.68 gross, but equal gross and line identity
 do not make different accounts the same accounting effect. These 429 rows are
-now a **wrong-account Gate D quarantine**, not an exact-duplicate reversal
-schedule. Finance must decide the intended account treatment and approve a
-purpose-built correction with its own before/after proof.
+therefore not an exact-duplicate reversal schedule. That refusal remains true
+and is not weakened by the purpose-built correction below.
+
+#### B5.4a Purpose-built wrong-account correction — schedule rehearsed, not executed
+
+Michael authorized construction and rehearsal of the separate wrong-account
+correction on 2026-08-23. The authorization did not name an unknown plan digest
+in advance and is **not recorded as production execution approval**. The new
+`scripts/accounting_bank_fee_wrong_account_correction.sql` keeps the duplicate
+detector's refusal intact and asks a narrower question: does each target differ
+from its canonical by exactly one of the two measured account substitutions,
+with the same debit/credit direction, money, currency/rate, dimensions, source
+metadata and intended entry date?
+
+It also proves the operational reversal source. `ReversalService` reverses
+`gl.journal_entry_line`, not a reconstructed ledger aggregate, so the schedule
+requires every target journal line to reproduce its immutable ledger row by
+`journal_line_id`, account, functional/original amount, currency/rate and every
+dimension. The run proved **858 journal lines = 858 ledger lines, zero
+mismatches, across all 429 targets**.
+
+The timing is not equivalent and is deliberately bound rather than hidden:
+
+| effect | ledger date/period | treatment |
+| --- | --- | --- |
+| 429 wrong-account targets | 2025-01-20 through 2025-09-12, in their header periods | The linked reversals name these exact journals. |
+| 39 retained line-keyed canonicals | 2026-03-13 / March 2026 (`7bc1edbb-270c-4096-b9e4-67cc72dd44a4`) | Remain posted and are never reversal targets. |
+| proposed linked reversals | 2026-08-23 / open August 2026 (`13659716-9fe2-42f8-8aca-32cd67da22b6`) | Current-period corrections; they do not rewrite immutable 2025 or March 2026 ledger rows. |
+
+The two exact admitted mappings and simulated correcting effect are:
+
+| targets | wrong bank account credited by target | canonical bank account credited | correcting debit | correcting credit |
+| ---: | --- | --- | ---: | ---: |
+| 352 | `Paystack OPEX - DT` | `1211` | ₦6,160.00 to `Paystack OPEX - DT` | included in ₦7,764.68 to `6080` |
+| 77 | `Zenith USD - DT` | `1207` | ₦1,604.68 to `Zenith USD - DT` | included in ₦7,764.68 to `6080` |
+
+All 352 Paystack targets still resolve to their statement-line row. All 77
+Zenith targets carry one of the already-measured dangling line identities; the
+schedule requires that exact resolution state instead of pretending the rows
+resolve. Each still has exactly one live canonical under the same immutable
+correlation identity and exact economic shape. A third mapping, changed
+resolution state, changed timing, line mismatch, missing canonical, changed
+count or changed ₦7,764.68 gross refuses the plan.
+
+The isolated, networkless rehearsal ran the schedule twice against one
+repeatable-read standby snapshot. Both runs emitted the same 429 rows:
+
+| binding | value |
+| --- | --- |
+| Internal schedule digest | `a5e1776785856c579bd3ed6bc0d68308` |
+| Canonical 429-row plan sha256 | `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148` |
+| Reversal simulation | 429 balanced linked reversals; all 858 target/account all-time nets become zero; all 39 canonicals remain live |
+| Production writes | **zero** |
+
+This establishes an exact correction plan, not its execution. Before any
+production write, the current state must reproduce the same plan and digest,
+Finance must approve that exact timing-aware plan, and a guarded operator must
+use the normal one-to-one linked-reversal service in one transaction with
+postconditions. A bulk reversal or an aggregate journal is still forbidden.
 
 **Zero APPROVED journals sit on the 39 affected lines**, so the Gate G backlog
 and this Gate D defect are disjoint populations and can be dispositioned
@@ -1405,7 +1466,9 @@ should not be assumed either way.
 3. **The 429 journal-keyed POSTED bank-fee effects (₦7,764.68) are not fixed
    here.** They are already in the posted ledger and belong to Gate D (§B5.4).
    Exact target-to-canonical verification ran and refused all 429 because their
-   account sets differ. None is an approved reversal target.
+   account sets differ. A separate timing-aware wrong-account schedule now
+   names and rehearses all 429 linked-reversal targets, but no production
+   reversal has been approved or written.
 4. **The POSTED-side anomalies are not resolved** — 95 journals with dangling
    line ids, and only 875 of 1,743 crediting their line's bank GL account.
 5. **Cross-document effect matching was never used as evidence.** 96% of journals
@@ -1472,8 +1535,9 @@ It does not close Gate G. Outstanding:
   a statement-line match should be followed to that line first.
 - Continued production verification of the deployed single-owner, at-most-once
   and bulk-mutator controls at `sha-0dc07e4`.
-- Finance treatment of the **429 journal-keyed wrong-account POSTED effects
-  (₦7,764.68)**, plus the POSTED-side anomalies (§B5.4, §B5.6).
+- Exact-plan Finance approval, a named guarded operator and production
+  execution proof for the **429 journal-keyed wrong-account POSTED effects
+  (₦7,764.68)**, plus the remaining POSTED-side anomalies (§B5.4, §B5.6).
 
 ## B10. What this appendix corrected about itself
 
@@ -1514,12 +1578,13 @@ Not recommendations — preconditions. In order:
    LSN range (§B0).
 3. **VOID approved duplicates — never delete them.** The APPROVED rows are
    evidence of the defect and of the decision taken about them.
-4. **Do not use the duplicate-reversal path for the 429.** The revised §B5.4
-   detector ran twice and quarantined every target on account mismatch; no
-   schedule or digest exists. Finance must approve a separate wrong-account
-   correction design, including exact target rows, intended accounts and
-   before/after proof. Re-run immediately before any eventual execution. No
-   bulk reversal, and nothing reversed on the strength of a row count or gross.
+4. **Do not use the exact-duplicate path for the 429.** That detector still
+   refuses every target on account mismatch. Use only the separate §B5.4a
+   wrong-account plan: re-run immediately before execution, require the exact
+   429-row SHA-256 digest, the 2025/March/August timing proof, 858/858 journal
+   parity and Finance approval of that exact plan. Execute one normal linked
+   reversal per target in one transaction with postconditions. No bulk or
+   aggregate journal, and nothing reversed on the strength of a count or gross.
 5. **Keep the seven undecided journals quarantined with named Finance owners**
    and deadlines: Q1 `JE202607-9427`, and the six Q2 reconciliations — four of
    which have a statement-line match to follow first (§B6).
@@ -1531,6 +1596,7 @@ Not recommendations — preconditions. In order:
 | Containers `erp-forensic-gateg-20260822` and `erp-forensic-lineid-20260822` removed | `docker rm -f`; `docker ps -a --filter name=erp-forensic` returns 0 rows |
 | Volumes `erp-forensic-gateg-20260822-data` and `erp-forensic-lineid-20260822-data` removed | `docker volume rm`; `docker volume ls --filter name=erp-forensic` returns 0 rows |
 | Detector, discovery and verification SQL removed from `dotmac-db-primary` and from the standby container | all `No such file or directory` |
-| No dump file ever written | tables streamed container-to-container; no export file existed on either host |
+| Wrong-account rehearsal `erp-fee-correction-rehearsal-20260823`, copied subset and `/tmp/codex-erp-fee-correction-20260823` removed | explicit container, source-container file and staging-path checks returned `cleanup=verified` |
+| No full database dump ever written | Earlier tables streamed container-to-container. The wrong-account rehearsal wrote only the enumerated, column-limited non-PII CSV subset into temporary container/host paths; cleanup checks proved every file absent afterward. |
 | Standby unchanged | `pg_is_in_recovery() = t`, `max_standby_streaming_delay = 30s`, replay advancing |
 | Production primary | never connected to |

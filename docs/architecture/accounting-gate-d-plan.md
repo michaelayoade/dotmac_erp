@@ -99,10 +99,22 @@ if every target passes. The 2026-08-23 run at commit `ed83989b`, sha256
 `2988835df245f1e1ed67faf4c6e855e95324de93ae2f6b003fe0a552f956586c`,
 **refused all 429 targets**: header and unkeyed monetary shapes match, but none
 of the ledger account sets matches its canonical. No schedule or digest was
-emitted; the population is quarantined for a Finance-designed wrong-account
-correction, not an exact-duplicate reversal.
+emitted by the exact-duplicate detector.
 
-**Still outstanding:** Finance treatment of the 429 wrong-account effects, the
+The separate `scripts/accounting_bank_fee_wrong_account_correction.sql` now
+implements the purpose-built correction schedule without weakening that
+refusal. On 2026-08-23 it ran twice against one isolated repeatable-read standby
+copy and admitted exactly the 352 Paystack and 77 Zenith substitutions. It
+proved 858/858 journal-line-to-ledger parity, bound the 2025 target / March 2026
+canonical / August 2026 reversal timing, simulated 429 balanced linked
+reversals with every target/account all-time net zero, and emitted the same
+429-row SHA-256 plan digest twice:
+`dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
+No production accounting row changed. Exact-plan Finance approval, a guarded
+operator and execution proof remain Gate D work.
+
+**Still outstanding:** exact-plan approval and execution of the 429
+wrong-account corrections, the
 §1a audited-opening bridge, the composite-reversal treatment, Finance's approval
 of the three micro repairs, the per-document proof 6 reconciliation for the
 ar/INVOICE cohort, the reporting and tax assessment, approver and operator.
@@ -353,6 +365,6 @@ memory.
 | SourceIdentity keyed on the GL journal, `version = "1"` | **RULED 2026-08-21.** See above — the run identifier belongs in import/rehearsal evidence, not identity. |
 | Gate D stops before dual write | **Confirmed.** Dual write is gate E. |
 | All four data defects are execution blockers | **RULED 2026-08-21.** Finance corrects and adjudicates through ordinary reviewed ERP process; the survey re-run is the gate. |
-| The 429 journal-keyed POSTED bank-fee effects | **Additional Gate D quarantine.** The exact comparison ran twice and refused all 429 because their ledger account sets differ from the canonicals (`352`: canonical `1211/6080`, target `6080/Paystack OPEX - DT`; `77`: canonical `1207/6080`, target `6080/Zenith USD - DT`). No duplicate-reversal schedule or digest exists. Finance must approve a purpose-built wrong-account correction and its proof. |
+| The 429 journal-keyed POSTED bank-fee effects | **Correction designed and rehearsed; execution pending.** The exact-duplicate comparison still refuses all 429 because their ledger accounts differ. The separate wrong-account plan admits only the measured `352` (`Paystack OPEX - DT`→`1211`) and `77` (`Zenith USD - DT`→`1207`) substitutions, proves 858/858 reversal-source parity and explicitly binds the different posting periods. Both isolated runs produced SHA-256 plan digest `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`. No production row changed; exact-plan approval, guarded execution and post-write proof remain required. |
 | The 14,263 APPROVED-but-unposted journals | **Separate Finance remediation track, started now.** Classify by producer and business-document state before disposing. Gate D proceeds in parallel; gate G blocks on complete disposition. |
 | RECURRING / REVALUATION / CONSOLIDATION writers | Must retire, or the module must gain the kinds, before gate E. Not gate D's problem; recorded so it is not discovered at gate E. |
