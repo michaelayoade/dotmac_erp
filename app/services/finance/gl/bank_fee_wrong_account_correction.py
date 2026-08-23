@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_interface
 from typing import Any
 from uuid import UUID
 
@@ -507,7 +507,11 @@ class BankFeeWrongAccountCorrectionService:
         actual_database, actual_address = self.db.execute(
             text("SELECT current_database(), inet_server_addr()::text")
         ).one()
-        if actual_database != expected_database or actual_address != expected_address:
+        try:
+            actual_host = str(ip_interface(str(actual_address)).ip)
+        except ValueError as exc:
+            raise CorrectionRefused("database server address is invalid") from exc
+        if actual_database != expected_database or actual_host != expected_address:
             raise CorrectionRefused("database name or server address does not match")
 
     def _validate_reversal_period(
