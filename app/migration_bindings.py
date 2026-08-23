@@ -94,6 +94,7 @@ ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
 COMPOSED_MODULE_LINEAGES: Final[dict[str, str]] = {
     "files": "fi_0001_stored_files",
     "accounting": "ac_0001_accounting",
+    "imports": "im_0001_import_runs",
 }
 
 __all__ = ["ASSEMBLY_PREREQUISITE_BINDINGS", "COMPOSED_MODULE_LINEAGES"]

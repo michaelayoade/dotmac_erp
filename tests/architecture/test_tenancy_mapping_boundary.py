@@ -31,6 +31,18 @@ def test_mapping_adapter_has_no_database_dependency() -> None:
     assert "sqlalchemy" not in source
     assert "Session" not in source
     assert "OrganizationTenantContext" in source
+    assert "TenantScope" in source
+
+
+def test_shared_module_scope_is_owned_by_the_mapping_adapter() -> None:
+    offenders = []
+    for path in sorted(APP_ROOT.rglob("*.py")):
+        if path == MAPPING:
+            continue
+        source = path.read_text(encoding="utf-8")
+        if "dotmac_kernel.cache" in source or "TenantScope(" in source:
+            offenders.append(path.relative_to(APP_ROOT))
+    assert offenders == []
 
 
 def test_app_rls_is_the_only_module_scope_guc_writer() -> None:

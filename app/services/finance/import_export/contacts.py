@@ -22,6 +22,64 @@ from .base import BaseImporter, FieldMapping, ImportConfig
 logger = logging.getLogger(__name__)
 
 
+def customer_source_mappings() -> list[FieldMapping]:
+    """The one customer CSV vocabulary shared by both import engines."""
+    return [
+        FieldMapping("Display Name", "display_name", required=True),
+        FieldMapping("Company Name", "company_name", required=False),
+        FieldMapping("First Name", "first_name", required=False),
+        FieldMapping("Last Name", "last_name", required=False),
+        FieldMapping("Phone", "phone", required=False),
+        FieldMapping(
+            "Currency Code",
+            "currency_code",
+            required=False,
+            default=settings.default_functional_currency_code,
+        ),
+        FieldMapping(
+            "Status",
+            "is_active",
+            required=False,
+            transformer=lambda value: value != "Inactive",
+            default=True,
+        ),
+        FieldMapping(
+            "Credit Limit",
+            "credit_limit",
+            required=False,
+            transformer=BaseImporter.parse_decimal,
+        ),
+        FieldMapping(
+            "Payment Terms",
+            "payment_terms_days",
+            required=False,
+            transformer=lambda value: (
+                int(value) if value and str(value).isdigit() else 30
+            ),
+            default=30,
+        ),
+        FieldMapping("Billing Attention", "billing_attention", required=False),
+        FieldMapping("Billing Address", "billing_street", required=False),
+        FieldMapping("Billing Street2", "billing_street2", required=False),
+        FieldMapping("Billing City", "billing_city", required=False),
+        FieldMapping("Billing State", "billing_state", required=False),
+        FieldMapping("Billing Country", "billing_country", required=False),
+        FieldMapping("Billing Code", "billing_postal_code", required=False),
+        FieldMapping("Billing Phone", "billing_phone", required=False),
+        FieldMapping("Shipping Attention", "shipping_attention", required=False),
+        FieldMapping("Shipping Address", "shipping_street", required=False),
+        FieldMapping("Shipping Street2", "shipping_street2", required=False),
+        FieldMapping("Shipping City", "shipping_city", required=False),
+        FieldMapping("Shipping State", "shipping_state", required=False),
+        FieldMapping("Shipping Country", "shipping_country", required=False),
+        FieldMapping("Shipping Code", "shipping_postal_code", required=False),
+        FieldMapping("Shipping Phone", "shipping_phone", required=False),
+        FieldMapping("Notes", "notes", required=False),
+        FieldMapping("Website", "website", required=False),
+        FieldMapping("Customer Sub Type", "customer_sub_type", required=False),
+    ]
+
+
 class CustomerImporter(BaseImporter[Customer]):
     """
     Importer for customers from Zoho Books Contacts.csv export.
@@ -49,61 +107,7 @@ class CustomerImporter(BaseImporter[Customer]):
 
     def get_field_mappings(self) -> list[FieldMapping]:
         """Define field mappings from Zoho CSV to Customer model."""
-        return [
-            FieldMapping("Display Name", "display_name", required=True),
-            FieldMapping("Company Name", "company_name", required=False),
-            FieldMapping("First Name", "first_name", required=False),
-            FieldMapping("Last Name", "last_name", required=False),
-            FieldMapping("Phone", "phone", required=False),
-            FieldMapping(
-                "Currency Code",
-                "currency_code",
-                required=False,
-                default=settings.default_functional_currency_code,
-            ),
-            FieldMapping(
-                "Status",
-                "is_active",
-                required=False,
-                transformer=lambda v: v != "Inactive",
-                default=True,
-            ),
-            FieldMapping(
-                "Credit Limit",
-                "credit_limit",
-                required=False,
-                transformer=self.parse_decimal,
-            ),
-            FieldMapping(
-                "Payment Terms",
-                "payment_terms_days",
-                required=False,
-                transformer=lambda v: int(v) if v and v.isdigit() else 30,
-                default=30,
-            ),
-            # Billing address fields
-            FieldMapping("Billing Attention", "billing_attention", required=False),
-            FieldMapping("Billing Address", "billing_street", required=False),
-            FieldMapping("Billing Street2", "billing_street2", required=False),
-            FieldMapping("Billing City", "billing_city", required=False),
-            FieldMapping("Billing State", "billing_state", required=False),
-            FieldMapping("Billing Country", "billing_country", required=False),
-            FieldMapping("Billing Code", "billing_postal_code", required=False),
-            FieldMapping("Billing Phone", "billing_phone", required=False),
-            # Shipping address fields
-            FieldMapping("Shipping Attention", "shipping_attention", required=False),
-            FieldMapping("Shipping Address", "shipping_street", required=False),
-            FieldMapping("Shipping Street2", "shipping_street2", required=False),
-            FieldMapping("Shipping City", "shipping_city", required=False),
-            FieldMapping("Shipping State", "shipping_state", required=False),
-            FieldMapping("Shipping Country", "shipping_country", required=False),
-            FieldMapping("Shipping Code", "shipping_postal_code", required=False),
-            FieldMapping("Shipping Phone", "shipping_phone", required=False),
-            # Contact info
-            FieldMapping("Notes", "notes", required=False),
-            FieldMapping("Website", "website", required=False),
-            FieldMapping("Customer Sub Type", "customer_sub_type", required=False),
-        ]
+        return customer_source_mappings()
 
     def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is the display name."""

@@ -24,6 +24,33 @@ deployment.
 - E1's historical inventory baseline remains ERP commit `96928fa1`; sections
   that cite that hash describe that earlier measurement, not the E8 baseline.
 
+## Imports I1 — first durable customer adopter
+
+ERP composes `dotmac-imports==0.1.0a2` as the first real consumer of its
+tenant-scoped `im` lineage. The module owns the run, immutable partition plan,
+atomic claim/checkpoint lifecycle and minimised row outcomes. ERP remains the
+sole owner of customer vocabulary, validation, duplicate policy and mutation;
+`app.services.finance.import_export.durable_customers` delegates accepted rows
+to `customer_service.create_customer` and never commits, rolls back or creates
+a session.
+
+Source and derived partition bytes are held by the already composed
+`dotmac-files` contract through ERP's one MinIO adapter. Upload admission is
+streamed into a spooled file under a configured hard ceiling; partition size,
+row count and validation-worker count are deployment settings. Workers use
+three phases: commit an atomic claim, read and verify the authorized stored
+object with no session, then settle domain effects and outcomes in one new
+tenant transaction. Apply stays serialized until customer legal-name
+uniqueness is enforced by the database; dry-run claims may run concurrently.
+
+This is a shadow slice, not immediate retirement. Every durable validation row
+is compared with the retiring `CustomerImporter` verdict first and a mismatch
+refuses settlement. The legacy endpoint stays available until CI/PostgreSQL
+evidence and real shadow comparisons are clean, after which its decoding,
+mapping and run-loop ownership is removed and the two-directional caller
+ratchet is lowered in the same change. The exact contract is
+`docs/architecture/imports-adoption-boundary.md`.
+
 ## E8 slice 3 — Organization identity is module tenant identity
 
 The measured RLS audit/ratchet (E8 slices 1 and 2) is followed by the first
@@ -619,9 +646,10 @@ a named kernel database effect while runtime callers remain separately gated) ·
 named ownership and composition decision) ·
 **prohibited** (out of scope for this program; never imported under `app/`).
 
-Only **consume-pure** modules are in the architecture-test import allowlist
-today. `adapt-existing` and `defer-db` modules join the allowlist only in the
-slice that adopts them, in the same change that updates this table.
+Only **consume-pure** modules and the exact persisted symbols named below are
+in the architecture-test import allowlist today. `adapt-existing` and
+`defer-db` modules join only in the slice that adopts them, in the same change
+that updates this table.
 
 | Kernel module | Class | Timing | Rationale / constraints |
 |---|---|---|---|
@@ -646,6 +674,7 @@ slice that adopts them, in the same change that updates this table.
 | `dotmac_kernel.db` | defer-db | After E8 | Import constructs TWO engines + `SessionLocal`/`PlatformSessionLocal` from env at import time and primes RLS via GUC `app.current_tenant` — a different GUC than ERP's `app.current_organization_id`. Importing it violates the no-second-session-factory exclusion and would half-initialize tenancy |
 | `dotmac_kernel.migrations` | defer-db (full lineage); exact verifier adopted by provider revision | After E8 | ERP imports `migrations.verify.require_prerequisites` only from its idempotency provider revision, as a proof over ERP-owned DDL. The kernel revision lineage itself remains absent and permanently unstampable: composing it into ERP's graph would collide on `public.tenants` and assert unrelated identity/RBAC/audit effects |
 | `dotmac_kernel.models` | partial persisted adoption: exact `Tenant` symbol only; identity/RBAC prohibited | E8 slice 4 | `app.services.tenant_projection` is the only admitted importer and writer. `TenantDomain` has a hosted table but no runtime import. `Party`/`Role`/`UserCredential`/`AuthSession` remain prohibited; Party never replaces `Person` in this program |
+| `dotmac_kernel.cache` | partial typed adoption: exact `TenantScope` symbol only | Imports I1 | `app.tenancy` is the only admitted importer and constructor. It maps the authoritative Organization UUID to the shared-module scope; services ask that adapter for the scope and cannot independently choose tenant or platform scope |
 | `dotmac_kernel.models_platform` | prohibited | — | Platform actor identity (`platform_admins`/`platform_sessions`/`platform_audit_events`); ERP has no platform-actor concept and identity stays local |
 | `dotmac_kernel.security` | prohibited | — | Kernel credential hashing/token machinery; ERP `auth.flow` owner stays |
 | `dotmac_kernel.deps` | prohibited | — | Kernel route guards query kernel identity models |

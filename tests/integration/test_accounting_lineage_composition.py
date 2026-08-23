@@ -13,7 +13,8 @@ that constructs its own tables proves something about the test, not the deploy.
 ## ERP does not have one Alembic head, and asserting one would be a bug
 
 Every composed module lineage is an independent ROOT with its own branch label:
-`fi_0001_stored_files` labels `files`, `ac_0001_accounting` labels `accounting`.
+`fi_0001_stored_files` labels `files`, `ac_0001_accounting` labels `accounting`,
+and `im_0001_import_runs` labels `imports`.
 That is the design — a module owns its history so it can be released and pinned
 without ERP rewriting its graph — and it is why ERP's deploy path has always
 been `alembic upgrade heads`, plural.
@@ -65,6 +66,7 @@ from psycopg import sql
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from alembic import command
 from alembic.script import ScriptDirectory
@@ -75,6 +77,8 @@ pytestmark = pytest.mark.integration
 
 ACCOUNTING_SCHEMA = "mod_accounting"
 ACCOUNTING_REVISION = "ac_0001_accounting"
+IMPORTS_SCHEMA = "mod_imports"
+IMPORTS_REVISION = "im_0001_import_runs"
 IDEMPOTENCY_PROVIDER_REVISION = "20260820_idempotency_ledger"
 REQUIRED_EFFECTS = (
     "tenant_scope_catalog.v1",
@@ -298,6 +302,102 @@ def test_the_module_schema_exists_with_every_declared_table(
         engine.dispose()
     missing = sorted(set(module.tables) - present)
     assert not missing, f"{ACCOUNTING_SCHEMA} is missing declared tables: {missing}"
+
+
+def test_the_imports_schema_exists_with_every_declared_table(
+    composed_database: URL,
+) -> None:
+    from dotmac_imports.manifest import module
+
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            present = set(
+                connection.execute(
+                    text("SELECT tablename FROM pg_tables WHERE schemaname = :schema"),
+                    {"schema": IMPORTS_SCHEMA},
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+    missing = sorted(set(module.tables) - present)
+    assert module.tables, "imports manifest declares no tables"
+    assert not missing, f"{IMPORTS_SCHEMA} is missing declared tables: {missing}"
+
+
+def test_two_concurrent_import_workers_claim_different_partitions(
+    composed_database: URL,
+) -> None:
+    """The first adopter proves SKIP LOCKED ownership on its real schema."""
+    from dotmac_imports import (
+        ColumnMapping,
+        PartitionDescriptor,
+        SourceDocument,
+        claim_partition,
+        create_dry_run,
+        register_partition_plan,
+    )
+
+    tenant_id = uuid4()
+    run_id = None
+    engine = create_engine(composed_database)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO public.tenants (id, slug, name, is_active)
+                    VALUES (:id, :slug, 'Import claim tenant', true)
+                    """
+                ),
+                {"id": tenant_id, "slug": f"claim-{tenant_id.hex}"},
+            )
+        source = SourceDocument(file_id=uuid4(), checksum_sha256="0" * 64)
+        with Session(engine) as setup:
+            run = create_dry_run(
+                setup,
+                tenant_id=tenant_id,
+                kind="finance.customer_master.v1",
+                source=source,
+                mapping=ColumnMapping((("Display Name", "display_name"),)),
+            )
+            register_partition_plan(
+                setup,
+                tenant_id=tenant_id,
+                run_id=run.id,
+                source=source,
+                descriptors=(
+                    PartitionDescriptor(0, 0, 1, uuid4(), "1" * 64, 10),
+                    PartitionDescriptor(1, 1, 1, uuid4(), "2" * 64, 10),
+                ),
+            )
+            run_id = run.id
+            setup.commit()
+
+        first_session = Session(engine)
+        second_session = Session(engine)
+        try:
+            first = claim_partition(
+                first_session,
+                tenant_id=tenant_id,
+                run_id=run_id,
+            )
+            second = claim_partition(
+                second_session,
+                tenant_id=tenant_id,
+                run_id=run_id,
+            )
+            assert first is not None
+            assert second is not None
+            assert first.partition_id != second.partition_id
+            assert {first.ordinal, second.ordinal} == {0, 1}
+        finally:
+            first_session.rollback()
+            second_session.rollback()
+            first_session.close()
+            second_session.close()
+    finally:
+        engine.dispose()
 
 
 # ---------------------------------------------------------------------------
@@ -588,6 +688,45 @@ def test_every_accounting_table_is_tenant_scoped_and_rls_forced(
         engine.dispose()
 
 
+def test_every_imports_table_is_tenant_scoped_and_rls_forced(
+    composed_database: URL,
+) -> None:
+    """The first adopter proves the import ledger is a real tenant plane."""
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
+                           a.attnotnull
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    JOIN pg_attribute a ON a.attrelid = c.oid
+                    WHERE n.nspname = :schema
+                      AND c.relkind = 'r'
+                      AND a.attname = 'tenant_id'
+                      AND NOT a.attisdropped
+                    ORDER BY c.relname
+                    """
+                ),
+                {"schema": IMPORTS_SCHEMA},
+            ).all()
+            assert rows, f"{IMPORTS_SCHEMA} has no tenant tables"
+            assert all(
+                enabled and forced and not_null for _, enabled, forced, not_null in rows
+            )
+            declared = connection.scalar(
+                text("SELECT count(*) FROM pg_tables WHERE schemaname = :schema"),
+                {"schema": IMPORTS_SCHEMA},
+            )
+            assert declared == len(rows), (
+                f"{IMPORTS_SCHEMA} contains a table without tenant_id"
+            )
+    finally:
+        engine.dispose()
+
+
 def test_the_accounting_schema_stays_out_of_erps_own_namespaces(
     composed_database: URL,
 ) -> None:
@@ -639,12 +778,13 @@ def _gate_report():
     from app.migration_bindings import ASSEMBLY_PREREQUISITE_BINDINGS
     from dotmac_accounting.manifest import module as accounting_module
     from dotmac_files.manifest import module as files_module
+    from dotmac_imports.manifest import module as imports_module
 
     previous = tuple(installed_bindings())
     install_prerequisite_bindings(ASSEMBLY_PREREQUISITE_BINDINGS)
     try:
         return run_gate(
-            (accounting_module, files_module),
+            (accounting_module, files_module, imports_module),
             _composed_version_locations(),
             bindings=ASSEMBLY_PREREQUISITE_BINDINGS,
         )
@@ -685,7 +825,11 @@ def test_the_composed_migration_gate_reports_nothing_against_the_modules() -> No
     """
     report = _gate_report()
     module_revisions = _module_owned_revisions(report)
-    assert module_revisions >= {ACCOUNTING_REVISION, "fi_0001_stored_files"}
+    assert module_revisions >= {
+        ACCOUNTING_REVISION,
+        "fi_0001_stored_files",
+        IMPORTS_REVISION,
+    }
 
     offending = [
         violation
@@ -693,6 +837,7 @@ def test_the_composed_migration_gate_reports_nothing_against_the_modules() -> No
         if any(revision in violation for revision in module_revisions)
         or "module 'accounting'" in violation
         or "module 'files'" in violation
+        or "module 'imports'" in violation
     ]
     assert not offending, (
         "composed migration gate rejected a module lineage:\n  "
