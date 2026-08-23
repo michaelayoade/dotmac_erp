@@ -38,7 +38,7 @@ The measurement was worth taking before writing code. Four things it decided:
 
 `docs/inventories/accounting-backfill-survey-2026-08-21.md`.
 
-### D1 — clear the four defects. ALL FOUR ARE EXECUTION BLOCKERS
+### D1 — clear the defects. ALL SURVEY DEFECTS ARE EXECUTION BLOCKERS
 
 An earlier draft called only defect 1 a hard blocker. **The ruling makes all
 four blockers**, and the reason is worth stating: a defect that the backfill
@@ -62,12 +62,105 @@ reversal structure quietly wrong, and would move an accounting decision from
 Finance into a migration script. The only acceptable exclusion is one **Finance
 explicitly quarantines**, recorded as such.
 
+#### Forensics — see the Finance correction memorandum (PARTIALLY COMPLETE)
+
+`docs/inventories/accounting-finance-correction-memorandum.md` carries the
+read-only evidence. It is **not complete**, but one part of it now is.
+
+**Done.** The ar/INVOICE candidate-population detector has run against an
+isolated restored database (`scripts/accounting_stranded_repost_detector.sql`;
+results in Appendix A). 2,033 of 2,039 candidates have a proven ledger chain,
+the population is 98.6% CREDIT NOTES rather than invoices, the one-row delta is
+explained as a duplicate of an already-posted journal, and the cohort splits
+into **four separate dispositions** that must not be approved as one net batch
+(Appendix A §A5). Appendix A is the only operative instruction for that
+population.
+
+**Also done, and not a data repair.** The recurrence fix for defect 1 — the
+residue allocator, exact persisted-precision balance enforcement at all four
+boundaries, and removal of the `Decimal("0.01")` backlog tolerance — merged as
+**ERP PR #336 / `0e40d799`** on 2026-08-22. It stops new occurrences; it repairs
+nothing historical.
+
+**A fifth Gate D population was found during Gate G forensics.** A journal-keyed
+backfill namespace produced 429 currently effective POSTED bank-fee journals
+over 39 statement-line identities, with ₦7,764.68 gross debit. ERP PRs #337–#339
+merge the single owner, database at-most-once boundary, exact live-effect
+verification and bulk-mutator gate; production was observed healthy on their
+merge revision `sha-0dc07e4` on 2026-08-23. They repair no historical data.
+
+The first duplicate detector proved the second namespace, current liveness,
+target identities and aggregate amount; it did not compare each target's full
+immutable ledger effect with its line-keyed canonical. The revised
+`scripts/accounting_bank_fee_duplicate_postings.sql` fails closed on unknown
+keys, non-single canonicals and any account/direction/amount/currency/rate/date/
+period/source/dimension mismatch, then emits a one-to-one schedule digest only
+if every target passes. The 2026-08-23 run at commit `ed83989b`, sha256
+`2988835df245f1e1ed67faf4c6e855e95324de93ae2f6b003fe0a552f956586c`,
+**refused all 429 targets**: header and unkeyed monetary shapes match, but none
+of the ledger account sets matches its canonical. No schedule or digest was
+emitted by the exact-duplicate detector.
+
+The separate `scripts/accounting_bank_fee_wrong_account_correction.sql` now
+implements the purpose-built correction schedule without weakening that
+refusal. On 2026-08-23 it ran twice against one isolated repeatable-read standby
+copy and admitted exactly the 352 Paystack and 77 Zenith substitutions. It
+proved 858/858 journal-line-to-ledger parity, bound the 2025 target / March 2026
+canonical / August 2026 reversal timing, simulated 429 balanced linked
+reversals with every target/account all-time net zero, and emitted the same
+429-row SHA-256 plan digest twice:
+`dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
+No production accounting row changed. Exact-plan Finance approval, a guarded
+operator and execution proof remain Gate D work.
+
+**Still outstanding:** exact-plan approval and execution of the 429
+wrong-account corrections, the
+§1a audited-opening bridge, the composite-reversal treatment, Finance's approval
+of the three micro repairs, the per-document proof 6 reconciliation for the
+ar/INVOICE cohort, the reporting and tax assessment, approver and operator.
+
+What it establishes:
+
+- **Defect 2 is not a labelling problem.** `REV-SYNC-OB-001` and six later
+  journals reverse the same six originals twice. Relative to a single-reversal
+  position the effect is duplicated by **₦1,619,218.75** on accounts 1400 and
+  3100, with no compensating correction.
+
+  **Whether that duplication is a misstatement is conditional** on whether the
+  composite reversal was itself economically correct — which requires the signed
+  2024 audited trial balance and the AR/AP/WHT opening schedules, none of which
+  has been obtained. If the composite improperly removed genuine AR/AP opening
+  balances, the required correction is broader than reversing those six.
+
+- **The duplication is bounded to 1400 and 3100.** A complete account-by-account
+  matrix found no duplicate reversal on 1211, 1220, 1420, 2000 or 2110. The
+  ₦68,308,470.18 on 1420 is a reversal performed once, as intended — not a
+  misstatement. An earlier draft inferred otherwise from the composite amount;
+  that inference is disproven. It is **not** a clean bill of health for WHT: the
+  opening-balance reconciliation stays open.
+
+- **Defect 1 has TWO code causes.** The AR allocator rounds each revenue line
+  independently, and `LedgerPostingService` admits an imbalance of *exactly* one
+  micro-unit because it rejects only on `abs(debit - credit) > Decimal("0.000001")`.
+  A third, larger instance sits in `posting_backlog.py` at `Decimal("0.01")`.
+  Repairing the rows fixes none of them.
+
+  The allocation policy is: round normally, apply the residue to the **largest
+  absolute revenue line**, break ties by stable line number. For these journals
+  that is line 2.
+
+Decisions, approver and operator are Finance's. Gate D stays blocked on content
+completeness, not on CI.
+
 #### Exit criterion
 
 Re-run `scripts/accounting_backfill_survey.sql` after the repairs and require
-**zero unresolved balance defects and zero unresolved reversal defects**. The
-survey is the gate, not an assurance that the repairs were attempted: it reads
-the database rather than the change log.
+**zero unresolved balance defects and zero unresolved reversal defects**. Also
+re-run `scripts/accounting_bank_fee_duplicate_postings.sql`: before execution
+its count/gross/digest must equal the Finance-approved schedule; after the
+one-to-one corrections it must report zero live journal-keyed reversal targets.
+The database detectors are the gate, not an assurance that repairs were
+attempted: they read current effects rather than the change log.
 
 ### D2 — implement the two seams
 
@@ -272,5 +365,6 @@ memory.
 | SourceIdentity keyed on the GL journal, `version = "1"` | **RULED 2026-08-21.** See above — the run identifier belongs in import/rehearsal evidence, not identity. |
 | Gate D stops before dual write | **Confirmed.** Dual write is gate E. |
 | All four data defects are execution blockers | **RULED 2026-08-21.** Finance corrects and adjudicates through ordinary reviewed ERP process; the survey re-run is the gate. |
+| The 429 journal-keyed POSTED bank-fee effects | **Correction designed and rehearsed; execution pending.** The exact-duplicate comparison still refuses all 429 because their ledger accounts differ. The separate wrong-account plan admits only the measured `352` (`Paystack OPEX - DT`→`1211`) and `77` (`Zenith USD - DT`→`1207`) substitutions, proves 858/858 reversal-source parity and explicitly binds the different posting periods. Both isolated runs produced SHA-256 plan digest `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`. No production row changed; exact-plan approval, guarded execution and post-write proof remain required. |
 | The 14,263 APPROVED-but-unposted journals | **Separate Finance remediation track, started now.** Classify by producer and business-document state before disposing. Gate D proceeds in parallel; gate G blocks on complete disposition. |
 | RECURRING / REVALUATION / CONSOLIDATION writers | Must retire, or the module must gain the kinds, before gate E. Not gate D's problem; recorded so it is not discovered at gate E. |

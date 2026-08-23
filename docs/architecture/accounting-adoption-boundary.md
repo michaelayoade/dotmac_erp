@@ -393,6 +393,20 @@ Each gate is a separate authorized change. None is implied by the one before it.
   and with one organization the rehearsal must manufacture a second tenant,
   because a mis-scoped write would otherwise have no observable symptom.
 
+  Gate G forensics added a fifth Gate D population: 429 currently effective
+  journal-keyed bank-fee postings over 39 statement-line identities. The
+  namespace and ₦7,764.68 gross population are measured. The 2026-08-23 exact
+  detector refused all 429 because their ledger account sets differ from the one
+  line-keyed canonical per identity; it emitted no exact-duplicate schedule.
+  The separate wrong-account detector subsequently proved 858/858 target
+  journal-line parity, bound the 2025 target / March 2026 canonical / August
+  2026 reversal timing, and rehearsed 429 balanced linked reversals twice with
+  identical SHA-256 plan digest
+  `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
+  No production row changed. Exact-plan Finance approval, a guarded operator
+  and post-write proof remain Gate D requirements; aggregate count or amount is
+  not authorization.
+
 - **Gate E — dual write and parity.** Both sides post; every posting is compared.
   Divergence is a stop, not a warning.
 - **Gate F — cutover.** One writer at a time, in the order the writer ledger
