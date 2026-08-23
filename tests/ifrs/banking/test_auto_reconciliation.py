@@ -31,6 +31,10 @@ from app.services.finance.banking.auto_reconciliation import (
     AutoMatchResult,
     AutoReconciliationService,
 )
+from app.services.finance.banking.bank_fee_posting import (
+    BankFeeOutcome,
+    BankFeeState,
+)
 from tests.ifrs.banking.conftest import (
     MockBankAccount,
     MockBankStatement,
@@ -1428,7 +1432,8 @@ class MockPostingResult:
 class TestBankFeeMatching:
     """Tests for pass 4 — bank fee auto-journal creation and matching."""
 
-    def test_happy_path_fee_line_matched(
+    @pytest.mark.parametrize("outcome_state_name", ["CREATED", "LEGACY_BATCH_ONLY"])
+    def test_live_fee_outcome_is_matched(
         self,
         service: AutoReconciliationService,
         mock_db: MagicMock,
@@ -1436,8 +1441,9 @@ class TestBankFeeMatching:
         gl_account_id: uuid.UUID,
         statement: MockBankStatement,
         bank_account: MockBankAccount,
+        outcome_state_name: str,
     ) -> None:
-        """Creates GL journal for fee line and matches it."""
+        """Fresh and legacy live effects both reach idempotent match repair."""
         from datetime import date
 
         fee_line = MockBankStatementLine(
@@ -1465,24 +1471,22 @@ class TestBankFeeMatching:
         setup_db_execute_journal(mock_db, je)
 
         mock_journal = MockApprovedJournal()
-        mock_posting = MockPostingResult(success=True)
+        fee_outcome = BankFeeOutcome(
+            state=BankFeeState[outcome_state_name],
+            journal=mock_journal,  # type: ignore[arg-type]
+            message="Bank fee posted",
+        )
 
         with (
             patch(
-                "app.services.finance.posting.base.BasePostingAdapter"
-            ) as mock_adapter_cls,
+                "app.services.finance.banking.bank_fee_posting.post_bank_fee",
+                return_value=fee_outcome,
+            ) as mock_post_fee,
             patch(
                 "app.services.finance.banking.bank_reconciliation."
                 "BankReconciliationService"
             ),
         ):
-            mock_adapter_cls.create_and_approve_journal.return_value = (
-                mock_journal,
-                None,
-            )
-            mock_adapter_cls.post_to_ledger.return_value = mock_posting
-            mock_adapter_cls.make_idempotency_key.return_value = "test-key"
-
             result = service.auto_match_statement(
                 mock_db, org_id, statement.statement_id
             )
@@ -1491,19 +1495,15 @@ class TestBankFeeMatching:
         assert result.skipped == 0
         assert result.errors == []
 
-        # Verify journal was created with correct parameters
-        call_args = mock_adapter_cls.create_and_approve_journal.call_args
-        journal_input = call_args[0][2]  # positional arg: journal_input
-        assert journal_input.source_module == "BANKING"
-        assert journal_input.source_document_type == "BANK_FEE"
-        assert journal_input.correlation_id == f"bank-fee-{fee_line.line_id}"
-        assert len(journal_input.lines) == 2
-        # Debit Finance Cost (absolute amount)
-        assert journal_input.lines[0].account_id == finance_cost_account.account_id
-        assert journal_input.lines[0].debit_amount == Decimal("5000.00")
-        # Credit bank GL
-        assert journal_input.lines[1].account_id == gl_account_id
-        assert journal_input.lines[1].credit_amount == Decimal("5000.00")
+        mock_post_fee.assert_called_once_with(
+            mock_db,
+            organization_id=org_id,
+            line=fee_line,
+            bank_gl_account_id=gl_account_id,
+            finance_cost_account_id=finance_cost_account.account_id,
+            posted_by_user_id=service.SYSTEM_USER_ID,
+            poster=service._post_with_period_fallback,
+        )
 
     def test_no_fee_lines_no_action(
         self,
@@ -1527,15 +1527,15 @@ class TestBankFeeMatching:
         mock_db.scalar.return_value = MockAccount(organization_id=org_id)
 
         with patch(
-            "app.services.finance.posting.base.BasePostingAdapter"
-        ) as mock_adapter_cls:
+            "app.services.finance.banking.bank_fee_posting.post_bank_fee"
+        ) as mock_post_fee:
             result = service.auto_match_statement(
                 mock_db, org_id, statement.statement_id
             )
 
         assert result.matched == 0
         assert result.skipped == 1
-        mock_adapter_cls.create_and_approve_journal.assert_not_called()
+        mock_post_fee.assert_not_called()
 
     def test_finance_cost_account_not_found(
         self,
@@ -1558,15 +1558,15 @@ class TestBankFeeMatching:
         mock_db.scalar.return_value = None
 
         with patch(
-            "app.services.finance.posting.base.BasePostingAdapter"
-        ) as mock_adapter_cls:
+            "app.services.finance.banking.bank_fee_posting.post_bank_fee"
+        ) as mock_post_fee:
             result = service.auto_match_statement(
                 mock_db, org_id, statement.statement_id
             )
 
         assert result.matched == 0
         assert result.skipped == 1
-        mock_adapter_cls.create_and_approve_journal.assert_not_called()
+        mock_post_fee.assert_not_called()
 
     def test_journal_creation_failure_records_error(
         self,
@@ -1588,19 +1588,17 @@ class TestBankFeeMatching:
         setup_db_scalars(mock_db, [fee_line], intents=[], splynx_payments=[])
         mock_db.scalar.return_value = MockAccount(organization_id=org_id)
 
-        create_error = MockPostingResult(
-            success=False,
+        create_error = BankFeeOutcome(
+            state=BankFeeState.FAILED,
+            journal=None,
             message="Fee journal creation failed: Fiscal period not found",
+            error="Fiscal period not found",
         )
 
         with patch(
-            "app.services.finance.posting.base.BasePostingAdapter"
-        ) as mock_adapter_cls:
-            mock_adapter_cls.create_and_approve_journal.return_value = (
-                None,
-                create_error,
-            )
-
+            "app.services.finance.banking.bank_fee_posting.post_bank_fee",
+            return_value=create_error,
+        ):
             result = service.auto_match_statement(
                 mock_db, org_id, statement.statement_id
             )
@@ -1650,24 +1648,22 @@ class TestBankFeeMatching:
 
         # First fee: posting succeeds, but _find_journal_line raises
         # Second fee: posting succeeds and matches
-        mock_journal = MockApprovedJournal()
-        posting_ok = MockPostingResult(success=True)
+        fee_outcome = BankFeeOutcome(
+            state=BankFeeState.CREATED,
+            journal=MockApprovedJournal(),  # type: ignore[arg-type]
+            message="Bank fee posted",
+        )
 
         with (
             patch(
-                "app.services.finance.posting.base.BasePostingAdapter"
-            ) as mock_adapter_cls,
+                "app.services.finance.banking.bank_fee_posting.post_bank_fee",
+                return_value=fee_outcome,
+            ),
             patch(
                 "app.services.finance.banking.bank_reconciliation."
                 "BankReconciliationService"
             ),
         ):
-            mock_adapter_cls.create_and_approve_journal.return_value = (
-                mock_journal,
-                None,
-            )
-            mock_adapter_cls.post_to_ledger.return_value = posting_ok
-            mock_adapter_cls.make_idempotency_key.return_value = "test-key"
             # First call: exception during execute; second call: success
             mock_exec_fail = MagicMock()
             mock_exec_fail.unique.side_effect = RuntimeError("DB glitch")
@@ -1731,25 +1727,22 @@ class TestBankFeeMatching:
         mock_db.scalar.return_value = MockAccount(organization_id=org_id)
         setup_db_execute_journal(mock_db, [je1, je2])
 
-        mock_journal = MockApprovedJournal()
-        posting_ok = MockPostingResult(success=True)
+        fee_outcome = BankFeeOutcome(
+            state=BankFeeState.CREATED,
+            journal=MockApprovedJournal(),  # type: ignore[arg-type]
+            message="Bank fee posted",
+        )
 
         with (
             patch(
-                "app.services.finance.posting.base.BasePostingAdapter"
-            ) as mock_adapter_cls,
+                "app.services.finance.banking.bank_fee_posting.post_bank_fee",
+                return_value=fee_outcome,
+            ) as mock_post_fee,
             patch(
                 "app.services.finance.banking.bank_reconciliation."
                 "BankReconciliationService"
             ),
         ):
-            mock_adapter_cls.create_and_approve_journal.return_value = (
-                mock_journal,
-                None,
-            )
-            mock_adapter_cls.post_to_ledger.return_value = posting_ok
-            mock_adapter_cls.make_idempotency_key.return_value = "test-key"
-
             result = service.auto_match_statement(
                 mock_db, org_id, statement.statement_id
             )
@@ -1757,7 +1750,7 @@ class TestBankFeeMatching:
         assert result.matched == 2
         assert result.skipped == 0
         assert result.errors == []
-        assert mock_adapter_cls.create_and_approve_journal.call_count == 2
+        assert mock_post_fee.call_count == 2
 
 
 # ── Tests: Settlement matching (pass 5) ────────────────────────────

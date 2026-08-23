@@ -47,10 +47,7 @@ class AutoReconciliationSpecialService:
         3. Matches the statement line to the credit journal line.
         """
         from app.models.finance.gl.account import Account
-        from app.services.finance.banking.bank_fee_posting import (
-            BankFeeState,
-            post_bank_fee,
-        )
+        from app.services.finance.banking.bank_fee_posting import post_bank_fee
 
         # Look up Finance Cost GL account (configurable, default 6080) once
         account_code = (
@@ -114,14 +111,6 @@ class AutoReconciliationSpecialService:
                         outcome.message,
                     )
                     result.errors.append(f"Line {line.line_number}: {outcome.message}")
-                    continue
-
-                if outcome.state is BankFeeState.LEGACY_BATCH_ONLY:
-                    logger.info(
-                        "Bank fee for line %s already posted (legacy): %s",
-                        line.line_id,
-                        outcome.message,
-                    )
                     continue
 
                 if not outcome.ok:
