@@ -1484,9 +1484,7 @@ class TestAnUnrelatedIntegrityErrorIsNotALostRace:
         unrelated = IntegrityError(
             "INSERT INTO gl.journal_entry ...",
             {},
-            SimpleNamespace(
-                diag=SimpleNamespace(constraint_name="uq_journal_number")
-            ),
+            SimpleNamespace(diag=SimpleNamespace(constraint_name="uq_journal_number")),
         )
 
         def _raise_unrelated(*_args, **_kwargs):

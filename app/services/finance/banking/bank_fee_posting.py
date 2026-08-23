@@ -289,7 +289,7 @@ def is_effect_live(db: Session, journal: JournalEntry) -> bool:
         db.scalar(
             select(func.count(PostedLedgerLine.ledger_line_id)).where(
                 PostedLedgerLine.organization_id == journal.organization_id,
-                PostedLedgerLine.journal_entry_id == journal.journal_entry_id
+                PostedLedgerLine.journal_entry_id == journal.journal_entry_id,
             )
         )
     )
@@ -342,7 +342,7 @@ def find_existing_posting_effect(
         db.scalars(
             select(PostedLedgerLine.journal_entry_id).where(
                 PostedLedgerLine.organization_id == organization_id,
-                PostedLedgerLine.posting_batch_id == batch.batch_id
+                PostedLedgerLine.posting_batch_id == batch.batch_id,
             )
         ).all()
     )
@@ -711,9 +711,7 @@ def _content_mismatch(
                 if line_number == 1
                 else "statement line's bank account"
             )
-            return (
-                f"the {role} line is {actual_line}, expected {expected_line}"
-            )
+            return f"the {role} line is {actual_line}, expected {expected_line}"
         if row.currency_code != journal.currency_code:
             return (
                 f"journal line {line_number} currency is {row.currency_code!r}, "
@@ -816,8 +814,7 @@ def _effect_mismatch(
     expected_key = fee_idempotency_key(journal.organization_id, line.line_id)
     if batch.idempotency_key != expected_key:
         return (
-            f"posting batch key is {batch.idempotency_key!r}, expected "
-            f"{expected_key!r}"
+            f"posting batch key is {batch.idempotency_key!r}, expected {expected_key!r}"
         )
     if batch.correlation_id != journal.correlation_id:
         return (
@@ -869,11 +866,10 @@ def _effect_mismatch(
             return f"ledger line {ledger_row.ledger_line_id} changed account"
         if ledger_row.entry_date != journal.entry_date:
             return f"ledger line {ledger_row.ledger_line_id} changed entry date"
-        if (
-            quantize_amount(ledger_row.debit_amount)
-            != quantize_amount(journal_row.debit_amount_functional)
-            or quantize_amount(ledger_row.credit_amount)
-            != quantize_amount(journal_row.credit_amount_functional)
+        if quantize_amount(ledger_row.debit_amount) != quantize_amount(
+            journal_row.debit_amount_functional
+        ) or quantize_amount(ledger_row.credit_amount) != quantize_amount(
+            journal_row.credit_amount_functional
         ):
             return f"ledger line {ledger_row.ledger_line_id} changed functional amount"
         if (
