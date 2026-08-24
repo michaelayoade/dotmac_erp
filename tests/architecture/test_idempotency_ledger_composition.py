@@ -39,7 +39,7 @@ def _assignment(path: Path, name: str) -> str | tuple[str, ...]:
 def test_kernel_pin_contains_the_published_prerequisite_contract() -> None:
     pyproject = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     dependency = pyproject["tool"]["poetry"]["dependencies"]["dotmac-kernel"]
-    assert dependency == {"version": "0.1.0a85", "source": "forgejo"}
+    assert dependency == {"version": "0.1.0a94", "source": "forgejo"}
 
 
 def test_provider_revision_merges_every_preexisting_erp_head() -> None:
