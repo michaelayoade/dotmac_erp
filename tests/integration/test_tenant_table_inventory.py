@@ -104,7 +104,8 @@ WITH t AS (
 )
 SELECT t.sch, t.tbl,
        CASE WHEN (t.sch = 'public' AND t.tbl IN (
-                    'tenants', 'tenant_domains', 'platform_idempotency_records'
+                    'tenants', 'tenant_domains', 'platform_idempotency_records',
+                    'platform_outbox_events'
                   ))
                   OR (t.sch = 'mod_files' AND t.tbl = 'platform_stored_files')
               THEN 'platform'
