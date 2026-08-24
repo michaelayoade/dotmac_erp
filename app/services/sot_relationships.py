@@ -136,6 +136,23 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             # as-built owners only. Reintroduction adopts the released
             # dotmac-auth-oidc package and re-registers an owner here.
             SOTService(
+                name="identity.party_projection",
+                module="app.services.party_projection",
+                owns=(
+                    "Person-to-kernel-Party catalogue projection writes",
+                    "Person-to-kernel-PartyPerson profile projection writes",
+                    "person party retirement on Person deletion",
+                ),
+                notes=(
+                    "public.people remains authoritative; the projection "
+                    "supplies party_person_catalog.v1 and mutates in the "
+                    "caller's ERP-owned transaction. parties.id IS people.id, "
+                    "so the projection needs no mapping and is rebuildable "
+                    "from the source alone. Authority moves when dotmac-party "
+                    "and dotmac-people are composed and cut over."
+                ),
+            ),
+            SOTService(
                 name="auth.rbac",
                 module="app.services.rbac",
                 owns=(
@@ -287,6 +304,13 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "projection drift via the canonical rebuild writer."
                 ),
             ),
+            # The kernel relay planes (public.outbox_events,
+            # public.platform_outbox_events) deliberately have NO entry here.
+            # This registry names live runtime owners, and 20260824_outbox_relay
+            # supplies schema and privilege only — there is no ERP service
+            # deciding anything on those tables, and naming a migration as an
+            # owner would be a name that cannot be imported or reached. The
+            # boundary it creates is recorded in this domain's rule instead.
             SOTService(
                 name="events.hooks",
                 module="app.services.hooks.registry",
@@ -297,7 +321,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         rule=(
             "Cross-module consequences ride the outbox inside the business "
             "transaction; handlers never commit; external delivery goes "
-            "through service hooks with signed, retried delivery."
+            "through service hooks with signed, retried delivery. ERP business "
+            "events ride platform.event_outbox; composed-module events ride "
+            "the kernel relay planes. One authority each, neither reading the "
+            "other's rows."
         ),
     ),
     DomainSOT(

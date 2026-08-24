@@ -21,6 +21,21 @@ ROLE_CONTRACT: Final[dict[str, RolePosture]] = {
     "app_user": (False, False),
     "platform_api": (False, False),
 }
+#: The relay's two least-privilege drain identities, kept SEPARATE from
+#: `ROLE_CONTRACT` on purpose. `ROLE_CONTRACT` is what `module_database_roles.v1`
+#: means, and that effect is already supplied and bound; folding two more roles
+#: into it would silently change what an applied revision asserted. These belong
+#: to `outbox_relay.v1` and are verified by its own provider.
+#:
+#: Both are `(rolbypassrls, rolsuper) = (False, False)`. A dispatcher exists to
+#: drain events through two SECURITY DEFINER functions and nothing else — one
+#: that could bypass row-level security would make the whole hardening
+#: decorative, and a superuser bypasses it whether or not the flag is set.
+RELAY_DISPATCHER_CONTRACT: Final[dict[str, RolePosture]] = {
+    "outbox_dispatcher": (False, False),
+    "platform_outbox_dispatcher": (False, False),
+}
+
 MIGRATION_EXECUTOR: Final[str] = "app_admin"
 OWNERSHIP_PLAN_VERSION: Final[int] = 1
 OwnershipPlanRow = tuple[str, str, str, str]
@@ -294,6 +309,23 @@ def role_contract_violations(
         for role in sorted(set(ROLE_CONTRACT) - set(observed))
     ]
     for role, expected in ROLE_CONTRACT.items():
+        actual = observed.get(role)
+        if actual is not None and actual != expected:
+            violations.append(
+                f"{role} is {posture(*actual)}, contract requires {posture(*expected)}"
+            )
+    return tuple(violations)
+
+
+def relay_dispatcher_violations(
+    observed: Mapping[str, RolePosture],
+) -> tuple[str, ...]:
+    """Name every way the relay's drain identities fail their contract."""
+    violations = [
+        f"database role {role!r} is missing"
+        for role in sorted(set(RELAY_DISPATCHER_CONTRACT) - set(observed))
+    ]
+    for role, expected in RELAY_DISPATCHER_CONTRACT.items():
         actual = observed.get(role)
         if actual is not None and actual != expected:
             violations.append(

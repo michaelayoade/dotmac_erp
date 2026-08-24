@@ -151,17 +151,30 @@ Three obligations fall out of it, and none of them is a version bump:
 - **ERP must supply `party_person_catalog.v1`.** `dotmac-people`,
   `dotmac-party` and `dotmac-expenses` require it and no assembly migration
   provides it. That is the identity seam, and it gates the whole HR and expense
-  column of the product.
+  column of the product. Closed on 2026-08-24 by
+  `20260824_party_person_projection`, which hosts `public.parties` and
+  `public.party_persons` as a projection of `public.people` on the same
+  create-or-adopt, refuse-drift pattern as the tenant catalogue. Those three
+  modules moved to tranche 1; tranche 2 keeps its number and is now empty.
 - **ERP must supply `outbox_relay.v1`.** `dotmac-approvals` and
   `dotmac-durable-timers` require it. Durable Timers in turn underpins
-  reminders, escalations and scheduled runs.
+  reminders, escalations and scheduled runs. Closed on 2026-08-24 by
+  `20260824_outbox_relay`, which hosts both relay planes, their claim/settle
+  pairs and the dispatcher privilege boundary for MODULE events only —
+  `platform.event_outbox` remains ERP's business-event authority. Both members
+  moved to tranche 1; tranche 3 keeps its number and is now empty.
 
-The assembly supplies exactly three effects today — `tenant_scope_catalog.v1`,
-`module_database_roles.v1` and `idempotency_ledger.v1` — and the plan's blocked
-set is derived from that fact and compared against a declared one, so supplying
-an effect must delete its row in the same change that adds the migration.
+With both effects supplied, `MISSING_EFFECTS` is empty and the assembly
+supplies everything the frozen selection declares. What remains before a module
+composes is the four-file change itself.
 
-Twenty-one modules are otherwise unblocked. Four have no installable artifact at
+The assembly supplies exactly five effects today — `tenant_scope_catalog.v1`,
+`module_database_roles.v1`, `idempotency_ledger.v1`,
+`party_person_catalog.v1`, and `outbox_relay.v1` — and the plan's blocked set is
+derived from that fact and compared against a declared one, so supplying an
+effect must delete its row in the same change that adds the migration.
+
+Twenty-six modules are otherwise unblocked. Four have no installable artifact at
 all.
 
 ## Consequences

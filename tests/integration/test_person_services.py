@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from app.models.finance.core_org.organization import Organization
 from app.schemas.person import PersonCreate, PersonUpdate
 from app.services import person as person_service
+from app.services.tenant_projection import reconcile_organization_tenant
 
 # Test organization ID for multi-tenancy
 TEST_ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -282,6 +283,13 @@ def test_person_crud_cannot_cross_organizations(db, organization):
     db.add(other_organization)
     db.flush()
     other_organization_id = uuid.UUID(str(other_organization.organization_id))
+
+    # Production organization creation writes the tenant projection in the
+    # same transaction. Keep this isolation fixture faithful to that contract
+    # so the Party projection has a valid tenant FK for both organizations.
+    reconcile_organization_tenant(db, organization)
+    reconcile_organization_tenant(db, other_organization)
+    db.flush()
 
     visible = person_service.people.create(
         db,

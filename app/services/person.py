@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session
 from app.models.person import Person, PersonStatus
 from app.schemas.person import PersonCreate, PersonUpdate
 from app.services.common import coerce_uuid
+from app.services.party_projection import (
+    reconcile_person_party,
+    retire_person_party,
+)
 from app.services.response import (
     ListResponseMixin,
     apply_ordering as _apply_ordering,
@@ -32,6 +36,9 @@ class People(ListResponseMixin):
         person = Person(organization_id=organization_id, **payload.model_dump())
         db.add(person)
         db.flush()
+        # The kernel party catalogue is a projection of this row, written in
+        # the same transaction so the two cannot disagree after a failure.
+        reconcile_person_party(db, person)
         return person
 
     @staticmethod
@@ -97,6 +104,7 @@ class People(ListResponseMixin):
         for key, value in payload.model_dump(exclude_unset=True).items():
             setattr(person, key, value)
         db.flush()
+        reconcile_person_party(db, person)
         return person
 
     @staticmethod
@@ -109,6 +117,7 @@ class People(ListResponseMixin):
         )
         if not person:
             raise HTTPException(status_code=404, detail="Person not found")
+        retire_person_party(db, person.id)
         db.delete(person)
         db.flush()  # caller owns the commit (auto-committing request dep)
 

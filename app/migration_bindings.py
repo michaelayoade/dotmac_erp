@@ -37,6 +37,8 @@ from typing import Final
 from dotmac_kernel.prerequisites import (
     IDEMPOTENCY_LEDGER_V1,
     MODULE_DATABASE_ROLES_V1,
+    OUTBOX_RELAY_V1,
+    PARTY_PERSON_CATALOG_V1,
     TENANT_SCOPE_CATALOG_V1,
     PrerequisiteBinding,
 )
@@ -50,6 +52,12 @@ from dotmac_kernel.prerequisites import (
 #: `20260820_idempotency_ledger` hosts both planes of the kernel at-most-once
 #: ledger while ADR-0001 keeps ERP's endpoint-response cache as ratcheted
 #: transitional state; no operation is cut over merely by supplying storage.
+#: `20260824_party_person_projection` hosts `public.parties` and
+#: `public.party_persons` as a projection of `public.people`, which stays the
+#: person authority until `dotmac-party` and `dotmac-people` cut over.
+#: `20260824_outbox_relay` hosts both relay planes for MODULE events; ERP's
+#: own `platform.event_outbox` remains the business-event authority and is not
+#: touched by it.
 ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
     PrerequisiteBinding(
         prerequisite=TENANT_SCOPE_CATALOG_V1.name,
@@ -64,6 +72,16 @@ ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
     PrerequisiteBinding(
         prerequisite=IDEMPOTENCY_LEDGER_V1.name,
         provider_revision="20260820_idempotency_ledger",
+        provider_owner="assembly",
+    ),
+    PrerequisiteBinding(
+        prerequisite=PARTY_PERSON_CATALOG_V1.name,
+        provider_revision="20260824_party_person_projection",
+        provider_owner="assembly",
+    ),
+    PrerequisiteBinding(
+        prerequisite=OUTBOX_RELAY_V1.name,
+        provider_revision="20260824_outbox_relay",
         provider_owner="assembly",
     ),
 )
