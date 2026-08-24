@@ -285,6 +285,51 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         ),
     ),
     DomainSOT(
+        domain="payment_execution",
+        services=(
+            SOTService(
+                name="payments.intent_lifecycle",
+                module="app.services.finance.payments.payment_service",
+                owns=(
+                    "PaymentIntent.status - every transition, from every trigger",
+                    "transfer initiation, completion, failure and reversal",
+                    "scheduled reconciliation of in-flight transfers",
+                ),
+                notes=(
+                    "Sole writer of payments.payment_intent.status. The webhook "
+                    "receiver, the API routes and the scheduled poller are all "
+                    "adapters over this service; none of them decides a status "
+                    "itself. Enforced by tests/architecture/"
+                    "test_payment_intent_status_single_owner.py. Implemented and "
+                    "tested; production enablement unconfirmed."
+                ),
+            ),
+            SOTService(
+                name="payments.webhook_intake",
+                module="app.services.finance.payments.webhook_service",
+                owns=(
+                    "Paystack webhook signature verification and replay refusal",
+                    "webhook event to payment-intent dispatch",
+                ),
+                depends_on=("payments.intent_lifecycle",),
+                notes=(
+                    "Transport only: it validates and dispatches, and never "
+                    "writes an intent status of its own."
+                ),
+            ),
+        ),
+        entrypoints=(
+            "app.api.finance.payments",
+            "app.tasks.expense",
+        ),
+        rule=(
+            "One service decides what a payment intent's status is. Webhooks, "
+            "routes and schedulers validate, authorize and delegate; a second "
+            "writer is how a settled transfer gets reopened or an in-flight "
+            "payout gets stamped expired."
+        ),
+    ),
+    DomainSOT(
         domain="platform_events",
         services=(
             SOTService(
