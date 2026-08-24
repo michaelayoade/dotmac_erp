@@ -154,17 +154,17 @@ on 1400 and 3100 only.
 | 3100 | net RE impact removed once | removed twice | **misstated 1,619,218.75** |
 | 1211, 1220, 1420, 2000, 2110 | removed once | removed once | **nil** |
 
-### Reconciliation to OB-000001 (claimed 2024 audited TB authority)
+### Reconciliation to OB-000001 (current state and reconstructed original)
 
-| acct | OB-000001 | REV-SYNC-OB-001 reverses | observation |
+| acct | current OB-000001 | REV-SYNC-OB-001 reverses | observation |
 | --- | ---: | ---: | --- |
 | 1211 | Dr 297,500.00 (+ Dr 40,615.65) | Cr 297,500.00 | ties exactly |
 | 1220 | Dr 3,245.44 | Cr 3,245.44 | ties exactly |
 | 1420 | Dr 68,308,470.02 | Cr 68,308,470.18 | **differs by ₦0.16** |
 | 2110 | Cr 3,136,499.51 | Dr 14,536,448.13 | different figures; not a duplication |
 | 3100 | net Dr 48,222,886.90 | Dr 53,874,583.74 | differs by 5,651,696.84 |
-| **1400** | **no line** | Cr 2,841,816.25 | **OB-000001 does not replace it** |
-| **2000** | **no line** | Dr 3,040,000.00 | **OB-000001 does not replace it** |
+| **1400** | **no current line** | Cr 2,841,816.25 | original Dr 20,591,053.35 line was deleted on 2026-04-29 |
+| **2000** | **no current line** | Dr 3,040,000.00 | original Cr 40,310,713.50 line was deleted on 2026-04-29 |
 
 Three open reconciliation questions for Finance — **stated as questions, not as
 findings**:
@@ -173,16 +173,25 @@ findings**:
    **₦0.16**. Reversing the sync version and retaining OB-000001's leaves the
    audited position, so this is not a duplication — but the two sources
    disagreed, and someone should say why.
-2. **OB-000001 carries no 1400 or 2000 line.** The composite removed
-   ₦2,841,816.25 of customer opening balances and ₦3,040,000 of supplier opening
-   balances with no GL-level replacement in the journal claimed as authoritative.
-   Whether those belong in AR/AP subledger opening documents instead is a
-   Finance determination.
-3. The 3100 figures differ by ₦5,651,696.84, which is consistent with
-   OB-000001 and the sync set covering different populations — but it has not
-   been traced.
+2. **OB-000001 originally carried 1400 and 2000, exactly agreeing to the
+   unsigned TB and the rounded signed financial statements.** Raw SQL deleted
+   both lines on 2026-04-29 in favour of GL-only detail journals, after the
+   composite had already reversed part of that detail. Which representation is
+   authoritative, and how it becomes real AR/AP subledger detail, is a Finance
+   determination.
+3. The current 3100 figure is not an audited opening. The 2026-04-29 cleanup
+   rewrote it, while the original opening had omitted the signed ₦508,996
+   income-tax close. Both effects must reconcile; neither may become a plug.
 
 ### §1a. Finance evidence package REQUIRED — the source, not the description
+
+**2026-08-24 evidence result: PARTIAL / HOLD.** The production evidence review is
+recorded in
+[accounting-audited-opening-bridge-evidence.md](accounting-audited-opening-bridge-evidence.md).
+Physically signed 2024 financial statements and the unsigned TB workbook were
+found. They prove the original 1400/2000 OB lines and expose an omitted ₦508,996
+tax close, but the signed TB, AR/AP ageings, WHT schedules and approved opening
+workpaper remain absent. No composite correction may be posted yet.
 
 Nothing above may be actioned on the strength of `REV-SYNC-OB-001`'s own
 description. That description is the *assertion under test*. Obtain the actual
@@ -206,11 +215,14 @@ signed audited closing TB
           → current GL and AR/AP subledgers
 ```
 
-#### Question 2 is the priority
+#### The representation decision is the priority
 
-OB-000001 carries **no 1400 and no 2000 line**. If the AR and AP opening
-schedules do contain the ₦2,841,816.25 and ₦3,040,000 balances, then **identify
-the GL control-account entry that represents them**.
+Current `OB-000001` carries no 1400 or 2000 because raw SQL deleted the original
+control lines. The surviving 17 AR and 26 AP opening journals have no subledger
+document IDs; their totals differ from the signed controls by ₦326,200.00 and
+₦123,962.46 respectively. Finance must choose and document the authoritative
+representation, then identify both the GL control entries and the customer/
+supplier subledger records that represent it.
 
 > **A subledger balance without its GL control counterpart is not a
 > replacement.**
@@ -220,9 +232,11 @@ or improperly removed genuine opening balances.
 
 #### The retained-earnings difference must reconcile, not plug
 
-The ₦5,651,696.84 difference on 3100 must reconcile **through the same bridge**.
-It must not become a balancing plug: a plug would conceal exactly the kind of
-gap the bridge exists to find.
+The 3100 difference must reconcile **through the same bridge**. The signed
+statements add ₦508,996 income-tax expense that the original opening omitted;
+the later cleanup then changed the retained-earnings credit from ₦6,734,260.89
+to ₦5,011,140.74. It must not become a balancing plug: a plug would conceal
+exactly the kind of gap the bridge exists to find.
 
 ### Indicated treatment, CONDITIONAL on the signed evidence
 
@@ -618,7 +632,7 @@ where it already blocks legacy-writer retirement.
 | --- | --- |
 | Three balance repairs (`JE202604-40653/40818/42111`) | *pending Finance decision* — §2 |
 | Composite-reversal treatment (`REV-SYNC-OB-001` + the six duplicates) | *pending Finance decision, conditional on §1a evidence* |
-| §1a audited-opening bridge complete | *not started* |
+| §1a audited-opening bridge complete | **PARTIAL / HOLD — 2026-08-24 evidence schedule completed.** Signed financial statements and the unsigned TB were found; signed TB, AR/AP ageings, WHT schedules and approved representation remain missing. No composite write is authorized. |
 | Recurrence fix landed (allocator + posting boundary + backlog tolerance) | **DONE — ERP PR #336 merged to `main` as `0e40d799` on 2026-08-22T08:06Z**, `version:patch`, all checks green. Not a data repair. |
 | Reporting assessment **for these corrections only** | *not yet performed* — §6 |
 | Bank-fee recurrence prevention | **DEPLOYED.** ERP PRs #337–#339 establish the one-owner, typed-source, at-most-once boundary, fail-closed effect verification and bulk-mutator kill switch. Production is healthy on `sha-8290c7d`; those controls prevent recurrence and remain distinct from the completed historical correction below. |
