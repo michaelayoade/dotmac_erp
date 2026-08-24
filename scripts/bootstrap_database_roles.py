@@ -65,9 +65,11 @@ from psycopg import sql
 
 from app.migration_database_roles import (
     MIGRATION_OWNERSHIP_SQL,
+    RELAY_DISPATCHER_CONTRACT,
     ROLE_CONTRACT,
     migration_executor_violations,
     migration_ownership_violations,
+    relay_dispatcher_violations,
     role_contract_violations,
 )
 
@@ -82,10 +84,21 @@ def _attributes(bypassrls: bool, superuser: bool) -> str:
     )
 
 
+#: Every role this script creates or adopts: the three module roles, plus the
+#: relay's two drain identities. They are observed together because a partial
+#: bootstrap is the failure this script exists to prevent — a cluster with
+#: `app_user` but no `outbox_dispatcher` fails its first relay migration
+#: instead of its first request, which is much later and much less obvious.
+_ALL_CONTRACTS: dict[str, tuple[bool, bool]] = {
+    **ROLE_CONTRACT,
+    **RELAY_DISPATCHER_CONTRACT,
+}
+
+
 def _observe(conn: psycopg.Connection) -> dict[str, tuple[bool, bool]]:
     rows = conn.execute(
         "SELECT rolname, rolbypassrls, rolsuper FROM pg_roles WHERE rolname = ANY(%s)",
-        (list(ROLE_CONTRACT),),
+        (list(_ALL_CONTRACTS),),
     ).fetchall()
     return {str(r[0]): (bool(r[1]), bool(r[2])) for r in rows}
 
@@ -95,7 +108,10 @@ def bootstrap(conn: psycopg.Connection, *, dry_run: bool, repair: bool) -> int:
 
     wrong_existing = [
         violation
-        for violation in role_contract_violations(observed)
+        for violation in (
+            *role_contract_violations(observed),
+            *relay_dispatcher_violations(observed),
+        )
         if not violation.endswith("is missing")
     ]
     if wrong_existing and not repair:
@@ -108,7 +124,7 @@ def bootstrap(conn: psycopg.Connection, *, dry_run: bool, repair: bool) -> int:
             )
         return 1
 
-    for role, (want_bypass, want_super) in ROLE_CONTRACT.items():
+    for role, (want_bypass, want_super) in _ALL_CONTRACTS.items():
         identifier = sql.Identifier(role)
         wanted = _attributes(want_bypass, want_super)
 
