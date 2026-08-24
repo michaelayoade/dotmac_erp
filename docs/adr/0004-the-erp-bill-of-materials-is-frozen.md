@@ -168,12 +168,13 @@ With both effects supplied, `MISSING_EFFECTS` is empty and the assembly
 supplies everything the frozen selection declares. What remains before a module
 composes is the four-file change itself.
 
-The assembly supplies exactly three effects today — `tenant_scope_catalog.v1`,
-`module_database_roles.v1` and `idempotency_ledger.v1` — and the plan's blocked
-set is derived from that fact and compared against a declared one, so supplying
-an effect must delete its row in the same change that adds the migration.
+The assembly supplies exactly five effects today — `tenant_scope_catalog.v1`,
+`module_database_roles.v1`, `idempotency_ledger.v1`,
+`party_person_catalog.v1`, and `outbox_relay.v1` — and the plan's blocked set is
+derived from that fact and compared against a declared one, so supplying an
+effect must delete its row in the same change that adds the migration.
 
-Twenty-one modules are otherwise unblocked. Four have no installable artifact at
+Twenty-six modules are otherwise unblocked. Four have no installable artifact at
 all.
 
 ## Consequences
