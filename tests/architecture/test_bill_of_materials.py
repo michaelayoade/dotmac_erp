@@ -109,7 +109,7 @@ def test_every_capability_has_exactly_one_owner() -> None:
         "a capability is module-owned or retained, never both: "
         f"{sorted(set(carried) & set(retained))}"
     )
-    assert bom.ERP_CAPABILITY_CENSUS == set(carried) | set(retained)
+    assert set(carried) | set(retained) == bom.ERP_CAPABILITY_CENSUS
 
 
 def test_every_selected_module_carries_at_least_one_capability() -> None:
@@ -169,9 +169,9 @@ def test_the_pin_detector_reads_the_real_pins() -> None:
 def test_the_pins_are_exact() -> None:
     """A frozen product cannot float. No caret, tilde, range or wildcard."""
     for distribution, version in _module_pins(_pyproject()).items():
-        assert not any(
-            character in version for character in "^~><*,"
-        ), f"{distribution} pins a range: {version!r}"
+        assert not any(character in version for character in "^~><*,"), (
+            f"{distribution} pins a range: {version!r}"
+        )
 
 
 # --------------------------------------------------------------------------

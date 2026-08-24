@@ -146,9 +146,7 @@ COMPOSITION_STATES: Final[frozenset[str]] = frozenset({"composed", "selected"})
 #: exists at the census revision — it cannot occur while module closure holds,
 #: and is kept so a future BOM row for a module that must be created has a
 #: truthful state instead of borrowing `unreleased`.
-RELEASE_STATES: Final[frozenset[str]] = frozenset(
-    {"released", "unreleased", "unbuilt"}
-)
+RELEASE_STATES: Final[frozenset[str]] = frozenset({"released", "unreleased", "unbuilt"})
 
 
 @dataclass(frozen=True)
@@ -838,8 +836,7 @@ EXCLUDED: Final[tuple[ExcludedModule, ...]] = (
         distribution="dotmac-sites",
         owner="pending-decision",
         rationale=(
-            "Marketing site estate. See ADR-0004 open decision 1, with "
-            "dotmac-content."
+            "Marketing site estate. See ADR-0004 open decision 1, with dotmac-content."
         ),
     ),
     ExcludedModule(
