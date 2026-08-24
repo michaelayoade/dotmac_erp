@@ -136,6 +136,23 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             # as-built owners only. Reintroduction adopts the released
             # dotmac-auth-oidc package and re-registers an owner here.
             SOTService(
+                name="identity.party_projection",
+                module="app.services.party_projection",
+                owns=(
+                    "Person-to-kernel-Party catalogue projection writes",
+                    "Person-to-kernel-PartyPerson profile projection writes",
+                    "person party retirement on Person deletion",
+                ),
+                notes=(
+                    "public.people remains authoritative; the projection "
+                    "supplies party_person_catalog.v1 and mutates in the "
+                    "caller's ERP-owned transaction. parties.id IS people.id, "
+                    "so the projection needs no mapping and is rebuildable "
+                    "from the source alone. Authority moves when dotmac-party "
+                    "and dotmac-people are composed and cut over."
+                ),
+            ),
+            SOTService(
                 name="auth.rbac",
                 module="app.services.rbac",
                 owns=(

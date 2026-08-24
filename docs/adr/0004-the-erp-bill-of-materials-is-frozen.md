@@ -151,7 +151,11 @@ Three obligations fall out of it, and none of them is a version bump:
 - **ERP must supply `party_person_catalog.v1`.** `dotmac-people`,
   `dotmac-party` and `dotmac-expenses` require it and no assembly migration
   provides it. That is the identity seam, and it gates the whole HR and expense
-  column of the product.
+  column of the product. Closed on 2026-08-24 by
+  `20260824_party_person_projection`, which hosts `public.parties` and
+  `public.party_persons` as a projection of `public.people` on the same
+  create-or-adopt, refuse-drift pattern as the tenant catalogue. Those three
+  modules moved to tranche 1; tranche 2 keeps its number and is now empty.
 - **ERP must supply `outbox_relay.v1`.** `dotmac-approvals` and
   `dotmac-durable-timers` require it. Durable Timers in turn underpins
   reminders, escalations and scheduled runs.

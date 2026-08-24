@@ -28,7 +28,7 @@ semantics.
 | Domain | Owns | Rule in one line |
 |---|---|---|
 | `organization_tenancy` | org context priming, ORM filter, RLS GUCs | Both enforcement layers are primed together or not at all |
-| `identity_access` | auth flows, guards, RBAC catalogue | Person is the single login identity; RBAC scope decision pending (ledger finding 2) |
+| `identity_access` | auth flows, guards, RBAC catalogue, Person→Party catalogue projection | Person is the single login identity and the person authority; the kernel party catalogue is a rebuildable projection of it, never a second identity; RBAC scope decision pending (ledger finding 2) |
 | `configuration_control` | settings writes + history, specs, flags | One canonical settings writer; flags never substitute for authorization |
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |

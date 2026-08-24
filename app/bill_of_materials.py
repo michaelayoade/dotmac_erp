@@ -1161,6 +1161,7 @@ ASSEMBLY_SUPPLIED_EFFECTS: Final[frozenset[str]] = frozenset(
         "tenant_scope_catalog.v1",
         "module_database_roles.v1",
         "idempotency_ledger.v1",
+        "party_person_catalog.v1",
     }
 )
 
@@ -1189,7 +1190,7 @@ class CompositionStep:
 TRANCHE_NAMES: Final[dict[int, str]] = {
     0: "composed",
     1: "unblocked by the kernel repin",
-    2: "blocked on party_person_catalog.v1",
+    2: "blocked on party_person_catalog.v1 — closed 2026-08-24, no members",
     3: "blocked on outbox_relay.v1",
     4: "blocked on release",
 }
@@ -1437,10 +1438,13 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
         lineage_head=None,
         requires_effects=(),
     ),
-    # -- tranche 2: the assembly does not supply party_person_catalog.v1 -----
+    # -- tranche 2 is empty: party_person_catalog.v1 is now supplied by
+    #    20260824_party_person_projection, so its three members moved to
+    #    tranche 1. The tranche keeps its number and its name -- renumbering
+    #    would silently rewrite what an earlier review approved.
     CompositionStep(
         distribution="dotmac-people",
-        tranche=2,
+        tranche=1,
         kernel_floor="0.1.0a71",
         schema="mod_people",
         lineage_branch="people",
@@ -1449,7 +1453,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     ),
     CompositionStep(
         distribution="dotmac-party",
-        tranche=2,
+        tranche=1,
         kernel_floor="0.1.0a85",
         schema="mod_party",
         lineage_branch="party",
@@ -1458,7 +1462,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     ),
     CompositionStep(
         distribution="dotmac-expenses",
-        tranche=2,
+        tranche=1,
         kernel_floor="0.1.0a85",
         schema="mod_expenses",
         lineage_branch="expenses",
@@ -1534,11 +1538,6 @@ KERNEL_FLOOR_DEMANDED_BY_SELECTION: Final = "0.1.0a91"
 #: a new assembly migration ERP must write before the modules listed can be
 #: composed at all — not a repin, not a version bump.
 MISSING_EFFECTS: Final[dict[str, tuple[str, ...]]] = {
-    "party_person_catalog.v1": (
-        "dotmac-expenses",
-        "dotmac-party",
-        "dotmac-people",
-    ),
     "outbox_relay.v1": (
         "dotmac-approvals",
         "dotmac-durable-timers",
