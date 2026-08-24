@@ -304,6 +304,13 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "projection drift via the canonical rebuild writer."
                 ),
             ),
+            # The kernel relay planes (public.outbox_events,
+            # public.platform_outbox_events) deliberately have NO entry here.
+            # This registry names live runtime owners, and 20260824_outbox_relay
+            # supplies schema and privilege only — there is no ERP service
+            # deciding anything on those tables, and naming a migration as an
+            # owner would be a name that cannot be imported or reached. The
+            # boundary it creates is recorded in this domain's rule instead.
             SOTService(
                 name="events.hooks",
                 module="app.services.hooks.registry",
@@ -314,7 +321,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         rule=(
             "Cross-module consequences ride the outbox inside the business "
             "transaction; handlers never commit; external delivery goes "
-            "through service hooks with signed, retried delivery."
+            "through service hooks with signed, retried delivery. ERP business "
+            "events ride platform.event_outbox; composed-module events ride "
+            "the kernel relay planes. One authority each, neither reading the "
+            "other's rows."
         ),
     ),
     DomainSOT(

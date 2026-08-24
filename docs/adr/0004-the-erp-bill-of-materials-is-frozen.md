@@ -158,7 +158,15 @@ Three obligations fall out of it, and none of them is a version bump:
   modules moved to tranche 1; tranche 2 keeps its number and is now empty.
 - **ERP must supply `outbox_relay.v1`.** `dotmac-approvals` and
   `dotmac-durable-timers` require it. Durable Timers in turn underpins
-  reminders, escalations and scheduled runs.
+  reminders, escalations and scheduled runs. Closed on 2026-08-24 by
+  `20260824_outbox_relay`, which hosts both relay planes, their claim/settle
+  pairs and the dispatcher privilege boundary for MODULE events only —
+  `platform.event_outbox` remains ERP's business-event authority. Both members
+  moved to tranche 1; tranche 3 keeps its number and is now empty.
+
+With both effects supplied, `MISSING_EFFECTS` is empty and the assembly
+supplies everything the frozen selection declares. What remains before a module
+composes is the four-file change itself.
 
 The assembly supplies exactly three effects today — `tenant_scope_catalog.v1`,
 `module_database_roles.v1` and `idempotency_ledger.v1` — and the plan's blocked

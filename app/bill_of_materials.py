@@ -1162,6 +1162,7 @@ ASSEMBLY_SUPPLIED_EFFECTS: Final[frozenset[str]] = frozenset(
         "module_database_roles.v1",
         "idempotency_ledger.v1",
         "party_person_catalog.v1",
+        "outbox_relay.v1",
     }
 )
 
@@ -1191,7 +1192,7 @@ TRANCHE_NAMES: Final[dict[int, str]] = {
     0: "composed",
     1: "unblocked by the kernel repin",
     2: "blocked on party_person_catalog.v1 — closed 2026-08-24, no members",
-    3: "blocked on outbox_relay.v1",
+    3: "blocked on outbox_relay.v1 — closed 2026-08-24, no members",
     4: "blocked on release",
 }
 
@@ -1469,10 +1470,12 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
         lineage_head="ex_0001_expenses",
         requires_effects=(_TENANT, _ROLES, _PARTY_PERSON),
     ),
-    # -- tranche 3: the assembly does not supply outbox_relay.v1 ------------
+    # -- tranche 3 is empty: outbox_relay.v1 is now supplied by
+    #    20260824_outbox_relay, so both members moved to tranche 1. The
+    #    tranche keeps its number for the same reason tranche 2 does.
     CompositionStep(
         distribution="dotmac-approvals",
-        tranche=3,
+        tranche=1,
         kernel_floor="0.1.0a67",
         schema="mod_approvals",
         lineage_branch="approvals",
@@ -1481,7 +1484,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     ),
     CompositionStep(
         distribution="dotmac-durable-timers",
-        tranche=3,
+        tranche=1,
         kernel_floor="0.1.0a72",
         schema="mod_timers",
         lineage_branch="durable_timers",
@@ -1537,9 +1540,9 @@ KERNEL_FLOOR_DEMANDED_BY_SELECTION: Final = "0.1.0a91"
 #: Effects a selected module needs that this assembly does not supply. Each is
 #: a new assembly migration ERP must write before the modules listed can be
 #: composed at all — not a repin, not a version bump.
-MISSING_EFFECTS: Final[dict[str, tuple[str, ...]]] = {
-    "outbox_relay.v1": (
-        "dotmac-approvals",
-        "dotmac-durable-timers",
-    ),
-}
+#: Empty since 2026-08-24: the assembly supplies every effect the frozen
+#: selection declares. The map stays, and the derived-versus-declared check
+#: stays with it — the next module added to the bill of materials may well
+#: need an effect nothing provides, and an absent map would answer that
+#: question with silence.
+MISSING_EFFECTS: Final[dict[str, tuple[str, ...]]] = {}
