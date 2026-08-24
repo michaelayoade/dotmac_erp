@@ -69,10 +69,7 @@ def test_both_projection_tables_are_rls_forced_and_tenant_bound() -> None:
         assert f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY" in source
         assert f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY" in source
     assert source.count("app_current_tenant_id()") >= 4
-    assert (
-        'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {table} TO app_user'
-        in source
-    )
+    assert "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {table} TO app_user" in source
     assert "for table in PROJECTED_TABLES:" in source
 
 

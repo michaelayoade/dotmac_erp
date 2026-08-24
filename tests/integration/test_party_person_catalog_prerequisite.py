@@ -169,27 +169,39 @@ def test_a_person_party_cannot_be_read_from_another_tenant(engine: Engine) -> No
             text("SELECT set_config('app.current_tenant', :tenant, true)"),
             {"tenant": str(second_tenant)},
         )
-        assert connection.scalar(
-            text("SELECT count(*) FROM public.parties WHERE id = :id"),
-            {"id": party_id},
-        ) == 0
-        assert connection.scalar(
-            text("SELECT count(*) FROM public.party_persons WHERE party_id = :id"),
-            {"id": party_id},
-        ) == 0
+        assert (
+            connection.scalar(
+                text("SELECT count(*) FROM public.parties WHERE id = :id"),
+                {"id": party_id},
+            )
+            == 0
+        )
+        assert (
+            connection.scalar(
+                text("SELECT count(*) FROM public.party_persons WHERE party_id = :id"),
+                {"id": party_id},
+            )
+            == 0
+        )
 
         connection.execute(
             text("SELECT set_config('app.current_tenant', :tenant, true)"),
             {"tenant": str(first_tenant)},
         )
-        assert connection.scalar(
-            text("SELECT count(*) FROM public.parties WHERE id = :id"),
-            {"id": party_id},
-        ) == 1
-        assert connection.scalar(
-            text("SELECT count(*) FROM public.party_persons WHERE party_id = :id"),
-            {"id": party_id},
-        ) == 1
+        assert (
+            connection.scalar(
+                text("SELECT count(*) FROM public.parties WHERE id = :id"),
+                {"id": party_id},
+            )
+            == 1
+        )
+        assert (
+            connection.scalar(
+                text("SELECT count(*) FROM public.party_persons WHERE party_id = :id"),
+                {"id": party_id},
+            )
+            == 1
+        )
     finally:
         transaction.rollback()
         connection.close()

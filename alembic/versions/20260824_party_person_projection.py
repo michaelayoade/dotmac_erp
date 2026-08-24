@@ -87,12 +87,12 @@ def _unique_column_sets(table: str) -> set[tuple[str, ...]]:
 def _assert_catalog_shape() -> None:
     """Refuse a pre-existing catalogue that is not the one we would create."""
     inspector = sa.inspect(op.get_bind())
-    if not _PARTY_COLUMNS <= _column_names("parties"):
+    if not _column_names("parties") >= _PARTY_COLUMNS:
         raise RuntimeError(
             "public.parties is missing kernel Party columns "
             f"{sorted(_PARTY_COLUMNS - _column_names('parties'))!r}"
         )
-    if not _PERSON_COLUMNS <= _column_names("party_persons"):
+    if not _column_names("party_persons") >= _PERSON_COLUMNS:
         raise RuntimeError(
             "public.party_persons is missing kernel PartyPerson columns "
             f"{sorted(_PERSON_COLUMNS - _column_names('party_persons'))!r}"
@@ -142,8 +142,7 @@ def _create_catalog() -> None:
             ),
             sa.UniqueConstraint("tenant_id", "id", name="uq_parties_tenant_id"),
             sa.CheckConstraint(
-                "party_type IN ("
-                f"'{PERSON_PARTY_TYPE}', '{ORGANIZATION_PARTY_TYPE}')",
+                f"party_type IN ('{PERSON_PARTY_TYPE}', '{ORGANIZATION_PARTY_TYPE}')",
                 name="ck_parties_party_type",
             ),
             schema="public",
@@ -222,9 +221,7 @@ def _protect_catalog() -> None:
     # catalogue current. Isolation here is the FORCEd policy above, not a
     # withheld grant.
     for table in PROJECTED_TABLES:
-        op.execute(
-            f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {table} TO app_user"
-        )
+        op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {table} TO app_user")
 
 
 def _assert_projection_is_representable() -> None:
