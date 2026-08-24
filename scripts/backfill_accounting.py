@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-"""Extract one organization's general ledger for the `dotmac-accounting` backfill.
+"""Inspect one organization's legacy general ledger for composition evidence.
 
-Read-only in every mode that runs today.  The extraction half of the backfill is
-finished and can be run against a live database now; the load half refuses until
-the module is pinned and `ACCOUNTING_COMPOSITION_ENABLED` is set, because a
-loader written against an unreleased signature is guesswork that a passing test
-cannot catch.
+Permanently read-only. ADR-0003 makes the clean ERP a governed-opening install,
+not a replay of the legacy ledger. This tool preserves the typed inventory and
+period digests needed for forensic review, but it has no load mode and is not a
+clean-instance bootstrap path.
 
-Running it before the module exists is the point: the plan it prints is the
-review artifact for the cutover.  It answers the questions that decide whether
-the backfill is a day or a quarter — how many accounts, how many periods, how
-many posted lines per period, and whether anything in ERP's chart of accounts
-has a classification the module has no mapping for.
+The plan it prints is evidence about the historical system: how many accounts,
+periods and posted lines it contains, and whether its chart uses a classification
+the module cannot represent. It does not authorize any of those rows for the
+clean installation.
 
-    # what would be backfilled, and is any of it unmappable?
+    # inspect legacy masters and report anything unmappable
     python3 scripts/backfill_accounting.py --org-id <uuid> --out plan.json
 
-    # per-period work list with ERP's acceptance digest for each period
+    # per-period legacy work list and digest
     python3 scripts/backfill_accounting.py --org-id <uuid> --periods
 
 `--periods` digests every posted line in the organization and is proportionate
@@ -40,17 +38,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from app.accounting_adoption import (  # noqa: E402
-    AccountingCompositionNotReady,
-    composition_state,
-)
+from app.accounting_adoption import composition_state  # noqa: E402
 from app.db.session_context import session_for_org  # noqa: E402
 from app.services.finance.gl.accounting_backfill import (  # noqa: E402
     AccountingBackfillExtractor,
     BackfillNotPossible,
     MasterBackfill,
     PeriodWorkItem,
-    load_masters,
 )
 
 
@@ -70,14 +64,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help="Restrict the period work list to one fiscal year code (e.g. FY2026)",
     )
     parser.add_argument("--out", help="Write JSON here instead of stdout")
-    parser.add_argument(
-        "--load",
-        action="store_true",
-        help=(
-            "Write the extracted masters into the module. Refuses unless the "
-            "module is installed AND ACCOUNTING_COMPOSITION_ENABLED is true."
-        ),
-    )
     return parser.parse_args(argv)
 
 
@@ -98,8 +84,8 @@ def _period_payload(item: PeriodWorkItem) -> dict[str, Any]:
     """Counts and the digest — never the lines themselves.
 
     A plan holding every posted line would be a copy of the ledger with none of
-    its guarantees.  What a reviewer needs is the size of each period and the
-    value the module will have to reproduce.
+    its guarantees. A reviewer needs only the size and digest of each historical
+    period.
     """
     return {
         "fiscal_year_code": item.scope.fiscal_year_code,
@@ -156,15 +142,11 @@ def main(argv: list[str] | None = None) -> int:
                     ],
                 }
         except BackfillNotPossible as exc:
-            print(f"backfill cannot represent ERP faithfully: {exc}", file=sys.stderr)
+            print(
+                f"legacy inspection cannot represent ERP faithfully: {exc}",
+                file=sys.stderr,
+            )
             return 3
-
-        if args.load:
-            try:
-                load_masters(masters)
-            except AccountingCompositionNotReady as exc:
-                print(f"--load refused: {exc}", file=sys.stderr)
-                return 3
 
     rendered = json.dumps(payload, indent=2, default=str)
     if args.out:

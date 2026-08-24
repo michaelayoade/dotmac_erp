@@ -143,8 +143,10 @@ returns.
 
 `app/accounting_adoption.py` declares the composition as data: distribution and
 import names, the migration version location, the required database effects, the
-ERP-relation → module-relation map, and the module-only relations the backfill
-must synthesise. It imports nothing from the module.
+ERP-relation → module-relation map, and the module-only relations the bootstrap
+must synthesise. Under ADR-0003 those relations are created from a reviewed
+clean-bootstrap pack, not copied from historical transaction tables. It imports
+nothing from the module.
 
 `ACCOUNTING_COMPOSITION_ENABLED` (default `false`) is the single deploy-time
 knob. `require_composition_ready()` refuses when the module is absent *or* when
@@ -277,21 +279,22 @@ revision named `extend_alembic_version` widened the column. The test checks that
 width against the live catalog, so if anyone ever narrows it the warning becomes
 true again and the build says so.
 
-## Backfill
+## Legacy evidence and clean bootstrap
 
 `app/services/finance/gl/accounting_backfill.py`, driven by
-`scripts/backfill_accounting.py`. Read-only in every mode that runs today; the
-loader refuses until the pin exists.
+`scripts/backfill_accounting.py`, is permanently read-only under ADR-0003. It
+describes the legacy chart, calendar, dimensions and period effects for forensic
+review. It has no load mode and is not a clean-instance bootstrap path.
 
 Masters are extracted row by row (categories, accounts, fiscal years, fiscal
 periods, dimension definitions and values). Transactions are extracted as a
 **work list** — one item per fiscal period with its counts and ERP's acceptance
 digest — because a plan holding every posted line would be a copy of the ledger
-with none of its guarantees. The loader walks the list one period at a time and
-shadow-compares each period as it lands, so a divergence is attributable to a
-period rather than to "the backfill".
+with none of its guarantees. The work list remains evidence about the old books;
+none of those transaction rows is admitted to the clean installation.
 
-Three shape changes the backfill performs rather than copies:
+Three shape changes the future reviewed-master bootstrap performs rather than
+copying database rows:
 
 1. **Dimensions.** ERP carries four fixed dimension columns; the module carries a
    generic registry. The extraction synthesises four dimensions and reads their
@@ -311,13 +314,17 @@ Three shape changes the backfill performs rather than copies:
    tests check each table against the ERP enum it maps, so a new enum member is a
    build failure rather than a mid-run one.
 
-## Shadow comparison
+## Rehearsal comparison
 
-`app/services/finance/gl/accounting_shadow.py`. Both sides produce the same
+`app/services/finance/gl/accounting_shadow.py` remains the exact legacy digest
+reader and pure comparison foundation. Both sides produce the same
 normalised `LedgerFact` values and `digest_facts` folds either stream into a
 `PeriodLedgerDigest`, so the comparison logic is a pure function over exact
 `Decimal`s — unit-tested today, unchanged on the day of the cutover. The ERP
 producer is real; the module producer refuses until composition is enabled.
+ADR-0003 no longer requires reproducing every historical period. Gate D uses
+the same exactness rules for the approved opening state and uses versioned
+business fixtures to prove new posting behaviour on an isolated clean database.
 
 The **posted ledger** is what is compared, not journals (intent) and not
 balances (a derived cache). Three levels, because they fail differently:
@@ -377,39 +384,27 @@ Each gate is a separate authorized change. None is implied by the one before it.
   `ac_0001_accounting` applied through ERP's real Alembic environment against a
   production-shaped non-production predecessor database. `dotmac-files` is NOT
   repinned. `ACCOUNTING_COMPOSITION_ENABLED` stays false. The module-side digest
-  reader and master loader deliberately do NOT land here — they belong with the
-  backfill that uses them.
-- **Gate D — backfill and shadow.** Backfill masters, then periods oldest first,
-  comparing each as it lands. Acceptance is `ShadowComparison.matches` at all
-  three levels for every period, with the unbalanced-period list empty.
+  reader and clean master loader deliberately do NOT land here — they belong
+  with the governed bootstrap that uses them.
+- **Gate D — clean bootstrap and rehearsal.** ADR-0003 supersedes historical
+  replay. Implement a private, digest-bound manifest; bootstrap reviewed
+  masters through module commands; admit one Finance-approved opening state;
+  and prove representative ERP business consequences on two independently
+  created clean databases. A synthetic second tenant makes scope failures
+  observable. The detailed plan is
+  `docs/architecture/accounting-gate-d-plan.md`.
 
-  **Planned in detail: `docs/architecture/accounting-gate-d-plan.md`**, on
-  measured evidence in
-  `docs/inventories/accounting-backfill-survey-2026-08-21.md`. The survey
-  settled the scope rule — backfill exactly the journals that carry posted
-  ledger lines, 190,179 of 206,071 — and cleared the one thing that could have
-  blocked the gate behind a Starter release: ERP's four journal types with no
-  module counterpart have zero rows. Four small data defects are the first work,
-  and with one organization the rehearsal must manufacture a second tenant,
-  because a mis-scoped write would otherwise have no observable symptom.
+  The known legacy accounting defects remain in the historical ERP and do not
+  enter the clean installation. They no longer block software composition.
+  Finance approval of the opening trial balance and supporting schedules still
+  blocks final cutover because Engineering cannot choose the opening position.
 
-  Gate G forensics added a fifth Gate D population: 429 currently effective
-  journal-keyed bank-fee postings over 39 statement-line identities. The
-  namespace and ₦7,764.68 gross population are measured. The 2026-08-23 exact
-  detector refused all 429 because their ledger account sets differ from the one
-  line-keyed canonical per identity; it emitted no exact-duplicate schedule.
-  The separate wrong-account detector subsequently proved 858/858 target
-  journal-line parity, bound the 2025 target / March 2026 canonical / August
-  2026 reversal timing, and rehearsed 429 balanced linked reversals twice with
-  identical SHA-256 plan digest
-  `dbeab5dafe0d27bafa834fde43c35ae9f36996ba5a332623784619cddcbd9148`.
-  No production row changed. Exact-plan Finance approval, a guarded operator
-  and post-write proof remain Gate D requirements; aggregate count or amount is
-  not authorization.
-
-- **Gate E — dual write and parity.** Both sides post; every posting is compared.
-  Divergence is a stop, not a warning.
-- **Gate F — cutover.** One writer at a time, in the order the writer ledger
+- **Gate E — caller composition and parity.** Repoint callers in coherent
+  producer slices to the module contract. Run the same accepted fixture input
+  through the retiring and replacement paths on isolated databases; divergence
+  is a stop, not a warning. Production dual-writing is not used to copy legacy
+  history.
+- **Gate F — clean-instance cutover.** One writer at a time, in the order the writer ledger
   gives, lowering the ledger row by row. Each row's `final_state` says what
   "done" means for it: `writer_removed` deletes the path, `tool_repointed` gives
   the tool the module contract, `tool_archived` moves the file to
@@ -423,14 +418,11 @@ Each gate is a separate authorized change. None is implied by the one before it.
   they were tracking. Reaching that state is checkable — it is what the two
   ledgers reduce to, not a judgement call.
 
-  **Additional blocking condition: every remaining APPROVED-but-unposted journal
-  must carry an explicit disposition.** At the 2026-08-21 survey there were
-  14,263, of which at least 2,038 belong to the known stranded repost cohort.
-  Retiring ERP's GL writers while any remain undisposed would strand live
-  workflow state inside a retired system — work someone approved, that was never
-  posted, and that no longer has a system able to post it. The remediation track
-  is described in `accounting-gate-d-plan.md`; it runs in parallel with gate D
-  and blocks here.
+  **Additional blocking condition: every still-live operational item must carry
+  an explicit cutover disposition.** It is completed before freeze, admitted
+  through its owning domain's typed open-item contract, or deliberately left in
+  the read-only archive because no obligation remains. Historical GL cleanup is
+  not required, but a clean installation cannot silently strand live work.
 
 Production deployment and any authority move are separate authorizations, and
 neither is granted by this document.

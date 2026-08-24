@@ -22,7 +22,7 @@ as ratcheted transitional state.
 
 What this module is for:
 
-- the backfill extractor and the shadow comparator read the relation mapping
+- the legacy extractor and the rehearsal comparator read the relation mapping
   from ONE place instead of each carrying a copy;
 - `tests/architecture/test_accounting_composition.py` asserts the composition is
   real (exact pin, installed manifest, composed lineage) and still inert;
@@ -70,7 +70,8 @@ EXPECTED_VERSION: Final = "0.1.0a1"
 #:
 #: The pin and the lineage are now in place; the flag is what still separates
 #: "the tables exist" from "the module decides anything", and it stays false
-#: until a backfill, a shadow comparison and an authorized cutover say otherwise.
+#: until a clean bootstrap, behavioural rehearsal and authorized cutover say
+#: otherwise.
 COMPOSITION_ENABLED: Final[bool] = (
     os.getenv("ACCOUNTING_COMPOSITION_ENABLED", "false").lower() == "true"
 )
@@ -147,12 +148,12 @@ RETAINED_ERP_RELATIONS: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: Module relations with no ERP counterpart — these are BACKFILL INPUTS ERP must
-#: synthesise, not rows it can copy.  ERP carries dimensions as fixed columns on
+#: Module relations with no ERP counterpart — these are CLEAN BOOTSTRAP INPUTS
+#: ERP must synthesise, not rows it can copy. ERP carries dimensions as fixed columns on
 #: `gl.journal_entry_line` (business unit, cost centre, project, segment) and
 #: carries period status as a column on `gl.fiscal_period` rather than as an
-#: event stream.  Both are shape changes the backfill has to perform, and naming
-#: them here is what stops the backfill from being written as a straight copy.
+#: event stream. Both are shape changes the bootstrap has to perform, and naming
+#: them here is what stops the bootstrap from being written as a straight copy.
 MODULE_ONLY_TABLES: Final[tuple[str, ...]] = (
     "accounting_dimensions",
     "accounting_dimension_values",
@@ -182,6 +183,29 @@ EXPECTED_MODULE_TABLES: Final[frozenset[str]] = frozenset(
 #: fails it.
 RETAINED_GL_DECISIONS: Final[frozenset[str]] = frozenset({"gl.balances"})
 
+#: ADR-0003's complete admission vocabulary for the clean installation. A new
+#: data class is an architecture decision, not an importer convenience.
+CLEAN_INSTALL_INPUT_CLASSES: Final[frozenset[str]] = frozenset(
+    {
+        "reconciled_master",
+        "open_operational_item",
+        "approved_accounting_opening",
+        "continuity_identity",
+    }
+)
+
+#: Legacy accounting history stays in the read-only ERP archive. Naming the
+#: relations here gives bootstrap guards a shared fail-closed vocabulary and
+#: prevents a future operator from treating "not in the pack" as sufficient.
+CLEAN_INSTALL_FORBIDDEN_HISTORY_RELATIONS: Final[frozenset[str]] = frozenset(
+    {
+        "gl.journal_entry",
+        "gl.journal_entry_line",
+        "gl.posted_ledger_line",
+        "gl.posting_batch",
+    }
+)
+
 
 class AccountingCompositionNotReady(RuntimeError):
     """Raised when something asks for the module before the gates are met."""
@@ -191,7 +215,7 @@ def module_relation_for(erp_relation: str) -> str | None:
     """The module relation that will own `erp_relation`, or `None` if ERP keeps it.
 
     Raises for a relation that is not a GL relation at all, so a typo in a
-    backfill or comparator surfaces as a name error rather than as a silently
+    bootstrap or comparator surfaces as a name error rather than as a silently
     skipped table.
     """
     try:
@@ -206,9 +230,9 @@ def module_relation_for(erp_relation: str) -> str | None:
 def migrating_relations() -> tuple[str, ...]:
     """The ERP relations whose authority moves, in a stable order.
 
-    Ordered by dependency so a backfill or a comparison can iterate it directly:
-    categories and accounts, then the fiscal calendar, then journals, lines and
-    the posted ledger.
+    Ordered by dependency so a clean bootstrap or comparison can iterate it
+    directly: categories and accounts, then the fiscal calendar, then journals,
+    lines and the posted ledger.
     """
     return tuple(
         relation for relation, owner in RELATION_OWNERSHIP.items() if owner is not None
@@ -260,7 +284,7 @@ def require_composition_ready() -> str:
     differs: a missing pin is a deploy that never installed the wheel, while a
     disabled flag is a deploy that installed it and has not been told to use it.
     Neither is allowed to degrade into "carry on against ERP's own tables" —
-    that is precisely how a shadow run silently measures nothing.
+    that is precisely how a rehearsal silently measures nothing.
     """
     installed = _module_version()
     if installed is None:
@@ -281,6 +305,8 @@ def require_composition_ready() -> str:
 __all__ = [
     "AccountingCompositionNotReady",
     "COMPOSITION_ENABLED",
+    "CLEAN_INSTALL_FORBIDDEN_HISTORY_RELATIONS",
+    "CLEAN_INSTALL_INPUT_CLASSES",
     "DISTRIBUTION",
     "EXPECTED_MODULE_TABLES",
     "EXPECTED_VERSION",
