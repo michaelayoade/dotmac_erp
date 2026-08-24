@@ -46,23 +46,24 @@ def _imported_names(source: str) -> set[str]:
 
 
 def test_clean_install_admission_vocabulary_is_closed() -> None:
-    assert accounting_adoption.CLEAN_INSTALL_INPUT_CLASSES == {
+    assert {
         "reconciled_master",
         "open_operational_item",
         "approved_accounting_opening",
         "continuity_identity",
-    }
+    } == accounting_adoption.CLEAN_INSTALL_INPUT_CLASSES
 
 
 def test_legacy_accounting_history_is_explicitly_forbidden() -> None:
-    assert accounting_adoption.CLEAN_INSTALL_FORBIDDEN_HISTORY_RELATIONS == {
+    assert {
         "gl.journal_entry",
         "gl.journal_entry_line",
         "gl.posted_ledger_line",
         "gl.posting_batch",
-    }
-    assert accounting_adoption.CLEAN_INSTALL_FORBIDDEN_HISTORY_RELATIONS <= set(
-        accounting_adoption.RELATION_OWNERSHIP
+    } == accounting_adoption.CLEAN_INSTALL_FORBIDDEN_HISTORY_RELATIONS
+    assert (
+        set(accounting_adoption.RELATION_OWNERSHIP)
+        >= accounting_adoption.CLEAN_INSTALL_FORBIDDEN_HISTORY_RELATIONS
     )
 
 
