@@ -54,6 +54,28 @@ Apply is unavailable until the durable dry run is complete and error-free.
 Provider reads occur between the claim transaction and the settlement
 transaction, so storage latency never extends a partition lease transaction.
 
+## Clean-instance cutover and legacy history
+
+ADR-0003 makes the new composable ERP and the historical ERP two systems with
+non-overlapping time authority. The historical ERP owns every pre-cutover
+transaction and becomes read-only at final cutover. The clean ERP owns only the
+approved opening state, explicitly admitted live operational items and all
+post-cutover decisions. It never reads the legacy database at runtime.
+
+Data crosses only through an owning domain's typed, idempotent adapter with
+stable source identity, content fingerprint and reconciliation evidence.
+Reconciled masters, open operational items, approved accounting opening state
+and continuity identities are the complete admission vocabulary. Historical
+transaction tables are retained in the archive rather than copied. The clean
+database therefore does not become a second owner or a competing
+interpretation of old books.
+
+For Accounting specifically, Finance owns admission of the opening trial
+balance and supporting subsidiary schedules; `dotmac-accounting` owns the
+balanced opening journal and every later journal/ledger transition. ERP owns
+only adapters and the explicitly retained balance projection. The detailed
+gates are in `docs/architecture/accounting-adoption-boundary.md`.
+
 ## Sub service workflows and ERP backoffice support
 
 `sync.sub_operational_context` owns ERP's organization-scoped mirror of Sub

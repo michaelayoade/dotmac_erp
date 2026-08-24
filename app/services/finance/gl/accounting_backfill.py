@@ -1,13 +1,13 @@
-"""Extracts ERP's general ledger into the shape `dotmac-accounting` accepts.
+"""Extracts ERP's legacy general ledger as read-only composition evidence.
 
-A backfill is the step that lets shadow comparison mean anything: until the
-module holds the same chart of accounts, the same fiscal calendar and the same
-dimensions, every comparison fails for reasons that are not posting behaviour.
+ADR-0003 selects a governed-opening clean installation and forbids replaying the
+legacy transaction history into it. This module therefore inventories the
+legacy chart, calendar, dimensions and period effects for forensic review only.
+It deliberately exports no loader.
 
-This module does the half that can be done and verified NOW — reading ERP and
-producing a typed, exact plan — and stops cleanly at the half that cannot: the
-module is not installed, so nothing here writes to it.  `load_masters` refuses
-rather than degrading.
+The clean bootstrap is a separate future adapter over reviewed private input and
+the module's published commands. Keeping it separate prevents a useful legacy
+reader from quietly becoming a table-copy migration.
 
 ## Masters are rows; transactions are a work list
 
@@ -17,11 +17,9 @@ single organization's ledger runs to millions of lines, and a "plan" holding all
 of them would be a copy of the database with none of its guarantees.
 
 So the transactional half is extracted as a WORK LIST — one item per fiscal
-period, carrying its counts and ERP's digest for that period.  The loader walks
-it one period at a time, and each period is shadow-compared the moment it lands
-rather than after the whole run.  A divergence is then attributable to a period
-instead of to "the backfill", which is the difference between a fix and a
-restart.
+period, carrying its counts and ERP's digest for that period. The work list
+describes the legacy record without copying its lines or granting them admission
+to the clean system.
 
 ## Three shape changes this must perform, not copy
 
@@ -201,7 +199,7 @@ class MasterBackfill:
 
 @dataclass(frozen=True)
 class PeriodWorkItem:
-    """One period of transactional backfill, with its acceptance evidence."""
+    """One historical period inventory item with exact digest evidence."""
 
     scope: PeriodScope
     fiscal_period_id: UUID
@@ -213,9 +211,9 @@ class PeriodWorkItem:
 class AccountingBackfillExtractor:
     """Reads ERP.  Writes nothing, anywhere — including to ERP.
 
-    Safe to run against a live database while ERP remains the authority, which
-    it must be: the extraction has to be repeatable during the shadow phase, and
-    an extraction with a side effect is not.
+    Safe to run against a live database while ERP remains the authority. The
+    extraction has to be repeatable as forensic evidence, and an extraction
+    with a side effect is not.
     """
 
     def __init__(self, db: Session) -> None:
@@ -476,24 +474,6 @@ class AccountingBackfillExtractor:
         )
 
 
-def load_masters(masters: MasterBackfill) -> None:
-    """Write the extracted masters into the module — refuses until it exists.
-
-    Deliberately a named seam rather than an omission.  The extraction above is
-    the part that depends on ERP's shapes and is therefore the part worth
-    settling and testing early; the write is a straight walk over the module's
-    own create contracts, and writing it against an unreleased signature would
-    be guesswork that a passing test could not catch.
-    """
-    from app.accounting_adoption import require_composition_ready
-
-    require_composition_ready()
-    raise NotImplementedError(
-        "the module-side loader lands with the pin; see docs/architecture/"
-        "accounting-adoption-boundary.md gate C"
-    )
-
-
 __all__ = [
     "ACCOUNT_TYPE_TO_KIND",
     "IFRS_CATEGORY_TO_ACCOUNT_CLASS",
@@ -508,5 +488,4 @@ __all__ = [
     "FiscalYearRow",
     "MasterBackfill",
     "PeriodWorkItem",
-    "load_masters",
 ]

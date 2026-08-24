@@ -4,9 +4,14 @@ Measured facts about Dotmac Technologies' general ledger, taken before the
 Accounting backfill was designed. Facts, not mandates: the plan that rests on
 them is `docs/architecture/accounting-gate-d-plan.md`.
 
-**Re-run before cutover.** `scripts/accounting_backfill_survey.sql` is the exact
-query that produced this. A survey whose result is a year old is a guess, and
-every number below is a moving target — the ledger gains rows daily.
+**Planning use superseded 2026-08-24.** ADR-0003 selects a governed-opening
+clean installation and forbids historical journal replay. This survey remains
+evidence about the legacy system; it is no longer an import scope or cutover
+baseline.
+
+`scripts/accounting_backfill_survey.sql` is the exact query that produced this.
+Re-running it may support legacy forensics, but clean-instance acceptance uses
+the approved opening pack and fresh-database rehearsal instead.
 
 ## How it was taken
 

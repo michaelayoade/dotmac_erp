@@ -184,6 +184,21 @@ tenancy, permissions, settings, database schema or migration lineage.
 
 ## Adoption slices
 
+**2026-08-24 — Clean-instance composition direction.** ADR-0003 supersedes the
+planned replay of 190,179 legacy posted journals. ERP will finish module
+composition against fresh databases, import only reviewed masters, live open
+items, continuity identities and a Finance-approved opening accounting state,
+then retain the legacy ERP as the read-only owner of pre-cutover history. Known
+legacy accounting defects remain evidence in that archive; they no longer block
+software composition and are never copied into `mod_accounting`.
+
+This changes Gate D, not the as-built Gate C claim. Accounting remains composed
+and disabled, no runtime owner has moved, and production is untouched. The
+legacy extractor loses its load seam and remains a read-only forensic tool. The
+new bootstrap must use module public contracts, stable source identities,
+content fingerprints and exact control evidence, and must be reproducible on
+two independently migrated clean databases before any caller is repointed.
+
 **2026-08-21 — Accounting gate C: composed and disabled.** ERP pins
 `dotmac-accounting==0.1.0a1` exactly and composes `mod_accounting` into its
 Alembic graph. Kernel repinned `0.1.0a83` → `0.1.0a85` — **demanded by the

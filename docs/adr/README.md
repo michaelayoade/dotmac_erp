@@ -36,3 +36,4 @@ is exactly what blocked E8 for two weeks.
 |---|---|---|
 | [0001](0001-kernel-idempotency-is-erps-only-at-most-once-owner.md) | The kernel is ERP's only at-most-once owner | Accepted |
 | [0002](0002-bank-statement-numbers-take-the-module-grammar.md) | Bank statement numbers take the module grammar (`STMT-2026-00001`) | Accepted |
+| [0003](0003-clean-install-starts-from-governed-opening-state.md) | The composable ERP starts from governed opening state | Accepted |

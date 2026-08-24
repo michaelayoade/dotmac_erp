@@ -240,12 +240,16 @@ def test_every_declared_dimension_column_exists_on_both_erp_line_tables() -> Non
         assert hasattr(PostedLedgerLine, binding.line_column), binding.line_column
 
 
-def test_the_module_side_loader_refuses_while_the_module_is_absent() -> None:
-    from app.accounting_adoption import AccountingCompositionNotReady
-    from app.services.finance.gl.accounting_backfill import load_masters
+def test_the_legacy_extractor_exports_no_module_loader() -> None:
+    """ADR-0003 makes this evidence path permanently read-only.
 
-    with pytest.raises(AccountingCompositionNotReady):
-        load_masters(None)  # type: ignore[arg-type]
+    A loader appearing here would route around the reviewed clean-bootstrap
+    manifest and make legacy rows importable again.
+    """
+    from app.services.finance.gl import accounting_backfill
+
+    assert "load_masters" not in accounting_backfill.__all__
+    assert not hasattr(accounting_backfill, "load_masters")
 
 
 def test_every_mapped_class_is_a_real_module_account_class() -> None:
