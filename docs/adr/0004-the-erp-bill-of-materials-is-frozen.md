@@ -142,8 +142,12 @@ four against each other.
 Three obligations fall out of it, and none of them is a version bump:
 
 - **The kernel must be repinned before anything in tranche 1 composes.** The
-  selection floors at `0.1.0a91` (`dotmac-payments`); ERP pins `0.1.0a85`. Every
-  other selected module floors at or below `0.1.0a88`.
+  selection floors at `0.1.0a91` (`dotmac-payments`); ERP pinned `0.1.0a85` when
+  this was written. Every other selected module floors at or below `0.1.0a88`.
+  Closed on 2026-08-24 by the repin to `0.1.0a94` — the latest published kernel,
+  chosen over the minimum `0.1.0a91` so steps 3 through 7 do not force a second
+  repin. The check became "the pin satisfies every SELECTED module's floor",
+  which is the stronger question the gap had been hiding.
 - **ERP must supply `party_person_catalog.v1`.** `dotmac-people`,
   `dotmac-party` and `dotmac-expenses` require it and no assembly migration
   provides it. That is the identity seam, and it gates the whole HR and expense

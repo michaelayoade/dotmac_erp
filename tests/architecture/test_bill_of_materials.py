@@ -413,33 +413,38 @@ def _alpha(version: str) -> int:
     return int(version.rsplit("a", 1)[1])
 
 
-def test_the_kernel_pin_satisfies_every_composed_module_floor() -> None:
+def test_the_kernel_pin_satisfies_every_selected_module_floor() -> None:
+    """Not just the composed ones.
+
+    Until 2026-08-24 this could only ask about tranche 0, because the pin did
+    not yet satisfy the rest of the selection. `dotmac-payments` floors at
+    0.1.0a91 against a pinned 0.1.0a85, and the gap was carried as a declared
+    obligation rather than a check. The repin to 0.1.0a94 closes it, so the
+    question becomes the stronger one: can this kernel load everything the
+    bill of materials selects?
+    """
     pinned = _module_pins(_pyproject())["dotmac-kernel"]
     for step in bom.COMPOSITION_PLAN:
-        if step.tranche != 0 or step.kernel_floor is None:
+        if step.kernel_floor is None:
             continue
         assert _alpha(pinned) >= _alpha(step.kernel_floor), (
             f"{step.distribution} floors at {step.kernel_floor}, kernel is {pinned}"
         )
 
 
-def test_the_outstanding_kernel_repin_is_visible() -> None:
-    """The selection demands more kernel than the assembly pins.
-
-    This is a real obligation of step 2, not a defect: composing tranche 1
-    starts with the repin. When the repin lands, both halves move here in the
-    same change.
-    """
-    demanded = bom.KERNEL_FLOOR_DEMANDED_BY_SELECTION
+def test_the_demanded_floor_is_the_highest_one_in_the_plan() -> None:
     floors = [
         step.kernel_floor
         for step in bom.COMPOSITION_PLAN
         if step.kernel_floor is not None
     ]
-    assert _alpha(demanded) == max(_alpha(floor) for floor in floors)
-
-    pinned = _module_pins(_pyproject())["dotmac-kernel"]
-    assert _alpha(pinned) < _alpha(demanded), (
-        "the kernel now satisfies the whole selection — delete this check and "
-        "let test_the_kernel_pin_satisfies_every_composed_module_floor carry it"
+    assert _alpha(bom.KERNEL_FLOOR_DEMANDED_BY_SELECTION) == max(
+        _alpha(floor) for floor in floors
     )
+
+
+def test_the_kernel_floor_detector_is_sensitive() -> None:
+    """A module floored above the pin must be caught, not rounded away."""
+    pinned = _module_pins(_pyproject())["dotmac-kernel"]
+    impossible = f"0.1.0a{_alpha(pinned) + 1}"
+    assert _alpha(pinned) < _alpha(impossible)
