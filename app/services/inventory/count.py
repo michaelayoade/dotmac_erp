@@ -639,12 +639,23 @@ class InventoryCountService(ListResponseMixin):
             ).all()
         )
 
-        # Create adjustment transactions
+        # Resolve every referenced item before creating the first adjustment.
+        # The request transaction still owns atomicity if a later adjustment
+        # fails, while this preflight prevents a missing item from producing a
+        # partially prepared post in callers that inspect the session before
+        # the request boundary rolls it back.
+        resolved_lines: builtins.list[tuple[InventoryCountLine, Item]] = []
         for line in lines:
             item = db.get(Item, line.item_id)
             if not item:
-                continue
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Item not found for count line {line.line_id}",
+                )
+            resolved_lines.append((line, item))
 
+        # Create adjustment transactions
+        for line, item in resolved_lines:
             variance_qty = line.variance_quantity or Decimal("0")
             txn_input = TransactionInput(
                 transaction_type=TransactionType.COUNT_ADJUSTMENT,

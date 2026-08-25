@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from datetime import date as date_type
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlencode
@@ -39,8 +40,6 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 if TYPE_CHECKING:
-    from decimal import Decimal
-
     from app.models.inventory.inventory_transaction import InventoryTransaction
 
 logger = logging.getLogger(__name__)
@@ -81,6 +80,26 @@ def _form_value(form_data: object, key: str) -> object:
     if isinstance(value, (list, tuple)):
         return value[-1] if value else None
     return value
+
+
+def _required_counted_quantity(raw_value: object) -> Decimal:
+    """Parse an explicitly supplied, finite inventory-count quantity."""
+    value = _safe_form_text(raw_value)
+    if not value:
+        raise HTTPException(status_code=400, detail="Counted quantity is required")
+    try:
+        quantity = Decimal(value)
+    except (InvalidOperation, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Counted quantity must be a valid number",
+        ) from exc
+    if not quantity.is_finite():
+        raise HTTPException(
+            status_code=400,
+            detail="Counted quantity must be a finite number",
+        )
+    return quantity
 
 
 def _serials_url(**params: object) -> str:
@@ -5279,15 +5298,12 @@ class OperationsInventoryWebService:
             raise HTTPException(status_code=401, detail="Authentication required")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Authentication required")
-        try:
-            InventoryCountService.start_count(
-                db,
-                org_id,
-                coerce_uuid(count_id),
-                user_id,
-            )
-        except Exception as e:
-            logger.warning("Failed to start count %s: %s", count_id, e)
+        InventoryCountService.start_count(
+            db,
+            org_id,
+            coerce_uuid(count_id),
+            user_id,
+        )
         return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     def complete_count_response(
@@ -5303,14 +5319,11 @@ class OperationsInventoryWebService:
         org_id = auth.organization_id
         if org_id is None:
             raise HTTPException(status_code=401, detail="Authentication required")
-        try:
-            InventoryCountService.complete_count(
-                db,
-                org_id,
-                coerce_uuid(count_id),
-            )
-        except Exception as e:
-            logger.warning("Failed to complete count %s: %s", count_id, e)
+        InventoryCountService.complete_count(
+            db,
+            org_id,
+            coerce_uuid(count_id),
+        )
         return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     def post_count_response(
@@ -5329,15 +5342,12 @@ class OperationsInventoryWebService:
             raise HTTPException(status_code=401, detail="Authentication required")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Authentication required")
-        try:
-            InventoryCountService.post_count(
-                db,
-                org_id,
-                coerce_uuid(count_id),
-                user_id,
-            )
-        except Exception as e:
-            logger.warning("Failed to post count %s: %s", count_id, e)
+        InventoryCountService.post_count(
+            db,
+            org_id,
+            coerce_uuid(count_id),
+            user_id,
+        )
         return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     async def record_count_line_response(
@@ -5349,7 +5359,6 @@ class OperationsInventoryWebService:
         db: Session,
     ) -> RedirectResponse:
         """Record counted quantity for a count line."""
-        from decimal import Decimal, InvalidOperation
         from uuid import UUID as UUID_Type
 
         from app.models.inventory.inventory_count_line import InventoryCountLine
@@ -5364,49 +5373,36 @@ class OperationsInventoryWebService:
             raise HTTPException(status_code=401, detail="Authentication required")
 
         form = await request.form()
-        counted_qty_str = _safe_form_text(
+        counted_qty = _required_counted_quantity(
             form.get("counted_quantity") or form.get(f"counted_quantity_{line_id}")
         )
         reason_code = _safe_form_text(form.get("reason_code")) or None
         notes = _safe_form_text(form.get("notes")) or None
 
-        try:
-            counted_qty = Decimal(counted_qty_str) if counted_qty_str else Decimal("0")
-        except (InvalidOperation, ValueError):
-            counted_qty = Decimal("0")
-
         # Get the existing line to extract item_id, warehouse_id, lot_id
         try:
             lid = UUID_Type(line_id)
-        except ValueError:
-            return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid count line ID") from exc
 
         line = db.get(InventoryCountLine, lid)
         if not line or str(line.count_id) != count_id:
             return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
-        try:
-            InventoryCountService.record_count(
-                db,
-                org_id,
-                coerce_uuid(count_id),
-                CountLineInput(
-                    item_id=line.item_id,
-                    warehouse_id=line.warehouse_id,
-                    counted_quantity=counted_qty,
-                    lot_id=line.lot_id,
-                    reason_code=reason_code,
-                    notes=notes,
-                ),
-                user_id,
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to record count line %s on count %s: %s",
-                line_id,
-                count_id,
-                e,
-            )
+        InventoryCountService.record_count(
+            db,
+            org_id,
+            coerce_uuid(count_id),
+            CountLineInput(
+                item_id=line.item_id,
+                warehouse_id=line.warehouse_id,
+                counted_quantity=counted_qty,
+                lot_id=line.lot_id,
+                reason_code=reason_code,
+                notes=notes,
+            ),
+            user_id,
+        )
         return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     async def bulk_record_count_lines_response(
@@ -5417,7 +5413,6 @@ class OperationsInventoryWebService:
         db: Session,
     ) -> RedirectResponse:
         """Bulk record counted quantities for selected count lines."""
-        from decimal import Decimal, InvalidOperation
         from uuid import UUID as UUID_Type
 
         from app.services.common import coerce_uuid
@@ -5445,18 +5440,15 @@ class OperationsInventoryWebService:
         for raw_line_id in selected_line_ids:
             try:
                 line_id = UUID_Type(raw_line_id)
-            except ValueError:
-                continue
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid selected count line ID",
+                ) from exc
 
-            counted_qty_str = _safe_form_text(
+            counted_qty = _required_counted_quantity(
                 form.get(f"counted_quantity_{raw_line_id}")
             )
-            try:
-                counted_qty = (
-                    Decimal(counted_qty_str) if counted_qty_str else Decimal("0")
-                )
-            except (InvalidOperation, ValueError):
-                counted_qty = Decimal("0")
 
             bulk_inputs.append(
                 BulkCountLineInput(
@@ -5468,21 +5460,13 @@ class OperationsInventoryWebService:
         if not bulk_inputs:
             return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
-        try:
-            InventoryCountService.record_count_bulk(
-                db=db,
-                organization_id=org_id,
-                count_id=coerce_uuid(count_id),
-                inputs=bulk_inputs,
-                counted_by_user_id=user_id,
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed bulk count save on count %s for %s lines: %s",
-                count_id,
-                len(bulk_inputs),
-                e,
-            )
+        InventoryCountService.record_count_bulk(
+            db=db,
+            organization_id=org_id,
+            count_id=coerce_uuid(count_id),
+            inputs=bulk_inputs,
+            counted_by_user_id=user_id,
+        )
         return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     # ------------------------------------------------------------------
