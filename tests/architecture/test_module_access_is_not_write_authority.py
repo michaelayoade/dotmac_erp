@@ -24,6 +24,25 @@ This file is what stops that regrowing, and it does three separable jobs:
 frozen by a two-directional ratchet against a named per-file allowlist below:
 the count may not rise, and it may not fall without lowering the allowlist in
 the same reviewed change. A follow-up branch empties it.
+
+## Scope: all of `app/web/**` (2026-08-25 amendment)
+
+The detector originally read `app/web/fixed_assets.py` and `app/web/finance/**`
+and nothing else, which is 20% of the web adapter. The premise ADR-0006 states
+is fleet-wide, so the remaining 80% was not exempt from it — it was simply
+unmonitored, which is the failure mode the fleet's own guard-exemption rule
+(ADR-0018) names. The identical defect could be added to `app/web/people/**`,
+`app/web/inventory.py`, `app/web/projects.py` or `app/web/support.py` and no
+test would have noticed.
+
+The detector now walks every `app/web/**/*.py`. `WEB_BACKLOG` below records
+what that measured — 489 mutating routes authorized by module visibility alone
+across 41 files — on the same two-directional ratchet, and
+`UNAUTHENTICATED_WEB_MUTATIONS` separates out the strictly worse category
+underneath it: mutating routes reachable with no authenticated principal at
+all. Job (2) widened too and found its own debt —
+`WEB_UNSEEDABLE_PERMISSIONS`. None of these tables is an assessment. All three
+are debt markers.
 """
 
 from __future__ import annotations
@@ -36,8 +55,9 @@ import pytest
 from scripts.seed_rbac import DEFAULT_PERMISSIONS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FIXED_ASSETS = REPO_ROOT / "app" / "web" / "fixed_assets.py"
-FINANCE_WEB = REPO_ROOT / "app" / "web" / "finance"
+WEB_ROOT = REPO_ROOT / "app" / "web"
+FIXED_ASSETS = WEB_ROOT / "fixed_assets.py"
+FINANCE_WEB = WEB_ROOT / "finance"
 
 MUTATING_METHODS = frozenset({"post", "put", "patch", "delete"})
 
@@ -72,8 +92,58 @@ MODULE_ACCESS_GUARDS = frozenset(
         "require_settings_access",
         "require_support_access",
         "require_training_access",
+        # --- added 2026-08-25 with the app/web/** scope extension ---
+        #
+        # Every name below was classified by READING ITS BODY in
+        # `app/web/deps.py`, not by its name. Each has an admit path that lets
+        # a caller through on module visibility alone, which is what puts it
+        # here; the granular permission each also mentions is unreachable for
+        # anyone who already holds the module scope.
+        #
+        # `require_discipline_cases_{read,create,update}` and
+        # `require_discipline_workflow_manage` all open with
+        # `if auth.is_admin or auth.has_module_access("people")` and only THEN
+        # consider `discipline:cases:create` / `discipline:workflow:manage`.
+        # Any holder of `hr:access` — or of the `hr_manager`, `hr_director`,
+        # `payroll_admin`, `payroll_approver` role names, which
+        # `accessible_modules` also maps to "people" — passes without holding
+        # any discipline permission. The name says capability; the body says
+        # module visibility.
+        #
+        # `require_self_service_discipline_manager` admits
+        # `discipline:access`, which IS the discipline module's visibility
+        # scope (`accessible_modules` derives the module from exactly that
+        # string). Its other admit paths — full discipline permissions, or a
+        # position tree showing direct reports — are real; the visibility one
+        # is not, and one bad path is enough.
+        #
+        # `require_private_performance_mode` and `require_government_pms_mode`
+        # are ROUTER-level dependencies on `app/web/people/perf.py` and
+        # `app/web/people/pms.py`. They chain `require_hr_access` and then
+        # compare the organization's `PerformanceMode` against the route
+        # family. A deployment mode is a statement about which features are
+        # switched on, not about who may use them: it cannot distinguish two
+        # people in the same organization, so it adds no authority over the
+        # `require_hr_access` it wraps.
+        "require_discipline_cases_read",
+        "require_discipline_cases_create",
+        "require_discipline_cases_update",
+        "require_discipline_workflow_manage",
+        "require_self_service_discipline_manager",
+        "require_private_performance_mode",
+        "require_government_pms_mode",
     }
 )
+
+# The strictly worse subset. `optional_web_auth` does not authorize and does
+# not authenticate either — its docstring says so ("returns a guest context if
+# no valid authentication is provided") and its body returns
+# `WebAuthContext(is_authenticated=False)` on every failure path rather than
+# raising. A mutating route whose only dependency is this one, or which has no
+# `require_*`/`optional_*` dependency at all, is reachable by an anonymous
+# caller. That is a different and larger finding than a coarse guard, so it is
+# counted separately below instead of disappearing into WEB_BACKLOG's total.
+NO_AUTHORIZATION_GUARDS = frozenset({"optional_web_auth"})
 
 # ---------------------------------------------------------------------------
 # Backlog allowlist — GRANDFATHERED, NOT REVIEWED-AND-CORRECT.
@@ -109,6 +179,136 @@ FINANCE_BACKLOG: dict[str, int] = {
     "sales_order.py": 10,
     "settings.py": 8,
     "tax.py": 12,
+}
+
+# ---------------------------------------------------------------------------
+# The rest of the web adapter — GRANDFATHERED, NOT REVIEWED-AND-CORRECT.
+#
+# Same defect, same semantics, same ratchet as FINANCE_BACKLOG above; a
+# separate table because it is a separate, later-measured scope and because
+# the finance decomposition is in flight against the one above. Keys are paths
+# relative to `app/web/`, so nested modules keep their directory.
+#
+# 489 mutating routes across 41 files whose only authorization is module
+# visibility. Nobody has confirmed that any individual route here is
+# acceptable. These are not exemptions and this table is not an assessment: it
+# is a measurement, taken so the debt is bounded and cannot grow silently.
+#
+# Absent because they are already granular, not because they were skipped:
+# `app/web/fleet.py` (every mutating route carries a
+# `require_fleet_<resource>_manage` built from `require_fleet_permissions`,
+# which ANDs a real `fleet:<resource>:manage` permission onto module access),
+# `app/web/people/weekly_meeting_reports.py`
+# (`require_any_web_permission(["performance:weekly_reports:<action>"])`),
+# and `app/web/admin.py` / `app/web/admin_sla_policies.py` (both mount their
+# router with `dependencies=[Depends(require_admin_access)]`, an `is_admin`
+# authority tier — see `_router_level_guards`).
+#
+# Decomposing these is a separate, prioritized program. See the 2026-08-25
+# amendment in docs/adr/0006-module-access-is-not-write-authority.md.
+# ---------------------------------------------------------------------------
+WEB_BACKLOG: dict[str, int] = {
+    "admin_crm_sync.py": 5,
+    "admin_dotmac_sub_sync.py": 3,
+    "careers.py": 4,
+    "help.py": 6,
+    "inventory.py": 31,
+    "notifications.py": 2,
+    "onboarding_portal.py": 1,
+    "people/attendance.py": 10,
+    "people/hr/competencies.py": 2,
+    "people/hr/discipline.py": 12,
+    "people/hr/employee_extended.py": 11,
+    "people/hr/employees.py": 11,
+    "people/hr/handbook.py": 4,
+    "people/hr/info_changes.py": 4,
+    "people/hr/job_descriptions.py": 6,
+    "people/hr/lifecycle.py": 10,
+    "people/hr/locations.py": 4,
+    "people/hr/onboarding_admin.py": 5,
+    "people/hr/organization.py": 9,
+    "people/hr/positions.py": 4,
+    "people/hr/skills.py": 3,
+    "people/import_export.py": 2,
+    "people/leave.py": 17,
+    "people/payroll.py": 35,
+    "people/perf.py": 44,
+    "people/pms.py": 60,
+    "people/recruit.py": 23,
+    "people/scheduling.py": 10,
+    "people/self_service.py": 17,
+    "people/settings.py": 3,
+    "people/training.py": 50,
+    "procurement.py": 6,
+    "profile.py": 2,
+    "projects.py": 39,
+    "public_sector/appropriations.py": 2,
+    "public_sector/commitments.py": 1,
+    "public_sector/funds.py": 1,
+    "public_sector/virements.py": 3,
+    "settings.py": 1,
+    "support.py": 23,
+    "workflow_tasks.py": 3,
+}
+
+# ---------------------------------------------------------------------------
+# The severe subset of WEB_BACKLOG: mutating routes an ANONYMOUS caller
+# reaches. Counted per file, and a strict subset of the entry above it.
+#
+# `admin_crm_sync.py` (mounted at `/admin/sync/crm` whenever the `crm` module
+# is enabled) and `admin_dotmac_sub_sync.py` (prefix `/admin/sync/dotmac-sub`,
+# currently imported by nothing, so unreachable until somebody mounts it) both
+# guard every route with `optional_web_auth` and neither router carries a
+# `dependencies=` list. Unlike `admin.py` next to them, nothing supplies
+# `require_admin_access`. These are NOT grandfathered-acceptable: they save
+# integration credentials and mint and revoke API keys.
+#
+# `careers.py` and `onboarding_portal.py` are deliberately public portals and
+# their premise is enforceable and stated: the four careers routes are a job
+# application, an application-status email request, and offer accept/decline —
+# the first two are anonymous intake behind a captcha and a rate limit, and
+# the last two plus the onboarding task completion authorize by possession of
+# an unguessable per-record token checked in the handler (`get_offer_by_token`
+# / `_require_valid_token`), which is bearer-of-secret authority rather than
+# session authority. They are listed so the count is honest, not because they
+# are wrong.
+# ---------------------------------------------------------------------------
+UNAUTHENTICATED_WEB_MUTATIONS: dict[str, int] = {
+    "admin_crm_sync.py": 5,
+    "admin_dotmac_sub_sync.py": 3,
+    "careers.py": 4,
+    "onboarding_portal.py": 1,
+}
+
+# ---------------------------------------------------------------------------
+# Job (2) — "every guarded permission is real" — measured over the widened
+# scope. GRANDFATHERED, NOT REVIEWED-AND-CORRECT.
+#
+# `app/web/inventory.py`'s material-request routes are the mirror image of the
+# rest of this file: they DO carry granular guards, and the names those guards
+# ask for are not in `scripts/seed_rbac.py`'s catalogue, so no role can be
+# granted them. `has_permission` short-circuits on `auth.is_admin`, so the
+# effect is that six material-request routes plus three of their forms are
+# admin-only by accident rather than by decision, and every non-admin holder
+# of an inventory role gets a 403 nobody chose.
+#
+# Two spellings appear because `require_any_web_permission` lists both an
+# `inv:` and an `inventory:` form of the same act; neither exists. Values are
+# the number of guard sites naming that permission.
+#
+# Fixing it means adding rows to the seeded catalogue and deciding which roles
+# hold them, which is an authority grant and belongs in its own reviewed
+# change — not in a guard-extension branch. Recorded here so it is monitored
+# rather than merely known.
+# ---------------------------------------------------------------------------
+WEB_UNSEEDABLE_PERMISSIONS: dict[str, int] = {
+    "inv:material_requests:approve": 2,
+    "inv:material_requests:create": 5,
+    "inv:material_requests:delete": 1,
+    "inv:material_requests:submit": 2,
+    "inventory:material_requests:approve": 2,
+    "inventory:material_requests:delete": 1,
+    "inventory:material_requests:submit": 2,
 }
 
 
@@ -206,15 +406,82 @@ def _routes(source: str) -> list[tuple[int, str, set[str], list[str], list[str]]
     return found
 
 
+def _router_level_guards(source: str) -> list[str]:
+    """Guards applied to every route in the file by `APIRouter(dependencies=)`.
+
+    A per-route dependency is not the whole story. `app/web/admin.py` declares
+    `optional_web_auth` on all 35 of its mutating handlers and is nonetheless
+    admin-only, because its router is constructed with
+    `dependencies=[Depends(require_admin_access)]` — that runs first, for every
+    route, and `require_admin_access` tests `auth.is_admin`. Reading only the
+    argument defaults would report those 35 routes plus five more in
+    `admin_sla_policies.py` as unauthorized, which is false.
+
+    The reverse case is why this cannot simply exempt any file with a
+    router-level dependency: `people/perf.py` and `people/pms.py` also declare
+    one, and theirs (`require_private_performance_mode`,
+    `require_government_pms_mode`) are visibility guards wearing a deployment
+    mode — see MODULE_ACCESS_GUARDS. A router-level guard is folded into the
+    route's guard set and then classified like any other.
+
+    Only `APIRouter(...)` construction is read. `include_router(...,
+    dependencies=[...])` in `app/main.py` adds guards too, but no HTML router
+    is mounted that way — every occurrence there is on a JSON `/api` router —
+    so following it would add reach without adding coverage.
+    """
+    guards: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        called = (
+            func.id
+            if isinstance(func, ast.Name)
+            else func.attr
+            if isinstance(func, ast.Attribute)
+            else ""
+        )
+        if called != "APIRouter":
+            continue
+        for keyword in node.keywords:
+            if keyword.arg != "dependencies":
+                continue
+            guards.extend(
+                n for n in _dependency_names(keyword.value) if _is_guard_name(n)
+            )
+    return guards
+
+
 def _visibility_only_mutations(source: str) -> list[str]:
     """Mutating routes whose only authorization is module visibility."""
+    router_guards = _router_level_guards(source)
     offenders = []
     for lineno, name, methods, guards, _ in _routes(source):
         if not methods & MUTATING_METHODS:
             continue
-        if guards and not all(g in MODULE_ACCESS_GUARDS for g in guards):
+        effective = [*guards, *router_guards]
+        if effective and not all(g in MODULE_ACCESS_GUARDS for g in effective):
             continue
-        held = ",".join(sorted(set(guards))) or "no guard at all"
+        held = ",".join(sorted(set(effective))) or "no guard at all"
+        offenders.append(f"{lineno}:{name} ({held})")
+    return offenders
+
+
+def _unauthenticated_mutations(source: str) -> list[str]:
+    """The subset of the above that no authenticated principal is needed for.
+
+    A route qualifies when its effective guard set is empty or contains
+    nothing but NO_AUTHORIZATION_GUARDS.
+    """
+    router_guards = _router_level_guards(source)
+    offenders = []
+    for lineno, name, methods, guards, _ in _routes(source):
+        if not methods & MUTATING_METHODS:
+            continue
+        effective = {*guards, *router_guards}
+        if effective - NO_AUTHORIZATION_GUARDS:
+            continue
+        held = ",".join(sorted(effective)) or "no guard at all"
         offenders.append(f"{lineno}:{name} ({held})")
     return offenders
 
@@ -255,6 +522,25 @@ def test_fixed_assets_still_has_mutating_routes_to_protect() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _web_modules() -> list[Path]:
+    """Every Python module under `app/web/`, the full adapter surface."""
+    return sorted(WEB_ROOT.rglob("*.py"))
+
+
+def _web_backlog_modules() -> list[Path]:
+    """`_web_modules()` minus the two scopes with their own rule above.
+
+    Fixed Assets is decomposed and held at zero by rule (a); `app/web/finance`
+    is ratcheted by FINANCE_BACKLOG. Excluding them here keeps every mutating
+    route in exactly one table, so the totals add up rather than overlap.
+    """
+    return [
+        path
+        for path in _web_modules()
+        if path != FIXED_ASSETS and FINANCE_WEB not in path.parents
+    ]
+
+
 def _guarded_permissions(paths: list[Path]) -> dict[str, set[str]]:
     by_permission: dict[str, set[str]] = {}
     for path in paths:
@@ -292,8 +578,12 @@ def test_every_guarded_permission_is_seedable(paths: list[Path]) -> None:
 
 
 def test_no_route_guard_requests_a_wildcard_permission() -> None:
-    """A wildcard is HELD, never REQUESTED (ADR-0006 decision 3)."""
-    paths = [FIXED_ASSETS, *sorted(FINANCE_WEB.glob("*.py"))]
+    """A wildcard is HELD, never REQUESTED (ADR-0006 decision 3).
+
+    Scoped to the whole web adapter since 2026-08-25. It passes there with no
+    allowlist: `fa:*` really was the only requested wildcard in `app/web/**`.
+    """
+    paths = _web_modules()
     offenders = {
         perm: sorted(sites)
         for perm, sites in _guarded_permissions(paths).items()
@@ -451,3 +741,256 @@ def test_fixed_assets_is_not_in_the_finance_backlog() -> None:
     """Fixed Assets is fixed, not grandfathered — it must never acquire a row
     here as a way of getting a regression past the (a) rule."""
     assert "fixed_assets.py" not in FINANCE_BACKLOG
+
+
+# ---------------------------------------------------------------------------
+# Sensitivity for the widened scope
+#
+# A ratchet that has never been shown to bite on the surface it newly claims
+# to cover is not evidence. Each proof below is two-sided: the planted defect
+# is reported, and the corrected version goes quiet.
+# ---------------------------------------------------------------------------
+
+
+_CLEAN_PEOPLE_ROUTER = """
+from fastapi import APIRouter, Depends
+from app.web.deps import require_hr_access, require_web_permission
+
+router = APIRouter(prefix="/people/hr/employees")
+
+@router.get("")
+def list_employees(auth=Depends(require_hr_access)):
+    ...
+
+@router.post("/{employee_id}/terminate")
+def terminate(employee_id: str, auth=Depends(require_web_permission("hr:employees:terminate"))):
+    ...
+"""
+
+_PLANTED_PEOPLE_VIOLATION = """
+@router.post("/{employee_id}/salary")
+def change_salary(employee_id: str, auth=Depends(require_hr_access)):
+    ...
+"""
+
+
+def test_the_detector_fires_outside_finance_and_fixed_assets() -> None:
+    """The widened scope's own two-sided proof, half one.
+
+    `require_hr_access` is `has_module_access("people")` and nothing else, so
+    a mutating People route holding it alone is the ADR-0006 defect in the
+    module the widened scope exists to reach.
+    """
+    offenders = _visibility_only_mutations(
+        _CLEAN_PEOPLE_ROUTER + _PLANTED_PEOPLE_VIOLATION
+    )
+    assert len(offenders) == 1, offenders
+    assert "change_salary" in offenders[0]
+    assert "require_hr_access" in offenders[0]
+
+
+def test_the_detector_goes_quiet_outside_finance_when_the_route_is_granular() -> None:
+    """...and half two."""
+    assert _visibility_only_mutations(_CLEAN_PEOPLE_ROUTER) == []
+
+
+_ADMIN_STYLE_ROUTER = """
+from fastapi import APIRouter, Depends
+from app.web.deps import optional_web_auth, require_admin_access
+
+router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin_access)])
+
+@router.post("/settings/paystack")
+def update_paystack(auth=Depends(optional_web_auth)):
+    ...
+"""
+
+_UNMOUNTED_ADMIN_STYLE_ROUTER = _ADMIN_STYLE_ROUTER.replace(
+    ", dependencies=[Depends(require_admin_access)]", ""
+)
+
+
+def test_a_router_level_authority_guard_clears_its_routes() -> None:
+    """`app/web/admin.py`'s shape: `optional_web_auth` per route, and a
+    router-level `require_admin_access` that actually decides. Without this
+    the widened scan would have reported 40 false positives, and a table of
+    40 false positives is how a ratchet gets deleted."""
+    assert _visibility_only_mutations(_ADMIN_STYLE_ROUTER) == []
+
+
+def test_dropping_the_router_level_guard_is_detected() -> None:
+    """The other half: `app/web/admin_crm_sync.py`'s shape — the same routes
+    with nothing supplying the router-level guard. The detector must not
+    credit a guard that is not there."""
+    offenders = _visibility_only_mutations(_UNMOUNTED_ADMIN_STYLE_ROUTER)
+    assert len(offenders) == 1, offenders
+    assert "update_paystack" in offenders[0]
+    assert "optional_web_auth" in offenders[0]
+
+
+def test_a_router_level_visibility_guard_does_not_clear_its_routes() -> None:
+    """`people/pms.py`'s shape. A router-level dependency is folded in and
+    then classified; being router-level does not make it authority."""
+    source = _ADMIN_STYLE_ROUTER.replace(
+        "require_admin_access", "require_government_pms_mode"
+    )
+    offenders = _visibility_only_mutations(source)
+    assert len(offenders) == 1, offenders
+    assert "require_government_pms_mode" in offenders[0]
+
+
+def test_the_unauthenticated_detector_separates_the_severe_case() -> None:
+    """A coarse guard and no guard are not the same finding."""
+    coarse = _visibility_only_mutations(_PLANTED_PEOPLE_VIOLATION)
+    assert len(coarse) == 1
+    assert _unauthenticated_mutations(_PLANTED_PEOPLE_VIOLATION) == []
+
+    anonymous = _unauthenticated_mutations(_UNMOUNTED_ADMIN_STYLE_ROUTER)
+    assert len(anonymous) == 1, anonymous
+    assert "update_paystack" in anonymous[0]
+    assert _unauthenticated_mutations(_ADMIN_STYLE_ROUTER) == []
+
+
+def test_the_extended_module_access_guards_are_real_dependencies() -> None:
+    """Every name added to MODULE_ACCESS_GUARDS on 2026-08-25 must still be
+    defined somewhere under `app/web/`. A frozenset entry for a guard that has
+    been renamed away silently stops classifying anything, and the routes it
+    used to cover would leave the backlog without anyone deciding to."""
+    added = {
+        "require_discipline_cases_read",
+        "require_discipline_cases_create",
+        "require_discipline_cases_update",
+        "require_discipline_workflow_manage",
+        "require_self_service_discipline_manager",
+        "require_private_performance_mode",
+        "require_government_pms_mode",
+    }
+    defined: set[str] = set()
+    for path in _web_modules():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                defined.add(node.name)
+    assert added <= defined, (
+        f"MODULE_ACCESS_GUARDS names no-longer-defined guards: {sorted(added - defined)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The rest-of-web backlog ratchet
+# ---------------------------------------------------------------------------
+
+
+def _observed_web_backlog() -> dict[str, int]:
+    observed: dict[str, int] = {}
+    for path in _web_backlog_modules():
+        count = len(_visibility_only_mutations(path.read_text(encoding="utf-8")))
+        if count:
+            observed[path.relative_to(WEB_ROOT).as_posix()] = count
+    return observed
+
+
+def test_the_web_backlog_is_a_two_directional_ratchet() -> None:
+    observed = _observed_web_backlog()
+    recorded = WEB_BACKLOG
+
+    grew = {f: observed[f] for f in observed if observed[f] > recorded.get(f, 0)}
+    shrank = {
+        f: observed.get(f, 0) for f in recorded if observed.get(f, 0) < recorded[f]
+    }
+
+    assert observed == recorded, (
+        "the app/web module-visibility backlog moved.\n"
+        f"  grew (new debt, forbidden): {grew}\n"
+        f"  shrank (lower WEB_BACKLOG in the same change): {shrank}\n\n"
+        "A new mutating web route must carry a granular require_web_permission "
+        "guard naming the act it authorizes — app/web/finance/ap.py and "
+        "app/web/fixed_assets.py are the worked examples, and app/web/fleet.py "
+        "shows the module-access-AND-permission shape. When you decompose a "
+        "module, edit WEB_BACKLOG so the fix and the number land together. "
+        "These entries are grandfathered, not reviewed-and-correct: see the "
+        "2026-08-25 amendment in "
+        "docs/adr/0006-module-access-is-not-write-authority.md."
+    )
+
+
+def test_the_unauthenticated_web_mutations_are_a_two_directional_ratchet() -> None:
+    """The severe subset, ratcheted separately so it cannot be diluted by the
+    489 coarse ones sitting above it."""
+    observed: dict[str, int] = {}
+    for path in _web_backlog_modules():
+        count = len(_unauthenticated_mutations(path.read_text(encoding="utf-8")))
+        if count:
+            observed[path.relative_to(WEB_ROOT).as_posix()] = count
+
+    assert observed == UNAUTHENTICATED_WEB_MUTATIONS, (
+        "the set of mutating web routes reachable with NO authenticated "
+        f"principal moved: {observed} vs {UNAUTHENTICATED_WEB_MUTATIONS}.\n\n"
+        "A new one is never acceptable. Removing one means lowering "
+        "UNAUTHENTICATED_WEB_MUTATIONS in the same change. The two admin sync "
+        "routers in this table are a live defect, not a grandfathered "
+        "shape — see the 2026-08-25 amendment in "
+        "docs/adr/0006-module-access-is-not-write-authority.md."
+    )
+
+
+def test_the_unauthenticated_table_is_a_subset_of_the_web_backlog() -> None:
+    """Every anonymous mutation is also a visibility-only mutation, so the two
+    tables must agree about the files they share. If they ever disagree the
+    severe count is being kept somewhere the headline number does not reach."""
+    for name, count in UNAUTHENTICATED_WEB_MUTATIONS.items():
+        assert name in WEB_BACKLOG, f"{name} is missing from WEB_BACKLOG"
+        assert count <= WEB_BACKLOG[name], (
+            f"{name}: {count} anonymous mutations recorded but WEB_BACKLOG "
+            f"only records {WEB_BACKLOG[name]} visibility-only mutations"
+        )
+
+
+def test_the_web_backlog_names_only_files_that_exist() -> None:
+    """A ratchet against a deleted file silently stops ratcheting."""
+    missing = [name for name in WEB_BACKLOG if not (WEB_ROOT / name).is_file()]
+    assert missing == [], f"WEB_BACKLOG names missing files: {missing}"
+
+
+def test_the_web_backlog_does_not_overlap_the_finance_one() -> None:
+    """One route, one table. Overlap would double-count the headline number
+    and let a decomposition be claimed twice."""
+    overlapping = [name for name in WEB_BACKLOG if name.startswith("finance/")]
+    assert overlapping == [], f"WEB_BACKLOG reaches into finance: {overlapping}"
+    assert "fixed_assets.py" not in WEB_BACKLOG
+
+
+def test_the_web_scan_actually_reaches_the_whole_adapter() -> None:
+    """The scan must be measuring the surface it claims to. A glob that
+    silently stopped matching — a rename of `app/web`, a packaging change —
+    would empty every table above and pass."""
+    scanned = _web_backlog_modules()
+    assert len(scanned) >= 55, f"only {len(scanned)} web modules scanned"
+    relative = {p.relative_to(WEB_ROOT).as_posix() for p in scanned}
+    for expected in ("people/pms.py", "people/hr/employees.py", "support.py"):
+        assert expected in relative, f"{expected} is not being scanned"
+
+
+def test_the_unseedable_web_permission_backlog_is_a_two_directional_ratchet() -> None:
+    """Job (2) over the widened scope.
+
+    Fixed Assets and finance are held at zero by
+    `test_every_guarded_permission_is_seedable` above, which takes no
+    allowlist. The rest of the adapter gets one, because the only way to empty
+    it is to grant authority, and a guard-extension change must not do that.
+    """
+    catalogue = {key for key, _ in DEFAULT_PERMISSIONS}
+    observed = {
+        perm: len(sites)
+        for perm, sites in _guarded_permissions(_web_backlog_modules()).items()
+        if perm not in catalogue
+    }
+
+    assert observed == WEB_UNSEEDABLE_PERMISSIONS, (
+        "the set of route guards naming permissions scripts/seed_rbac.py never "
+        f"defines moved:\n  observed: {observed}\n  "
+        f"recorded: {WEB_UNSEEDABLE_PERMISSIONS}\n\n"
+        "A guard naming an unseeded permission is not protection — no role can "
+        "hold it, so the route answers 403 to everyone except an admin, whose "
+        "`is_admin` short-circuits `has_permission`. Seed the permission and "
+        "grant it deliberately, then remove the row here in the same change."
+    )

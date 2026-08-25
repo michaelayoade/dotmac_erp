@@ -192,3 +192,140 @@ existing 19-permission catalogue and the JSON API already express.
 **Give the web adapter its own permission names.** Rejected: two vocabularies
 for one act is how the API and the portal diverged in the first place. The
 web routes reuse the API's strings verbatim.
+
+## Amendment — 2026-08-25: the detector covers all of `app/web/**`
+
+The decision above is unchanged. What changes is the reach of the guard that
+enforces it.
+
+### What was wrong
+
+`tests/architecture/test_module_access_is_not_write_authority.py` read
+`app/web/fixed_assets.py` and `app/web/finance/**` and nothing else — 21 of
+the web adapter's 81 modules. The premise this ADR states is fleet-wide, so
+the other 60 modules were not exempt from it; they were unmonitored, which is
+the failure this fleet's guard-exemption rule (Governance ADR-0018) names
+explicitly. The exact defect decided against here could have been added to
+`app/web/people/**`, `app/web/inventory.py`, `app/web/projects.py` or
+`app/web/support.py` and no test would have said a word.
+
+The detector now walks every `app/web/**/*.py`.
+
+### What the widened scan measured
+
+**661 mutating web routes are authorized by module visibility alone**, of
+which **195 are being decomposed in flight** (172 finance in `FINANCE_BACKLOG`,
+23 Fixed Assets already fixed by this ADR). The remaining **489 across 41
+modules** are newly recorded in `WEB_BACKLOG`, on the same two-directional
+ratchet: the count may not rise, and it may not fall without lowering the
+table in the same reviewed change.
+
+Grouped by what the routes can cause:
+
+| Module group | Routes | What a holder of module visibility alone can do |
+|---|---|---|
+| People / payroll | 35 | run payroll, post payslips, adjust earnings and deductions |
+| People / performance (`perf.py`, `pms.py`) | 104 | appraisals, PIPs, appeals, contract amendments, institutional scoring |
+| People / training | 50 | courses, assessments, grading, certificates |
+| People / recruitment | 23 | requisitions, offers, hiring decisions |
+| People / HR records | 144 | establishment, positions, org tree, lifecycle, discipline, leave, attendance, scheduling, self-service |
+| Inventory | 31 | stock movements, adjustments, counts, transfers |
+| Projects | 39 | project lifecycle, tasks, budgets, billing inputs |
+| Support | 23 | ticket lifecycle |
+| Public sector | 7 | appropriations, commitments, funds, virements — statutory budget instruments |
+| Procurement | 6 | requisition and vendor actions |
+| Admin sync + portals + misc | 27 | integration credentials, API keys, help content, notifications, profile |
+
+A prioritized decomposition program should take them in the order money,
+stock, establishment/headcount and statutory filings move: public sector (7,
+smallest and most statutory), payroll (35), inventory (31), procurement (6),
+then projects (39), then the People performance/HR/training mass (321), then
+support and the remainder.
+
+### The severe subset: 13 mutating routes with no authorization at all
+
+Recorded separately in `UNAUTHENTICATED_WEB_MUTATIONS`, because a coarse guard
+and no guard are not the same finding.
+
+- **`app/web/admin_crm_sync.py` — 5 routes, live.** Mounted at
+  `/admin/sync/crm` whenever the `crm` module is enabled. Every route depends
+  on `optional_web_auth`, which returns a guest context instead of raising,
+  and the router carries no `dependencies=` list. Unlike `app/web/admin.py`
+  beside it, nothing supplies `require_admin_access`. The five routes save CRM
+  integration configuration, **generate an API key**, **revoke an API key**,
+  trigger an inventory push and run a health check. This is not grandfathered
+  debt of the kind the tables above describe; it is a live authorization gap
+  and needs its own fix.
+- **`app/web/admin_dotmac_sub_sync.py` — 3 routes, currently unmounted.** The
+  same shape (`/admin/sync/dotmac-sub`, `optional_web_auth`, no router-level
+  guard) for saving dotmac_sub integration config, testing the connection and
+  triggering a sync. No module imports this router today, so the routes are
+  unreachable — until somebody mounts it, at which point they are the case
+  above.
+- **`app/web/careers.py` — 4 routes — and `app/web/onboarding_portal.py` — 1
+  route.** Deliberately public, with a stated and enforceable premise: job
+  application submission and application-status requests are anonymous intake
+  behind a captcha and a rate limit; offer accept/decline and onboarding task
+  completion authorize by possession of an unguessable per-record token
+  verified in the handler (`get_offer_by_token`, `_require_valid_token`) —
+  bearer-of-secret authority rather than session authority. Listed so the
+  count is honest, not because they are wrong.
+
+### A second finding: guards naming permissions that cannot be granted
+
+Widening job (2) of the test — "every guarded permission is real" — surfaced
+seven permission strings guarding nine sites in `app/web/inventory.py`'s
+material-request routes that `scripts/seed_rbac.py` does not define:
+`inv:material_requests:{create,submit,approve,delete}` and an `inventory:`
+spelling of three of them. No role can hold them, and `has_permission`
+short-circuits on `is_admin`, so those routes are admin-only by accident
+rather than by decision. This is the inverse failure — a granular guard that
+denies everyone — and it is recorded in `WEB_UNSEEDABLE_PERMISSIONS`.
+Resolving it means seeding the permissions and deciding which roles hold them,
+which is an authority grant and belongs in its own reviewed change.
+
+### Classification: guards are classified by body, never by name
+
+Three corrections came out of reading every `require_*` body rather than
+trusting its name.
+
+- `require_discipline_cases_{read,create,update}` and
+  `require_discipline_workflow_manage` read as capability checks and are not:
+  each opens `if auth.is_admin or auth.has_module_access("people")` and only
+  then considers its granular permission, so any holder of `hr:access` passes
+  without it. They are visibility guards and are classified as such.
+  `require_self_service_discipline_manager` admits `discipline:access`, which
+  is that module's visibility scope, and is classified the same way.
+- `require_private_performance_mode` and `require_government_pms_mode` are
+  router-level dependencies on `people/perf.py` and `people/pms.py` that chain
+  `require_hr_access` and compare the organization's `PerformanceMode`. A
+  deployment mode says which features are switched on, not who may use them —
+  it cannot distinguish two people in the same organization — so it adds no
+  authority.
+- Conversely, `app/web/fleet.py`'s `require_fleet_<resource>_manage` family
+  (14 mutating routes) and `people/weekly_meeting_reports.py`'s
+  `require_report_{write,submit,reopen}` **are** genuine: each ANDs a real
+  `<module>:<resource>:<action>` permission onto module access. They are not
+  in any backlog. `people/self_service.py`'s
+  `require_self_service_{profile_update,documents_upload,leave_approver,expense_approver}`
+  are genuine too, which is why that file records 17 rather than 27.
+
+### A per-route guard is not the whole guard
+
+The detector now also reads `APIRouter(dependencies=[...])`. `app/web/admin.py`
+declares `optional_web_auth` on all 35 of its mutating handlers and is
+nonetheless admin-only, because its router is constructed with
+`dependencies=[Depends(require_admin_access)]`; `admin_sla_policies.py` is the
+same for five more. Counting argument defaults alone would have reported those
+40 routes as unauthorized, and a table of 40 false positives is how a ratchet
+gets deleted. The same mechanism is what identified `admin_crm_sync.py` as
+genuinely unguarded — it has the routes and not the router dependency.
+
+### Status of the backlog
+
+**Grandfathered, not reviewed-and-correct.** No individual route in
+`WEB_BACKLOG` has been assessed and found acceptable. Nothing in this
+amendment changes any route's authorization: it changes only what is measured.
+Decomposing these routes into granular `<module>:<resource>:<action>`
+permissions is a separate, prioritized program, and the two admin sync routers
+above are a defect to fix rather than debt to schedule.
