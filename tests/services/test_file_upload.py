@@ -4,7 +4,8 @@ Tests for the unified FileUploadService (S3-backed).
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -17,7 +18,9 @@ from app.services.file_upload import (
     InvalidMagicBytesError,
     UploadResult,
     _derive_s3_prefix,
+    prepare_tenant_import_csv,
 )
+from app.config import settings
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -313,3 +316,86 @@ class TestUploadResult:
         from pathlib import Path
 
         assert result.file_path == Path("avatars/abc123.jpg")
+
+
+class _AsyncUpload:
+    filename = "customers.csv"
+    content_type = "text/csv; charset=utf-8"
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = iter(chunks)
+
+    async def read(self, size: int = -1) -> bytes:
+        del size
+        return next(self._chunks, b"")
+
+
+class _CaptureProvider:
+    code = "test_store"
+
+    def __init__(self) -> None:
+        self.put_calls: list[tuple[str, bytes, int, str]] = []
+
+    def put(
+        self,
+        key,
+        content,
+        *,
+        content_type,
+        size_bytes,
+        checksum_sha256,
+    ) -> None:
+        self.put_calls.append((key, content.read(), size_bytes, checksum_sha256))
+
+
+@pytest.mark.asyncio
+async def test_tenant_import_upload_is_bounded_and_scoped(monkeypatch) -> None:
+    tenant_id = uuid4()
+    provider = _CaptureProvider()
+    monkeypatch.setattr(
+        settings,
+        "import_max_file_size_bytes",
+        64,
+        raising=False,
+    )
+
+    with patch(
+        "app.services.storage.get_dotmac_files_provider",
+        return_value=provider,
+    ):
+        prepared = await prepare_tenant_import_csv(
+            _AsyncUpload([b"Display Name,Company Name\n", b"Acme,Acme Ltd\n"]),
+            tenant_id=tenant_id,
+        )
+
+    assert prepared.scope.tenant_id == tenant_id
+    assert provider.put_calls[0][1] == (b"Display Name,Company Name\nAcme,Acme Ltd\n")
+    assert prepared.size_bytes == len(provider.put_calls[0][1])
+
+
+@pytest.mark.asyncio
+async def test_tenant_import_upload_refuses_before_storage_at_the_limit(
+    monkeypatch,
+) -> None:
+    tenant_id = uuid4()
+    provider = _CaptureProvider()
+    monkeypatch.setattr(
+        settings,
+        "import_max_file_size_bytes",
+        4,
+        raising=False,
+    )
+
+    with (
+        patch(
+            "app.services.storage.get_dotmac_files_provider",
+            return_value=provider,
+        ),
+        pytest.raises(FileTooLargeError),
+    ):
+        await prepare_tenant_import_csv(
+            _AsyncUpload([b"123", b"45"]),
+            tenant_id=tenant_id,
+        )
+
+    assert provider.put_calls == []

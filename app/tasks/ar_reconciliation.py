@@ -16,13 +16,12 @@ import logging
 import uuid
 
 from celery import shared_task
-from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.models.batch_operation import BatchOperationType
-from app.models.finance.core_org.organization import Organization
 from app.services.batch_operation import batch_operation
 from app.services.finance.ar.amount_paid_reconciler import reconcile_amount_paid
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +38,7 @@ def reconcile_invoice_amount_paid(
     if organization_id is not None:
         org_ids = [uuid.UUID(str(organization_id))]
     else:
-        with cross_org_session() as db:
-            org_ids = list(db.scalars(select(Organization.organization_id)).all())
+        org_ids = organization_ids(include_inactive=True)
 
     summary: dict[str, dict] = {}
     for org_id in org_ids:

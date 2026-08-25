@@ -21,7 +21,6 @@ from app.models.auth import Session as AuthSession
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.observability import actor_id_var
-from app.rls import enable_rls_bypass_sync
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.cache import cache_service
@@ -677,23 +676,71 @@ def require_tenant_permission(permission_key: str):
     return _require_tenant_permission
 
 
+def has_live_admin_grant(db: Session, person_id: UUID | str | None) -> bool:
+    """Does this person hold the ``admin`` role RIGHT NOW?
+
+    THE admin-authority question, asked of the grant tables rather than of a
+    token. A JWT's ``roles`` claim and a web session's ``roles`` list are both
+    login-time SNAPSHOTS: revoking someone's admin role leaves every already
+    issued token asserting it until that token expires, which for a
+    platform-level control is a window in which a removed administrator still
+    rewrites the deployment's ceiling.
+
+    Extracted from :func:`require_admin_bypass`, which already asked exactly
+    this and states the standard in its own comment. It is a FUNCTION and not a
+    third dependency because its other two callers are not FastAPI dependencies
+    at all — one is a predicate over a history row
+    (``app.api.settings._can_restore_history_entry``), the other a method on the
+    admin web service (``AdminWebService._require_admin_web_auth``) — and three
+    hand-written copies of one security question is how two of them drift.
+
+    Deliberately NOT cached: the whole point is that it is re-asked per request.
+    It is one indexed join on the primary key of ``person_roles``.
+
+    Returns ``False`` for a missing or unparseable ``person_id`` — an actor
+    whose identity cannot be resolved does not hold a grant.
+    """
+    if person_id is None:
+        return False
+    try:
+        person_uuid = coerce_uuid(person_id, raise_http=False)
+    except (TypeError, ValueError):
+        return False
+    if person_uuid is None:
+        return False
+    return (
+        db.scalar(
+            select(PersonRole)
+            .join(Role, PersonRole.role_id == Role.id)
+            .where(PersonRole.person_id == person_uuid)
+            .where(Role.name == "admin")
+            .where(Role.is_active.is_(True))
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def require_admin_bypass(
     authorization: str | None = Header(default=None),
     request: Request = None,
     db: Session = Depends(_get_db),
 ):
     """
-    Admin-only dependency that bypasses RLS using an ERP-owned session.
+    Authorize an admin-only cross-organization route.
 
-    Use this for system administration endpoints that need to see
-    data across all tenants. Requires the 'admin' role.
+    This dependency proves live admin authority; it does not modify its
+    database session and cannot bypass PostgreSQL RLS. Pair it with the route's
+    existing ``get_db_admin_bypass`` dependency, whose historical name refers
+    only to the ORM listener's ``allow_cross_org`` marker.
 
-    WARNING: Use with extreme caution! This bypasses tenant isolation.
+    Use for system administration endpoints that need application-layer access
+    across organizations. Requires the live ``admin`` role assignment.
 
     Usage:
         @app.get("/admin/all-organizations")
         def list_all_orgs(auth=Depends(require_admin_bypass), db: Session = Depends(get_db)):
-            # Can see all organizations across tenants
+            # The route's DB dependency owns any approved cross-org context.
             return db.scalars(select(Organization)).all()
     """
     token = _extract_bearer_token(authorization)
@@ -727,22 +774,12 @@ def require_admin_bypass(
     # JWT role claims are a login-time snapshot. Cross-tenant authority must be
     # checked against the live assignment on every request so removing the
     # admin role takes effect immediately, even while the session and access
-    # token remain otherwise valid.
+    # token remain otherwise valid. `has_live_admin_grant` above is that check,
+    # and is shared with the two other doors onto platform-row writes.
     roles_value = payload.get("roles")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-    admin_link = db.scalar(
-        select(PersonRole)
-        .join(Role, PersonRole.role_id == Role.id)
-        .where(PersonRole.person_id == person_uuid)
-        .where(Role.name == "admin")
-        .where(Role.is_active.is_(True))
-        .limit(1)
-    )
-    if not admin_link:
+    if not has_live_admin_grant(db, person_uuid):
         raise HTTPException(status_code=403, detail="Admin access required")
-
-    # Enable RLS bypass for admin operations
-    enable_rls_bypass_sync(db)
 
     scopes_value = payload.get("scopes")
     scopes = (

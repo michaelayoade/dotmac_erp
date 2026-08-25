@@ -30,8 +30,6 @@
 \timing on
 \pset pager off
 
-SET app.bypass_rls = 'true';
-
 \echo
 \echo ============================================================
 \echo  As-of date: 2025-12-31  (FY2025 close)

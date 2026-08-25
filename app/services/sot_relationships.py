@@ -89,13 +89,12 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 name="tenancy.rls",
                 module="app.rls",
                 owns=(
-                    "PostgreSQL RLS GUC context "
-                    "(app.current_organization_id, app.current_tenant, "
-                    "app.bypass_rls)",
+                    "PostgreSQL tenant-scope GUC context "
+                    "(app.current_organization_id, app.current_tenant)",
                 ),
                 notes=(
                     "ERP and shared-module scope GUCs are set atomically; "
-                    "app.bypass_rls never bypasses module policies."
+                    "runtime code has no user-settable RLS bypass."
                 ),
             ),
         ),
@@ -132,17 +131,25 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "single has_permission owner is the consolidation target."
                 ),
             ),
+            # No external-identity protocol owner is registered: ERP's
+            # unshipped OIDC adapter was deleted, and the registry records
+            # as-built owners only. Reintroduction adopts the released
+            # dotmac-auth-oidc package and re-registers an owner here.
             SOTService(
-                name="auth.oidc",
-                module="app.services.sso.oidc",
+                name="identity.party_projection",
+                module="app.services.party_projection",
                 owns=(
-                    "OIDC Authorization Code + PKCE protocol exchange",
-                    "issuer/subject to ERP person binding resolution",
+                    "Person-to-kernel-Party catalogue projection writes",
+                    "Person-to-kernel-PartyPerson profile projection writes",
+                    "person party retirement on Person deletion",
                 ),
-                depends_on=("auth.flow", "auth.rbac"),
                 notes=(
-                    "The identity provider proves identity only. ERP owns its "
-                    "sessions, cookies, roles, permissions, and user status."
+                    "public.people remains authoritative; the projection "
+                    "supplies party_person_catalog.v1 and mutates in the "
+                    "caller's ERP-owned transaction. parties.id IS people.id, "
+                    "so the projection needs no mapping and is rebuildable "
+                    "from the source alone. Authority moves when dotmac-party "
+                    "and dotmac-people are composed and cut over."
                 ),
             ),
             SOTService(
@@ -162,9 +169,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         entrypoints=("app.api.auth_flow", "app.web.auth", "app.api.rbac"),
         rule=(
             "Person is the single ERP login identity; credentials, sessions, "
-            "MFA, API keys, and federated issuer/subject bindings resolve to "
-            "person_id. External authorization claims and counterparties "
-            "(Customer, Supplier) are not ERP identities or permission owners."
+            "MFA, and API keys resolve to person_id. ERP accepts no external "
+            "identity assertion today. External authorization claims and "
+            "counterparties (Customer, Supplier) are not ERP identities or "
+            "permission owners."
         ),
     ),
     DomainSOT(
@@ -296,6 +304,13 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "projection drift via the canonical rebuild writer."
                 ),
             ),
+            # The kernel relay planes (public.outbox_events,
+            # public.platform_outbox_events) deliberately have NO entry here.
+            # This registry names live runtime owners, and 20260824_outbox_relay
+            # supplies schema and privilege only — there is no ERP service
+            # deciding anything on those tables, and naming a migration as an
+            # owner would be a name that cannot be imported or reached. The
+            # boundary it creates is recorded in this domain's rule instead.
             SOTService(
                 name="events.hooks",
                 module="app.services.hooks.registry",
@@ -306,7 +321,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         rule=(
             "Cross-module consequences ride the outbox inside the business "
             "transaction; handlers never commit; external delivery goes "
-            "through service hooks with signed, retried delivery."
+            "through service hooks with signed, retried delivery. ERP business "
+            "events ride platform.event_outbox; composed-module events ride "
+            "the kernel relay planes. One authority each, neither reading the "
+            "other's rows."
         ),
     ),
     DomainSOT(
@@ -407,6 +425,41 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             "reconciliation paths. ERP remains independently replaceable: no "
             "direct external database access, cross-system foreign keys, shared "
             "transactions, or shared business-domain runtime."
+        ),
+    ),
+    DomainSOT(
+        domain="bulk_imports",
+        services=(
+            SOTService(
+                name="imports.run_ledger",
+                module="dotmac_imports",
+                owns=(
+                    "durable import runs, partition claims and checkpoints",
+                    "minimised per-row outcomes and promotion lifecycle",
+                ),
+                notes=(
+                    "Reusable mechanism only; it never owns ERP field meaning, "
+                    "validation, duplicate policy or domain mutation."
+                ),
+            ),
+            SOTService(
+                name="imports.customer_port",
+                module="app.services.finance.import_export.durable_customers",
+                owns=(
+                    "customer CSV field vocabulary and typed validation",
+                    "customer import duplicate policy and canonical mutation port",
+                    "legacy-to-durable dry-run parity refusal",
+                ),
+                depends_on=("imports.run_ledger", "platform.storage"),
+            ),
+        ),
+        entrypoints=(
+            "app.api.finance.import_export",
+            "app.tasks.imports",
+        ),
+        rule=(
+            "The module owns resumable mechanics; ERP owns what a customer row "
+            "means and applies it only through the canonical customer service."
         ),
     ),
     DomainSOT(

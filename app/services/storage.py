@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import io
 import logging
-from collections.abc import Iterator
-from typing import TYPE_CHECKING, cast
+from collections.abc import Iterable, Iterator
+from datetime import datetime
+from typing import IO, TYPE_CHECKING, Any, BinaryIO, Protocol, cast
 from urllib.parse import urlparse
 
 import urllib3
@@ -20,6 +21,8 @@ from app.config import settings
 
 if TYPE_CHECKING:
     from minio import Minio
+
+    from dotmac_files import ObjectInfo
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +216,171 @@ class S3StorageService:
             return _FallbackS3Error
 
 
+class _MinioResponse(Protocol):
+    def read(self, size: int = -1) -> bytes: ...
+
+    def close(self) -> None: ...
+
+    def release_conn(self) -> None: ...
+
+
+class _S3Readable(io.RawIOBase):
+    """Context-managed response that always releases the MinIO connection."""
+
+    def __init__(self, response: _MinioResponse) -> None:
+        self._response = response
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: Any) -> int:
+        value = self._response.read(len(buffer))
+        length = len(value)
+        buffer[:length] = value
+        return length
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        try:
+            self._response.close()
+            self._response.release_conn()
+        finally:
+            super().close()
+
+
+class DotmacFilesS3Provider:
+    """ERP's MinIO adapter for the provider-neutral ``dotmac-files`` seam.
+
+    Provider calls contain no session and no domain decision.  Immutable replay
+    is proved from size plus the checksum metadata written with the object;
+    existing bytes are never overwritten speculatively.
+    """
+
+    code = "erp_s3"
+
+    def __init__(self, storage: S3StorageService | None = None) -> None:
+        self._storage = storage or get_storage()
+
+    @staticmethod
+    def _checksum(metadata: object) -> str | None:
+        getter = getattr(metadata, "get", None)
+        if not callable(getter):
+            return None
+        return cast(
+            str | None,
+            getter("x-amz-meta-checksum-sha256") or getter("checksum-sha256"),
+        )
+
+    @staticmethod
+    def _is_missing(exc: Exception) -> bool:
+        return getattr(exc, "code", None) in {
+            "NoSuchKey",
+            "NoSuchObject",
+            "NotFound",
+        }
+
+    def put(
+        self,
+        key: str,
+        content: IO[bytes],
+        *,
+        content_type: str,
+        size_bytes: int,
+        checksum_sha256: str,
+    ) -> None:
+        from dotmac_files import StorageConflict, StorageUnavailable
+
+        try:
+            current = self._storage._client.stat_object(self._storage._bucket, key)
+        except self._storage._s3_error as exc:
+            if not self._is_missing(exc):
+                raise StorageUnavailable("object metadata is unavailable") from None
+        else:
+            current_size = current.size
+            if (
+                current_size is not None
+                and int(current_size) == size_bytes
+                and self._checksum(current.metadata) == checksum_sha256
+            ):
+                return
+            raise StorageConflict("immutable object key already holds other bytes")
+
+        try:
+            self._storage._client.put_object(
+                self._storage._bucket,
+                key,
+                cast(BinaryIO, content),
+                length=size_bytes,
+                content_type=content_type,
+                metadata={"checksum-sha256": checksum_sha256},
+            )
+        except self._storage._s3_error:
+            raise StorageUnavailable("object upload failed") from None
+
+    def open(self, key: str) -> BinaryIO:
+        from dotmac_files import ObjectMissing, StorageUnavailable
+
+        try:
+            response = self._storage._client.get_object(self._storage._bucket, key)
+        except self._storage._s3_error as exc:
+            if self._is_missing(exc):
+                raise ObjectMissing("stored object is missing") from None
+            raise StorageUnavailable("stored object is unavailable") from None
+        return io.BufferedReader(_S3Readable(cast(_MinioResponse, response)))
+
+    def exists(self, key: str) -> bool:
+        from dotmac_files import StorageUnavailable
+
+        try:
+            self._storage._client.stat_object(self._storage._bucket, key)
+        except self._storage._s3_error as exc:
+            if self._is_missing(exc):
+                return False
+            raise StorageUnavailable("object metadata is unavailable") from None
+        return True
+
+    def delete(self, key: str) -> None:
+        from dotmac_files import StorageUnavailable
+
+        try:
+            self._storage._client.remove_object(self._storage._bucket, key)
+        except self._storage._s3_error:
+            raise StorageUnavailable("object deletion failed") from None
+
+    def list(self, prefix: str) -> Iterable[ObjectInfo]:
+        from dotmac_files import ObjectInfo, StorageUnavailable
+
+        try:
+            objects = tuple(
+                self._storage._client.list_objects(
+                    self._storage._bucket,
+                    prefix=prefix,
+                    recursive=True,
+                )
+            )
+        except self._storage._s3_error:
+            raise StorageUnavailable("object listing failed") from None
+        result: list[ObjectInfo] = []
+        for item in objects:
+            modified = cast(datetime | None, item.last_modified)
+            if modified is None:
+                raise StorageUnavailable("object listing omitted modification time")
+            result.append(
+                ObjectInfo(
+                    key=str(item.object_name),
+                    size_bytes=int(item.size),
+                    last_modified=modified,
+                )
+            )
+        return tuple(result)
+
+
 def get_storage() -> S3StorageService:
     """Factory — returns a ready-to-use storage service."""
     return S3StorageService()
+
+
+def get_dotmac_files_provider() -> DotmacFilesS3Provider:
+    """Return the sole dotmac-files provider used by ERP."""
+    return DotmacFilesS3Provider()

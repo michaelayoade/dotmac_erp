@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_tenant_auth
+from app.api.deps import get_db_with_org, require_tenant_auth
 from app.db import get_db_session
 from app.services.auth_dependencies import (
     get_current_org_id,
@@ -39,7 +39,13 @@ from app.services.finance.import_export import (
     get_ap_control_account,
     get_ar_control_account,
 )
+from app.services.finance.import_export.durable_customers import (
+    CustomerImportRunSnapshot,
+    DurableCustomerImportService,
+)
+from app.services.storage import get_dotmac_files_provider
 from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
+from app.tasks.imports import enqueue_customer_import_run
 
 router = APIRouter(
     prefix="/import",
@@ -149,6 +155,147 @@ class ImportPreviewResponse(BaseModel):
             detected_format=result.detected_format,
             is_valid=result.is_valid,
         )
+
+
+class DurableCustomerRunResponse(BaseModel):
+    """Detached, provider-neutral view of one durable customer import."""
+
+    run_id: UUID
+    status: str
+    dry_run: bool
+    processed: int
+    ok: int
+    failed: int
+    skipped: int
+
+
+class DurableRowOutcomeResponse(BaseModel):
+    row_number: int
+    row_fingerprint_sha256: str
+    status: str
+    error_code: str | None
+    error_message: str | None
+
+
+def _durable_run_response(
+    run: CustomerImportRunSnapshot,
+) -> DurableCustomerRunResponse:
+    return DurableCustomerRunResponse(
+        run_id=run.run_id,
+        status=str(run.status),
+        dry_run=run.dry_run,
+        processed=run.processed,
+        ok=run.ok,
+        failed=run.failed,
+        skipped=run.skipped,
+    )
+
+
+@router.post(
+    "/durable/customers/dry-run",
+    response_model=DurableCustomerRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_durable_customer_dry_run(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db_with_org),
+    org_id: UUID = Depends(get_current_org_id),
+    user_id: UUID = Depends(get_current_user_id),
+    auth: dict = Depends(require_tenant_permission("import:execute")),
+) -> DurableCustomerRunResponse:
+    """Store, partition and enqueue the first durable ERP import pilot."""
+    workflow = DurableCustomerImportService(db, get_dotmac_files_provider())
+    run = await workflow.create_dry_run(
+        file,
+        tenant_id=org_id,
+        created_by=user_id,
+    )
+    # Make the claimed work visible before any worker is allowed to run.
+    db.commit()
+    enqueue_customer_import_run(org_id, run.run_id, dry_run=run.dry_run)
+    return _durable_run_response(run)
+
+
+@router.get(
+    "/durable/customers/{run_id}",
+    response_model=DurableCustomerRunResponse,
+)
+def read_durable_customer_import(
+    run_id: UUID,
+    db: Session = Depends(get_db_with_org),
+    org_id: UUID = Depends(get_current_org_id),
+    auth: dict = Depends(require_tenant_permission("import:read")),
+) -> DurableCustomerRunResponse:
+    return _durable_run_response(
+        DurableCustomerImportService(db).get(
+            tenant_id=org_id,
+            run_id=run_id,
+        )
+    )
+
+
+@router.get(
+    "/durable/customers/{run_id}/outcomes",
+    response_model=list[DurableRowOutcomeResponse],
+)
+def read_durable_customer_outcomes(
+    run_id: UUID,
+    db: Session = Depends(get_db_with_org),
+    org_id: UUID = Depends(get_current_org_id),
+    auth: dict = Depends(require_tenant_permission("import:read")),
+) -> list[DurableRowOutcomeResponse]:
+    return [
+        DurableRowOutcomeResponse(
+            row_number=item.row_number,
+            row_fingerprint_sha256=item.row_fingerprint_sha256,
+            status=str(item.status),
+            error_code=item.error_code,
+            error_message=item.error_message,
+        )
+        for item in DurableCustomerImportService(db).outcomes(
+            tenant_id=org_id,
+            run_id=run_id,
+        )
+    ]
+
+
+@router.post(
+    "/durable/customers/{run_id}/apply",
+    response_model=DurableCustomerRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def apply_durable_customer_import(
+    run_id: UUID,
+    db: Session = Depends(get_db_with_org),
+    org_id: UUID = Depends(get_current_org_id),
+    user_id: UUID = Depends(get_current_user_id),
+    auth: dict = Depends(require_tenant_permission("import:execute")),
+) -> DurableCustomerRunResponse:
+    applied = DurableCustomerImportService(db).promote(
+        tenant_id=org_id,
+        run_id=run_id,
+        created_by=user_id,
+    )
+    db.commit()
+    enqueue_customer_import_run(org_id, applied.run_id, dry_run=applied.dry_run)
+    return _durable_run_response(applied)
+
+
+@router.post(
+    "/durable/customers/{run_id}/process",
+    response_model=DurableCustomerRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_durable_customer_import(
+    run_id: UUID,
+    db: Session = Depends(get_db_with_org),
+    org_id: UUID = Depends(get_current_org_id),
+    auth: dict = Depends(require_tenant_permission("import:execute")),
+) -> DurableCustomerRunResponse:
+    """Re-enqueue a committed run after a broker or worker interruption."""
+    run = DurableCustomerImportService(db).get(tenant_id=org_id, run_id=run_id)
+    enqueue_customer_import_run(org_id, run.run_id, dry_run=run.dry_run)
+    return _durable_run_response(run)
 
 
 @router.get("/supported-types")

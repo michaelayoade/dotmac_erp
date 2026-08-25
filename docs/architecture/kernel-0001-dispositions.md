@@ -265,11 +265,11 @@ certify cluster-wide authority to satisfy it.
 migration snapshot to the same contract, proves the migration issues no role
 DDL, and checks every CI migration entry-point family with a sensitivity proof.
 
-**Still outstanding for the files adoption:** ERP pins kernel `0.1.0a24` and the
-logical-prerequisite contract arrived in `0.1.0a56`. Repinning is its own slice.
-Until then this revision is the *intended* provider for
-`module_database_roles.v1` but is not yet bound to it, and `dotmac-files` is not
-in ERP's `version_locations`.
+**Resolved by the files adoption:** ERP first repinned to kernel `0.1.0a56`,
+bound this revision as the provider for `module_database_roles.v1`, and added
+the exact `dotmac-files` lineage to `version_locations`. The 2026-08-20
+idempotency-provider slice advances the exact kernel pin to a83 without
+changing this role contract or composing the kernel lineage.
 
 ## Historical production preflight, 2026-08-13
 

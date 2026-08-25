@@ -7,8 +7,9 @@ Provides view-focused data and operations for AR customer web routes.
 from __future__ import annotations
 
 import logging
+from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal, TypedDict
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
@@ -48,6 +49,31 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
+
+
+_AgingAmountKey = Literal[
+    "current",
+    "days_1_30",
+    "days_31_60",
+    "days_61_90",
+    "over_90",
+]
+_AGING_AMOUNT_KEYS: tuple[_AgingAmountKey, ...] = (
+    "current",
+    "days_1_30",
+    "days_31_60",
+    "days_61_90",
+    "over_90",
+)
+
+
+class _AgingBucket(TypedDict):
+    current: Decimal
+    days_1_30: Decimal
+    days_31_60: Decimal
+    days_61_90: Decimal
+    over_90: Decimal
+    oldest_days: int | None
 
 
 class CustomerWebService:
@@ -161,6 +187,55 @@ class CustomerWebService:
         balances = balances.all()
         balance_map = {row.customer_id: row.balance for row in balances}
 
+        paid_rows = db.execute(
+            select(
+                CustomerPayment.customer_id,
+                func.coalesce(func.sum(CustomerPayment.gross_amount), 0).label(
+                    "paid_total"
+                ),
+            )
+            .where(
+                CustomerPayment.organization_id == org_id,
+                CustomerPayment.status.in_(PaymentStatus.effective()),
+            )
+            .group_by(CustomerPayment.customer_id)
+        ).all()
+        paid_map = {row.customer_id: row.paid_total for row in paid_rows}
+
+        today = date.today()
+        aging_map: dict[UUID, _AgingBucket] = {}
+        invoice_rows = db.execute(
+            select(Invoice.customer_id, Invoice.balance_due, Invoice.due_date).where(
+                Invoice.organization_id == org_id,
+                Invoice.status.in_(open_statuses),
+                Invoice.balance_due > 0,
+            )
+        ).all()
+        for row in invoice_rows:
+            bucket = aging_map.setdefault(
+                row.customer_id,
+                {
+                    "current": Decimal("0"),
+                    "days_1_30": Decimal("0"),
+                    "days_31_60": Decimal("0"),
+                    "days_61_90": Decimal("0"),
+                    "over_90": Decimal("0"),
+                    "oldest_days": None,
+                },
+            )
+            days_overdue = max((today - row.due_date).days, 0)
+            bucket["oldest_days"] = max(int(bucket["oldest_days"] or 0), days_overdue)
+            if days_overdue == 0:
+                bucket["current"] = bucket["current"] + row.balance_due
+            elif days_overdue <= 30:
+                bucket["days_1_30"] = bucket["days_1_30"] + row.balance_due
+            elif days_overdue <= 60:
+                bucket["days_31_60"] = bucket["days_31_60"] + row.balance_due
+            elif days_overdue <= 90:
+                bucket["days_61_90"] = bucket["days_61_90"] + row.balance_due
+            else:
+                bucket["over_90"] = bucket["over_90"] + row.balance_due
+
         # Stat-card counts — org-wide totals, independent of the current
         # pagination/search/collapse view (the template reads these three and
         # silently defaults them to 0 when missing).
@@ -200,6 +275,33 @@ class CustomerWebService:
             db.scalar(select(func.count()).select_from(with_balance_subq)) or 0
         )
 
+        total_outstanding = sum(balance_map.values(), Decimal("0"))
+        overdue_total = sum(
+            (
+                bucket["days_1_30"]
+                + bucket["days_31_60"]
+                + bucket["days_61_90"]
+                + bucket["over_90"]
+            )
+            for bucket in aging_map.values()
+        )
+        total_paid = sum(paid_map.values(), Decimal("0"))
+
+        recurring_customers_count = 0
+        total_mrr = Decimal("0")
+        total_arr = Decimal("0")
+        for customer in db.scalars(
+            select(Customer).where(Customer.organization_id == org_id)
+        ).all():
+            metrics = customer.dotmac_sub_metrics or {}
+            recurring_count = int(metrics.get("recurring_subscription_count") or 0)
+            mrr = Decimal(str(metrics.get("mrr") or "0"))
+            arr = Decimal(str(metrics.get("arr") or "0"))
+            if recurring_count > 0 or mrr > 0:
+                recurring_customers_count += 1
+            total_mrr += mrr
+            total_arr += arr
+
         # Use shared audit service for user names
         audit_service = get_audit_service(db)
         creator_ids = [
@@ -234,6 +336,9 @@ class CustomerWebService:
         # plus the sum of its sub-accounts, and carries the sub-account rows.
         sub_accounts_map: dict[UUID, list[dict]] = {}
         family_balance_map: dict[UUID, Decimal] = {}
+        family_paid_map: dict[UUID, Decimal] = {}
+        family_aging_map: dict[UUID, _AgingBucket] = {}
+        family_metrics_map: dict[UUID, dict[str, Any]] = {}
         if collapsed:
             parent_ids_on_page = [
                 cid for cid in customer_ids if child_count_map.get(cid, 0) > 0
@@ -252,6 +357,9 @@ class CustomerWebService:
                     if pid is None:
                         continue
                     child_bal = balance_map.get(child.customer_id, Decimal("0"))
+                    child_paid = paid_map.get(child.customer_id, Decimal("0"))
+                    child_aging = aging_map.get(child.customer_id)
+                    child_metrics = child.dotmac_sub_metrics or {}
                     sub_accounts_map.setdefault(pid, []).append(
                         {
                             "customer_id": child.customer_id,
@@ -259,15 +367,77 @@ class CustomerWebService:
                             "customer_name": customer_display_name(child),
                             "is_active": child.is_active,
                             "balance": format_currency(child_bal, child.currency_code),
+                            "paid_total": format_currency(
+                                child_paid, child.currency_code
+                            ),
+                            "subscriber_status": child_metrics.get("subscriber_status"),
+                            "next_renewal_at": child_metrics.get("next_renewal_at"),
+                            "mrr": format_currency(
+                                Decimal(str(child_metrics.get("mrr") or "0")),
+                                child.currency_code,
+                            ),
                         }
                     )
                     family_balance_map[pid] = (
                         family_balance_map.get(pid, Decimal("0")) + child_bal
                     )
+                    family_paid_map[pid] = (
+                        family_paid_map.get(pid, Decimal("0")) + child_paid
+                    )
+                    if child_aging:
+                        target = family_aging_map.setdefault(
+                            pid,
+                            {
+                                "current": Decimal("0"),
+                                "days_1_30": Decimal("0"),
+                                "days_31_60": Decimal("0"),
+                                "days_61_90": Decimal("0"),
+                                "over_90": Decimal("0"),
+                                "oldest_days": None,
+                            },
+                        )
+                        for key in _AGING_AMOUNT_KEYS:
+                            target[key] = target[key] + child_aging[key]
+                        target["oldest_days"] = max(
+                            int(target["oldest_days"] or 0),
+                            int(child_aging["oldest_days"] or 0),
+                        )
+                    if child_metrics:
+                        target_metrics = family_metrics_map.setdefault(
+                            pid,
+                            {
+                                "recurring_subscription_count": 0,
+                                "mrr": Decimal("0"),
+                                "arr": Decimal("0"),
+                                "next_renewal_at": None,
+                                "subscriber_status": None,
+                                "service_status": None,
+                            },
+                        )
+                        target_metrics["recurring_subscription_count"] += int(
+                            child_metrics.get("recurring_subscription_count") or 0
+                        )
+                        target_metrics["mrr"] += Decimal(
+                            str(child_metrics.get("mrr") or "0")
+                        )
+                        target_metrics["arr"] += Decimal(
+                            str(child_metrics.get("arr") or "0")
+                        )
+                        next_renewal = child_metrics.get("next_renewal_at")
+                        if next_renewal and (
+                            target_metrics["next_renewal_at"] is None
+                            or next_renewal < target_metrics["next_renewal_at"]
+                        ):
+                            target_metrics["next_renewal_at"] = next_renewal
+                        target_metrics["subscriber_status"] = "mixed"
+                        target_metrics["service_status"] = "mixed"
                 for pid in parent_ids_on_page:
                     family_balance_map[pid] = family_balance_map.get(
                         pid, Decimal("0")
                     ) + balance_map.get(pid, Decimal("0"))
+                    family_paid_map[pid] = family_paid_map.get(
+                        pid, Decimal("0")
+                    ) + paid_map.get(pid, Decimal("0"))
 
         customers_view = []
         for customer in customers:
@@ -278,6 +448,21 @@ class CustomerWebService:
                 if collapsed and is_parent
                 else balance_map.get(cid, Decimal("0"))
             )
+            display_paid = (
+                family_paid_map.get(cid, paid_map.get(cid, Decimal("0")))
+                if collapsed and is_parent
+                else paid_map.get(cid, Decimal("0"))
+            )
+            display_aging = (
+                family_aging_map.get(cid, aging_map.get(cid))
+                if collapsed and is_parent
+                else aging_map.get(cid)
+            )
+            display_metrics = (
+                family_metrics_map.get(cid, customer.dotmac_sub_metrics or {})
+                if collapsed and is_parent
+                else customer.dotmac_sub_metrics or {}
+            )
             view = customer_list_view(
                 customer,
                 display_balance,
@@ -286,6 +471,9 @@ class CustomerWebService:
                 else None,
                 balance_trends.get(cid),
                 child_count=child_count_map.get(cid, 0),
+                paid_total=display_paid,
+                aging=display_aging,
+                dotmac_sub_metrics=display_metrics,
             )
             view["is_parent"] = is_parent
             view["sub_accounts"] = sub_accounts_map.get(cid, [])
@@ -309,6 +497,12 @@ class CustomerWebService:
             "active_count": active_count,
             "inactive_count": inactive_count,
             "with_balance_count": with_balance_count,
+            "recurring_customers_count": recurring_customers_count,
+            "total_outstanding": format_currency(total_outstanding),
+            "overdue_total": format_currency(overdue_total),
+            "total_paid": format_currency(total_paid),
+            "total_mrr": format_currency(total_mrr),
+            "total_arr": format_currency(total_arr),
             "total_pages": total_pages,
             "active_filters": active_filters,
             "sort": sort or "",

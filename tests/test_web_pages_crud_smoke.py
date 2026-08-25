@@ -407,6 +407,9 @@ _INFRA_ERRORS = (
     # Optional external services are not available in the SQLite smoke harness.
     "Failed to resolve",
     "Name or service not known",
+    # WeasyPrint's native GTK/GObject stack is not installed in the Windows harness.
+    "WeasyPrint could not import",
+    "cannot load library 'gobject",
     # Placeholder UUID entity not found (expected for detail/edit pages)
     "not found",
     "Not Found",

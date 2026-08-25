@@ -8,6 +8,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Versioned, tenant-bound read projection for Backoffice People backfill and
+  reconciliation, protected by an explicit service-principal scope.
+- Exact two-directional retirement ledger for ERP writers of projected People
+  fields across runtime services, workers, scripts, and tools.
+
+## [1.33.0] - 2026-08-18
+
+### Added
+- Employee search by name, employee code, or email on Leave Allocations and the Leave Balance Report.
+- Executable PostgreSQL reachability evidence for the cross-organization retirement ledger.
+
+### Changed
+- Cross-organization callers are classified by explicit retirement disposition and protected-relation reach.
+- Engineering standards are pinned to the accepted connector runtime authority revision.
+
+### Fixed
+- Removed four cross-organization bypass regions that did not guard protected relations.
+
+## [1.32.0] - 2026-08-15
+
+### Added
 - Repeatable employee self-service submission for qualifications, certifications, skills, dependants, and documents using approval-backed batch envelopes and itemized HR review.
 - Kernel-compatible `tenants`/`tenant_domains` catalogue projected from authoritative ERP Organizations, with one same-transaction reconciler and shared-module RLS scope bridge.
 - Executable fresh and predecessor-upgrade PostgreSQL rehearsal that pins the installed Kernel lineage's exact revision-0001 collision without stamping it or leaking database-role changes.

@@ -19,7 +19,6 @@ from tests._helpers.source_introspection import (
 )
 
 from app.services.finance.gl.posting_backlog import (
-    IMBALANCE_TOLERANCE,
     POSTABLE_PERIOD_STATUSES,
     ApprovedJournal,
     JournalPostingResult,
@@ -53,14 +52,19 @@ def _db(rows):
 # --------------------------------------------------------------------------
 
 
-def test_a_journal_within_tolerance_is_balanced():
-    assert _journal("0.009").is_balanced
+def test_only_an_exactly_balanced_journal_is_balanced():
+    """There is no tolerance. `IMBALANCE_TOLERANCE = Decimal("0.01")` is gone.
+
+    It was declared as mirroring the AR/AP payment tolerance, and that mirroring
+    was the mistake: payment dust is a settlement concept, while journal balance
+    is an identity. At `NUMERIC(20, 6)` it also admitted an imbalance 10,000x
+    larger than the GL posting boundary, in the very service that exists to post
+    the APPROVED backlog — so the bulk path was the most permissive one.
+    """
     assert _journal("0").is_balanced
-
-
-def test_a_journal_at_the_tolerance_is_not_balanced():
-    """Strictly less than. A whole kobo out is a real imbalance, not dust."""
-    assert not _journal(str(IMBALANCE_TOLERANCE)).is_balanced
+    assert not _journal("0.009").is_balanced
+    assert not _journal("0.01").is_balanced
+    assert not _journal("0.000001").is_balanced
 
 
 def test_an_unbalanced_journal_is_never_postable():

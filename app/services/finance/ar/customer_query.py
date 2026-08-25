@@ -4,7 +4,7 @@ Shared AR customer query builder for list + export.
 
 from __future__ import annotations
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -38,6 +38,14 @@ def build_customer_query(
 
     if is_active is not None:
         query = query.where(Customer.is_active == is_active)
+    elif status:
+        try:
+            query = query.where(
+                func.lower(Customer.dotmac_sub_metrics["subscriber_status"].astext)
+                == status.strip().lower()
+            )
+        except NotImplementedError:
+            pass
     if search:
         search_pattern = f"%{search}%"
         query = query.where(

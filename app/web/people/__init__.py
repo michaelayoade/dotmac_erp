@@ -30,6 +30,9 @@ from app.web.people.scheduling import router as scheduling_router
 from app.web.people.self_service import router as self_service_router
 from app.web.people.settings import router as settings_router
 from app.web.people.training import router as training_router
+from app.web.people.weekly_meeting_reports import (
+    router as weekly_meeting_reports_router,
+)
 
 # Create main people web router
 router = APIRouter(prefix="/people", tags=["people-web"])
@@ -62,6 +65,9 @@ router.include_router(recruit_router)
 router.include_router(training_router)
 
 # Performance routes
+# Weekly reports are mounted separately because they are available in every
+# performance mode; appraisal/PMS policy guards remain on their own routers.
+router.include_router(weekly_meeting_reports_router)
 router.include_router(perf_router)
 
 # Self-service routes

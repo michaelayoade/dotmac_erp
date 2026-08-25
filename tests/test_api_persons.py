@@ -1,7 +1,24 @@
 import uuid
 
+import pytest
+
 from app.models.person import Person
+from app.services import person as person_service
 from tests.conftest import DEFAULT_TEST_ORG_ID
+
+
+@pytest.fixture(autouse=True)
+def _isolate_postgresql_party_projection(monkeypatch):
+    """Keep SQLite API tests focused on the Person HTTP/service contract.
+
+    The Party projection uses PostgreSQL-owned tables and RLS policies. Its
+    writer and transaction behavior are covered by the dedicated service and
+    PostgreSQL integration suites, so these schema-translated SQLite tests use
+    inert writer seams instead of pretending to reproduce that database
+    contract.
+    """
+    monkeypatch.setattr(person_service, "reconcile_person_party", lambda db, row: None)
+    monkeypatch.setattr(person_service, "retire_person_party", lambda db, row_id: None)
 
 
 class TestPersonsAPI:

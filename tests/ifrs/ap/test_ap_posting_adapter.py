@@ -197,10 +197,14 @@ class MockPostingResult:
         success: bool = True,
         posting_batch_id: uuid.UUID = None,
         message: str = "Posted successfully",
+        idempotent_replay: bool = False,
     ):
         self.success = success
         self.posting_batch_id = posting_batch_id or uuid.uuid4()
         self.message = message
+        # Mirrors the real `PostingResult`. A double that omits a field the
+        # real class carries is how the propagation gap stayed invisible.
+        self.idempotent_replay = idempotent_replay
 
 
 class MockReversalResult:

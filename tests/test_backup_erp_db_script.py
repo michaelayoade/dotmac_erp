@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "scripts/backup_erp_db.sh"
@@ -12,6 +15,16 @@ SCRIPT_PATH = REPO_ROOT / "scripts/backup_erp_db.sh"
 def _write_executable(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+
+def _bash_executable() -> str:
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("backup_erp_db.sh tests require bash")
+    probe = subprocess.run([bash, "-lc", "true"], check=False)  # noqa: S603
+    if probe.returncode != 0:
+        pytest.skip("backup_erp_db.sh tests require a usable bash")
+    return bash
 
 
 def test_backup_script_prunes_old_remote_backups(tmp_path) -> None:
@@ -96,7 +109,7 @@ raise SystemExit(main())
     env["PGPASSWORD"] = "test-password"
 
     subprocess.run(  # noqa: S603
-        [str(SCRIPT_PATH)],
+        [_bash_executable(), str(SCRIPT_PATH)],
         check=True,
         cwd=str(REPO_ROOT),
         env=env,
@@ -180,7 +193,7 @@ raise SystemExit(main())
     env.pop("POSTGRES_PASSWORD", None)
 
     subprocess.run(  # noqa: S603
-        [str(SCRIPT_PATH)],
+        [_bash_executable(), str(SCRIPT_PATH)],
         check=True,
         cwd=str(REPO_ROOT),
         env=env,
@@ -261,7 +274,7 @@ raise SystemExit(main())
     env.pop("DB_OS_USER", None)
 
     subprocess.run(  # noqa: S603
-        [str(SCRIPT_PATH)],
+        [_bash_executable(), str(SCRIPT_PATH)],
         check=True,
         cwd=str(REPO_ROOT),
         env=env,

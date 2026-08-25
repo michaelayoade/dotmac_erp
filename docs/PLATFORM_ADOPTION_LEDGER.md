@@ -1,7 +1,8 @@
 # Platform Adoption Ledger — dotmac_erp
 
-**Status:** UI consumer slice added 2026-08-13; kernel adoption remains on its
-independent E8 track. Supersedes the
+**Status:** UI consumption and three ERP-hosted kernel prerequisites are
+composed; runtime idempotency cutover remains blocked by the non-superuser role
+gate and the per-operation retirement plan. Supersedes the
 Phase-0 draft (recon pin 318a6e0d, surveyed 2026-07-19), which predated this
 repo's checked-in SOT map, the executable SOT registry, and the released kernel.
 This ledger records boundaries and evidence; it does not authorize a production
@@ -9,20 +10,46 @@ deployment.
 
 **Evidence pins:**
 
-- E8 slices 3 and 4: `dotmac_erp` `origin/main` at
-  `2f33a448b8394fc5c28564bb4a785bfea7c3b0ba`.
-- E8 slice 5 is an uncommitted working-tree continuation from that same pin;
-  its evidence is local until normal review and CI promotion occur.
-- Current lock: `dotmac-kernel==0.1.0a24` (source of record:
+- This composition slice starts from `dotmac_erp` `origin/main` at
+  `61e0bf3e4c6a2d3e19706d251c3811bd4362d5c7`; its final evidence is the
+  reviewed commit and CI result, not this prose.
+- Current declared pin: `dotmac-kernel==0.1.0a94` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
-  The dependency **is installed** at this exact pin; E8's migration inventory
-  and compatibility tests inspect this installed distribution dynamically.
+  The lock must resolve this exact published artifact; dependency, installed
+  wheel, prerequisite vocabulary and verifier are checked dynamically.
 - UI slice baseline: `dotmac_erp` `origin/main` at
   `c5f933d9be758c1ae70167cc030326877d9b27f7`; exact target
   `dotmac-ui==0.1.0a7`, UI contract `1` (source of record:
   `dotmac_starter_mt/packages/dotmac-ui`, import name `dotmac_ui`).
 - E1's historical inventory baseline remains ERP commit `96928fa1`; sections
   that cite that hash describe that earlier measurement, not the E8 baseline.
+
+## Imports I1 — first durable customer adopter
+
+ERP composes `dotmac-imports==0.1.0a2` as the first real consumer of its
+tenant-scoped `im` lineage. The module owns the run, immutable partition plan,
+atomic claim/checkpoint lifecycle and minimised row outcomes. ERP remains the
+sole owner of customer vocabulary, validation, duplicate policy and mutation;
+`app.services.finance.import_export.durable_customers` delegates accepted rows
+to `customer_service.create_customer` and never commits, rolls back or creates
+a session.
+
+Source and derived partition bytes are held by the already composed
+`dotmac-files` contract through ERP's one MinIO adapter. Upload admission is
+streamed into a spooled file under a configured hard ceiling; partition size,
+row count and validation-worker count are deployment settings. Workers use
+three phases: commit an atomic claim, read and verify the authorized stored
+object with no session, then settle domain effects and outcomes in one new
+tenant transaction. Apply stays serialized until customer legal-name
+uniqueness is enforced by the database; dry-run claims may run concurrently.
+
+This is a shadow slice, not immediate retirement. Every durable validation row
+is compared with the retiring `CustomerImporter` verdict first and a mismatch
+refuses settlement. The legacy endpoint stays available until CI/PostgreSQL
+evidence and real shadow comparisons are clean, after which its decoding,
+mapping and run-loop ownership is removed and the two-directional caller
+ratchet is lowered in the same change. The exact contract is
+`docs/architecture/imports-adoption-boundary.md`.
 
 ## E8 slice 3 — Organization identity is module tenant identity
 
@@ -39,9 +66,24 @@ ERP retains its existing engine, `SessionLocal`, transaction boundaries, ORM
 listener and `app.current_organization_id` policies. Canonical session primers
 now set `app.current_organization_id` and `app.current_tenant` atomically and
 re-arm both after every transaction boundary. The latter is the scope consumed
-by stateful shared-module RLS. ERP's `app.bypass_rls` does not bypass that
-module scope; cross-organization module work iterates Organizations under
-separate `session_for_org` sessions.
+by stateful shared-module RLS. Runtime code has no PostgreSQL bypass writer;
+that removal is fail-closed against ERP's migrated policy set, not a no-op.
+Cross-organization module work iterates Organizations under separate
+`session_for_org` sessions, and the future `app_user` cutover remains blocked
+until every residual database-wide caller has a narrow reviewed contract.
+
+That caller disposition is exact and checked in at
+`docs/inventories/rls-cross-org-callers.tsv`: one row per runtime
+cross-organization caller, carrying its mechanism, the schema-qualified
+relations it reaches, its reviewed contract, and whether it is ready for
+ordinary `app_user` or still blocked.
+
+The counts are deliberately NOT repeated here. Every converted slice moves
+them, and a number copied into prose is stale by the next merge — this
+paragraph carried "198 owning functions / ninety ready / 108 blocked / 71 jobs
+and scripts" for four slices after all four had stopped being true. The TSV is
+the count of record; `tests/architecture/test_cross_org_caller_dispositions.py`
+is the two-directional ratchet and sensitivity proof that keeps it exact.
 
 The complete contract and remaining gate are
 `docs/architecture/organization-tenant-boundary.md`. This slice creates no
@@ -140,11 +182,166 @@ itself promote the component slice to reuse-proven; that requires the planned
 independent Sub cutover on an exact released pin. It changes no accounting,
 tenancy, permissions, settings, database schema or migration lineage.
 
+## Adoption slices
+
+**2026-08-24 — Clean-instance composition direction.** ADR-0003 supersedes the
+planned replay of 190,179 legacy posted journals. ERP will finish module
+composition against fresh databases, import only reviewed masters, live open
+items, continuity identities and a Finance-approved opening accounting state,
+then retain the legacy ERP as the read-only owner of pre-cutover history. Known
+legacy accounting defects remain evidence in that archive; they no longer block
+software composition and are never copied into `mod_accounting`.
+
+This changes Gate D, not the as-built Gate C claim. Accounting remains composed
+and disabled, no runtime owner has moved, and production is untouched. The
+legacy extractor loses its load seam and remains a read-only forensic tool. The
+new bootstrap must use module public contracts, stable source identities,
+content fingerprints and exact control evidence, and must be reproducible on
+two independently migrated clean databases before any caller is repointed.
+
+**2026-08-21 — Accounting gate C: composed and disabled.** ERP pins
+`dotmac-accounting==0.1.0a1` exactly and composes `mod_accounting` into its
+Alembic graph. Kernel repinned `0.1.0a83` → `0.1.0a85` — **demanded by the
+module, not bundled with it**: `dotmac-accounting 0.1.0a1` floors at
+`dotmac-kernel >= 0.1.0a85`, so the lock cannot resolve at a83. `dotmac-files`
+needs no repin and stays at `0.1.0a2`. The regenerated lock adds exactly one
+package and moves exactly one version; there is no transitive churn.
+
+**Gate B is complete**, settled by the annotated Starter tag
+`dotmac-accounting-v0.1.0a1`, which peels to commit `20d24703`. Gate A's
+`test_the_distribution_is_not_pinned` was an ABSENCE guard, never a tag oracle;
+gate C replaced it and the three other absence assertions with their positive
+counterparts — exact pin, installed version matches, lineage resolves,
+`require_composition_ready()` now refuses for "not enabled" rather than "not
+installed". The one gate-A assertion that survives unchanged is that nothing
+under `app/` imports the package.
+
+**This is storage, not authority.** `ACCOUNTING_COMPOSITION_ENABLED` stays
+false, no ERP writer is repointed, no backfill has run, and no decision has
+moved — the same rule ERP already applies to `idempotency_ledger.v1`, whose
+tables have existed since `20260820_idempotency_ledger` while its operations
+remain uncut-over.
+
+Proven against PostgreSQL on a disposable database built the way a deploy builds
+one (ERP's lineage to head, then `alembic upgrade heads` with the modules
+composed): `ac_0001_accounting` applies and is stamped; `require_prerequisites`
+passes against the live catalog for all three effects, with a sensitivity proof;
+every declared `mod_accounting` table exists with a non-nullable `tenant_id` and
+FORCEd RLS; `upgrade heads` is repeatable; and the kernel's composed migration
+gate reports nothing against either module lineage.
+
+**Two head-related corrections, both of which a draft got wrong.** First, ERP
+does not have one global Alembic head and must not expect one — each composed
+module lineage is an independent root with its own branch label, which is why
+the deploy path has always been `alembic upgrade heads`, plural. Second, the
+adoption run showed `alembic_version` held only TWO rows
+(`ac_0001_accounting`, `fi_0001_stored_files`): the prerequisite provider
+`20260820_idempotency_ledger` was subsumed because both modules carry a
+`depends_on` edge onto it, and Alembic treats a depended-upon revision as an
+ancestor. Later ERP revisions remain separately stamped effective heads, so
+the current composed graph has 3 graph heads and 3 stamped rows. The expectation
+is derived from the script directory, and a separate test distinguishes
+"provider subsumed" from "provider never ran" — indistinguishable in the
+version table alone. `app/migration_bindings.py` now declares
+`COMPOSED_MODULE_LINEAGES` as the checked expectation.
+
+The composed gate must also see the WHOLE composition: scoped to the module's
+own directory it correctly reports each bound prerequisite as naming "a revision
+this deployment never runs". Given every location, what remains is ERP's legacy
+history, so the assertion is scoped by the gate's own attribution, and ERP's
+long revision ids rest on an enforceable premise checked against the live
+catalog — `extend_alembic_version` widened `alembic_version.version_num`, and if
+anyone narrows it the build says so.
+
+**2026-08-21 — Accounting readiness (gate A). No pin.** ERP prepares the five
+artifacts a sealed `dotmac-accounting` cutover needs, and pins nothing: the
+module has no release tag, and
+`tests/architecture/test_accounting_composition_disabled.py` enforces its
+absence four independent ways (no dependency, no import under `app/`, no
+`version_locations` entry, `ACCOUNTING_COMPOSITION_ENABLED` defaulting off).
+
+What landed, and what each is for:
+
+- **The map.** `docs/inventories/accounting-gl-writers.tsv` (74 rows) and
+  `docs/inventories/accounting-gl-callers.tsv` (168 rows), each an exact
+  two-directional ratchet with a per-shape sensitivity proof
+  (`tests/architecture/test_accounting_gl_boundary.py`). Every row carries both a
+  disposition and a `final_state`, and each pair carries an invariant checked
+  against the code rather than the label — a `keep_local` writer must touch only
+  retained relations, a `tool_repointed` entry point must be Python, a
+  `gl_internal` caller must really live in the GL owner. Writer final states:
+  36 `writer_removed`, 20 `tool_repointed`, 12 `tool_archived`, 6
+  `retained_erp_writer`. Caller final states: 106 `caller_repointed`, 58
+  `retired_with_gl_owner`, 4 `retained_erp_caller`. The 106 repointed callers
+  are the real size of this cutover.
+- **The disabled composition, proven inert.** `app/accounting_adoption.py`
+  states the composition as data — names, version location, required effects, and
+  a THREE-way partition of every GL relation: seven migrate, four are retained
+  ERP writers (`gl.account_balance`, `gl.balance_refresh_queue`, `gl.budget`,
+  `gl.budget_line`), and `gl.posting_batch` ends with its writer, having neither
+  a module table nor a surviving ERP writer once the poster is sealed. The
+  two-way version of that partition mis-filed
+  `LedgerPostingService._retire_superseded_batch_key` as `keep_local`; the
+  writer ledger's invariant is what caught it. It imports nothing from the
+  module, and `require_composition_ready()` refuses rather than degrading,
+  distinguishing "not installed" from "not enabled".
+  `tests/architecture/test_accounting_scaffold_is_inert.py` proves the scaffold
+  changes no deployment: booting `app.main` imports none of it, it registers no
+  route/task/beat entry/ORM table, it reads exactly one environment variable,
+  and importing it with every outbound socket poisoned reaches no network. Both
+  probes carry sensitivity proofs, since both pass by finding nothing.
+- **Migrations: prerequisites bound and resolving; nothing further proven.** The
+  module declares `tenant_scope_catalog.v1`, `module_database_roles.v1` and
+  `idempotency_ledger.v1`; ERP binds all three to its own revisions, the last of
+  them by PR #328, and resolution yields exactly those three and nothing
+  beginning `0001_`. That is a check over declarations and bindings — the only
+  one possible without the wheel. It does NOT prove the effects hold in a
+  database (`require_prerequisites` verifies that against the live catalog at
+  migration time, and has not run for Accounting), nor that `ac_0001` applies
+  onto ERP's revision graph with a single head. The accurate claim is that no
+  ERP migration is currently known to be outstanding; whether any is needed is a
+  gate C question answered by running the lineage against a real non-production
+  database.
+- **The backfill.** `app/services/finance/gl/accounting_backfill.py` plus
+  `scripts/backfill_accounting.py`. Masters row by row; transactions as a
+  per-period work list carrying ERP's acceptance digest, so a divergence is
+  attributable to a period rather than to "the backfill". Three shape changes
+  are performed rather than copied — fixed dimension columns to a generic
+  registry, a period status column to an event stream, and ERP's
+  category-IFRS-class / account-type split onto the module's `account_class` /
+  `kind`. Both classification tables are checked against the ERP enums they map,
+  so a new enum member fails the build instead of the run.
+- **The shadow comparison.**
+  `app/services/finance/gl/accounting_shadow.py` — a pure comparator over exact
+  `Decimal`s at three levels (control totals, per account, ordered line digest),
+  because a missing document, a mis-mapped account and the same position reached
+  by different entries fail differently and a single boolean hides which. Both
+  sides produce the same `LedgerFact` values, so the comparison logic is
+  unit-tested today and unchanged at cutover.
+
+No writer moved, no authority moved, no production work was performed. The
+ordered gates B–G are in `docs/architecture/accounting-adoption-boundary.md`;
+each is a separate authorization.
+
 ## Pin history
 
-**Current E8 measurement — `0.1.0a24`.** The a24 dependency and lock were
+**2026-08-20 — `0.1.0a56` → `0.1.0a83`.** This is the first DB-provider use
+of the pinned kernel without composing its lineage. ERP revision
+`20260820_idempotency_ledger` creates both planes required by
+`idempotency_ledger.v1`, binds the effect to that ERP revision, and calls the
+published verifier before the migration may succeed. The app still imports no
+kernel idempotency model or execution service, and no legacy operation moves:
+the exact caller ratchet and ADR-0001 keep runtime cutover separate.
+
+The floor is a83 because it is the latest published kernel already validated
+by Starter before this slice; Accounting's prepared package floor is a85 and
+therefore remains uncomposable until a85 and Accounting a1 are separately
+authorized and registry-verified. This pin supplies the prerequisite contract,
+not authorization to publish either artifact.
+
+**Historical E8 measurement — `0.1.0a24`.** The a24 dependency and lock were
 already present at the E8 slice baseline; this slice does not claim to perform
-that upgrade. The current distribution has 17 kernel migration revisions and
+that upgrade. That distribution had 17 kernel migration revisions and
 E8's 0001 disposition test derives its table inventory from the installed
 revision rather than copying an a13-era count.
 
@@ -444,8 +641,9 @@ migration tests, and a rollback/retirement plan.
    and single writer.
 3. Dual-layer tenancy (ORM listener + PostgreSQL RLS) must never be weakened
    or partially initialized (evidence section below).
-4. ERP identity/OIDC/sessions/RBAC stay local; kernel Party/auth/RBAC is
-   prohibited in this program.
+4. ERP identity/sessions/RBAC stay local; kernel Party/auth/RBAC is
+   prohibited in this program. (ERP's unshipped OIDC adapter was deleted on
+   2026-08-15 — see `docs/oidc_identity_contract.md`.)
 5. The existing finance outbox is improved in place; kernel messaging tables
    are not introduced beside it before the E8 ADR.
 6. Kernel `Money` is a boundary value only; ERP's six-decimal posting, FX,
@@ -457,13 +655,16 @@ migration tests, and a rollback/retirement plan.
 
 Classes: **consume-pure** (DB-free contract, importable once the pin lands in
 E2) · **adapt-existing** (kernel contract adapted behind an existing ERP
-owner, no kernel table) · **defer-db** (kernel persistence/session/migration
-surface; gated on the E8 Organization→Tenant + migration ADR) ·
+owner, no kernel table) · **hosted-db** (ERP's own lineage truthfully supplies
+a named kernel database effect while runtime callers remain separately gated) ·
+**defer-db** (kernel persistence/session/migration surface still awaiting its
+named ownership and composition decision) ·
 **prohibited** (out of scope for this program; never imported under `app/`).
 
-Only **consume-pure** modules are in the architecture-test import allowlist
-today. `adapt-existing` and `defer-db` modules join the allowlist only in the
-slice that adopts them, in the same change that updates this table.
+Only **consume-pure** modules and the exact persisted symbols named below are
+in the architecture-test import allowlist today. `adapt-existing` and
+`defer-db` modules join only in the slice that adopts them, in the same change
+that updates this table.
 
 | Kernel module | Class | Timing | Rationale / constraints |
 |---|---|---|---|
@@ -473,12 +674,12 @@ slice that adopts them, in the same change that updates this table.
 | `dotmac_kernel.profiles` | consume-pure | Early (E7) | `DeploymentProfileSpec`/registry for release preflight; never branch business logic on profile strings |
 | `dotmac_kernel.assembly` | consume-pure | Early (E7) | `ProductAssemblySpec` as metadata/release validation; does not replace ERP app startup |
 | `dotmac_kernel.providers` | consume-pure | Early (E7) | Provider seam interfaces consumed by profile preflight only |
-| `dotmac_kernel.prerequisites` | consume-pure | E8 (kernel `0.1.0a56`) | Vocabulary + `PrerequisiteBinding` + `resolve_depends_on` for ADR-0006 D1's logical migration prerequisites. Pure — no I/O, no ORM, no web framework — so it is consume-pure rather than an exact-symbol adoption like `models.Tenant`. ERP declares its bindings in `app/migration_bindings.py` and installs them from `alembic/env.py`; both effects are supplied by ERP's OWN revisions (`20260813_tenant_projection`, `20260814_database_roles`), never by a kernel revision, because ERP hosts `public.tenants` itself and can never run kernel `0001`. `dotmac_kernel.migrations.verify` is deliberately NOT admitted: only a REQUIRING module calls it, and ERP requires nothing yet |
+| `dotmac_kernel.prerequisites` | consume-pure | E8 (kernel `0.1.0a83`) | Vocabulary + `PrerequisiteBinding` + `resolve_depends_on` for ADR-0006 D1's logical migration prerequisites. Pure — no I/O, no ORM, no web framework — so it is consume-pure rather than an exact-symbol adoption like `models.Tenant`. ERP declares its bindings in `app/migration_bindings.py` and installs them from `alembic/env.py`; all three effects are supplied by ERP's OWN revisions (`20260813_tenant_projection`, `20260814_database_roles`, `20260820_idempotency_ledger`), never by a kernel revision, because ERP hosts `public.tenants` itself and can never run kernel `0001` |
 | `dotmac_kernel.testing` | consume-pure | Early (E2+) | Pure fakes/clock/licence kit for compatibility tests. The a7 wheel defect (eager `harness` → `deps` → `db` import made the subtree DB-bound) is FIXED in 0.1.0a8; DB-free import of the full subtree is asserted by `tests/architecture/test_kernel_compatibility.py::test_every_consume_pure_module_imports_without_db`. `FakeLicenceSigner` works without kernel extras because cryptography is an ERP main dependency |
 | `dotmac_kernel.licensing` | consume-pure (types/verifier); cutover deferred-but-required | E9 (after E8) | Value types + `verify_licence` are DB-free and importable; enforcement cutover replaces the placeholder-key path (`app/licensing/validator.py:32`) through one explicit shadow-compare + cutover. No second enforcement owner meanwhile |
 | `dotmac_kernel.messaging` (behavior: envelope/outcome semantics) | adapt-existing | Early (E3) | Target semantics for the existing ERP outbox (`events.outbox` owner): claim/deliver/settle, fail-closed unknown events, no service-internal commits. Semantics are matched, not imported wholesale |
 | `dotmac_kernel.messaging` (storage/relay/worker: `messaging.models`, `relay`, `worker`, `platform_*`, `inbox`) | defer-db | After E8 ADR | Kernel `outbox_events`/`inbox_records`/`platform_*` tables would stand beside `platform.event_outbox` — a prohibited second outbox until the ADR decides migration/tenancy compatibility |
-| `dotmac_kernel.idempotency` (+ `.idempotency_models`) | defer-db | After E8 ADR | Kernel `0.1.0a31` (ADR-0014) makes at-most-once execution one owner and renames the inbox ledgers to `idempotency_records` / `platform_idempotency_records`. `idempotency_records.tenant_id` is NOT NULL with an FK to kernel `tenants`, which ERP neither has nor migrates, and the table would stand beside `platform.idempotency_record` — a prohibited second ledger. ERP's `IdempotencyService` remains the owner until E8; the kernel contract is conformance criteria only |
+| `dotmac_kernel.idempotency` (+ `.idempotency_models`) | hosted-db; runtime import/cutover deferred | Storage composed 2026-08-20 under [ADR-0001](adr/0001-kernel-idempotency-is-erps-only-at-most-once-owner.md) | ERP revision `20260820_idempotency_ledger` creates BOTH kernel-shaped tables in ERP's own lineage, binds `idempotency_ledger.v1`, and proves the exact columns, unique keys, retention indexes and RLS plane posture through the pinned verifier. It never runs or stamps the kernel root. `platform.idempotency_record` remains transitional legacy state under `tests/architecture/idempotency_legacy_callers.txt`; no operation is cut over or dual-written by this storage slice. Runtime adoption requires a disjoint operation-scope/replay-window mapping and stays blocked while production connects as `postgres`, because an RLS proof on a superuser proves nothing. Accounting also remains disabled until its exact kernel/package pins are published and its own requiring migration re-verifies this effect |
 | `dotmac_kernel.config` | adapt-existing | Mid-program (E6+) | Typed settings contract adapted behind ERP's canonical settings owner only after direct `DomainSetting` writers are removed. Env-name collision: both define `DATABASE_URL`; kernel additionally wants `PLATFORM_DATABASE_URL`. Kernel builds a module-level `settings` singleton on import |
 | `dotmac_kernel.settings_resolver` | adapt-existing | Mid-program (E6+) | Spec registry / tenant→platform→default resolution adapted behind `control.settings`; ERP DB remains runtime-authoritative |
 | `dotmac_kernel.settings_models` | defer-db | After E8 | Kernel `DomainSetting` table name `domain_settings` **collides exactly** with ERP `public.domain_settings` (different columns: `tenant_id` vs `organization_id`, no ERP history table on the kernel side) |
@@ -486,8 +687,9 @@ slice that adopts them, in the same change that updates this table.
 | `dotmac_kernel.audit` | defer-db | After E6 consolidation | `write_audit_event` targets table `audit_events` — **collides exactly** with ERP `public.audit_events` (`app/models/audit.py:26`). No kernel audit table beside ERP's four unconsolidated writers |
 | `dotmac_kernel.entitlements` | defer-db | After E8 | `tenant_entitlement_grants` table; local grants only after Organization→Tenant mapping + module catalogue |
 | `dotmac_kernel.db` | defer-db | After E8 | Import constructs TWO engines + `SessionLocal`/`PlatformSessionLocal` from env at import time and primes RLS via GUC `app.current_tenant` — a different GUC than ERP's `app.current_organization_id`. Importing it violates the no-second-session-factory exclusion and would half-initialize tenancy |
-| `dotmac_kernel.migrations` | defer-db | After E8 | 17 revisions designed to compose into the consumer's Alembic `version_locations`; composing them into ERP's single-root, 372-revision graph (shared `public.alembic_version`) is an ADR-gated migration decision |
+| `dotmac_kernel.migrations` | defer-db (full lineage); exact verifier adopted by provider revision | After E8 | ERP imports `migrations.verify.require_prerequisites` only from its idempotency provider revision, as a proof over ERP-owned DDL. The kernel revision lineage itself remains absent and permanently unstampable: composing it into ERP's graph would collide on `public.tenants` and assert unrelated identity/RBAC/audit effects |
 | `dotmac_kernel.models` | partial persisted adoption: exact `Tenant` symbol only; identity/RBAC prohibited | E8 slice 4 | `app.services.tenant_projection` is the only admitted importer and writer. `TenantDomain` has a hosted table but no runtime import. `Party`/`Role`/`UserCredential`/`AuthSession` remain prohibited; Party never replaces `Person` in this program |
+| `dotmac_kernel.cache` | partial typed adoption: exact `TenantScope` symbol only | Imports I1 | `app.tenancy` is the only admitted importer and constructor. It maps the authoritative Organization UUID to the shared-module scope; services ask that adapter for the scope and cannot independently choose tenant or platform scope |
 | `dotmac_kernel.models_platform` | prohibited | — | Platform actor identity (`platform_admins`/`platform_sessions`/`platform_audit_events`); ERP has no platform-actor concept and identity stays local |
 | `dotmac_kernel.security` | prohibited | — | Kernel credential hashing/token machinery; ERP `auth.flow` owner stays |
 | `dotmac_kernel.deps` | prohibited | — | Kernel route guards query kernel identity models |
@@ -525,6 +727,7 @@ across classes, defeating per-module review. Import the classified submodule.
 | `user_credentials` | **EXACT COLLISION** — ERP `public.user_credentials` (`app/models/auth.py:47`) | Kernel identity prohibited anyway |
 | `auth_sessions` | Near-miss — ERP uses `public.sessions` (`app/models/auth.py:190`); no name clash but same concern | Prohibited surface |
 | `tenants`, `tenant_domains` | Hosted kernel-compatible catalogue. `tenants` is a same-UUID projection of authoritative `core_org.organization`; `tenant_domains` has no ERP writer yet | E8 slice 4; full kernel lineage still gated |
+| `idempotency_records`, `platform_idempotency_records` | Hosted at the a83 contract by ERP revision `20260820_idempotency_ledger`; the legacy response cache remains separately named `platform.idempotency_record` | Storage provider adopted; runtime operation cutover blocked by ADR-0001 gates |
 | `parties`, `party_persons`, `party_organizations`, `party_roles` | No name clash with `public.people` (`app/models/person.py:50`) | Prohibited surface |
 | `outbox_events`, `inbox_records`, `platform_outbox_events`, `platform_inbox_records` | No name clash — ERP outbox is `platform.event_outbox` (`app/models/finance/platform/event_outbox.py:42`, schema `platform`) — but a second outbox beside it is prohibited by boundary 5 | Defer-db |
 | `platform_admins`, `platform_sessions`, `platform_audit_events` | No name clash; note ERP already uses a *schema* named `platform` — kernel `platform_*` tables in `public` would be confusable | Prohibited surface |
@@ -543,8 +746,8 @@ incl. `hr`, `lease`, `core_org`, `tax`, `rpt`, `pm`, `fa`, `support`,
   (`alembic/env.py` — `version_table_schema="public"`, `include_schemas=True`).
   Production migrates via `scripts/deploy.sh:93` →
   `poetry run alembic upgrade heads` (plural heads is a lived habit).
-- Kernel: 17 revisions under `dotmac_kernel/migrations/versions/`
-  (`…0001_initial_tenant_schema` … `…0017_history_actor`), designed to be
+- Kernel a83: 26 revisions under `dotmac_kernel/migrations/versions/`
+  (`…0001_initial_tenant_schema` … `…0026_platform_audit_log`), designed to be
   composed via the consuming app's `version_locations`. Composition would put
   a **second root** into ERP's revision graph sharing the same
   `public.alembic_version` table → guaranteed extra head, and `upgrade heads`
@@ -601,9 +804,11 @@ incl. `hr`, `lease`, `core_org`, `tax`, `rpt`, `pm`, `fa`, `support`,
 
 - Kernel `Party`/`UserCredential`/`AuthSession`/`platform_auth` vs ERP
   `Person` (`public.people`) + `user_credentials`/`sessions`/`mfa_methods`/
-  `api_keys`/`federated_identities` (`app/models/auth.py`) + OIDC adapter
-  (`app/services/sso/oidc.py`). Prohibited for this program (boundary 4);
+  `api_keys` (`app/models/auth.py`). Prohibited for this program (boundary 4);
   guarded already by `tests/architecture/test_identity_protocol_boundary.py`.
+  There is no OIDC adapter to compare against: `app/services/sso/` was deleted
+  on 2026-08-15 (never enabled, zero rows). `federated_identities` survives as
+  an empty table with no reader, pending a separate retirement change.
 
 ### Outbox
 
@@ -639,25 +844,23 @@ ERP tenancy is dual-layer, and both layers must always be primed together
   SELECT-time only; UPDATE/DELETE isolation is RLS's job.
 - **Layer 2 — PostgreSQL RLS:** policies created dynamically by migration
   `alembic/versions/add_rls_policies.py` (plus `add_hr_rls_policies.py` and
-  schema-specific successors): per-table SELECT/INSERT/UPDATE/DELETE policies
-  of the form `should_bypass_rls() OR organization_id =
-  get_current_organization_id()`, with **`FORCE ROW LEVEL SECURITY`**
-  (`add_rls_policies.py:108`), reading GUCs `app.current_organization_id` and
-  `app.bypass_rls` set via `app/rls.py`
-  (`set_current_organization_sync`, `bypass_rls_sync`; `SET LOCAL`, i.e.
-  transaction-scoped — reset at COMMIT/ROLLBACK).
+  schema-specific successors). A clean database at migration heads has 103
+  tables whose policies still carry the legacy `should_bypass_rls()` predicate;
+  the earlier 16-table count described stale production, not ERP's design.
+  Runtime code sets only `app.current_organization_id` (and shared-module
+  `app.current_tenant`); it has no writer for the user-settable bypass GUC.
 
 Per execution context:
 
 | Context | Priming path | Both layers? |
 |---|---|---|
-| HTTP JSON API | `app/api/deps.py::get_db_with_org` — `prime_session(db, org)` + `set_current_organization_sync(db, org)` (deps.py:106-107), org from `require_tenant_auth`; auto-commit at edge. Cross-tenant admin: `get_db_admin_bypass` / auth bootstrap: `get_db_auth_bypass` — both bypass layers together (`enable_rls_bypass_sync` + `info["allow_cross_org"]`) | Yes — single dependency owns both |
+| HTTP JSON API | `app/api/deps.py::get_db_with_org` — `prime_session(db, org)` + `set_current_organization_sync(db, org)` (deps.py:106-107), org from `require_tenant_auth`; auto-commit at edge. Cross-tenant admin/auth bootstrap dependencies set only `info["allow_cross_org"]`; their historical `*_bypass` names refer to the ORM listener, not PostgreSQL RLS | Tenant paths: yes. Cross-org paths: ORM only |
 | HTTP web (Jinja/HTMX) | `app/web/deps.py::get_db_for_org` (web/deps.py:1436; primes both at 1468-1475). Public-slug flows (careers/onboarding) open unprimed via `get_db` (web/deps.py:79), resolve the org under bypass, then `prime_tenant_context` (`app/db/session_context.py:119`) sets both layers retroactively | Yes — canonical dep or `prime_tenant_context` |
 | **Not middleware** | ERP has **no tenant middleware**: org context is established by DB dependencies after authentication, never from Host headers. (Contrast: kernel `middleware/tenant.py` + kernel `get_db`.) | n/a |
-| Celery tasks | `app/db/session_context.py::session_for_org` primes both layers; `cross_org_session` bypasses both. Both helpers re-arm their transaction-local PostgreSQL GUC on every `after_begin`, so commits do not silently lose scope. One session per org remains required to avoid identity-map contamination. `scripts/check_session_context.py` enforces the boundary in CI and pre-commit. Worker bootstrap (`app/celery_app.py`): `worker_process_init` re-registers audit listeners per process; beat uses `app.celery_scheduler.DbScheduler` | Yes — canonical context managers |
+| Celery tasks | `app/db/session_context.py::session_for_org` primes ORM and database tenant scope; `cross_org_session` bypasses only the ORM listener. `session_for_org` re-arms its transaction-local PostgreSQL scope GUCs on every `after_begin`, so commits do not silently lose scope. One session per org remains required to avoid identity-map contamination. `scripts/check_session_context.py` enforces the boundary in CI and pre-commit. Worker bootstrap (`app/celery_app.py`): `worker_process_init` re-registers audit listeners per process; beat uses `app.celery_scheduler.DbScheduler` | Tenant paths: yes. Cross-org discovery: ORM only |
 | CLI / maintenance scripts | Same context managers (`session_for_org` / `cross_org_session`), e.g. `scripts/backfill_mailcow_offboarding.py`, `scripts/review_suspicious_bank_matches.py`. `scripts/check_session_context.py` now scans `scripts/` as well as `app/tasks/` and `app/tools/`; the exact legacy count is a shrinking ratchet in `scripts/session_context_legacy.txt`, with the fail-silent RLS subset independently ratcheted by `tests/architecture/test_script_rls_scope.py`. Provisioning entry points now separate global discovery/catalogue work from tenant-owned writes | Yes — enforced, with a shrinking legacy baseline |
 | Reconciliation jobs | They are Celery tasks (e.g. `app/tasks/dotmac_sub.py` daily/full reconciliation, `app/tasks/outbox_relay.py`) → `session_for_org`/`cross_org_session` path above. The outbox relay processes per-event org context from the event row | Yes — same task path |
-| Migrations | `alembic/env.py` builds its own engine from `settings.database_url` (no session-context helpers, no GUCs). DDL is unaffected by RLS; **data** migrations run subject to `FORCE ROW LEVEL SECURITY` unless they explicitly `SET app.bypass_rls = 'true'` (the policy functions honor it — `add_rls_policies.py:58,73-76`). Deploy path: `scripts/deploy.sh` → `alembic upgrade heads` inside the app container | RLS applies at the DB; no org context — bypass must be explicit per data migration |
+| Migrations | `alembic/env.py` builds its own engine from the migration URL. Historical revisions that set the legacy GUC remain immutable; new data migrations must use the migration executor's approved database authority rather than reintroducing a runtime GUC escape. Deploy path: `scripts/deploy.sh` → `alembic upgrade heads` inside the app container | Separate migration authority |
 
 Any kernel adoption that opens sessions (db/messaging/entitlements/audit)
 must reach RLS through these exact seams or atomically extend them — a kernel

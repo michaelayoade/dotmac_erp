@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 from app.services.finance.banking.programmatic_parts.base import (
     Any,
     BankAccount,
@@ -34,9 +35,7 @@ class BankFeeStrategy(MatchStrategy):
         if not still_unmatched:
             return
         from app.models.finance.gl.account import Account
-        from app.models.finance.gl.journal_entry import JournalType
-        from app.services.finance.gl.journal import JournalInput, JournalLineInput
-        from app.services.finance.posting.base import BasePostingAdapter
+        from app.services.finance.banking.bank_fee_posting import post_bank_fee
 
         account_code = ctx.policy.gl_mappings.get(
             "fee_expense_account_code",
@@ -63,66 +62,37 @@ class BankFeeStrategy(MatchStrategy):
 
         for line in fee_lines:
             try:
-                amount = abs(line.amount)
-                correlation_id = f"bank-fee-{line.line_id}"
-                journal_input = JournalInput(
-                    journal_type=JournalType.STANDARD,
-                    entry_date=line.transaction_date,
-                    posting_date=line.transaction_date,
-                    description=f"Bank charge - {line.description}",
-                    reference=line.reference,
-                    source_module="BANKING",
-                    source_document_type="BANK_FEE",
-                    correlation_id=correlation_id,
-                    lines=[
-                        JournalLineInput(
-                            account_id=finance_cost_account.account_id,
-                            debit_amount=amount,
-                            description=line.description,
-                        ),
-                        JournalLineInput(
-                            account_id=ctx.bank_account.gl_account_id,
-                            credit_amount=amount,
-                            description=line.description,
-                        ),
-                    ],
-                )
-                journal, create_error = BasePostingAdapter.create_and_approve_journal(
+                # Delegated to the one bank-fee owner (see `bank_fee_posting`).
+                outcome = post_bank_fee(
                     ctx.db,
-                    ctx.organization_id,
-                    journal_input,
-                    service.SYSTEM_USER_ID,
-                    error_prefix="Fee journal creation failed",
+                    organization_id=ctx.organization_id,
+                    line=line,
+                    bank_gl_account_id=ctx.bank_account.gl_account_id,
+                    finance_cost_account_id=finance_cost_account.account_id,
+                    posted_by_user_id=service.SYSTEM_USER_ID,
+                    poster=service._post_with_period_fallback,
                 )
-                if create_error:
+
+                if outcome.needs_attention:
+                    # Something exists but no ledger effect does. Surfaced, not
+                    # skipped: counting this shape as done is what let 12,117
+                    # orphan journals accumulate unnoticed.
                     ctx.result.errors.append(
-                        f"Line {line.line_number}: {create_error.message}"
+                        f"Line {line.line_number}: {outcome.message}"
                     )
                     continue
 
-                idempotency_key = BasePostingAdapter.make_idempotency_key(
-                    ctx.organization_id,
-                    "BANKING",
-                    line.line_id,
-                    action="bank-fee",
-                )
-                posting_result = service._post_with_period_fallback(
-                    ctx.db,
-                    organization_id=ctx.organization_id,
-                    journal_entry_id=journal.journal_entry_id,
-                    posting_date=line.transaction_date,
-                    idempotency_key=idempotency_key,
-                    source_module="BANKING",
-                    correlation_id=correlation_id,
-                    posted_by_user_id=service.SYSTEM_USER_ID,
-                    success_message="Bank fee posted",
-                    error_prefix="Fee journal posting failed",
-                )
-                if not posting_result.success:
+                if not outcome.ok:
                     ctx.result.errors.append(
-                        f"Line {line.line_number}: {posting_result.message}"
+                        f"Line {line.line_number}: {outcome.message}"
                     )
                     continue
+
+                # Matching runs whether or not this call created the journal:
+                # a crash between posting and matching would otherwise leave the
+                # statement line unmatched forever. `_find_journal_line` looks
+                # the line up by correlation id, so repeating it is harmless.
+                correlation_id = f"bank-fee-{line.line_id}"
 
                 journal_line = service._find_journal_line(
                     ctx.db,

@@ -1,0 +1,107 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, pagination, icon_svg, status_badge %}
+
+{% block page_title %}Academy Progress{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Training</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">Academy Progress</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/training/academy/requirements" class="btn btn-secondary">{{ icon_svg("settings", "h-4 w-4 mr-1.5") }} Requirements</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/training/academy/progress",
+        active_filters=active_filters if active_filters else [],
+        show_search=false
+    ) %}
+        <select aria-label="Employee" name="employee_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Employees</option>
+            {% for employee in employees %}
+            <option value="{{ employee.employee_id }}" {{ 'selected' if employee_id == employee.employee_id|string }}>{{ employee.person.name }} · {{ employee.employee_code }}</option>
+            {% endfor %}
+        </select>
+        <select aria-label="Designation" name="designation_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Designations</option>
+            {% for designation in designations %}
+            <option value="{{ designation.designation_id }}" {{ 'selected' if designation_id == designation.designation_id|string }}>{{ designation.designation_name }}</option>
+            {% endfor %}
+        </select>
+        <select aria-label="Academy course" name="academy_course_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Academy Courses</option>
+            {% for course_id, course_title in academy_courses %}
+            <option value="{{ course_id }}" {{ 'selected' if academy_course_id == course_id }}>{{ course_title if course_title else course_id }}</option>
+            {% endfor %}
+        </select>
+        <select aria-label="Status" name="status" class="form-select" {{ filter_attrs }}>
+            <option value="">All Statuses</option>
+            {% for item in statuses %}
+            <option value="{{ item }}" {{ 'selected' if status == item }}>{{ item|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
+
+    <div id="results-container">
+        {% if progress_records %}
+        <div class="card overflow-hidden">
+            <div class="table-container">
+                <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-800/50">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Employee</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Academy Course</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Assessment</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Progress</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Score</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Last Sync</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        {% for progress in progress_records %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+                                {{ progress.employee.person.name }}
+                                <div class="text-xs text-slate-500">{{ progress.employee.employee_code }}{% if progress.employee.designation %} · {{ progress.employee.designation.designation_name }}{% endif %}</div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+                                {{ progress.academy_course_title if progress.academy_course_title else progress.academy_course_id }}
+                                <div class="font-mono text-xs text-slate-500">{{ progress.academy_course_id }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                                {{ progress.academy_assessment_title if progress.academy_assessment_title else '-' }}
+                                {% if progress.academy_assessment_id %}<div class="font-mono text-xs text-slate-500">{{ progress.academy_assessment_id }}</div>{% endif %}
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ status_badge(progress.status.value, "sm") }}
+                                <div class="mt-1 text-xs text-slate-500">{{ progress.progress_percentage }}%</div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                                {{ progress.score if progress.score is not none else '-' }}
+                                {% if progress.passed is not none %}<div class="text-xs text-slate-500">{{ 'Passed' if progress.passed else 'Not passed' }}</div>{% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                                {{ progress.last_synced_at.strftime('%Y-%m-%d %H:%M') if progress.last_synced_at else '-' }}
+                                {% if progress.certificate_ref %}<div class="font-mono text-xs text-slate-500">{{ progress.certificate_ref }}</div>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        {{ empty_state("No Academy progress found", "Progress appears after Academy sends staff activity events.", "chart") }}
+        {% endif %}
+        {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
+    </div>
+</div>
+{% endblock %}

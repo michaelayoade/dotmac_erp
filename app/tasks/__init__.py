@@ -103,6 +103,7 @@ from app.tasks.inventory import (
     auto_issue_pending_stock_material_requests,
     send_low_stock_notifications,
 )
+from app.tasks.imports import process_customer_import_partitions
 from app.tasks.license import revalidate_license
 from app.tasks.notifications import (
     process_pending_nextcloud_notifications,
@@ -136,6 +137,7 @@ from app.tasks.staff_sync import (
 from app.tasks.project_sla import (
     process_project_sla_breaches,
 )
+from app.tasks.weekly_meeting_reports import send_weekly_meeting_report_hr_email
 
 __all__ = [
     # Expense module tasks
@@ -218,6 +220,8 @@ __all__ = [
     # Inventory tasks
     "auto_issue_pending_stock_material_requests",
     "send_low_stock_notifications",
+    # Durable import tasks
+    "process_customer_import_partitions",
     # Analytics tasks
     "refresh_cash_flow_metrics",
     "refresh_compliance_metrics",
@@ -263,4 +267,5 @@ __all__ = [
     "cleanup_published_outbox_events",
     "reconcile_outbox_balance_projection",
     "run_infrastructure_health_checks_task",
+    "send_weekly_meeting_report_hr_email",
 ]

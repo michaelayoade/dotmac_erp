@@ -91,9 +91,12 @@ def _direct_organization_writer_paths() -> set[Path]:
 
 def test_only_the_projection_service_may_import_kernel_tenant() -> None:
     assert {
+        Path("tenancy.py"): {
+            ("dotmac_kernel.cache", "TenantScope"),
+        },
         Path("services/tenant_projection.py"): {
             ("dotmac_kernel.models", "Tenant"),
-        }
+        },
     } == ADOPTED_KERNEL_IMPORTS
     assert kernel_import_violations(PROJECT_ROOT / "app") == []
 

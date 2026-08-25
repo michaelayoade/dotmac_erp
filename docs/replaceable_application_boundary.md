@@ -25,11 +25,14 @@ Dotmac ERP may be replaced by Zoho or another provider.
    decision in the source application.
 7. Secrets and credentials remain local to each provider configuration.
 
-These rules also govern identity integration. The retired shared-auth-database
-SSO path has been replaced with OIDC Authorization Code + PKCE. The identity
-provider proves identity; ERP maps the opaque issuer/subject to a local person
-and remains the only writer of ERP sessions, cookies, user status, roles, and
-permissions. Provider authorization claims are not imported.
+These rules also govern identity integration. The shared-auth-database SSO path
+was retired, and the OIDC implementation that briefly replaced it was itself
+deleted on 2026-08-15 without ever being enabled. ERP therefore has no external
+identity integration: it is the only writer of ERP sessions, cookies, user
+status, roles, and permissions, and there is no provider whose authorization
+claims could be imported. If an identity provider is added later it proves
+identity only, mapping an opaque issuer/subject to a local person — see
+`docs/oidc_identity_contract.md`.
 
 ## Existing tax-data remediation
 
@@ -46,3 +49,18 @@ The boundary is acceptable only if Dotmac ERP can be replaced without changing
 Sub's core domain services or database schema beyond provider-neutral
 correlation data. Equally, ERP must remain usable for its own backoffice and
 accounting functions when Sub is unavailable.
+
+## Active vertical replacement programme
+
+ERP is being replaced one domain at a time by released Starter-owned modules
+composed by the thin **Dotmac ERP** product assembly (corrected 2026-08-19 —
+the destination is not an internally framed `dotmac_backoffice` application;
+see `dotmac-erp-recomposition-into-domain-modules`). Composition alone does not
+move authority. Each domain must expose a versioned source projection, backfill
+into the composed product, shadow and reconcile, switch one sole writer, and
+then remove the matching ERP writer before it counts as retired.
+
+People is the first vertical slice. Its read-only source contract, exact writer
+retirement ledger, ownership boundary and cutover gates are recorded in
+`docs/architecture/people-replacement-boundary.md`. ERP remains the sole People
+writer at the state documented here.

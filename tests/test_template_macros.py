@@ -220,6 +220,22 @@ def test_topbar_hides_back_button_when_fallback_is_blank():
     assert 'aria-label="Go back"' not in html
 
 
+def test_topbar_polls_for_new_mentions_and_shows_deduplicated_toasts():
+    html = _render(
+        """
+{% from "components/macros.html" import topbar %}
+{{ topbar("Title") }}
+"""
+    )
+
+    assert "/notifications/context?limit=20" in html
+    assert "window.setInterval" in html
+    assert "30000" in html
+    assert 'n.notification_type === "MENTION"' in html
+    assert "knownNotificationIds.has" in html
+    assert "window.showToast" in html
+
+
 def test_compact_filters_escapes_untrusted_search_and_filter_values():
     html = _render(
         """

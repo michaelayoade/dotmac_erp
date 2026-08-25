@@ -67,6 +67,7 @@ from app.api.settings import router as settings_router
 from app.api.support import router as support_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
 from app.api.sync.dotmac_sub import router as sub_sync_router
+from app.api.sync.backoffice_people import router as backoffice_people_router
 from app.api.sync.sub_attendance import router as sub_attendance_router
 from app.api.workflow_tasks import router as workflow_tasks_router
 from app.config import settings
@@ -84,7 +85,11 @@ from app.services.htmx import is_htmx_request
 from app.services.integration_config import seed_dotmac_sub_webhook_binding
 from app.services.settings_seed import seed_all_settings
 from app.ui import UI_ASSET_DIRECTORY, UI_ASSET_MOUNT
-from app.startup import log_startup_info, validate_startup
+from app.startup import (
+    log_startup_info,
+    validate_startup,
+    warn_unconfigured_webhook_allowlist,
+)
 from app.telemetry import setup_otel
 from app.templates import templates
 from app.web.admin import router as admin_web_router
@@ -190,6 +195,11 @@ async def lifespan(app: FastAPI):
             # IntegrationConfig(DOTMAC_SUB) binding (idempotent; the binding
             # rows are the webhook org-attribution authority).
             seed_dotmac_sub_webhook_binding(db)
+
+        # The warning must observe the post-seed state. Running it from
+        # `validate_startup` above produced a false outage warning on first
+        # boot immediately before the configured environment value was seeded.
+        warn_unconfigured_webhook_allowlist(db)
 
         # Register payroll lifecycle event handlers so posted runs/slips
         # can create notifications and queue payslip emails.
@@ -321,16 +331,8 @@ def _friendly_redirect_error_message(error_value: str, status_code: int) -> str:
     return error_value
 
 
-def _is_no_response_runtime_error(
-    exc: BaseException, _seen: set[int] | None = None
-) -> bool:
-    """Return True when Starlette surfaces a client-disconnect style response gap."""
-    if _seen is None:
-        _seen = set()
-    if id(exc) in _seen:
-        return False
-    _seen.add(id(exc))
-
+def _is_no_response_runtime_error(exc: BaseException) -> bool:
+    """Return True only when the whole failure is a response-stream disconnect."""
     if isinstance(exc, RuntimeError) and str(exc) == "No response returned.":
         return True
 
@@ -346,21 +348,14 @@ def _is_no_response_runtime_error(
 
     children = getattr(exc, "exceptions", None)
     if children:
-        for child in children:
-            if isinstance(child, BaseException) and _is_no_response_runtime_error(
-                child, _seen
-            ):
-                return True
-
-    cause = getattr(exc, "__cause__", None)
-    if isinstance(cause, BaseException):
-        if _is_no_response_runtime_error(cause, _seen):
-            return True
-
-    context = getattr(exc, "__context__", None)
-    if isinstance(context, BaseException):
-        if _is_no_response_runtime_error(context, _seen):
-            return True
+        # BaseHTTPMiddleware can combine a real application error with an
+        # EndOfStream. Treating "any disconnect-shaped child" as a disconnect
+        # swallowed the real exception and returned an empty 204. A group is a
+        # disconnect only when every child is one.
+        return all(
+            isinstance(child, BaseException) and _is_no_response_runtime_error(child)
+            for child in children
+        )
 
     return False
 
@@ -745,6 +740,7 @@ if is_module_enabled("people"):
     app.include_router(payroll_alias_web_router)
     app.include_router(onboarding_portal_router)
     _include_api_router(sub_attendance_router)
+    app.include_router(backoffice_people_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Finance module

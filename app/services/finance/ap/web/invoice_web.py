@@ -40,7 +40,7 @@ from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import IFRSCategory
 from app.models.finance.tax.tax_code import TaxCode, TaxType
-from app.models.notification import EntityType, NotificationType
+from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.person import Person
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -1531,6 +1531,7 @@ class InvoiceWebService:
                             break
                         pos = normalized_comment.find(needle, pos + 1)
 
+        mention_notification_created = False
         if mentioned_person_ids:
             actor_id = coerce_uuid(user_id)
             actor = db.get(Person, actor_id)
@@ -1553,10 +1554,25 @@ class InvoiceWebService:
                         f"{actor_name} mentioned you in a comment on invoice "
                         f"{invoice.invoice_number}."
                     ),
+                    channel=NotificationChannel.BOTH,
                     action_url=f"/finance/ap/invoices/{invoice_id}#comments",
                     actor_id=actor_id,
                 )
+                mention_notification_created = True
         db.commit()
+
+        if mention_notification_created:
+            try:
+                from app.tasks.notifications import process_pending_notification_emails
+
+                process_pending_notification_emails.delay()
+            except Exception:
+                # The minute-based scheduler remains the delivery fallback when
+                # the broker is temporarily unavailable.
+                logger.exception(
+                    "Failed to queue AP invoice mention email dispatch for %s",
+                    invoice_id,
+                )
 
         return RedirectResponse(
             url=f"/finance/ap/invoices/{invoice_id}?success=Comment+added#comments",

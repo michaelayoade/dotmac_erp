@@ -8,13 +8,25 @@ from __future__ import annotations
 
 import logging
 import os
-from collections import defaultdict
+from uuid import UUID
 
 from celery import shared_task
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
+
+
+def _list_organization_ids() -> list[UUID]:
+    """Every tenant, deactivated ones included.
+
+    The scan this replaced enumerated organizations from ``Person`` rows joined
+    to admin/finance_manager roles, with no organization-active predicate, so a
+    deactivated tenant's administrators were notified like everyone else's. This
+    change repairs discovery; it does not change who is notified.
+    """
+    return organization_ids(include_inactive=True)
 
 
 @shared_task
@@ -93,28 +105,28 @@ def _notify_admins(state, results: dict) -> None:
     try:
         from sqlalchemy import select
 
-        from app.models.people.person import Person
+        from app.models.person import Person
         from app.models.rbac import PersonRole, Role
 
-        # Notify all admin/finance_manager-role users across all orgs
-        stmt = (
-            select(PersonRole.person_id, Person.organization_id)
-            .join(Role, PersonRole.role_id == Role.id)
-            .join(Person, PersonRole.person_id == Person.id)
-            .where(
-                Role.name.in_(["admin", "finance_manager"]),
-                Role.is_active.is_(True),
-            )
-        )
-        with cross_org_session() as db:
-            rows = db.execute(stmt).all()
-
-        rows_by_org = defaultdict(list)
-        for person_id, org_id in rows:
-            rows_by_org[org_id].append(person_id)
-
-        for org_id, person_ids in rows_by_org.items():
+        # Notify all admin/finance_manager-role users, one tenant at a time.
+        # The retired version ran this join once across every tenant and grouped
+        # the rows by ``Person.organization_id``. The grouping key is now the
+        # session's own scope, so the predicate below says exactly what the
+        # grouping used to say — and says it to a database that enforces it.
+        for org_id in _list_organization_ids():
             with session_for_org(org_id) as db:
+                person_ids = list(
+                    db.scalars(
+                        select(PersonRole.person_id)
+                        .join(Role, PersonRole.role_id == Role.id)
+                        .join(Person, PersonRole.person_id == Person.id)
+                        .where(
+                            Person.organization_id == org_id,
+                            Role.name.in_(["admin", "finance_manager"]),
+                            Role.is_active.is_(True),
+                        )
+                    ).all()
+                )
                 for person_id in person_ids:
                     try:
                         notification_service.create(

@@ -28,12 +28,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PostingResult:
-    """Result of a posting operation."""
+    """Result of a posting operation.
+
+    `idempotent_replay` is carried deliberately. `LedgerPostingService` sets it
+    when a batch already exists for the idempotency key, and this wrapper used
+    to drop it — so every adapter saw `success=True` and could not tell "I
+    posted" from "someone already had". Callers that create a journal before
+    posting need that distinction: without it the journal they just created is
+    left stranded and nothing says so. Losing exactly this signal is how 12,117
+    APPROVED bank-fee journals accumulated.
+    """
 
     success: bool
     journal_entry_id: UUID | None = None
     posting_batch_id: UUID | None = None
     message: str = ""
+    idempotent_replay: bool = False
 
 
 class BasePostingAdapter:
@@ -63,6 +73,47 @@ class BasePostingAdapter:
         )
 
     @staticmethod
+    def submit_and_approve_as_system(
+        db: Session,
+        organization_id: UUID,
+        journal: JournalEntry,
+        posted_by_user_id: UUID,
+    ) -> None:
+        """Submit and approve a journal on behalf of an automated actor.
+
+        For system postings (sync, reconciliation, backfill) the same actor
+        creates and approves, which segregation of duties refuses by design.
+        The bypass is deliberate and is recorded on the journal.
+
+        Extracted so there is ONE implementation. It previously lived inline in
+        `create_and_approve_journal`, and any other path that needed to approve
+        an existing journal — recovering a DRAFT left by a failed post, for
+        instance — either duplicated the `except` block or, worse, called
+        `approve_journal` directly and raised an uncaught `HTTPException` the
+        first time SoD fired.
+        """
+        JournalService.submit_journal(
+            db, organization_id, journal.journal_entry_id, posted_by_user_id
+        )
+        try:
+            JournalService.approve_journal(
+                db, organization_id, journal.journal_entry_id, posted_by_user_id
+            )
+        except HTTPException as sod_exc:
+            if "Segregation of duties" not in str(sod_exc.detail):
+                raise
+            from app.models.finance.gl.journal_entry import JournalStatus
+
+            journal.status = JournalStatus.APPROVED
+            journal.approved_by_user_id = posted_by_user_id
+            journal.approved_at = datetime.now(UTC)
+            db.flush()
+            logger.info(
+                "Auto-approved journal %s (SoD bypass for system posting)",
+                journal.journal_entry_id,
+            )
+
+    @staticmethod
     def create_and_approve_journal(
         db: Session,
         organization_id: UUID,
@@ -75,30 +126,9 @@ class BasePostingAdapter:
             journal = JournalService.create_journal(
                 db, organization_id, journal_input, posted_by_user_id
             )
-            JournalService.submit_journal(
-                db, organization_id, journal.journal_entry_id, posted_by_user_id
+            BasePostingAdapter.submit_and_approve_as_system(
+                db, organization_id, journal, posted_by_user_id
             )
-            try:
-                JournalService.approve_journal(
-                    db, organization_id, journal.journal_entry_id, posted_by_user_id
-                )
-            except HTTPException as sod_exc:
-                if "Segregation of duties" in str(sod_exc.detail):
-                    # For automated/system postings (sync, backfill), the
-                    # same user creates and approves.  Bypass the SoD check
-                    # by setting journal status directly.
-                    from app.models.finance.gl.journal_entry import JournalStatus
-
-                    journal.status = JournalStatus.APPROVED
-                    journal.approved_by_user_id = posted_by_user_id
-                    journal.approved_at = datetime.now(UTC)
-                    db.flush()
-                    logger.info(
-                        "Auto-approved journal %s (SoD bypass for system posting)",
-                        journal.journal_entry_id,
-                    )
-                else:
-                    raise
             return journal, None
         except HTTPException as exc:
             return cast(JournalEntry, None), PostingResult(
@@ -150,6 +180,9 @@ class BasePostingAdapter:
                 journal_entry_id=journal_entry_id,
                 posting_batch_id=posting_result.posting_batch_id,
                 message=success_message,
+                idempotent_replay=bool(
+                    getattr(posting_result, "idempotent_replay", False)
+                ),
             )
         except Exception as exc:
             BasePostingAdapter._revert_unposted_journal(db, journal_entry_id, str(exc))

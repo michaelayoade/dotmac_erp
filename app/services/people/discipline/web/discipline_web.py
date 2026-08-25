@@ -18,7 +18,6 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.session_context import allow_cross_org
 from app.models.people.discipline import (
     ActionType,
     CaseStatus,
@@ -106,22 +105,25 @@ class DisciplineWebService:
         if auth.person_id is None:
             return False
 
-        with allow_cross_org(db):
-            viewer_department_id = db.scalar(
-                select(Employee.department_id).where(
-                    Employee.organization_id == org_id,
-                    Employee.person_id == auth.person_id,
-                )
+        # The request session is already primed to `org_id`
+        # (`coerce_uuid(auth.organization_id)` at both call sites) and both
+        # predicates below pin the same org, so the ORM-listener bypass only
+        # suppressed a filter identical to the one written here.
+        viewer_department_id = db.scalar(
+            select(Employee.department_id).where(
+                Employee.organization_id == org_id,
+                Employee.person_id == auth.person_id,
             )
-            if viewer_department_id is None:
-                return False
+        )
+        if viewer_department_id is None:
+            return False
 
-            case_employee_department_id = db.scalar(
-                select(Employee.department_id).where(
-                    Employee.organization_id == org_id,
-                    Employee.employee_id == case_employee_id,
-                )
+        case_employee_department_id = db.scalar(
+            select(Employee.department_id).where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == case_employee_id,
             )
+        )
         return case_employee_department_id == viewer_department_id
 
     @staticmethod

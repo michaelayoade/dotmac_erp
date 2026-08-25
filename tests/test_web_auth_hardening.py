@@ -16,7 +16,6 @@ from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
 from app.services.auth_flow import AuthFlow, hash_session_token
 from app.services.auth_web import auth_web_service
-from app.services.sso.oidc import OIDCLogin
 from app.web.deps import require_web_auth
 
 
@@ -60,39 +59,24 @@ def _request(path: str, headers: list[tuple[bytes, bytes]] | None = None) -> Req
     )
 
 
-def test_oidc_login_keeps_absolute_safe_next_in_signed_state(monkeypatch):
-    from app.services import auth_web as auth_web_module
+def test_login_keeps_absolute_same_host_next_and_drops_a_foreign_one():
+    """Redirect sanitization is host-scoped, not scheme-scoped.
 
-    monkeypatch.setattr(
-        auth_web_module,
-        "settings",
-        SimpleNamespace(oidc_enabled=True),
+    This replaces the OIDC-specific version of the same assertion, deleted with
+    the unshipped OIDC implementation. ``_sanitize_redirect_url`` is the
+    surviving owner of the open-redirect defence and keeps its coverage here.
+    """
+    auth = SimpleNamespace(is_authenticated=False, roles=[])
+
+    same_host = "http://testserver/finance/dashboard?tab=summary"
+    kept = auth_web_service.login_response(_request("/login"), same_host, auth, db=None)
+    assert kept.context["next"] == same_host
+
+    foreign = auth_web_service.login_response(
+        _request("/login"), "https://evil.example.com/steal", auth, db=None
     )
-    captured = {}
-
-    def _start_login(db, request, next_url):
-        captured["next"] = next_url
-        return OIDCLogin(
-            authorization_url="https://identity.example.com/authorize?state=opaque",
-            state_cookie="signed-state",
-        )
-
-    monkeypatch.setattr(auth_web_module.oidc_client, "start_login", _start_login)
-    monkeypatch.setattr(
-        AuthFlow,
-        "refresh_cookie_settings",
-        staticmethod(lambda _db=None: {"secure": True}),
-    )
-
-    next_url = "https://testserver/finance/dashboard?tab=summary"
-    response = auth_web_service._oidc_login_response(
-        _request("/login"), next_url, MagicMock()
-    )
-
-    assert response is not None
-    assert urlparse(response.headers["location"]).netloc == "identity.example.com"
-    assert captured["next"] == next_url
-    assert "erp_oidc_state=signed-state" in response.headers["set-cookie"]
+    assert foreign.context["next"] == "/"
+    assert urlparse(foreign.context["next"]).netloc == ""
 
 
 def test_logout_response_uses_cookie_defaults_when_settings_lookup_fails(monkeypatch):

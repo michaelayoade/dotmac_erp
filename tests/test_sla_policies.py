@@ -118,7 +118,7 @@ def test_page_visibility_does_not_vary_between_authenticated_users(monkeypatch):
 
 
 def test_menu_link_is_unconditional_within_authenticated_menu():
-    template = (REPO_ROOT / "templates/base.html").read_text()
+    template = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
     authenticated_menu = template.split(
         "{% if user and user.is_authenticated %}", maxsplit=1
     )[1].split("{% else %}", maxsplit=1)[0]
@@ -131,7 +131,9 @@ def test_menu_link_is_unconditional_within_authenticated_menu():
 
 
 def test_page_template_has_safe_read_only_empty_state():
-    template = (REPO_ROOT / "templates/sla_policies/index.html").read_text()
+    template = (REPO_ROOT / "templates/sla_policies/index.html").read_text(
+        encoding="utf-8"
+    )
 
     assert "No SLA policies published yet" in template
     assert "policy.body_json" in template

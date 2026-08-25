@@ -6,6 +6,19 @@ Handles:
 - Appraisal generation for eligible employees
 - Progress tracking and reporting
 - Deadline notification scheduling
+
+Two shapes live in this module and only one of them is a fan-out.
+``process_cycle_phase_transitions`` and ``sync_all_cycle_progress`` ask "which
+cycles anywhere are due" — that is enumeration, and it now runs once per tenant
+through :func:`app.tenant_catalog.organization_ids`.
+
+``generate_cycle_appraisals``, ``calculate_cycle_progress``, ``activate_cycle``
+and ``complete_cycle`` are the other shape: each is handed one ``cycle_id`` from
+outside any tenant context and must resolve which tenant owns that single row
+before it can open a session. The tenant catalogue returns identifiers and
+nothing else, by design, so it cannot answer that; those four keep the
+``cross_org_session`` lookup until a tenant-resolution contract exists. Marked
+"Mode 3" at each site.
 """
 
 import logging
@@ -16,15 +29,14 @@ from celery import shared_task
 from sqlalchemy import select
 
 from app.db.session_context import cross_org_session, session_for_org
-from app.models.finance.core_org.organization import Organization
 from app.models.people.perf.appraisal_cycle import AppraisalCycle, AppraisalCycleStatus
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
 
 def _list_organization_ids() -> list[UUID]:
-    with cross_org_session() as db:
-        return list(db.scalars(select(Organization.organization_id)).all())
+    return organization_ids(include_inactive=True)
 
 
 @shared_task
@@ -47,58 +59,54 @@ def process_cycle_phase_transitions() -> dict:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        transitions = [
-            (cycle.cycle_id, cycle.organization_id, target_status)
-            for cycle, target_status in PerformanceAutomationService(
-                cross_db
-            ).get_cycles_ready_for_transition()
-        ]
-
-    for cycle_id, org_id, target_status in transitions:
+    cycles_ready = 0
+    for org_id in _list_organization_ids():
         with session_for_org(org_id) as db:
             service = PerformanceAutomationService(db)
-            try:
-                cycle = db.get(AppraisalCycle, cycle_id)
-                if not cycle:
+            # ``get_cycles_ready_for_transition`` takes no organization_id — it
+            # scopes through the session, so inside this tenant session it
+            # returns only this organization's cycles, under both the ORM
+            # listener and PostgreSQL RLS. The cycles come back attached to this
+            # session, which is why the id round-trip and the ``db.get`` re-fetch
+            # it fed are gone: they existed only to carry rows out of the
+            # cross-tenant scan and back into a tenant session, and with them
+            # goes the "Cycle not found" branch, which could only fire when the
+            # two sessions disagreed.
+            transitions = service.get_cycles_ready_for_transition()
+            cycles_ready += len(transitions)
+
+            for cycle, target_status in transitions:
+                try:
+                    old_status = cycle.status.value
+                    success = service.advance_cycle_phase(cycle, target_status)
+
+                    if success:
+                        results["transitions"].append(
+                            {
+                                "cycle_id": str(cycle.cycle_id),
+                                "cycle_name": cycle.cycle_name,
+                                "from_status": old_status,
+                                "to_status": target_status.value,
+                            }
+                        )
+
+                    db.commit()
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to transition cycle %s: %s",
+                        cycle.cycle_id,
+                        e,
+                    )
+                    db.rollback()
                     results["errors"].append(
                         {
-                            "cycle_id": str(cycle_id),
-                            "error": "Cycle not found",
-                        }
-                    )
-                    continue
-
-                old_status = cycle.status.value
-                success = service.advance_cycle_phase(cycle, target_status)
-
-                if success:
-                    results["transitions"].append(
-                        {
                             "cycle_id": str(cycle.cycle_id),
-                            "cycle_name": cycle.cycle_name,
-                            "from_status": old_status,
-                            "to_status": target_status.value,
+                            "error": str(e),
                         }
                     )
 
-                db.commit()
-
-            except Exception as e:
-                logger.error(
-                    "Failed to transition cycle %s: %s",
-                    cycle_id,
-                    e,
-                )
-                db.rollback()
-                results["errors"].append(
-                    {
-                        "cycle_id": str(cycle_id),
-                        "error": str(e),
-                    }
-                )
-
-    if not transitions:
+    if not cycles_ready:
         logger.debug("No performance cycles ready for transition")
 
     logger.info(
@@ -307,30 +315,24 @@ def sync_all_cycle_progress() -> dict:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        cycle_meta = list(
-            cross_db.execute(
-                select(AppraisalCycle.cycle_id, AppraisalCycle.organization_id).where(
-                    AppraisalCycle.status.in_(
-                        [
-                            AppraisalCycleStatus.ACTIVE,
-                            AppraisalCycleStatus.REVIEW,
-                            AppraisalCycleStatus.CALIBRATION,
-                        ]
-                    ),
-                )
-            ).all()
-        )
-
-    cycles_by_org: dict[UUID, list[UUID]] = {}
-    for cycle_id, org_id in cycle_meta:
-        cycles_by_org.setdefault(org_id, []).append(cycle_id)
-
-    for org_id, cycle_ids in cycles_by_org.items():
+    for org_id in _list_organization_ids():
         with session_for_org(org_id) as db:
             try:
+                # The status filter is the same one the cross-tenant scan used;
+                # what has gone is the id-grouping and the second SELECT that
+                # re-fetched each group. A tenant-scoped session answers this
+                # query with exactly this organization's cycles, so the two
+                # round-trips existed only to serve the cross-tenant read.
                 cycles = db.scalars(
-                    select(AppraisalCycle).where(AppraisalCycle.cycle_id.in_(cycle_ids))
+                    select(AppraisalCycle).where(
+                        AppraisalCycle.status.in_(
+                            [
+                                AppraisalCycleStatus.ACTIVE,
+                                AppraisalCycleStatus.REVIEW,
+                                AppraisalCycleStatus.CALIBRATION,
+                            ]
+                        ),
+                    )
                 ).all()
                 service = PerformanceAutomationService(db)
 

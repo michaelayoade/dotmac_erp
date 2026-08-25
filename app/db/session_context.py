@@ -21,19 +21,26 @@ opened for "an org" that doesn't actually scope its queries to that org.
 Public API for callers
 ----------------------
 
-Use the high-level context managers — they establish every applicable input
-and clean up:
+Use the high-level context managers — they establish the applicable input and
+clean up:
 
+- :func:`tenant_scope_for_session` — bind an existing, newly-opened Session
+  (HTTP dependencies) and keep its database scope armed across commits.
 - :func:`session_for_org` — single-org tenant session (Celery tasks,
   CLI scripts, anything outside a web request).
-- :func:`cross_org_session` — explicit cross-tenant access for global
-  batch jobs (e.g. "list every org with pending work").
+- :func:`for_each_organization` — every organization in turn, each in its own
+  tenant session. This is what a fleet-wide batch job wants: discovery goes
+  through the narrow catalog definer in :mod:`app.tenant_catalog`, never
+  through a cross-org read of ``core_org.organization``.
+- :func:`cross_org_session` — application-layer cross-tenant access to tables
+  that have **no** PostgreSQL RLS policy. It does not bypass PostgreSQL RLS,
+  so it cannot be used to enumerate organizations; see its own warning.
 
 The low-level primitives below (:func:`prime_session`,
 :func:`allow_cross_org`) exist for infrastructure code only — the web
-dependency at ``app/api/deps.py::get_db_for_org`` composes them with the RLS
-helpers because it owns the session-lifecycle contract for HTTP requests. New
-code should not compose primitives manually.
+dependencies and background-session helpers compose them through
+:func:`tenant_scope_for_session`, which owns the session-lifecycle contract.
+New code should not compose primitives manually.
 
 A note on ``SET LOCAL`` and commits
 ------------------------------------
@@ -44,8 +51,9 @@ middle of its work therefore lost its RLS GUC and silently started
 returning zero rows, while ``session.info`` kept the ORM-listener layer
 looking primed: it read as scoped and behaved as unscoped.
 
-``session_for_org`` and ``cross_org_session`` now re-arm their GUC on
-SQLAlchemy's ``after_begin``, which fires as each new transaction opens.
+``tenant_scope_for_session`` re-arms its scope GUCs on SQLAlchemy's
+``after_begin``, which fires as each new transaction opens. Both the HTTP
+dependencies and ``session_for_org`` use that one lifecycle owner.
 Commit-and-continue inside a block is therefore safe, and the call site is
 no longer the contract owner for it.
 
@@ -69,8 +77,6 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.rls import (
-    bypass_rls_sync,
-    enable_rls_bypass_on_connection,
     set_current_organization_on_connection,
     set_current_organization_sync,
 )
@@ -90,8 +96,8 @@ def prime_session(session: Session, organization_id: UUID) -> None:
        :func:`session_for_org` instead — it sets both layers.
 
        Direct callers are limited to infrastructure code that already
-       composes both layers explicitly (notably ``app.api.deps.get_db_for_org``
-       and ``app.web.deps``). Application code should not import this.
+       composes both layers explicitly. Application code should not import
+       this.
 
     Calling on an already-primed session overwrites the previous value —
     useful for tasks that iterate orgs *within a single session*, though
@@ -110,8 +116,8 @@ def allow_cross_org(session: Session) -> Iterator[None]:
 
        Like :func:`prime_session`, this bypasses ONLY the ORM listener
        layer. It does NOT bypass PostgreSQL RLS policies. Use
-       :func:`cross_org_session` for genuine cross-tenant work — it
-       bypasses both layers and opens a dedicated session.
+       :func:`cross_org_session` for genuine cross-tenant application work —
+       it opens a dedicated session but retains that database boundary.
 
        Direct use is reserved for infrastructure code that composes both
        layers (web admin-bypass dependencies, audit listeners that
@@ -134,8 +140,8 @@ def prime_tenant_context(session: Session, organization_id: UUID) -> None:
     Use this when a request opens unprimed (the org isn't known at
     request entry — e.g., a public portal route resolving an org from a
     URL slug, or an onboarding portal resolving from a token) and the
-    service has just looked the org up under :func:`allow_cross_org` /
-    :func:`app.rls.bypass_rls_sync`. After the lookup, retroactively
+    service has just looked the org up under :func:`allow_cross_org`. After
+    the lookup, retroactively
     prime the session for the rest of the work:
 
         # Route opens unprimed because slug → org_id isn't known yet
@@ -164,6 +170,35 @@ def prime_tenant_context(session: Session, organization_id: UUID) -> None:
     prime_session(session, organization_id)
     if session.get_bind().dialect.name == "postgresql":
         set_current_organization_sync(session, organization_id)
+
+
+@contextmanager
+def tenant_scope_for_session(
+    session: Session, organization_id: UUID
+) -> Iterator[Session]:
+    """Bind an existing Session to one tenant for its whole lifecycle.
+
+    ``SET LOCAL`` disappears at every commit or rollback. This context manager
+    owns the matching SQLAlchemy ``after_begin`` listener so the database GUCs
+    are present for the first transaction and automatically restored for every
+    later transaction. It also primes ``session.info`` for the ORM tenant
+    filter.
+
+    Use this only with a newly-opened session that is not already in a
+    transaction. The caller remains responsible for commit/rollback and close.
+    """
+
+    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
+        # Emitted on the Connection because the Session is still provisioning
+        # that connection while ``after_begin`` runs.
+        set_current_organization_on_connection(connection, organization_id)
+
+    prime_session(session, organization_id)
+    event.listen(session, "after_begin", _arm)
+    try:
+        yield session
+    finally:
+        event.remove(session, "after_begin", _arm)
 
 
 @contextmanager
@@ -205,30 +240,10 @@ def session_for_org(organization_id: UUID) -> Iterator[Session]:
 
     session = SessionLocal()
 
-    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
-        # Both database scopes are transaction-local. A commit inside the
-        # caller's block would therefore drop the GUCs while `session.info`
-        # still looked primed — an
-        # asymmetry that reads as "scoped" and behaves as "unscoped".
-        # Re-arming on every new transaction removes the hazard here, rather
-        # than constraining every caller to commit exactly once forever.
-        #
-        # Emitted on the CONNECTION, not the Session: `after_begin` fires while
-        # the Session is still provisioning its connection, and going through
-        # the Session there raises InvalidRequestError.
-        set_current_organization_on_connection(connection, organization_id)
-
     try:
-        # Session layer: ORM listener + explicit module-scope identity.
-        prime_session(session, organization_id)
-        # Database layers: ERP and shared-module RLS GUCs.
-        # `after_begin` fires before the statement that opened the transaction
-        # runs, so the GUC is in place for the caller's very first query and
-        # for every query after every commit.
-        event.listen(session, "after_begin", _arm)
-        yield session
+        with tenant_scope_for_session(session, organization_id):
+            yield session
     finally:
-        event.remove(session, "after_begin", _arm)
         session.close()
 
 
@@ -236,42 +251,84 @@ def session_for_org(organization_id: UUID) -> Iterator[Session]:
 def cross_org_session() -> Iterator[Session]:
     """Canonical session for cross-organization ERP work (admin/batch).
 
-    Opens a fresh ``SessionLocal`` with ERP's **two** bypass layers active —
-    ``allow_cross_org`` for the ORM listener and ``bypass_rls_sync`` for ERP
-    PostgreSQL policies. Shared-module RLS is deliberately not bypassed. Use
-    this to discover rows across Organizations, then process each module scope
-    under its own per-org session::
+    Opens a fresh ``SessionLocal`` with ``allow_cross_org`` active for the ORM
+    listener. It does not bypass PostgreSQL RLS.
+
+    .. warning::
+
+       **This is not how you enumerate organizations.**
+       ``core_org.organization`` is RLS-protected at migration heads, so
+       ``select(Organization.organization_id)`` here returns every row under
+       today's ``postgres`` superuser runtime and *zero* rows under
+       ``app_user`` — a scheduled task that silently processes nothing and
+       exits 0. Use :func:`for_each_organization` below, or
+       :func:`app.tenant_catalog.active_organization_ids` when you need the ids
+       without the sessions.
+
+    What remains legitimate here is discovering rows in tables that have **no**
+    RLS policy at migration heads, then processing each module scope under its
+    own per-org session::
 
         with cross_org_session() as cross_db:
-            org_ids = list(cross_db.scalars(select(Organization.id)).all())
+            ids = list(cross_db.scalars(select(UnprotectedThing.id)).all())
         for org_id in org_ids:
             with session_for_org(org_id) as db:
                 ...
 
-    Don't query a shared-module table or reuse a ``cross_org_session`` for
-    per-org work — switching contexts mid-session is the bug class this helper
-    exists to prevent.
+    Don't query a PostgreSQL-RLS-protected table or reuse a
+    ``cross_org_session`` for per-org work — switching contexts mid-session is
+    the bug class this helper exists to prevent.
     """
     from app.db import SessionLocal
 
     session = SessionLocal()
 
-    def _arm(sess: Session, transaction: object, connection: Connection) -> None:
-        # Same hazard as session_for_org: SET LOCAL app.bypass_rls dies with
-        # the transaction, so a commit mid-block would silently restore RLS
-        # with no organization set — every later read returning zero rows
-        # while `allow_cross_org` still claimed the bypass was active.
-        # On the CONNECTION for the same reason as above.
-        enable_rls_bypass_on_connection(connection)
-
     try:
         # ORM listener bypass — session.info marker the listener checks.
         session.info["allow_cross_org"] = True
-        # PostgreSQL RLS bypass, re-armed on every transaction.
-        event.listen(session, "after_begin", _arm)
-        with bypass_rls_sync(session):
-            yield session
+        yield session
     finally:
-        event.remove(session, "after_begin", _arm)
         session.info["allow_cross_org"] = False
         session.close()
+
+
+def for_each_organization(
+    *,
+    include_inactive: bool = False,
+    only: UUID | None = None,
+) -> Iterator[tuple[UUID, Session]]:
+    """Yield ``(organization_id, tenant-scoped session)`` for each organization.
+
+    This is the canonical replacement for the retired
+    "``cross_org_session`` to list orgs, then ``session_for_org`` to work" pair.
+    Discovery goes through the narrow catalog definer
+    (:mod:`app.tenant_catalog`); each iteration then gets a fully primed
+    tenant session from :func:`session_for_org`::
+
+        for org_id, db in for_each_organization():
+            Service(db).run(org_id)
+            db.commit()
+
+    The discovery session is closed before the first tenant session opens, so
+    an unscoped session is never alive at the same time as a scoped one.
+
+    Each organization's session is opened and closed inside its own iteration.
+    An exception raised in the caller's loop body therefore closes that
+    organization's session and propagates — it does not leak into the next
+    organization's scope. Callers that must continue past a failing tenant
+    wrap their own body in ``try/except``, which is what every task in
+    ``app/tasks`` already does to collect per-org errors.
+
+    Args:
+        include_inactive: passed straight to
+            :func:`app.tenant_catalog.organization_ids`.
+        only: restrict to a single organization, for tasks that accept an
+            optional ``organization_id`` argument.
+    """
+    from app.tenant_catalog import organization_ids
+
+    for organization_id in organization_ids(
+        include_inactive=include_inactive, only=only
+    ):
+        with session_for_org(organization_id) as session:
+            yield organization_id, session

@@ -608,6 +608,19 @@ class DomainSettings(ListResponseMixin):
         """
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
+
+        from app.services.setting_scopes import is_platform_owned
+
+        if is_platform_owned(self.domain, key):
+            # Platform-owned: exactly one scope exists, so an organization the
+            # caller passed — or one it merely inherited from the ambient
+            # session context — is discarded rather than honoured. Without
+            # this, a row created outside the ORM (raw SQL, a replica that has
+            # not run the migration) would still outrank the platform row on
+            # the `ORDER BY (organization_id = :org) DESC` below. See
+            # `app/services/setting_scopes.py`.
+            organization_id = None
+
         org_id = _resolve_scope(db, organization_id)
         stmt = select(DomainSetting).where(
             DomainSetting.domain == self.domain,
@@ -964,6 +977,54 @@ def restore_from_history(
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> DomainSetting:
+    """Restore a setting from history, refusing a platform-owned target cleanly.
+
+    The whole restore is wrapped rather than pre-checked, because the refusal
+    it handles is raised by an ORM listener at FLUSH time, and both branches
+    below (update an existing row, recreate a deleted one) can reach a flush.
+    A pre-check placed in front of only one of them would be a second, partial
+    copy of the rule the listener owns.
+
+    Why this can happen at all: the platform-ownership migration renames every
+    organization row for a webhook SSRF key onto its narrowing key AND records
+    that move in ``domain_setting_history`` under the OLD key with the
+    organization's id — the entry an operator would naturally reach for.
+    Restoring it asks for an organization-scoped row on a platform-owned key,
+    which ``_require_platform_scope`` refuses. That refusal is correct; what
+    was wrong is that nothing caught ``PlatformOwnedSettingError`` between the
+    flush and the route, so a deliberate, fail-closed refusal surfaced as a 500
+    on a session left holding a rejected pending INSERT — which the next
+    statement on that session would then fail on, for a reason unrelated to the
+    request that caused it.
+
+    ``409``, not ``403``: the caller has the authority; the target no longer
+    accepts the write. The rollback is the load-bearing half — it is what
+    hands the session back usable.
+    """
+    from app.models.domain_settings import PlatformOwnedSettingError
+
+    try:
+        return _restore_from_history(
+            db,
+            history_id,
+            changed_by_id=changed_by_id,
+            change_reason=change_reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except PlatformOwnedSettingError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def _restore_from_history(
+    db: Session,
+    history_id: str,
+    changed_by_id: str | None = None,
+    change_reason: str | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> DomainSetting:
     """
     Restore a setting to a previous state from a history entry.
 
@@ -980,6 +1041,9 @@ def restore_from_history(
 
     Raises:
         HTTPException: If history entry not found or setting cannot be restored
+        PlatformOwnedSettingError: If the target is an organization-scoped row
+            for a platform-owned key. Handled by ``restore_from_history``
+            above, which is the only intended caller.
     """
     history = get_history_entry(db, history_id)
     if not history:

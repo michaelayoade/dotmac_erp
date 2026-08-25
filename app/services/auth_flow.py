@@ -227,7 +227,6 @@ def _refresh_cookie_samesite(db: Session | None) -> str:
     """Get refresh cookie SameSite attribute.
 
     Defaults to 'strict' for production security to prevent CSRF attacks.
-    OIDC login state uses its own short-lived SameSite=Lax callback cookie;
     ERP session cookies are never shared with another application.
     """
     return (
@@ -783,9 +782,12 @@ class AuthFlow(ListResponseMixin):
                 status_code=400, detail="Invalid auth provider"
             ) from exc
         if resolved_provider != AuthProvider.local:
+            # AuthProvider.sso survives as a stored credential value only; ERP
+            # ships no external-identity protocol adapter, so there is no flow
+            # such a credential could complete.
             raise HTTPException(
                 status_code=400,
-                detail="Federated login must use the OIDC authorization flow",
+                detail="Only local username and password login is available",
             )
         if not username:
             raise HTTPException(status_code=401, detail="Wrong username")

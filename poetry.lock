@@ -1053,8 +1053,71 @@ trio = ["trio (>=0.30)"]
 wmi = ["wmi (>=1.5.1) ; platform_system == \"Windows\""]
 
 [[package]]
+name = "dotmac-accounting"
+version = "0.1.0a1"
+description = "Tenant chart, fiscal-period and immutable balanced-ledger authority"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_accounting-0.1.0a1-py3-none-any.whl", hash = "sha256:79fc97fefb224e0e6e1da8e6d773a38dfce82aeccba767bb7e04bba15965dbc9"},
+    {file = "dotmac_accounting-0.1.0a1.tar.gz", hash = "sha256:7a669d5e84e88935173b3d9a3a0e23cb5e1305739e76c2557ed9497b68591362"},
+]
+
+[package.dependencies]
+dotmac-kernel = ">=0.1.0a85"
+sqlalchemy = ">=2.0,<3.0"
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
+name = "dotmac-files"
+version = "0.1.0a2"
+description = "DotMac dual-plane stored-object lifecycle and validation"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_files-0.1.0a2-py3-none-any.whl", hash = "sha256:6b7c92f3441bc65ffb75200033d6dd0e249f39e7863d413d42c8a1829784cb41"},
+    {file = "dotmac_files-0.1.0a2.tar.gz", hash = "sha256:5bc579f05a6c2a2e25d8a1f53643e41cf51ecd0d6ef95140aa13a06987437b25"},
+]
+
+[package.dependencies]
+dotmac-kernel = ">=0.1.0a56"
+sqlalchemy = ">=2.0,<3.0"
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
+name = "dotmac-imports"
+version = "0.1.0a2"
+description = "DotMac bulk-import run ledger, dry-run/apply promotion and column mapping"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_imports-0.1.0a2-py3-none-any.whl", hash = "sha256:cd4056426f300c001c784f3675704991f12ff3fc98174c17575bbaefda79200a"},
+    {file = "dotmac_imports-0.1.0a2.tar.gz", hash = "sha256:f1617a06fc206221109f514ab374d002174f2e42b7c95e4bb3d6e7e83f3d82fd"},
+]
+
+[package.dependencies]
+dotmac-kernel = ">=0.1.0a56"
+sqlalchemy = ">=2.0,<3.0"
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
 name = "dotmac-integration-client"
-version = "0.1.1"
+version = "0.2.0"
 description = "Canonical HTTP transport for Dotmac inter-service integration edges: policy-driven retry with jitter, Retry-After, reachability circuit, idempotency keys, request-id propagation, and metrics hooks."
 optional = false
 python-versions = "^3.11"
@@ -1068,19 +1131,19 @@ httpx = ">=0.24"
 [package.source]
 type = "git"
 url = "https://github.com/michaelayoade/dotmac-integration-client.git"
-reference = "v0.1.1"
-resolved_reference = "4714d9411e7512cc00944fd44583bc38812e9839"
+reference = "v0.2.0"
+resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"
 
 [[package]]
 name = "dotmac-kernel"
-version = "0.1.0a56"
+version = "0.1.0a94"
 description = "DotMac platform kernel — multi-tenant FastAPI foundation (config, RLS db, identity/tenancy models, security, platform auth, middleware, settings, features registry, audit)"
 optional = false
 python-versions = ">=3.11,<3.14"
 groups = ["main"]
 files = [
-    {file = "dotmac_kernel-0.1.0a56-py3-none-any.whl", hash = "sha256:89a8ca61406b9cee4ec0fb9c3f61a7cffc18ffe53b1bf06c6e8ab91a6c201ae4"},
-    {file = "dotmac_kernel-0.1.0a56.tar.gz", hash = "sha256:85ffa536eddfda64cf32509be29272e510a48bde4abb7e72f1feaaca0d5e9a46"},
+    {file = "dotmac_kernel-0.1.0a94-py3-none-any.whl", hash = "sha256:281481d06ec25b3ed968d40c01171116a89bb984c674a5f3cc46e74717743715"},
+    {file = "dotmac_kernel-0.1.0a94.tar.gz", hash = "sha256:491abcf903d0a37b950c288b2eea60fd398acf4c16c1c2100eb6eab9c5f1ba2d"},
 ]
 
 [package.dependencies]
@@ -5053,4 +5116,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "bbc3bb7cef78b1b4ac07ce8bca009d535c6ca513bfda453cde20c52e41c446a6"
+content-hash = "de784ac8b921330e6ff88754649612e2e8684dc3c773c7d2496ed6ceb8bf1c29"

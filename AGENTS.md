@@ -11,7 +11,11 @@ These are the repo-level instructions Codex should follow for this workspace.
 - Unit/integration: `pytest tests/ --ignore=tests/e2e/`
 - Coverage: `pytest --cov=app --cov-report=html`
 - E2E: `pytest tests/e2e/ -v`
-- Lint: `ruff`
+- Lint: `make lint` (`poetry run ruff check`) — never a bare `ruff`, which
+  runs whatever is on `PATH` rather than the version `poetry.lock` pins.
+- Formatting: `make format-check` (verify) / `make format` (write). Both are
+  part of `make check`; ruff is pinned exactly and the pins are guarded by
+  `tests/architecture/test_toolchain_coherence.py`.
 - Typing: `mypy`
 - CSS build: `npm run dev` or `npm run watch:css` (outputs `static/css/app.css`)
 
@@ -29,6 +33,10 @@ These are the repo-level instructions Codex should follow for this workspace.
 - Do not weaken security controls without explicit approval.
 
 ## Codebase Rules (Source of Truth)
+- `docs/adr/` for accepted architecture decisions. An ADR outranks a plan
+  document; where they disagree, fix the plan. Added 2026-08-15 — ERP had no
+  decision record directory, which is how a gate ("After E8 ADR") came to point
+  at a document that did not exist.
 - `CLAUDE.md` for critical coding rules, workflow, verification steps, and module map.
 - `.claude/rules/` for design system, templates, security, services, and web routes standards.
 - `UI_CONVENTIONS.md` and `CONSISTENCY_CHECKLIST.md` for UI consistency checks.
@@ -43,3 +51,8 @@ Follow those files as the authoritative guidance when implementing changes or re
   revision and be required on protected `main`.
 - Mutable tags/branches, copied rules, candidate mode, or a missing required
   check are not substitutes for the Governance-owned enforcement path.
+- The schema-9 external-connector ratchet is transitional migration evidence,
+  not runtime isolation. Its six baselines and conservation ledger match
+  `docs/external-connector-surface.md`; they only shrink with deletion or a
+  proved cutover behind Dotmac Integrator. The permanent boundary is
+  Integrator-only connector packages, secrets, ingress, and egress.

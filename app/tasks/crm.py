@@ -14,7 +14,7 @@ from uuid import UUID
 from celery import shared_task
 
 from app.config import settings
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 
 logger = logging.getLogger(__name__)
 
@@ -508,5 +508,7 @@ def crm_inventory_health_check() -> dict:
 
     logger.info("Running CRM inventory webhook health check")
 
-    with cross_org_session() as db, InventoryPushService(db) as service:
+    # No session: the probe is an HTTP POST to the configured webhook and reads
+    # no table. The cross-org session this used to open was never queried.
+    with InventoryPushService() as service:
         return service.health_check()

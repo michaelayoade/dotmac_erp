@@ -26,8 +26,6 @@
 \timing on
 \pset pager off
 
-SET app.bypass_rls = 'true';
-
 \echo
 \echo ============================================================
 \echo  Tax monthly reconciliation: 2025 (subledger vs GL)

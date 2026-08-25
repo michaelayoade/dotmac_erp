@@ -108,9 +108,8 @@ def main() -> None:
     args = parser.parse_args()
 
     from app.db import SessionLocal
-    from app.db.session_context import bypass_rls_sync
 
-    with SessionLocal() as db, bypass_rls_sync(db):
+    with SessionLocal() as db:
         counts = db.execute(text(_COUNT_SQL)).one()
         logger.info(
             "Positive (wrong-sign) Splynx credit notes: "

@@ -7,8 +7,9 @@ primed neither tenant layer, and no record that it ran.
 
 It also carried two business rules that belong here rather than in a script:
 
-* **The imbalance tolerance.** A journal whose debits and credits differ by
-  less than `IMBALANCE_TOLERANCE` is treated as balanced and postable;
+* **Balance is exact.** A journal is postable only when its debits equal its
+  credits. There is no tolerance — the former `Decimal("0.01")` allowance is
+  gone, and the reasoning is beside `is_balanced` below;
   anything above is skipped as a data defect. This is the same sub-cent dust
   concept AR and AP settled on, and it was the third place in the codebase to
   declare it independently.
@@ -37,11 +38,23 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-# Debits and credits differing by less than this are rounding dust, not an
-# unbalanced entry. Mirrors the AR/AP payment tolerance; declared here because
-# GL imbalance and payment coverage are different questions that happen to
-# share a magnitude.
-IMBALANCE_TOLERANCE = Decimal("0.01")
+# A journal is balanced when its debits equal its credits. There is no
+# tolerance, and there was never a good reason for one here.
+#
+# This replaced `IMBALANCE_TOLERANCE = Decimal("0.01")`, whose own comment said
+# it "mirrors the AR/AP payment tolerance". That mirroring was the mistake:
+# payment dust is a SETTLEMENT concept — whether a customer has paid closely
+# enough to consider an invoice settled — while journal balance is an identity.
+# A journal is balanced or it is not, and one that is not cannot appear in a
+# trial balance that adds up.
+#
+# The magnitude made it worse. At `NUMERIC(20, 6)` this admitted an imbalance
+# 10,000x larger than the GL posting boundary, in the service that exists to
+# post the APPROVED backlog — so the bulk path was the most permissive one.
+#
+# It was also incompatible with `dotmac-accounting`, which refuses an
+# unbalanced journal outright: anything posted under this tolerance would have
+# been rejected at backfill.
 
 # Period states that accept a posting. `None` covers journals with no fiscal
 # period attached at all.
@@ -58,7 +71,7 @@ class ApprovedJournal:
 
     @property
     def is_balanced(self) -> bool:
-        return self.imbalance < IMBALANCE_TOLERANCE
+        return self.imbalance == Decimal("0")
 
     @property
     def period_accepts_posting(self) -> bool:

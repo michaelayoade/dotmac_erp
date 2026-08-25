@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 import sys
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.db.session_context import allow_cross_org
@@ -63,8 +63,7 @@ def _match(custs: list[Customer], inc: str, exc: str | None) -> list[Customer]:
 
 def main() -> None:
     created = reassigned = 0
-    with SessionLocal() as db:
-        db.execute(text("SET app.bypass_rls='true'"))
+    with SessionLocal() as db:  # noqa: SIM117 -- preserve archived flow
         with allow_cross_org(db):
             org_id = db.execute(
                 select(Customer.organization_id, func.count())

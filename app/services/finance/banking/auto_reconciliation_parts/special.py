@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 from app.services.finance.banking.auto_reconciliation_parts.base import (
     AutoMatchDefaults,
     AutoMatchResult,
@@ -46,9 +47,7 @@ class AutoReconciliationSpecialService:
         3. Matches the statement line to the credit journal line.
         """
         from app.models.finance.gl.account import Account
-        from app.models.finance.gl.journal_entry import JournalType
-        from app.services.finance.gl.journal import JournalInput, JournalLineInput
-        from app.services.finance.posting.base import BasePostingAdapter
+        from app.services.finance.banking.bank_fee_posting import post_bank_fee
 
         # Look up Finance Cost GL account (configurable, default 6080) once
         account_code = (
@@ -88,79 +87,56 @@ class AutoReconciliationSpecialService:
 
         for line in fee_lines:
             try:
-                amount = abs(line.amount)
-                correlation_id = f"bank-fee-{line.line_id}"
-
-                journal_input = JournalInput(
-                    journal_type=JournalType.STANDARD,
-                    entry_date=line.transaction_date,
-                    posting_date=line.transaction_date,
-                    description=f"Bank charge - {line.description}",
-                    reference=line.reference,
-                    source_module="BANKING",
-                    source_document_type="BANK_FEE",
-                    correlation_id=correlation_id,
-                    lines=[
-                        JournalLineInput(
-                            account_id=finance_cost_account.account_id,
-                            debit_amount=amount,
-                            description=line.description,
-                        ),
-                        JournalLineInput(
-                            account_id=bank_account.gl_account_id,
-                            credit_amount=amount,
-                            description=line.description,
-                        ),
-                    ],
-                )
-
-                # Step 1: Create, submit, approve (with SoD bypass)
-                journal, create_error = BasePostingAdapter.create_and_approve_journal(
-                    db,
-                    organization_id,
-                    journal_input,
-                    SYSTEM_USER_ID,
-                    error_prefix="Fee journal creation failed",
-                )
-
-                if create_error:
-                    logger.warning(
-                        "Failed to create fee journal for line %s: %s",
-                        line.line_id,
-                        create_error.message,
-                    )
-                    result.errors.append(
-                        f"Line {line.line_number}: {create_error.message}"
-                    )
-                    continue
-
-                # Step 2: Post to ledger
-                idempotency_key = BasePostingAdapter.make_idempotency_key(
-                    organization_id, "BANKING", line.line_id, action="bank-fee"
-                )
-                posting_result = self._post_with_period_fallback(  # type: ignore[attr-defined]
+                # Delegated to the one bank-fee owner. It checks BEFORE it
+                # creates, records the statement line as typed identity, and is
+                # backed by a unique index — see `bank_fee_posting`.
+                outcome = post_bank_fee(
                     db,
                     organization_id=organization_id,
-                    journal_entry_id=journal.journal_entry_id,
-                    posting_date=line.transaction_date,
-                    idempotency_key=idempotency_key,
-                    source_module="BANKING",
-                    correlation_id=correlation_id,
+                    line=line,
+                    bank_gl_account_id=bank_account.gl_account_id,
+                    finance_cost_account_id=finance_cost_account.account_id,
                     posted_by_user_id=SYSTEM_USER_ID,
-                    success_message="Bank fee posted",
-                    error_prefix="Fee journal posting failed",
+                    poster=self._post_with_period_fallback,  # type: ignore[attr-defined]
                 )
 
-                if not posting_result.success:
+                if outcome.needs_attention:
+                    # APPROVED-but-unposted, or voided/reversed. Something
+                    # exists and the ledger effect does not. Surfaced rather
+                    # than counted as done — silently skipping this shape is
+                    # what let 12,117 orphans accumulate unnoticed.
                     logger.warning(
-                        "Failed to post fee journal for line %s: %s",
+                        "Bank fee for line %s needs attention: %s",
                         line.line_id,
-                        posting_result.message,
+                        outcome.message,
                     )
+                    result.errors.append(f"Line {line.line_number}: {outcome.message}")
+                    continue
+
+                if not outcome.ok:
+                    logger.warning(
+                        "Failed to record fee journal for line %s: %s",
+                        line.line_id,
+                        outcome.message,
+                    )
+                    result.errors.append(f"Line {line.line_number}: {outcome.message}")
+                    continue
+
+                # Falls through to matching even when nothing was created. A
+                # crash between posting and matching leaves the statement line
+                # unmatched forever otherwise, and the match step below is
+                # idempotent — it looks the line up before writing.
+                journal = outcome.posted_journal
+                if journal is None:
+                    # A live effect without a journal to match against. Reported
+                    # rather than asserted away: if it ever happens the fee is
+                    # silently unmatched, which is how this went wrong before.
                     result.errors.append(
-                        f"Line {line.line_number}: {posting_result.message}"
+                        f"Line {line.line_number}: fee posted without a journal"
                     )
                     continue
+
+                correlation_id = f"bank-fee-{line.line_id}"
 
                 # Find the credit line on the bank GL account
                 journal_line = self._find_journal_line(  # type: ignore[attr-defined]

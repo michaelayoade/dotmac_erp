@@ -87,6 +87,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.execute:
+        from app.services.finance.gl.bulk_posting_policy import (
+            BulkPostingDisabled,
+            require_bulk_posting_allowed,
+        )
+
+        try:
+            require_bulk_posting_allowed("post_stranded_bank_fees.py", dry_run=False)
+
+        except BulkPostingDisabled as exc:
+            logger.error("%s", exc)
+
+            return 2
+
     mode = "EXECUTE" if args.execute else "DRY RUN"
     logger.info(
         "=== Post stranded %s/%s journals (%s) — org %s, %s ===",
