@@ -66,6 +66,7 @@ def _make_intent(
     bank_account_id: Any = _SENTINEL,
     expires_at: datetime | None = None,
     created_at: datetime | None = None,
+    poll_count: int = 0,
 ) -> Any:
     """Build a lightweight intent object for unit tests."""
     return SimpleNamespace(
@@ -97,6 +98,8 @@ def _make_intent(
         expires_at=expires_at or (datetime.now(UTC) + timedelta(hours=24)),
         created_at=created_at or datetime.now(UTC),
         updated_at=None,
+        poll_count=poll_count,
+        last_poll_error=None,
     )
 
 
@@ -1021,6 +1024,152 @@ class TestPollTransferStatus:
 
         with pytest.raises(ValueError, match="OUTBOUND"):
             svc.poll_transfer_status(intent, _CFG)
+
+
+# ===========================================================================
+# 4b. reconcile_stuck_transfer / expire_stale_pending_transfer
+#
+# The scheduled worker used to make these decisions inline. They are the
+# owner's now, and the property that matters is that both re-prove, under a
+# lock, the premise a *different* session established.
+# ===========================================================================
+
+
+class TestReconcileStuckTransfer:
+    """Tests for PaymentService.reconcile_stuck_transfer()."""
+
+    def _svc(self, db: MagicMock, org_id: uuid.UUID) -> PaymentService:
+        svc = PaymentService.__new__(PaymentService)
+        svc.db = db
+        svc.organization_id = org_id
+        return svc
+
+    def test_ambiguous_pending_intent_is_promoted_then_settled(self) -> None:
+        """PENDING with a transfer_code means initiation was ambiguous and the
+        money may already be moving. Polling only reconciles PROCESSING rows,
+        so the owner promotes it first and drives it to a verdict."""
+        org_id = _org_id()
+        db = MagicMock()
+        claim = _make_claim(org_id=org_id)
+        intent = _make_intent(
+            org_id=org_id,
+            status=PaymentIntentStatus.PENDING,
+            transfer_code="TRF_amb",
+            source_id=claim.claim_id,
+            bank_account_id=None,
+        )
+
+        db.scalars.return_value.one_or_none.return_value = intent
+        db.execute.return_value.scalar_one_or_none.return_value = intent
+        db.get.return_value = claim
+        db.scalar.return_value = None
+
+        client_cm = _paystack_client_context(
+            verify_result=_make_paystack_verify_result(status="success")
+        )
+
+        svc = self._svc(db, org_id)
+
+        with (
+            patch(
+                "app.services.finance.payments.payment_service.PaystackClient",
+                return_value=client_cm,
+            ),
+            _patch_expense_mark_paid(db),
+        ):
+            result = svc.reconcile_stuck_transfer(intent.intent_id, _CFG)
+
+        assert intent.status == PaymentIntentStatus.COMPLETED
+        assert result.outcome.value == "completed"
+        assert result.poll_count == 1
+
+    @pytest.mark.parametrize(
+        "settled",
+        [
+            PaymentIntentStatus.COMPLETED,
+            PaymentIntentStatus.FAILED,
+            PaymentIntentStatus.REVERSED,
+            PaymentIntentStatus.EXPIRED,
+        ],
+    )
+    def test_an_already_settled_intent_is_left_alone(
+        self, settled: PaymentIntentStatus
+    ) -> None:
+        """Selected while in flight, settled by a webhook before the poller got
+        to it. The verdict is not the poller's to reopen, and the attempt
+        budget is not its to spend."""
+        org_id = _org_id()
+        db = MagicMock()
+        intent = _make_intent(
+            org_id=org_id,
+            status=settled,
+            transfer_code="TRF_done",
+            poll_count=3,
+        )
+        db.scalars.return_value.one_or_none.return_value = intent
+
+        svc = self._svc(db, org_id)
+
+        with patch(
+            "app.services.finance.payments.payment_service.PaystackClient"
+        ) as client_cls:
+            result = svc.reconcile_stuck_transfer(intent.intent_id, _CFG)
+
+        assert intent.status == settled
+        assert intent.poll_count == 3
+        assert result.outcome.value == "skipped"
+        client_cls.assert_not_called()
+
+    def test_a_vanished_intent_is_reported_not_raised(self) -> None:
+        """A batch job must survive one row disappearing under it."""
+        org_id = _org_id()
+        db = MagicMock()
+        db.scalars.return_value.one_or_none.return_value = None
+
+        result = self._svc(db, org_id).reconcile_stuck_transfer(uuid.uuid4(), _CFG)
+
+        assert result.outcome.value == "skipped"
+
+
+class TestExpireStalePendingTransfer:
+    """Tests for PaymentService.expire_stale_pending_transfer()."""
+
+    def _svc(self, db: MagicMock, org_id: uuid.UUID) -> PaymentService:
+        svc = PaymentService.__new__(PaymentService)
+        svc.db = db
+        svc.organization_id = org_id
+        return svc
+
+    def test_a_genuinely_stalled_intent_is_expired(self) -> None:
+        org_id = _org_id()
+        db = MagicMock()
+        intent = _make_intent(
+            org_id=org_id,
+            status=PaymentIntentStatus.PENDING,
+            transfer_code=None,
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+        db.scalars.return_value.one_or_none.return_value = intent
+
+        assert self._svc(db, org_id).expire_stale_pending_transfer(intent.intent_id)
+        assert intent.status == PaymentIntentStatus.EXPIRED
+
+    def test_a_transfer_started_in_the_gap_is_not_expired(self) -> None:
+        """The premise was established in the cross-organization select; by the
+        time this write happens the transfer may have been initiated, and
+        EXPIRED over an in-flight payout is a payout nobody chases."""
+        org_id = _org_id()
+        db = MagicMock()
+        intent = _make_intent(
+            org_id=org_id,
+            status=PaymentIntentStatus.PROCESSING,
+            transfer_code="TRF_started_in_the_gap",
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+        db.scalars.return_value.one_or_none.return_value = intent
+
+        assert not self._svc(db, org_id).expire_stale_pending_transfer(intent.intent_id)
+        assert intent.status == PaymentIntentStatus.PROCESSING
 
 
 # ===========================================================================

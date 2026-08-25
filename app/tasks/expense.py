@@ -746,32 +746,22 @@ def calculate_expense_analytics(
 
 @shared_task
 def poll_stuck_expense_transfers() -> dict:
-    """
-    Poll Paystack for status of stuck expense reimbursement transfers.
+    """Reconcile expense reimbursement transfers whose webhook never arrived.
 
-    Checks active transfer intents older than 2 minutes and updates their
-    status via direct API query. Includes:
-    - PROCESSING intents
-    - PENDING intents that already have transfer_code
+    Thin adapter. It discovers which tenants have work, opens one session per
+    tenant, hands each intent to :class:`PaymentService` and adds up what it is
+    told. Every decision about a transfer — whether it is stale, whether to
+    promote it, whether to give up on it — belongs to that service, which is
+    the sole writer of ``PaymentIntent.status``
+    (``tests/architecture/test_payment_intent_status_single_owner.py``).
 
     Returns:
         Dict with polling results
     """
-    from datetime import timedelta
-
-    from app.models.domain_settings import SettingDomain
-    from app.models.finance.payments.payment_intent import (
-        PaymentDirection,
-        PaymentIntent,
-        PaymentIntentStatus,
+    from app.services.finance.payments.payment_service import (
+        PaymentService,
+        TransferPollOutcome,
     )
-    from app.services.finance.payments.payment_service import PaymentService
-    from app.services.finance.payments.paystack_client import PaystackConfig
-    from app.services.settings_spec import resolve_value
-
-    # After this many failed poll attempts (every 2 min), mark as FAILED.
-    # 10 attempts = ~20 minutes of retrying before giving up.
-    MAX_POLL_ATTEMPTS = 10
 
     logger.info("Polling stuck expense transfers")
 
@@ -784,152 +774,60 @@ def poll_stuck_expense_transfers() -> dict:
         "errors": [],
     }
 
-    # Expire PENDING intents that never had a transfer initiated
-    # (step 2 was never called) and are past their expires_at.
+    # One clock for both selections, so an intent cannot be judged stale by one
+    # pass and fresh by the next within a single run.
     now = datetime.now(UTC)
-    with cross_org_session() as cross_db:
-        stale_pending_meta = list(
-            cross_db.execute(
-                select(PaymentIntent.intent_id, PaymentIntent.organization_id).where(
-                    PaymentIntent.direction == PaymentDirection.OUTBOUND,
-                    PaymentIntent.status == PaymentIntentStatus.PENDING,
-                    PaymentIntent.source_type == "EXPENSE_CLAIM",
-                    PaymentIntent.transfer_code.is_(None),
-                    PaymentIntent.expires_at.isnot(None),
-                    PaymentIntent.expires_at <= now,
-                )
-            ).all()
-        )
 
-    stale_by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
-    for intent_id, org_id in stale_pending_meta:
-        stale_by_org.setdefault(org_id, []).append(intent_id)
+    # Expire PENDING intents that never had a transfer initiated (step 2 was
+    # never called) and are past their expires_at.
+    with cross_org_session() as cross_db:
+        stale_by_org = PaymentService.find_stale_pending_transfer_intents(
+            cross_db, now=now
+        )
 
     for org_id, intent_ids in stale_by_org.items():
         with session_for_org(org_id) as db:
-            stale_pending = db.scalars(
-                select(PaymentIntent).where(PaymentIntent.intent_id.in_(intent_ids))
-            ).all()
-            for intent in stale_pending:
-                intent.status = PaymentIntentStatus.EXPIRED
-                logger.info(
-                    "Expired stale PENDING transfer intent %s (created %s)",
-                    intent.intent_id,
-                    intent.created_at,
-                )
-                results["expired"] = results.get("expired", 0) + 1
+            svc = PaymentService(db, org_id)
+            for intent_id in intent_ids:
+                if svc.expire_stale_pending_transfer(intent_id, now=now):
+                    results["expired"] = results.get("expired", 0) + 1
             db.commit()
 
-    # Fast fallback: check PROCESSING transfers older than 2 minutes.
-    cutoff = now - timedelta(minutes=2)
+    # Fast fallback for transfers that are in flight but have no verdict.
     with cross_org_session() as cross_db:
-        stuck_intent_meta = list(
-            cross_db.execute(
-                select(PaymentIntent.intent_id, PaymentIntent.organization_id).where(
-                    PaymentIntent.direction == PaymentDirection.OUTBOUND,
-                    PaymentIntent.status.in_(
-                        [
-                            PaymentIntentStatus.PROCESSING,
-                            PaymentIntentStatus.PENDING,
-                        ]
-                    ),
-                    PaymentIntent.source_type == "EXPENSE_CLAIM",
-                    PaymentIntent.transfer_code.isnot(None),
-                    PaymentIntent.created_at < cutoff,
-                    PaymentIntent.poll_count < MAX_POLL_ATTEMPTS,
-                )
-            ).all()
-        )
+        stuck_by_org = PaymentService.find_stuck_transfer_intents(cross_db, now=now)
 
-    if not stuck_intent_meta:
+    if not stuck_by_org:
         logger.info("No stuck transfers found")
         return results
 
-    # Group by organization to use correct config
-    by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
-    for intent_id, org_id in stuck_intent_meta:
-        by_org.setdefault(org_id, []).append(intent_id)
-
-    for org_id, intent_ids in by_org.items():
+    for org_id, intent_ids in stuck_by_org.items():
         with session_for_org(org_id) as db:
-            # Get Paystack config for this org
-            secret_key = resolve_value(
-                db, SettingDomain.payments, "paystack_secret_key"
-            )
-            public_key = resolve_value(
-                db, SettingDomain.payments, "paystack_public_key"
-            )
-            webhook_secret = resolve_value(
-                db, SettingDomain.payments, "paystack_webhook_secret"
-            )
-            if not secret_key or not public_key:
+            svc = PaymentService(db, org_id)
+            config = svc.resolve_transfer_polling_config()
+            if config is None:
                 logger.warning("No Paystack keys for org %s", org_id)
                 continue
 
-            config = PaystackConfig(
-                secret_key=str(secret_key),
-                public_key=str(public_key),
-                webhook_secret=str(webhook_secret or ""),
-            )
-            svc = PaymentService(db, org_id)
-            intents = db.scalars(
-                select(PaymentIntent).where(PaymentIntent.intent_id.in_(intent_ids))
-            ).all()
+            for intent_id in intent_ids:
+                results["intents_checked"] += 1
+                outcome = svc.reconcile_stuck_transfer(intent_id, config)
 
-            for intent in intents:
-                try:
-                    results["intents_checked"] += 1
-                    intent.poll_count += 1
-
-                    # Some intents can remain PENDING despite having a transfer_code.
-                    # Promote to PROCESSING so poll_transfer_status can reconcile them.
-                    if intent.status == PaymentIntentStatus.PENDING:
-                        intent.status = PaymentIntentStatus.PROCESSING
-                        db.flush()
-
-                    svc.poll_transfer_status(intent, config)
-
-                    if intent.status == PaymentIntentStatus.COMPLETED:
-                        results["completed"] += 1
-                    elif intent.status == PaymentIntentStatus.FAILED:
-                        results["failed"] += 1
-                    else:
-                        results["still_pending"] += 1
-
-                except Exception as e:
-                    error_msg = str(e)
-                    intent.last_poll_error = error_msg
-                    logger.error(
-                        "Failed to poll transfer %s (attempt %d/%d): %s",
-                        intent.intent_id,
-                        intent.poll_count,
-                        MAX_POLL_ATTEMPTS,
-                        e,
-                    )
-
-                    if intent.poll_count >= MAX_POLL_ATTEMPTS:
-                        intent.status = PaymentIntentStatus.FAILED
-                        intent.gateway_response = {
-                            **(intent.gateway_response or {}),
-                            "poll_abandoned": True,
-                            "poll_attempts": intent.poll_count,
-                            "last_error": error_msg,
+                if outcome.outcome is TransferPollOutcome.ERRORED:
+                    results["errors"].append(
+                        {
+                            "intent_id": str(outcome.intent_id),
+                            "error": outcome.error,
+                            "poll_count": outcome.poll_count,
                         }
-                        logger.warning(
-                            "Transfer %s marked FAILED after %d poll attempts: %s",
-                            intent.intent_id,
-                            intent.poll_count,
-                            error_msg,
-                        )
-                        results["abandoned"] += 1
-                    else:
-                        results["errors"].append(
-                            {
-                                "intent_id": str(intent.intent_id),
-                                "error": error_msg,
-                                "poll_count": intent.poll_count,
-                            }
-                        )
+                    )
+                    continue
+
+                # TransferPollOutcome values ARE the result keys; SKIPPED is
+                # the only one not pre-seeded, so it appears only when a
+                # tenant actually had an intent that moved under the worker.
+                counter = outcome.outcome.value
+                results[counter] = results.get(counter, 0) + 1
 
             db.commit()
 
