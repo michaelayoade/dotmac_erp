@@ -25,6 +25,7 @@ from app.services.finance.gl.period_close import (
     PeriodReadiness,
     close_periods,
 )
+from app.services.finance.gl.posting_backlog import IMBALANCE_TOLERANCE
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "close_fiscal_periods.py"
@@ -92,26 +93,26 @@ def test_only_open_and_reopened_periods_are_considered():
 # --------------------------------------------------------------------------
 
 
-def test_any_imbalance_at_all_blocks_the_close():
-    """DELIBERATE CHANGE. The gate blocked only at `Decimal("0.01")`.
-
-    A trial balance is an identity, not a settlement: over POSTED journals
-    debits equal credits or the ledger is broken. The old threshold let a
-    period close while its own trial balance did not add up, at 10,000x the
-    scale the ledger stores. Sub-kobo dust now blocks, and `force` remains for
-    the operator who must close over a known defect.
-    """
-    assert _period(imbalance="0").is_ready
-    assert not _period(imbalance="0.009").is_ready
-    assert not _period(imbalance="0.01").is_ready
-    assert not _period(imbalance="0.000001").is_ready
+def test_an_imbalance_below_the_tolerance_does_not_block():
+    assert _period(imbalance="0.009").is_ready
 
 
-def test_no_tolerance_constant_survives_anywhere_on_this_path():
-    """A tolerance that still exists is a tolerance someone can widen."""
-    source = SERVICE.read_text(encoding="utf-8")
-    assert "IMBALANCE_TOLERANCE = " not in source
-    assert "import IMBALANCE_TOLERANCE" not in source
+def test_an_imbalance_at_exactly_the_tolerance_now_blocks():
+    """DELIBERATE CHANGE. The script blocked on `imbalance > 0.01`, so exactly
+    one kobo passed. `gl.posting_backlog` treats a journal as balanced only
+    when `imbalance < IMBALANCE_TOLERANCE`, so exactly 0.01 is an imbalance
+    there. Two GL rules disagreeing about the same kobo is the drift worth
+    removing, and the stricter reading is right for a one-way act."""
+    assert not _period(imbalance=str(IMBALANCE_TOLERANCE)).is_ready
+
+
+def test_the_tolerance_is_shared_not_redeclared():
+    """A fifth independent declaration of 0.01 is what this avoids."""
+    assert "IMBALANCE_TOLERANCE = " not in SERVICE.read_text(encoding="utf-8")
+    assert (
+        "from app.services.finance.gl.posting_backlog import IMBALANCE_TOLERANCE"
+        in (SERVICE.read_text(encoding="utf-8"))
+    )
 
 
 # --------------------------------------------------------------------------

@@ -227,21 +227,19 @@ revision `COMPOSED_MODULE_LINEAGES` names, exactly one ERP head, and no
 unintended heads. The last is the one with teeth — a second ERP root or an
 orphaned revision makes `upgrade heads` apply a graph nobody drew.
 
-**And the live run found a second, subtler thing.** At the original adoption
-point, after `upgrade heads`, `alembic_version` held only TWO rows:
+**And the live run found a second, subtler thing.** After `upgrade heads`,
+`alembic_version` holds only TWO rows:
 
 ```
 ac_0001_accounting
 fi_0001_stored_files
 ```
 
-The prerequisite provider, `20260820_idempotency_ledger`, is absent — correctly.
-Both module lineages declare logical prerequisites that ERP's bindings resolve
-onto ERP revisions, so each carries a `depends_on` edge onto that provider, and
-Alembic treats a depended-upon revision as an ancestor of its dependent. It
-stops being an effective head and its row is subsumed. Later ERP revisions are
-not prerequisites of those module revisions, so the current ERP head remains a
-separately stamped effective head.
+ERP's own head, `20260820_idempotency_ledger`, is absent — correctly. Both
+module lineages declare logical prerequisites that ERP's bindings resolve onto
+ERP revisions, so each carries a `depends_on` edge onto ERP's head, and Alembic
+treats a depended-upon revision as an ancestor of its dependent. It stops being
+an effective head and its row is subsumed.
 
 So there are three numbers, not one, and they are all correct:
 
@@ -249,14 +247,14 @@ So there are three numbers, not one, and they are all correct:
 | --- | ---: | --- |
 | graph heads (`alembic heads`) | 3 | one ERP + one per module lineage |
 | depended-upon | 3 ERP revisions | the bound prerequisite providers |
-| stamped rows | derived | graph heads minus those subsumed by `depends_on`; currently 3 |
+| stamped rows | 2 | graph heads minus those subsumed by `depends_on` |
 
 The test derives the expected stamped set from the script directory rather than
 hard-coding 2, because the answer changes with the composition: a future module
 needing no ERP prerequisite would leave ERP's head stamped. A separate test
-distinguishes "subsumed" from "the provider never ran" — those look identical
-in the version table — by requiring the provider revision to be depended upon
-AND its tables to exist.
+distinguishes "subsumed" from "the branch never ran" — those look identical in
+the version table — by requiring the ERP head to be depended upon AND its
+tables to exist.
 
 ### The composed gate must see the whole composition
 

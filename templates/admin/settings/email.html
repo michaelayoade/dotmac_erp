@@ -54,27 +54,11 @@
     </div>
     {% endif %}
 
-    {% if smtp_test %}
-    <div class="rounded-lg border p-4 {{ 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' if smtp_test.success else 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' }}">
-        <div class="flex items-center gap-3">
-            {{ icon_svg("check", "h-5 w-5 text-green-600 dark:text-green-400" if smtp_test.success else "h-5 w-5 text-red-600 dark:text-red-400") }}
-            <p class="text-sm {{ 'text-green-700 dark:text-green-300' if smtp_test.success else 'text-red-700 dark:text-red-300' }}">{{ smtp_test.message }}</p>
-        </div>
-    </div>
-    {% endif %}
-
     <form method="POST" action="/admin/settings/email" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <!-- SMTP Server Settings -->
         <div class="admin-card p-6">
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">SMTP Server</h2>
-                <button type="submit" formaction="/admin/settings/email/test" name="smtp_test_target" value="global" formnovalidate
-                        class="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium text-accent-700 bg-accent-50 border border-accent-200 hover:bg-accent-100 dark:text-accent-300 dark:bg-accent-900/20 dark:border-accent-800 dark:hover:bg-accent-900/40 transition-colors">
-                    {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
-                    Test Global Connection
-                </button>
-            </div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">SMTP Server</h2>
             <div class="grid gap-6 sm:grid-cols-2">
                 <div>
                     <label for="smtp_host" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SMTP Host</label>
@@ -270,14 +254,6 @@
                                class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Where replies should be sent (optional)</p>
                     </div>
-                </div>
-
-                <div class="flex justify-end">
-                    <button type="submit" formaction="/admin/settings/email/test" name="smtp_test_target" value="module:{{ module.key }}" formnovalidate
-                            class="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium text-accent-700 bg-accent-50 border border-accent-200 hover:bg-accent-100 dark:text-accent-300 dark:bg-accent-900/20 dark:border-accent-800 dark:hover:bg-accent-900/40 transition-colors">
-                        {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
-                        Test {{ module.label }} Connection
-                    </button>
                 </div>
             </div>
         </div>

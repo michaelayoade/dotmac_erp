@@ -1188,36 +1188,7 @@ async def admin_settings_email_update(
                 request, "admin/settings/email.html", context
             )
 
-    return RedirectResponse(url="/admin/settings/email?success=1", status_code=303)
-
-
-@router.post("/settings/email/test", response_class=HTMLResponse)
-async def admin_settings_email_test(
-    request: Request,
-    db: Session = Depends(get_db),
-    auth: WebAuthContext = Depends(optional_web_auth),
-):
-    """Test email settings without saving changes."""
-    form = getattr(request.state, "csrf_form", None)
-    if form is None:
-        form = await request.form()
-    data = dict(form)
-    target = str(data.get("smtp_test_target") or "global")
-
-    context = _admin_base_context(request, auth, "Email Configuration", db)
-    if auth and auth.organization_id:
-        context.update(
-            admin_settings_web_service.get_email_context(db, auth.organization_id)
-        )
-        success, message = admin_settings_web_service.test_email(
-            db, auth.organization_id, data, target
-        )
-        context["smtp_test"] = {
-            "success": success,
-            "message": message,
-        }
-
-    return templates.TemplateResponse(request, "admin/settings/email.html", context)
+    return RedirectResponse(url="/admin/settings/email?saved=1", status_code=303)
 
 
 @router.get("/settings/features", response_class=HTMLResponse)
