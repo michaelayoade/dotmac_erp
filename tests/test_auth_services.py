@@ -115,7 +115,7 @@ def test_session_delete_revokes(db_session, person):
 def test_api_key_generate_with_redis(monkeypatch, db_session):
     fake = _FakeRedis()
     monkeypatch.setattr(auth_service, "_get_redis_client", lambda: fake)
-    payload = ApiKeyGenerateRequest(label="test")
+    payload = ApiKeyGenerateRequest(label="test", scopes=["erp:sync:write"])
     result = auth_service.api_keys.generate_with_rate_limit(db_session, payload, None)
     raw_key = result["key"]
     api_key = result["api_key"]
@@ -126,6 +126,8 @@ def test_api_key_rate_limit_requires_redis(monkeypatch, db_session):
     monkeypatch.setattr(auth_service, "_get_redis_client", lambda: None)
     with pytest.raises(HTTPException) as exc:
         auth_service.api_keys.generate_with_rate_limit(
-            db_session, ApiKeyGenerateRequest(label="test"), None
+            db_session,
+            ApiKeyGenerateRequest(label="test", scopes=["erp:sync:write"]),
+            None,
         )
     assert exc.value.status_code == 503
