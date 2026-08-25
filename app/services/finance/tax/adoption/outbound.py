@@ -9,10 +9,12 @@ periods, currency mismatches, duplicate source versions or changed fingerprints
 refuse the whole source row. A module determination never writes GL directly."
 
 C1 delivers the PROJECTION half of that, in full, as a pure function:
-:func:`project_determination_set` verifies, resolves and produces a complete,
-self-balancing :class:`ConsequencePosting` that renders into ERP's existing
-`JournalInput`/`JournalLineInput` — the accounting owner's own input type.  It
-performs no write.  Writing the snapshot and invoking
+:func:`project_determination_set` verifies, resolves and produces a typed
+:class:`ConsequencePosting`. A postable result is complete, self-balancing and
+renders into ERP's existing `JournalInput`/`JournalLineInput` — the accounting
+owner's own input type. A reportable-only zero treatment carries its return-box
+components and renders no journal. The projection performs no write. Writing
+the snapshot and invoking
 `BasePostingAdapter.create_approve_and_post_journal` is the cohort cutover
 (C4), which is gated on a zero-drift shadow; supplying an adapter does not cut
 anything over.
@@ -209,15 +211,20 @@ class ConsequencePostingLine:
 
 @dataclass(frozen=True, slots=True)
 class ConsequencePosting:
-    """A complete, balanced posting request ERP can validate on its own.
+    """A typed accounting or reportable-only tax consequence.
 
-    Deliberately self-balancing, unlike the legacy `TAXPostingAdapter`, whose
-    own docstring records that it emits tax lines alone and leaves the contra
-    to the source document.  `JournalService._require_balanced` demands equality
-    at persisted scale with no tolerance, so a projection that cannot balance
-    itself can only be validated after it has been combined with something else
-    — which is precisely when a shadow comparison stops being able to attribute
-    a difference.
+    A postable result is deliberately self-balancing, unlike the legacy
+    `TAXPostingAdapter`, whose own docstring records that it emits tax lines
+    alone and leaves the contra to the source document.
+    `JournalService._require_balanced` demands equality at persisted scale with
+    no tolerance, so a projection that cannot balance itself can only be
+    validated after it has been combined with something else — which is
+    precisely when a shadow comparison stops being able to attribute a
+    difference.
+
+    An all-zero configured treatment is a normal reportable-only result. It has
+    no lines and therefore no `JournalInput`, while its distinct zero-rated,
+    exempt or out-of-scope components remain reachable for return reporting.
     """
 
     organization_id: UUID
@@ -244,6 +251,17 @@ class ConsequencePosting:
     segment_id: UUID | None = None
 
     @property
+    def is_postable(self) -> bool:
+        """Whether this consequence has any journal to post.
+
+        False ONLY when every component was a configured zero treatment. That
+        is a complete, correct tax answer that happens to owe nothing — an
+        exempt supply — and it is distinguished here, on the returned value,
+        rather than by inspecting an exception message.
+        """
+        return bool(self.lines)
+
+    @property
     def total_debit(self) -> Decimal:
         return sum((line.debit_amount for line in self.lines), _ZERO)
 
@@ -251,8 +269,13 @@ class ConsequencePosting:
     def total_credit(self) -> Decimal:
         return sum((line.credit_amount for line in self.lines), _ZERO)
 
-    def to_journal_input(self) -> JournalInput:
-        """Render into the accounting owner's own input type.
+    def to_journal_input(self) -> JournalInput | None:
+        """Render into the accounting owner's own input type, or `None`.
+
+        Returns `None` for a reportable-only consequence (`is_postable` False).
+        A journal with no lines must never reach `JournalService`: it would put
+        a meaningless zero entry in the ledger for every exempt line, and
+        `_require_balanced` would pass it, because zero equals zero.
 
         Imported lazily: `app.services.finance.gl.journal` pulls in the GL
         service graph, and this package is otherwise importable — and testable —
@@ -260,6 +283,9 @@ class ConsequencePosting:
         `ConsequencePosting` exists, every module value has already been turned
         into an ERP account, an ERP side and an ERP amount.
         """
+        if not self.lines:
+            return None
+
         from app.models.finance.gl.journal_entry import JournalType
         from app.services.finance.gl.journal import JournalInput, JournalLineInput
 
@@ -454,33 +480,35 @@ def project_determination_set(
             )
         )
 
-    if not lines:
-        if not reportable_zero:
-            raise TaxAdapterRefusal(
-                "the determination set produced no postable and no reportable component"
-            )
-        # Every component was a configured zero treatment: there is a reportable
-        # answer and nothing to post. Emitting a zero-value journal would put a
-        # meaningless entry in the ledger for every exempt line.
+    if not lines and not reportable_zero:
         raise TaxAdapterRefusal(
-            "every component is a zero treatment "
-            f"({', '.join(sorted({c.treatment_code for c in reportable_zero}))}); "
-            "there is a return-box consequence but no journal. Record the "
-            "reportable components and do not post."
+            "the determination set produced no postable and no reportable component"
         )
 
-    total_tax = apply.tax_amount.amount
-    counterpart_credit = apply.consequence is AccountingConsequence.AP_INPUT_TAX
-    if apply.reversal:
-        counterpart_credit = not counterpart_credit
-    lines.append(
-        ConsequencePostingLine(
-            account_id=apply.counterpart_account_id,
-            debit_amount=_ZERO if counterpart_credit else total_tax,
-            credit_amount=total_tax if counterpart_credit else _ZERO,
-            description=f"Tax counterpart for {apply.source_ref}",
+    # An all-zero set is a REPORTABLE-ONLY consequence, not a refusal (C1.1).
+    #
+    # Every component being `zero_rated` / `exempt` / `out_of_scope` is the most
+    # ordinary answer in tax — an exempt supply — and it still belongs in a
+    # return box. Raising here put that outcome on the same path as a genuine
+    # defect (ambiguous account, changed fingerprint, unbalanced arithmetic) and
+    # left `reportable_zero_components` unreachable, so a caller could not act on
+    # the very thing this adapter carries them for. A caller writing the natural
+    # `except TaxAdapterRefusal: log and skip` then silently dropped a statutory
+    # obligation. The components are returned instead, with `is_postable` False
+    # and no counterpart line, and `to_journal_input()` yields `None`.
+    if lines:
+        total_tax = apply.tax_amount.amount
+        counterpart_credit = apply.consequence is AccountingConsequence.AP_INPUT_TAX
+        if apply.reversal:
+            counterpart_credit = not counterpart_credit
+        lines.append(
+            ConsequencePostingLine(
+                account_id=apply.counterpart_account_id,
+                debit_amount=_ZERO if counterpart_credit else total_tax,
+                credit_amount=total_tax if counterpart_credit else _ZERO,
+                description=f"Tax counterpart for {apply.source_ref}",
+            )
         )
-    )
 
     posting = ConsequencePosting(
         organization_id=apply.organization_id,
