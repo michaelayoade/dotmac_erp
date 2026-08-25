@@ -16,7 +16,10 @@ from pathlib import Path
 
 import pytest
 from dotmac_kernel.prerequisites import (
+    IDEMPOTENCY_LEDGER_V1,
     MODULE_DATABASE_ROLES_V1,
+    OUTBOX_RELAY_V1,
+    PARTY_PERSON_CATALOG_V1,
     TENANT_SCOPE_CATALOG_V1,
     install_prerequisite_bindings,
     resolve_depends_on,
@@ -47,13 +50,18 @@ def _install() -> None:
     install_prerequisite_bindings(ASSEMBLY_PREREQUISITE_BINDINGS)
 
 
-def test_erp_binds_both_effects_dotmac_files_needs() -> None:
-    """Not an arbitrary pair: these are exactly what `fi_0001_stored_files`
+def test_erp_binds_every_effect_it_truthfully_hosts() -> None:
+    """The first pair is exactly what `fi_0001_stored_files`
     requires — a tenant catalogue to point a foreign key at, and roles to grant
-    to. Neither implies the kernel's identity, RBAC or audit estate."""
+    to. The ledger effect is the separate ADR-0001 composition decision and
+    supplies both storage planes without implying a caller cutover. The party
+    and relay effects are the two assembly providers closed by ADR-0004."""
     assert {b.prerequisite for b in ASSEMBLY_PREREQUISITE_BINDINGS} == {
         TENANT_SCOPE_CATALOG_V1.name,
         MODULE_DATABASE_ROLES_V1.name,
+        IDEMPOTENCY_LEDGER_V1.name,
+        PARTY_PERSON_CATALOG_V1.name,
+        OUTBOX_RELAY_V1.name,
     }
 
 
@@ -71,12 +79,24 @@ def test_every_bound_revision_exists_in_erps_lineage(binding) -> None:
 
 
 def test_the_bindings_resolve_to_erps_own_revisions() -> None:
-    """The whole point: ERP supplies both effects from its OWN lineage, so no
+    """The whole point: ERP supplies every effect from its OWN lineage, so no
     kernel revision is named anywhere in the resolution."""
     resolved = resolve_depends_on(
-        (TENANT_SCOPE_CATALOG_V1.name, MODULE_DATABASE_ROLES_V1.name)
+        (
+            TENANT_SCOPE_CATALOG_V1.name,
+            MODULE_DATABASE_ROLES_V1.name,
+            IDEMPOTENCY_LEDGER_V1.name,
+            PARTY_PERSON_CATALOG_V1.name,
+            OUTBOX_RELAY_V1.name,
+        )
     )
-    assert resolved == ("20260813_tenant_projection", "20260814_database_roles")
+    assert resolved == (
+        "20260813_tenant_projection",
+        "20260814_database_roles",
+        "20260820_idempotency_ledger",
+        "20260824_party_person_projection",
+        "20260824_outbox_relay",
+    )
     assert not any(r.startswith("0001_") for r in resolved), (
         "ERP must never resolve a prerequisite to a kernel revision — it cannot "
         "run the kernel lineage at all"

@@ -157,6 +157,7 @@ _test_engine = create_engine(
             "core_org": None,
             "hr": None,
             "perf": None,
+            "training": None,
             "pm": None,
             "support": None,
             "automation": None,
@@ -235,25 +236,9 @@ def _noop_clear_org_sync(db):
     pass
 
 
-def _noop_enable_bypass_sync(db):
-    """No-op for SQLite: PostgreSQL RLS not available."""
-    pass
-
-
-def _noop_disable_bypass_sync(db):
-    """No-op for SQLite: PostgreSQL RLS not available."""
-    pass
-
-
 @contextmanager
 def _noop_tenant_context_sync(db, organization_id):
     """No-op tenant context for SQLite."""
-    yield
-
-
-@contextmanager
-def _noop_bypass_rls_sync(db):
-    """No-op RLS bypass for SQLite."""
     yield
 
 
@@ -264,16 +249,6 @@ async def _noop_set_org_async(db, organization_id):
 
 
 async def _noop_clear_org_async(db):
-    """No-op for SQLite: PostgreSQL RLS not available."""
-    pass
-
-
-async def _noop_enable_bypass_async(db):
-    """No-op for SQLite: PostgreSQL RLS not available."""
-    pass
-
-
-async def _noop_disable_bypass_async(db):
     """No-op for SQLite: PostgreSQL RLS not available."""
     pass
 
@@ -292,15 +267,9 @@ mock_rls_module.clear_organization_context_sync = _noop_clear_org_sync
 # because this stub replaces app.rls wholesale, so anything session_context
 # imports must exist on it too.
 mock_rls_module.set_current_organization_on_connection = _noop_set_org_sync
-mock_rls_module.enable_rls_bypass_on_connection = _noop_enable_bypass_sync
-mock_rls_module.enable_rls_bypass_sync = _noop_enable_bypass_sync
-mock_rls_module.disable_rls_bypass_sync = _noop_disable_bypass_sync
-mock_rls_module.bypass_rls_sync = _noop_bypass_rls_sync
 mock_rls_module.tenant_context_sync = _noop_tenant_context_sync
 mock_rls_module.set_current_organization = _noop_set_org_async
 mock_rls_module.clear_organization_context = _noop_clear_org_async
-mock_rls_module.enable_rls_bypass = _noop_enable_bypass_async
-mock_rls_module.disable_rls_bypass = _noop_disable_bypass_async
 mock_rls_module.tenant_context = _noop_tenant_context
 
 
@@ -347,15 +316,7 @@ class MockSettings:
     dotmac_academy_webhook_secret = None
     dotmac_academy_webhook_prefix = "/dotmac-academy"
     dotmac_academy_issuing_authority = "Dotmac Academy"
-    # OpenID Connect settings
-    oidc_enabled = False
-    oidc_issuer = None
-    oidc_client_id = None
-    oidc_client_secret = None
-    oidc_discovery_url = None
-    oidc_redirect_uri = None
-    oidc_scopes = "openid profile email"
-    oidc_request_timeout = 10.0
+    # No OIDC settings: ERP ships no external-identity protocol adapter.
     # Multi-org session listener defaults on; tests keep the same posture.
     enforce_org_filter = True
     # Coach / Intelligence Engine

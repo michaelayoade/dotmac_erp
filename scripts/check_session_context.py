@@ -11,9 +11,9 @@ sessions through the canonical context managers in
 2. ERP's PostgreSQL RLS GUC (``app.current_organization_id``); and
 3. shared modules' PostgreSQL RLS GUC (``app.current_tenant``).
 
-``cross_org_session`` bypasses the first two ERP-owned layers only. It does not
-bypass module RLS; a batch that touches module rows must return to one
-``session_for_org`` per Organization.
+``cross_org_session`` bypasses only the ERP-owned ORM listener. It bypasses
+neither ERP nor module PostgreSQL RLS; a batch that touches protected rows must
+return to one ``session_for_org`` per Organization.
 
 A raw ``SessionLocal()`` in a task primes neither, which is a silent bug:
 queries either raise ``MissingOrgContextError``, return zero rows under

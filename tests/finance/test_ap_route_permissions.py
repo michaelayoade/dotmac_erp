@@ -19,7 +19,7 @@ def _extract_route_permissions(filepath: str) -> dict[str, list[str]]:
 
     Returns a dict mapping function_name -> list of permission strings found.
     """
-    source = Path(filepath).read_text()
+    source = Path(filepath).read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     results: dict[str, list[str]] = {}
@@ -70,7 +70,7 @@ class TestAPRoutePermissionsExist:
 
     def test_no_route_uses_require_finance_access(self) -> None:
         """No route should still use the broad require_finance_access guard."""
-        source = Path(AP_ROUTES_FILE).read_text()
+        source = Path(AP_ROUTES_FILE).read_text(encoding="utf-8")
         assert "require_finance_access" not in source, (
             "AP routes should use granular permissions "
             "(require_web_permission / require_any_web_permission), "
@@ -82,7 +82,7 @@ class TestAPRoutePermissionsExist:
         route_perms = _extract_route_permissions(AP_ROUTES_FILE)
 
         # Filter to only actual route handlers (skip helper functions)
-        source = Path(AP_ROUTES_FILE).read_text()
+        source = Path(AP_ROUTES_FILE).read_text(encoding="utf-8")
         tree = ast.parse(source)
 
         route_functions = set()

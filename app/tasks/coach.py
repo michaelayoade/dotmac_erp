@@ -11,11 +11,10 @@ import uuid
 from typing import Any
 
 from celery import shared_task
-from sqlalchemy import select
 
 from app.config import settings as app_settings
-from app.db.session_context import cross_org_session, session_for_org
-from app.models.finance.core_org.organization import Organization
+from app.db.session_context import session_for_org
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +35,9 @@ def generate_daily_data_quality_insights(organization_id: str | None = None) -> 
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -86,15 +79,9 @@ def generate_daily_banking_health_insights(organization_id: str | None = None) -
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -137,15 +124,9 @@ def generate_daily_expense_approval_insights(
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -186,15 +167,9 @@ def generate_daily_ar_overdue_insights(organization_id: str | None = None) -> di
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -232,15 +207,9 @@ def generate_daily_ap_due_insights(organization_id: str | None = None) -> dict:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -289,15 +258,9 @@ def _run_org_analyzer(
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -400,15 +363,9 @@ def generate_weekly_finance_report(organization_id: str | None = None) -> dict:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -446,15 +403,9 @@ def generate_weekly_hr_report(organization_id: str | None = None) -> dict:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:

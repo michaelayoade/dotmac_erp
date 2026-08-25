@@ -240,6 +240,12 @@ class Customer(Base):
         comment="dotmac_sub reseller ID — reseller/child customers have this set",
     )
 
+    dotmac_sub_metrics: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Latest dotmac_sub commercial/customer lifecycle metrics snapshot",
+    )
+
     # Audit fields
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

@@ -1,0 +1,134 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, pagination, icon_svg, status_badge %}
+
+{% block page_title %}Academy Requirements{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Training</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">Academy Requirements</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/training/academy/progress" class="btn btn-secondary">{{ icon_svg("chart", "h-4 w-4 mr-1.5") }} Progress</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    <form method="post" action="/people/training/academy/requirements" class="card">
+        {{ request.state.csrf_form | safe }}
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Map Academy Course to Job Role</h3>
+        </div>
+        <div class="card-body grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div>
+                <label for="designation_id" class="form-label required">Designation</label>
+                <select id="designation_id" name="designation_id" required class="form-input w-full">
+                    <option value="">Select designation</option>
+                    {% for designation in designations %}
+                    <option value="{{ designation.designation_id }}">{{ designation.designation_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="academy_course_id" class="form-label required">Academy Course ID</label>
+                <input id="academy_course_id" name="academy_course_id" required class="form-input w-full" maxlength="120">
+            </div>
+            <div>
+                <label for="academy_course_title" class="form-label required">Academy Course Title</label>
+                <input id="academy_course_title" name="academy_course_title" required class="form-input w-full" maxlength="255">
+            </div>
+            <div>
+                <label for="academy_assessment_id" class="form-label">Academy Assessment ID</label>
+                <input id="academy_assessment_id" name="academy_assessment_id" class="form-input w-full" maxlength="120">
+            </div>
+            <div>
+                <label for="academy_assessment_title" class="form-label">Academy Assessment Title</label>
+                <input id="academy_assessment_title" name="academy_assessment_title" class="form-input w-full" maxlength="255">
+            </div>
+            <div>
+                <label for="notes" class="form-label">Notes</label>
+                <input id="notes" name="notes" class="form-input w-full" maxlength="500">
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="is_required" class="form-checkbox" checked>
+                Required
+            </label>
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Mapping</button>
+            </div>
+        </div>
+    </form>
+
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/training/academy/requirements",
+        active_filters=active_filters if active_filters else [],
+        show_search=false
+    ) %}
+        <select aria-label="Designation" name="designation_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Designations</option>
+            {% for designation in designations %}
+            <option value="{{ designation.designation_id }}" {{ 'selected' if designation_id == designation.designation_id|string }}>{{ designation.designation_name }}</option>
+            {% endfor %}
+        </select>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <input type="checkbox" name="include_inactive" value="1" class="form-checkbox" {{ 'checked' if include_inactive else '' }} {{ filter_attrs }}>
+            Include Archived
+        </label>
+    {% endcall %}
+
+    <div id="results-container">
+        {% if requirements %}
+        <div class="card overflow-hidden">
+            <div class="table-container">
+                <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-800/50">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Designation</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Academy Course</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Assessment</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Status</th>
+                            <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        {% for requirement in requirements %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">{{ requirement.designation.designation_name }}</td>
+                            <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+                                {{ requirement.academy_course_title }}
+                                <div class="font-mono text-xs text-slate-500">{{ requirement.academy_course_id }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                                {{ requirement.academy_assessment_title if requirement.academy_assessment_title else '-' }}
+                                {% if requirement.academy_assessment_id %}<div class="font-mono text-xs text-slate-500">{{ requirement.academy_assessment_id }}</div>{% endif %}
+                            </td>
+                            <td class="px-4 py-3">{{ status_badge("active" if requirement.is_active else "inactive", "sm") }}</td>
+                            <td class="px-4 py-3 text-right">
+                                {% if requirement.is_active %}
+                                <form method="post" action="/people/training/academy/requirements/{{ requirement.id }}/archive" class="inline">
+                                    {{ request.state.csrf_form | safe }}
+                                    <button type="submit" class="btn btn-secondary btn-sm">{{ icon_svg("archive", "h-4 w-4 mr-1.5") }} Archive</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        {{ empty_state("No Academy requirements found", "Map Academy courses to job designations.", "academic-cap") }}
+        {% endif %}
+        {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
+    </div>
+</div>
+{% endblock %}

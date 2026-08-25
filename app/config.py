@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.30.0")
+    app_version: str = os.getenv("APP_VERSION", "1.33.2")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -126,19 +126,9 @@ class Settings:
     # Application URL (for email links)
     app_url: str = os.getenv("APP_URL", "http://localhost:8000")
 
-    # OpenID Connect authentication boundary. The identity provider proves the
-    # user's identity; ERP remains authoritative for local people, roles,
-    # permissions, sessions, and cookies. No identity-provider database or JWT
-    # signing secret is shared with ERP.
-    oidc_enabled: bool = os.getenv("OIDC_ENABLED", "false").lower() == "true"
-    oidc_issuer: str | None = os.getenv("OIDC_ISSUER") or None
-    oidc_client_id: str | None = os.getenv("OIDC_CLIENT_ID") or None
-    # May be an OpenBao reference resolved by app.services.secrets.
-    oidc_client_secret: str | None = os.getenv("OIDC_CLIENT_SECRET") or None
-    oidc_discovery_url: str | None = os.getenv("OIDC_DISCOVERY_URL") or None
-    oidc_redirect_uri: str | None = os.getenv("OIDC_REDIRECT_URI") or None
-    oidc_scopes: str = os.getenv("OIDC_SCOPES", "openid profile email")
-    oidc_request_timeout: float = float(os.getenv("OIDC_REQUEST_TIMEOUT", "10.0"))
+    # ERP has no external-identity protocol adapter. The OIDC_* settings that
+    # used to live here were deleted with the unshipped OIDC implementation and
+    # must not be restored ad hoc — see docs/oidc_identity_contract.md.
 
     # ==========================================================================
     # S3 / MinIO Object Storage
@@ -150,6 +140,19 @@ class Settings:
     s3_region: str = os.getenv("S3_REGION", "us-east-1")
     s3_connect_timeout_s: float = float(os.getenv("S3_CONNECT_TIMEOUT_S", "3.0"))
     s3_read_timeout_s: float = float(os.getenv("S3_READ_TIMEOUT_S", "10.0"))
+
+    # Durable bulk imports.  Files spool to disk before the dotmac-files
+    # provider streams them, so this ceiling is an admission limit rather than
+    # a process-memory allocation.  Partition bounds are passed explicitly to
+    # dotmac-imports and therefore remain deployment policy, not module policy.
+    import_max_file_size_bytes: int = int(
+        os.getenv("IMPORT_MAX_FILE_SIZE_BYTES", str(512 * 1024 * 1024))
+    )
+    import_partition_rows: int = int(os.getenv("IMPORT_PARTITION_ROWS", "200"))
+    import_partition_max_bytes: int = int(
+        os.getenv("IMPORT_PARTITION_MAX_BYTES", str(8 * 1024 * 1024))
+    )
+    import_validation_workers: int = int(os.getenv("IMPORT_VALIDATION_WORKERS", "2"))
 
     # ==========================================================================
     # CRM Integration (crm.dotmac.io)

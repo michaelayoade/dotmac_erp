@@ -13,11 +13,10 @@ from datetime import date
 from typing import Any
 
 from celery import shared_task
-from sqlalchemy import select
 
 from app.config import settings as app_settings
-from app.db.session_context import cross_org_session, session_for_org
-from app.models.finance.core_org.organization import Organization
+from app.db.session_context import session_for_org
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +41,9 @@ def refresh_cash_flow_metrics(organization_id: str | None = None) -> dict:
 
     today = date.today()
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -102,15 +95,9 @@ def refresh_efficiency_metrics(organization_id: str | None = None) -> dict:
 
     today = date.today()
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -161,15 +148,9 @@ def _run_computer(
     }
     today = date.today()
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:

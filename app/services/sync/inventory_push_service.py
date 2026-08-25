@@ -58,9 +58,22 @@ class InventoryPushService:
     so CRM can maintain a local cache for installation assignments.
     """
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Session | None = None) -> None:
+        # `health_check` is pure HTTP and needs no session. Requiring one here
+        # forced its only caller to open a cross-org session it never queried.
+        # Every inventory read still requires a tenant-scoped session and says
+        # so loudly if one was not supplied.
+        self._db = db
         self._client: httpx.Client | None = None
+
+    @property
+    def db(self) -> Session:
+        if self._db is None:
+            raise InventoryPushError(
+                "InventoryPushService was constructed without a session; "
+                "inventory reads require a tenant-scoped session."
+            )
+        return self._db
 
     @property
     def is_configured(self) -> bool:

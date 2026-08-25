@@ -88,24 +88,6 @@ class LogoutResponse(BaseModel):
     revoked_at: datetime
 
 
-class FederatedIdentityCreate(BaseModel):
-    person_id: UUID
-    subject: str = Field(min_length=1, max_length=255)
-
-
-class FederatedIdentityRead(BaseModel):
-    id: UUID
-    person_id: UUID
-    issuer: str
-    subject: str
-    is_active: bool
-    last_authenticated_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 class ErrorDetail(BaseModel):
     code: str
     message: str

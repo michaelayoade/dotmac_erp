@@ -29,6 +29,7 @@ from app.schemas.settings import (
 from app.services import settings_api as settings_service
 from app.api.deps import get_db_admin_bypass
 from app.services.auth_dependencies import (
+    has_live_admin_grant,
     require_admin_bypass,
     require_tenant_permission,
 )
@@ -497,16 +498,52 @@ def import_settings(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _owns_history_entry(entry: object, auth: dict) -> bool:
-    """Does this history entry belong to the caller's organization?
+def _can_read_history_entry(entry: object, auth: dict) -> bool:
+    """May the caller READ this history entry?
 
-    The settings routes run on ``get_db_admin_bypass`` (RLS off), so nothing
-    below this scopes a history row to a tenant. Global settings rows carry a
-    NULL ``organization_id`` and are readable by anyone with the permission.
+    The settings routes run with ``get_db_admin_bypass``'s ORM cross-org
+    marker, so the database query below does not scope a history row to a
+    tenant. PostgreSQL RLS still applies. Global settings rows carry a NULL
+    ``organization_id`` and are readable by anyone with the permission.
     """
     entry_org = getattr(entry, "organization_id", None)
     if entry_org is None:
         return True
+    return str(entry_org) == str(auth.get("organization_id"))
+
+
+def _can_restore_history_entry(entry: object, auth: dict, db: Session) -> bool:
+    """May the caller RESTORE this history entry? A stricter question.
+
+    This used to be the same predicate as the read above, whose justification
+    ("global rows are readable by anyone with the permission") is about
+    READABILITY and was applied unchanged to a WRITE.
+
+    ``restore_from_history`` resolves its target scope from the history row
+    itself (``_restore_target_organization``), so an entry with a NULL
+    ``organization_id`` rewrites the PLATFORM row. Under the read predicate,
+    a tenant administrator holding the tenant permission ``settings:manage``
+    could therefore roll ``webhook_allowed_hosts`` — or any other
+    platform-owned control — back to any value it has ever held. That is a
+    tenant-driven write to a platform-owned setting, arriving by a different
+    door from the automation-settings form, and closing only the form would
+    leave the boundary half-built.
+
+    The repair is general: it protects every platform row's history, not only
+    the webhook keys. It is a real behaviour change for an operator who today
+    restores a global setting from a non-admin tenant account.
+
+    The admin half asks ``has_live_admin_grant``, not ``auth["roles"]``. That
+    list is a login-time claim, so a first version of this check read it and
+    left a revoked administrator holding ceiling-write until the token expired
+    — a stale-claim door onto exactly the row this branch is making
+    platform-owned. ``require_admin_bypass`` already states the standard and
+    already asks the grant tables; this is the same function, not a third
+    check.
+    """
+    entry_org = getattr(entry, "organization_id", None)
+    if entry_org is None:
+        return has_live_admin_grant(db, auth.get("person_id"))
     return str(entry_org) == str(auth.get("organization_id"))
 
 
@@ -571,7 +608,7 @@ def get_history(
 ):
     """Get details of a specific history entry (caller's organization only)."""
     entry = get_history_entry(db, str(history_id))
-    if not entry or not _owns_history_entry(entry, auth):
+    if not entry or not _can_read_history_entry(entry, auth):
         # 404 rather than 403 — a cross-tenant id should not be confirmable.
         raise HTTPException(status_code=404, detail="History entry not found")
     return SettingHistoryRead.model_validate(entry)
@@ -599,10 +636,12 @@ def restore_setting(
 
     Restricted to the caller's organization. This is a *write* on an RLS-bypass
     session, so without the ownership check below a history id from another
-    tenant would rewrite that tenant's live setting.
+    tenant would rewrite that tenant's live setting. A history entry for a
+    PLATFORM row (NULL ``organization_id``) additionally requires the ``admin``
+    role — see ``_can_restore_history_entry``.
     """
     entry = get_history_entry(db, str(payload.history_id))
-    if not entry or not _owns_history_entry(entry, auth):
+    if not entry or not _can_restore_history_entry(entry, auth, db):
         raise HTTPException(status_code=404, detail="History entry not found")
 
     user_id = auth.get("user_id") if auth else None

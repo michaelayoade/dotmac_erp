@@ -1,12 +1,14 @@
 """
 Row Level Security (RLS) context utilities.
 
-This module is the one writer for ERP and shared-module PostgreSQL RLS context.
+This module is the one writer for ERP and shared-module PostgreSQL tenant scope.
 
 ERP's Organization UUID maps directly to the shared Tenant UUID. Every tenant
 primer sets ``app.current_organization_id`` and ``app.current_tenant`` in one
-transaction-local statement; ERP's legacy bypass remains separate and is not a
-module-RLS bypass.
+transaction-local statement. Runtime code cannot assert a PostgreSQL RLS
+bypass. The separate ORM-listener boundary in ``app.db.session_context`` permits
+application-layer cross-organization reads only where PostgreSQL RLS does not
+require tenant context; it is not database authority.
 
 Usage:
     # In a request middleware or dependency:
@@ -15,11 +17,6 @@ Usage:
         organization_id: UUID
     ):
         await set_current_organization(db, organization_id)
-
-    # For admin/system operations that need to bypass ERP-owned RLS:
-    async with bypass_rls(db):
-        # ERP policies may see all organizations; module RLS is not bypassed
-        all_orgs = await db.execute(select(Organization))
 
     # Or using the context manager:
     async with tenant_context(db, organization_id):
@@ -123,50 +120,6 @@ async def clear_organization_context(db: AsyncSession) -> None:
     await db.execute(_CLEAR_CURRENT_SCOPE_SQL)
 
 
-async def enable_rls_bypass(db: AsyncSession) -> None:
-    """
-    Enable the legacy ERP-policy RLS bypass for admin/system operations.
-
-    WARNING: Use with caution! This allows cross-organization access only for
-    ERP policies that explicitly consult ``app.bypass_rls``. Shared-module
-    policies do not consult it and remain tenant-scoped/fail-closed.
-
-    Args:
-        db: The database session
-    """
-    await db.execute(text("SET LOCAL app.bypass_rls = 'true'"))
-
-
-async def disable_rls_bypass(db: AsyncSession) -> None:
-    """
-    Disable RLS bypass (re-enable tenant isolation).
-
-    Args:
-        db: The database session
-    """
-    await db.execute(text("SET LOCAL app.bypass_rls = 'false'"))
-
-
-@asynccontextmanager
-async def bypass_rls(db: AsyncSession) -> AsyncGenerator[None, None]:
-    """
-    Context manager to temporarily bypass RLS for admin operations.
-
-    Usage:
-        async with bypass_rls(db):
-            # ERP policies that opt in are bypassed; module RLS is not
-            all_data = await db.execute(select(SomeModel))
-
-    Args:
-        db: The database session
-    """
-    await enable_rls_bypass(db)
-    try:
-        yield
-    finally:
-        await disable_rls_bypass(db)
-
-
 @asynccontextmanager
 async def tenant_context(
     db: AsyncSession,
@@ -254,56 +207,9 @@ def set_current_organization_on_connection(
     connection.execute(_SET_CURRENT_SCOPE_SQL, _scope_params(organization_id))
 
 
-def enable_rls_bypass_on_connection(connection: Connection) -> None:
-    """Set the RLS bypass GUC directly on a Connection. See above for why."""
-    if connection.dialect.name != "postgresql":
-        return
-    connection.execute(text("SET LOCAL app.bypass_rls = 'true'"))
-
-
 def clear_organization_context_sync(db: Session) -> None:
     """Clear ERP and shared-module scope together (sync version)."""
     db.execute(_CLEAR_CURRENT_SCOPE_SQL)
-
-
-def enable_rls_bypass_sync(db: Session) -> None:
-    """
-    Synchronous version of the ERP-only ``enable_rls_bypass``.
-
-    Args:
-        db: The database session
-    """
-    db.execute(text("SET LOCAL app.bypass_rls = 'true'"))
-
-
-def disable_rls_bypass_sync(db: Session) -> None:
-    """
-    Synchronous version of disable_rls_bypass.
-
-    Args:
-        db: The database session
-    """
-    db.execute(text("SET LOCAL app.bypass_rls = 'false'"))
-
-
-@contextmanager
-def bypass_rls_sync(db: Session) -> Generator[None, None, None]:
-    """
-    Synchronous context manager to temporarily bypass RLS.
-
-    Usage:
-        with bypass_rls_sync(db):
-            # Only ERP policies that consult app.bypass_rls are bypassed
-            all_data = db.execute(select(SomeModel))
-
-    Args:
-        db: The database session
-    """
-    enable_rls_bypass_sync(db)
-    try:
-        yield
-    finally:
-        disable_rls_bypass_sync(db)
 
 
 @contextmanager

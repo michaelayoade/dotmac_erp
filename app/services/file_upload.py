@@ -21,16 +21,30 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import tempfile
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Protocol, Union
+
+from dotmac_files import FilePolicy, PreparedFile, StorageProvider, prepare_upload
 
 from app.config import settings
+from app.tenancy import OrganizationTenantContext
 
 if TYPE_CHECKING:
     from app.services.storage import S3StorageService
+
+
+class AsyncUpload(Protocol):
+    """The small UploadFile surface needed by the durable import boundary."""
+
+    filename: str | None
+    content_type: str | None
+
+    async def read(self, size: int = -1) -> bytes: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +239,55 @@ class PathTraversalError(FileUploadError):
     """Attempted path traversal detected."""
 
     pass
+
+
+async def prepare_tenant_import_csv(
+    upload: AsyncUpload,
+    *,
+    tenant_id: uuid.UUID,
+    provider: StorageProvider | None = None,
+) -> PreparedFile:
+    """Stream one admitted CSV into the shared immutable file owner.
+
+    The request body is spooled to disk above one MiB and the configured limit
+    is enforced while reading, before ``dotmac-files`` performs its independent
+    signature, checksum and policy checks.  No session is accepted here.
+    """
+    if provider is None:
+        from app.services.storage import get_dotmac_files_provider
+
+        provider = get_dotmac_files_provider()
+
+    filename = upload.filename or ""
+    content_type = (upload.content_type or "").split(";", 1)[0].strip().lower()
+    policy = FilePolicy(
+        max_bytes=settings.import_max_file_size_bytes,
+        allowed_extensions=frozenset({".csv"}),
+        allowed_media_types=frozenset({"text/csv"}),
+    )
+    with tempfile.SpooledTemporaryFile(max_size=1024 * 1024, mode="w+b") as spool:
+        total = 0
+        while chunk := await upload.read(1024 * 1024):
+            total += len(chunk)
+            if total > settings.import_max_file_size_bytes:
+                raise FileTooLargeError(
+                    "Import file exceeds the configured upload limit"
+                )
+            spool.write(chunk)
+        spool.seek(0)
+
+        def chunks() -> Iterator[bytes]:
+            while value := spool.read(1024 * 1024):
+                yield value
+
+        return prepare_upload(
+            provider,
+            scope=OrganizationTenantContext.for_organization(tenant_id).tenant_scope,
+            policy=policy,
+            original_filename=filename,
+            declared_media_type=content_type,
+            chunks=chunks(),
+        )
 
 
 class FileUploadService:

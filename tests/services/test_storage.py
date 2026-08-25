@@ -6,12 +6,15 @@ Uses mocked minio client — no real S3/MinIO connection needed.
 
 from __future__ import annotations
 
+import io
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from dotmac_files import StorageConflict, StorageUnavailable
 
 from app.services import storage as storage_mod
-from app.services.storage import S3StorageService
+from app.services.storage import DotmacFilesS3Provider, S3StorageService
 
 
 @pytest.fixture(autouse=True)
@@ -159,3 +162,88 @@ class TestEnsureBucket:
             S3StorageService()
 
         mock_minio_client.bucket_exists.assert_not_called()
+
+
+class _ProviderS3Error(Exception):
+    def __init__(self, code: str, detail: str = "provider detail") -> None:
+        self.code = code
+        super().__init__(detail)
+
+
+class _ProviderStorage:
+    def __init__(self) -> None:
+        self._client = MagicMock()
+        self._bucket = "erp-files"
+        self._s3_error = _ProviderS3Error
+
+
+class TestDotmacFilesProvider:
+    def test_put_writes_checksum_metadata_after_proving_key_absent(self) -> None:
+        storage = _ProviderStorage()
+        storage._client.stat_object.side_effect = _ProviderS3Error("NoSuchKey")
+        provider = DotmacFilesS3Provider(storage)  # type: ignore[arg-type]
+
+        provider.put(
+            "tenants/t/files/id",
+            io.BytesIO(b"csv"),
+            content_type="text/csv",
+            size_bytes=3,
+            checksum_sha256="sha256:digest",
+        )
+
+        storage._client.put_object.assert_called_once()
+        assert storage._client.put_object.call_args.kwargs["metadata"] == {
+            "checksum-sha256": "sha256:digest"
+        }
+
+    def test_put_accepts_only_an_identical_immutable_replay(self) -> None:
+        storage = _ProviderStorage()
+        storage._client.stat_object.return_value = SimpleNamespace(
+            size=3,
+            metadata={"x-amz-meta-checksum-sha256": "sha256:digest"},
+        )
+        provider = DotmacFilesS3Provider(storage)  # type: ignore[arg-type]
+
+        provider.put(
+            "tenants/t/files/id",
+            io.BytesIO(b"csv"),
+            content_type="text/csv",
+            size_bytes=3,
+            checksum_sha256="sha256:digest",
+        )
+        storage._client.put_object.assert_not_called()
+
+        with pytest.raises(StorageConflict):
+            provider.put(
+                "tenants/t/files/id",
+                io.BytesIO(b"other"),
+                content_type="text/csv",
+                size_bytes=5,
+                checksum_sha256="sha256:other",
+            )
+
+    def test_open_releases_the_provider_connection(self) -> None:
+        storage = _ProviderStorage()
+        response = MagicMock()
+        response.read.side_effect = [b"csv", b""]
+        storage._client.get_object.return_value = response
+        provider = DotmacFilesS3Provider(storage)  # type: ignore[arg-type]
+
+        with provider.open("tenants/t/files/id") as opened:
+            assert opened.read() == b"csv"
+
+        response.close.assert_called_once()
+        response.release_conn.assert_called_once()
+
+    def test_provider_errors_never_expose_the_sdk_detail(self) -> None:
+        storage = _ProviderStorage()
+        storage._client.get_object.side_effect = _ProviderS3Error(
+            "ServiceUnavailable", "credential=do-not-copy"
+        )
+        provider = DotmacFilesS3Provider(storage)  # type: ignore[arg-type]
+
+        with pytest.raises(StorageUnavailable) as raised:
+            provider.open("tenants/t/files/id")
+
+        assert str(raised.value) == "stored object is unavailable"
+        assert "do-not-copy" not in repr(raised.value)

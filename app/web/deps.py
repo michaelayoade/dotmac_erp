@@ -24,13 +24,18 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import AsyncSessionLocal, SessionLocal
-from app.db.session_context import allow_cross_org, prime_session, prime_tenant_context
+from app.db.session_context import (
+    allow_cross_org,
+    prime_session,
+    prime_tenant_context,
+    tenant_scope_for_session,
+)
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.observability import actor_id_var
-from app.rls import set_current_organization, set_current_organization_sync
+from app.rls import set_current_organization
 from app.services.auth_dependencies import is_session_inactive
 from app.services.auth_flow import (
     AuthFlow,
@@ -1279,7 +1284,8 @@ def require_web_auth(
     """
     Require authentication for web routes and set tenant context.
 
-    OIDC users reach this dependency only after ERP has issued a local session.
+    Every session reaching this dependency was issued by ERP itself; ERP
+    accepts no externally minted session or identity assertion.
 
     Checks for JWT in:
     1. Authorization header (Bearer token)
@@ -1465,23 +1471,13 @@ def get_db_for_org(
         )
     db = SessionLocal()
     try:
-        prime_session(db, auth.organization_id)
-        # Also set the PostgreSQL GUC consumed by RLS policies — prime_session
-        # only writes a Python-side marker on session.info, which the ORM
-        # listener reads, but in-database row-level security needs
-        # ``app.current_organization_id``. Without this, RLS-protected
-        # SELECTs return empty result sets and (pre Bug A's per-row pin in
-        # the audit listener) audit_log INSERTs tripped InsufficientPrivilege.
-        set_current_organization_sync(db, auth.organization_id)
-        yield db
-        # Mirror ``get_db_with_org`` (API dep): auto-commit on successful yield,
-        # rollback on exception. Without this, web routes that follow the
-        # documented "services flush, routes commit" rule lose data silently —
-        # the route handler builds a RedirectResponse referencing freshly-
-        # flushed UUIDs, then the session closes without committing, and the
-        # caller sees a 404 (or in the period-close case, status stays OPEN
-        # despite a 303 redirect with ?saved=1).
-        db.commit()
+        with tenant_scope_for_session(db, auth.organization_id):
+            yield db
+            # Mirror ``get_db_with_org`` (API dep): auto-commit on successful
+            # yield, rollback on exception. Without this, web routes that
+            # follow the documented "services flush, routes commit" rule lose
+            # data silently.
+            db.commit()
     except Exception:
         db.rollback()
         raise

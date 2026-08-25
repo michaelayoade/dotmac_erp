@@ -16,6 +16,7 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceType,
 )
 from app.models.finance.ap.supplier_payment import APPaymentMethod
+from app.models.notification import NotificationChannel, NotificationType
 from app.services.finance.ap.web.invoice_web import InvoiceWebService
 
 
@@ -242,3 +243,64 @@ async def test_update_invoice_response_does_not_read_invoice_after_commit(monkey
     payload = json.loads(response.body)
     assert payload["success"] is True
     assert payload["invoice_id"] == str(invoice._invoice_id)
+
+
+@pytest.mark.asyncio
+async def test_invoice_mention_queues_both_channels_and_email_dispatch(monkeypatch):
+    org_id = uuid4()
+    actor_id = uuid4()
+    recipient_id = uuid4()
+    invoice_id = uuid4()
+    invoice = SimpleNamespace(
+        invoice_id=invoice_id,
+        invoice_number="PINV-001",
+        comments=None,
+    )
+    actor = SimpleNamespace(name="Invoice Author")
+    recipient = SimpleNamespace(
+        id=recipient_id,
+        display_name="Finance User",
+        first_name="Finance",
+        last_name="User",
+    )
+    request = MagicMock()
+    request.form = AsyncMock(return_value={"comment": "@Finance User please review"})
+    auth = SimpleNamespace(
+        organization_id=org_id,
+        person_id=actor_id,
+        user_id=actor_id,
+    )
+    db = MagicMock()
+    db.get.return_value = actor
+    db.scalars.side_effect = [_Rows([recipient]), _Rows([recipient])]
+
+    notification_create = MagicMock()
+    email_dispatch_delay = MagicMock()
+    monkeypatch.setattr(
+        "app.services.finance.ap.web.invoice_web.supplier_invoice_service.get",
+        lambda *_args, **_kwargs: invoice,
+    )
+    monkeypatch.setattr(
+        "app.services.finance.ap.web.invoice_web.notification_service.create",
+        notification_create,
+    )
+    monkeypatch.setattr(
+        "app.tasks.notifications.process_pending_notification_emails.delay",
+        email_dispatch_delay,
+    )
+
+    response = await InvoiceWebService().add_invoice_comment_response(
+        request,
+        auth,
+        db,
+        str(invoice_id),
+    )
+
+    assert response.status_code == 303
+    notification_create.assert_called_once()
+    notification_kwargs = notification_create.call_args.kwargs
+    assert notification_kwargs["recipient_id"] == recipient_id
+    assert notification_kwargs["notification_type"] == NotificationType.MENTION
+    assert notification_kwargs["channel"] == NotificationChannel.BOTH
+    db.commit.assert_called_once()
+    email_dispatch_delay.assert_called_once_with()

@@ -77,16 +77,3 @@ def test_connection_rearming_sets_both_scopes(real_rls: ModuleType) -> None:
         "organization_id": str(organization_id),
         "tenant_id": str(organization_id),
     }
-
-
-def test_legacy_cross_org_bypass_does_not_bypass_module_scope(
-    real_rls: ModuleType,
-) -> None:
-    """ERP's bypass stays local to ERP policies; module RLS remains fail-closed."""
-    session = MagicMock()
-
-    real_rls.enable_rls_bypass_sync(session)
-
-    statement = str(session.execute.call_args.args[0])
-    assert "app.bypass_rls" in statement
-    assert "app.current_tenant" not in statement

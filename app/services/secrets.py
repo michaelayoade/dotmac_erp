@@ -4,10 +4,9 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.domain_settings import SettingDomain
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +33,40 @@ def _coerce_bool(value: object | None, default: bool = False) -> bool:
 
 
 def _openbao_allow_insecure(db: Session | None) -> bool:
+    """Read the PLATFORM row for ``automation/openbao_allow_insecure``.
+
+    This function used to issue its own ``select(DomainSetting)`` with no scope
+    clause at all, which on a tenant session the org listener rewrote into
+    ``organization_id == <session org>``: the value read was the TENANT's row,
+    so a tenant that could write one decided whether this deployment verifies
+    TLS when talking to its own secret store. The key is now declared
+    ``scope=PLATFORM`` (see ``settings_spec.py``), and this read is routed
+    through the settings service so the declaration actually governs it —
+    ``get_by_key`` discards a caller's organization for a platform-owned key
+    and reads ``organization_id IS NULL`` and nothing else.
+
+    Going through the service rather than repeating a hand-written query here
+    is the point: the platform-scope override lives in ONE place, and this call
+    site cannot drift from it. It also adds no new cross-org bypass caller —
+    ``get_by_key`` owns the one this read needs.
+
+    The environment fallback is kept deliberately. An environment variable is a
+    deployment-level source, the same level as the platform row, so it remains
+    the answer when no row exists (``get_by_key`` raises 404, caught below).
+    """
     if db is not None:
         try:
-            setting = db.scalar(
-                select(DomainSetting).where(
-                    DomainSetting.domain == SettingDomain.automation,
-                    DomainSetting.key == "openbao_allow_insecure",
-                    DomainSetting.is_active.is_(True),
-                )
+            # Imported inside the function: this module is pulled in by startup
+            # and by the seed, and `settings_spec` reaches the model layer, so
+            # a module-level import here would tie two import orders together
+            # for one boolean.
+            from app.services.settings_spec import DOMAIN_SETTINGS_SERVICE
+
+            service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.automation)
+            setting = (
+                service.get_by_key(db, "openbao_allow_insecure", organization_id=None)
+                if service
+                else None
             )
             if setting:
                 raw = (
@@ -50,6 +75,9 @@ def _openbao_allow_insecure(db: Session | None) -> bool:
                     else setting.value_text
                 )
                 return _coerce_bool(raw, default=False)
+        except HTTPException:
+            # 404 — no platform row. Fall through to the environment.
+            pass
         except Exception:
             logger.exception("Ignored exception")
     return _coerce_bool(os.getenv("OPENBAO_ALLOW_INSECURE"), default=False)

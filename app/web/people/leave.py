@@ -29,7 +29,7 @@ def leave_overview(
 def leave_types(
     request: Request,
     search: str | None = None,
-    is_active: bool | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
@@ -48,6 +48,7 @@ def leave_types(
 @router.get("/applications", response_class=HTMLResponse)
 def leave_applications(
     request: Request,
+    employee_search: str | None = None,
     employee_id: str | None = None,
     leave_type_id: str | None = None,
     status: str | None = None,
@@ -64,6 +65,7 @@ def leave_applications(
         request=request,
         auth=auth,
         db=db,
+        employee_search=employee_search,
         employee_id=employee_id,
         leave_type_id=leave_type_id,
         status=status,
@@ -78,6 +80,7 @@ def leave_applications(
 @router.get("/allocations", response_class=HTMLResponse)
 def leave_allocations(
     request: Request,
+    employee_search: str | None = None,
     employee_id: str | None = None,
     leave_type_id: str | None = None,
     year: str | None = None,
@@ -94,6 +97,7 @@ def leave_allocations(
         request=request,
         auth=auth,
         db=db,
+        employee_search=employee_search,
         employee_id=employee_id,
         leave_type_id=leave_type_id,
         year=year,
@@ -557,6 +561,7 @@ def leave_balance_report(
     request: Request,
     year: int | None = None,
     department_id: str | None = None,
+    employee_search: str | None = None,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
@@ -568,6 +573,7 @@ def leave_balance_report(
         db=db,
         year=year,
         department_id=department_id,
+        employee_search=employee_search,
         page=page,
     )
 

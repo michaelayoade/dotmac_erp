@@ -1,0 +1,59 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
+
+{% block page_title %}{{ report.report_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb"><ol class="flex items-center gap-2"><li><a href="/people/perf" class="hover:text-violet-600">Performance</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li><a href="/people/perf/weekly-meeting-reports" class="hover:text-violet-600">Weekly Meeting Reports</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ report.report_number }}</li></ol></nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex flex-wrap gap-2">
+    <a class="btn btn-secondary" href="/people/perf/weekly-meeting-reports/{{ report.report_id }}/print" target="_blank">{{ icon_svg("document", "h-4 w-4 mr-1.5") }} Print</a>
+    {% if report.status.value == 'DRAFT' and can_edit %}<a class="btn btn-primary" href="/people/perf/weekly-meeting-reports/{{ report.report_id }}/edit">Edit Draft</a>{% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6">
+    {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    <section class="card overflow-hidden">
+        <div class="border-b border-slate-200 p-6 text-center dark:border-slate-700"><h1 class="text-2xl font-semibold text-slate-900 dark:text-white">WEEKLY MEETING REPORT</h1><p class="mt-1 font-mono text-sm text-slate-500">{{ report.report_number }}</p></div>
+        <dl class="grid sm:grid-cols-2 lg:grid-cols-4">
+            <div class="border-b border-r border-slate-200 p-4 dark:border-slate-700"><dt class="text-xs uppercase tracking-wider text-slate-500">Division</dt><dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ report.division_name_snapshot }}</dd></div>
+            <div class="border-b border-r border-slate-200 p-4 dark:border-slate-700"><dt class="text-xs uppercase tracking-wider text-slate-500">Week Ending</dt><dd class="mt-1 text-slate-900 dark:text-white">{{ report.week_ending | format_date }}</dd></div>
+            <div class="border-b border-r border-slate-200 p-4 dark:border-slate-700"><dt class="text-xs uppercase tracking-wider text-slate-500">Meeting</dt><dd class="mt-1 text-slate-900 dark:text-white">{{ report.meeting_date | format_date }} · {{ report.meeting_time.strftime('%H:%M') }}</dd></div>
+            <div class="border-b border-slate-200 p-4 dark:border-slate-700"><dt class="text-xs uppercase tracking-wider text-slate-500">Status</dt><dd class="mt-1">{{ status_badge(report.status.value, 'sm') }}</dd></div>
+            <div class="border-r border-slate-200 p-4 dark:border-slate-700"><dt class="text-xs uppercase tracking-wider text-slate-500">Division Head</dt><dd class="mt-1 text-slate-900 dark:text-white">{{ report.division_head_name_snapshot or '—' }}</dd></div>
+            <div class="border-r border-slate-200 p-4 dark:border-slate-700"><dt class="text-xs uppercase tracking-wider text-slate-500">Prepared By</dt><dd class="mt-1 text-slate-900 dark:text-white">{{ report.prepared_by_name_snapshot }}</dd></div>
+            <div class="border-r border-slate-200 p-4 dark:border-slate-700"><dt class="text-xs uppercase tracking-wider text-slate-500">Submitted</dt><dd class="mt-1 text-slate-900 dark:text-white">{{ report.submitted_at | format_datetime if report.submitted_at else '—' }}</dd></div>
+            <div class="p-4"><dt class="text-xs uppercase tracking-wider text-slate-500">HR Email</dt><dd class="mt-1">{{ status_badge(report.notification_status.value, 'sm') }}</dd><dd class="mt-1 text-xs text-slate-500">{{ report.notification_recipient or 'Not queued' }}</dd></div>
+        </dl>
+    </section>
+
+    <section class="card p-6"><h2 class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">1. Attendees / Participants</h2><div class="table-container"><table class="table min-w-full"><thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Attendance</th></tr></thead><tbody>{% for participant in report.participants %}<tr><td>{{ participant.name_snapshot }}</td><td>{{ participant.role_snapshot or '—' }}</td><td>{{ status_badge(participant.attendance_status.value, 'sm') }}</td></tr>{% else %}<tr><td colspan="3" class="py-6 text-center text-slate-500">No participants recorded.</td></tr>{% endfor %}</tbody></table></div></section>
+
+    {% set sections = [
+        ('2. Meeting Purpose / Context', report.purpose_context),
+        ('3. Matters Discussed / Meeting Notes', report.matters_discussed),
+        ('4. Key Decisions / Agreements Reached', report.key_decisions),
+        ('5. Issues, Risks, Dependencies or Support Required', report.issues_risks_support)
+    ] %}
+    {% for title, value in sections %}<section class="card p-6"><h2 class="mb-3 text-lg font-semibold text-slate-900 dark:text-white">{{ title }}</h2><div class="whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-slate-300">{{ value or 'N/A' }}</div></section>{% endfor %}
+
+    <section class="card p-6"><h2 class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">6. Action Items / Follow-up</h2><div class="table-container"><table class="table min-w-full"><thead><tr><th scope="col">Action</th><th scope="col">Owner</th><th scope="col">Due Date</th><th scope="col">Status</th></tr></thead><tbody>{% for item in report.action_items %}<tr><td>{{ item.action_text }}</td><td>{{ item.owner_name_snapshot or '—' }}</td><td>{{ item.due_date | format_date if item.due_date else '—' }}</td><td>{{ status_badge(item.status.value, 'sm') }}</td></tr>{% else %}<tr><td colspan="4" class="py-6 text-center text-slate-500">No action items recorded.</td></tr>{% endfor %}</tbody></table></div></section>
+    <section class="card p-6"><h2 class="mb-3 text-lg font-semibold text-slate-900 dark:text-white">7. Items to Carry Forward / Discuss Next Week</h2><div class="whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-slate-300">{{ report.carry_forward or 'N/A' }}</div></section>
+
+    <section class="card flex flex-wrap items-center justify-end gap-3 p-5">
+        {% if report.status.value == 'DRAFT' and can_edit %}
+        <form method="post" action="/people/perf/weekly-meeting-reports/{{ report.report_id }}/refresh">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-secondary">Refresh from HR</button></form>
+        {% endif %}
+        {% if report.status.value == 'SUBMITTED' and can_reopen %}
+        <form method="post" action="/people/perf/weekly-meeting-reports/{{ report.report_id }}/reopen">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-secondary">Reopen Draft</button></form>
+        {% if report.notification_status.value in ['FAILED', 'PROCESSING', 'PENDING'] %}<form method="post" action="/people/perf/weekly-meeting-reports/{{ report.report_id }}/retry-notification">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-secondary">Retry HR Email</button></form>{% endif %}
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

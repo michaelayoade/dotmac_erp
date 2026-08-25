@@ -28,7 +28,6 @@ from app.models.people.recruit.job_applicant import ApplicantStatus, JobApplican
 from app.models.people.recruit.job_offer import JobOffer, OfferStatus
 from app.models.people.recruit.job_opening import JobOpening, JobOpeningStatus
 from app.db.session_context import prime_tenant_context
-from app.rls import bypass_rls_sync
 from app.services.careers.candidate_notifications import CandidateNotificationService
 from app.services.careers.resume_service import ResumeService
 from app.services.forms import FormEngineService, FormValidationError
@@ -97,24 +96,23 @@ class CareersService:
         Returns:
             Organization if found, None otherwise
         """
-        with bypass_rls_sync(self.db):
+        stmt = select(Organization).where(
+            Organization.slug == slug,
+            Organization.is_active == True,
+        )
+        org = self.db.scalar(stmt)
+        if not org:
+            # Allow UUIDs in the public URL to resolve by organization_id.
+            try:
+                org_id = uuid.UUID(str(slug))
+            except (ValueError, TypeError):
+                return None
+
             stmt = select(Organization).where(
-                Organization.slug == slug,
+                Organization.organization_id == org_id,
                 Organization.is_active == True,
             )
             org = self.db.scalar(stmt)
-            if not org:
-                # Allow UUIDs in the public URL to resolve by organization_id.
-                try:
-                    org_id = uuid.UUID(str(slug))
-                except (ValueError, TypeError):
-                    return None
-
-                stmt = select(Organization).where(
-                    Organization.organization_id == org_id,
-                    Organization.is_active == True,
-                )
-                org = self.db.scalar(stmt)
 
         if org:
             # Prime BOTH tenant layers: the PostgreSQL GUC (consumed by

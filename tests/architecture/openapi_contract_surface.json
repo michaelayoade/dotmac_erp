@@ -66,17 +66,6 @@
     "422": "a11c9d9b2af8"
    }
   },
-  "DELETE /api/v1/auth/oidc/identities/{binding_id}": {
-   "params": [
-    "header:authorization",
-    "path:binding_id!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "5e67e314f78c",
-    "422": "a11c9d9b2af8"
-   }
-  },
   "DELETE /api/v1/banking/statements/{statement_id}": {
    "params": [
     "cookie:access_token",
@@ -797,16 +786,6 @@
    "responses": {
     "200": "2edc44a576b5",
     "401": "4e95924cace6",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/auth/oidc/identities": {
-   "params": [
-    "header:authorization"
-   ],
-   "request": null,
-   "responses": {
-    "200": "df781c2206f1",
     "422": "a11c9d9b2af8"
    }
   },
@@ -1962,6 +1941,30 @@
    "request": null,
    "responses": {
     "200": "22485fdcf500",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/import/durable/customers/{run_id}": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "c71190d8a9dd",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/import/durable/customers/{run_id}/outcomes": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "2e406e05a93d",
     "422": "a11c9d9b2af8"
    }
   },
@@ -4244,6 +4247,19 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/backoffice/people/projection": {
+   "params": [
+    "header:x-api-key!",
+    "query:after",
+    "query:entity!",
+    "query:limit"
+   ],
+   "request": null,
+   "responses": {
+    "200": "b143dab394e4",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/sync/crm/contacts/companies": {
    "params": [
     "header:x-api-key!",
@@ -5749,16 +5765,6 @@
     "422": "a11c9d9b2af8"
    }
   },
-  "POST /api/v1/auth/oidc/identities": {
-   "params": [
-    "header:authorization"
-   ],
-   "request": "8a849586e90c",
-   "responses": {
-    "201": "5e67e314f78c",
-    "422": "a11c9d9b2af8"
-   }
-  },
   "POST /api/v1/auth/password/reset-required": {
    "params": [],
    "request": "d415facd615c",
@@ -7052,6 +7058,41 @@
    "request": null,
    "responses": {
     "200": "f1c2e682ee57",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/import/durable/customers/dry-run": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization"
+   ],
+   "request": "3fe5093e014d",
+   "responses": {
+    "202": "c71190d8a9dd",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/import/durable/customers/{run_id}/apply": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "202": "c71190d8a9dd",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/import/durable/customers/{run_id}/process": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:run_id!"
+   ],
+   "request": null,
+   "responses": {
+    "202": "c71190d8a9dd",
     "422": "a11c9d9b2af8"
    }
   },
@@ -9540,6 +9581,7 @@
   "BankStatementStatus": "d919a636c23b",
   "BankStatementWithLines": "55150e02193c",
   "BillingStatus": "d353049ef871",
+  "Body_create_durable_customer_dry_run_api_v1_import_durable_customers_dry_run_post": "66bd5dd68168",
   "Body_import_data_api_v1_fixed_assets_import__entity_type__post": "539c8b507be4",
   "Body_import_data_api_v1_fleet_import__entity_type__post": "b77cd95a4a8e",
   "Body_import_data_api_v1_import__entity_type__post": "9f1af258405f",
@@ -9648,12 +9690,14 @@
   "DeferredTaxSummaryRead": "cbcae224272a",
   "DepartmentListResponse": "bfe86160ba4a",
   "DepartmentMemberRead": "ee7259d8e388",
+  "DepartmentProjection": "a01f5291ccc9",
   "DepartmentRead": "5bdd337eb016",
   "DepartmentWithCount": "976efdc942c7",
   "DependencyType": "b0dfc94abce3",
   "DepreciationRunCreate": "264f36cf3aab",
   "DepreciationRunRead": "58a7c1d04517",
   "DepreciationScheduleRead": "feb6baa9231a",
+  "DesignationProjection": "106a3a49ad28",
   "DeviceRegisterRequest": "a5059796ac48",
   "DeviceUnregisterRequest": "e9bc5bf17e3f",
   "DimensionFilters": "ac56ef5ab02f",
@@ -9674,13 +9718,17 @@
   "DocumentUpdate": "768cc3611e9c",
   "DomainSettingRead": "12b17dd329b2",
   "DomainSettingUpdate": "8612ead70c8f",
+  "DurableCustomerRunResponse": "d72eb4e0a5e1",
+  "DurableRowOutcomeResponse": "44a84494b89e",
   "DynamicApplicationSubmitRequest": "5e01493f9ef9",
   "EligibleApprover": "f8c2dfe67e7f",
   "EliminationEntryCreate": "6bcf8084475d",
   "EliminationEntryRead": "ef62a2fccb14",
   "EliminationType": "e6da4566722b",
   "EmployeeExpenseSummary": "150e7a3b52f5",
+  "EmployeeProjection": "114bac9a0b64",
   "EmployeeUsageSummary": "3a455032bf2e",
+  "EmploymentTypeProjection": "1a01f85d429d",
   "EndAllocationRequest": "0128885efa7c",
   "EntityType-Output": "d3be49e32e01",
   "ErrorDetail": "baaa77850daa",
@@ -9727,8 +9775,6 @@
   "ExpenseTotalsResponse": "a57e60a710d1",
   "FIFOInventoryRead": "bc93daf81a13",
   "FIFOLayerRead": "dc0491f468a7",
-  "FederatedIdentityCreate": "c9d432500a56",
-  "FederatedIdentityRead": "ee8105f3ec7e",
   "FiscalPeriodCreate": "f7d6a8efc032",
   "FiscalPeriodRead": "c773241c1c47",
   "FleetSummary": "71a0e3d3ca28",
@@ -9931,6 +9977,7 @@
   "POCreate": "8433574cbae7",
   "POLineCreate": "28c4cb996e76",
   "PORead": "b96ac2faba6d",
+  "PartyPersonProjection": "919aa122844c",
   "PasswordChangeRequest": "5ba9a185f0ca",
   "PasswordChangeResponse": "17414c83f867",
   "PasswordResetRequiredRequest": "5f6b4f57bb51",
@@ -9940,6 +9987,8 @@
   "PaymentBatchRead": "a60d93ec64ce",
   "PaymentScheduleRead": "b21a356ad95d",
   "PaymentStatusResponse": "b9d2e86e5dfc",
+  "PeopleProjectionEntity": "1cf97d0bf56a",
+  "PeopleProjectionPage": "43cfee6aee3d",
   "PerformanceObligationCreate": "731a3ed93c8c",
   "PermissionCreate": "9fb6db789888",
   "PermissionRead": "00e265d0ec99",
@@ -9955,6 +10004,8 @@
   "PlanItemCreate": "b693d7dc9eb0",
   "PlanItemResponse": "92bd7726d82e",
   "PlanItemStatus": "d02190f59e17",
+  "PositionAssignmentProjection": "3780cec7cfee",
+  "PositionProjection": "46a99d0e75a3",
   "PostingResultSchema": "577405ca07e5",
   "PrequalificationCreate": "5c5affe19409",
   "PrequalificationResponse": "19a76cd190e7",

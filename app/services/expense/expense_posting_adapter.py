@@ -993,17 +993,17 @@ class ExpensePostingAdapter:
         2. Category default (expense_account_id on category)
         3. Organization default expense account
 
-        Note: Priority 2 uses the item.category relationship instead of
-        db.get() to avoid RLS filtering in Celery task sessions where
-        app.current_organization_id may not be set.
+        Note: Priority 2 uses an already-loaded item.category relationship
+        instead of issuing a second ORM query in Celery task sessions where
+        the listener's organization context may not be set.
         """
         # Priority 1: Item-level override
         if item.expense_account_id:
             return item.expense_account_id
 
-        # Priority 2: Category default — use relationship to bypass RLS,
-        # fall back to explicit query with org filter if relationship is
-        # not loaded.
+        # Priority 2: Category default — use the loaded relationship to avoid
+        # a second listener-mediated query; fall back to an explicit query
+        # with an organization predicate when it is not loaded.
         if item.category_id:
             category = item.category if item.category else None
             if category is None:

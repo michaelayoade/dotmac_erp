@@ -29,10 +29,10 @@ from app.models.expense import (
     ExpenseClaimStatus,
     LimitPeriodType,
 )
-from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.notification import NotificationService
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +63,9 @@ def refresh_period_usage_cache(organization_id: str | None = None) -> dict:
         "errors": [],
     }
 
-    with cross_org_session() as cross_db:
-        org_query = select(Organization.organization_id).where(
-            Organization.is_active == True  # noqa: E712
-        )
-        if organization_id:
-            org_query = org_query.where(
-                Organization.organization_id == uuid.UUID(organization_id)
-            )
-        org_ids = list(cross_db.scalars(org_query).all())
+    org_ids = active_organization_ids(
+        only=uuid.UUID(organization_id) if organization_id else None
+    )
 
     for org_id in org_ids:
         try:
@@ -337,14 +331,7 @@ def reset_weekly_approver_budgets() -> dict:
         current_week_start, datetime.min.time(), tzinfo=AFRICA_LAGOS_TZ
     )
 
-    with cross_org_session() as cross_db:
-        org_ids = list(
-            cross_db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.is_active == True  # noqa: E712
-                )
-            ).all()
-        )
+    org_ids = active_organization_ids()
 
     for org_id in org_ids:
         try:

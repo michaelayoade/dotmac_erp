@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 9,
   "profile_id": "dotmac-erp-engineering-standards",
   "repository": {
     "canonical_url": "https://github.com/michaelayoade/dotmac_erp",
@@ -8,7 +8,7 @@
   "governance_model": {
     "kind": "pinned",
     "canonical_url": "https://github.com/michaelayoade/dotmac_governance",
-    "revision": "b1dfd824bde6f9644ad5c805a71714b5093ced7f",
+    "revision": "a19259b10568d29dc0a9617347498fea7f1e7a97",
     "source": "docs/adr/0006-cross-repository-engineering-conformance.md",
     "status": "accepted"
   },
@@ -61,18 +61,96 @@
     {
       "vocabulary_id": "setting-domains",
       "subject": "Setting domains are declared by the module that owns the settings and validated at the domain_settings write boundary.",
-      "member_type": "SettingDomain",
-      "member_type_path": "app/models/domain_settings.py",
+      "member_type": {
+        "kind": "declared",
+        "name": "SettingDomain",
+        "path": "app/models/domain_settings.py"
+      },
       "registry_interface": "app.services.setting_domains.registry",
       "registry_implementation": "app/services/setting_domains.py",
       "declaration_field": "setting_domains",
       "declaration_paths": [
         "app/services/setting_domain_declaration.py"
       ],
-      "storage_column": "domain",
-      "storage_paths": [
-        "app/models/domain_settings.py"
-      ]
+      "storage": {
+        "column": "domain",
+        "paths": [
+          "app/models/domain_settings.py"
+        ]
+      }
     }
-  ]
+  ],
+  "testing_kit_boundary": {
+    "test_roots": [
+      "tests"
+    ],
+    "kit_source_roots": [],
+    "conformance_probes": []
+  },
+  "external_connector_surface": {
+    "baselines": {
+      "outbound_transport": 22,
+      "webhook_surface": 8,
+      "provider_credential": 6,
+      "connector_task": 12,
+      "sync_checkpoint": 18,
+      "delivery_retry": 6
+    },
+    "conserved_exclusions": [
+      {
+        "path": "app/services/coach/insight_engine.py",
+        "symbol": "InsightEngine",
+        "category": "delivery_retry",
+        "fingerprint": "f7f150d9fa6c5e2d3675f1d041c8b2bcc65068b1924504f577f6205207108ed0"
+      },
+      {
+        "path": "app/services/coach/insight_engine.py",
+        "symbol": "InsightEngine",
+        "category": "outbound_transport",
+        "fingerprint": "f7f150d9fa6c5e2d3675f1d041c8b2bcc65068b1924504f577f6205207108ed0"
+      },
+      {
+        "path": "tests/services/test_dotmac_sub_incremental_sync.py",
+        "symbol": "test_customer_feeds_forward_their_watermarks",
+        "category": "sync_checkpoint",
+        "fingerprint": "c60a65c1214a478fd7909fe746b7c3b6d607b4d074ae09ceddaa9cbd1e301c41"
+      },
+      {
+        "path": "tests/services/test_dotmac_sub_sync.py",
+        "symbol": "test_verify_webhook_signature",
+        "category": "webhook_surface",
+        "fingerprint": "7a87e6ab27b39d6e01e49ccac47818926bce03ed12bd764665023a16a583c57c"
+      },
+      {
+        "path": "tests/services/test_dotmac_sub_sync.py",
+        "symbol": "test_verify_webhook_signature_unconfigured",
+        "category": "webhook_surface",
+        "fingerprint": "7a87e6ab27b39d6e01e49ccac47818926bce03ed12bd764665023a16a583c57c"
+      },
+      {
+        "path": "tests/services/test_hook_registry.py",
+        "symbol": "TestHookRegistry",
+        "category": "webhook_surface",
+        "fingerprint": "3241007e58c4c3fd6974f234bc622472ac6ce8d84dfeb0235ae38bca818678aa"
+      },
+      {
+        "path": "tests/services/test_mono_sync.py",
+        "symbol": "test_verify_webhook_rejects_empty_secrets",
+        "category": "webhook_surface",
+        "fingerprint": "3db300e89674052e47d62060f10e90da27fa084ee070ba39df0a9a577d6bf628"
+      },
+      {
+        "path": "tests/tasks/test_hooks_tasks.py",
+        "symbol": "TestExecuteAsyncHook",
+        "category": "delivery_retry",
+        "fingerprint": "ced43bd99de9a2af6ac3d9d4be8e3bb3a254f17d4b7435bb8eedb1c29a399ff6"
+      },
+      {
+        "path": "tests/test_email_services.py",
+        "symbol": "TestSendEmail",
+        "category": "outbound_transport",
+        "fingerprint": "5691ef206ab4756c077e82cda323498492adcb4195916005f4eef6fe185868a8"
+      }
+    ]
+  }
 }

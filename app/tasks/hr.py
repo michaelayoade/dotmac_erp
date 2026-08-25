@@ -26,6 +26,7 @@ from app.models.person import Person, PersonStatus
 from app.models.rbac import PersonRole, Role
 from app.services.notification import NotificationService
 from app.services.people.hr.org_resolver import OrgResolver
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,7 @@ def _resolve_manager(db, employee: Employee, organization_id) -> Employee | None
 
 
 def _list_organization_ids() -> list[uuid.UUID]:
-    with cross_org_session() as db:
-        return list(db.scalars(select(Organization.organization_id)).all())
+    return organization_ids(include_inactive=True)
 
 
 def _get_hr_manager_recipients(db, org_id: uuid.UUID) -> list[Person]:

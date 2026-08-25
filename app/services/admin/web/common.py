@@ -24,6 +24,7 @@ from app.models.audit import AuditActorType
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.models.finance.core_org.organization import Organization
 from app.models.person import Person
+from app.services.auth_dependencies import has_live_admin_grant
 from app.services.common import coerce_uuid
 from app.templates import templates
 
@@ -365,12 +366,37 @@ class AdminWebCommonMixin:
     def _require_admin_web_auth(
         self,
         request: Request,
+        db: Session,
         auth: WebAuthContext,
     ) -> WebAuthContext | RedirectResponse:
+        """Admin authority for a portal request, re-checked against the grants.
+
+        ``auth.roles`` is a login-time SNAPSHOT taken when the web session was
+        established, so ``"admin" not in auth.roles`` left a revoked
+        administrator holding every screen behind this guard — including
+        ``settings_create_response``/``settings_update_response``, which write
+        PLATFORM rows (no ``organization_id``): the webhook SSRF ceiling and
+        ``openbao_allow_insecure`` have no other writer left, so this guard is
+        what stands in front of them.
+
+        ``has_live_admin_grant`` is the same function ``require_admin_bypass``
+        uses, which already stated this standard for the API's cross-org
+        routes. Sharing it rather than writing a third check is deliberate: two
+        hand-written copies of one security question is how one of them stays
+        on the stale claim.
+
+        The claim is still checked first. It is cheap, it is a necessary
+        condition, and a request that fails it never reaches the database.
+        """
         if not auth.is_authenticated:
             return self._admin_login_redirect(self._request_path_with_query(request))
-        if "admin" not in auth.roles:
-            raise HTTPException(status_code=403, detail="Admin access required")
+
+        if "admin" not in auth.roles or not has_live_admin_grant(db, auth.person_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Admin access required",
+            )
+
         return auth
 
     def _render_admin_template(

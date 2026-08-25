@@ -21,7 +21,9 @@ Organization and uses the same UUID; it is not a parallel tenant writer.
 
 The adapter is persistence-free. It accepts an already-validated UUID and
 returns the two typed names for that one identity. Transport strings are parsed
-before this boundary.
+before this boundary. It is also the assembly's only constructor for the
+kernel's typed `TenantScope`; product services ask the adapter for that scope
+instead of importing or recreating the shared-module identity mapping.
 
 ## Tenant catalogue projection
 
@@ -89,14 +91,23 @@ another.
 
 ## Bypass boundary
 
-ERP's legacy transaction-local `app.bypass_rls` remains limited to ERP-owned
-policies that explicitly consult it. It does not set or bypass
-`app.current_tenant`, and shared module policies do not consult it.
+Runtime code has no writer for the legacy user-settable `app.bypass_rls` GUC.
+A clean database at migration heads has 103 tables with policies that still
+consult it until a forward migration rewrites them. The earlier 16-table count
+described stale production, not ERP's migration design. No application, worker,
+CLI, cron SQL, or archived executable can assert the GUC; historical Alembic
+revisions remain immutable.
 
-A cross-organization job that touches a tenant module must enumerate
-Organizations under `cross_org_session`, close that discovery session, and do
-each tenant's work under `session_for_org`. A broad ERP bypass never becomes a
-broad module bypass.
+`session.info["allow_cross_org"]` is a separate application-layer boundary. It
+continues to bypass the ORM listener for approved pre-auth and administrative
+flows, but it does not bypass PostgreSQL RLS. Removing the GUC writer therefore
+makes migrated cross-tenant reads fail closed under `app_user`; the runtime-role
+cutover is blocked until those callers have individual database contracts.
+
+A cross-organization job that touches an RLS-protected ERP or module table must
+enumerate Organizations under an approved discovery path, close that session,
+and do each tenant's work under `session_for_org`. `cross_org_session` bypasses
+only the ORM listener; it is not a database privilege.
 
 ## What remains gated
 

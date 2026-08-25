@@ -7,24 +7,16 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
-from app.models.finance.core_org.organization import Organization
+from app.db.session_context import session_for_org
 from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
 
 def _list_active_organization_ids() -> list[UUID]:
-    with cross_org_session() as db:
-        return list(
-            db.scalars(
-                select(Organization.organization_id).where(
-                    Organization.is_active.is_(True)
-                )
-            ).all()
-        )
+    return active_organization_ids()
 
 
 @shared_task

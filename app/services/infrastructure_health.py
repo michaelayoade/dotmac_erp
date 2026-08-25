@@ -11,6 +11,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any, cast
 
 import redis
@@ -997,9 +998,15 @@ class InfrastructureHealthService:
             return None
 
     def _load_average(self) -> dict[str, float | int] | None:
+        getloadavg = cast(
+            Callable[[], tuple[float, float, float]] | None,
+            getattr(os, "getloadavg", None),
+        )
+        if getloadavg is None:
+            return None
         try:
-            one, five, fifteen = os.getloadavg()
-        except (AttributeError, OSError):
+            one, five, fifteen = getloadavg()
+        except OSError:
             return None
         cpu_count = os.cpu_count() or 1
         return {

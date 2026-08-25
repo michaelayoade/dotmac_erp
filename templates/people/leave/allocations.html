@@ -159,7 +159,11 @@
     {# Filters #}
     {% call(filter_attrs) compact_filters(
         base_url="/people/leave/allocations",
-        active_filters=active_filters | default([])
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=employee_search,
+        search_name="employee_search",
+        search_placeholder="Search employees by name, code, or email..."
     ) %}
     <div>
                 <div class="w-44">
@@ -183,8 +187,8 @@
     </div>
     {% endcall %}
 
-    {% if allocations %}
     <div id="results-container">
+    {% if allocations %}
 
     <div class="card overflow-hidden">
         <div class="table-container">
@@ -250,7 +254,6 @@
             </table>
         </div>
     </div>
-    </div>
 
     {% else %}
     <div class="card p-8 text-center">
@@ -262,10 +265,11 @@
         page=page | default(1),
         total_pages=total_pages | default(1),
         total_count=total | default(0),
-        limit=20,
+        limit=per_page,
         show_size_selector=false,
-        filters={"employee_id": employee_id, "leave_type_id": leave_type_id, "per_page": per_page, "year": year}
+        filters={"employee_search": employee_search, "employee_id": employee_id, "leave_type_id": leave_type_id, "per_page": per_page, "year": year, "is_active": is_active}
     ) }}
+    </div>{# /results-container #}
 
 </div>
 
@@ -296,7 +300,7 @@ function bulkAllocationManager() {
     }
 
     const storageKey = 'leave_allocations_filters_v1';
-    const fieldNames = ['employee_id', 'leave_type_id', 'year', 'is_active', 'per_page'];
+    const fieldNames = ['employee_search', 'employee_id', 'leave_type_id', 'year', 'is_active', 'per_page'];
 
     function getCurrentValues() {
         const values = {};

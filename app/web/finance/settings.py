@@ -216,18 +216,14 @@ async def update_automation_settings(
         form_data = await request.form()
     data = dict(form_data)
     is_admin = "admin" in auth.roles
-    if not is_admin:
-        restricted_keys = {
-            "webhook_allowed_hosts",
-            "webhook_allowed_domains",
-            "webhook_allow_insecure",
-            "webhook_allow_localhost",
-            "webhook_timeout_seconds",
-            "openbao_allow_insecure",
-        }
-        for key in restricted_keys:
-            data.pop(key, None)
-
+    # There is deliberately no literal key set here any more. Which automation
+    # keys an organization may own is declared on the spec
+    # (`SettingScopeAuthority.PLATFORM`), skipped by the service below, and
+    # refused outright at the ORM boundary — three layers a new platform
+    # control joins the day it is declared, rather than the day somebody
+    # remembers to edit a set inside one route handler. The old set was also
+    # skipped entirely for `is_admin`, so it never constrained the caller who
+    # could do the most damage.
     success, error = settings_web_service.update_automation_settings(
         db, auth.organization_id, data
     )

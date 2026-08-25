@@ -6,8 +6,6 @@ from app.schemas.auth import MFAMethodRead
 from app.schemas.auth_flow import (
     AvatarUploadResponse,
     ErrorResponse,
-    FederatedIdentityCreate,
-    FederatedIdentityRead,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     LoginRequest,
@@ -33,9 +31,8 @@ from app.schemas.auth_flow import (
 )
 from app.services import auth_flow as auth_flow_service
 from app.api.deps import get_db_auth_bypass, get_db_with_org, require_tenant_auth
-from app.services.auth_dependencies import require_admin_bypass, require_user_auth
+from app.services.auth_dependencies import require_user_auth
 from app.services.auth_flow_api import auth_flow_api_service
-from app.services.sso.oidc import oidc_client
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -195,47 +192,6 @@ def logout(
     return auth_flow_service.auth_flow.logout_response(
         db, payload.refresh_token, request
     )
-
-
-@router.get(
-    "/oidc/identities",
-    response_model=list[FederatedIdentityRead],
-    dependencies=[Depends(require_admin_bypass)],
-)
-def list_oidc_identities(db: Session = Depends(get_db_auth_bypass)):
-    """List ERP-owned identity bindings for the configured OIDC issuer."""
-    return oidc_client.list_bindings(db)
-
-
-@router.post(
-    "/oidc/identities",
-    response_model=FederatedIdentityRead,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin_bypass)],
-)
-def create_oidc_identity(
-    payload: FederatedIdentityCreate,
-    db: Session = Depends(get_db_auth_bypass),
-):
-    """Bind an opaque OIDC subject to an existing ERP person."""
-    return oidc_client.bind_identity(
-        db,
-        person_id=str(payload.person_id),
-        subject=payload.subject,
-    )
-
-
-@router.delete(
-    "/oidc/identities/{binding_id}",
-    response_model=FederatedIdentityRead,
-    dependencies=[Depends(require_admin_bypass)],
-)
-def disable_oidc_identity(
-    binding_id: str,
-    db: Session = Depends(get_db_auth_bypass),
-):
-    """Disable a binding without deleting its audit history."""
-    return oidc_client.disable_binding(db, binding_id)
 
 
 @router.get(
