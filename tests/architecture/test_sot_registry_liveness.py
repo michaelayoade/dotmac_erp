@@ -100,3 +100,41 @@ def test_registry_owners_are_live() -> None:
         "registry owners not imported anywhere under app/ — wire a consumer "
         "or strike the entry:\n  " + "\n  ".join(dead)
     )
+
+
+def test_the_refund_owners_are_registered_and_reachable() -> None:
+    """ADR-0008 named two owners for a decision that previously had none.
+
+    The generic tests above would keep passing if the `customer_refund` domain
+    were quietly dropped or renamed, because they only check whatever the
+    registry happens to contain. This pins what it must contain: before this
+    slice, `grep -n "refund\\|reversal\\|credit"` over the registry returned
+    nothing at all, and that silence is exactly what the map's expansion rule
+    exists to prevent recurring.
+    """
+    by_name = {service.name: service for service in all_services()}
+
+    assert "refunds.customer_money" in by_name, (
+        "the customer refund owner is not registered — a decision with no "
+        "registry entry is how refund came to have eleven writers"
+    )
+    assert (
+        by_name["refunds.customer_money"].module
+        == "app.services.finance.ar.customer_payment"
+    )
+
+    # The GL mechanism is registered as a MECHANISM, and must stay a
+    # dependency of the refund owner rather than becoming a second one.
+    assert "refunds.gl_mechanism" in by_name
+    assert "refunds.gl_mechanism" in by_name["refunds.customer_money"].depends_on
+
+    # Company money out stays where ADR-0005 put it, and the refund owner
+    # depends on it rather than writing PaymentIntent.status itself.
+    assert "payments.intent_lifecycle" in by_name
+    assert "payments.intent_lifecycle" in by_name["refunds.customer_money"].depends_on
+
+    domain = next(d for d in DOMAIN_SOT_RELATIONSHIPS if d.domain == "customer_refund")
+    # The adapters that used to decide are named as entry points, which is what
+    # keeps them importable and visibly subordinate to the owner.
+    assert "app.services.dotmac_sub.sync._payments" in domain.entrypoints
+    assert "app.services.finance.payments.webhook_service" in domain.entrypoints

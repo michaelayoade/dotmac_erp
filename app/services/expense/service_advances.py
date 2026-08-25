@@ -194,27 +194,6 @@ class ExpenseAdvanceMixin(ExpenseServiceBase):
         self.db.flush()
         return advance
 
-    def record_refund(
-        self,
-        org_id: UUID,
-        advance_id: UUID,
-        *,
-        refund_amount: Decimal,
-        payment_reference: str | None = None,
-    ) -> CashAdvance:
-        advance = self.get_advance(org_id, advance_id)
-        if advance.status != CashAdvanceStatus.DISBURSED:
-            raise ExpenseServiceError(
-                f"Cannot record refund for advance in {advance.status.value} status"
-            )
-        advance.amount_refunded += refund_amount
-        total_accounted = advance.amount_settled + advance.amount_refunded
-        if total_accounted >= (advance.approved_amount or advance.requested_amount):
-            advance.status = CashAdvanceStatus.FULLY_SETTLED
-            advance.settled_on = date.today()
-        self.db.flush()
-        return advance
-
     def settle_advance(
         self,
         org_id: UUID,

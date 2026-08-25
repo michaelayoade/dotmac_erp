@@ -1344,6 +1344,67 @@ class ARInvoiceService(ListResponseMixin):
         return invoice
 
     @staticmethod
+    def void_from_external_source(
+        db: Session,
+        organization_id: UUID,
+        invoice_id: UUID,
+        *,
+        reason: str,
+        voided_by_user_id: UUID,
+        source: str,
+    ) -> Invoice:
+        """Void a document because the system that ORIGINATED it voided it.
+
+        `void_invoice` is ERP's own void decision, and it refuses POSTED,
+        PARTIALLY_PAID and PAID documents on purpose: a person may not void a
+        document that is already in the ledger. An upstream void is a different
+        premise — the document was never ERP's to decide, and the sync adapter
+        has already reversed its GL leg before calling this.
+
+        This entry point exists (ADR-0008) so that the adapter can stop
+        stamping `InvoiceStatus.VOID` itself. The transition still belongs to
+        the lifecycle owner, which is what keeps `void_reason`,
+        `voided_by_user_id`, `voided_at` and the audit event on it. It is
+        deliberately NOT a general-purpose "void anything" escape hatch: the
+        caller must name the originating system, and that name lands in the
+        void reason and the audit row.
+
+        Idempotent — a document already VOID is returned untouched.
+        """
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+        user_id = coerce_uuid(voided_by_user_id)
+
+        invoice = db.get(Invoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            raise NotFoundError("Invoice not found")
+
+        if invoice.status == InvoiceStatus.VOID:
+            return invoice
+
+        old_status = invoice.status.value
+        invoice.status = InvoiceStatus.VOID
+        invoice.voided_by_user_id = user_id
+        invoice.voided_at = datetime.now(UTC)
+        invoice.void_reason = f"[{source}] {reason}"
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "VOID", "voided_by_source": source},
+            user_id=user_id,
+            reason=reason,
+        )
+
+        db.flush()
+        return invoice
+
+    @staticmethod
     def cancel_invoice(
         db: Session,
         organization_id: UUID,

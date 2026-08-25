@@ -415,15 +415,24 @@ def test_post_payment_rejects_unmapped_bank_account():
 
 
 def test_void_and_bounce_reverse_allocations():
+    """Void and bounce are now thin callers of `refund_payment` (ADR-0008):
+    one behaviour, three reasons. The outcome they always had is unchanged —
+    the allocations come back and the paid-status owner re-derives the
+    invoice."""
     db = MagicMock()
     org_id = uuid4()
+    actor_id = uuid4()
     payment = SimpleNamespace(
         payment_id=uuid4(),
         organization_id=org_id,
         status=PaymentStatus.CLEARED,
+        amount=Decimal("50.00"),
+        gross_amount=Decimal("50.00"),
         journal_entry_id=None,
+        created_by_user_id=actor_id,
     )
     invoice = SimpleNamespace(
+        invoice_id=uuid4(),
         amount_paid=Decimal("50.00"),
         total_amount=Decimal("100.00"),
         status=InvoiceStatus.PAID,
@@ -450,7 +459,61 @@ def test_void_and_bounce_reverse_allocations():
 
     payment.status = PaymentStatus.CLEARED
     invoice.amount_paid = Decimal("50.00")
+    invoice.status = InvoiceStatus.PAID
     bounced = CustomerPaymentService.mark_bounced(
         db, org_id, payment.payment_id, reason="nsf"
     )
     assert bounced.status == PaymentStatus.BOUNCED
+    assert invoice.amount_paid == Decimal("0")
+
+
+def test_void_is_idempotent():
+    """It used to raise `ValidationError("Payment is already voided")`. A
+    second void is now a no-op, because the owner is idempotent and the sync
+    adapter and the webhook both re-present the same decision."""
+    db = MagicMock()
+    org_id = uuid4()
+    payment = SimpleNamespace(
+        payment_id=uuid4(),
+        organization_id=org_id,
+        status=PaymentStatus.VOID,
+        amount=Decimal("50.00"),
+        gross_amount=Decimal("50.00"),
+        journal_entry_id=None,
+        created_by_user_id=uuid4(),
+    )
+    db.get.side_effect = lambda model, _id: (
+        payment if model.__name__ == "CustomerPayment" else None
+    )
+
+    returned = CustomerPaymentService.void_payment(
+        db, org_id, payment.payment_id, voided_by_user_id=uuid4(), reason="again"
+    )
+
+    assert returned is payment
+    assert payment.status == PaymentStatus.VOID
+    db.scalars.assert_not_called()
+
+
+def test_a_voided_payment_cannot_then_be_bounced():
+    """Terminal is terminal: `refund_payment` refuses a second, different
+    verdict on the same receipt rather than overwriting the first."""
+    db = MagicMock()
+    org_id = uuid4()
+    payment = SimpleNamespace(
+        payment_id=uuid4(),
+        organization_id=org_id,
+        status=PaymentStatus.VOID,
+        amount=Decimal("50.00"),
+        gross_amount=Decimal("50.00"),
+        journal_entry_id=None,
+        created_by_user_id=uuid4(),
+    )
+    db.get.side_effect = lambda model, _id: (
+        payment if model.__name__ == "CustomerPayment" else None
+    )
+
+    with pytest.raises(ValidationError):
+        CustomerPaymentService.mark_bounced(db, org_id, payment.payment_id, reason="x")
+
+    assert payment.status == PaymentStatus.VOID

@@ -12,6 +12,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -26,6 +27,19 @@ from app.services.finance.payments.payment_service import PaymentService
 from app.services.finance.payments.paystack_client import PaystackClient, PaystackConfig
 
 logger = logging.getLogger(__name__)
+
+#: Gateway events that say a customer refund actually went out. Before
+#: ADR-0008 these matched no branch in `process_webhook` and were logged at
+#: INFO as "Unhandled event type" while the webhook row was marked PROCESSED —
+#: the cash left the bank and ERP's books never moved.
+#: `docs/paystack_chargebacks_investigation.md` is eight instances of it.
+REFUND_SETTLED_EVENTS = frozenset({"charge.refund", "refund.processed"})
+
+#: Events whose payload identifies the transaction by `transaction_reference`
+#: rather than `reference`. Both the intent lookup AND the event id must know
+#: this: without the second, every refund in a deployment collapses onto the
+#: event id "refund.processed:" and the second one is silently DUPLICATE.
+ALTERNATE_REFERENCE_EVENTS = REFUND_SETTLED_EVENTS | {"refund.failed", "refund.pending"}
 
 
 class WebhookRetryDisabledError(RuntimeError):
@@ -82,7 +96,7 @@ class WebhookService:
             raise ValueError("Invalid webhook signature")
 
         # Extract reference and build idempotency key
-        reference = event_data.get("reference", "")
+        reference = self._extract_reference(event_type, event_data)
         event_id = self._build_event_id(event_type, event_data)
 
         # Check for duplicate (idempotency)
@@ -162,6 +176,10 @@ class WebhookService:
                 self._handle_transfer_failed(intent, event_data)
             elif event_type == "transfer.reversed":
                 self._handle_transfer_reversed(intent, event_data)
+            elif event_type in REFUND_SETTLED_EVENTS:
+                self._handle_refund_settled(intent, event_type, event_data)
+            elif event_type == "refund.failed":
+                self._handle_refund_failed(intent, event_data)
             else:
                 logger.info(f"Unhandled event type: {event_type}")
 
@@ -186,8 +204,43 @@ class WebhookService:
         - Transaction IDs can change if Paystack retries internally
         - We want to prevent duplicate processing of the same payment event
         """
-        reference = event_data.get("reference", "")
+        reference = self._extract_reference(event_type, event_data)
         return f"{event_type}:{reference}"
+
+    @staticmethod
+    def _extract_reference(event_type: str, event_data: dict[str, Any]) -> str:
+        """The merchant reference this event is about.
+
+        Refund payloads name the transaction `transaction_reference` (and
+        sometimes nest it under `transaction`), not `reference`. Reading only
+        `reference` makes every refund event reference-less, which both breaks
+        the intent lookup and collapses their idempotency keys onto one value.
+        """
+        reference = event_data.get("reference")
+        if not reference and event_type in ALTERNATE_REFERENCE_EVENTS:
+            reference = event_data.get("transaction_reference")
+            if not reference:
+                transaction = event_data.get("transaction")
+                if isinstance(transaction, dict):
+                    reference = transaction.get("reference")
+        return str(reference or "")
+
+    @staticmethod
+    def _refund_amount(event_data: dict[str, Any]) -> Decimal | None:
+        """Refunded cash in major units, or None when the payload omits it.
+
+        Paystack reports money in minor units (kobo), the same convention
+        `_validate_amount_and_currency` assumes on the way in.
+        """
+        raw = event_data.get("amount")
+        if raw is None:
+            raw = event_data.get("refunded_amount")
+        if raw is None:
+            return None
+        try:
+            return Decimal(str(raw)) / Decimal("100")
+        except (InvalidOperation, ValueError):
+            raise ValueError(f"Refund payload carries an unusable amount: {raw!r}")
 
     def _validate_amount_and_currency(
         self,
@@ -453,6 +506,107 @@ class WebhookService:
                 "reason": reason,
             },
         )
+
+    def _handle_refund_settled(
+        self,
+        intent: PaymentIntent,
+        event_type: str,
+        data: dict[str, Any],
+    ) -> None:
+        """Handle a customer refund the gateway has actually paid out.
+
+        Transport only. The refund DECISION is
+        `CustomerPaymentService.refund_payment`'s (ADR-0008): this resolves the
+        settled receipt the refund is against, hands the decision over, and
+        then lets `PaymentService` — the sole writer of `PaymentIntent.status`
+        under ADR-0005 — record what the gateway did to the intent.
+
+        Failure is loud on purpose. A partial refund, an intent that never
+        produced a receipt, or a refund arriving on an outbound payout all
+        raise, and `process_webhook` records the reason on a FAILED
+        `PaymentWebhook` row. Webhook redrive is disabled repo-wide (fail
+        closed, 2026-08-14), so that row is a durable "a human must look at
+        this" — which is strictly more than the silence this used to produce.
+        """
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
+
+        if intent.direction != PaymentDirection.INBOUND:
+            raise ValueError(
+                f"{event_type} arrived on an OUTBOUND intent "
+                f"({intent.intent_id}); an outbound reversal is transfer.reversed"
+            )
+
+        payment_id = intent.customer_payment_id
+        if payment_id is None:
+            raise ValueError(
+                f"{event_type} for reference {intent.paystack_reference} has no "
+                "settled customer payment to refund"
+            )
+
+        reason = (
+            data.get("merchant_note")
+            or data.get("customer_note")
+            or data.get("reason")
+            or event_type
+        )
+        refunded_at = self._parse_gateway_timestamp(data)
+
+        CustomerPaymentService.refund_payment(
+            self.db,
+            intent.organization_id,
+            payment_id,
+            amount=self._refund_amount(data),
+            reason=f"Paystack refund: {reason}",
+            refunded_by_user_id=None,
+        )
+
+        PaymentService(self.db, intent.organization_id).record_inbound_refund(
+            intent=intent,
+            refunded_at=refunded_at,
+            gateway_response=data,
+            reason=str(reason),
+        )
+
+        logger.warning(
+            f"Processed {event_type} for intent {intent.intent_id}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "customer_payment_id": str(payment_id),
+                "reason": reason,
+            },
+        )
+
+    def _handle_refund_failed(
+        self,
+        intent: PaymentIntent,
+        data: dict[str, Any],
+    ) -> None:
+        """Handle a refund the gateway tried and could not complete.
+
+        Changes NO ERP state — the money did not move, so there is nothing to
+        refund — but is dispatched rather than ignored, so the event lands as a
+        PROCESSED webhook with its payload instead of an INFO log line.
+        """
+        logger.error(
+            f"Paystack refund FAILED for intent {intent.intent_id}; "
+            "ERP state unchanged",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "customer_payment_id": str(intent.customer_payment_id),
+                "reason": data.get("reason") or data.get("message"),
+            },
+        )
+
+    @staticmethod
+    def _parse_gateway_timestamp(data: dict[str, Any]) -> datetime:
+        """Best-effort instant from a gateway payload; now() when unusable."""
+        raw = data.get("refunded_at") or data.get("updated_at") or data.get("paid_at")
+        if isinstance(raw, str):
+            try:
+                return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                return datetime.now(UTC)
+        return datetime.now(UTC)
 
     def get_webhook_by_event_id(self, event_id: str) -> PaymentWebhook | None:
         """Get a webhook record by event ID."""

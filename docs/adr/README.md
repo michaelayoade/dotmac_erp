@@ -39,3 +39,4 @@ is exactly what blocked E8 for two weeks.
 | [0003](0003-clean-install-starts-from-governed-opening-state.md) | The composable ERP starts from governed opening state | Accepted |
 | [0004](0004-the-erp-bill-of-materials-is-frozen.md) | The ERP bill of materials is frozen before composition starts | Proposed |
 | [0005](0005-payment-intent-status-has-one-writer.md) | `PaymentIntent.status` has one writer | Accepted |
+| [0008](0008-refunds-have-one-owner.md) | Refunds have one owner (two, at one named boundary) | Accepted |

@@ -33,6 +33,8 @@ from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.tax.tax_code import TaxCode, TaxType
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import NotFoundError, ValidationError, coerce_uuid
 from app.services.finance.ar.input_utils import (
     parse_date_str,
@@ -41,11 +43,39 @@ from app.services.finance.ar.input_utils import (
     require_uuid,
     resolve_currency_code,
 )
-from app.services.finance.ar.payment_status import apply_payment_status
+from app.services.finance.ar.payment_status import (
+    PAYMENT_DUST,
+    apply_payment_status,
+)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
+
+
+class RefundReversalError(ValidationError):
+    """The ledger leg of a refund could not be posted, so NOTHING was changed.
+
+    Raised before any allocation is reversed and before any status is written.
+    The caller is free to report and move on knowing the payment, its invoices
+    and the GL are all exactly as they were — which is the property
+    ``void_payment`` and ``mark_bounced`` did not have before ADR-0008 (they
+    logged the failure and completed the void anyway, leaving the ledger
+    carrying cash the subledger had already given back).
+    """
+
+
+#: Statuses from which no further refund decision can be taken. A payment that
+#: is already VOID cannot subsequently be BOUNCED; a refunded receipt cannot be
+#: refunded twice. Re-requesting the status a payment already holds is a no-op,
+#: not an error — see :meth:`CustomerPaymentService.refund_payment`.
+REFUND_TERMINAL_STATUSES = frozenset(
+    {
+        PaymentStatus.VOID,
+        PaymentStatus.BOUNCED,
+        PaymentStatus.REVERSED,
+    }
+)
 
 
 def _reverse_vat_cash_basis_for_payment(
@@ -590,6 +620,274 @@ class CustomerPaymentService(ListResponseMixin):
             logger.exception("Error auto-posting payment %s: %s", payment.payment_id, e)
             return False
 
+    # ------------------------------------------------------------------
+    # Refunds (ADR-0008)
+    #
+    # `refund_payment` is the ONE place a customer refund is decided. Before
+    # it, refund was a shape stamped onto five aggregates by eleven writers
+    # with no owner: two near-identical bodies here, an assignment in the Sub
+    # sync adapter, and — for a refund Paystack had actually paid out —
+    # nothing at all, because `charge.refund` matched no webhook branch.
+    #
+    # One behaviour, three reasons: a void, a bounce and a refund differ in
+    # WHY and in the terminal status they settle on, not in what has to
+    # happen to the ledger, the allocations or the derived invoice verdicts.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def refund_payment(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+        amount: Decimal | None = None,
+        reason: str = "",
+        refunded_by_user_id: UUID | None = None,
+        *,
+        outcome_status: PaymentStatus = PaymentStatus.REVERSED,
+        idempotency_suffix: str = "refund",
+        allowed_from: frozenset[PaymentStatus] | None = None,
+        credit_note_id: UUID | None = None,
+    ) -> CustomerPayment:
+        """Refund a customer receipt. The single owner of that decision.
+
+        Reverses the ledger, gives the invoices their balance back, lets the
+        paid-status owner re-derive each verdict, records who refunded what and
+        why, and settles the payment's terminal status.
+
+        Args:
+            db: Database session.
+            organization_id: Organization scope.
+            payment_id: The receipt the money is going back out of.
+            amount: Cash being returned. ``None`` means the whole receipt.
+                A materially smaller amount is REFUSED — see below.
+            reason: Business reason, recorded on the GL reversal and the audit
+                row. Callers pass the fully-formed sentence
+                (``"Payment voided: ..."``) so the ledger reads the same as it
+                did before this consolidation.
+            refunded_by_user_id: Actor. Falls back to the payment's creator,
+                which is what the unattended paths (sync, webhook) get.
+            outcome_status: Terminal status to settle on. ``REVERSED`` for a
+                refund, ``VOID`` for a void, ``BOUNCED`` for a bounce.
+            idempotency_suffix: Distinguishes this refund's GL reversal from
+                every other kind of reversal in the ledger. ``void`` and
+                ``bounce`` reproduce the pre-ADR-0008 keys byte for byte.
+            allowed_from: Optional whitelist of source statuses, for callers
+                that are narrower than "anything not already terminal".
+            credit_note_id: Recorded in the audit row when the refund was
+                issued alongside a credit note, so the two stop being
+                disconnected facts.
+
+        Returns:
+            The payment, in its terminal status.
+
+        Raises:
+            NotFoundError: Payment not found in this organization.
+            ValidationError: Refused source status, or a PARTIAL refund —
+                which this repository cannot represent (``create_reversal``
+                reverses a whole journal and there is no Refund aggregate to
+                hold a second one). ADR-0008 states the aggregate as a
+                follow-up; silently reversing the whole receipt instead would
+                be a cash error.
+            RefundReversalError: The GL reversal failed. Nothing was changed.
+
+        Idempotent: a second call against a payment already in
+        ``outcome_status`` returns it untouched — no ledger row, no allocation
+        movement, no audit noise.
+        """
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+
+        payment = db.get(CustomerPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise NotFoundError("Payment not found")
+
+        # Idempotency first: the sync adapter and the webhook both re-present
+        # the same refund, and neither should produce a second ledger row.
+        if payment.status == outcome_status:
+            logger.info(
+                "Payment %s is already %s — refund request is a no-op",
+                pay_id,
+                outcome_status.value,
+            )
+            return payment
+
+        if allowed_from is not None and payment.status not in allowed_from:
+            raise ValidationError(
+                f"Cannot settle payment as '{outcome_status.value}' "
+                f"from status '{payment.status.value}'"
+            )
+        if payment.status in REFUND_TERMINAL_STATUSES:
+            raise ValidationError(
+                f"Payment is already settled as '{payment.status.value}'"
+            )
+
+        actor_id = (
+            coerce_uuid(refunded_by_user_id)
+            if refunded_by_user_id is not None
+            else payment.created_by_user_id
+        )
+
+        # A refund is measured against the cash that actually arrived. Dust is
+        # the paid-status owner's threshold, shared so "too small to matter"
+        # cannot drift apart between the two decisions.
+        refunded_amount = payment.amount if amount is None else amount
+        if amount is not None and (payment.amount - amount) > PAYMENT_DUST:
+            raise ValidationError(
+                f"Partial refunds are not supported: {amount} of "
+                f"{payment.amount} on payment {pay_id}. A partial refund needs "
+                "a first-class Refund record (stated ADR-0008 follow-up); "
+                "reversing the whole receipt instead would misstate cash."
+            )
+
+        # Only a CLEARED receipt has reached the ledger and the invoices.
+        was_cleared = payment.status == PaymentStatus.CLEARED
+
+        # 1. The ledger leg goes FIRST, and its failure is fatal to the whole
+        #    refund. Reversing the allocations first (what void/bounce used to
+        #    do) means a failed GL reversal leaves the invoices credited and
+        #    the ledger still holding the cash.
+        if was_cleared and payment.journal_entry_id:
+            CustomerPaymentService._reverse_payment_journal(
+                db,
+                org_id,
+                payment,
+                actor_id=actor_id,
+                reason=reason,
+                idempotency_suffix=idempotency_suffix,
+            )
+            _reverse_vat_cash_basis_for_payment(
+                db,
+                org_id,
+                payment,
+                actor_id,
+                reason,
+                idempotency_suffix,
+            )
+
+        # 2. Subledger: hand each invoice its balance back and let the
+        #    paid-status owner (ADR-protected) say what that makes it.
+        if was_cleared:
+            allocations = list(
+                db.scalars(
+                    select(PaymentAllocation).where(
+                        PaymentAllocation.payment_id == pay_id
+                    )
+                ).all()
+            )
+            for alloc in allocations:
+                invoice = db.get(Invoice, alloc.invoice_id)
+                if invoice:
+                    invoice.amount_paid -= alloc.allocated_amount
+                    apply_payment_status(invoice)
+
+        # 3. Terminal status, and the durable answer to "by whom, why, how
+        #    much". Until a Refund aggregate exists (ADR-0008 follow-up) this
+        #    audit row plus the refund-marked reversal journal ARE the record.
+        old_status = payment.status.value
+        payment.status = outcome_status
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="customer_payment",
+            record_id=str(pay_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={
+                "status": outcome_status.value,
+                "refunded_amount": str(refunded_amount),
+                "credit_note_id": str(credit_note_id) if credit_note_id else None,
+            },
+            user_id=actor_id,
+            reason=reason,
+        )
+
+        db.flush()
+
+        logger.info(
+            "Refunded payment %s: %s -> %s (%s)",
+            pay_id,
+            old_status,
+            outcome_status.value,
+            reason,
+        )
+        return payment
+
+    @staticmethod
+    def _reverse_payment_journal(
+        db: Session,
+        org_id: UUID,
+        payment: CustomerPayment,
+        *,
+        actor_id: UUID,
+        reason: str,
+        idempotency_suffix: str,
+    ) -> UUID | None:
+        """Reverse a refunded receipt's GL journal, or raise having done nothing.
+
+        The reversal is marked with ``idempotency_suffix`` so a refund reversal
+        is distinguishable in the ledger from an FX revaluation or a
+        data-health correction — ``ReversalService`` owns HOW a journal is
+        reversed and is deliberately not told WHY by anything but this string.
+        """
+        from app.models.finance.gl.journal_entry import JournalEntry
+        from app.services.finance.gl.reversal import ReversalService
+
+        journal_id = payment.journal_entry_id
+        if journal_id is None:  # pragma: no cover — guarded by the caller
+            return None
+
+        # Already reversed (a retry that got past the status check) is a
+        # success, not a second reversal.
+        original = db.get(JournalEntry, journal_id)
+        existing_reversal: UUID | None = (
+            original.reversal_journal_id if original is not None else None
+        )
+        if existing_reversal:
+            logger.info(
+                "Journal %s for payment %s was already reversed (%s)",
+                journal_id,
+                payment.payment_id,
+                existing_reversal,
+            )
+            return existing_reversal
+
+        try:
+            result = ReversalService.create_reversal(
+                db=db,
+                organization_id=org_id,
+                original_journal_id=journal_id,
+                reversal_date=date.today(),
+                created_by_user_id=actor_id,
+                reason=reason,
+                auto_post=True,
+                idempotency_key=(
+                    f"{org_id}:AR:PAY:{payment.payment_id}"
+                    f":{idempotency_suffix}-reversal:v1"
+                ),
+            )
+        except Exception as exc:
+            logger.exception("GL reversal errored for payment %s", payment.payment_id)
+            raise RefundReversalError(
+                f"Could not reverse the GL journal for payment "
+                f"{payment.payment_id}: {exc}"
+            ) from exc
+
+        if not getattr(result, "success", False):
+            raise RefundReversalError(
+                f"Could not reverse the GL journal for payment "
+                f"{payment.payment_id}: {getattr(result, 'message', 'unknown')}"
+            )
+
+        logger.info(
+            "Created GL reversal journal %s for payment %s (%s)",
+            result.reversal_journal_id,
+            payment.payment_id,
+            idempotency_suffix,
+        )
+        return result.reversal_journal_id
+
     @staticmethod
     def void_payment(
         db: Session,
@@ -598,82 +896,27 @@ class CustomerPaymentService(ListResponseMixin):
         voided_by_user_id: UUID,
         reason: str,
     ) -> CustomerPayment:
-        """Void a payment."""
-        org_id = coerce_uuid(organization_id)
-        pay_id = coerce_uuid(payment_id)
+        """Void a payment — a refund decision whose reason is "voided".
 
-        payment = db.get(CustomerPayment, pay_id)
-        if not payment or payment.organization_id != org_id:
-            raise NotFoundError("Payment not found")
+        A thin caller of :meth:`refund_payment` (ADR-0008), not a second
+        implementation of it. The GL reason and idempotency key it produces are
+        byte-identical to the ones this method wrote before the consolidation,
+        so no already-reversed production journal changes identity.
 
-        if payment.status == PaymentStatus.VOID:
-            raise ValidationError("Payment is already voided")
-
-        # Reverse allocations if payment was cleared
-        was_cleared = payment.status == PaymentStatus.CLEARED
-        if was_cleared:
-            allocations = list(
-                db.scalars(
-                    select(PaymentAllocation).where(
-                        PaymentAllocation.payment_id == pay_id
-                    )
-                ).all()
-            )
-
-            for alloc in allocations:
-                invoice = db.get(Invoice, alloc.invoice_id)
-                if invoice:
-                    invoice.amount_paid -= alloc.allocated_amount
-                    apply_payment_status(invoice)
-
-        # Create GL reversal journal if payment was cleared and has a journal
-        if was_cleared and payment.journal_entry_id:
-            try:
-                from app.services.finance.gl.reversal import ReversalService
-
-                user_id = coerce_uuid(voided_by_user_id)
-                result = ReversalService.create_reversal(
-                    db=db,
-                    organization_id=org_id,
-                    original_journal_id=payment.journal_entry_id,
-                    reversal_date=date.today(),
-                    created_by_user_id=user_id,
-                    reason=f"Payment voided: {reason}",
-                    auto_post=True,
-                    idempotency_key=f"{org_id}:AR:PAY:{pay_id}:void-reversal:v1",
-                )
-                if result.success:
-                    logger.info(
-                        "Created GL reversal journal %s for voided payment %s",
-                        result.reversal_journal_id,
-                        pay_id,
-                    )
-                else:
-                    logger.warning(
-                        "GL reversal failed for voided payment %s: %s",
-                        pay_id,
-                        result.message,
-                    )
-            except Exception as e:
-                logger.exception(
-                    "Failed to create GL reversal for voided payment %s: %s",
-                    pay_id,
-                    e,
-                )
-            _reverse_vat_cash_basis_for_payment(
-                db,
-                org_id,
-                payment,
-                coerce_uuid(voided_by_user_id),
-                f"Payment voided: {reason}",
-                "void",
-            )
-
-        payment.status = PaymentStatus.VOID
-
-        db.flush()
-
-        return payment
+        Two behaviours changed on purpose: voiding an already-VOID payment is
+        now a no-op rather than a `ValidationError`, and a failed GL reversal
+        now refuses the void instead of completing it over a ledger that still
+        holds the cash.
+        """
+        return CustomerPaymentService.refund_payment(
+            db,
+            organization_id,
+            payment_id,
+            reason=f"Payment voided: {reason}",
+            refunded_by_user_id=voided_by_user_id,
+            outcome_status=PaymentStatus.VOID,
+            idempotency_suffix="void",
+        )
 
     @staticmethod
     def mark_bounced(
@@ -682,84 +925,21 @@ class CustomerPaymentService(ListResponseMixin):
         payment_id: UUID,
         reason: str,
     ) -> CustomerPayment:
-        """Mark a payment as bounced."""
-        org_id = coerce_uuid(organization_id)
-        pay_id = coerce_uuid(payment_id)
+        """Mark a payment as bounced — a refund decision whose reason is "bounced".
 
-        payment = db.get(CustomerPayment, pay_id)
-        if not payment or payment.organization_id != org_id:
-            raise NotFoundError("Payment not found")
-
-        if payment.status not in [PaymentStatus.PENDING, PaymentStatus.CLEARED]:
-            raise ValidationError(
-                f"Cannot mark payment as bounced with status '{payment.status.value}'"
-            )
-
-        # Reverse allocations if payment was cleared
-        was_cleared = payment.status == PaymentStatus.CLEARED
-        if was_cleared:
-            allocations = list(
-                db.scalars(
-                    select(PaymentAllocation).where(
-                        PaymentAllocation.payment_id == pay_id
-                    )
-                ).all()
-            )
-
-            for alloc in allocations:
-                invoice = db.get(Invoice, alloc.invoice_id)
-                if invoice:
-                    invoice.amount_paid -= alloc.allocated_amount
-                    apply_payment_status(invoice)
-
-        # Create GL reversal journal if payment was cleared and has a journal
-        if was_cleared and payment.journal_entry_id:
-            try:
-                from app.services.finance.gl.reversal import ReversalService
-
-                user_id = payment.created_by_user_id
-                result = ReversalService.create_reversal(
-                    db=db,
-                    organization_id=org_id,
-                    original_journal_id=payment.journal_entry_id,
-                    reversal_date=date.today(),
-                    created_by_user_id=user_id,
-                    reason=f"Payment bounced: {reason}",
-                    auto_post=True,
-                    idempotency_key=f"{org_id}:AR:PAY:{pay_id}:bounce-reversal:v1",
-                )
-                if result.success:
-                    logger.info(
-                        "Created GL reversal journal %s for bounced payment %s",
-                        result.reversal_journal_id,
-                        pay_id,
-                    )
-                else:
-                    logger.warning(
-                        "GL reversal failed for bounced payment %s: %s",
-                        pay_id,
-                        result.message,
-                    )
-            except Exception as e:
-                logger.exception(
-                    "Failed to create GL reversal for bounced payment %s: %s",
-                    pay_id,
-                    e,
-                )
-            _reverse_vat_cash_basis_for_payment(
-                db,
-                org_id,
-                payment,
-                payment.created_by_user_id,
-                f"Payment bounced: {reason}",
-                "bounce",
-            )
-
-        payment.status = PaymentStatus.BOUNCED
-
-        db.flush()
-
-        return payment
+        A thin caller of :meth:`refund_payment` (ADR-0008). ``allowed_from``
+        preserves this method's narrower precondition: a bounce is only
+        meaningful for a payment that was pending or cleared.
+        """
+        return CustomerPaymentService.refund_payment(
+            db,
+            organization_id,
+            payment_id,
+            reason=f"Payment bounced: {reason}",
+            outcome_status=PaymentStatus.BOUNCED,
+            idempotency_suffix="bounce",
+            allowed_from=frozenset({PaymentStatus.PENDING, PaymentStatus.CLEARED}),
+        )
 
     @staticmethod
     def update_payment(

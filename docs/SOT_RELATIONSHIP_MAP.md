@@ -33,7 +33,8 @@ semantics.
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
-| `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation | One service decides what a payment intent's status is; webhooks, routes and schedulers validate, authorize and delegate |
+| `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation, **outbound payout reversal** | One service decides what a payment intent's status is; webhooks, routes and schedulers validate, authorize and delegate |
+| `customer_refund` | the customer refund decision and its one entry point, allocation reversal, payment terminal status, refund evidence; the GL reversal *mechanism*; credit-note transitions | Refund is a decision, not a side effect: customer money back is AR's, payout money back is payments', and an adapter that stamps a terminal status has taken the decision |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
 | `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
@@ -68,6 +69,67 @@ deviation from the HTTP-adapter rule above, predating this slice and not
 resolved by it.
 
 Implemented and tested; production enablement unconfirmed.
+
+## Refunds (ADR-0008)
+
+Refund had **eleven writers across five aggregates and no owner at all**. There
+was no `Refund` model, no `refund` table and no `/refund` route; this map named
+no refund, credit-note or reversal domain, and `grep -n "refund\|reversal\|credit"`
+over the registry returned nothing. Nothing could answer "was this refunded, by
+whom, against what, and is it posted".
+
+Two owners, one named boundary — customer money in versus company money out:
+
+- `app.services.finance.ar.customer_payment.CustomerPaymentService` owns the
+  **customer refund decision**, through the single entry point
+  `refund_payment(db, organization_id, payment_id, amount, reason,
+  refunded_by_user_id, ...)`. `void_payment` and `mark_bounced` are thin
+  callers of it with different reasons and different terminal statuses — one
+  behaviour, three reasons, and the two pre-existing GL idempotency keys
+  (`void-reversal:v1`, `bounce-reversal:v1`) preserved byte for byte.
+- `PaymentService` (`payment_execution`, ADR-0005) owns **expense/outbound
+  payout reversals** — `source_type == "EXPENSE_CLAIM"` — and, because ADR-0005
+  does not bend, remains the sole writer of `PaymentIntent.status`. So an
+  inbound gateway refund is *decided* by `refund_payment` and *recorded on the
+  intent* by `PaymentService.record_inbound_refund`. The intent is the
+  transport's receipt, not the refund record.
+
+The ledger leg goes first and a refund that cannot reach the ledger changes
+nothing: GL reversal → allocation reversal (then `apply_payment_status`) →
+terminal status, with `RefundReversalError` raised on a failed reversal having
+mutated nothing. This is a deliberate change to `void_payment`/`mark_bounced`,
+which previously logged the GL failure and voided the payment anyway.
+
+Adapters observe and delegate. `dotmac_sub/sync/_payments.py` no longer assigns
+`PaymentStatus.REVERSED`; `dotmac_sub/sync/_credit_notes.py` no longer stamps
+`InvoiceStatus.VOID` onto an existing credit note but calls
+`ARInvoiceService.void_from_external_source` — a second premise on the
+lifecycle owner, because `void_invoice` refuses POSTED/paid documents by design
+and an upstream void of an already-posted credit note is a different premise.
+`charge.refund`, `refund.processed` and `refund.failed` are dispatched instead
+of falling into `logger.info("Unhandled event type: ...")`, which is the shape
+behind `docs/paystack_chargebacks_investigation.md`.
+
+`ReversalService` stays the GL **mechanism** and is not the owner: it is handed
+a journal id and a reason and cannot know why. Every `create_reversal` call site
+states an explicit `reason`, and every call site that decides a refund states an
+explicit `idempotency_key`, so a refund reversal is distinguishable from an FX
+revaluation or a data-health correction.
+
+Credit notes are **not** the refund record — no payment link, no cash leg. The
+AR credit-note lifecycle (`ar/invoice.py`, `ar_posting_saga.py`,
+`ar_inventory_integration.py`) keeps its as-built fragmentation; ADR-0008 names
+the owner rather than rewriting AR.
+
+Deliberately **not** built: a first-class `Refund` aggregate. Today's refund
+evidence is three durable facts — the refund-marked GL reversal journal, an
+`audit.audit_log` row carrying actor/reason/amount/credit-note id, and the
+payment's terminal status. Partial customer refunds are refused loudly, naming
+ADR-0008, because nothing can represent one. The aggregate is a stated ADR-0008
+follow-up, not a dropped requirement.
+
+Enforced by `tests/architecture/test_refund_has_one_owner.py`, with the same
+two-sided sensitivity proof ADR-0005's gate carries.
 
 ## Durable customer imports
 

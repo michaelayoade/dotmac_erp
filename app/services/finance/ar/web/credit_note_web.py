@@ -21,6 +21,7 @@ from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
 from app.services.finance.ar.customer import customer_service
+from app.services.finance.ar.customer_payment import CustomerPaymentService
 from app.services.finance.ar.invoice import ARInvoiceInput, ar_invoice_service
 from app.services.finance.ar.web.base import (
     customer_display_name,
@@ -518,6 +519,24 @@ class CreditNoteWebService:
                 input=input_data,
                 created_by_user_id=user_id,
             )
+
+            # A credit note issued against a settled receipt IS a refund of
+            # that receipt, and before ADR-0008 the two were disconnected
+            # facts: the credit note carries no payment link and no cash leg,
+            # so nothing could answer "was this refunded, and against what".
+            # The web layer stays an adapter — it delegates the decision to
+            # the refund owner and takes none of it.
+            refund_payment_id = data.get("refund_payment_id") or None
+            if refund_payment_id:
+                CustomerPaymentService.refund_payment(
+                    db,
+                    org_id,
+                    coerce_uuid(refund_payment_id),
+                    amount=abs(credit_note.total_amount),
+                    reason=f"Refunded on credit note {credit_note.invoice_number}",
+                    refunded_by_user_id=user_id,
+                    credit_note_id=credit_note.invoice_id,
+                )
 
             if "application/json" in content_type:
                 return {

@@ -294,6 +294,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "PaymentIntent.status - every transition, from every trigger",
                     "transfer initiation, completion, failure and reversal",
                     "scheduled reconciliation of in-flight transfers",
+                    "expense/outbound payout reversal (source_type EXPENSE_CLAIM): "
+                    "claim revert, batch-item consequence, reimbursement and fee "
+                    "reversal postings",
+                    "recording a gateway refund onto an INBOUND intent",
                 ),
                 notes=(
                     "Sole writer of payments.payment_intent.status. The webhook "
@@ -301,7 +305,11 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "adapters over this service; none of them decides a status "
                     "itself. Enforced by tests/architecture/"
                     "test_payment_intent_status_single_owner.py. Implemented and "
-                    "tested; production enablement unconfirmed."
+                    "tested; production enablement unconfirmed. ADR-0008 draws "
+                    "the refund boundary here: this service owns COMPANY money "
+                    "going out (payout reversals) and, because ADR-0005 does not "
+                    "bend, the intent column for an inbound refund - but the "
+                    "inbound refund DECISION is refunds.customer_money's."
                 ),
             ),
             SOTService(
@@ -327,6 +335,85 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             "routes and schedulers validate, authorize and delegate; a second "
             "writer is how a settled transfer gets reopened or an in-flight "
             "payout gets stamped expired."
+        ),
+    ),
+    DomainSOT(
+        domain="customer_refund",
+        services=(
+            SOTService(
+                name="refunds.customer_money",
+                module="app.services.finance.ar.customer_payment",
+                owns=(
+                    "the customer refund decision - one entry point, "
+                    "CustomerPaymentService.refund_payment",
+                    "allocation reversal on a refunded receipt",
+                    "CustomerPayment terminal status (REVERSED / VOID / BOUNCED)",
+                    "the refund's durable evidence: refund-marked GL reversal, "
+                    "audit row carrying actor, reason and amount",
+                ),
+                depends_on=("refunds.gl_mechanism", "payments.intent_lifecycle"),
+                notes=(
+                    "ADR-0008. Refund had ELEVEN writers across five aggregates "
+                    "and no owner at all. void_payment and mark_bounced are now "
+                    "thin callers of refund_payment with different reasons, not "
+                    "parallel implementations; the Sub sync adapter and the "
+                    "Paystack refund webhooks call it instead of stamping a "
+                    "status. Defers the derived invoice verdict to "
+                    "ar.payment_status.apply_payment_status and the ledger to "
+                    "refunds.gl_mechanism - it decides, it does not compute "
+                    "coverage or post lines. Partial refunds are REFUSED: no "
+                    "Refund aggregate exists yet (stated ADR-0008 follow-up). "
+                    "Enforced by tests/architecture/"
+                    "test_refund_has_one_owner.py."
+                ),
+            ),
+            SOTService(
+                name="refunds.gl_mechanism",
+                module="app.services.finance.gl.reversal",
+                owns=("how a posted journal is reversed",),
+                notes=(
+                    "MECHANISM, NOT OWNER. ReversalService is handed a journal "
+                    "id and a reason string; it cannot know whether it is "
+                    "undoing a refund, an FX revaluation, a duplicate posting "
+                    "or a data-health correction, and it is not asked to. Every "
+                    "call site states an explicit reason, and every call site "
+                    "that DECIDES a refund states an explicit idempotency key "
+                    "as well, so a refund reversal is distinguishable in the "
+                    "ledger from every other kind."
+                ),
+            ),
+            SOTService(
+                name="refunds.credit_note_lifecycle",
+                module="app.services.finance.ar.invoice",
+                owns=(
+                    "credit-note status transitions, including an "
+                    "externally-originated void",
+                ),
+                notes=(
+                    "A credit note is NOT the refund record - it carries no link "
+                    "to a payment and no cash leg - so this is a neighbour of "
+                    "the refund owner, not a second one. AS-BUILT FRAGMENTATION: "
+                    "the credit-note lifecycle still has writers in "
+                    "ar_posting_saga and ar_inventory_integration, deliberately "
+                    "untouched by ADR-0008. What that ADR did add is "
+                    "void_from_external_source, so the Sub sync adapter requests "
+                    "the void from this owner instead of stamping "
+                    "InvoiceStatus.VOID itself."
+                ),
+            ),
+        ),
+        entrypoints=(
+            "app.services.finance.payments.webhook_service",
+            "app.services.dotmac_sub.sync._payments",
+            "app.services.dotmac_sub.sync._credit_notes",
+            "app.services.finance.ar.web.credit_note_web",
+        ),
+        rule=(
+            "Refund is a decision, not a side effect. Customer money going back "
+            "is refunds.customer_money's; company money coming back from a "
+            "failed payout is payments.intent_lifecycle's. Webhooks, sync "
+            "adapters and web handlers observe and delegate - an adapter that "
+            "assigns a terminal status has taken the decision."
         ),
     ),
     DomainSOT(

@@ -7,6 +7,14 @@ mutating ``CustomerPayment.amount`` in place leaves the GL at the old figure
 while the subledger shows the new one. The sync now reverses the existing
 journal and drops the posting link so ``post_unposted_payments`` re-posts at
 the new amount — and declines to mutate at all if the reversal fails.
+
+``_reverse_posted_payment_gl`` is the AMOUNT-CHANGE path only. ADR-0008 took
+the refund path off it: an unsettled dotmac_sub payment is a refund, refund is
+a decision, and the decision belongs to
+``CustomerPaymentService.refund_payment``. The adapter reports what Sub said
+and asks the owner — see ``tests/finance/test_refund_owner.py`` for the
+end-to-end assertion that this door and the other two land in identical ledger
+and subledger state.
 """
 
 from __future__ import annotations
@@ -254,3 +262,38 @@ def test_unchanged_source_payment_repairs_missing_accounting_projection():
 
     assert repaired == [("receipt", payment), ("wht", payment)]
     assert result.skipped == 1
+
+
+def test_the_adapter_no_longer_decides_a_refund_itself():
+    """Writer #10, retired. The sync used to assign ``PaymentStatus.REVERSED``
+    directly — ERP state changed because *Sub* refunded, decided by an adapter.
+
+    Asserted structurally rather than behaviourally because the point is the
+    absence of a decision: the module must reach the refund owner, and must not
+    stamp the column.
+    """
+    import ast
+    import inspect
+
+    from app.services.dotmac_sub.sync import _payments as module
+
+    source = inspect.getsource(module)
+    tree = ast.parse(source)
+
+    stamps = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Attribute)
+        and isinstance(node.value.value, ast.Name)
+        and node.value.value.id == "PaymentStatus"
+        and node.value.attr == "REVERSED"
+        and any(
+            isinstance(target, ast.Attribute) and target.attr == "status"
+            for target in node.targets
+        )
+    ]
+    assert stamps == [], f"the sync adapter decides a refund at lines {stamps}"
+    assert "CustomerPaymentService.refund_payment" in source, (
+        "the adapter must request the refund from its owner"
+    )

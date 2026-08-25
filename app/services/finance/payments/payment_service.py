@@ -2100,6 +2100,62 @@ class PaymentService:
             },
         )
 
+    def record_inbound_refund(
+        self,
+        intent: PaymentIntent,
+        refunded_at: datetime,
+        gateway_response: dict[str, Any],
+        reason: str | None = None,
+    ) -> None:
+        """Record that the gateway refunded an INBOUND collection.
+
+        The refund DECISION — allocations, the GL reversal, the derived invoice
+        verdicts, the receipt's terminal status — belongs to
+        ``CustomerPaymentService.refund_payment`` (ADR-0008), and the caller has
+        already taken it. This method moves the intent and nothing else,
+        because ADR-0005 makes this service the sole writer of
+        ``PaymentIntent.status`` and that does not bend for an inbound refund.
+
+        The two refund owners meet here and nowhere else: the intent is the
+        transport's receipt, not the refund record.
+
+        Idempotent: an intent already REVERSED is left alone.
+        """
+        if intent.direction != PaymentDirection.INBOUND:
+            raise ValueError(
+                f"Intent {intent.intent_id} is not an inbound collection; "
+                "an outbound payout reversal is process_transfer_reversal's"
+            )
+
+        if intent.status == PaymentIntentStatus.REVERSED:
+            logger.info(f"Inbound intent {intent.intent_id} already reversed")
+            return
+
+        if intent.status != PaymentIntentStatus.COMPLETED:
+            logger.warning(
+                f"Cannot record a refund against intent {intent.intent_id} "
+                f"with status '{intent.status.value}'"
+            )
+            return
+
+        intent.status = PaymentIntentStatus.REVERSED
+        intent.gateway_response = {
+            **(intent.gateway_response or {}),
+            "refund": gateway_response,
+            "refund_reason": reason,
+            "refunded_at": refunded_at.isoformat(),
+        }
+        self.db.flush()
+
+        logger.warning(
+            f"Recorded inbound refund for intent {intent.intent_id}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "customer_payment_id": str(intent.customer_payment_id),
+                "reason": reason,
+            },
+        )
+
     def _post_reversal_entries(
         self,
         intent: PaymentIntent,

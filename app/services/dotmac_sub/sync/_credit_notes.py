@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.services.dotmac_sub.client import CreditNoteRecord, DotmacSubError
+from app.services.finance.ar.invoice import ar_invoice_service
 
 from ._constants import (
     DOTMAC_SUB_SYNC_MIN_DATE,
@@ -264,7 +265,24 @@ class CreditNoteSyncMixin:
             existing.amount_paid = -abs(cn.applied_total)
             existing.functional_currency_amount = functional_amount
             existing.exchange_rate = exch_rate
-            existing.status = local_status
+            if local_status == InvoiceStatus.VOID:
+                # The void is a TRANSITION, and transitions belong to the
+                # credit-note lifecycle owner — this adapter used to stamp
+                # `InvoiceStatus.VOID` itself, which made it the eleventh
+                # writer of a refund-shaped decision with no owner (ADR-0008).
+                # `void_invoice` is ERP's own void decision and refuses a
+                # posted document by design; an upstream void is a different
+                # premise, and the GL leg is already reversed above.
+                ar_invoice_service.void_from_external_source(
+                    self.db,
+                    self.organization_id,
+                    existing.invoice_id,
+                    reason=f"credit note {cn.credit_number} voided at source",
+                    voided_by_user_id=created_by_user_id or SYSTEM_USER_ID,
+                    source="dotmac_sub",
+                )
+            else:
+                existing.status = local_status
             existing.notes = cn.memo
             existing.dotmac_sub_id = cn.id
             existing.dotmac_sub_number = cn.credit_number
