@@ -387,8 +387,10 @@ rather than assuming the scales agree.
 
 `project_determination_set(apply, *, accounts, expected_fingerprint,
 fiscal_period_id) -> ConsequencePosting` is a **pure function**. It verifies,
-resolves accounts, and renders into `JournalInput`/`JournalLineInput` — the
-accounting owner's own input type. It performs no write; invoking
+resolves accounts, and returns a typed consequence. A postable consequence
+renders into `JournalInput`/`JournalLineInput` — the accounting owner's own
+input type — while a reportable-only zero consequence renders no journal. It
+performs no write; invoking
 `BasePostingAdapter.create_approve_and_post_journal` and writing the document /
 tax-transaction snapshot is C4.
 
@@ -431,15 +433,16 @@ Zero treatments are **carried, not dropped**. `zero_rated`, `exempt` and
 `out_of_scope` are distinct treatments that all produce zero tax, and a zero
 component is still reportable — it belongs in a return box. They land on
 `ConsequencePosting.reportable_zero_components`. A set in which EVERY component
-is a zero treatment is refused for posting with a message naming the return-box
-consequence, rather than emitting a meaningless zero-value journal for every
-exempt line.
+is a zero treatment is a normal reportable-only result: `is_postable` is false,
+`lines` is empty, and `to_journal_input()` returns `None`. The caller can record
+the distinct return-box components without catching a refusal, and no
+meaningless zero-value journal or counterpart line is emitted.
 
 Unlike the legacy `TAXPostingAdapter` — whose own docstring records that it emits
 tax lines alone and leaves the contra to the source document — a
-`ConsequencePosting` is self-balancing. A projection that cannot balance itself
-can only be validated after being combined with something else, which is exactly
-when a shadow comparison stops being able to attribute a difference.
+postable `ConsequencePosting` is self-balancing. A projection that cannot balance
+itself can only be validated after being combined with something else, which is
+exactly when a shadow comparison stops being able to attribute a difference.
 
 Two ERP account mappings for one module tax code is an ambiguity, not
 last-one-wins: it is refused at `TaxAccountMap` construction, per the boundary

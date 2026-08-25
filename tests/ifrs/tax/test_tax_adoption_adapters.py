@@ -692,6 +692,30 @@ def exempt_component(*, sequence: int = 300):
     )
 
 
+def zero_treatment_component(
+    *, sequence: int, treatment: str
+) -> TaxDeterminationComponentV1:
+    """A component carrying a configured zero treatment.
+
+    `zero_rated`, `exempt` and `out_of_scope` are DISTINCT legal answers that
+    all produce no money, and the module keeps them distinct on purpose.
+    """
+    zero = ngn("0.00")
+    return TaxDeterminationComponentV1(
+        component_sequence=sequence,
+        tax_code_id=STAMP_DUTY_CODE_ID,
+        rule_id=uuid.uuid4(),
+        rule_version=1,
+        treatment_code=treatment,
+        calculation_base_code="source_amount",
+        inclusive=False,
+        base_amount=ngn("100000.00"),
+        tax_amount=zero,
+        recoverable_amount=zero,
+        non_recoverable_amount=zero,
+    )
+
+
 def build_apply(
     *,
     consequence: AccountingConsequence = AccountingConsequence.AR_OUTPUT_TAX,
@@ -925,15 +949,94 @@ def test_a_zero_treatment_component_is_carried_not_dropped():
 
     posting = project(apply)
 
+    assert posting.is_postable is True
     assert len(posting.lines) == 2, "the exempt component produces no journal line"
     assert len(posting.reportable_zero_components) == 1
     assert posting.reportable_zero_components[0].treatment_code == "exempt"
 
 
-def test_an_all_zero_set_names_the_report_consequence_and_refuses_to_post():
-    apply = build_apply(components=[exempt_component()], tax="0.00", gross="100000.00")
-    with pytest.raises(TaxAdapterRefusal, match="return-box consequence"):
-        project(apply)
+def _all_exempt() -> ApplyTaxDeterminationSetV1:
+    return build_apply(components=[exempt_component()], tax="0.00", gross="100000.00")
+
+
+def test_an_all_zero_set_returns_its_reportable_components_and_posts_nothing():
+    """C1.1: an exempt supply is an ANSWER, not a refusal.
+
+    This previously raised `TaxAdapterRefusal`, which put the most ordinary
+    outcome in tax on the same path as a changed fingerprint or an ambiguous
+    account, and left the reportable components unreachable — so a caller could
+    not do the one thing the message told it to do.
+    """
+    posting = project(_all_exempt())
+
+    assert posting.is_postable is False
+    assert posting.lines == ()
+    assert len(posting.reportable_zero_components) == 1
+    assert posting.reportable_zero_components[0].treatment_code == "exempt"
+
+
+def test_an_all_zero_set_renders_no_journal_at_all():
+    """A zero-line journal must never reach JournalService.
+
+    `_require_balanced` would happily accept it — zero equals zero — so the
+    guard has to be here, where "nothing to post" is still distinguishable from
+    "balanced".
+    """
+    assert project(_all_exempt()).to_journal_input() is None
+
+
+def test_an_all_zero_set_emits_no_counterpart_line():
+    """The counterpart exists to balance tax; with no tax there is nothing to balance."""
+    posting = project(_all_exempt())
+
+    assert all(line.account_id != COUNTERPART_ACCOUNT for line in posting.lines)
+    assert posting.total_debit == posting.total_credit == Decimal("0")
+
+
+def test_a_reversing_all_zero_set_is_still_reportable_and_still_posts_nothing():
+    """Reversal flips sides; it cannot manufacture a line where there is no tax."""
+    apply = build_apply(
+        components=[exempt_component()], tax="0.00", gross="100000.00", reversal=True
+    )
+
+    posting = project(apply)
+
+    assert posting.is_postable is False
+    assert posting.lines == ()
+    assert len(posting.reportable_zero_components) == 1
+
+
+def test_every_zero_treatment_is_reportable_not_only_exempt():
+    """All three zero treatments survive to the return box, distinctly."""
+    apply = build_apply(
+        components=[
+            zero_treatment_component(sequence=sequence, treatment=treatment)
+            for sequence, treatment in enumerate(
+                ("zero_rated", "exempt", "out_of_scope"), start=1
+            )
+        ],
+        tax="0.00",
+        gross="100000.00",
+    )
+
+    posting = project(apply)
+
+    assert posting.is_postable is False
+    assert {c.treatment_code for c in posting.reportable_zero_components} == {
+        "zero_rated",
+        "exempt",
+        "out_of_scope",
+    }
+
+
+def test_a_postable_set_is_unchanged_by_the_reportable_only_path():
+    """Regression: C1.1 must not alter the ordinary path."""
+    posting = project(build_apply())
+
+    assert posting.is_postable is True
+    journal = posting.to_journal_input()
+    assert journal is not None
+    assert len(journal.lines) == 2
 
 
 def test_a_standard_rated_component_holding_no_tax_is_a_defect():
@@ -981,6 +1084,7 @@ def test_the_projection_renders_into_the_accounting_owners_own_input_type():
 
     journal = posting.to_journal_input()
 
+    assert journal is not None
     assert journal.source_module == SOURCE_MODULE
     assert journal.source_document_type == "AR_INVOICE"
     assert journal.source_document_id == posting.document_id
