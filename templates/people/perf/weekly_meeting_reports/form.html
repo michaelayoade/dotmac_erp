@@ -94,7 +94,7 @@
             ('5. Issues, Risks, Dependencies or Support Required', 'issues_risks_support', 'Record unresolved issues, blockers, risks, dependencies, or management support required.')
         ] %}
         {% for title, name, hint in sections %}
-        <section class="card p-6"><label for="{{ name }}" class="mb-2 block text-lg font-semibold text-slate-900 dark:text-white">{{ title }}</label><textarea id="{{ name }}" name="{{ name }}" rows="4" class="form-textarea" placeholder="{{ hint }}">{{ form_values[name] }}</textarea><p class="form-hint">Use N/A when this section is not relevant.</p></section>
+        <section class="card p-6"><label for="{{ name }}" class="mb-2 block text-lg font-semibold text-slate-900 dark:text-white">{{ title }}</label><textarea id="{{ name }}" name="{{ name }}" rows="4" class="form-textarea w-full" placeholder="{{ hint }}">{{ form_values[name] }}</textarea><p class="form-hint">Use N/A when this section is not relevant.</p></section>
         {% endfor %}
 
         <section class="card p-6">
@@ -103,7 +103,7 @@
                 <table class="table min-w-full"><thead><tr><th scope="col">Action / Follow-up</th><th scope="col">Owner</th><th scope="col">Due Date</th><th scope="col">Status</th><th scope="col" class="text-right">Action</th></tr></thead>
                 <tbody>
                     <template x-for="(item, index) in actionItems" :key="index"><tr>
-                        <td><textarea x-model="item.action_text" class="form-textarea" rows="2" aria-label="Action item"></textarea></td>
+                        <td><textarea x-model="item.action_text" class="form-textarea w-full" rows="2" aria-label="Action item"></textarea></td>
                         <td><select x-model="item.owner_employee_id" @change="setActionOwner(item)" class="form-select" aria-label="Action owner"><option value="">Manual / unassigned</option><template x-for="employee in employees" :key="employee.employee_id"><option :value="employee.employee_id" x-text="employee.name"></option></template></select><input x-show="!item.owner_employee_id" x-model="item.owner_name" maxlength="160" class="form-input mt-2" placeholder="Owner name" aria-label="Manual owner name"></td>
                         <td><input x-model="item.due_date" type="date" class="form-input" aria-label="Action due date"></td>
                         <td><select x-model="item.status" class="form-select" aria-label="Action status">{% for status in action_statuses %}<option value="{{ status }}">{{ status | replace('_', ' ') | title }}</option>{% endfor %}</select></td>
@@ -114,7 +114,7 @@
             </div>
         </section>
 
-        <section class="card p-6"><label for="carry_forward" class="mb-2 block text-lg font-semibold text-slate-900 dark:text-white">7. Items to Carry Forward / Discuss Next Week</label><textarea id="carry_forward" name="carry_forward" rows="4" class="form-textarea" placeholder="Record open matters requiring continued monitoring.">{{ form_values.carry_forward }}</textarea></section>
+        <section class="card p-6"><label for="carry_forward" class="mb-2 block text-lg font-semibold text-slate-900 dark:text-white">7. Items to Carry Forward / Discuss Next Week</label><textarea id="carry_forward" name="carry_forward" rows="4" class="form-textarea w-full" placeholder="Record open matters requiring continued monitoring.">{{ form_values.carry_forward }}</textarea></section>
 
         <div class="card flex flex-col-reverse justify-between gap-3 p-5 sm:flex-row sm:items-center">
             <p class="text-sm text-slate-500 dark:text-slate-400">Keep the final report concise enough for a two-page printout.</p>

@@ -2,8 +2,9 @@
 
 Nginx serves `/static/` from `/var/www/dotmac/static/` (it runs as `www-data`
 and cannot read `/root`, mode `0700`). The project source lives in
-`/root/dotmac/static/`, so assets must be rsync'd to the serving directory by
-`scripts/sync-static.sh`.
+`/root/dotmac/static/`, while released `dotmac-ui` assets live in the app
+container's installed package. `scripts/sync-static.sh` stages both sources and
+then rsyncs the complete static tree to the serving directory.
 
 `scripts/deploy.sh` already runs that sync (Step 4). These units are a
 **belt-and-suspenders** for updates that bypass `deploy.sh` — a bare
