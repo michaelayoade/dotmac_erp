@@ -103,11 +103,11 @@ def require_service_auth(
 
 
 def require_service_scope(scope: str):
-    """Require a scope while retaining legacy unscoped-key compatibility."""
+    """Require one explicitly granted service-principal scope."""
 
     def _dep(auth: dict = Depends(require_service_auth)) -> dict:
         scopes = auth.get("scopes") or []
-        if scopes and scope not in scopes:
+        if scope not in scopes:
             raise HTTPException(
                 status_code=403,
                 detail=f"API key missing required scope: {scope}",
@@ -135,9 +135,11 @@ def require_explicit_service_scope(scope: str):
 
 
 def require_any_service_scope(*required: str):
+    """Require at least one explicitly granted service-principal scope."""
+
     def _dep(auth: dict = Depends(require_service_auth)) -> dict:
         scopes = auth.get("scopes") or []
-        if scopes and not any(scope in scopes for scope in required):
+        if not any(scope in scopes for scope in required):
             raise HTTPException(
                 status_code=403,
                 detail=f"API key missing required scope: one of {', '.join(required)}",

@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.models.auth import AuthProvider, MFAMethodType, SessionStatus
+
+ServiceScope = Annotated[
+    str,
+    Field(
+        min_length=3,
+        max_length=120,
+        pattern=r"^[a-z][a-z0-9_-]*(?::[a-z][a-z0-9_.-]*)+$",
+    ),
+]
 
 
 class UserCredentialBase(BaseModel):
@@ -125,16 +135,18 @@ class ApiKeyBase(BaseModel):
     last_used_at: datetime | None = None
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
+    scopes: list[ServiceScope] | None = None
 
 
 class ApiKeyCreate(ApiKeyBase):
-    pass
+    scopes: list[ServiceScope] = Field(min_length=1)
 
 
 class ApiKeyGenerateRequest(BaseModel):
     person_id: UUID | None = None
     label: str | None = Field(default=None, max_length=120)
     expires_at: datetime | None = None
+    scopes: list[ServiceScope] = Field(min_length=1)
 
 
 class ApiKeyUpdate(BaseModel):
@@ -145,6 +157,7 @@ class ApiKeyUpdate(BaseModel):
     last_used_at: datetime | None = None
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
+    scopes: list[ServiceScope] | None = Field(default=None, min_length=1)
 
 
 class ApiKeyRead(ApiKeyBase):

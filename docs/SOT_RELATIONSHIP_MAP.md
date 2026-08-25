@@ -38,6 +38,13 @@ semantics.
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
+Service API keys authenticate an identity but receive no authority unless an
+operator assigns at least one explicit leaf scope. NULL or empty scope lists are
+legacy audit findings, not a full-access compatibility mode; every service
+operation fails closed for them. The API-key read surface returns scope names so
+operators can locate, replace, or revoke legacy keys without exposing key
+material. Wildcard scopes are refused for newly created and updated keys.
+
 ## Durable customer imports
 
 `dotmac-imports` owns the durable run, immutable partition plan, bounded claim,
