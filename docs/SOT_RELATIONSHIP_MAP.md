@@ -33,13 +33,13 @@ semantics.
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
-| `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation | One service decides what a payment intent's status is; webhooks, routes and schedulers validate, authorize and delegate |
+| `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation, the observed-verdict vs unobserved-outcome distinction | One service decides what a payment intent's status is **and may only claim what was observed**; webhooks, routes and schedulers validate, authorize and delegate |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
 | `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
-## Payment execution (ADR-0005)
+## Payment execution (ADR-0005, ADR-0007)
 
 `app.services.finance.payments.payment_service.PaymentService` is the **sole
 writer** of `payments.payment_intent.status`. It had three writers until
@@ -66,6 +66,42 @@ Enforced by `tests/architecture/test_payment_intent_status_single_owner.py`.
 Note that `PaymentService` raises `HTTPException` throughout — a pre-existing
 deviation from the HTTP-adapter rule above, predating this slice and not
 resolved by it.
+
+### What the column may claim (ADR-0007)
+
+Owning the write is not the same as owning the meaning. Every
+`PaymentIntentStatus` member except one asserts a fact about the money, and
+`FAILED` in particular is a claim that the payout did not happen — downstream,
+the claim reverts to APPROVED, the intent becomes resettable, and the operator
+is told to try again. Until 2026-08-25 that value was also what the system
+wrote when it simply could not tell: a connect timeout, a 5xx, ten spent poll
+attempts with no answer, or a provider status word it did not parse.
+
+`INDETERMINATE` (+ `unresolved_since`) is the vocabulary for *unobserved*. ERP
+is adopting the fleet rule stated in `dotmac_starter_mt` ADR-0032 — unobserved
+is UNKNOWN, never ABSENT — for money movement.
+
+- `app.services.finance.payments.paystack_client` owns the transport-level
+  half: `PaystackUnreachable` for "Paystack did not answer" (every
+  `httpx.RequestError` site, every 5xx), plain `PaystackError` for "Paystack
+  answered and refused".
+- `PaymentService` owns the decision half. `FAILED` on the give-up path
+  requires that Paystack answered; everything else is `INDETERMINATE`, and the
+  classifier is inverted so the safe answer is the default rather than the
+  remembered case.
+- `resolve_indeterminate_transfer` (driven hourly by
+  `app.tasks.expense.reconcile_unresolved_expense_transfers`) is the **only**
+  writer that may move an intent out of `INDETERMINATE`, and only to a status
+  Paystack itself justified. No attempt cap and no give-up branch: a budget
+  there would manufacture a verdict out of repeated silence.
+- An `INDETERMINATE` intent is never resettable — `force` included — and blocks
+  a new payout for the same claim. The claim stays APPROVED and unpaid, and no
+  GL journal is posted.
+- The initiate route answers `409`, not `502`: 5xx is in every default retry
+  set, and retrying a payout whose outcome is unknown is the double-payment
+  path.
+
+Enforced by `tests/architecture/test_unobserved_is_not_a_verdict.py`.
 
 Implemented and tested; production enablement unconfirmed.
 

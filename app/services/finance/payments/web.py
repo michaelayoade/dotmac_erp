@@ -84,6 +84,15 @@ class PaymentWebService:
             elif intent.status == PaymentIntentStatus.EXPIRED:
                 status = "expired"
                 message = "Payment session expired. Please initiate a new payment."
+            elif intent.status == PaymentIntentStatus.INDETERMINATE:
+                # The default below already says "unknown", but by accident.
+                # Stated explicitly so the page cannot silently start telling
+                # somebody their payment failed if the default ever changes.
+                status = "unknown"
+                message = (
+                    "We could not confirm what happened to this payment. Do "
+                    "not pay again - support is reconciling it."
+                )
 
         return {
             "title": f"Payment {status.title()}",
@@ -156,8 +165,19 @@ class PaymentWebService:
         if not expense_claim or expense_claim.organization_id != organization_id:
             return {"redirect_url": "/expense/claims"}
 
-        # Check for existing active payment intent to prevent duplicate payments
-        active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+        # Check for existing active payment intent to prevent duplicate payments.
+        #
+        # INDETERMINATE counts as active. It is not "in progress" in any
+        # ordinary sense - nothing is being processed and nobody is waiting on
+        # a webhook - but it has the one property that matters here: the money
+        # may already have left. Omitting it would leave `active_intent` None,
+        # `can_reimburse` True, and a Reimburse button on screen for a claim
+        # whose payout is unaccounted for (ADR-0007).
+        active_statuses = [
+            PaymentIntentStatus.PENDING,
+            PaymentIntentStatus.PROCESSING,
+            PaymentIntentStatus.INDETERMINATE,
+        ]
         active_intent = db.scalar(
             select(PaymentIntent)
             .where(
@@ -181,6 +201,10 @@ class PaymentWebService:
             .limit(1)
         )
 
+        # Every member here asserts the money did NOT move, which is what makes
+        # a retry safe. INDETERMINATE asserts nothing and is deliberately
+        # absent - `reset_expense_payment_intent` refuses it outright, force or
+        # not, so offering the button would only produce a 409.
         resettable_statuses = {
             PaymentIntentStatus.FAILED,
             PaymentIntentStatus.ABANDONED,
@@ -310,6 +334,17 @@ class PaymentWebService:
             )
             or 0
         )
+        indeterminate_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PaymentIntent)
+                .where(
+                    *base_filter,
+                    PaymentIntent.status == PaymentIntentStatus.INDETERMINATE,
+                )
+            )
+            or 0
+        )
         failed_count = (
             db.scalar(
                 select(func.count())
@@ -367,6 +402,7 @@ class PaymentWebService:
             "stat_processing": processing_count,
             "stat_completed": completed_count,
             "stat_failed": failed_count,
+            "stat_indeterminate": indeterminate_count,
         }
 
     @staticmethod

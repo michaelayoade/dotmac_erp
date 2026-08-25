@@ -1191,7 +1191,15 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         )
 
     def has_payment_in_flight(self, org_id: UUID, claim_id: UUID) -> bool:
-        """Whether a payment for this claim is pending or processing."""
+        """Whether this claim has a payout that may still move money.
+
+        INDETERMINATE belongs in this set even though nothing is actively "in
+        flight" for it: the question this method answers is whether withdrawing
+        the approval could strand a real payout, and a payout whose outcome
+        nobody observed is the strongest case for yes there is. Treating it as
+        settled would let an approval be withdrawn out from under money that
+        may already have left the account (ADR-0007).
+        """
         from app.models.finance.payments.payment_intent import (
             PaymentIntent,
             PaymentIntentStatus,
@@ -1204,7 +1212,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     PaymentIntent.source_type == "EXPENSE_CLAIM",
                     PaymentIntent.source_id == claim_id,
                     PaymentIntent.status.in_(
-                        [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+                        [
+                            PaymentIntentStatus.PENDING,
+                            PaymentIntentStatus.PROCESSING,
+                            PaymentIntentStatus.INDETERMINATE,
+                        ]
                     ),
                 )
             )

@@ -771,6 +771,11 @@ def poll_stuck_expense_transfers() -> dict:
         "failed": 0,
         "still_pending": 0,
         "abandoned": 0,
+        # Distinct from `abandoned` on purpose: abandoned means Paystack
+        # answered and refused, indeterminate means nobody ever answered.
+        # Collapsing the two here would make the job's own report repeat the
+        # conflation ADR-0007 removes from the column.
+        "indeterminate": 0,
         "errors": [],
     }
 
@@ -832,11 +837,115 @@ def poll_stuck_expense_transfers() -> dict:
             db.commit()
 
     logger.info(
-        "Transfer polling complete: %d checked, %d completed, %d failed, %d abandoned",
+        "Transfer polling complete: %d checked, %d completed, %d failed, "
+        "%d abandoned, %d unresolved",
         results["intents_checked"],
         results["completed"],
         results["failed"],
         results["abandoned"],
+        results["indeterminate"],
+    )
+
+    return results
+
+
+@shared_task
+def reconcile_unresolved_expense_transfers() -> dict:
+    """Keep asking Paystack about payouts whose outcome was never observed.
+
+    The slow lane behind `poll_stuck_expense_transfers`. That job runs every two
+    minutes because a webhook is merely late; this one runs hourly because its
+    subjects have already exhausted the fast loop, and re-asking at two-minute
+    intervals would be load without information.
+
+    Same adapter shape and the same reason (ADR-0005): it discovers which
+    tenants have unresolved payouts, opens one session per tenant, and hands
+    each intent to `PaymentService`. It decides nothing.
+    `resolve_indeterminate_transfer` is the only writer permitted to move an
+    intent out of INDETERMINATE, and it may only move it to a status Paystack
+    itself justified.
+
+    There is deliberately no give-up path here. A transfer nobody can account
+    for stays unresolved until someone learns what happened to it; the job's
+    job is to keep asking and to make the age of the oldest one visible
+    (ADR-0007, adopting `dotmac_starter_mt` ADR-0032).
+    """
+    from app.metrics import set_transfer_unresolved_oldest_age
+    from app.services.finance.payments.payment_service import (
+        PaymentService,
+        TransferPollOutcome,
+    )
+
+    logger.info("Reconciling transfers with unobserved outcomes")
+
+    results: dict[str, Any] = {
+        "intents_checked": 0,
+        "completed": 0,
+        "failed": 0,
+        "reversed": 0,
+        "still_unresolved": 0,
+        "errors": [],
+    }
+
+    now = datetime.now(UTC)
+
+    with cross_org_session() as cross_db:
+        unresolved_by_org = PaymentService.find_indeterminate_transfer_intents(cross_db)
+        # Published before any resolution work, so the gauge reflects the real
+        # backlog even if every tenant below turns out to be unconfigured.
+        set_transfer_unresolved_oldest_age(
+            PaymentService.oldest_unresolved_transfer_age(
+                cross_db, now=now
+            ).total_seconds()
+        )
+
+    if not unresolved_by_org:
+        logger.info("No unresolved transfers found")
+        return results
+
+    for org_id, intent_ids in unresolved_by_org.items():
+        with session_for_org(org_id) as db:
+            svc = PaymentService(db, org_id)
+            config = svc.resolve_transfer_polling_config()
+            if config is None:
+                # No keys means no verdict is obtainable, so nothing is written.
+                # The intents stay unresolved and stay in the gauge, which is
+                # the correct signal: a tenant that cannot be reconciled is a
+                # tenant somebody has to configure.
+                logger.warning(
+                    "No Paystack keys for org %s - %d unresolved transfer(s) "
+                    "cannot be reconciled",
+                    org_id,
+                    len(intent_ids),
+                )
+                continue
+
+            for intent_id in intent_ids:
+                results["intents_checked"] += 1
+                outcome = svc.resolve_indeterminate_transfer(intent_id, config, now=now)
+
+                if outcome.outcome is TransferPollOutcome.STILL_UNRESOLVED:
+                    results["still_unresolved"] += 1
+                    results["errors"].append(
+                        {
+                            "intent_id": str(outcome.intent_id),
+                            "error": outcome.error,
+                            "poll_count": outcome.poll_count,
+                        }
+                    )
+                    continue
+
+                counter = outcome.outcome.value
+                results[counter] = results.get(counter, 0) + 1
+
+            db.commit()
+
+    logger.info(
+        "Unresolved transfer reconciliation complete: %d checked, %d resolved, "
+        "%d still unknown",
+        results["intents_checked"],
+        results["completed"] + results["failed"] + results["reversed"],
+        results["still_unresolved"],
     )
 
     return results

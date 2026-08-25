@@ -30,6 +30,7 @@ from app.services.finance.payments import (
     WebhookService,
 )
 from app.services.expense.limit_service import ExpenseLimitServiceError
+from app.services.finance.payments.payment_service import TransferOutcomeUnknown
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.settings_spec import resolve_value
 
@@ -678,6 +679,46 @@ def initiate_transfer(
         raise HTTPException(status_code=400, detail=str(e))
     except ExpenseLimitServiceError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except TransferOutcomeUnknown as e:
+        # 409, not 502, and the distinction is the whole point.
+        #
+        # A 502 says "the upstream failed" and every retry policy in the world
+        # -- proxies, HTTP client libraries, the operator's instinct, a queue's
+        # backoff -- treats 5xx as safe to repeat. Repeating THIS request is how
+        # an employee gets reimbursed twice, because the first attempt may
+        # already have moved the money and nobody can currently say.
+        #
+        # 409 says the resource is in a state that conflicts with what was
+        # asked, which is exactly true: the intent is INDETERMINATE and no
+        # further initiation is permitted from it. 4xx is not in any default
+        # retry set, it does not read as "we failed", and it puts the caller on
+        # the only correct path -- wait for reconciliation, or have a human
+        # confirm with Paystack.
+        #
+        # 202 was the alternative and was rejected: it is a SUCCESS code, and a
+        # client that treats "accepted" as "it worked" would mark the claim as
+        # paid in its own UI on the strength of an outcome nobody observed.
+        logger.error(
+            "Transfer initiation outcome UNKNOWN for intent %s: %s",
+            e.intent_id,
+            e.reason,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "transfer_outcome_unknown",
+                "intent_id": str(e.intent_id),
+                "message": (
+                    "The transfer was sent to Paystack but its outcome could "
+                    "not be confirmed, so it may or may not have moved money. "
+                    "Do NOT retry this payout. It has been recorded as "
+                    "unresolved and is being reconciled; the expense claim "
+                    "stays approved and unpaid until a real outcome is known."
+                ),
+                "retryable": False,
+                "reason": e.reason,
+            },
+        )
     except PaystackError as e:
         logger.error(f"Transfer initiation failed: {e}")
         raise HTTPException(status_code=502, detail=f"Transfer failed: {e.message}")

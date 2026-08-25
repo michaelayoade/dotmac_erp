@@ -49,7 +49,10 @@ from app.models.finance.payments.payment_intent import (
     PaymentDirection,
     PaymentIntentStatus,
 )
-from app.services.finance.payments.paystack_client import PaystackError
+from app.services.finance.payments.paystack_client import (
+    PaystackError,
+    PaystackUnreachable,
+)
 from app.tasks import expense as expense_tasks
 
 ORG_A = uuid.UUID("00000000-0000-0000-0000-0000000000a1")
@@ -101,6 +104,7 @@ def _make_intent(
         updated_at=None,
         poll_count=poll_count,
         last_poll_error=None,
+        unresolved_since=None,
     )
 
 
@@ -307,12 +311,18 @@ class TestAmbiguousAttemptConverges:
         assert results["failed"] == 1
         harness.db.commit.assert_called()
 
-    def test_unreachable_transfer_settles_once_the_budget_is_spent(
+    def test_an_unreachable_transfer_becomes_indeterminate_not_failed(
         self, monkeypatch, paystack_configured
     ) -> None:
-        """An ambiguous transfer Paystack will not answer about still has to
-        stop somewhere. The circuit breaker is the owner's decision now; the
-        last attempt settles it FAILED and says why in gateway_response."""
+        """Spending the attempt budget ends the polling. It is not a verdict.
+
+        This test asserted FAILED when the single-writer fix moved the circuit
+        breaker into the owner, because that is what the behaviour was: ten
+        unanswered attempts produced the identical row Paystack's own
+        "this failed" answer produces. ADR-0007 separates them — an outcome
+        nobody observed is INDETERMINATE, and `unresolved_since` starts the
+        clock an operator is eventually paged on.
+        """
         claim_id = uuid.uuid4()
         intent = _make_intent(
             status=PaymentIntentStatus.PROCESSING,
@@ -327,17 +337,52 @@ class TestAmbiguousAttemptConverges:
             claim=_make_claim(claim_id),
         )
 
-        with _paystack(verify_error=PaystackError("Request timed out")):
+        with _paystack(verify_error=PaystackUnreachable("Request failed: timeout")):
             results = _run(harness, monkeypatch)
 
         assert intent.poll_count == 10
-        assert intent.status == PaymentIntentStatus.FAILED
-        assert intent.gateway_response["poll_abandoned"] is True
+        assert intent.status == PaymentIntentStatus.INDETERMINATE
+        assert intent.unresolved_since is not None
+        assert intent.gateway_response["poll_abandoned_unobserved"] is True
+        assert intent.gateway_response["outcome_observed"] is False
         assert intent.gateway_response["poll_attempts"] == 10
-        assert intent.last_poll_error == "Request timed out"
-        assert results["abandoned"] == 1
-        # An abandoned intent is a verdict, not an unresolved error.
+        assert intent.last_poll_error == "Request failed: timeout"
+        assert results["indeterminate"] == 1
+        # Not counted as abandoned: abandoned means Paystack answered.
+        assert results["abandoned"] == 0
+        # An unresolved intent is a recorded state, not a transient error.
         assert results["errors"] == []
+        # And the claim is untouched — it is not payable again.
+        assert harness.claim.status == ExpenseClaimStatus.APPROVED
+
+    def test_a_provider_refusal_at_the_budget_still_settles_failed(
+        self, monkeypatch, paystack_configured
+    ) -> None:
+        """Specificity for the test above: the give-up path did not simply stop
+        producing FAILED. When Paystack ANSWERED and refused, FAILED is the
+        honest record and the claim becomes payable again."""
+        claim_id = uuid.uuid4()
+        intent = _make_intent(
+            status=PaymentIntentStatus.PROCESSING,
+            transfer_code="TRF_amb",
+            poll_count=9,
+            source_id=claim_id,
+        )
+        harness = _Harness(
+            stale_rows=[],
+            stuck_rows=[(intent.intent_id, ORG_A)],
+            intent=intent,
+            claim=_make_claim(claim_id),
+        )
+
+        with _paystack(verify_error=PaystackError("Transfer not found")):
+            results = _run(harness, monkeypatch)
+
+        assert intent.status == PaymentIntentStatus.FAILED
+        assert intent.unresolved_since is None
+        assert intent.gateway_response["poll_abandoned"] is True
+        assert results["abandoned"] == 1
+        assert results.get("indeterminate", 0) == 0
 
     def test_a_retryable_failure_is_reported_and_left_alone(
         self, monkeypatch, paystack_configured
@@ -357,12 +402,14 @@ class TestAmbiguousAttemptConverges:
             claim=_make_claim(claim_id),
         )
 
-        with _paystack(verify_error=PaystackError("Request timed out")):
+        with _paystack(verify_error=PaystackUnreachable("Request failed: timeout")):
             results = _run(harness, monkeypatch)
 
         assert intent.status == PaymentIntentStatus.PROCESSING
         assert intent.poll_count == 1
+        assert intent.unresolved_since is None
         assert results["abandoned"] == 0
+        assert results["indeterminate"] == 0
         assert len(results["errors"]) == 1
         assert results["errors"][0]["intent_id"] == str(intent.intent_id)
 
@@ -476,7 +523,9 @@ class TestStaleWorkerReplay:
         self, monkeypatch
     ) -> None:
         """No Paystack keys means no verdict is obtainable, so nothing may be
-        written — least of all a FAILED that reads as 'Paystack said no'."""
+        written — least of all a FAILED that reads as 'Paystack said no'. The
+        intent is left in PROCESSING and its attempt budget untouched, so the
+        next pass (against a configured tenant) starts from where it was."""
         claim_id = uuid.uuid4()
         intent = _make_intent(
             status=PaymentIntentStatus.PROCESSING,
