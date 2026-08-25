@@ -21,7 +21,6 @@ SHIPMENT_CREATED = "shipment.created"
 INVENTORY_TRANSACTION_POSTED = "inventory.transaction.posted"
 INVENTORY_STOCK_RESERVED = "inventory.stock.reserved"
 INVENTORY_STOCK_RELEASED = "inventory.stock.released"
-CRM_MATERIAL_REQUEST_STATUS_CHANGED = "crm.material_request.status_changed"
 SUB_MATERIAL_REQUEST_STATUS_CHANGED = "sub.material_request.status_changed"
 
 # Banking
@@ -47,7 +46,6 @@ __all__ = [
     "INVENTORY_TRANSACTION_POSTED",
     "INVENTORY_STOCK_RESERVED",
     "INVENTORY_STOCK_RELEASED",
-    "CRM_MATERIAL_REQUEST_STATUS_CHANGED",
     "BANK_RECONCILIATION_COMPLETED",
     "HR_EMPLOYEE_CREATED",
     "EXPENSE_CLAIM_SUBMITTED",

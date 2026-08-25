@@ -1,8 +1,8 @@
 """Shared machinery for the /api/v1 OpenAPI contract-surface pin.
 
-The full OpenAPI document spans 2,800+ paths because every API router is
-mounted twice: once at a bare legacy alias (``/customers/...``,
-``/crm/webhook``, ...) and once under the canonical ``/api/v1`` prefix (see
+The full OpenAPI document spans 2,800+ paths because API routers are mounted
+at a bare legacy alias (for example, ``/customers/...``) and under the
+canonical ``/api/v1`` prefix (see
 ``_include_api_router`` in ``app/main.py``). The pinned *contract surface*
 is the canonical ``/api/v1`` prefix only — the bare legacy duplicates are
 deliberately not pinned: they mirror the same routers route-for-route and

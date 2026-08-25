@@ -456,8 +456,8 @@ unchanged). What shipped:
   `boundary_money()` (headers, WHT evidence, allocation amounts), enforced
   per-row inside the sync savepoints (`_invoices.py`, `_credit_notes.py`,
   `_payments.py` — a bad row fails ITS savepoint, never the run); the
-  Sub/CRM payables command `CRMPurchaseInvoicePayload`
-  (`app/schemas/sync/dotmac_crm.py`) validates header totals and line
+  Sub payables command `SubPurchaseInvoicePayload`
+  (`app/schemas/sync/dotmac_sub.py`) validates header totals and line
   amounts through the adapter at parse time. The `_CENTS`/`ROUND_HALF_UP`
   scattering in `_invoices.py` and the flat `0.01` WHT tolerance in
   `_payments.py` were replaced by the adapter's currency-aware equivalents
@@ -473,7 +473,7 @@ unchanged). What shipped:
   Decimal fields (e.g. `SubPurchaseInvoiceStatusResponse`) already serialize
   as exact JSON strings under pydantic v2 (verified); re-quantizing that
   existing wire contract to minor units was deliberately NOT done.
-- **No money at the material-support boundary:** `CRMMaterialRequestPayload`
+- **No money at the material-support boundary:** `SubMaterialRequestPayload`
   carries quantities/serials only — valuation is ERP-internal at issue
   (moving-average cost). Nothing to convert; recorded here as the E4
   finding for that flow.
@@ -525,7 +525,7 @@ above:
   money crosses the wire as a canonical decimal STRING
   (`{"amount": "48375.00"}`); every JSON number token — int and float —
   plus booleans and non-finite values (NaN/±Infinity) is rejected at
-  ingress (`mode="before"` validators on `CRMPurchaseInvoicePayload`, the
+  ingress (`mode="before"` validators on `SubPurchaseInvoicePayload`, the
   strict Sub parsers). Per Michael's directive this rule is slated to
   become a checked-in cross-repository contract document when the E4 (ERP)
   and S5 (Sub) slices land — tracked here until that contract exists.
@@ -596,11 +596,11 @@ The Phase-0 ledger's finding 10 ("no erp-wide SOT relationship map or
 architecture-test suite") is **closed**: both now exist and win over this
 ledger. Deltas the rebaseline absorbs:
 
-| Phase-0 statement | Current state at 96928fa1 |
+| Phase-0 statement | Current state after the CRM retirement slice |
 |---|---|
 | No SOT map; creating one is a finding | `docs/SOT_RELATIONSHIP_MAP.md` + `app/services/sot_relationships.py` exist; 9 domains, liveness-guarded |
 | `tests/architecture/` holds one metrics test | Full governance suite: SOT registry liveness, OpenAPI contract surface pin, identity protocol boundary, replaceable application boundary, webhook org attribution, metrics scrape safety, version-impact gate |
-| Material flows CRM-only; #118 class open on that edge | `inventory.material_support` (module `app.services.inventory.material_support`) is the registered ERP owner of the Sub material-support slice; `sync.crm_procurement` is demoted to an explicit compatibility engine, still repair-first (registry notes) |
+| Material flows CRM-only; #118 class open on that edge | `inventory.material_support` (module `app.services.inventory.material_support`) is the registered ERP owner of the Sub material-support slice; `sync.sub_procurement` owns canonical Sub procurement/AP intake, and the CRM runtime is retired with historical evidence sealed outside live mappings |
 | Webhook org attribution in shadow retirement | Registry/`tests/architecture/test_webhook_org_attribution.py` govern it; per-org `IntegrationConfig(DOTMAC_SUB)` bindings are the authority |
 | No OpenAPI pin (dual-mount aliasing risk) | `/api/v1` surface pinned in `tests/architecture/openapi_contract_surface.json` |
 
@@ -609,8 +609,8 @@ Registry owners this ledger defers to (do not restate or fork them here):
 `audit.business_log` (fragmentation honestly recorded), `gl.*`,
 `platform.sequences`, `fx.rates`, `tax.policy`, `events.outbox`,
 `events.hooks`, `licensing.enforcement`, `sync.dotmac_sub`,
-`inventory.material_support`, `sync.crm_procurement`, `platform.storage`,
-`platform.secrets`, `platform.notifications`.
+`inventory.material_support`, `sync.sub_procurement`, `sync.sub_expenses`,
+`platform.storage`, `platform.secrets`, `platform.notifications`.
 
 Still-open Phase-0 findings carried forward unchanged (verified present at
 96928fa1): audit four-writers/three-tables (finding 1 — E6 prerequisite),
@@ -802,8 +802,8 @@ incl. `hr`, `lease`, `core_org`, `tax`, `rpt`, `pm`, `fa`, `support`,
 
 ### Routes
 
-- ERP mounts every API router twice (bare legacy alias + `/api/v1`,
-  `app/main.py:694-695`; CRM webhook at `/api/v2`), owns `/admin`, `/static`,
+- ERP mounts API routers at the current assembly prefixes (including the
+  canonical Sub operational surface under `/api/v1`), owns `/admin`, `/static`,
   and ~40 web routers. Kernel `app_factory.create_app` mounts platform auth,
   kernel `/static`, and feature routers incl. `/admin`. Never mounted;
   `/api/v1` remains pinned by

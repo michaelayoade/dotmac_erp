@@ -302,7 +302,12 @@ class SupplierInvoice(Base, VersionedMixin):
         UUID(as_uuid=True),
         nullable=True,
     )
-    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(132), nullable=True)
+    source_fingerprint: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="SHA-256 of the immutable Sub financial command",
+    )
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
 

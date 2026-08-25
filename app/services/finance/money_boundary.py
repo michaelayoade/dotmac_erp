@@ -2,8 +2,8 @@
 
 The ONE adapter between kernel ``dotmac_kernel.money`` values
 (``Money``/``Currency``/immutable ``ExchangeRate``) and ERP's existing
-``Decimal + currency_code`` contracts at external boundaries (dotmac_sub /
-dotmac_crm connector payloads, command schemas, acknowledgements).
+``Decimal + currency_code`` contracts at external boundaries (Dotmac Sub
+payloads, command schemas, and acknowledgements).
 
 Boundary #6 of the accepted kernel-adoption plan: kernel ``Money`` is a
 BOUNDARY value, never a replacement for ERP internals. ERP's ``Numeric(20,6)``

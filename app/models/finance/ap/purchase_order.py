@@ -57,6 +57,13 @@ class PurchaseOrder(Base):
             unique=True,
             postgresql_where=text("variation_id IS NOT NULL"),
         ),
+        Index(
+            "uq_po_sub_source_correlation",
+            "organization_id",
+            "correlation_id",
+            unique=True,
+            postgresql_where=text("correlation_id LIKE 'sub-wo:%'"),
+        ),
         {"schema": "ap"},
     )
 
@@ -139,7 +146,12 @@ class PurchaseOrder(Base):
         nullable=True,
     )
 
-    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(139), nullable=True)
+    source_fingerprint: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="SHA-256 of the immutable Sub financial command",
+    )
 
     # Amendment / Variation tracking
     is_amendment: Mapped[bool] = mapped_column(
@@ -162,9 +174,9 @@ class PurchaseOrder(Base):
         Text, nullable=True, comment="Reason for the amendment / variation"
     )
     variation_id: Mapped[str | None] = mapped_column(
-        String(36),
+        String(120),
         nullable=True,
-        comment="CRM variation identifier for traceability",
+        comment="External variation identifier for traceability",
     )
 
     created_at: Mapped[datetime] = mapped_column(

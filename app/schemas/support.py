@@ -61,8 +61,6 @@ class TicketRead(TicketBase):
     raised_by_id: UUID | None = None
     assigned_to_id: UUID | None = None
     project_id: UUID | None = None
-    erpnext_id: str | None = None
-    last_synced_at: datetime | None = None
     created_at: datetime
     updated_at: datetime | None = None
 

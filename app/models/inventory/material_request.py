@@ -73,8 +73,9 @@ class MaterialRequest(Base):
         ),
         UniqueConstraint(
             "organization_id",
-            "crm_id",
-            name="uq_material_request_org_crm_id",
+            "source_system",
+            "source_id",
+            name="uq_material_request_org_source_id",
         ),
         Index("idx_material_request_org", "organization_id"),
         Index("idx_material_request_status", "status"),
@@ -83,6 +84,11 @@ class MaterialRequest(Base):
         Index("idx_material_request_requested_by", "requested_by_id"),
         Index("idx_material_request_project", "project_id"),
         Index("idx_material_request_ticket", "ticket_id"),
+        Index(
+            "idx_material_request_source_id",
+            "source_id",
+            postgresql_where=text("source_id IS NOT NULL"),
+        ),
         Index("idx_material_request_transfer_to_wh", "transfer_to_warehouse_id"),
         Index("idx_material_request_erpnext", "erpnext_id"),
         {"schema": "inv"},
@@ -150,11 +156,10 @@ class MaterialRequest(Base):
 
     # ERPNext sync tracking
     erpnext_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    crm_id: Mapped[str | None] = mapped_column(
-        String(36),
+    source_id: Mapped[str | None] = mapped_column(
+        String(120),
         nullable=True,
-        index=True,
-        comment="DotMac CRM material request ID (omni_id for idempotency)",
+        comment="Opaque source request ID; populated only for named source systems",
     )
     source_system: Mapped[str] = mapped_column(
         String(20), nullable=False, default="erp", server_default=text("'erp'")

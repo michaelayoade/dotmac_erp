@@ -519,8 +519,8 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
         release_state="unreleased",
         capabilities=("cross-application-sync",),
         rationale=(
-            "Transport, authentication and atomic deduplication for the Sub, CRM "
-            "and Academy seams. What a synchronised row MEANS stays retained."
+            "Transport, authentication and atomic deduplication for approved external "
+            "application seams. What a synchronised row MEANS stays retained."
         ),
     ),
 )
@@ -805,7 +805,7 @@ EXCLUDED: Final[tuple[ExcludedModule, ...]] = (
         owner="dotmac_sub",
         rationale=(
             "Installed only where Dotmac ERP is the named writer, and it is not: "
-            "ERP's sales surface is the Sub/CRM synchronisation projection."
+            "ERP's sales surface is the Sub synchronisation projection."
         ),
     ),
     ExcludedModule(
@@ -1100,7 +1100,7 @@ RETAINED: Final[tuple[RetainedCapability, ...]] = (
     RetainedCapability(
         capability="external-system-projections",
         rationale=(
-            "What a synchronised Sub, CRM or Academy row MEANS in ERP. "
+            "What a synchronised Sub or Academy row MEANS in ERP. "
             "dotmac-app-sync carries only the transport and deduplication."
         ),
     ),

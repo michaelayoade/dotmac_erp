@@ -2,9 +2,8 @@
 
 Sub supplies an approved operational need.  ERP remains authoritative for
 warehouse availability, serial validation, stock issue posting, and the
-resulting backoffice status.  The existing CRM procurement implementation is
-retained as a compatibility engine during migration; this service is the only
-public owner used by the neutral ``/sync/sub/material-requests`` adapter.
+resulting backoffice status. This is the only owner used by the
+``/sync/sub/material-requests`` adapter.
 """
 
 from __future__ import annotations
@@ -16,19 +15,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.inventory.material_request import MaterialRequest
-from app.schemas.sync.dotmac_crm import (
-    CRMMaterialRequestPayload,
-    CRMMaterialRequestResponse,
-    CRMMaterialRequestStatusRead,
+from app.schemas.sync.dotmac_sub import (
+    SubMaterialRequestPayload,
+    SubMaterialRequestResponse,
+    SubMaterialRequestStatusRead,
 )
-from app.services.sync.crm.procurement import _ProcurementMixin
+from app.services.sync.sub.procurement import _ProcurementMixin
 
 
 @dataclass(frozen=True)
 class MaterialSupportAcceptance:
     """Accepted ERP outcome plus whether the source request was a replay."""
 
-    outcome: CRMMaterialRequestResponse
+    outcome: SubMaterialRequestResponse
     replayed: bool
 
 
@@ -42,20 +41,16 @@ class MaterialSupportService(_ProcurementMixin):
         self,
         *,
         organization_id: UUID,
-        payload: CRMMaterialRequestPayload,
+        payload: SubMaterialRequestPayload,
         actor_person_id: UUID | None,
     ) -> MaterialSupportAcceptance:
-        """Accept one immutable Sub request and execute ERP inventory policy.
-
-        ``omni_id`` is retained on the wire and in ``crm_id`` as a temporary
-        compatibility field.  For this endpoint it always means the immutable
-        Sub ``FieldMaterialRequest.id`` and never grants CRM authority.
-        """
+        """Accept one immutable Sub request and execute ERP inventory policy."""
         replayed = bool(
             self.db.scalar(
                 select(MaterialRequest.request_id).where(
                     MaterialRequest.organization_id == organization_id,
-                    MaterialRequest.crm_id == payload.omni_id,
+                    MaterialRequest.source_system == "sub",
+                    MaterialRequest.source_id == payload.source_request_id,
                 )
             )
         )
@@ -63,7 +58,6 @@ class MaterialSupportService(_ProcurementMixin):
             organization_id,
             payload,
             actor_person_id,
-            source_system="sub",
         )
         return MaterialSupportAcceptance(outcome=outcome, replayed=replayed)
 
@@ -72,9 +66,27 @@ class MaterialSupportService(_ProcurementMixin):
         *,
         organization_id: UUID,
         source_request_id: str,
-    ) -> CRMMaterialRequestStatusRead | None:
+    ) -> SubMaterialRequestStatusRead | None:
         """Return ERP's authoritative outcome for a Sub material request."""
-        return self.get_material_request_by_crm_id(
+        return self.get_material_request_by_source_id(
             organization_id,
             source_request_id,
+        )
+
+    def emit_sub_outcome(
+        self,
+        *,
+        organization_id: UUID,
+        request: MaterialRequest,
+        old_status,
+        new_status,
+        actor_person_id: UUID | None,
+    ) -> None:
+        """Publish the domain outcome for one Sub-originated request."""
+        self._emit_sub_material_request_status_changed(
+            org_id=organization_id,
+            request=request,
+            old_status=old_status,
+            new_status=new_status,
+            actor_person_id=actor_person_id,
         )

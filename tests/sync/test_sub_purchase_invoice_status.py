@@ -37,7 +37,7 @@ def _invoice(*, organization_id):
 def test_status_owner_returns_authoritative_amounts_and_status() -> None:
     db = MagicMock()
     organization_id = uuid4()
-    source_invoice_id = uuid4()
+    source_invoice_id = "i" * 120
     invoice = _invoice(organization_id=organization_id)
     db.scalar.return_value = invoice
 
@@ -61,7 +61,7 @@ def test_status_owner_returns_authoritative_amounts_and_status() -> None:
 def test_status_owner_raises_transport_neutral_not_found() -> None:
     db = MagicMock()
     db.scalar.return_value = None
-    source_invoice_id = uuid4()
+    source_invoice_id = "sub-purchase-invoice-missing"
 
     with pytest.raises(PurchaseInvoiceStatusNotFoundError) as exc_info:
         get_purchase_invoice_status(
@@ -79,7 +79,7 @@ def test_http_adapter_translates_owner_not_found() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         get_sub_purchase_invoice_status(
-            uuid4(),
+            "sub-purchase-invoice-missing",
             auth={"organization_id": uuid4()},
             db=db,
         )

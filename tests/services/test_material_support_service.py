@@ -1,16 +1,16 @@
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from app.schemas.sync.dotmac_crm import (
-    CRMMaterialRequestPayload,
-    CRMMaterialRequestResponse,
+from app.schemas.sync.dotmac_sub import (
+    SubMaterialRequestPayload,
+    SubMaterialRequestResponse,
 )
 from app.services.inventory.material_support import MaterialSupportService
 
 
-def _payload() -> CRMMaterialRequestPayload:
-    return CRMMaterialRequestPayload(
-        omni_id=str(uuid4()),
+def _payload() -> SubMaterialRequestPayload:
+    return SubMaterialRequestPayload(
+        source_request_id=str(uuid4()),
         request_type="ISSUE",
         status="submitted",
         requested_by_email="field@example.com",
@@ -31,11 +31,11 @@ def test_accept_sub_request_reports_create_and_replay() -> None:
     org_id = uuid4()
     actor_id = uuid4()
     payload = _payload()
-    response = CRMMaterialRequestResponse(
+    response = SubMaterialRequestResponse(
         request_id=uuid4(),
         request_number="MR-0001",
         status="submitted",
-        omni_id=payload.omni_id,
+        source_request_id=payload.source_request_id,
     )
     service = MaterialSupportService(db)
 
@@ -59,7 +59,7 @@ def test_accept_sub_request_reports_create_and_replay() -> None:
     assert created.replayed is False
     assert replayed.replayed is True
     assert create.call_count == 2
-    create.assert_called_with(org_id, payload, actor_id, source_system="sub")
+    create.assert_called_with(org_id, payload, actor_id)
 
 
 def test_get_sub_outcome_uses_source_request_identity() -> None:
@@ -69,7 +69,7 @@ def test_get_sub_outcome_uses_source_request_identity() -> None:
 
     with patch.object(
         service,
-        "get_material_request_by_crm_id",
+        "get_material_request_by_source_id",
         return_value=None,
     ) as get_status:
         assert (

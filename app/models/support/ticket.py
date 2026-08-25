@@ -1,8 +1,7 @@
 """
 Support Ticket Model.
 
-Represents helpdesk tickets synced from ERPNext Issue or HD Ticket DocTypes.
-Used for linking expense claims and other entities to support tickets.
+Represents internal support work created and owned inside ERP.
 """
 
 import enum
@@ -25,7 +24,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.people.base import AuditMixin, ERPNextSyncMixin
+from app.models.people.base import AuditMixin
 
 if TYPE_CHECKING:
     from app.models.finance.ar.customer import Customer
@@ -38,7 +37,7 @@ if TYPE_CHECKING:
 
 
 class TicketStatus(str, enum.Enum):
-    """Ticket status following ERPNext Issue status workflow."""
+    """ERP's temporary local ticket lifecycle during module cutover."""
 
     OPEN = "OPEN"
     REPLIED = "REPLIED"
@@ -56,32 +55,13 @@ class TicketPriority(str, enum.Enum):
     URGENT = "URGENT"
 
 
-# Mapping from ERPNext status to DotMac status
-ERPNEXT_STATUS_MAP = {
-    "Open": TicketStatus.OPEN,
-    "Replied": TicketStatus.REPLIED,
-    "On Hold": TicketStatus.ON_HOLD,
-    "Hold": TicketStatus.ON_HOLD,
-    "Resolved": TicketStatus.RESOLVED,
-    "Closed": TicketStatus.CLOSED,
-}
-
-# Mapping from ERPNext priority to DotMac priority
-ERPNEXT_PRIORITY_MAP = {
-    "Low": TicketPriority.LOW,
-    "Medium": TicketPriority.MEDIUM,
-    "High": TicketPriority.HIGH,
-    "Urgent": TicketPriority.URGENT,
-}
-
-
-class Ticket(Base, AuditMixin, ERPNextSyncMixin):
+class Ticket(Base, AuditMixin):
     """
-    Support ticket synced from ERPNext.
+    ERP-owned internal support ticket.
 
     Can be linked to:
     - Expense claims (for support-related expenses)
-    - Projects (inherited from ERPNext Issue)
+    - ERP projects
     - Employees (raised_by, assigned_to)
     """
 
@@ -116,7 +96,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         String(50),
         nullable=False,
         index=True,
-        comment="Unique ticket number (ERPNext Issue name)",
+        comment="Unique ERP ticket number",
     )
     subject: Mapped[str] = mapped_column(
         String(255),
@@ -164,7 +144,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
-        comment="Related project from ERPNext",
+        comment="Related ERP project",
     )
 
     # Customer linkage (optional - for customer support tickets)
@@ -173,7 +153,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         ForeignKey("ar.customer.customer_id"),
         nullable=True,
         index=True,
-        comment="Customer linked to this ticket (synced from ERPNext)",
+        comment="Customer linked to this ERP ticket",
     )
 
     # Contact info (can be auto-populated from customer or manually entered)
@@ -285,13 +265,3 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
 
     def __repr__(self) -> str:
         return f"<Ticket(ticket_id={self.ticket_id}, number={self.ticket_number}, status={self.status})>"
-
-    @classmethod
-    def map_erpnext_status(cls, status: str) -> TicketStatus:
-        """Map ERPNext Issue status to DotMac TicketStatus."""
-        return ERPNEXT_STATUS_MAP.get(status, TicketStatus.OPEN)
-
-    @classmethod
-    def map_erpnext_priority(cls, priority: str) -> TicketPriority:
-        """Map ERPNext Issue priority to DotMac TicketPriority."""
-        return ERPNEXT_PRIORITY_MAP.get(priority, TicketPriority.MEDIUM)

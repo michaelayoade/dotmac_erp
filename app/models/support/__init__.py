@@ -1,8 +1,7 @@
 """
 Support Module Models.
 
-This module provides models for helpdesk/support ticket tracking,
-synced from ERPNext's Issue or HD Ticket DocTypes.
+This module provides models for ERP-owned internal ticket tracking.
 """
 
 from app.models.support.attachment import TicketAttachment

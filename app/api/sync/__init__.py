@@ -1,11 +1,7 @@
-"""
-Sync API - External system synchronization endpoints.
-"""
+"""Synchronization API adapters."""
 
-from .dotmac_crm import router as crm_router
 from .dotmac_sub import router as sub_router
 
 __all__ = [
-    "crm_router",
     "sub_router",
 ]

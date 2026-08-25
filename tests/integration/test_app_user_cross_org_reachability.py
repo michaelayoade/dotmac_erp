@@ -10,7 +10,7 @@ relation the ledger's
 ## WHAT THIS TEST CANNOT PROVE  (design §7.4 — read this before trusting a green run)
 
 1. **An unprotected row is not proved reachable.**  ``app_user`` holds table
-   privileges on 1 of the 420 relations in the design catalog, and no migration
+   privileges on 1 of the 422 relations in the design catalog, and no migration
    under ``alembic/versions/`` issues a table-level ``GRANT ... TO app_user`` —
    only ``EXECUTE`` on two functions.  Every ``protected_access == no`` row's
    targets therefore measure ``denied-no-grant`` today.  Asserting reachability
@@ -19,7 +19,7 @@ relation the ledger's
    :func:`test_unprotected_rows_have_no_reachable_target_yet` records the
    number as a two-directional ratchet.  It becomes a real assertion in the
    change that adds the grants.
-2. **A protected-target row is not proved refused.**  158 of the 224 relations in
+2. **A protected-target row is not proved refused.**  157 of the 223 relations in
    ``docs/rls-coverage-baseline.json`` carry no RLS at all.  Once grants land,
    those return EVERY organization's rows to ``app_user``; ``denied-no-grant``
    is the absence of a privilege, not the presence of a boundary.
@@ -550,7 +550,7 @@ def test_a_protected_rows_targets_are_not_freely_readable(measured) -> None:
     nothing.
 
     Recorded as a shrink-only literal rather than asserted to zero, because the
-    honest expectation for the 158 ``known_gaps`` relations with no RLS is
+    honest expectation for the 157 ``known_gaps`` relations with no RLS is
     exactly ``visible-unprotected`` once grants land (§7.4.2).
     """
     freely_readable = sorted(
@@ -594,7 +594,7 @@ def test_unprotected_rows_have_no_reachable_target_yet(measured) -> None:
             for relation in gate.row_relations(row)
         )
     )
-    # 91 unprotected rows, all of them. app_user holds SELECT on 1 of 420
+    # 91 unprotected rows, all of them. app_user holds SELECT on 1 of 422
     # relations and none of the ledger's 48 application targets is that one.
     baseline = 91
     assert len(unreachable) == baseline, (

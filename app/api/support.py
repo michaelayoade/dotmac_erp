@@ -168,7 +168,7 @@ def create_ticket(
     if not MANUAL_TICKET_CREATION_API_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Manual ticket creation is disabled. Tickets are synced from CRM.",
+            detail="Manual ticket creation is disabled during ticketing module cutover.",
         )
 
     org_id = coerce_uuid(auth["organization_id"])

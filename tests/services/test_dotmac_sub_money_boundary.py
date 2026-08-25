@@ -1,7 +1,7 @@
 """E4 money-boundary behavior of the Sub-facing schemas.
 
 Golden-style pins for the typed Money boundary on the dotmac_sub connector
-records (invoice / credit-note / payment WHT evidence) and the Sub/CRM
+records (invoice / credit-note / payment WHT evidence) and the Sub
 payables command schema: exact NGN round-trips and byte-exact serialization
 where the touched schemas carry money, plus every fail-closed rejection, and
 proof that a rejected row fails ITS savepoint (raises) without any DB work.
@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.sync.dotmac_crm import CRMPurchaseInvoicePayload
+from app.schemas.sync.dotmac_sub import SubPurchaseInvoicePayload
 from app.services.dotmac_sub.client import (
     AllocationRecord,
     CreditNoteRecord,
@@ -269,15 +269,15 @@ def test_unsettled_payment_with_invalid_money_still_fails_admission() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sub/CRM payables command schema (vendor invoice)
+# Sub payables command schema (vendor invoice)
 # ---------------------------------------------------------------------------
 
 
 def _payables_payload(**overrides: object) -> dict:
     payload: dict = {
-        "crm_invoice_id": "src-inv-1",
-        "crm_invoice_number": "VND-1",
-        "crm_project_id": "proj-1",
+        "source_invoice_id": "src-inv-1",
+        "source_invoice_number": "VND-1",
+        "source_project_id": "proj-1",
         "installation_project_id": "inst-1",
         "erp_purchase_order_id": "PO-0001",
         "vendor_name": "Vendor Ltd",
@@ -300,13 +300,13 @@ def _payables_payload(**overrides: object) -> dict:
 
 
 def test_payables_payload_accepts_exact_money() -> None:
-    payload = CRMPurchaseInvoicePayload(**_payables_payload())
+    payload = SubPurchaseInvoicePayload(**_payables_payload())
     assert payload.total == Decimal("1075.00")
 
 
 def test_payables_payload_rejects_excess_header_precision() -> None:
     with pytest.raises(ValidationError, match="minor-unit precision"):
-        CRMPurchaseInvoicePayload(**_payables_payload(total=Decimal("1075.005")))
+        SubPurchaseInvoicePayload(**_payables_payload(total=Decimal("1075.005")))
 
 
 def test_payables_payload_rejects_excess_line_precision() -> None:
@@ -319,12 +319,12 @@ def test_payables_payload_rejects_excess_line_precision() -> None:
         }
     ]
     with pytest.raises(ValidationError, match="line 1 amount"):
-        CRMPurchaseInvoicePayload(**_payables_payload(items=bad_items))
+        SubPurchaseInvoicePayload(**_payables_payload(items=bad_items))
 
 
 def test_payables_payload_rejects_invalid_currency() -> None:
     with pytest.raises(ValidationError, match="invalid ISO-4217"):
-        CRMPurchaseInvoicePayload(**_payables_payload(currency="N1N"))
+        SubPurchaseInvoicePayload(**_payables_payload(currency="N1N"))
 
 
 def test_payables_payload_unit_price_keeps_erp_decimal_scale() -> None:
@@ -337,7 +337,7 @@ def test_payables_payload_unit_price_keeps_erp_decimal_scale() -> None:
             "amount": Decimal("1000.00"),
         }
     ]
-    payload = CRMPurchaseInvoicePayload(**_payables_payload(items=items))
+    payload = SubPurchaseInvoicePayload(**_payables_payload(items=items))
     assert payload.items[0].unit_price == Decimal("333.3333")
 
 
@@ -352,9 +352,9 @@ def test_payables_payload_unit_price_keeps_erp_decimal_scale() -> None:
 
 def _payables_json(**overrides: object) -> str:
     payload: dict = {
-        "crm_invoice_id": "src-inv-1",
-        "crm_invoice_number": "VND-1",
-        "crm_project_id": "proj-1",
+        "source_invoice_id": "src-inv-1",
+        "source_invoice_number": "VND-1",
+        "source_project_id": "proj-1",
         "installation_project_id": "inst-1",
         "erp_purchase_order_id": "PO-0001",
         "vendor_name": "Vendor Ltd",
@@ -377,7 +377,7 @@ def _payables_json(**overrides: object) -> str:
 
 
 def test_payables_json_ingress_accepts_string_money_exactly() -> None:
-    payload = CRMPurchaseInvoicePayload.model_validate_json(_payables_json())
+    payload = SubPurchaseInvoicePayload.model_validate_json(_payables_json())
     assert payload.total == Decimal("1075.00")
     assert payload.items[0].amount == Decimal("1000.00")
 
@@ -386,18 +386,18 @@ def test_payables_json_ingress_rejects_bare_json_float_header() -> None:
     # A bare fractional JSON number materializes as float — refused pre-coercion.
     raw = _payables_json().replace('"total": "1075.00"', '"total": 1075.005')
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
     # Even an exactly-representable JSON float is refused — policy is by
     # type, not by luck of representability.
     raw = _payables_json().replace('"total": "1075.00"', '"total": 1075.5')
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
 
 
 def test_payables_json_ingress_rejects_bare_json_float_line_amount() -> None:
     raw = _payables_json().replace('"amount": "1000.00"', '"amount": 1000.25')
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
 
 
 def test_payables_json_ingress_rejects_integer_money_tokens() -> None:
@@ -405,17 +405,17 @@ def test_payables_json_ingress_rejects_integer_money_tokens() -> None:
     # EVERY JSON number token is rejected, integers included.
     raw = _payables_json().replace('"subtotal": "1000.00"', '"subtotal": 1000')
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
     raw = _payables_json().replace('"amount": "1000.00"', '"amount": 1000')
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
 
 
 def test_payables_dict_ingress_rejects_python_float_and_int() -> None:
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate(_payables_payload(total=1075.00))
+        SubPurchaseInvoicePayload.model_validate(_payables_payload(total=1075.00))
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate(_payables_payload(subtotal=1000))
+        SubPurchaseInvoicePayload.model_validate(_payables_payload(subtotal=1000))
     bad_items = [
         {
             "description": "Fibre splice",
@@ -425,7 +425,7 @@ def test_payables_dict_ingress_rejects_python_float_and_int() -> None:
         }
     ]
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate(_payables_payload(items=bad_items))
+        SubPurchaseInvoicePayload.model_validate(_payables_payload(items=bad_items))
 
 
 def test_payables_ingress_rejects_non_finite_values() -> None:
@@ -434,15 +434,15 @@ def test_payables_ingress_rejects_non_finite_values() -> None:
     for bad in ("NaN", "Infinity", "-Infinity"):
         raw = _payables_json().replace('"total": "1075.00"', f'"total": "{bad}"')
         with pytest.raises(ValidationError, match="non-finite"):
-            CRMPurchaseInvoicePayload.model_validate_json(raw)
+            SubPurchaseInvoicePayload.model_validate_json(raw)
         raw = _payables_json().replace('"amount": "1000.00"', f'"amount": "{bad}"')
         with pytest.raises(ValidationError, match="non-finite"):
-            CRMPurchaseInvoicePayload.model_validate_json(raw)
+            SubPurchaseInvoicePayload.model_validate_json(raw)
     # As Python floats they are refused by type (floats never enter).
     with pytest.raises(ValidationError, match="money at ingress"):
-        CRMPurchaseInvoicePayload.model_validate(_payables_payload(total=float("inf")))
+        SubPurchaseInvoicePayload.model_validate(_payables_payload(total=float("inf")))
     with pytest.raises(ValidationError, match="non-finite"):
-        CRMPurchaseInvoicePayload.model_validate(
+        SubPurchaseInvoicePayload.model_validate(
             _payables_payload(total=Decimal("NaN"))
         )
 
@@ -450,7 +450,7 @@ def test_payables_ingress_rejects_non_finite_values() -> None:
 def test_payables_dict_ingress_still_accepts_internal_decimal() -> None:
     # Internal Python callers may pass Decimal (finite, canonical scale) —
     # the strings-only rule is a WIRE rule.
-    payload = CRMPurchaseInvoicePayload.model_validate(_payables_payload())
+    payload = SubPurchaseInvoicePayload.model_validate(_payables_payload())
     assert payload.total == Decimal("1075.00")
 
 
@@ -465,10 +465,10 @@ def test_payables_ingress_rejects_every_non_canonical_spelling(
     # coercion — at header and line level.
     raw = _payables_json().replace('"total": "1075.00"', f'"total": "{literal}"')
     with pytest.raises(ValidationError, match="non-canonical money string"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
     raw = _payables_json().replace('"amount": "1000.00"', f'"amount": "{literal}"')
     with pytest.raises(ValidationError, match="non-canonical money string"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
 
 
 @pytest.mark.parametrize("literal", ["1075", "1075.0", "1075.000"])
@@ -479,10 +479,10 @@ def test_payables_ingress_requires_exact_minor_unit_digits(literal: str) -> None
     # NGN form.
     raw = _payables_json().replace('"total": "1075.00"', f'"total": "{literal}"')
     with pytest.raises(ValidationError, match="fractional digits"):
-        CRMPurchaseInvoicePayload.model_validate_json(raw)
+        SubPurchaseInvoicePayload.model_validate_json(raw)
     # Internal Decimal callers are held to the same exact scale.
     with pytest.raises(ValidationError, match="fractional digits"):
-        CRMPurchaseInvoicePayload.model_validate(
+        SubPurchaseInvoicePayload.model_validate(
             _payables_payload(total=Decimal(literal))
         )
 
@@ -631,7 +631,7 @@ def test_admitted_collections_are_tuples_not_lists() -> None:
     # No admitted record may carry a bare mutable container of any kind.
     for record in (inv, inv.lines[0], inv.allocations[0], pay, cn, cn.lines[0]):
         for name, value in vars(record).items():
-            assert not isinstance(value, (list, dict, set)), (
+            assert not isinstance(value, list | dict | set), (
                 f"{type(record).__name__}.{name} is a mutable "
                 f"{type(value).__name__}; admitted evidence must be immutable"
             )
@@ -831,9 +831,9 @@ def test_sub_parser_accepts_positive_zero() -> None:
 
 @pytest.mark.parametrize("literal", ["-0.00", "-0", "-0.0000"])
 def test_pydantic_ingress_rejects_negative_zero_money(literal: str) -> None:
-    """The other ingress path: the CRM/Sub payables command schema."""
+    """The other ingress path: the Sub payables command schema."""
     with pytest.raises(ValidationError, match="negative zero"):
-        CRMPurchaseInvoicePayload(**_payables_payload(total=literal))
+        SubPurchaseInvoicePayload(**_payables_payload(total=literal))
     bad_items = [
         {
             "description": "Fibre splice",
@@ -843,7 +843,7 @@ def test_pydantic_ingress_rejects_negative_zero_money(literal: str) -> None:
         }
     ]
     with pytest.raises(ValidationError, match="negative zero"):
-        CRMPurchaseInvoicePayload(**_payables_payload(items=bad_items))
+        SubPurchaseInvoicePayload(**_payables_payload(items=bad_items))
 
 
 def test_parse_invoice_rejects_missing_money_fact_instead_of_zero() -> None:

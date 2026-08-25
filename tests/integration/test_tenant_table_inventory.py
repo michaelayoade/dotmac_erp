@@ -15,14 +15,14 @@ gate.
 
 ## The debts this pins
 
-1. **Tenant-isolation debt.** 309 tables carry ERP's `organization_id`; module
+1. **Tenant-isolation debt.** 310 tables carry ERP's `organization_id`; module
    tenant tables instead carry `tenant_id`. The baseline records exact ENABLE,
    FORCE, policy-count and unsafe-GUC state for every table.
 2. **Referential-integrity debt.** A table is `inherited` only when PostgreSQL
    enforces its path to a direct tenant table. ORM metadata is not evidence for a
    database boundary.
 3. **Deployment drift.** Production was still at
-   `20260808_open_setting_domain` when this baseline was corrected. Its 420-table
+   `20260808_open_setting_domain` when this baseline was corrected. Its 421-table
    catalog is a drift snapshot, not ERP's design.
 
 ## Reading the classes
@@ -107,6 +107,8 @@ SELECT t.sch, t.tbl,
                     'tenants', 'tenant_domains', 'platform_idempotency_records',
                     'platform_outbox_events'
                   ))
+                  OR (t.sch = 'archive'
+                      AND t.tbl = 'retired_crm_scheduled_tasks')
                   OR (t.sch = 'mod_files' AND t.tbl = 'platform_stored_files')
               THEN 'platform'
             WHEN t.oid IN (SELECT attrelid FROM scoped) THEN 'direct'
@@ -204,7 +206,7 @@ def test_the_isolation_debt_is_recorded_and_only_shrinks() -> None:
     being lowered in the same change, so progress is recorded rather than
     silently absorbed.
     """
-    baseline = 158
+    baseline = 157
     unprotected = [
         f"{row['schema']}.{row['table']}"
         for row in _recorded().values()

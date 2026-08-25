@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    CheckConstraint,
     Date,
     Enum,
     ForeignKey,
@@ -139,6 +140,10 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
             "claim_number",
             name="uq_expense_claim_org_number",
         ),
+        CheckConstraint(
+            "ticket_id IS NULL OR external_work_reference IS NULL",
+            name="ck_expense_claim_one_work_reference",
+        ),
         Index("idx_expense_claim_employee", "employee_id"),
         Index("idx_expense_claim_status", "organization_id", "status"),
         Index("idx_expense_claim_date", "organization_id", "claim_date"),
@@ -202,7 +207,12 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         UUID(as_uuid=True),
         ForeignKey("support.ticket.ticket_id"),
         nullable=True,
-        comment="Related support ticket from ERPNext",
+        comment="Related ERP-owned internal support ticket",
+    )
+    external_work_reference: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Opaque reference to work owned by an external application",
     )
     task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

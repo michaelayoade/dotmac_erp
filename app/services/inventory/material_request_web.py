@@ -1412,10 +1412,10 @@ class MaterialRequestWebService:
     ) -> None:
         if request.source_system != "sub":
             return
-        from app.services.sync.crm.procurement import _ProcurementMixin
+        from app.services.inventory.material_support import MaterialSupportService
 
-        _ProcurementMixin(db)._emit_crm_material_request_status_changed(
-            org_id=organization_id,
+        MaterialSupportService(db).emit_sub_outcome(
+            organization_id=organization_id,
             request=request,
             old_status=old_status,
             new_status=new_status,

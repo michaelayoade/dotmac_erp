@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    CheckConstraint,
     Computed,
     Date,
     Enum,
@@ -164,8 +165,12 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         ),
         UniqueConstraint(
             "organization_id",
-            "crm_id",
-            name="uq_expense_claim_org_crm_id",
+            "source_id",
+            name="uq_expense_claim_org_source_id",
+        ),
+        CheckConstraint(
+            "ticket_id IS NULL OR external_work_reference IS NULL",
+            name="ck_expense_claim_one_work_reference",
         ),
         Index("idx_expense_claim_employee", "employee_id"),
         Index("idx_expense_claim_status", "organization_id", "status"),
@@ -174,6 +179,11 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Index("idx_expense_claim_reimbursement_journal", "reimbursement_journal_id"),
         Index("idx_expense_claim_supplier_invoice", "supplier_invoice_id"),
         Index("idx_expense_claim_task", "task_id"),
+        Index(
+            "idx_expense_claim_source_id",
+            "source_id",
+            postgresql_where=text("source_id IS NOT NULL"),
+        ),
         Index("idx_expense_claim_vehicle", "organization_id", "vehicle_id"),
         {"schema": "expense"},
     )
@@ -233,7 +243,12 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         UUID(as_uuid=True),
         ForeignKey("support.ticket.ticket_id"),
         nullable=True,
-        comment="Related support ticket from ERPNext",
+        comment="Related ERP-owned internal support ticket",
+    )
+    external_work_reference: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Opaque reference to work owned by an external application",
     )
     task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -392,12 +407,11 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=True,
     )
 
-    # DotMac CRM sync tracking (last_synced_at comes from ERPNextSyncMixin)
-    crm_id: Mapped[str | None] = mapped_column(
-        String(36),
+    # Source identity for the active Sub intake; legacy CRM identities are archived.
+    source_id: Mapped[str | None] = mapped_column(
+        String(120),
         nullable=True,
-        index=True,
-        comment="DotMac CRM expense request ID (omni_id for idempotency)",
+        comment="Opaque Sub expense request ID used for idempotency",
     )
 
     # Notes

@@ -4,16 +4,14 @@ Unlike the fan-out conversions in the preceding steps, none of these callers
 needed a per-tenant loop. Each had opened a fleet-wide session for a reason
 that does not survive reading the code:
 
-1. ``crm_inventory_health_check`` opened one to satisfy a constructor. The
-   probe it runs is an HTTP POST to a configured webhook and queries nothing.
-2. ``DisciplineWebService._can_view_department_case`` suppressed the ORM
+1. ``DisciplineWebService._can_view_department_case`` suppressed the ORM
    listener around two statements that already pin the request's own
    organization, so the bypass removed a filter identical to the one written
    by hand.
-3. ``execute_async_hook`` opened one purely to read back an organization that
+2. ``execute_async_hook`` opened one purely to read back an organization that
    both enqueue sites already hold, then threw the session away and reopened a
    scoped one.
-4. ``verify_audit_hash_chain`` discovered its tenants with a ``DISTINCT`` over
+3. ``verify_audit_hash_chain`` discovered its tenants with a ``DISTINCT`` over
    the RLS-protected ``audit.audit_log``. ``cross_org_session`` sets no
    organization GUC, so under ``app_user`` that returns zero rows: a tamper
    check that verifies nothing and exits 0.
@@ -31,59 +29,12 @@ from uuid import UUID
 
 import pytest
 
-from app.services.sync.inventory_push_service import (
-    InventoryPushError,
-    InventoryPushService,
-)
-
 ORG_A = UUID("00000000-0000-0000-0000-0000000000a1")
 ORG_B = UUID("00000000-0000-0000-0000-0000000000b2")
 
 
 # --------------------------------------------------------------------------
-# 1. the CRM probe that never queried
-# --------------------------------------------------------------------------
-
-
-def test_the_inventory_health_probe_opens_no_session():
-    """The task constructs the service with no session at all."""
-    from app.tasks import crm as crm_tasks
-
-    with patch(
-        "app.services.sync.inventory_push_service.InventoryPushService"
-    ) as mock_cls:
-        mock_cls.return_value.__enter__.return_value.health_check.return_value = {
-            "healthy": True
-        }
-        result = crm_tasks.crm_inventory_health_check()
-
-    assert result == {"healthy": True}
-    assert mock_cls.call_args.args == ()
-    assert mock_cls.call_args.kwargs == {}
-
-
-def test_the_crm_task_module_no_longer_imports_the_bypass():
-    from app.tasks import crm as crm_tasks
-
-    assert not hasattr(crm_tasks, "cross_org_session")
-
-
-def test_an_inventory_read_without_a_session_fails_loudly():
-    """Making `db` optional must not let an inventory read run unscoped."""
-    service = InventoryPushService()
-
-    with pytest.raises(InventoryPushError, match="tenant-scoped session"):
-        _ = service.db
-
-
-def test_a_supplied_session_is_still_returned_unchanged():
-    db = MagicMock(name="db")
-
-    assert InventoryPushService(db).db is db
-
-
-# --------------------------------------------------------------------------
-# 2. the department check that ran in its own tenant context all along
+# 1. the department check that ran in its own tenant context all along
 # --------------------------------------------------------------------------
 
 
@@ -128,7 +79,7 @@ def test_the_discipline_web_module_no_longer_imports_the_bypass():
 
 
 # --------------------------------------------------------------------------
-# 3. the organization travels on the async hook message
+# 2. the organization travels on the async hook message
 # --------------------------------------------------------------------------
 
 
@@ -206,7 +157,7 @@ def test_the_registry_puts_the_event_organization_on_the_message():
 
 
 # --------------------------------------------------------------------------
-# 4. audit-integrity discovery comes from the tenant catalog
+# 3. audit-integrity discovery comes from the tenant catalog
 # --------------------------------------------------------------------------
 
 

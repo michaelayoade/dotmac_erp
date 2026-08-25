@@ -1,3 +1,6 @@
+archive	retired_crm_records	direct	true	true	app_admin	1	false	--	--
+archive	retired_crm_scheduled_tasks	platform	false	false	app_admin	0	false	--	--
+archive	retired_external_ticket	direct	true	true	app_admin	1	false	--	--
 ap	ap_aging_snapshot	direct	true	true	app_admin	4	true	--	--
 ap	goods_receipt	direct	true	true	app_admin	4	true	--	--
 ap	goods_receipt_line	inherited	false	false	app_admin	0	false	--	--
@@ -403,7 +406,6 @@ support	ticket_attachment	inherited	false	false	app_admin	0	false	--	--
 support	ticket_category	direct	false	false	app_admin	0	false	--	--
 support	ticket_comment	inherited	false	false	app_admin	0	false	--	--
 support	ticket_notification	inherited	false	false	app_admin	0	false	--	--
-sync	crm_sync_mapping	direct	false	false	app_admin	0	false	--	--
 sync	integration_config	direct	false	false	app_admin	0	false	--	--
 sync	staging_department	direct	false	false	app_admin	0	false	--	--
 sync	staging_designation	direct	false	false	app_admin	0	false	--	--

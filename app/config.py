@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.33.2")
+    app_version: str = os.getenv("APP_VERSION", "2.0.0")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -153,32 +153,6 @@ class Settings:
         os.getenv("IMPORT_PARTITION_MAX_BYTES", str(8 * 1024 * 1024))
     )
     import_validation_workers: int = int(os.getenv("IMPORT_VALIDATION_WORKERS", "2"))
-
-    # ==========================================================================
-    # CRM Integration (crm.dotmac.io)
-    # ==========================================================================
-    # CRM API base URL
-    crm_api_url: str = os.getenv("CRM_API_URL", "")
-    # CRM API authentication token
-    crm_api_token: str | None = os.getenv("CRM_API_TOKEN") or None
-    # Scoped CRM service ApiKey (preferred over the legacy static bearer).
-    crm_api_key: str | None = os.getenv("CRM_API_KEY") or None
-    # CRM webhook secret for validating incoming webhooks
-    crm_webhook_secret: str | None = os.getenv("CRM_WEBHOOK_SECRET") or None
-    # CRM sync interval in minutes (for periodic pull)
-    crm_sync_interval_minutes: int = int(os.getenv("CRM_SYNC_INTERVAL_MINUTES", "15"))
-    # CRM request timeout in seconds
-    crm_request_timeout: float = float(os.getenv("CRM_REQUEST_TIMEOUT", "30.0"))
-    # CRM max retries for failed requests
-    crm_max_retries: int = int(os.getenv("CRM_MAX_RETRIES", "3"))
-    # CRM inventory webhook URL (for pushing inventory updates TO CRM)
-    crm_inventory_webhook_url: str | None = (
-        os.getenv("CRM_INVENTORY_WEBHOOK_URL") or None
-    )
-    # Push inventory changes when stock changes by this percentage (0 = push all changes)
-    crm_inventory_push_threshold_percent: int = int(
-        os.getenv("CRM_INVENTORY_PUSH_THRESHOLD_PERCENT", "10")
-    )
 
     # ==========================================================================
     # Remita Integration (RRR for government payments)

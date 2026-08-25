@@ -24,7 +24,7 @@ class PurchaseInvoiceStatusNotFoundError(LookupError):
 
     code = "purchase_invoice_status_not_found"
 
-    def __init__(self, source_invoice_id: UUID) -> None:
+    def __init__(self, source_invoice_id: str) -> None:
         self.source_invoice_id = source_invoice_id
         super().__init__(f"Purchase invoice not found: {source_invoice_id}")
 
@@ -33,7 +33,7 @@ class PurchaseInvoiceStatusNotFoundError(LookupError):
 class PurchaseInvoiceStatusObservation:
     """Current ERP-owned AP settlement state for one Sub source invoice."""
 
-    source_invoice_id: UUID
+    source_invoice_id: str
     purchase_invoice_id: UUID
     invoice_number: str
     status: str
@@ -48,7 +48,7 @@ def get_purchase_invoice_status(
     db: Session,
     *,
     organization_id: UUID,
-    source_invoice_id: UUID,
+    source_invoice_id: str,
 ) -> PurchaseInvoiceStatusObservation:
     """Read a Sub-originated supplier invoice within its tenant boundary."""
     correlation_id = f"sub-invoice:{source_invoice_id}"

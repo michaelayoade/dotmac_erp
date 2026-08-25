@@ -171,12 +171,12 @@ def test_readiness_probe_reports_degraded_optional_dependencies(monkeypatch) -> 
         dependency_health_module,
         "collect_dependency_health",
         lambda: {
-            "crm": {
+            "dotmac_sub": {
                 "configured": True,
                 "healthy": False,
                 "required": False,
                 "status": "degraded",
-                "message": "CRM timeout",
+                "message": "Sub timeout",
             }
         },
     )
@@ -189,7 +189,7 @@ def test_readiness_probe_reports_degraded_optional_dependencies(monkeypatch) -> 
     payload = main_module.readiness_probe()
 
     assert payload["status"] == "ready_with_degraded_dependencies"
-    assert payload["dependencies"]["crm"]["healthy"] is False
+    assert payload["dependencies"]["dotmac_sub"]["healthy"] is False
 
 
 def test_readiness_probe_returns_503_for_required_dependency_failures(

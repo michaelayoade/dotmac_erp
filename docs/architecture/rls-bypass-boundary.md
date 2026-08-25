@@ -55,10 +55,10 @@ The first audit measured stale production at
 incorrectly described that deployment snapshot as ERP's design and concluded
 that every GUC writer was a database-layer no-op.
 
-A clean database at migration heads has 420 tables, 158 with RLS enabled, and
+A clean database at migration heads has 422 tables, 160 with RLS enabled, and
 105 whose policies consult `should_bypass_rls()`. (Re-measured 2026-08-15; this
 prose previously read 418/103. The classification partitions exactly —
-312 direct + 85 inherited + 3 platform + 20 unclassified = 420 — so the
+313 direct + 85 inherited + 3 platform + 20 unclassified = 421 — so the
 correction is two more direct tenant tables and two more dependent policies.)
 The no-op claim is withdrawn.
 Several administrative, pre-auth and batch paths touch protected domains in
@@ -273,7 +273,7 @@ does.
 
 Today's measurement is almost entirely `denied-no-grant`: no migration issues a
 table-level `GRANT … TO app_user`, only `EXECUTE` on two functions, so
-`app_user` holds `SELECT` on 1 of 420 relations. That produces four honest
+`app_user` holds `SELECT` on 1 of 422 relations. That produces four honest
 limits the module's own docstring carries:
 
 - **An unprotected row is not proved reachable.** Every one has an unreachable
@@ -281,7 +281,7 @@ limits the module's own docstring carries:
   than asserted to zero, because a wall of red on the first run is how a gate
   gets deleted. It becomes a real assertion in the change that adds the grants.
 - **A protected-target row is not proved refused.** `denied-no-grant` is the absence of
-  a privilege, not the presence of a boundary; 158 `known_gaps` relations carry
+  a privilege, not the presence of a boundary; 157 `known_gaps` relations carry
   no RLS at all and would return every organization's rows once granted.
 - **Reachability is not isolation.** Every policy's first disjunct is
   `should_bypass_rls()`, and `app.bypass_rls` is `PGC_USERSET` — `app_user` can
@@ -413,7 +413,7 @@ both phases rather than two owners colliding in the same file. Group by the
    the gate for `audit.py`, `notifications.py`, `outbox_relay.py` and the
    execution half of `hooks.py`.
 5. **Isolated/offline boundaries** for the irreducible remainder.
-6. **Exact catalog classification.** Land the corrected 420/312/105 baseline and
+6. **Exact catalog classification.** Land the corrected 421/313/105 baseline and
    make inherited tenant debt enforceable — 79 inherited tenant tables have no
    RLS and no ratchet watching them. Repairing policies against a catalog that
    under-counts the surface would certify the gap.

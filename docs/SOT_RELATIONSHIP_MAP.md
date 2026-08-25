@@ -35,7 +35,7 @@ semantics.
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
 | `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation | One service decides what a payment intent's status is; webhooks, routes and schedulers validate, authorize and delegate |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
-| `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
+| `external_sync` | Sub AR ingestion, operational-context projections, expense intake, ERP material support, and procurement/AP intake | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
@@ -117,25 +117,28 @@ gates are in `docs/architecture/accounting-adoption-boundary.md`.
 ## Sub service workflows and ERP backoffice support
 
 `sync.sub_operational_context` owns ERP's organization-scoped mirror of Sub
-projects, tickets, project tasks, and work orders. `/sync/sub/bulk` is the
-neutral version-2 entry point and currently delegates to the established bulk
-projection workflow during compatibility migration. Sub remains authoritative;
-ERP's copies are rebuildable and exist only for local finance and
-employee-expense linking. The typed contract, retry behavior, form usage, and
-limitations are documented in `docs/SUB_OPERATIONAL_SYNC.md`.
+projects, project tasks, and work orders. `/sync/sub/bulk` is the sole
+version-2 entry point. Sub remains authoritative; ERP's copies are rebuildable
+and exist only for local finance and employee-expense linking. ERP support
+tickets are independently ERP-owned and are not imported from Sub. The typed
+contract, retry behavior, form usage, and limitations are documented in
+`docs/SUB_OPERATIONAL_SYNC.md`. Retired external ticket projections are sealed
+as evidence in `archive.retired_external_ticket` and never re-enter the live
+ticket lifecycle.
 
 `inventory.material_support` owns the ERP side of the first cross-system
 operating slice. Dotmac Sub retains its service work order, operational material
 need, and customer outcome. ERP alone decides warehouse availability, serial
 validity, fiscal-period eligibility, stock issue, and the material-support
-outcome. The neutral `/sync/sub/material-requests` routes delegate to this owner;
-they do not call the legacy CRM route adapter.
-
-The inherited CRM procurement implementation is an explicit compatibility
-engine during migration, not a second business owner. The per-flow Sub cutover
-guard prevents CRM and Sub from originating the ERP write concurrently. The
-full request, outcome, reconciliation, cutover, rollback, and retirement rules
-are in `docs/dotmac_sub_material_support_contract.md`.
+outcome. The `/sync/sub/material-requests` routes delegate to this owner.
+`sync.sub_procurement` owns adjacent Sub purchase-order, variation, and
+purchase-invoice execution; `sync.sub_expenses` owns Sub expense intake and
+status. These owners use canonical Sub source identities; none retains a CRM
+adapter, setting, route, task, or live
+mapping. The retirement migration seals ambiguous historical CRM evidence in
+`archive.retired_crm_records` instead of relabelling it as Sub data. The full
+request, outcome, reconciliation, activation, and retirement rules are in
+`docs/dotmac_sub_material_support_contract.md`.
 
 ## Replaceable application boundary
 

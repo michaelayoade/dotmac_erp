@@ -1,102 +1,54 @@
-"""Neutral Sub -> ERP sync routes.
+"""Canonical Dotmac Sub operational adapter."""
 
-The CRM namespace remains available during transition, but new Sub clients use
-this route so no new operational dependency is named or anchored on CRM.
-"""
+from __future__ import annotations
 
-import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
 
-from app.api.sync.dotmac_crm import (
-    bulk_sync,
-    create_expense_claim,
-    create_purchase_order,
-    create_purchase_order_variation,
-    create_purchase_invoice,
-    get_expense_claim_status,
-    get_inventory_item,
-    get_db_with_service_org,
-    list_available_inventory_serials,
-    list_expense_categories,
-    list_inventory,
-    list_inventory_categories,
-    list_warehouses,
-    require_service_auth,
-    upload_purchase_invoice_attachment,
-)
-from app.schemas.sync.dotmac_crm import (
+from app.api.service_principal import get_db_with_service_org, require_service_auth
+from app.schemas.sync.dotmac_sub import (
     BulkSyncRequest,
     BulkSyncResponse,
-    CRMAvailableSerialListResponse,
-    CRMExpenseCategoriesResponse,
-    CRMExpenseClaimResponse,
-    CRMExpenseClaimStatusResponse,
-    CRMMaterialRequestPayload,
-    CRMMaterialRequestResponse,
-    CRMMaterialRequestStatusRead,
-    CRMPurchaseOrderResponse,
-    CRMPurchaseInvoiceAttachmentPayload,
-    CRMPurchaseInvoiceAttachmentResponse,
-    CRMPurchaseInvoicePayload,
-    CRMPurchaseInvoiceResponse,
     InventoryItemDetail,
     InventoryListResponse,
+    SubAvailableSerialListResponse,
+    SubExpenseCategoriesResponse,
+    SubExpenseClaimPayload,
+    SubExpenseClaimResponse,
+    SubExpenseClaimStatusResponse,
+    SubMaterialRequestPayload,
+    SubMaterialRequestResponse,
+    SubMaterialRequestStatusRead,
+    SubPurchaseInvoiceAttachmentPayload,
+    SubPurchaseInvoiceAttachmentResponse,
+    SubPurchaseInvoicePayload,
+    SubPurchaseInvoiceResponse,
+    SubPurchaseInvoiceStatusResponse,
+    SubPurchaseOrderPayload,
+    SubPurchaseOrderResponse,
+    SubPurchaseOrderVariationPayload,
 )
-from app.schemas.sync.dotmac_sub import SubPurchaseInvoiceStatusResponse
 from app.services.inventory.material_support import MaterialSupportService
+from app.services.sync.dotmac_sub_sync_service import DotmacSubSyncService
+from app.services.sync.sub.errors import (
+    SubNotFoundError,
+    SubPayloadTooLargeError,
+    SubReplayConflictError,
+    SubValidationError,
+)
 from app.services.sync.sub_purchase_invoice_status import (
     PurchaseInvoiceStatusNotFoundError,
     get_purchase_invoice_status,
 )
 
 router = APIRouter(prefix="/sync/sub", tags=["sub-sync"])
-logger = logging.getLogger(__name__)
 
 
-def require_sub_ap_scope(auth: dict = Depends(require_service_auth)) -> dict:
-    scopes = auth.get("scopes") or []
-    if not {"sub:ap:write", "crm:ap:write"}.intersection(scopes):
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=403, detail="API key missing required scope: sub:ap:write"
-        )
-    return auth
-
-
-def require_sub_ap_read_scope(auth: dict = Depends(require_service_auth)) -> dict:
-    scopes = auth.get("scopes") or []
-    if not {
-        "sub:ap:read",
-        "sub:ap:write",
-        "crm:ap:write",
-    }.intersection(scopes):
-        raise HTTPException(
-            status_code=403, detail="API key missing required scope: sub:ap:read"
-        )
-    return auth
-
-
-def require_sub_domain_scope(auth: dict = Depends(require_service_auth)) -> dict:
-    scopes = auth.get("scopes") or []
-    if not {"sub:domain:write", "crm:sync:write"}.intersection(scopes):
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=403,
-            detail="API key missing required scope: sub:domain:write",
-        )
-    return auth
-
-
-def _require_sub_flow_scope(auth: dict, *accepted: str) -> dict:
+def _require_scope(auth: dict, *accepted: str) -> dict:
     scopes = set(auth.get("scopes") or [])
     if not scopes.intersection(accepted):
-        from fastapi import HTTPException
-
         raise HTTPException(
             status_code=403,
             detail=f"API key missing required scope: {accepted[0]}",
@@ -104,28 +56,58 @@ def _require_sub_flow_scope(auth: dict, *accepted: str) -> dict:
     return auth
 
 
+def require_sub_domain_scope(auth: dict = Depends(require_service_auth)) -> dict:
+    return _require_scope(auth, "sub:domain:write")
+
+
 def require_sub_material_scope(auth: dict = Depends(require_service_auth)) -> dict:
-    return _require_sub_flow_scope(auth, "sub:material:write")
+    return _require_scope(auth, "sub:material:write")
 
 
 def require_sub_material_read_scope(
     auth: dict = Depends(require_service_auth),
 ) -> dict:
-    return _require_sub_flow_scope(auth, "sub:material:read")
+    return _require_scope(auth, "sub:material:read", "sub:material:write")
 
 
 def require_sub_inventory_read_scope(
     auth: dict = Depends(require_service_auth),
 ) -> dict:
-    return _require_sub_flow_scope(auth, "sub:inventory:read")
+    return _require_scope(auth, "sub:inventory:read")
 
 
 def require_sub_expense_scope(auth: dict = Depends(require_service_auth)) -> dict:
-    return _require_sub_flow_scope(auth, "sub:expense:write", "crm:expense:write")
+    return _require_scope(auth, "sub:expense:write")
+
+
+def require_sub_expense_read_scope(
+    auth: dict = Depends(require_service_auth),
+) -> dict:
+    return _require_scope(auth, "sub:expense:read", "sub:expense:write")
 
 
 def require_sub_po_scope(auth: dict = Depends(require_service_auth)) -> dict:
-    return _require_sub_flow_scope(auth, "sub:po:write", "crm:po:write")
+    return _require_scope(auth, "sub:po:write")
+
+
+def require_sub_ap_scope(auth: dict = Depends(require_service_auth)) -> dict:
+    return _require_scope(auth, "sub:ap:write")
+
+
+def require_sub_ap_read_scope(
+    auth: dict = Depends(require_service_auth),
+) -> dict:
+    return _require_scope(auth, "sub:ap:read", "sub:ap:write")
+
+
+def _organization_id(auth: dict) -> UUID:
+    value = auth["organization_id"]
+    return value if isinstance(value, UUID) else UUID(str(value))
+
+
+def _person_id(auth: dict) -> UUID:
+    value = auth["person_id"]
+    return value if isinstance(value, UUID) else UUID(str(value))
 
 
 @router.post(
@@ -138,21 +120,177 @@ def sync_sub_operational_domains(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
 ) -> BulkSyncResponse:
-    return bulk_sync(payload, auth, db)
+    return DotmacSubSyncService(db).bulk_sync(_organization_id(auth), payload)
+
+
+@router.post(
+    "/expense-claims",
+    response_model=SubExpenseClaimResponse,
+    status_code=201,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def create_sub_expense_claim(
+    payload: SubExpenseClaimPayload,
+    response: Response,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseClaimResponse:
+    try:
+        acceptance = DotmacSubSyncService(db).accept_expense_claim(
+            _organization_id(auth), payload, _person_id(auth)
+        )
+    except SubReplayConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SubValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    response.status_code = 200 if acceptance.replayed else 201
+    return acceptance.outcome
+
+
+@router.get(
+    "/expense-claims/{source_request_id}",
+    response_model=SubExpenseClaimStatusResponse,
+    dependencies=[Depends(require_sub_expense_read_scope)],
+)
+def get_sub_expense_claim_status(
+    source_request_id: str,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseClaimStatusResponse:
+    result = DotmacSubSyncService(db).get_expense_claim_by_source_id(
+        _organization_id(auth), source_request_id
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Expense claim not found: {source_request_id}",
+        )
+    return result
+
+
+@router.get(
+    "/expense-categories",
+    response_model=SubExpenseCategoriesResponse,
+    dependencies=[Depends(require_sub_expense_read_scope)],
+)
+def list_sub_expense_categories(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseCategoriesResponse:
+    return DotmacSubSyncService(db).list_expense_categories(_organization_id(auth))
+
+
+@router.post(
+    "/material-requests",
+    response_model=SubMaterialRequestResponse,
+    status_code=201,
+    dependencies=[Depends(require_sub_material_scope)],
+)
+def create_sub_material_request(
+    payload: SubMaterialRequestPayload,
+    response: Response,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubMaterialRequestResponse:
+    try:
+        acceptance = MaterialSupportService(db).accept_sub_request(
+            organization_id=_organization_id(auth),
+            payload=payload,
+            actor_person_id=_person_id(auth),
+        )
+    except SubReplayConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SubNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (SubValidationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    response.status_code = 200 if acceptance.replayed else 201
+    return acceptance.outcome
+
+
+@router.get(
+    "/material-requests/{source_request_id}",
+    response_model=SubMaterialRequestStatusRead,
+    dependencies=[Depends(require_sub_material_read_scope)],
+)
+def get_sub_material_request_status(
+    source_request_id: str,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubMaterialRequestStatusRead:
+    result = MaterialSupportService(db).get_sub_outcome(
+        organization_id=_organization_id(auth),
+        source_request_id=source_request_id,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Material support request not found: {source_request_id}",
+        )
+    return result
+
+
+@router.post(
+    "/purchase-orders",
+    response_model=SubPurchaseOrderResponse,
+    status_code=201,
+    dependencies=[Depends(require_sub_po_scope)],
+)
+def create_sub_purchase_order(
+    payload: SubPurchaseOrderPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubPurchaseOrderResponse:
+    try:
+        return DotmacSubSyncService(db).create_purchase_order(
+            _organization_id(auth), payload, _person_id(auth)
+        )
+    except SubReplayConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/purchase-orders/variations",
+    response_model=SubPurchaseOrderResponse,
+    status_code=201,
+    dependencies=[Depends(require_sub_po_scope)],
+)
+def create_sub_purchase_order_variation(
+    payload: SubPurchaseOrderVariationPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubPurchaseOrderResponse:
+    try:
+        return DotmacSubSyncService(db).create_purchase_order_variation(
+            _organization_id(auth), payload, _person_id(auth)
+        )
+    except SubReplayConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post(
     "/purchase-invoices",
-    response_model=CRMPurchaseInvoiceResponse,
+    response_model=SubPurchaseInvoiceResponse,
     status_code=201,
     dependencies=[Depends(require_sub_ap_scope)],
 )
 def create_sub_purchase_invoice(
-    payload: CRMPurchaseInvoicePayload,
+    payload: SubPurchaseInvoicePayload,
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
-) -> CRMPurchaseInvoiceResponse:
-    return create_purchase_invoice(payload, auth, db)
+) -> SubPurchaseInvoiceResponse:
+    try:
+        return DotmacSubSyncService(db).create_purchase_invoice(
+            _organization_id(auth), payload, _person_id(auth)
+        )
+    except SubReplayConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
@@ -161,15 +299,14 @@ def create_sub_purchase_invoice(
     dependencies=[Depends(require_sub_ap_read_scope)],
 )
 def get_sub_purchase_invoice_status(
-    source_invoice_id: UUID,
+    source_invoice_id: str = Path(..., min_length=1, max_length=120),
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
 ) -> SubPurchaseInvoiceStatusResponse:
-    """Return ERP's current AP status for one Sub-originated invoice."""
     try:
         observation = get_purchase_invoice_status(
             db,
-            organization_id=UUID(str(auth["organization_id"])),
+            organization_id=_organization_id(auth),
             source_invoice_id=source_invoice_id,
         )
     except PurchaseInvoiceStatusNotFoundError as exc:
@@ -181,159 +318,118 @@ def get_sub_purchase_invoice_status(
 
 @router.post(
     "/purchase-invoices/{purchase_invoice_id}/attachments",
-    response_model=CRMPurchaseInvoiceAttachmentResponse,
+    response_model=SubPurchaseInvoiceAttachmentResponse,
     status_code=201,
     dependencies=[Depends(require_sub_ap_scope)],
 )
 def upload_sub_purchase_invoice_attachment(
     purchase_invoice_id: UUID,
-    payload: CRMPurchaseInvoiceAttachmentPayload,
+    payload: SubPurchaseInvoiceAttachmentPayload,
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
-) -> CRMPurchaseInvoiceAttachmentResponse:
-    return upload_purchase_invoice_attachment(purchase_invoice_id, payload, auth, db)
-
-
-@router.post(
-    "/material-requests",
-    response_model=CRMMaterialRequestResponse,
-    status_code=201,
-    dependencies=[Depends(require_sub_material_scope)],
-)
-def create_sub_material_request(
-    payload: CRMMaterialRequestPayload,
-    response: Response,
-    auth: dict = Depends(require_service_auth),
-    db: Session = Depends(get_db_with_service_org),
-) -> CRMMaterialRequestResponse:
-    """Accept a Sub service-workflow need into ERP-owned material support."""
-    service = MaterialSupportService(db)
+) -> SubPurchaseInvoiceAttachmentResponse:
     try:
-        acceptance = service.accept_sub_request(
-            organization_id=auth["organization_id"],
-            payload=payload,
-            actor_person_id=auth["person_id"],
+        return DotmacSubSyncService(db).upload_purchase_invoice_attachment(
+            _organization_id(auth), purchase_invoice_id, payload, _person_id(auth)
         )
-        response.status_code = 200 if acceptance.replayed else 201
-        db.commit()
-        return acceptance.outcome
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as exc:
-        db.rollback()
-        logger.exception(
-            "Failed to accept Sub material support request source_id=%s",
-            payload.omni_id,
-        )
-        raise HTTPException(status_code=500, detail=str(exc)[:200]) from exc
+    except SubNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SubValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SubPayloadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
 
 
 @router.get(
-    "/material-requests/{omni_id}",
-    response_model=CRMMaterialRequestStatusRead,
-    dependencies=[Depends(require_sub_material_read_scope)],
-)
-def get_sub_material_request_status(
-    omni_id: str,
-    auth: dict = Depends(require_service_auth),
-    db: Session = Depends(get_db_with_service_org),
-) -> CRMMaterialRequestStatusRead:
-    """Return ERP's authoritative backoffice outcome for a Sub request."""
-    result = MaterialSupportService(db).get_sub_outcome(
-        organization_id=auth["organization_id"],
-        source_request_id=omni_id,
-    )
-    if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Material support request not found: {omni_id}",
-        )
-    return result
-
-
-# The remaining routes are aliases over ERP's established idempotent services.
-# Legacy /sync/crm routes remain available only for the old client during
-# migration and are protected by Sub's per-flow single-writer cutover guard.
-router.add_api_route(
-    "/expense-claims",
-    create_expense_claim,
-    methods=["POST"],
-    response_model=CRMExpenseClaimResponse,
-    status_code=201,
-    dependencies=[Depends(require_sub_expense_scope)],
-    name="create_sub_expense_claim",
-)
-router.add_api_route(
-    "/expense-claims/{omni_id}",
-    get_expense_claim_status,
-    methods=["GET"],
-    response_model=CRMExpenseClaimStatusResponse,
-    name="get_sub_expense_claim_status",
-)
-router.add_api_route(
-    "/expense-categories",
-    list_expense_categories,
-    methods=["GET"],
-    response_model=CRMExpenseCategoriesResponse,
-    name="list_sub_expense_categories",
-)
-router.add_api_route(
-    "/purchase-orders",
-    create_purchase_order,
-    methods=["POST"],
-    response_model=CRMPurchaseOrderResponse,
-    status_code=201,
-    dependencies=[Depends(require_sub_po_scope)],
-    name="create_sub_purchase_order",
-)
-router.add_api_route(
-    "/purchase-orders/variations",
-    create_purchase_order_variation,
-    methods=["POST"],
-    response_model=CRMPurchaseOrderResponse,
-    status_code=201,
-    dependencies=[Depends(require_sub_po_scope)],
-    name="create_sub_purchase_order_variation",
-)
-router.add_api_route(
     "/inventory",
-    list_inventory,
-    methods=["GET"],
     response_model=InventoryListResponse,
     dependencies=[Depends(require_sub_inventory_read_scope)],
-    name="list_sub_inventory",
 )
-router.add_api_route(
+def list_sub_inventory(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+    search: str | None = None,
+    category_code: str | None = None,
+    warehouse_id: UUID | None = None,
+    include_zero_stock: bool = False,
+    only_below_reorder: bool = False,
+    only_with_available_serials: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> InventoryListResponse:
+    return DotmacSubSyncService(db).list_inventory_items(
+        _organization_id(auth),
+        search=search,
+        category_code=category_code,
+        warehouse_id=warehouse_id,
+        include_zero_stock=include_zero_stock,
+        only_below_reorder=only_below_reorder,
+        only_with_available_serials=only_with_available_serials,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
     "/inventory/meta/categories",
-    list_inventory_categories,
-    methods=["GET"],
     dependencies=[Depends(require_sub_inventory_read_scope)],
-    name="list_sub_inventory_categories",
 )
-router.add_api_route(
+def list_sub_inventory_categories(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> list[dict]:
+    return DotmacSubSyncService(db).get_categories(_organization_id(auth))
+
+
+@router.get(
     "/inventory/meta/warehouses",
-    list_warehouses,
-    methods=["GET"],
     dependencies=[Depends(require_sub_inventory_read_scope)],
-    name="list_sub_inventory_warehouses",
 )
-router.add_api_route(
+def list_sub_warehouses(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> list[dict]:
+    return DotmacSubSyncService(db).get_warehouses(_organization_id(auth))
+
+
+@router.get(
     "/inventory/serials/available",
-    list_available_inventory_serials,
-    methods=["GET"],
-    response_model=CRMAvailableSerialListResponse,
+    response_model=SubAvailableSerialListResponse,
     dependencies=[Depends(require_sub_inventory_read_scope)],
-    name="list_sub_available_inventory_serials",
 )
-router.add_api_route(
+def list_sub_available_inventory_serials(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+    item_code: str = Query(..., min_length=1, max_length=50),
+    warehouse_code: str = Query(..., min_length=1, max_length=100),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> SubAvailableSerialListResponse:
+    try:
+        return DotmacSubSyncService(db).list_available_serials_for_sub(
+            _organization_id(auth),
+            item_code=item_code,
+            warehouse_code=warehouse_code,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
     "/inventory/{item_id}",
-    get_inventory_item,
-    methods=["GET"],
     response_model=InventoryItemDetail,
     dependencies=[Depends(require_sub_inventory_read_scope)],
-    name="get_sub_inventory_item",
 )
+def get_sub_inventory_item(
+    item_id: UUID,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> InventoryItemDetail:
+    result = DotmacSubSyncService(db).get_inventory_item_detail(
+        _organization_id(auth), item_id
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return result

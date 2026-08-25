@@ -241,10 +241,6 @@ def _format_ticket_for_detail(
             if ticket.updated_at
             else None,
             "status_icon_bg": status_style["icon_bg"],
-            "erpnext_id": ticket.erpnext_id,
-            "last_synced_at": ticket.last_synced_at.strftime("%b %d, %Y %H:%M")
-            if ticket.last_synced_at
-            else None,
             # Customer info
             "customer_id": str(ticket.customer_id) if ticket.customer_id else None,
             "customer_name": ticket.customer.trading_name or ticket.customer.legal_name

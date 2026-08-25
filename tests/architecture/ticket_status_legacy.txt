@@ -1,0 +1,10 @@
+# TicketStatus imports outside the model and temporary local lifecycle owner.
+# Exact per-file counts: additions and unrecorded reductions both fail.
+app/services/finance/exp/web.py 1
+app/services/inventory/material_request_web.py 1
+app/services/people/perf/perf_service.py 1
+app/services/people/self_service_web.py 1
+app/services/pm/web/project_parts/base.py 1
+app/services/support/sla.py 1
+app/services/support/team.py 1
+app/services/support/web.py 1

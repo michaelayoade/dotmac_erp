@@ -10,6 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    CheckConstraint,
     Date,
     DateTime,
     Enum,
@@ -67,6 +68,10 @@ class ExpenseEntry(Base):
     __table_args__ = (
         UniqueConstraint(
             "organization_id", "expense_number", name="uq_expense_entry_number"
+        ),
+        CheckConstraint(
+            "ticket_id IS NULL OR external_work_reference IS NULL",
+            name="ck_expense_entry_one_work_reference",
         ),
         Index("idx_expense_entry_org_date", "organization_id", "expense_date"),
         Index("idx_expense_entry_status", "organization_id", "status"),
@@ -145,7 +150,12 @@ class ExpenseEntry(Base):
         UUID(as_uuid=True),
         ForeignKey("support.ticket.ticket_id", ondelete="RESTRICT"),
         nullable=True,
-        comment="Support ticket for operational cost attribution",
+        comment="ERP-owned internal support ticket for cost attribution",
+    )
+    external_work_reference: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Opaque reference to work owned by an external application",
     )
     task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

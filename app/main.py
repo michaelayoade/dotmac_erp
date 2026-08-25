@@ -23,8 +23,6 @@ from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
 from app.api.careers import router as careers_api_router
 from app.api.coach import router as coach_router
-from app.api.crm import router as crm_router
-from app.api.crm import webhook_router as crm_webhook_router
 from app.api.deps import require_role, require_tenant_auth
 from app.api.dotmac_academy import webhook_router as dotmac_academy_webhook_router
 from app.api.dotmac_sub import webhook_router as dotmac_sub_webhook_router
@@ -65,7 +63,6 @@ from app.api.scheduler import router as scheduler_router
 from app.api.service_hooks import router as service_hooks_router
 from app.api.settings import router as settings_router
 from app.api.support import router as support_router
-from app.api.sync.dotmac_crm import router as crm_sync_router
 from app.api.sync.dotmac_sub import router as sub_sync_router
 from app.api.sync.backoffice_people import router as backoffice_people_router
 from app.api.sync.sub_attendance import router as sub_attendance_router
@@ -94,7 +91,6 @@ from app.telemetry import setup_otel
 from app.templates import templates
 from app.web.admin import router as admin_web_router
 from app.web.admin_batch_operations import router as admin_batch_operations_router
-from app.web.admin_crm_sync import router as admin_crm_sync_router
 from app.web.admin_sla_policies import router as admin_sla_policies_web_router
 from app.web.auth import router as auth_web_router
 from app.web.careers import router as careers_web_router
@@ -141,7 +137,6 @@ _ALL_MODULES = frozenset(
         "coach",
         "training",
         "public_sector",
-        "crm",
     }
 )
 
@@ -854,14 +849,9 @@ if is_module_enabled("projects"):
     app.include_router(projects_web_router)
 
 # ---------------------------------------------------------------------------
-# CRM Integration module
+# Dotmac Sub synchronization
 # ---------------------------------------------------------------------------
-if is_module_enabled("crm"):
-    _include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
-    _include_api_router(crm_webhook_router)
-    _include_api_router(crm_sync_router)
-    _include_api_router(sub_sync_router)
-    app.include_router(admin_crm_sync_router)
+_include_api_router(sub_sync_router)
 
 # ---------------------------------------------------------------------------
 # Coach/Intelligence module

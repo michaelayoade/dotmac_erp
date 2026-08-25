@@ -15,14 +15,14 @@ router = APIRouter(prefix="/support", tags=["support-web"])
 
 
 def _manual_ticket_creation_disabled_response(request: Request):
-    """Manual ticket creation is disabled; tickets are CRM-synced."""
+    """Refuse manual creation while the ticketing module cutover is pending."""
     from app.templates import templates
 
     return templates.TemplateResponse(
         request,
         "errors/404.html",
         {
-            "message": "Manual ticket creation is disabled. Tickets are synced from CRM.",
+            "message": "Manual ticket creation is disabled during ticketing module cutover.",
         },
         status_code=404,
     )
