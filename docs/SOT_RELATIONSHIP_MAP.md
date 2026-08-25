@@ -28,7 +28,7 @@ semantics.
 | Domain | Owns | Rule in one line |
 |---|---|---|
 | `organization_tenancy` | org context priming, ORM filter, RLS GUCs | Both enforcement layers are primed together or not at all |
-| `identity_access` | auth flows, guards, RBAC catalogue, Person→Party catalogue projection | Person is the single login identity and the person authority; the kernel party catalogue is a rebuildable projection of it, never a second identity; RBAC scope decision pending (ledger finding 2) |
+| `identity_access` | auth flows, guards, RBAC catalogue, Person→Party catalogue projection | Person is the single login identity and the person authority; the kernel party catalogue is a rebuildable projection of it, never a second identity; a module-visibility scope is never write authority (ADR-0006); RBAC table-scoping decision still pending (ledger finding 2) |
 | `configuration_control` | settings writes + history, specs, flags | One canonical settings writer; flags never substitute for authorization |
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
@@ -37,6 +37,31 @@ semantics.
 | `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
+
+## Module visibility is not write authority
+
+`auth.web_guards` (`app/web/deps.py`) owns the web layer's authorization
+decision, and ADR-0006 splits it in two. A `<module>:access` scope answers "may
+this person SEE this module" — every read-only role in a module holds it, so a
+`require_*_access` dependency may guard GET routes and nothing else. Only a
+granular `<module>:<resource>:<action>` permission answers "may this person
+CHANGE this", and each mutating route names the act it performs.
+
+Where the same business act is reachable through more than one adapter, the
+adapters share one permission string. The Fixed Assets web routes reuse the
+names `app/api/fixed_assets/` already enforces; two vocabularies for one act is
+how the portal and the JSON API came to disagree about who may post a
+depreciation journal.
+
+A wildcard scope is HELD, never REQUESTED: a held `X:*` grants the `X` subtree,
+and a requested `X:*` is matched literally.
+
+Fixed Assets is decomposed. `app/web/finance/**` still rests on
+`require_finance_access` across twelve modules and is frozen by the
+two-directional ratchet in
+`tests/architecture/test_module_access_is_not_write_authority.py` — those
+entries are grandfathered, not reviewed-and-correct.
+
 
 ## Durable customer imports
 

@@ -38,3 +38,4 @@ is exactly what blocked E8 for two weeks.
 | [0002](0002-bank-statement-numbers-take-the-module-grammar.md) | Bank statement numbers take the module grammar (`STMT-2026-00001`) | Accepted |
 | [0003](0003-clean-install-starts-from-governed-opening-state.md) | The composable ERP starts from governed opening state | Accepted |
 | [0004](0004-the-erp-bill-of-materials-is-frozen.md) | The ERP bill of materials is frozen before composition starts | Proposed |
+| [0006](0006-module-access-is-not-write-authority.md) | A module-visibility scope is never write authority | Accepted |

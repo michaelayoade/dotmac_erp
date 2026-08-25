@@ -170,10 +170,14 @@ FINANCE_PERMISSIONS = [
     ("fa:assets:read", "View fixed assets"),
     ("fa:assets:create", "Create fixed assets"),
     ("fa:assets:update", "Modify fixed assets"),
+    ("fa:assets:delete", "Delete draft fixed assets"),
     ("fa:assets:capitalize", "Capitalize assets"),
     ("fa:assets:dispose", "Dispose assets"),
     ("fa:assets:post", "Post asset acquisition to GL"),
     ("fa:assets:transfer", "Transfer assets between locations"),
+    ("fa:assets:import:read", "View fixed asset import options"),
+    ("fa:assets:import:preview", "Preview a fixed asset import file"),
+    ("fa:assets:import:execute", "Execute a fixed asset import"),
     ("fa:depreciation:read", "View depreciation schedules"),
     ("fa:depreciation:run", "Run depreciation"),
     ("fa:depreciation:post", "Post depreciation journals"),
@@ -185,6 +189,11 @@ FINANCE_PERMISSIONS = [
     ("fa:impairment:post", "Post impairments"),
     ("fa:categories:read", "View asset categories"),
     ("fa:categories:manage", "Manage asset categories"),
+    ("fa:counts:create", "Create and run asset count plans"),
+    ("fa:counts:check", "Record asset count line checks"),
+    ("fa:reconciliation:create", "Create asset GL reconciliation packages"),
+    ("fa:reconciliation:approve", "Approve/reject asset GL reconciliation packages"),
+    ("fa:reconciliation:journal", "Draft asset GL reconciliation correction journals"),
     # -------------------------------------------------------------------------
     # Banking
     # -------------------------------------------------------------------------
@@ -1061,6 +1070,15 @@ ROLE_PERMISSIONS = {
         "fa:impairment:post",
         "fa:categories:read",
         "fa:categories:manage",
+        "fa:assets:delete",
+        "fa:assets:import:read",
+        "fa:assets:import:preview",
+        "fa:assets:import:execute",
+        "fa:counts:create",
+        "fa:counts:check",
+        "fa:reconciliation:create",
+        "fa:reconciliation:approve",
+        "fa:reconciliation:journal",
         "banking:accounts:read",
         "banking:accounts:create",
         "banking:accounts:update",
@@ -1369,6 +1387,19 @@ ROLE_PERMISSIONS = {
         "fa:revaluation:post",
         "fa:categories:read",
         "fa:categories:manage",
+        "fa:assets:delete",
+        "fa:assets:import:read",
+        "fa:assets:import:preview",
+        "fa:assets:import:execute",
+        "fa:counts:create",
+        "fa:counts:check",
+        "fa:reconciliation:create",
+        "fa:reconciliation:approve",
+        "fa:reconciliation:journal",
+        # NOT fa:impairment:create / fa:impairment:post. finance_manager has
+        # never held either, and this change narrows authority rather than
+        # widening it: IAS 36 impairment stays with finance_director and
+        # asset_manager. See docs/adr/0006-module-access-is-not-write-authority.md.
         # Banking
         "banking:accounts:read",
         "banking:accounts:create",
@@ -1900,6 +1931,15 @@ ROLE_PERMISSIONS = {
         "fa:impairment:create",
         "fa:categories:read",
         "fa:categories:manage",
+        "fa:assets:delete",
+        "fa:assets:import:read",
+        "fa:assets:import:preview",
+        "fa:assets:import:execute",
+        "fa:counts:create",
+        "fa:counts:check",
+        # NOT fa:reconciliation:*. Approving an asset-to-GL reconciliation
+        # package and drafting its correction journal are controller acts;
+        # asset_manager holds no gl:journals:* and no banking:reconciliation:*.
         "gl:accounts:read",
     ],
     "asset_custodian": [
@@ -1910,6 +1950,11 @@ ROLE_PERMISSIONS = {
         "fa:assets:transfer",
         "fa:depreciation:read",
         "fa:categories:read",
+        # The custodian walks the floor, so it records count line checks — but
+        # does not open, close or delete anything. It deliberately still holds
+        # no fa:assets:dispose and no fa:depreciation:run, both of which it
+        # could reach through the web portal before ADR-0006.
+        "fa:counts:check",
     ],
     "asset_viewer": [
         "fa:access",

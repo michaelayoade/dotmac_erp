@@ -989,14 +989,6 @@ class WebAuthContext:
         scopes_set = set(self.scopes)
         roles_set = {r.strip().lower() for r in self.roles if r and r.strip()}
 
-        has_fixed_assets_scope = any(
-            scope == "fa"
-            or scope == "fixed_assets"
-            or scope.startswith("fa:")
-            or scope.startswith("fixed_assets:")
-            for scope in scopes_set
-        )
-
         if self.is_admin or "finance:access" in scopes_set:
             modules.append("finance")
         # HR/People: allow either scope-based access or named HR roles.
@@ -1025,7 +1017,13 @@ class WebAuthContext:
             modules.append("settings")
         if self.is_admin or "expense:access" in scopes_set:
             modules.append("expense")
-        if self.is_admin or has_fixed_assets_scope:
+        # Module visibility is the ``<module>:access`` scope, exactly like every
+        # other module above. This deliberately no longer accepts "any scope
+        # beginning fa:": that shape was the sidebar half of the escalation
+        # fixed in ADR-0006 — see require_fixed_assets_access. Every seeded role
+        # holding an fa: permission also holds fa:access, so no role loses the
+        # module from its sidebar.
+        if self.is_admin or "fa:access" in scopes_set:
             modules.append("fixed_assets")
         if self.is_admin or "discipline:access" in scopes_set:
             modules.append("discipline")
@@ -1086,7 +1084,20 @@ class WebAuthContext:
         return canonical in self.accessible_modules
 
     def has_permission(self, permission: str) -> bool:
-        """Check if user has a specific permission."""
+        """Check if the holder's scopes satisfy a requested permission.
+
+        A wildcard is something a principal HOLDS, never something a guard
+        ASKS FOR. A held ``X:*`` scope grants every permission in the ``X``
+        subtree; a requested ``X:*`` is matched as the literal string it is.
+
+        The removed second direction — "a requested ``X:*`` is satisfied by any
+        held scope under ``X``" — inverted the meaning of every wildcard guard:
+        it made ``has_permission("fa:*")`` true for a holder of
+        ``fa:assets:read`` alone, so a guard asking for "all of Fixed Assets"
+        was in fact asking for "anything at all in Fixed Assets". That is how
+        four read-only roles reached 23 mutating Fixed Assets routes. See
+        docs/adr/0006-module-access-is-not-write-authority.md.
+        """
         if self.is_admin:
             return True
 
@@ -1100,11 +1111,7 @@ class WebAuthContext:
             if scope == requested:
                 return True
 
-            if requested.endswith(":*"):
-                requested_root = requested[:-2]
-                if scope == requested_root or scope.startswith(f"{requested_root}:"):
-                    return True
-            elif scope.endswith(":*"):
+            if scope.endswith(":*"):
                 scope_root = scope[:-2]
                 if requested == scope_root or requested.startswith(f"{scope_root}:"):
                     return True
@@ -1734,10 +1741,24 @@ def require_fixed_assets_access(
     auth: WebAuthContext = Depends(require_web_auth),
 ) -> WebAuthContext:
     """
-    Require access to the Fixed Assets module.
+    Require read/navigation access to the Fixed Assets module.
 
+    VISIBILITY ONLY. This guard answers "may this person SEE Fixed Assets",
+    never "may this person CHANGE anything in it". ``fa:access`` is held by
+    every read-only asset role (``asset_viewer``, ``finance_viewer``,
+    ``auditor``, ``inventory_manager``), so it can only ever gate GET routes.
+    Every mutating route in ``app/web/fixed_assets.py`` carries its own
+    ``require_web_permission("fa:<resource>:<action>")`` guard naming the act
+    it authorizes.
+
+    It previously also admitted ``fa:*`` and ``fixed_assets:*``. Combined with
+    the old two-directional wildcard matcher (see
+    ``WebAuthContext.has_permission``), a requested ``fa:*`` was satisfied by
+    ANY held ``fa:``-prefixed scope, so ``fa:assets:read`` alone opened all 23
+    mutating Fixed Assets routes. See
+    docs/adr/0006-module-access-is-not-write-authority.md.
     """
-    if not auth.has_any_permission(["fa:access", "fa:*", "fixed_assets:*"]):
+    if not auth.has_permission("fa:access"):
         raise HTTPException(
             status_code=403,
             detail="Fixed Assets module access required",

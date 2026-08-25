@@ -153,6 +153,27 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 ),
             ),
             SOTService(
+                name="auth.web_guards",
+                module="app.web.deps",
+                owns=(
+                    "web route authorization guards",
+                    "the visibility/write-authority split for web routes",
+                    "WebAuthContext scope matching and module visibility",
+                ),
+                depends_on=("auth.guards", "auth.rbac"),
+                notes=(
+                    "ADR-0006: a `<module>:access` scope is visibility only "
+                    "and never write authority; every mutating web route "
+                    "names its act with require_web_permission, reusing the "
+                    "JSON API's permission string for the same act. A "
+                    "wildcard is HELD, never REQUESTED. Fixed Assets is "
+                    "decomposed; app/web/finance/** still rests on "
+                    "module-access guards and is frozen by the ratchet in "
+                    "tests/architecture/"
+                    "test_module_access_is_not_write_authority.py."
+                ),
+            ),
+            SOTService(
                 name="auth.rbac",
                 module="app.services.rbac",
                 owns=(
@@ -172,7 +193,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             "MFA, and API keys resolve to person_id. ERP accepts no external "
             "identity assertion today. External authorization claims and "
             "counterparties (Customer, Supplier) are not ERP identities or "
-            "permission owners."
+            "permission owners. Module visibility and write authority are "
+            "separate decisions: a `<module>:access` scope says what a person "
+            "may SEE, and only a granular `<module>:<resource>:<action>` "
+            "permission says what a person may CHANGE (ADR-0006)."
         ),
     ),
     DomainSOT(
