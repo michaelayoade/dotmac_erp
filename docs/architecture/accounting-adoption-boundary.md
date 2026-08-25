@@ -1,17 +1,12 @@
 # Accounting adoption boundary
 
-Status: **composed and disabled; authority remains entirely in ERP**.
+Status: **readiness prepared; authority remains entirely in ERP**.
 
-Gates A and B are complete and gate C has landed. `dotmac-accounting==0.1.0a1`
-is pinned exactly, its lineage is composed in `alembic.ini`, and
-`mod_accounting` is created by `alembic upgrade heads` against a real database.
-**That is storage, and storage alone.** `ACCOUNTING_COMPOSITION_ENABLED` is
-false, nothing under `app/` imports the package, no ERP writer has been
-repointed, no backfill has run, and no decision has moved.
-
-ERP already applies this exact rule to `idempotency_ledger.v1`, whose tables
-have existed since `20260820_idempotency_ledger` while its operations remain
-uncut-over. Supplying a module's tables cuts nothing over.
+Nothing in this slice moves a writer, pins a package, composes a migration
+lineage, or touches production. It prepares the five artifacts a sealed cutover
+needs — a writer/caller map, a disabled composition, migrations, a backfill and
+a shadow comparison — and freezes the map behind two-directional ratchets so it
+cannot rot between now and the cutover.
 
 ## Ownership
 
@@ -153,27 +148,12 @@ differs. Nothing degrades to "carry on against ERP's own tables" — a shadow ru
 that quietly compared ERP with ERP would report perfect agreement and mean
 nothing.
 
-`tests/architecture/test_accounting_composition.py` (renamed from
-`..._disabled.py` at gate C) now asserts PRESENCE where gate A asserted absence.
-The four absence assertions were replaced by their positive counterparts in the
-same change that made them true, not deleted:
-
-| gate A (absence) | gate C (presence) |
-| --- | --- |
-| not in `pyproject.toml` | pinned EXACTLY, from the `forgejo` source, and the INSTALLED version matches |
-| not in `version_locations` | composed, and the entry RESOLVES to a directory holding `ac_0001_accounting.py` |
-| `composition_state()` reports absent | reports the installed version, with `ready` still false |
-| `require_composition_ready()` says "not installed" | says "not enabled" |
-
-One gate-A assertion deliberately survives unchanged: **nothing under `app/`
-imports the package.** Composition is a storage fact; a code-level import would
-begin a runtime dependency, and that belongs to a later gate.
-
-`TestOnceInstalled` is gone as a concept — its manifest checks now run
-unconditionally, because the artifact is here. `EXPECTED_MODULE_TABLES`,
-`REQUIRED_PREREQUISITES`, the module code, version, `core=False`, schema and
-migration prefix are all checked against `dotmac_accounting`'s own manifest on
-every run.
+`tests/architecture/test_accounting_composition_disabled.py` proves absence four
+independent ways (no pin, no import under `app/`, no `version_locations` entry,
+flag off) and proves readiness one way (all three prerequisites resolve onto ERP
+revisions). Its `TestOnceInstalled` class checks ERP's claims about the module's
+tables, prerequisites and code against the module's own manifest, and skips
+until the distribution is present.
 
 ## Migrations
 
@@ -193,89 +173,29 @@ point: ERP hosts `public.tenants` itself and can never run kernel `0001`
 (`tests/integration/test_kernel_lineage_rehearsal.py` is the permanent negative
 canary).
 
-**Proven statically:** the three effect names resolve, through ERP's bindings,
-onto three revisions ERP runs (`test_required_prerequisites_are_already_bound_to_erp_revisions`).
+**Proven at this revision** (`test_required_prerequisites_are_already_bound_to_erp_revisions`):
+the three effect names the module declares resolve, through ERP's bindings, onto
+three revisions ERP actually runs. That is a check over declarations and
+bindings, and it is all that can be checked without the wheel.
 
-**Proven against PostgreSQL** at gate C, by
-`tests/integration/test_accounting_lineage_composition.py`, on a disposable
-database built the way a deploy builds one — ERP's own lineage to head first,
-then `alembic upgrade heads` with the module lineages composed:
+**Not proven, and not claimed:**
 
-1. `ac_0001_accounting` applies and is stamped.
-2. `require_prerequisites` — the same call `ac_0001` makes before its own DDL —
-   passes against the live catalog for all three effects, with a sensitivity
-   proof that drops a prerequisite table inside a rolled-back transaction and
-   requires a refusal. This is the check gate A explicitly could not make.
-3. Every declared `mod_accounting` table exists.
-4. Every one of them has a non-nullable `tenant_id` and **FORCEd** row-level
-   security. `FORCE` matters specifically: plain `ENABLE` is bypassed by the
-   table owner, and migrations run as `app_admin`, which owns these tables.
-5. `alembic upgrade heads` is repeatable — a second run is a no-op.
-6. The kernel's composed migration gate reports nothing against either module
-   lineage.
+- that the bindings satisfy the effects *in a database*. `require_prerequisites`
+  verifies table shape, key and index contract, the tenant function's semantics
+  and the three roles' `(rolbypassrls, rolsuper)` posture against the live
+  catalog, and it runs at migration time on a real database. No such run has
+  happened for Accounting.
+- that `ac_0001` applies cleanly onto ERP's 380-revision graph, or that it
+  produces a single head. Composition adds a second root; ERP has run that shape
+  once before (`dotmac-files`) but not with this lineage.
+- that the module's own composed-migration gate passes against ERP's catalog.
 
-### ERP does not have one Alembic head, and two drafts got this wrong
-
-An earlier draft of the gate C plan named "a single Alembic head" as an
-acceptance criterion. It is not one, and asserting it would have been a defect.
-Each composed module lineage is an independent ROOT with its own branch label —
-that is the design, and it is why ERP's deploy path has always been
-`alembic upgrade heads`, plural.
-
-The correct criterion is: exactly one head per composed module branch at the
-revision `COMPOSED_MODULE_LINEAGES` names, exactly one ERP head, and no
-unintended heads. The last is the one with teeth — a second ERP root or an
-orphaned revision makes `upgrade heads` apply a graph nobody drew.
-
-**And the live run found a second, subtler thing.** At the original adoption
-point, after `upgrade heads`, `alembic_version` held only TWO rows:
-
-```
-ac_0001_accounting
-fi_0001_stored_files
-```
-
-The prerequisite provider, `20260820_idempotency_ledger`, is absent — correctly.
-Both module lineages declare logical prerequisites that ERP's bindings resolve
-onto ERP revisions, so each carries a `depends_on` edge onto that provider, and
-Alembic treats a depended-upon revision as an ancestor of its dependent. It
-stops being an effective head and its row is subsumed. Later ERP revisions are
-not prerequisites of those module revisions, so the current ERP head remains a
-separately stamped effective head.
-
-So there are three numbers, not one, and they are all correct:
-
-| | value | meaning |
-| --- | ---: | --- |
-| graph heads (`alembic heads`) | 3 | one ERP + one per module lineage |
-| depended-upon | 3 ERP revisions | the bound prerequisite providers |
-| stamped rows | derived | graph heads minus those subsumed by `depends_on`; currently 3 |
-
-The test derives the expected stamped set from the script directory rather than
-hard-coding 2, because the answer changes with the composition: a future module
-needing no ERP prerequisite would leave ERP's head stamped. A separate test
-distinguishes "subsumed" from "the provider never ran" — those look identical
-in the version table — by requiring the provider revision to be depended upon
-AND its tables to exist.
-
-### The composed gate must see the whole composition
-
-Scoping it to the module's own versions directory is wrong, and the gate says
-so: each prerequisite is bound to an ERP revision, and a binding whose provider
-is not in any selected location "names a revision this deployment never runs".
-The first draft did exactly that and read the gate's correct rejection as a
-defect in the module.
-
-Given the whole composition, those violations disappear and what remains is
-ERP's legacy history — ~380 assembly revisions with ids longer than 32
-characters, and a root with no branch label. Those are not findings against this
-change, so the assertion is scoped by the gate's own ATTRIBUTION: no violation
-naming a module-owned revision. ERP's legacy ids are covered by a separate,
-*enforceable* premise rather than an excuse — the gate warns that ids over 32
-characters "fail at `alembic upgrade`", and for ERP that is untrue because a
-revision named `extend_alembic_version` widened the column. The test checks that
-width against the live catalog, so if anyone ever narrows it the warning becomes
-true again and the build says so.
+So the honest statement is narrower than "the migrations are done": **no ERP
+migration is currently known to be outstanding, and the prerequisite bindings
+this module needs already exist and resolve.** Whether anything further is
+required is a gate C question, answered by running the lineage against a real
+non-production database — which is exactly what gate C is for. If that run
+surfaces a gap, it is new work in the adoption change, not a defect in this one.
 
 ## Backfill
 
@@ -358,41 +278,20 @@ a ratchet exists to prevent.
 
 Each gate is a separate authorized change. None is implied by the one before it.
 
-- **Gate A — readiness. COMPLETE** (PR #329, merged `c656bb90`). Map frozen,
-  composition declared and disabled, prerequisites proven bound, backfill
-  extraction and shadow comparison built and tested. No pin, no cutover.
-- **Gate B — the tag. COMPLETE.** `dotmac-accounting` is released from Starter
-  as the annotated tag `dotmac-accounting-v0.1.0a1`, peeling to Starter commit
-  `20d24703`.
-
-  Gate A's `test_the_distribution_is_not_pinned` was never an oracle for this —
-  it was an ABSENCE guard, and treating it as a tag oracle would have made "we
-  forgot to pin" and "there is nothing to pin" indistinguishable. Gate B is
-  settled by the tag, and gate C replaced that assertion with its positive
-  counterpart rather than deleting it quietly.
-- **Gate C — composition. COMPLETE (this change).** Kernel repinned `a83` →
-  `a85` (demanded by Accounting's own floor, `dotmac-kernel >= 0.1.0a85`),
-  `dotmac-accounting==0.1.0a1` pinned exactly, the lineage composed in
-  `version_locations`, the three prerequisite bindings re-derived, and
-  `ac_0001_accounting` applied through ERP's real Alembic environment against a
-  production-shaped non-production predecessor database. `dotmac-files` is NOT
-  repinned. `ACCOUNTING_COMPOSITION_ENABLED` stays false. The module-side digest
-  reader and master loader deliberately do NOT land here — they belong with the
-  backfill that uses them.
+- **Gate A — readiness (this change).** Map frozen, composition declared and
+  disabled, prerequisites proven bound, backfill extraction and shadow
+  comparison built and tested. No pin, no cutover, no production.
+- **Gate B — the tag.** `dotmac-accounting` is released from Starter with a
+  published kernel floor. Until the tag exists it is not pinned here; that
+  constraint is enforced by `test_the_distribution_is_not_pinned`.
+- **Gate C — composition.** Add the exact pin and the `version_locations` entry;
+  land the module-side digest reader and master loader; delete the four
+  "absence" assertions and let `TestOnceInstalled` take over. Run the lineage in
+  a non-production database. `ACCOUNTING_COMPOSITION_ENABLED` stays false
+  everywhere else.
 - **Gate D — backfill and shadow.** Backfill masters, then periods oldest first,
   comparing each as it lands. Acceptance is `ShadowComparison.matches` at all
   three levels for every period, with the unbalanced-period list empty.
-
-  **Planned in detail: `docs/architecture/accounting-gate-d-plan.md`**, on
-  measured evidence in
-  `docs/inventories/accounting-backfill-survey-2026-08-21.md`. The survey
-  settled the scope rule — backfill exactly the journals that carry posted
-  ledger lines, 190,179 of 206,071 — and cleared the one thing that could have
-  blocked the gate behind a Starter release: ERP's four journal types with no
-  module counterpart have zero rows. Four small data defects are the first work,
-  and with one organization the rehearsal must manufacture a second tenant,
-  because a mis-scoped write would otherwise have no observable symptom.
-
 - **Gate E — dual write and parity.** Both sides post; every posting is compared.
   Divergence is a stop, not a warning.
 - **Gate F — cutover.** One writer at a time, in the order the writer ledger
@@ -408,15 +307,6 @@ Each gate is a separate authorized change. None is implied by the one before it.
   4 `retained_erp_caller` rows, and the ratchets are retired with the authority
   they were tracking. Reaching that state is checkable — it is what the two
   ledgers reduce to, not a judgement call.
-
-  **Additional blocking condition: every remaining APPROVED-but-unposted journal
-  must carry an explicit disposition.** At the 2026-08-21 survey there were
-  14,263, of which at least 2,038 belong to the known stranded repost cohort.
-  Retiring ERP's GL writers while any remain undisposed would strand live
-  workflow state inside a retired system — work someone approved, that was never
-  posted, and that no longer has a system able to post it. The remediation track
-  is described in `accounting-gate-d-plan.md`; it runs in parallel with gate D
-  and blocks here.
 
 Production deployment and any authority move are separate authorizations, and
 neither is granted by this document.

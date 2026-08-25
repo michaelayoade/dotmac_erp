@@ -149,7 +149,7 @@
         "path": "tests/test_email_services.py",
         "symbol": "TestSendEmail",
         "category": "outbound_transport",
-        "fingerprint": "5691ef206ab4756c077e82cda323498492adcb4195916005f4eef6fe185868a8"
+        "fingerprint": "fdcce130fa315a92dd3689dd38d97db4b8b258668a1780a6d9a010adde921b23"
       }
     ]
   }

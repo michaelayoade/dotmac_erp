@@ -1,13 +1,11 @@
 """The Accounting scaffold is operationally inert — proven against a booted app.
 
-`test_accounting_composition.py` proves the module is pinned, composed and
-switched OFF.  That is not the same claim as this one, and the difference gets
-sharper at gate C rather than softer: the wheel is now installed, so "nothing
-changes at runtime" stops being true by construction and has to be proven.
-Scaffolding can be entirely decision-free and still change a deployment — an
-import at boot, a registered route, a Celery task the beat scheduler picks up, a
-table joined to `Base.metadata` and swept into `create_all`, or a stray
-environment read that makes behaviour depend on a variable nobody set.
+`test_accounting_composition_disabled.py` proves the MODULE is absent.  That is
+not the same claim as this one.  Scaffolding added in anticipation of a cutover
+can be entirely module-free and still change a deployment: an import at boot, a
+registered route, a Celery task the beat scheduler picks up, a table joined to
+`Base.metadata` and swept into `create_all`, or a stray environment read that
+makes behaviour depend on a variable nobody set.
 
 Each of those is a way "we only added preparation" turns out to be false, and
 each is asserted false here against the real application object rather than by

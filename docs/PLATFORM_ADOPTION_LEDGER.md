@@ -13,7 +13,7 @@ deployment.
 - This composition slice starts from `dotmac_erp` `origin/main` at
   `61e0bf3e4c6a2d3e19706d251c3811bd4362d5c7`; its final evidence is the
   reviewed commit and CI result, not this prose.
-- Current declared pin: `dotmac-kernel==0.1.0a85` (source of record:
+- Current declared pin: `dotmac-kernel==0.1.0a83` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
   The lock must resolve this exact published artifact; dependency, installed
   wheel, prerequisite vocabulary and verifier are checked dynamically.
@@ -156,60 +156,6 @@ independent Sub cutover on an exact released pin. It changes no accounting,
 tenancy, permissions, settings, database schema or migration lineage.
 
 ## Adoption slices
-
-**2026-08-21 — Accounting gate C: composed and disabled.** ERP pins
-`dotmac-accounting==0.1.0a1` exactly and composes `mod_accounting` into its
-Alembic graph. Kernel repinned `0.1.0a83` → `0.1.0a85` — **demanded by the
-module, not bundled with it**: `dotmac-accounting 0.1.0a1` floors at
-`dotmac-kernel >= 0.1.0a85`, so the lock cannot resolve at a83. `dotmac-files`
-needs no repin and stays at `0.1.0a2`. The regenerated lock adds exactly one
-package and moves exactly one version; there is no transitive churn.
-
-**Gate B is complete**, settled by the annotated Starter tag
-`dotmac-accounting-v0.1.0a1`, which peels to commit `20d24703`. Gate A's
-`test_the_distribution_is_not_pinned` was an ABSENCE guard, never a tag oracle;
-gate C replaced it and the three other absence assertions with their positive
-counterparts — exact pin, installed version matches, lineage resolves,
-`require_composition_ready()` now refuses for "not enabled" rather than "not
-installed". The one gate-A assertion that survives unchanged is that nothing
-under `app/` imports the package.
-
-**This is storage, not authority.** `ACCOUNTING_COMPOSITION_ENABLED` stays
-false, no ERP writer is repointed, no backfill has run, and no decision has
-moved — the same rule ERP already applies to `idempotency_ledger.v1`, whose
-tables have existed since `20260820_idempotency_ledger` while its operations
-remain uncut-over.
-
-Proven against PostgreSQL on a disposable database built the way a deploy builds
-one (ERP's lineage to head, then `alembic upgrade heads` with the modules
-composed): `ac_0001_accounting` applies and is stamped; `require_prerequisites`
-passes against the live catalog for all three effects, with a sensitivity proof;
-every declared `mod_accounting` table exists with a non-nullable `tenant_id` and
-FORCEd RLS; `upgrade heads` is repeatable; and the kernel's composed migration
-gate reports nothing against either module lineage.
-
-**Two head-related corrections, both of which a draft got wrong.** First, ERP
-does not have one global Alembic head and must not expect one — each composed
-module lineage is an independent root with its own branch label, which is why
-the deploy path has always been `alembic upgrade heads`, plural. Second, the
-adoption run showed `alembic_version` held only TWO rows
-(`ac_0001_accounting`, `fi_0001_stored_files`): the prerequisite provider
-`20260820_idempotency_ledger` was subsumed because both modules carry a
-`depends_on` edge onto it, and Alembic treats a depended-upon revision as an
-ancestor. Later ERP revisions remain separately stamped effective heads, so
-the current composed graph has 3 graph heads and 3 stamped rows. The expectation
-is derived from the script directory, and a separate test distinguishes
-"provider subsumed" from "provider never ran" — indistinguishable in the
-version table alone. `app/migration_bindings.py` now declares
-`COMPOSED_MODULE_LINEAGES` as the checked expectation.
-
-The composed gate must also see the WHOLE composition: scoped to the module's
-own directory it correctly reports each bound prerequisite as naming "a revision
-this deployment never runs". Given every location, what remains is ERP's legacy
-history, so the assertion is scoped by the gate's own attribution, and ERP's
-long revision ids rest on an enforceable premise checked against the live
-catalog — `extend_alembic_version` widened `alembic_version.version_num`, and if
-anyone narrows it the build says so.
 
 **2026-08-21 — Accounting readiness (gate A). No pin.** ERP prepares the five
 artifacts a sealed `dotmac-accounting` cutover needs, and pins nothing: the

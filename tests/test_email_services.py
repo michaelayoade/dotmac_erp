@@ -3,7 +3,6 @@
 import smtplib
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
 from app.models.people.hr.employee import EmployeeStatus
 from app.models.person import PersonStatus
@@ -582,82 +581,3 @@ class TestEmailLogging:
                 )
 
         assert "Failed to send email" in caplog.text
-
-
-class TestAdminEmailSettingsTest:
-    """Tests for non-persisting SMTP connection tests from the admin UI."""
-
-    def test_global_test_uses_unsaved_form_values(self, db_session, monkeypatch):
-        captured = {}
-
-        def fake_validate(config):
-            captured.update(config)
-            return True, None
-
-        monkeypatch.setattr("app.services.email.validate_smtp_config", fake_validate)
-
-        from app.services.finance.settings_web import settings_web_service
-
-        ok, message = settings_web_service.test_email_settings(
-            db_session,
-            uuid4(),
-            {
-                "smtp_host": "smtp.example.com",
-                "smtp_port": "465",
-                "smtp_username": "ops@example.com",
-                "smtp_password": "secret",
-                "smtp_use_tls": "false",
-                "smtp_use_ssl": "true",
-                "smtp_from_email": "ops@example.com",
-                "smtp_from_name": "Ops",
-                "email_reply_to": "help@example.com",
-            },
-            "global",
-        )
-
-        assert ok is True
-        assert message == "Global SMTP connection succeeded."
-        assert captured["host"] == "smtp.example.com"
-        assert captured["port"] == 465
-        assert captured["username"] == "ops@example.com"
-        assert captured["password"] == "secret"
-        assert captured["use_tls"] is False
-        assert captured["use_ssl"] is True
-
-    def test_module_test_uses_unsaved_module_values(self, db_session, monkeypatch):
-        captured = {}
-
-        def fake_validate(config):
-            captured.update(config)
-            return True, None
-
-        monkeypatch.setattr("app.services.email.validate_smtp_config", fake_validate)
-
-        from app.services.finance.settings_web import settings_web_service
-
-        ok, message = settings_web_service.test_email_settings(
-            db_session,
-            uuid4(),
-            {
-                "module_finance_use_default": "false",
-                "module_finance_smtp_host": "smtp.finance.example.com",
-                "module_finance_smtp_port": "587",
-                "module_finance_smtp_username": "finance@example.com",
-                "module_finance_smtp_password": "finance-secret",
-                "module_finance_smtp_use_tls": "true",
-                "module_finance_smtp_use_ssl": "false",
-                "module_finance_smtp_from_email": "finance@example.com",
-                "module_finance_smtp_from_name": "Finance",
-                "module_finance_email_reply_to": "finance-help@example.com",
-            },
-            "module:finance",
-        )
-
-        assert ok is True
-        assert message == "Finance SMTP connection succeeded."
-        assert captured["host"] == "smtp.finance.example.com"
-        assert captured["port"] == 587
-        assert captured["username"] == "finance@example.com"
-        assert captured["password"] == "finance-secret"
-        assert captured["use_tls"] is True
-        assert captured["use_ssl"] is False

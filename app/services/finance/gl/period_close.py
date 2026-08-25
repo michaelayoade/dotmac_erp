@@ -13,8 +13,8 @@ A period is READY when both hold:
   unposted; only POSTED is settled. Closing over an APPROVED journal strands
   it permanently — it can never be posted into a closed period — which is
   what makes APPROVED belong on this list rather than looking finished.
-* **The period balances.** Debits and credits over POSTED journals are
-  EQUAL. Not nearly equal — see "Tolerance" below.
+* **The period balances.** Debits and credits over POSTED journals differ by
+  less than `IMBALANCE_TOLERANCE`.
 
 ## `force` bypasses the gate, and says so
 
@@ -31,27 +31,21 @@ not the bypass itself.
 close of an OPEN period is two transitions, not one. That sequencing was
 implicit in an `if` inside the script's loop.
 
-## Tolerance — there is none, and that is the change
+## Tolerance
 
-This gate used to block only when the imbalance reached `IMBALANCE_TOLERANCE`
-(`Decimal("0.01")`), shared from `gl.posting_backlog`. Sharing one declaration
-was the right instinct; the value was wrong.
+`IMBALANCE_TOLERANCE` is imported from `gl.posting_backlog` rather than
+re-declared. Whether a set of journals balances is the same question in both
+places, and this codebase has already produced four independent declarations
+of the same sub-cent threshold (AR, AP, GL posting, and here) — which is the
+divergence ADR-0015 is about.
 
-A kobo of dust is a SETTLEMENT concept — whether a customer has paid closely
-enough to consider an invoice settled. A trial balance is an identity: over
-POSTED journals, debits equal credits or the ledger is broken. The tolerance
-made a period closeable while its own trial balance did not add up, and it did
-so at 10,000x the scale the ledger stores.
-
-It is also unreachable now by construction. `JournalService._require_balanced`
-refuses any journal whose debits and credits differ at persisted scale, so a
-period built from journals posted after that fix sums to exactly zero. A
-non-zero imbalance means legacy rows written under the old boundary — exactly
-what an operator needs told before closing over them, not a threshold that
-hides anything under a kobo.
-
-`force` still exists for the operator who must close over a known defect, and
-still records what it overrode.
+**Sharing it changes behaviour at exactly one kobo, deliberately.** The script
+blocked on ``imbalance > Decimal("0.01")``, so an imbalance of exactly 0.01
+passed the gate. `gl.posting_backlog` treats a journal as balanced only when
+``imbalance < IMBALANCE_TOLERANCE``, so exactly 0.01 is an imbalance there.
+Two GL rules disagreeing about the same kobo is precisely the drift worth
+removing, and the stricter reading is the safe one for a one-way act: this
+now blocks at 0.01 rather than letting it through.
 
 Opens no session, sets no scope and never commits — the caller owns the
 transaction.
@@ -67,6 +61,8 @@ from decimal import Decimal
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from app.services.finance.gl.posting_backlog import IMBALANCE_TOLERANCE
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +122,7 @@ class PeriodReadiness:
         reasons = []
         if self.unposted_journals:
             reasons.append(f"{self.unposted_journals} unposted journal(s)")
-        if self.imbalance != Decimal("0"):
+        if self.imbalance >= IMBALANCE_TOLERANCE:
             reasons.append(f"trial balance out by {self.imbalance}")
         return reasons
 
