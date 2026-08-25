@@ -44,9 +44,6 @@ from app.schemas.sync.dotmac_crm import (
     CRMExpenseClaimStatusResponse,
     CRMInventoryItemPayload,
     CRMInventoryItemResponse,
-    CRMMaterialRequestPayload,
-    CRMMaterialRequestResponse,
-    CRMMaterialRequestStatusRead,
     CRMProjectPayload,
     CRMProjectRead,
     CRMPurchaseOrderPayload,
@@ -704,88 +701,6 @@ def list_people_contacts(
         limit=limit,
         offset=offset,
     )
-
-
-# ============ Material Request Endpoints (CRM → ERP) ============
-
-
-@router.post(
-    "/material-requests",
-    response_model=CRMMaterialRequestResponse,
-    status_code=201,
-    dependencies=[Depends(require_crm_material_sync_retired)],
-)
-def create_material_request(
-    payload: CRMMaterialRequestPayload,
-    response: Response,
-    auth: dict = Depends(require_crm_sync_enabled),
-    db: Session = Depends(get_db_with_service_org),
-) -> CRMMaterialRequestResponse:
-    """
-    Create a material request from CRM.
-
-    Immutable idempotent create-and-issue endpoint for CRM material issues.
-    """
-    from app.models.inventory.material_request import MaterialRequest
-
-    org_id = auth["organization_id"]
-    person_id = auth["person_id"]
-    service = DotMacCRMSyncService(db)
-    existed_before = bool(
-        db.scalar(
-            select(MaterialRequest.request_id).where(
-                MaterialRequest.organization_id == org_id,
-                MaterialRequest.crm_id == payload.omni_id,
-            )
-        )
-    )
-
-    try:
-        result = service.create_material_request(org_id, payload, person_id)
-        if existed_before:
-            response.status_code = 200
-        else:
-            response.status_code = 201
-        db.commit()
-        return result
-    except ValueError as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.exception(
-            "Failed to create material request omni_id=%s", payload.omni_id
-        )
-        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
-
-
-@router.get(
-    "/material-requests/{omni_id}",
-    response_model=CRMMaterialRequestStatusRead,
-    dependencies=[Depends(require_crm_material_sync_retired)],
-)
-def get_material_request_status(
-    omni_id: str,
-    auth: dict = Depends(require_crm_sync_enabled),
-    db: Session = Depends(get_db_with_service_org),
-) -> CRMMaterialRequestStatusRead:
-    """
-    Get material request status by CRM omni_id.
-
-    Used by CRM to poll request status after creation.
-    """
-    org_id = auth["organization_id"]
-    service = DotMacCRMSyncService(db)
-
-    result = service.get_material_request_by_crm_id(org_id, omni_id)
-    if not result:
-        raise HTTPException(
-            status_code=404, detail=f"Material request not found: {omni_id}"
-        )
-    return result
 
 
 # ============ Expense Claim Endpoints (CRM → ERP) ============

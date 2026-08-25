@@ -4372,17 +4372,6 @@
     "422": "a11c9d9b2af8"
    }
   },
-  "GET /api/v1/sync/crm/material-requests/{omni_id}": {
-   "params": [
-    "header:x-api-key!",
-    "path:omni_id!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "8d066627ad7c",
-    "422": "a11c9d9b2af8"
-   }
-  },
   "GET /api/v1/sync/crm/ncc/financials": {
    "params": [
     "header:x-api-key!",
@@ -8871,16 +8860,6 @@
    "request": "5c8525eb306c",
    "responses": {
     "201": "127d92d1f58f",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/material-requests": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "e2cf22d2eeed",
-   "responses": {
-    "201": "7cb3867d5e9b",
     "422": "a11c9d9b2af8"
    }
   },
