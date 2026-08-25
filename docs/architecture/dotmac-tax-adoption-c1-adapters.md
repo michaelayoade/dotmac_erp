@@ -152,7 +152,7 @@ derived property returning `organization_id` (same-UUID mapping,
 | `transaction_side` | constant `"output"` | Crosses as the module's plain string, not an ERP enum. |
 | `base_amount` | `ar.invoice_line.line_amount` + `ar.invoice.currency_code` | Exact kernel `Money` via `money_boundary.to_boundary_money`; magnitude only. |
 | `source_ref` | `erp:ar.invoice_line:{line_id}` | The determination unit is the LINE. |
-| `source_version` | `"v" + ar.invoice.version` | `VersionedMixin`. See § 5.3. |
+| `source_version` | **content digest** `cv1:<sha256>` over the tax-relevant fields | NOT `ar.invoice.version`. See § 5.3. |
 | `evidence_ref` | `erp:ar.invoice:{invoice_id}` | |
 | `counterparty_ref` | `erp:customer:{ar.invoice.customer_id}` | Opaque to the module. |
 | `supply_ref` | `erp:item:{ar.invoice_line.item_id}` or `None` | `item_id` is nullable in ERP. |
@@ -181,7 +181,7 @@ rather than the AR mapper behind a flag:
 | `transaction_side` | constant `"input"` |
 | `base_amount` | `ap.supplier_invoice_line.line_amount` + `ap.supplier_invoice.currency_code` |
 | `source_ref` | `erp:ap.supplier_invoice_line:{line_id}` |
-| `source_version` | `"v" + ap.supplier_invoice.version` |
+| `source_version` | **content digest** `cv1:<sha256>`, identical scheme to AR |
 | `evidence_ref` | `erp:ap.supplier_invoice:{invoice_id}` |
 | `counterparty_ref` | `erp:supplier:{ap.supplier_invoice.supplier_id}` |
 
@@ -201,7 +201,7 @@ amounts.
 | `transaction_side` | constant `"liability"` | Employer-remitted employee tax is neither an input credit nor an output tax on a supply. |
 | `base_amount` | `PAYEBreakdown.taxable_income` (ANNUAL) | See § 5.7. |
 | `source_ref` | `erp:payroll.salary_slip:{slip_id}:paye` | |
-| `source_version` | **caller-supplied** | `SalarySlip` has no `VersionedMixin.version`. See § 5.4. |
+| `source_version` | **content digest** `cv1:<sha256>`, identical scheme to AR/AP | No caller parameter. See § 5.3. |
 | `evidence_ref` | `erp:payroll.payroll_entry:{entry_id}` (falls back to the slip) | |
 | `counterparty_ref` | `erp:employee:{employee_id}` | |
 | `supply_ref`, `place_ref` | always `None` | Payroll has no supply or place. |
@@ -255,21 +255,69 @@ representation. `numeric(10,6)` also cannot hold a large fixed levy without
 losing the integer part — that limit must be checked against actual values, not
 assumed away.
 
-### 5.3 `Invoice.version` granularity
+### 5.3 `source_version` is a CONTENT DIGEST, not a row version — RESOLVED
 
-`VersionedMixin.version` is the only monotonic revision either invoice header
-carries, so it is what `source_version` is built from. A LINE edit that does not
-bump the header version reuses a source version with different facts. The module
-then raises `TaxConflict` — loud and fail-closed, which is the correct end state
-— but the fix belongs in the AR/AP line writers at cutover, not in a wider
-version string invented by an adapter. C4 must ensure a line mutation bumps its
-header version.
+An earlier revision of this note derived `source_version` from
+`VersionedMixin.version` on the invoice header and claimed it was "the only
+monotonic revision either invoice header carries". **That claim was wrong and
+the approach was a defect.** `version` is an optimistic-locking counter whose
+own docstring (`app/models/mixins.py`) says it "should be incremented on every
+successful update" — a writer CONVENTION. There is no `server_onupdate`, no
+trigger and no constraint, so nothing enforces monotonicity at all.
 
-### 5.4 Payroll has no version column
+It fails in **both** directions, and only one of them is loud:
 
-`SalarySlip` does not use `VersionedMixin`. `source_version` is therefore
-caller-supplied and the payroll writer owns the revision it publishes. The
-adapter refuses to derive one from a timestamp.
+- **Under-count.** A line edit that does not bump the header reuses a version
+  whose facts changed. The module fingerprints the fact and raises
+  `TaxConflict`. Loud, fail-closed, survivable — this was the only direction
+  originally reported.
+- **Over-count — SILENT, and the serious one.** `version` bumps on ANY update:
+  a status change, a memo, a posting flag. Each bump changes `source_version`
+  while the tax-relevant facts are identical. The module's
+  `uq_tax_determination_sets_source` is on
+  `(tenant_id, source_ref, source_version)` and there is **no** uniqueness on
+  `source_fingerprint`, so the new version matches no existing row and a SECOND
+  determination set is created carrying an identical fingerprint. Duplicate
+  statutory evidence for one unchanged fact, with nothing raising. That is the
+  variant-as-a-new-row pattern of § 3 reproduced inside the determination
+  evidence — the exact defect this programme exists to remove.
+
+`inbound._content_source_version` now derives the version from CONTENT:
+`cv1:<sha256>` over jurisdiction, `occurred_on`, `fact_kind`, recognition basis,
+transaction side, exact base amount + currency + minor units, party/supply/place
+refs, the three classification categories, and the SORTED
+`observed_tax_code_refs`. Fields are length-prefixed (`key:len:value`) so no
+reference containing a delimiter can collide with a different field set; money is
+digested as exact decimal text quantized to the currency's minor units and a
+float is refused outright; `None` uses a sentinel no real reference can spell, so
+an absent `supply_ref` and the literal string `"None"` cannot digest identically.
+
+This closes both directions. An edit that changes a tax fact yields a new
+version, correctly. An edit that does not yields the SAME version, so the
+module's existing fingerprint check turns a resubmission into an idempotent
+no-op instead of a duplicate set. It also removes the dependency on writer
+discipline spread across every AR, AP and payroll writer — the C4 caveat the old
+approach was really conceding.
+
+One consequence worth stating plainly: because `observed_tax_code_refs` is
+digested, a change in ERP's legacy calculator output alone produces a new
+version and therefore a second determination set with the same tax answer. Those
+two sets have DIFFERENT fingerprints and each records a genuinely different ERP
+submission, so this is not the identical-fingerprint duplication above — it is
+the shadow comparator's unit of comparison changing, which is what a shadow
+cohort wants to see.
+
+`cv1` namespaces the algorithm so a future, deliberate change to the field set or
+the encoding is a NEW algorithm rather than a silent re-versioning of every fact
+already determined under the old one.
+
+### 5.4 Payroll needed no workaround after all — RESOLVED
+
+`SalarySlip` does not use `VersionedMixin`, so the earlier design took
+`source_version` as a caller-supplied parameter for payroll only. That asymmetry
+existed solely to prop up the row-version scheme that § 5.3 retired. A content
+digest works uniformly across AR, AP and payroll, so the parameter is gone and no
+payroll caller has to invent a revision.
 
 ### 5.5 ERP has no place dimension
 
@@ -427,14 +475,20 @@ not here.
 
 Ran:
 
+- `ruff check` and `ruff format --check` at the exact version `poetry.lock` pins
+  (0.15.0) over the adapter package and the test module — clean.
 - `python3 -m py_compile` over all four adapter modules and the test module — clean.
-- Line-length conformance against `[tool.ruff] line-length = 88` — clean.
+- An offline logic harness that executes the real adapter code against a stubbed
+  `dotmac_kernel.money`: 20/20 outbound behaviours, 16/16 inbound behaviours, and
+  20/20 `source_version` digest behaviours as designed. This is a development aid,
+  not test evidence.
 
 NOT run here (must be green in CI before this is merged):
 
-- `make lint` (`poetry run ruff check`), `make format-check`, `mypy`;
-- `pytest tests/ifrs/tax/test_tax_adoption_adapters.py`;
-- the architecture suites.
+- `pytest tests/ifrs/tax/test_tax_adoption_adapters.py` and the architecture suites;
+- `mypy`.
+
+CI on the final SHA is the acceptance evidence.
 
 ## 9. What C1 did not do
 

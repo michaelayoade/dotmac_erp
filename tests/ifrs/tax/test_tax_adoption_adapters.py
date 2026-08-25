@@ -78,6 +78,7 @@ def build_ar_invoice(
     invoice_id: uuid.UUID | None = None,
     version: int = 3,
     currency_code: str = NGN,
+    invoice_date: date = date(2026, 3, 31),
 ) -> Invoice:
     return Invoice(
         invoice_id=invoice_id or uuid.uuid4(),
@@ -85,7 +86,7 @@ def build_ar_invoice(
         customer_id=uuid.UUID("66666666-6666-4666-8666-666666666666"),
         invoice_number="INV-0001",
         invoice_type=invoice_type,
-        invoice_date=date(2026, 3, 31),
+        invoice_date=invoice_date,
         due_date=date(2026, 4, 30),
         currency_code=currency_code,
         version=version,
@@ -169,7 +170,8 @@ def test_ar_invoice_line_fact_maps_every_field():
     assert fact.currency_code == NGN
     assert fact.minor_units == 2
     assert fact.source_ref == f"erp:ar.invoice_line:{line.line_id}"
-    assert fact.source_version == "v3"
+    assert fact.source_version.startswith("cv1:")
+    assert len(fact.source_version) == len("cv1:") + 64
     assert fact.evidence_ref == f"erp:ar.invoice:{invoice.invoice_id}"
     assert fact.document_id == invoice.invoice_id
     assert fact.line_id == line.line_id
@@ -318,7 +320,7 @@ def test_ap_supplier_invoice_line_fact_maps_every_field():
     assert fact.source_ref == f"erp:ap.supplier_invoice_line:{line.line_id}"
     assert fact.evidence_ref == f"erp:ap.supplier_invoice:{invoice.invoice_id}"
     assert fact.counterparty_ref == f"erp:supplier:{invoice.supplier_id}"
-    assert fact.source_version == "v2"
+    assert fact.source_version.startswith("cv1:")
     assert fact.base_amount == ngn("100000.00")
     assert fact.observed_tax_code_refs == (f"erp:tax.tax_code:{VAT_CODE_ID}",)
 
@@ -354,7 +356,6 @@ def test_payroll_taxable_pay_fact_carries_the_annualised_base():
         period_end=date(2026, 3, 31),
         annual_taxable_income=Decimal("7200000.00"),
         currency_code=NGN,
-        source_version="slip-1",
     )
 
     assert fact.family is SourceFactFamily.PAYROLL_TAXABLE_PAY
@@ -378,7 +379,6 @@ def test_negative_payroll_taxable_pay_is_refused():
             period_end=date(2026, 3, 31),
             annual_taxable_income=Decimal("-100.00"),
             currency_code=NGN,
-            source_version="slip-1",
         )
 
 
@@ -408,12 +408,169 @@ def test_sub_minor_unit_precision_is_refused_rather_than_rounded():
         ar_invoice_line_fact(invoice, line, jurisdiction_id=JURISDICTION_ID)
 
 
-def test_a_document_version_below_one_is_refused():
-    invoice = build_ar_invoice(version=0)
-    with pytest.raises(TaxAdapterRefusal, match="version"):
+# ====================================== INBOUND: source_version is CONTENT
+
+# `VersionedMixin.version` is an optimistic-locking counter, not a content
+# revision, and it fails in both directions: it UNDER-counts (a line edit that
+# does not bump the header reuses a version whose facts changed — loud, the
+# module raises TaxConflict) and it OVER-counts (any unrelated update bumps it,
+# so unchanged facts get a new version, match no existing row under
+# `uq_tax_determination_sets_source`, and create a SECOND determination set with
+# an identical fingerprint — silent duplicate statutory evidence). These tests
+# pin the digest that closes both.
+
+
+def test_the_header_version_column_does_not_reach_the_source_version():
+    """OVER-COUNT: an unrelated header bump must not re-version the fact."""
+    invoice_id = uuid.uuid4()
+    line_id = uuid.uuid4()
+    before = build_ar_invoice(invoice_id=invoice_id, version=3)
+    after = build_ar_invoice(invoice_id=invoice_id, version=97)
+
+    first = ar_invoice_line_fact(
+        before, build_ar_line(before, line_id=line_id), jurisdiction_id=JURISDICTION_ID
+    )
+    second = ar_invoice_line_fact(
+        after, build_ar_line(after, line_id=line_id), jurisdiction_id=JURISDICTION_ID
+    )
+
+    assert first.source_ref == second.source_ref
+    assert first.source_version == second.source_version
+
+
+def test_resubmitting_an_unchanged_row_yields_an_identical_digest():
+    """Idempotent no-op at the module, instead of a duplicate determination set."""
+    invoice = build_ar_invoice()
+    line_id = uuid.uuid4()
+    versions = {
         ar_invoice_line_fact(
-            invoice, build_ar_line(invoice), jurisdiction_id=JURISDICTION_ID
-        )
+            invoice,
+            build_ar_line(invoice, line_id=line_id),
+            jurisdiction_id=JURISDICTION_ID,
+        ).source_version
+        for _ in range(4)
+    }
+    assert len(versions) == 1
+
+
+def test_a_changed_tax_fact_yields_a_different_source_version():
+    """UNDER-COUNT: a line edit re-versions even though no header moved."""
+    invoice = build_ar_invoice(version=3)
+    line_id = uuid.uuid4()
+    baseline = ar_invoice_line_fact(
+        invoice,
+        build_ar_line(invoice, line_id=line_id),
+        jurisdiction_id=JURISDICTION_ID,
+    ).source_version
+
+    changed_amount = ar_invoice_line_fact(
+        invoice,
+        build_ar_line(invoice, line_id=line_id, line_amount=Decimal("100000.01")),
+        jurisdiction_id=JURISDICTION_ID,
+    ).source_version
+    changed_item = ar_invoice_line_fact(
+        invoice,
+        build_ar_line(invoice, line_id=line_id, item_id=uuid.uuid4()),
+        jurisdiction_id=JURISDICTION_ID,
+    ).source_version
+    changed_date = ar_invoice_line_fact(
+        build_ar_invoice(invoice_id=invoice.invoice_id, invoice_date=date(2026, 4, 1)),
+        build_ar_line(invoice, line_id=line_id),
+        jurisdiction_id=JURISDICTION_ID,
+    ).source_version
+    changed_basis = ar_invoice_line_fact(
+        invoice,
+        build_ar_line(invoice, line_id=line_id),
+        jurisdiction_id=JURISDICTION_ID,
+        recognition_basis_code="cash",
+    ).source_version
+    changed_place = ar_invoice_line_fact(
+        invoice,
+        build_ar_line(invoice, line_id=line_id),
+        jurisdiction_id=JURISDICTION_ID,
+        place_ref="erp:place:lagos",
+    ).source_version
+
+    distinct = {
+        baseline,
+        changed_amount,
+        changed_item,
+        changed_date,
+        changed_basis,
+        changed_place,
+    }
+    assert len(distinct) == 6
+
+
+def test_observed_tax_code_order_is_not_a_content_change():
+    """The legacy `line_taxes` collection has no meaningful order here."""
+    invoice = build_ar_invoice()
+    line_id = uuid.uuid4()
+
+    def fact_with(sequences):
+        line = build_ar_line(invoice, line_id=line_id)
+        line.line_taxes = [
+            InvoiceLineTax(
+                line_tax_id=uuid.uuid4(),
+                line_id=line_id,
+                tax_code_id=code_id,
+                base_amount=Decimal("100000.00"),
+                tax_rate=Decimal("0.075000"),
+                tax_amount=Decimal("7500.00"),
+                sequence=sequence,
+            )
+            for code_id, sequence in sequences
+        ]
+        return ar_invoice_line_fact(invoice, line, jurisdiction_id=JURISDICTION_ID)
+
+    forward = fact_with([(VAT_CODE_ID, 1), (WHT_2_CODE_ID, 2)])
+    backward = fact_with([(WHT_2_CODE_ID, 2), (VAT_CODE_ID, 1)])
+    assert forward.source_version == backward.source_version
+
+    # A different SET of observed codes is a content change.
+    fewer = fact_with([(VAT_CODE_ID, 1)])
+    assert fewer.source_version != forward.source_version
+
+
+def test_float_money_can_never_reach_the_digest():
+    """Digesting a float would make the version depend on binary rounding."""
+    from app.services.finance.tax.adoption.inbound import _exact_money_text
+
+    class FloatMoney:
+        amount = 100000.0
+        currency = ngn("1.00").currency
+
+    with pytest.raises(TaxAdapterRefusal, match="must be an exact Decimal"):
+        _exact_money_text(FloatMoney())
+
+
+def test_equal_money_written_at_different_scales_digests_identically():
+    """`Decimal("100.5")` and `Decimal("100.50")` are the same money."""
+    from app.services.finance.tax.adoption.inbound import _exact_money_text
+
+    currency = ngn("1.00").currency
+    loose = type(ngn("1.00"))(amount=Decimal("100.5"), currency=currency)
+    tight = type(ngn("1.00"))(amount=Decimal("100.50"), currency=currency)
+    assert _exact_money_text(loose) == _exact_money_text(tight) == "100.50"
+
+
+def test_every_family_derives_its_version_the_same_way():
+    ap_invoice = build_ap_invoice()
+    payroll = payroll_taxable_pay_fact(
+        organization_id=ORG_ID,
+        jurisdiction_id=JURISDICTION_ID,
+        employee_id=uuid.uuid4(),
+        slip_id=uuid.uuid4(),
+        period_end=date(2026, 3, 31),
+        annual_taxable_income=Decimal("7200000.00"),
+        currency_code=NGN,
+    )
+    ap = ap_supplier_invoice_line_fact(
+        ap_invoice, build_ap_line(ap_invoice), jurisdiction_id=JURISDICTION_ID
+    )
+    for fact in (ap, payroll):
+        assert fact.source_version.startswith("cv1:")
+        assert len(fact.source_version) == len("cv1:") + 64
 
 
 # ============================================ INBOUND: the module translation

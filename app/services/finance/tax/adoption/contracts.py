@@ -176,8 +176,14 @@ class ERPSourceTaxFactV1:
     Carries every field the boundary document's `ERPSourceTaxFactV1` list
     requires.  `source_ref` + `source_version` are the module's idempotency
     key: the module fingerprints the fact and refuses a reused version whose
-    facts changed, so a caller that mutates a document MUST advance
-    `source_version` rather than resubmit the old one.
+    facts changed.
+
+    `source_version` is therefore a CONTENT digest, produced by
+    `inbound._content_source_version` — never a row's `version` column, which is
+    an optimistic-locking counter that both under- and over-counts relative to
+    the tax-relevant content.  Read that function's docstring before changing
+    how a version is derived: the over-count direction fails silently and
+    creates duplicate statutory evidence.
     """
 
     organization_id: UUID

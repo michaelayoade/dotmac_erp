@@ -51,10 +51,13 @@ never passed through.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date
-from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from decimal import Decimal, InvalidOperation
+from typing import TYPE_CHECKING
 from uuid import UUID
+
+from dotmac_kernel.money import Money
 
 from app.services.finance.money_boundary import MoneyBoundaryError, to_boundary_money
 from app.services.finance.tax.adoption.contracts import (
@@ -145,13 +148,7 @@ def _require_date(value: object, label: str) -> date:
     return value
 
 
-def _require_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TaxAdapterRefusal(f"{label} must be an int, got {type(value).__name__}")
-    return value
-
-
-def _base_money(amount: object, currency_code: object, *, field: str) -> Any:
+def _base_money(amount: object, currency_code: object, *, field: str) -> Money:
     """Build exact kernel `Money`, translating a boundary refusal into ours.
 
     `to_boundary_money` already refuses floats, an unknown currency and excess
@@ -270,6 +267,15 @@ def ar_invoice_line_fact(
     customer_id = _require_uuid(
         getattr(invoice, "customer_id", None), "invoice.customer_id"
     )
+    occurred_on = _require_date(
+        getattr(invoice, "invoice_date", None), "invoice.invoice_date"
+    )
+    base_amount = _base_money(
+        amount, getattr(invoice, "currency_code", None), field="line.line_amount"
+    )
+    counterparty_ref = f"erp:customer:{customer_id}"
+    supply_ref = None if item_id is None else f"erp:item:{item_id}"
+    observed_tax_code_refs = _observed_line_tax_codes(line)
     return ERPSourceTaxFactV1(
         organization_id=_require_uuid(
             getattr(invoice, "organization_id", None), "invoice.organization_id"
@@ -279,28 +285,36 @@ def ar_invoice_line_fact(
         fact_kind=SourceFactFamily.AR_INVOICE_LINE.value,
         recognition_basis_code=recognition_basis_code,
         transaction_side=TransactionSide.OUTPUT,
-        occurred_on=_require_date(
-            getattr(invoice, "invoice_date", None), "invoice.invoice_date"
-        ),
-        base_amount=_base_money(
-            amount,
-            getattr(invoice, "currency_code", None),
-            field="line.line_amount",
-        ),
+        occurred_on=occurred_on,
+        base_amount=base_amount,
         source_ref=f"erp:ar.invoice_line:{line_id}",
-        source_version=_document_version(invoice, "invoice.version"),
+        source_version=_content_source_version(
+            jurisdiction_id=jurisdiction_id,
+            occurred_on=occurred_on,
+            fact_kind=SourceFactFamily.AR_INVOICE_LINE.value,
+            recognition_basis_code=recognition_basis_code,
+            transaction_side=TransactionSide.OUTPUT,
+            base_amount=base_amount,
+            counterparty_ref=counterparty_ref,
+            supply_ref=supply_ref,
+            place_ref=place_ref,
+            party_category=party_category,
+            supply_category=supply_category,
+            place_code=place_code,
+            observed_tax_code_refs=observed_tax_code_refs,
+        ),
         evidence_ref=f"erp:ar.invoice:{invoice_id}",
         document_id=invoice_id,
         line_id=line_id,
-        counterparty_ref=f"erp:customer:{customer_id}",
-        supply_ref=None if item_id is None else f"erp:item:{item_id}",
+        counterparty_ref=counterparty_ref,
+        supply_ref=supply_ref,
         place_ref=place_ref,
         party_category=party_category,
         supply_category=supply_category,
         place_code=place_code,
         correlation_ref=correlation_ref,
         reversal=reversal,
-        observed_tax_code_refs=_observed_line_tax_codes(line),
+        observed_tax_code_refs=observed_tax_code_refs,
     )
 
 
@@ -358,6 +372,15 @@ def ap_supplier_invoice_line_fact(
     supplier_id = _require_uuid(
         getattr(invoice, "supplier_id", None), "invoice.supplier_id"
     )
+    occurred_on = _require_date(
+        getattr(invoice, "invoice_date", None), "invoice.invoice_date"
+    )
+    base_amount = _base_money(
+        amount, getattr(invoice, "currency_code", None), field="line.line_amount"
+    )
+    counterparty_ref = f"erp:supplier:{supplier_id}"
+    supply_ref = None if item_id is None else f"erp:item:{item_id}"
+    observed_tax_code_refs = _observed_line_tax_codes(line)
     return ERPSourceTaxFactV1(
         organization_id=_require_uuid(
             getattr(invoice, "organization_id", None), "invoice.organization_id"
@@ -367,28 +390,36 @@ def ap_supplier_invoice_line_fact(
         fact_kind=SourceFactFamily.AP_INVOICE_LINE.value,
         recognition_basis_code=recognition_basis_code,
         transaction_side=TransactionSide.INPUT,
-        occurred_on=_require_date(
-            getattr(invoice, "invoice_date", None), "invoice.invoice_date"
-        ),
-        base_amount=_base_money(
-            amount,
-            getattr(invoice, "currency_code", None),
-            field="line.line_amount",
-        ),
+        occurred_on=occurred_on,
+        base_amount=base_amount,
         source_ref=f"erp:ap.supplier_invoice_line:{line_id}",
-        source_version=_document_version(invoice, "invoice.version"),
+        source_version=_content_source_version(
+            jurisdiction_id=jurisdiction_id,
+            occurred_on=occurred_on,
+            fact_kind=SourceFactFamily.AP_INVOICE_LINE.value,
+            recognition_basis_code=recognition_basis_code,
+            transaction_side=TransactionSide.INPUT,
+            base_amount=base_amount,
+            counterparty_ref=counterparty_ref,
+            supply_ref=supply_ref,
+            place_ref=place_ref,
+            party_category=party_category,
+            supply_category=supply_category,
+            place_code=place_code,
+            observed_tax_code_refs=observed_tax_code_refs,
+        ),
         evidence_ref=f"erp:ap.supplier_invoice:{invoice_id}",
         document_id=invoice_id,
         line_id=line_id,
-        counterparty_ref=f"erp:supplier:{supplier_id}",
-        supply_ref=None if item_id is None else f"erp:item:{item_id}",
+        counterparty_ref=counterparty_ref,
+        supply_ref=supply_ref,
         place_ref=place_ref,
         party_category=party_category,
         supply_category=supply_category,
         place_code=place_code,
         correlation_ref=correlation_ref,
         reversal=reversal,
-        observed_tax_code_refs=_observed_line_tax_codes(line),
+        observed_tax_code_refs=observed_tax_code_refs,
     )
 
 
@@ -401,7 +432,6 @@ def payroll_taxable_pay_fact(
     period_end: date,
     annual_taxable_income: Decimal,
     currency_code: str,
-    source_version: str,
     payroll_entry_id: UUID | None = None,
     deduction_line_id: UUID | None = None,
     recognition_basis_code: str = RECOGNITION_BASIS_PAYROLL_PERIOD,
@@ -444,10 +474,13 @@ def payroll_taxable_pay_fact(
     occurrence date — a period-based tax occurs at the period boundary, not on
     `posting_date`, which can move for banking reasons without changing the tax.
 
-    `source_version` is caller-supplied because `SalarySlip` carries no
-    `VersionedMixin.version` (unlike both invoice headers).  The payroll writer
-    owns the revision it publishes; this adapter will not invent one from a
-    timestamp.
+    `source_version` is a CONTENT DIGEST, exactly as for AR and AP.  There was
+    briefly a `source_version` parameter here because `SalarySlip` carries no
+    `VersionedMixin.version` to borrow — but that workaround only existed to prop
+    up a row-version scheme that was wrong for the invoice families too (see
+    :func:`_content_source_version`).  A digest works uniformly across all three
+    families, so the parameter is gone and no payroll caller has to invent a
+    revision.
     """
     if isinstance(annual_taxable_income, bool) or not isinstance(
         annual_taxable_income, Decimal
@@ -465,6 +498,12 @@ def payroll_taxable_pay_fact(
         )
     employee = _require_uuid(employee_id, "employee_id")
     slip = _require_uuid(slip_id, "slip_id")
+    occurred_on = _require_date(period_end, "period_end")
+    base_amount = _base_money(
+        annual_taxable_income, currency_code, field="annual_taxable_income"
+    )
+    counterparty_ref = f"erp:employee:{employee}"
+    observed_tax_code_refs = tuple(observed_tax_code_refs)
     return ERPSourceTaxFactV1(
         organization_id=_require_uuid(organization_id, "organization_id"),
         jurisdiction_id=_require_uuid(jurisdiction_id, "jurisdiction_id"),
@@ -472,12 +511,24 @@ def payroll_taxable_pay_fact(
         fact_kind=SourceFactFamily.PAYROLL_TAXABLE_PAY.value,
         recognition_basis_code=recognition_basis_code,
         transaction_side=TransactionSide.LIABILITY,
-        occurred_on=_require_date(period_end, "period_end"),
-        base_amount=_base_money(
-            annual_taxable_income, currency_code, field="annual_taxable_income"
-        ),
+        occurred_on=occurred_on,
+        base_amount=base_amount,
         source_ref=f"erp:payroll.salary_slip:{slip}:paye",
-        source_version=source_version,
+        source_version=_content_source_version(
+            jurisdiction_id=jurisdiction_id,
+            occurred_on=occurred_on,
+            fact_kind=SourceFactFamily.PAYROLL_TAXABLE_PAY.value,
+            recognition_basis_code=recognition_basis_code,
+            transaction_side=TransactionSide.LIABILITY,
+            base_amount=base_amount,
+            counterparty_ref=counterparty_ref,
+            supply_ref=None,
+            place_ref=None,
+            party_category=party_category,
+            supply_category=supply_category,
+            place_code=place_code,
+            observed_tax_code_refs=observed_tax_code_refs,
+        ),
         evidence_ref=(
             f"erp:payroll.payroll_entry:{payroll_entry_id}"
             if payroll_entry_id is not None
@@ -485,7 +536,7 @@ def payroll_taxable_pay_fact(
         ),
         document_id=slip,
         line_id=deduction_line_id,
-        counterparty_ref=f"erp:employee:{employee}",
+        counterparty_ref=counterparty_ref,
         supply_ref=None,
         place_ref=None,
         party_category=party_category,
@@ -497,24 +548,142 @@ def payroll_taxable_pay_fact(
     )
 
 
-def _document_version(document: object, label: str) -> str:
-    """ERP's optimistic-locking `version` as the module's source version.
+def _content_source_version(
+    *,
+    jurisdiction_id: UUID,
+    occurred_on: date,
+    fact_kind: str,
+    recognition_basis_code: str,
+    transaction_side: TransactionSide,
+    base_amount: Money,
+    counterparty_ref: str | None,
+    supply_ref: str | None,
+    place_ref: str | None,
+    party_category: str | None,
+    supply_category: str | None,
+    place_code: str | None,
+    observed_tax_code_refs: tuple[str, ...],
+) -> str:
+    """A stable digest of the tax-relevant CONTENT of one ERP source row.
 
-    `VersionedMixin.version` (`app/models/mixins.py`) is the only monotonic
-    revision either invoice header carries.  The module fingerprints each fact
-    and refuses a reused `source_version` whose facts changed, so a caller that
-    edits a document MUST advance the header version before resubmitting.
+    ## Why this is not a row's `version` column
 
-    A known, REPORTED gap: a line edit that does not bump the header version
-    reuses a version with different facts.  The module then raises `TaxConflict`
-    — loud and fail-closed, which is the correct end state — but the fix belongs
-    in the AR/AP line writers at cutover, not in a wider version string invented
-    here.  See the C1 note.
+    The obvious candidate — `VersionedMixin.version` on either invoice header —
+    is an OPTIMISTIC-LOCKING counter, not a content revision.  Its own docstring
+    (`app/models/mixins.py`) says it "should be incremented on every successful
+    update": a writer CONVENTION, with no `server_onupdate`, no trigger and no
+    constraint enforcing it.  Using it fails in both directions, and only one of
+    them is loud:
+
+    - **Under-count.**  A line edit that does not bump the header reuses a
+      version whose facts changed.  The module fingerprints the fact and raises
+      `TaxConflict`.  Loud, fail-closed, survivable.
+    - **Over-count, and this one is SILENT.**  `version` bumps on ANY update — a
+      status change, a memo, a posting flag — while the tax-relevant facts are
+      identical.  `uq_tax_determination_sets_source` is on
+      `(tenant_id, source_ref, source_version)` and there is NO uniqueness on
+      `source_fingerprint`, so the new version matches no existing row and a
+      SECOND determination set is created carrying an identical fingerprint.
+      Duplicate statutory evidence for one unchanged fact, with nothing raising.
+      That is the variant-as-a-new-row pattern reproduced inside the
+      determination evidence — precisely what this programme exists to remove.
+
+    Deriving the version from CONTENT closes both.  An edit that changes a tax
+    fact yields a new version, correctly.  An edit that does not yields the SAME
+    version, so the module's existing fingerprint check turns a resubmission
+    into an idempotent no-op instead of a duplicate set.  It also stops the
+    correctness of statutory evidence depending on writer discipline spread
+    across every AR, AP and payroll writer.
+
+    ## What goes in, and what deliberately does not
+
+    Everything the module is given, plus `observed_tax_code_refs` — ERP's own
+    legacy calculator output, which is part of what makes a submitted ERP row
+    distinct during the shadow cohorts.  Note the consequence: a legacy-output
+    change alone produces a new version and therefore a second determination set
+    with the same tax answer.  Those two sets have DIFFERENT fingerprints and
+    each records a genuinely different ERP submission, so this is not the
+    identical-fingerprint duplication described above; it is the shadow
+    comparator's unit of comparison changing.
+
+    `source_ref` is NOT digested: this is the version OF a source ref, and
+    including it would only make the digest opaque.  `evidence_ref`,
+    `document_id` and `line_id` are identity rather than content and are fixed
+    for a given `source_ref`.  `reversal` is not digested either — it is derived
+    from the document type, which cannot change without the base amount and
+    counterparty changing with it.
+
+    ## Encoding
+
+    Length-prefixed `key:len:value` fields, so no reference containing a
+    delimiter can be made to collide with a different field set.  Money is
+    digested as EXACT text quantized to its currency's minor units, never a
+    float and never a repr.  `observed_tax_code_refs` is SORTED, because the
+    underlying `line_taxes` collection has no meaningful order for this purpose
+    and an ordering change is not a content change.
     """
-    version = _require_int(getattr(document, "version", None), label)
-    if version < 1:
-        raise TaxAdapterRefusal(f"{label} must be >= 1, got {version}")
-    return f"v{version}"
+    parts: list[tuple[str, str]] = [
+        ("jurisdiction_id", str(jurisdiction_id)),
+        ("occurred_on", occurred_on.isoformat()),
+        ("fact_kind", fact_kind),
+        ("recognition_basis_code", recognition_basis_code),
+        ("transaction_side", transaction_side.value),
+        ("base_amount", _exact_money_text(base_amount)),
+        ("currency_code", base_amount.currency.code),
+        ("minor_units", str(base_amount.currency.minor_units)),
+        ("counterparty_ref", _digest_optional(counterparty_ref)),
+        ("supply_ref", _digest_optional(supply_ref)),
+        ("place_ref", _digest_optional(place_ref)),
+        ("party_category", _digest_optional(party_category)),
+        ("supply_category", _digest_optional(supply_category)),
+        ("place_code", _digest_optional(place_code)),
+        ("observed_tax_code_refs", "\x1f".join(sorted(observed_tax_code_refs))),
+    ]
+    payload = "\n".join(f"{key}:{len(value)}:{value}" for key, value in parts)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"{_SOURCE_VERSION_ALGORITHM}:{digest}"
+
+
+#: Namespaces the digest so a future, deliberate change to the field set or the
+#: encoding is a NEW algorithm rather than a silent re-versioning of every fact
+#: already determined under the old one.
+_SOURCE_VERSION_ALGORITHM = "cv1"
+
+#: A sentinel for `None` that no real reference can spell, so an absent
+#: `supply_ref` and the literal string "None" cannot digest identically.
+_ABSENT = "\x00absent"
+
+
+def _digest_optional(value: str | None) -> str:
+    return _ABSENT if value is None else value
+
+
+def _exact_money_text(money: Money) -> str:
+    """Exact decimal text for an amount, refusing anything inexact.
+
+    `Money` built through `money_boundary` already holds a `Decimal` quantized
+    to its currency's minor units, so the quantize below is a no-op that makes
+    the canonical form guaranteed rather than assumed: `Decimal("100.5")` and
+    `Decimal("100.50")` are numerically equal and must not digest differently.
+    A float amount is refused outright — digesting `repr(float)` would make the
+    version depend on binary rounding.
+    """
+    amount = money.amount
+    if isinstance(amount, bool) or not isinstance(amount, Decimal):
+        raise TaxAdapterRefusal(
+            f"a source version cannot be derived from {type(amount).__name__} "
+            f"{amount!r}; money must be an exact Decimal"
+        )
+    if not amount.is_finite():
+        raise TaxAdapterRefusal(f"non-finite amount {amount!r} is not money")
+    try:
+        canonical = amount.quantize(Decimal(1).scaleb(-money.currency.minor_units))
+    except (ArithmeticError, InvalidOperation) as exc:
+        raise TaxAdapterRefusal(
+            f"amount {amount!r} cannot be expressed exactly in "
+            f"{money.currency.code} minor units"
+        ) from exc
+    return format(canonical, "f")
 
 
 def _observed_line_tax_codes(line: object) -> tuple[str, ...]:
