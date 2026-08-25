@@ -40,6 +40,14 @@ def test_dynamic_form_supports_hr_refresh_and_manual_participants() -> None:
     assert 'x-model="row.attendance_status"' in form
 
 
+def test_long_text_fields_fill_their_available_cards_and_table_cells() -> None:
+    form = _read("templates/people/perf/weekly_meeting_reports/form.html")
+
+    assert form.count('class="form-textarea w-full"') == 3
+    assert 'rows="4" class="form-textarea w-full"' in form
+    assert 'class="form-textarea w-full" rows="2"' in form
+
+
 def test_weekly_report_router_is_mode_neutral_and_permission_guarded() -> None:
     people_router = _read("app/web/people/__init__.py")
     feature_router = _read("app/web/people/weekly_meeting_reports.py")
