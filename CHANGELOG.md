@@ -13,6 +13,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Exact two-directional retirement ledger for ERP writers of projected People
   fields across runtime services, workers, scripts, and tools.
 
+### Removed
+- Retired the legacy CRM material-request sync transport
+  (`GET/POST /sync/crm/material-requests` and canonical `/api/v1` variants);
+  Sub material support remains available through `/sync/sub/material-requests`.
+
 ## [1.33.0] - 2026-08-18
 
 ### Added
