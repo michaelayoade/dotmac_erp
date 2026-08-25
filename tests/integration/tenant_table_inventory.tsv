@@ -256,6 +256,10 @@ mod_files	stored_files	direct	true	true	app_admin	1	false	rw	rw
 mod_imports	import_partitions	direct	true	true	app_admin	1	false	rw	rw
 mod_imports	import_run_rows	direct	true	true	app_admin	1	false	rw	rw
 mod_imports	import_runs	direct	true	true	app_admin	1	false	rw	rw
+mod_numbering	allocation_receipts	direct	true	true	app_admin	1	false	rw	rw
+mod_numbering	number_series	direct	true	true	app_admin	1	false	rw	rw
+mod_numbering	series_counters	direct	true	true	app_admin	1	false	rw	rw
+mod_numbering	series_repairs	direct	true	true	app_admin	1	false	rw	rw
 payments	payment_intent	direct	false	false	app_admin	0	false	--	--
 payments	payment_webhook	direct	false	false	app_admin	0	false	--	--
 payments	remita_rrr	direct	false	false	app_admin	0	false	--	--
