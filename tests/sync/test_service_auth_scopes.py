@@ -1,8 +1,7 @@
-"""S1 foundation: least-privilege scopes on service ApiKeys.
+"""Least-privilege scopes on service ApiKeys.
 
-An unscoped key (NULL/empty scopes) is grandfathered to full access so existing
-keys keep working; a scoped key is restricted to exactly its scopes. The
-require_service_scope dependency enforces this per endpoint.
+Authentication does not imply authority: a key with NULL/empty scopes may be
+identified for an operator audit, but every service operation refuses it.
 """
 
 from __future__ import annotations
@@ -13,16 +12,20 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from app.api.sync.dotmac_crm import require_crm_sync_enabled, require_service_scope
+from app.api.sync.dotmac_crm import (
+    require_any_service_scope,
+    require_crm_sync_enabled,
+    require_service_scope,
+)
 from app.models.auth import ApiKey
 
 
-def test_apikey_has_scope_grandfathers_unscoped_keys():
+def test_apikey_has_scope_refuses_unscoped_keys():
     key = ApiKey()
     key.scopes = None
-    assert key.has_scope("crm:ncc:read") is True  # unscoped = full access
+    assert key.has_scope("crm:ncc:read") is False
     key.scopes = []
-    assert key.has_scope("anything") is True
+    assert key.has_scope("anything") is False
 
 
 def test_apikey_has_scope_restricts_scoped_keys():
@@ -32,10 +35,20 @@ def test_apikey_has_scope_restricts_scoped_keys():
     assert key.has_scope("crm:po:write") is False
 
 
-def test_require_service_scope_allows_unscoped_key():
+def test_require_service_scope_refuses_unscoped_key():
     dep = require_service_scope("crm:ncc:read")
-    auth = {"scopes": []}
-    assert dep(auth=auth) is auth
+    with pytest.raises(HTTPException) as exc:
+        dep(auth={"scopes": []})
+    assert exc.value.status_code == 403
+    assert "crm:ncc:read" in exc.value.detail
+
+
+def test_require_any_service_scope_refuses_unscoped_key():
+    dep = require_any_service_scope("crm:sync:write", "crm:write")
+    with pytest.raises(HTTPException) as exc:
+        dep(auth={"scopes": None})
+    assert exc.value.status_code == 403
+    assert "crm:sync:write" in exc.value.detail
 
 
 def test_require_service_scope_allows_key_with_scope():

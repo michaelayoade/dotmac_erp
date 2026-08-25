@@ -33,10 +33,48 @@ semantics.
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
+| `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation | One service decides what a payment intent's status is; webhooks, routes and schedulers validate, authorize and delegate |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
 | `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
+
+Service API keys authenticate an identity but receive no authority unless an
+operator assigns at least one explicit leaf scope. NULL or empty scope lists are
+legacy audit findings, not a full-access compatibility mode; every service
+operation fails closed for them. The API-key read surface returns scope names so
+operators can locate, replace, or revoke legacy keys without exposing key
+material. Wildcard scopes are refused for newly created and updated keys.
+
+## Payment execution (ADR-0005)
+
+`app.services.finance.payments.payment_service.PaymentService` is the **sole
+writer** of `payments.payment_intent.status`. It had three writers until
+2026-08-24: the service, the two-minute Celery job
+`app.tasks.expense.poll_stuck_expense_transfers` (untested, and writing from a
+read taken in a different session), and the dead `BatchTransferService`, which
+was deleted.
+
+The job is now an adapter: cross-tenant discovery, one `session_for_org` per
+tenant, and aggregation. Selection predicates, credential resolution, the
+PENDING-to-PROCESSING promotion, attempt counting and the circuit breaker are
+`PaymentService`'s. Both scheduled entry points
+(`expire_stale_pending_transfer`, `reconcile_stuck_transfer`) take an intent
+**by id**, lock it `FOR UPDATE` with `populate_existing=True`, and re-prove the
+premise the selection was made under — a transfer started, or settled by a
+webhook, between the select and the write is skipped rather than overwritten.
+
+`payments.transfer_batch` and `payments.transfer_batch_item` deliberately
+survive the batch service's deletion: existing rows are payout history, and
+`PaymentService._update_batch_item_status` still maintains them. Deleting dead
+service code is not a destructive migration.
+
+Enforced by `tests/architecture/test_payment_intent_status_single_owner.py`.
+Note that `PaymentService` raises `HTTPException` throughout — a pre-existing
+deviation from the HTTP-adapter rule above, predating this slice and not
+resolved by it.
+
+Implemented and tested; production enablement unconfirmed.
 
 ## Durable customer imports
 

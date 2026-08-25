@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 
 def require_sub_ap_scope(auth: dict = Depends(require_service_auth)) -> dict:
     scopes = auth.get("scopes") or []
-    if scopes and not {"sub:ap:write", "crm:ap:write"}.intersection(scopes):
+    if not {"sub:ap:write", "crm:ap:write"}.intersection(scopes):
         from fastapi import HTTPException
 
         raise HTTPException(
@@ -69,7 +69,7 @@ def require_sub_ap_scope(auth: dict = Depends(require_service_auth)) -> dict:
 
 def require_sub_ap_read_scope(auth: dict = Depends(require_service_auth)) -> dict:
     scopes = auth.get("scopes") or []
-    if scopes and not {
+    if not {
         "sub:ap:read",
         "sub:ap:write",
         "crm:ap:write",
@@ -82,7 +82,7 @@ def require_sub_ap_read_scope(auth: dict = Depends(require_service_auth)) -> dic
 
 def require_sub_domain_scope(auth: dict = Depends(require_service_auth)) -> dict:
     scopes = auth.get("scopes") or []
-    if scopes and not {"sub:domain:write", "crm:sync:write"}.intersection(scopes):
+    if not {"sub:domain:write", "crm:sync:write"}.intersection(scopes):
         from fastapi import HTTPException
 
         raise HTTPException(
@@ -94,7 +94,7 @@ def require_sub_domain_scope(auth: dict = Depends(require_service_auth)) -> dict
 
 def _require_sub_flow_scope(auth: dict, *accepted: str) -> dict:
     scopes = set(auth.get("scopes") or [])
-    if scopes and not scopes.intersection(accepted):
+    if not scopes.intersection(accepted):
         from fastapi import HTTPException
 
         raise HTTPException(

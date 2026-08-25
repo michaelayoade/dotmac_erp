@@ -72,6 +72,7 @@ CONSUME_PURE_IMPORTS: tuple[str, ...] = (
     "dotmac_kernel.features",
     "dotmac_kernel.licensing",
     "dotmac_kernel.money",
+    "dotmac_kernel.planes",
     "dotmac_kernel.prerequisites",
     "dotmac_kernel.profiles",
     "dotmac_kernel.providers",

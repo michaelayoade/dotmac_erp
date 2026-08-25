@@ -1009,7 +1009,12 @@ class RunWebService:
 
         from app.services.finance.banking.bank_upload import (
             BankUploadService,
-            PaymentItem,
+        )
+        from app.services.people.payroll.bank_payment_file import (
+            PayrollBankFileIncomplete,
+            PayrollBankFileUnresolved,
+            payment_items_for_slips,
+            require_resolved_bank_codes,
         )
 
         org_id = coerce_uuid(auth.organization_id)
@@ -1059,42 +1064,15 @@ class RunWebService:
                 status_code=303,
             )
 
-        # Convert slips to payment items
-        payment_items: list[PaymentItem] = []
-        for slip in slips:
-            # Skip slips without bank details
-            if not slip.bank_account_number:
-                continue
-
-            base_ref = slip.slip_number or f"SAL-{slip.slip_id.hex[:8].upper()}"
-            suffix = (
-                slip.employee.employee_code
-                if slip.employee and slip.employee.employee_code
-                else slip.slip_id.hex[:6].upper()
+        try:
+            payment_items = payment_items_for_slips(
+                slips,
+                payroll_month=entry.payroll_month,
+                payroll_year=entry.payroll_year,
             )
-
-            payment_items.append(
-                PaymentItem(
-                    reference=f"{base_ref}-{suffix}",
-                    beneficiary_name=slip.bank_account_name
-                    or slip.employee_name
-                    or "Unknown",
-                    amount=slip.net_pay,
-                    account_number=slip.bank_account_number,
-                    bank_name=slip.bank_name or "",
-                    bank_code=slip.bank_branch_code,
-                    beneficiary_code=slip.employee.employee_code
-                    if slip.employee
-                    else None,
-                    narration=f"Salary {entry.payroll_month}/{entry.payroll_year}"
-                    if entry.payroll_month
-                    else "Salary Payment",
-                )
-            )
-
-        if not payment_items:
+        except PayrollBankFileIncomplete as exc:
             return RedirectResponse(
-                url=f"/people/payroll/runs/{entry_id}?error=No slips with bank details found",
+                url=f"/people/payroll/runs/{entry_id}?error={quote(str(exc))}",
                 status_code=303,
             )
 
@@ -1109,6 +1087,13 @@ class RunWebService:
             bank_format="zenith",
             batch_reference=entry.entry_number,
         )
+        try:
+            require_resolved_bank_codes(result)
+        except PayrollBankFileUnresolved as exc:
+            return RedirectResponse(
+                url=f"/people/payroll/runs/{entry_id}?error={quote(str(exc))}",
+                status_code=303,
+            )
 
         # Generate filename with entry info
         entry_suffix = (

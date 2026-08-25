@@ -60,10 +60,11 @@ def _prime(mock_db, mappings):
 class TestScopeGate:
     """Mirrors tests/sync/test_service_auth_scopes.py for the any-of gate."""
 
-    def test_unscoped_key_grandfathered(self):
+    def test_unscoped_key_fails_closed(self):
         dep = require_any_service_scope("crm:sync:write", "crm:write")
-        auth = {"scopes": []}
-        assert dep(auth=auth) is auth
+        with pytest.raises(HTTPException) as exc:
+            dep(auth={"scopes": []})
+        assert exc.value.status_code == 403
 
     def test_crm_sync_write_allowed(self):
         dep = require_any_service_scope("crm:sync:write", "crm:write")

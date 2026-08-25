@@ -96,6 +96,14 @@ dotmac-imports = {version = "0.1.0a2", source = "forgejo"}
 # lock cannot resolve at a83. `dotmac-files` needs no repin and stays at a2.
 dotmac-accounting = {version = "0.1.0a1", source = "forgejo"}
 
+# Concurrency-safe document-series allocation and immutable allocation evidence.
+# This composition-only slice installs the tenant plane of `mod_numbering`; it
+# does not import the runtime service, seed a series, repoint BANK_STATEMENT or
+# move authority from ERP's legacy allocators. The explicit plane decision is
+# `app/migration_planes.py` and the later cutover remains one series family at a
+# time with a caller-supplied business date.
+dotmac-numbering = {version = "0.1.0a2", source = "forgejo"}
+
 # Private Forgejo PyPI index (Dotmac packages). Explicit priority: only
 # dependencies that name this source resolve from it; PyPI stays the default.
 # Credentials are NEVER stored in this repository — poetry reads them from its

@@ -244,16 +244,13 @@ class ApiKey(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Least-privilege scopes this key grants, e.g. ["crm:ncc:read", "crm:write"].
-    # NULL / empty = unscoped (full access) so pre-existing keys keep working;
-    # a non-empty list restricts the key to exactly those scopes.
+    # Least-privilege scopes this key grants, e.g. ["crm:ncc:read"]. NULL or
+    # empty identifies a legacy key for audit; it grants no operation.
     scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     person = relationship("Person")
 
     def has_scope(self, scope: str) -> bool:
-        """True if this key may use ``scope``. An unscoped key (NULL/empty
-        scopes) grants everything — that's the grandfathered default."""
-        if not self.scopes:
-            return True
-        return scope in self.scopes
+        """Return whether this key explicitly grants ``scope``."""
+        scopes = self.scopes or []
+        return scope in scopes
