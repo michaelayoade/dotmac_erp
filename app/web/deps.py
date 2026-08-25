@@ -1947,11 +1947,21 @@ def require_expense_access(
     auth: WebAuthContext = Depends(require_web_auth),
 ) -> WebAuthContext:
     """
-    Require access to the Expense module.
+    Require VISIBILITY of the Expense module. This is not write authority.
 
-    Use this dependency for all expense management web routes.
-    Also allows access for users with finance:access scope since
-    expense claims integrate with the GL.
+    The guard admits `expense:access` OR `finance:access` — both navigation
+    scopes, held by every read-only role in their module — so it answers one
+    question only: may this person SEE expense pages. It may guard reads and
+    navigation, and it must never be the only guard on a route that changes
+    state (ADR-0006). Five mutating routes in `app/web/finance/exp.py` rested
+    on it: commenting on a claim, withdrawing an approval, cancelling and
+    resubmitting a claim, and creating an expense. They now name the act with
+    `expense:claims:{comment,cancel,create,submit,approve:tier*}`.
+
+    The finance fallback is deliberately kept: expense claims integrate with
+    the GL, and finance roles legitimately READ them. Narrowing it would take
+    the module out of finance sidebars without closing a single write, which
+    is the opposite of what ADR-0006 asks for.
 
     Usage:
         @router.get("/expense/claims")

@@ -23,6 +23,7 @@ from app.web.deps import (
     base_context,
     get_async_db_for_org,
     require_finance_access,
+    require_web_permission,
 )
 
 router = APIRouter(prefix="/settings", tags=["finance-settings"])
@@ -139,7 +140,7 @@ async def update_numbering_sequence(
     min_digits: int = Form(4),
     year_format: int = Form(4),
     reset_frequency: str = Form("MONTHLY"),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("finance:numbering:manage")),
     db: AsyncSession = Depends(get_async_db_for_org),
 ):
     """Update a numbering sequence configuration."""
@@ -170,7 +171,7 @@ async def reset_numbering_sequence(
     request: Request,
     sequence_id: uuid.UUID,
     new_value: int = Form(0),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("finance:numbering:reset")),
     db: AsyncSession = Depends(get_async_db_for_org),
 ):
     """Reset a sequence counter to a specific value."""
@@ -207,7 +208,7 @@ async def automation_settings(
 @router.post("/automation-settings", response_class=HTMLResponse)
 async def update_automation_settings(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("finance:settings:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update automation settings."""
@@ -266,7 +267,7 @@ async def payroll_settings(
 @router.post("/payroll", response_class=HTMLResponse)
 async def update_payroll_settings(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("finance:settings:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update payroll settings."""
@@ -314,7 +315,7 @@ async def report_settings(
 @router.post("/reports", response_class=HTMLResponse)
 async def update_report_settings(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("finance:settings:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update report settings."""
@@ -368,7 +369,7 @@ async def exchange_rates_list(
 @router.post("/exchange-rates", response_class=HTMLResponse)
 async def create_exchange_rate(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("fx:rates:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create a manual exchange rate."""
@@ -397,7 +398,7 @@ async def create_exchange_rate(
 @router.post("/exchange-rates/fetch", response_class=HTMLResponse)
 async def fetch_exchange_rates(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("fx:rates:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Trigger exchange rate fetch from Currency API."""
@@ -419,7 +420,7 @@ async def fetch_exchange_rates(
 async def delete_exchange_rate(
     request: Request,
     rate_id: uuid.UUID,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("fx:rates:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Delete an exchange rate."""

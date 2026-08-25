@@ -9,7 +9,12 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import quote_web_service
-from app.web.deps import get_db_for_org, WebAuthContext, require_finance_access
+from app.web.deps import (
+    get_db_for_org,
+    WebAuthContext,
+    require_finance_access,
+    require_web_permission,
+)
 
 router = APIRouter(prefix="/quotes", tags=["quotes-web"])
 
@@ -77,7 +82,7 @@ def create_quote(
     internal_notes: str | None = Form(None),
     terms_and_conditions: str | None = Form(None),
     lines_json: str = Form("[]"),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:quotes:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create new quote."""
@@ -125,7 +130,7 @@ def quote_detail(
 def send_quote(
     request: Request,
     quote_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:quotes:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Send quote."""
@@ -136,7 +141,7 @@ def send_quote(
 def accept_quote(
     request: Request,
     quote_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:quotes:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Accept quote."""
@@ -148,7 +153,7 @@ def reject_quote(
     request: Request,
     quote_id: str,
     reason: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:quotes:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Reject quote."""
@@ -159,7 +164,7 @@ def reject_quote(
 def convert_to_invoice(
     request: Request,
     quote_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:quotes:convert")),
     db: Session = Depends(get_db_for_org),
 ):
     """Convert quote to invoice."""
@@ -171,7 +176,7 @@ def convert_to_sales_order(
     request: Request,
     quote_id: str,
     customer_po_number: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:quotes:convert")),
     db: Session = Depends(get_db_for_org),
 ):
     """Convert quote to sales order."""
@@ -184,7 +189,7 @@ def convert_to_sales_order(
 def void_quote(
     request: Request,
     quote_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:quotes:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Void quote."""

@@ -98,17 +98,8 @@ MODULE_ACCESS_GUARDS = frozenset(
 # ---------------------------------------------------------------------------
 FINANCE_BACKLOG: dict[str, int] = {
     "ar.py": 40,
-    "automation.py": 17,
     "banking.py": 43,
-    "exp.py": 5,
     "gl.py": 21,
-    "import_export.py": 2,
-    "quote.py": 7,
-    "remita.py": 6,
-    "reports.py": 1,
-    "sales_order.py": 10,
-    "settings.py": 8,
-    "tax.py": 12,
 }
 
 

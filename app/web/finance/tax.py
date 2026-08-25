@@ -21,6 +21,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     require_finance_access,
+    require_web_permission,
 )
 
 router = APIRouter(prefix="/tax", tags=["tax-web"])
@@ -110,7 +111,7 @@ def new_tax_code_form(
 @router.post("/codes/new", response_class=HTMLResponse)
 async def create_tax_code(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:codes:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create a new tax code."""
@@ -132,7 +133,7 @@ def edit_tax_code_form(
 async def update_tax_code(
     request: Request,
     tax_code_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:codes:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update an existing tax code."""
@@ -144,7 +145,7 @@ async def update_tax_code(
 @router.post("/codes/{tax_code_id}/toggle", response_class=HTMLResponse)
 def toggle_tax_code(
     tax_code_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:codes:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Toggle tax code active/inactive status."""
@@ -225,7 +226,7 @@ def new_return_form(
 @router.post("/returns/new", response_class=HTMLResponse)
 async def create_return(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:returns:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create a new tax return."""
@@ -258,7 +259,7 @@ def edit_return_form(
 async def update_return(
     request: Request,
     return_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:returns:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update a tax return."""
@@ -371,7 +372,7 @@ def export_tax_control_supplier_wht(
 @router.post("/control-tracker/evidence", response_class=HTMLResponse)
 async def save_tax_control_evidence(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:wht:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Save manual evidence tracking for customer certificates or supplier remittances."""
@@ -433,7 +434,7 @@ def return_transactions(
 @router.post("/returns/{return_id}/recalculate", response_class=HTMLResponse)
 def recalculate_return(
     return_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:returns:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Recalculate a draft tax return."""
@@ -443,7 +444,7 @@ def recalculate_return(
 @router.post("/returns/{return_id}/review", response_class=HTMLResponse)
 def review_return(
     return_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:returns:review")),
     db: Session = Depends(get_db_for_org),
 ):
     """Mark a tax return as reviewed."""
@@ -453,7 +454,7 @@ def review_return(
 @router.post("/returns/{return_id}/file", response_class=HTMLResponse)
 def file_return(
     return_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:returns:file")),
     db: Session = Depends(get_db_for_org),
 ):
     """File a tax return."""
@@ -565,7 +566,7 @@ def new_fiscal_position(
 @router.post("/fiscal-positions/new", response_class=HTMLResponse)
 async def create_fiscal_position(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:codes:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle fiscal position creation."""
@@ -619,7 +620,7 @@ def edit_fiscal_position(
 async def update_fiscal_position(
     request: Request,
     fiscal_position_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:codes:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle fiscal position update."""
@@ -643,7 +644,7 @@ async def update_fiscal_position(
 def delete_fiscal_position(
     request: Request,
     fiscal_position_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("tax:codes:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle fiscal position deletion."""

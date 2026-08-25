@@ -30,6 +30,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     require_finance_access,
+    require_web_permission,
 )
 
 router = APIRouter(prefix="/reports", tags=["reports-web"])
@@ -529,7 +530,7 @@ def queue_general_ledger_export_route(
     start_date: str | None = None,
     end_date: str | None = None,
     fmt: str = Query("csv", alias="format"),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("reports:gl_detail:read")),
     db: Session = Depends(get_db_for_org),
 ) -> JSONResponse:
     """Queue general ledger export for background processing."""

@@ -20,6 +20,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     get_db_for_org,
+    require_any_web_permission,
     require_expense_access,
     require_web_permission,
 )
@@ -32,6 +33,21 @@ _require_claim_approve = require_web_permission("expense:claims:approve:tier1")
 _require_claim_reject = require_web_permission("expense:claims:reject")
 _require_claim_submit = require_web_permission("expense:claims:submit")
 _require_claim_delete = require_web_permission("expense:claims:delete")
+_require_claim_create = require_web_permission("expense:claims:create")
+_require_claim_comment = require_web_permission("expense:claims:comment")
+_require_claim_cancel = require_web_permission("expense:claims:cancel")
+# Withdrawing an approval is the approver's own act being reversed, so it is
+# approver authority at ANY tier rather than the tier-1 name `approve` uses:
+# `ExpenseService.withdraw_approval` already pins the caller to the employee
+# who approved this claim (or an admin override), and a tier-2-only approver
+# who approved a claim must be able to take that approval back.
+_require_claim_approval_withdraw = require_any_web_permission(
+    [
+        "expense:claims:approve:tier1",
+        "expense:claims:approve:tier2",
+        "expense:claims:approve:tier3",
+    ]
+)
 _require_claim_post = require_web_permission("expense:claims:post")
 _require_claim_reimburse = require_web_permission("expense:claims:reimburse")
 _require_category_manage = require_web_permission("expense:categories:manage")
@@ -296,7 +312,7 @@ def submit_expense_claim(
 def add_expense_claim_comment(
     claim_id: str,
     content: str = Form(...),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_comment),
     db: Session = Depends(get_db_for_org),
 ):
     """Add a comment to an expense claim."""
@@ -351,7 +367,7 @@ def reject_expense_claim(
 def withdraw_expense_claim_approval(
     claim_id: str,
     reason: str = Form(...),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_approval_withdraw),
     db: Session = Depends(get_db_for_org),
 ):
     """Withdraw approval from an approved, financially untouched claim."""
@@ -369,7 +385,7 @@ def withdraw_expense_claim_approval(
 def cancel_expense_claim(
     claim_id: str,
     reason: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_cancel),
     db: Session = Depends(get_db_for_org),
 ):
     """Cancel an expense claim."""
@@ -386,7 +402,7 @@ def cancel_expense_claim(
 @router.post("/claims/{claim_id}/resubmit")
 def resubmit_expense_claim(
     claim_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_submit),
     db: Session = Depends(get_db_for_org),
 ):
     """Resubmit a rejected expense claim."""
@@ -609,7 +625,7 @@ def create_expense(
     cost_center_id: str | None = Form(None),
     business_unit_id: str | None = Form(None),
     return_to: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_create),
     db: Session = Depends(get_db_for_org),
 ):
     """Create new expense."""

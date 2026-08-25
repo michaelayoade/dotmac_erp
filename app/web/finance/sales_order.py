@@ -9,7 +9,12 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import sales_order_web_service
-from app.web.deps import get_db_for_org, WebAuthContext, require_finance_access
+from app.web.deps import (
+    get_db_for_org,
+    WebAuthContext,
+    require_finance_access,
+    require_web_permission,
+)
 
 router = APIRouter(prefix="/sales-orders", tags=["sales-orders-web"])
 
@@ -89,7 +94,7 @@ def create_sales_order(
     customer_notes: str | None = Form(None),
     internal_notes: str | None = Form(None),
     lines_json: str = Form("[]"),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create new sales order."""
@@ -144,7 +149,7 @@ def sales_order_detail(
 def submit_order(
     request: Request,
     so_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Submit sales order for approval."""
@@ -155,7 +160,7 @@ def submit_order(
 def approve_order(
     request: Request,
     so_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Approve sales order."""
@@ -166,7 +171,7 @@ def approve_order(
 def confirm_order(
     request: Request,
     so_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Confirm sales order."""
@@ -178,7 +183,7 @@ def cancel_order(
     request: Request,
     so_id: str,
     reason: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Cancel sales order."""
@@ -189,7 +194,7 @@ def cancel_order(
 def hold_order(
     request: Request,
     so_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Put sales order on hold."""
@@ -200,7 +205,7 @@ def hold_order(
 def release_order(
     request: Request,
     so_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:approve")),
     db: Session = Depends(get_db_for_org),
 ):
     """Release sales order from hold."""
@@ -211,7 +216,7 @@ def release_order(
 def create_invoice_from_order(
     request: Request,
     so_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:invoices:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create invoice from shipped lines."""
@@ -244,7 +249,7 @@ def create_shipment(
     shipping_method: str | None = Form(None),
     notes: str | None = Form(None),
     line_quantities_json: str = Form("[]"),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:ship")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create shipment for sales order."""
@@ -266,7 +271,7 @@ def create_shipment(
 def mark_delivered(
     request: Request,
     shipment_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ar:orders:ship")),
     db: Session = Depends(get_db_for_org),
 ):
     """Mark shipment as delivered."""

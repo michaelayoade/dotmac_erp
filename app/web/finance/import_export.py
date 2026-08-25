@@ -17,6 +17,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     require_finance_access,
+    require_web_permission,
 )
 
 
@@ -251,7 +252,7 @@ async def preview_import(
     request: Request,
     entity_type: str,
     file: UploadFile = File(...),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("import:preview")),
     db: Session = Depends(get_db_for_org),
 ):
     """Preview import with validation and column mapping (web route)."""
@@ -280,7 +281,7 @@ async def execute_import(
     skip_duplicates: str | None = Form(default=None),
     dry_run: str | None = Form(default=None),
     column_mapping: str | None = Form(default=None),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("import:execute")),
     db: Session = Depends(get_db_for_org),
 ):
     """Execute import operation (web route)."""

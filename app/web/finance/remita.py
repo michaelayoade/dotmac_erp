@@ -19,6 +19,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     require_finance_access,
+    require_web_permission,
 )
 
 router = APIRouter(prefix="/remita", tags=["remita-web"])
@@ -121,7 +122,7 @@ def generate_rrr(
     description: str = Form(""),
     source_type: str | None = Form(None),
     source_id: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("remita:rrr:generate")),
     db: Session = Depends(get_db_for_org),
 ):
     """
@@ -260,7 +261,7 @@ def rrr_detail(
 def refresh_status(
     request: Request,
     rrr_id: UUID,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("remita:rrr:refresh")),
     db: Session = Depends(get_db_for_org),
 ):
     """
@@ -292,7 +293,7 @@ def mark_paid(
     rrr_id: UUID,
     payment_reference: str = Form(...),
     payment_channel: str = Form("Bank"),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("remita:rrr:mark_paid")),
     db: Session = Depends(get_db_for_org),
 ):
     """
@@ -325,7 +326,7 @@ def link_source(
     rrr_id: UUID,
     source_type: str = Form(...),
     source_id: str = Form(...),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("remita:rrr:link")),
     db: Session = Depends(get_db_for_org),
 ):
     """Link an RRR to a source entity."""
@@ -384,7 +385,7 @@ def source_search(
 @router.post("/refresh-all", response_class=HTMLResponse)
 def refresh_all_pending(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("remita:rrr:refresh")),
     db: Session = Depends(get_db_for_org),
 ):
     """
@@ -426,7 +427,7 @@ def refresh_all_pending(
 def cancel_rrr(
     request: Request,
     rrr_id: UUID,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("remita:rrr:cancel")),
     db: Session = Depends(get_db_for_org),
 ):
     """

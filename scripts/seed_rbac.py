@@ -423,6 +423,42 @@ FINANCE_PERMISSIONS = [
     ("org:locations:manage", "Manage locations"),
     ("org:segments:read", "View reporting segments"),
     ("org:segments:manage", "Manage reporting segments"),
+    # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+    # Named by the web routes ADR-0006 decomposed in app/web/finance/. Each
+    # covers an act that had no permission at all, so `require_finance_access`
+    # — module VISIBILITY — was the only thing standing in front of it.
+    #
+    # Numbering is split in two on purpose. Editing a sequence's shape changes
+    # the numbers documents will get; resetting the counter can RE-ISSUE
+    # numbers already printed on filed invoices, which is a different and much
+    # worse act, so it gets its own key and a narrower grant.
+    ("finance:numbering:manage", "Configure document numbering sequences"),
+    (
+        "finance:numbering:reset",
+        "Reset a numbering sequence counter (may re-issue numbers)",
+    ),
+    (
+        "finance:settings:manage",
+        "Update finance module settings (automation, payroll, reporting)",
+    ),
+    # Generating an occurrence is not the same authority as editing the
+    # template: it CREATES the invoice, bill, expense or journal.
+    (
+        "automation:recurring:generate",
+        "Generate the next occurrence from a recurring template",
+    ),
+    ("automation:fields:manage", "Manage finance custom field definitions"),
+    # Shipping fulfils stock reservations, so it is a fulfilment act rather
+    # than an order-approval one.
+    ("ar:orders:ship", "Ship sales orders and mark shipments delivered"),
+    # Remita (RRR) had no catalogue entries at all. `mark_paid` asserts that
+    # money arrived and drives the source handler that settles the underlying
+    # document, so it is separated from the rest of the RRR lifecycle.
+    ("remita:rrr:generate", "Generate a Remita retrieval reference (RRR)"),
+    ("remita:rrr:refresh", "Refresh RRR status from the Remita gateway"),
+    ("remita:rrr:link", "Link an RRR to a source document"),
+    ("remita:rrr:mark_paid", "Manually mark an RRR paid (asserts funds were received)"),
+    ("remita:rrr:cancel", "Cancel a pending RRR"),
 ]
 
 # =============================================================================
@@ -686,6 +722,12 @@ EXPENSE_PERMISSIONS = [
     # -------------------------------------------------------------------------
     ("expense:reports:read", "View expense reports"),
     ("expense:reports:export", "Export expense data"),
+    # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+    # Commenting on a claim writes to its official record, and cancelling one
+    # ends a submitted claim; neither had a permission, so `expense:access`
+    # (or `finance:access`, through require_expense_access) reached both.
+    ("expense:claims:comment", "Comment on an expense claim"),
+    ("expense:claims:cancel", "Cancel a submitted expense claim"),
 ]
 
 # =============================================================================
@@ -1277,6 +1319,18 @@ ROLE_PERMISSIONS = {
         "org:locations:manage",
         "org:segments:read",
         "org:segments:manage",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "finance:numbering:manage",
+        "finance:numbering:reset",
+        "finance:settings:manage",
+        "automation:recurring:generate",
+        "automation:fields:manage",
+        "ar:orders:ship",
+        "remita:rrr:generate",
+        "remita:rrr:refresh",
+        "remita:rrr:link",
+        "remita:rrr:mark_paid",
+        "remita:rrr:cancel",
     ],
     "finance_manager": [
         "finance:access",
@@ -1570,6 +1624,19 @@ ROLE_PERMISSIONS = {
         "org:projects:read",
         "org:locations:read",
         "org:segments:read",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        # NOT finance:numbering:reset: re-issuing document numbers that are
+        # already on filed invoices stays with finance_director alone.
+        # NOT automation:*: finance_manager holds no automation permission
+        # today, and a security narrowing does not quietly fill an omission in.
+        "finance:numbering:manage",
+        "finance:settings:manage",
+        "ar:orders:ship",
+        "remita:rrr:generate",
+        "remita:rrr:refresh",
+        "remita:rrr:link",
+        "remita:rrr:mark_paid",
+        "remita:rrr:cancel",
     ],
     "senior_accountant": [
         "finance:access",
@@ -1854,6 +1921,16 @@ ROLE_PERMISSIONS = {
         "ar:aging:read",
         "gl:accounts:read",
         "banking:accounts:read",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        # Collections is the clerk's job, so it keeps the RRR lifecycle — but
+        # NOT remita:rrr:mark_paid, which asserts money arrived and settles the
+        # source document. ar_clerk holds ar:receipts:create and not
+        # ar:receipts:post; this is the same line.
+        "ar:orders:ship",
+        "remita:rrr:generate",
+        "remita:rrr:refresh",
+        "remita:rrr:link",
+        "remita:rrr:cancel",
     ],
     "inventory_manager": [
         "finance:access",
@@ -1915,6 +1992,10 @@ ROLE_PERMISSIONS = {
         "fa:depreciation:read",
         "fa:categories:read",
         "gl:accounts:read",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        # Shipping a sales order consumes the stock reservation behind it, and
+        # inventory_manager already reaches /sales-orders through finance:access.
+        "ar:orders:ship",
     ],
     "asset_manager": [
         "fa:access",
@@ -2497,6 +2578,9 @@ ROLE_PERMISSIONS = {
         "expense:cards:transactions:reconcile",
         "expense:reports:read",
         "expense:reports:export",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "expense:claims:comment",
+        "expense:claims:cancel",
     ],
     "expense_approver": [
         "expense:access",
@@ -2513,6 +2597,8 @@ ROLE_PERMISSIONS = {
         "expense:advances:read",
         "expense:advances:approve:tier2",
         "expense:reports:read",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "expense:claims:comment",
     ],
     "expense_processor": [
         "expense:access",
@@ -2526,6 +2612,8 @@ ROLE_PERMISSIONS = {
         "expense:cards:transactions:read",
         "expense:cards:transactions:reconcile",
         "expense:reports:read",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "expense:claims:comment",
     ],
     "expense_reviewer": [
         "expense:access",
@@ -2534,6 +2622,8 @@ ROLE_PERMISSIONS = {
         "expense:policies:read",
         "expense:limits:review",
         "expense:reports:read",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "expense:claims:comment",
     ],
     "expense_reimburser": [
         "expense:access",
@@ -2541,6 +2631,8 @@ ROLE_PERMISSIONS = {
         "expense:claims:read",
         "expense:claims:reimburse",
         "expense:reports:read",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "expense:claims:comment",
     ],
     # -------------------------------------------------------------------------
     # Operations Roles
@@ -2655,6 +2747,8 @@ ROLE_PERMISSIONS = {
         "tasks:read",
         "tasks:create",
         "tasks:assign",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "expense:claims:comment",
     ],
     "employee": [
         # Coach (self-only)
@@ -2697,6 +2791,8 @@ ROLE_PERMISSIONS = {
         "tasks:read_own",
         "tasks:update",
         "tasks:complete",
+        # --- finance write decomposition: tax/orders/settings/automation/remita/expense ---
+        "expense:claims:comment",
     ],
 }
 
