@@ -1,0 +1,449 @@
+# `dotmac-tax` C1 — typed source-fact and accounting-consequence adapters
+
+Status: **adapters delivered; module NOT composed**
+Companion to `docs/architecture/dotmac-tax-adoption-boundary.md`, which remains
+the authoritative design. This note records what C1 built, what it deliberately
+did not build, and every ERP field that does not map cleanly onto the published
+`dotmac-tax` contract.
+
+Contract read against: `dotmac-tax 0.1.0a2`
+(`packages/dotmac-tax/src/dotmac_tax/contracts.py` in `dotmac_starter_mt`) —
+`TaxFact`, `TaxRuleInput`, `TaxJurisdictionInput`, `TaxRuleBandInput`.
+
+Delivered:
+
+| Artefact | Path |
+|---|---|
+| ERP-owned contracts | `app/services/finance/tax/adoption/contracts.py` |
+| Inbound mappers | `app/services/finance/tax/adoption/inbound.py` |
+| Outbound projection | `app/services/finance/tax/adoption/outbound.py` |
+| Composition state (inert) | `app/services/finance/tax/adoption/composition.py` |
+| Tests | `tests/ifrs/tax/test_tax_adoption_adapters.py` |
+
+C1 changes no writer. `dotmac-tax` is absent from `pyproject.toml` and
+`poetry.lock`, its `tx` lineage is absent from `alembic.ini`, `mod_tax` exists in
+no ERP database, and no calculator, reader or filing path has been repointed.
+Pinning, lineage composition, policy backfill and cohort cutover are C2/C3/C4.
+
+---
+
+## 1. Source-fact families covered
+
+| Family | Cohort | ERP source | Mapper |
+|---|---|---|---|
+| `ar_invoice_line` | 1 | `ar.invoice` + `ar.invoice_line` | `ar_invoice_line_fact` |
+| `ap_invoice_line` | 2 | `ap.supplier_invoice` + `ap.supplier_invoice_line` | `ap_supplier_invoice_line_fact` |
+| `payroll_taxable_pay` | 6 | `payroll.salary_slip` + `PAYECalculator` output | `payroll_taxable_pay_fact` |
+
+These are the first two shadow cohorts plus payroll, which is the family whose
+shape most stresses the contract (see § 5.7) and therefore the one worth proving
+early rather than discovering at cutover.
+
+## 2. Families deliberately NOT covered, and why
+
+`SourceFactFamily` keeps a member for each so the gap is visible;
+`to_tax_fact_kwargs` refuses an unmapped family by name rather than letting a
+hand-built fact through (`UNMAPPED_FAMILIES`).
+
+| Family / area | Why not in C1 |
+|---|---|
+| `ar_settlement_withholding`, `ap_settlement_withholding` (cohort 4) | Settlement WHT is not line-shaped. The fact is a gross settlement event spread across payment allocations, and the invariant that must survive is `net + WHT = gross` at the DOCUMENT level across partial settlements. A per-line mapper modelled on cohorts 1–2 would be the wrong shape, and ERP currently carries header deductions (`Invoice.withholding_tax_amount`, `vat_withheld`) that have no line to hang from. This needs its own fact shape and its own review. |
+| `expense_entry` (cohort 5) | Depends on cohort 5's stamp-duty/fixed-levy decisions, which in turn depend on the module `fixed_amount` typed-money rule replacing ERP's `is_fixed_amount` + `tax_rate` overload. Mapping it before that adjudication would bake the overload in. |
+| Recurring AR/AP generation (cohort 3) | Correctly has NO fact family of its own. `app/services/finance/automation/recurring.py` produces ordinary AR/AP lines and must submit the same typed line fact — the boundary document is explicit that no recurring-only calculator is retained. Adding a family here would create exactly the duplicate path it forbids. |
+| Sub-imported accounting observations (cohort 7) | These are typed EXTERNAL observations that must be recorded, mapped and reconciled, with the source tax ids remaining evidence rather than ERP master ids. That is an importer contract, not a determination fact, and it belongs with the Sub sync boundary. |
+| Deferred / current tax (cohort 6b) | The accounting measurement inputs stay in ERP by design; only where the fact IS a tax determination does module identity apply. Nothing here is a determination fact today. |
+| Report boxes, filing obligations, return lifecycle (cohort 8) | Module-side authorities (`StatutoryReportBoxInput`, filing obligations, return transitions). They consume determinations; they are not source facts. |
+
+## 3. Two ERP VAT rows → one module tax code
+
+**This is the finding, not a footnote.**
+
+ERP models the inclusive variant of VAT as a SEPARATE `tax.tax_code` row. Of the
+six live codes in production, two are VAT and they differ in exactly one column:
+
+| `tax_code` | `tax_type` | `tax_rate` | `is_inclusive` | everything else |
+|---|---|---|---|---|
+| `VAT-7.5` | `VAT` | `0.075000` | `false` | identical |
+| `VAT-7.5 (inclusive)` | `VAT` | `0.075000` | `true` | identical |
+
+That is the "variant as a new row" anti-pattern the whole programme exists to
+remove. Its costs are the usual ones: the two rows drift independently (a rate
+change must be applied twice, and nothing enforces that it is); return-box and
+reporting-code identity is duplicated; `tax_collected_account_id` is mapped
+twice; and every caller that must "pick the inclusive one" is making a POLICY
+decision at a call site.
+
+In `dotmac-tax`, `inclusive` is a column on a tax **rule**
+(`TaxRuleInput.inclusive`), and a rule is selected by jurisdiction, effective
+date, fact signature and the party/supply/place classifications. So:
+
+```
+ERP  tax.tax_code  "VAT-7.5"              ─┐
+                                           ├─► ONE module TaxCode  (code "VAT", tax_kind_code "vat")
+ERP  tax.tax_code  "VAT-7.5 (inclusive)"  ─┘        │
+                                                    ├─► TaxRule v1  inclusive=false  rate=0.075  (exclusive supplies)
+                                                    └─► TaxRule v1' inclusive=true   rate=0.075  (inclusive supplies)
+```
+
+Both rules carry the same `tax_code_id`, so return-box identity, reporting code
+and the ERP account mapping exist **once**. What distinguishes them is the
+supply/party/place classification that selects one over the other — which is
+evidenced, versioned policy data, not a code a caller names.
+
+Concretely, at backfill (C3):
+
+| ERP evidence | Module projection |
+|---|---|
+| `VAT-7.5`.`tax_code_id`, `VAT-7.5 (inclusive)`.`tax_code_id` | both retained as ERP-side evidence refs; NEITHER becomes the module tax-code id |
+| `tax_code` / `tax_name` / `tax_return_box` / `reporting_code` (identical on both rows) | one `TaxCode` |
+| `tax_type = VAT` | open `tax_kind_code`, not an enum |
+| `tax_rate = 0.075` (twice) | one rate, on two rules |
+| `is_inclusive = false` | `TaxRule(inclusive=False, calculation_base_code="source_amount")` |
+| `is_inclusive = true` | `TaxRule(inclusive=True)` — selected by the supply classification that says the price is tax-inclusive |
+| `tax_collected_account_id` (twice) | ONE `TaxCodeAccounts` entry keyed by the module tax-code id |
+
+**Every historical `ar.invoice_line_tax` / `ap.supplier_invoice_line_tax` row
+pointing at either legacy id must be linked to the single new code and to the
+rule whose `inclusive` matches the row's own `is_inclusive` snapshot.** A row
+whose `is_inclusive` disagrees with the legacy code it references is an
+`operator_adjudication_required` row, not a variance to normalise away.
+
+The C1 adapters make the collapse structurally enforceable rather than merely
+documented: **`ERPSourceTaxFactV1` has no `inclusive` field and no tax-code
+field.** An ERP caller literally cannot request the inclusive variant. The rule
+decides. `test_a_source_fact_cannot_express_inclusiveness_or_a_tax_code` asserts
+both absences, and `to_tax_fact_kwargs` is checked to carry neither.
+
+The same reasoning applies to the four remaining live codes:
+
+| ERP rows | Module projection |
+|---|---|
+| `WHT 10%`, `WHT 5%` (both `WITHHOLDING`, compound, recoverable) | Separate rates are genuinely separate rules on ONE withholding code, selected by the **party/supply classification** that determines which rate a payee attracts — not by a caller passing a different `tax_code_id`. Whether they are one code or two is a C3 adjudication that must cite the legal basis for the rate split. |
+| `WHT 2%` (`WITHHOLDING`, compound, NOT recoverable) | `recoverable_rate = 0` on its rule. `is_recoverable`/`recovery_rate` stop being code columns. |
+| `SD-1%` (`STAMP_DUTY`, 0.01) | `tax_kind_code = "stamp_duty"` — open data, no enum migration. It is a percentage rule today; if any historical row used `is_fixed_amount`, that row needs the typed `fixed_amount` Money rule and is adjudicated separately (§ 5.2). |
+
+`is_compound` alone does not survive the move: the module needs an explicit
+positive `calculation_sequence` plus `calculation_base_code =
+"source_plus_prior_tax"`. ERP's current ordering — ordinary taxes first, then
+compound, then by tax-code **text** — is not migration evidence, and C3 must
+record an approved ordering adjudication instead of copying it.
+
+---
+
+## 4. Field-by-field ERP → `TaxFact`
+
+`TaxFact` has fifteen fields. `to_tax_fact_kwargs` produces exactly those and
+nothing else; `TAX_FACT_FIELDS` mirrors the list and is asserted equal to the
+real dataclass whenever the distribution is installed.
+
+Note that `tenant_id` is **not** a `TaxFact` field: the module takes it as a
+separate argument to `determine_tax_set`, and ERP passes `fact.tenant_id`, a
+derived property returning `organization_id` (same-UUID mapping,
+`app/tenancy.py`).
+
+### 4.1 `ar_invoice_line` (transaction side `output`)
+
+| `TaxFact` field | ERP source | Notes |
+|---|---|---|
+| `jurisdiction_id` | **caller-supplied** | The MODULE jurisdiction id from the C3 backfill map. ERP's `tax.tax_jurisdiction.jurisdiction_id` is a different identifier space and is never passed through. |
+| `occurred_on` | `ar.invoice.invoice_date` | |
+| `fact_kind` | constant `"ar_invoice_line"` | ERP declares this string; published rules must use the same `fact_kind`. |
+| `recognition_basis_code` | `"accrual"` (default), `"cash"` | Matches ERP's own `TaxRecognitionBasis` vocabulary. Cash-basis VAT callers pass `"cash"` explicitly. |
+| `transaction_side` | constant `"output"` | Crosses as the module's plain string, not an ERP enum. |
+| `base_amount` | `ar.invoice_line.line_amount` + `ar.invoice.currency_code` | Exact kernel `Money` via `money_boundary.to_boundary_money`; magnitude only. |
+| `source_ref` | `erp:ar.invoice_line:{line_id}` | The determination unit is the LINE. |
+| `source_version` | `"v" + ar.invoice.version` | `VersionedMixin`. See § 5.3. |
+| `evidence_ref` | `erp:ar.invoice:{invoice_id}` | |
+| `counterparty_ref` | `erp:customer:{ar.invoice.customer_id}` | Opaque to the module. |
+| `supply_ref` | `erp:item:{ar.invoice_line.item_id}` or `None` | `item_id` is nullable in ERP. |
+| `place_ref` | **caller-supplied**, default `None` | See § 5.5. |
+| `party_category` | never populated | Module-owned classification policy. |
+| `supply_category` | never populated | Module-owned classification policy. |
+| `place_code` | never populated | Module-owned classification policy. |
+
+ERP-only fields carried on `ERPSourceTaxFactV1` and dropped before the module
+sees them: `organization_id`, `family`, `document_id`, `line_id`, `reversal`,
+`correlation_ref`, `observed_tax_code_refs`.
+
+`observed_tax_code_refs` is the legacy `ar.invoice_line_tax` rows already loaded
+on the line, rendered as `erp:tax.tax_code:{id}` and ordered by the legacy
+`sequence`. It is **shadow-comparator evidence, never an input** — passing ERP's
+chosen codes to the module would reinstate the decision ERP is retiring. The
+mapper reads only an already-loaded relationship and issues no query.
+
+### 4.2 `ap_invoice_line` (transaction side `input`)
+
+Identical shape with four substitutions, and deliberately a separate function
+rather than the AR mapper behind a flag:
+
+| `TaxFact` field | ERP source |
+|---|---|
+| `transaction_side` | constant `"input"` |
+| `base_amount` | `ap.supplier_invoice_line.line_amount` + `ap.supplier_invoice.currency_code` |
+| `source_ref` | `erp:ap.supplier_invoice_line:{line_id}` |
+| `source_version` | `"v" + ap.supplier_invoice.version` |
+| `evidence_ref` | `erp:ap.supplier_invoice:{invoice_id}` |
+| `counterparty_ref` | `erp:supplier:{ap.supplier_invoice.supplier_id}` |
+
+Recoverability is **not** an inbound field. `ap.supplier_invoice_line_tax
+.is_recoverable` / `.recoverable_amount` are legacy calculator output; the module
+decides recovery from `TaxRuleInput.recoverable_rate` and returns the split as
+amounts.
+
+### 4.3 `payroll_taxable_pay` (transaction side `liability`)
+
+| `TaxFact` field | ERP source | Notes |
+|---|---|---|
+| `jurisdiction_id` | caller-supplied | as above |
+| `occurred_on` | `payroll.salary_slip.end_date` | The period boundary, NOT `posting_date`, which moves for banking reasons without changing the tax. |
+| `fact_kind` | constant `"payroll_taxable_pay"` | |
+| `recognition_basis_code` | constant `"payroll_period"` | A third basis ERP declares; the module's vocabulary is open. |
+| `transaction_side` | constant `"liability"` | Employer-remitted employee tax is neither an input credit nor an output tax on a supply. |
+| `base_amount` | `PAYEBreakdown.taxable_income` (ANNUAL) | See § 5.7. |
+| `source_ref` | `erp:payroll.salary_slip:{slip_id}:paye` | |
+| `source_version` | **caller-supplied** | `SalarySlip` has no `VersionedMixin.version`. See § 5.4. |
+| `evidence_ref` | `erp:payroll.payroll_entry:{entry_id}` (falls back to the slip) | |
+| `counterparty_ref` | `erp:employee:{employee_id}` | |
+| `supply_ref`, `place_ref` | always `None` | Payroll has no supply or place. |
+| `party_category`, `supply_category`, `place_code` | never populated | |
+
+The mapper takes keyword scalars rather than an ORM row on purpose: the taxable
+base is DERIVED in memory by `PAYECalculator.calculate`
+(`annual_gross - total_statutory - rent_relief`) and is persisted nowhere. The
+only durable payroll artefact is a `payroll.salary_slip_deduction` row for
+component `PAYE` holding the resulting amount. Re-deriving the base inside the
+tax adapter would install a second payroll-base calculator, which is the exact
+duplication this programme removes.
+
+`payroll.tax_band` rows are likewise not read: bands become module
+`TaxRuleBandInput` policy at C3, and a determination that consulted ERP bands
+would be ERP calculating the tax again under another name.
+
+---
+
+## 5. What does NOT map cleanly
+
+Reported, not bent. Each item is either refused loudly by the adapter or flagged
+here as a C3 adjudication.
+
+### 5.1 Foreign-currency documents vs the jurisdiction currency — **blocker candidate**
+
+`dotmac_tax` validates a fact's currency AND minor units against its
+**jurisdiction's** currency (`_validate_tax_fact` → "tax fact uses the wrong
+jurisdiction currency"). ERP's money boundary provisions both `NGN` and `USD`,
+and both invoice headers carry `currency_code` plus `exchange_rate` /
+`functional_currency_amount`, so ERP can hold a document whose currency is not
+the tax jurisdiction's.
+
+There is no field on `TaxFact` for an exchange rate or a functional amount, and
+the adapter does not invent one — a fact is submitted in the document currency
+and the module accepts or refuses it. Before cohort 1 shadowing, C3 must
+establish, from evidence, either that every in-scope document is in the
+jurisdiction currency, or which converted amount is the legal tax base and who
+owns that conversion. **This is an adjudication, not a defaulting decision, and
+it is the item most likely to block cohorts 1–2.**
+
+### 5.2 `is_fixed_amount` overloads `tax_rate`
+
+`tax.tax_code.is_fixed_amount` reinterprets `tax_rate numeric(10,6)` as an
+absolute money amount. The module has a typed `fixed_amount: Money` on the rule
+and a separate `calculation_method = "fixed"`, so nothing is overloaded there.
+The six live production codes are all percentage codes, so this is a historical-
+row question: any row that ever used the overload must project to a fixed rule
+with exact money and retain a source-row fingerprint proving the legacy
+representation. `numeric(10,6)` also cannot hold a large fixed levy without
+losing the integer part — that limit must be checked against actual values, not
+assumed away.
+
+### 5.3 `Invoice.version` granularity
+
+`VersionedMixin.version` is the only monotonic revision either invoice header
+carries, so it is what `source_version` is built from. A LINE edit that does not
+bump the header version reuses a source version with different facts. The module
+then raises `TaxConflict` — loud and fail-closed, which is the correct end state
+— but the fix belongs in the AR/AP line writers at cutover, not in a wider
+version string invented by an adapter. C4 must ensure a line mutation bumps its
+header version.
+
+### 5.4 Payroll has no version column
+
+`SalarySlip` does not use `VersionedMixin`. `source_version` is therefore
+caller-supplied and the payroll writer owns the revision it publishes. The
+adapter refuses to derive one from a timestamp.
+
+### 5.5 ERP has no place dimension
+
+`TaxFact.place_ref` / `place_code` model a place of supply. ERP has no such
+column on an invoice or a line — `billing_address` / `shipping_address` are JSONB
+blobs, not references. `place_ref` is caller-supplied and defaults to `None`. If
+any live rule needs a place classification, C3 must first create a real,
+referenceable place dimension; a JSONB address is not one.
+
+### 5.6 Negative lines and credit-note sign conventions
+
+`TaxFact.base_amount` must be non-negative and the module has no reversal
+concept, so the magnitude is the fact and the direction is an ERP consequence.
+Two ERP realities do not map onto that cleanly:
+
+- A **negative discount line inside a STANDARD invoice** is legal
+  (`app/services/finance/ar/invoice.py` guards the invoice TOTAL, not the line).
+  Taking its magnitude would tax a discount as if it were a supply, so the
+  mapper **refuses** it and names the case. Cohort 1 must decide whether such
+  lines are netted before determination or determined as negative adjustments —
+  and the answer must be evidenced.
+- A **credit note's line sign is unconstrained** anywhere in ERP; both spellings
+  occur. Direction is therefore taken from `invoice_type`, which IS a constrained
+  column, and the magnitude from the line. A credit note with mixed line signs is
+  a document defect that this adapter cannot detect from one line.
+
+### 5.7 Payroll annualisation, monthly division and pro-ration do not round-trip
+
+ERP's PAYE path annualises pay, applies annual band thresholds, divides the
+annual tax by twelve, and then pro-rates by `payment_days /
+total_working_days`. A `TaxFact` can carry the annual taxable base — and does —
+but there is no field for "divide by twelve" or "pro-rate by attendance", and
+`determine_tax_set` returns the tax for the base it was given.
+
+So the module's answer for a payroll fact is the **annual** PAYE, and the
+monthly division plus attendance pro-ration remain an ERP consequence applied
+afterwards. Cohort 6 shadowing must compare at the annual figure, not the payslip
+figure, or it will report a difference on every part-month employee. Whether the
+pro-rated monthly amount can be reconstructed exactly (rounding at each step)
+is an open C3 question.
+
+### 5.8 Output-side "recoverability" has no module equivalent
+
+`ar.invoice_line_tax.is_recoverable` / `.recoverable_amount` exist "for special
+cases like bad debt VAT relief" (the model's own comment). The module's
+`recoverable_rate` is an input-tax recovery property on a rule. Bad-debt relief
+is a later, separate event on an already-determined output tax, not a property
+of the original determination, and C1 does not map it. Cohort 1 must confirm
+whether any live AR row uses it.
+
+### 5.9 Header-level deductions have no line to hang from
+
+`Invoice.withholding_tax_amount`, `withholding_tax_code_id`,
+`stamp_duty_amount`, `stamp_duty_code_id`, `stamp_duty_treatment` and
+`vat_withheld` are HEADER columns computed from the invoice subtotal, not from a
+line. They belong to cohorts 4–5 and have no C1 mapper (§ 2).
+
+### 5.10 `recovery_rate numeric(5,4)` precision
+
+ERP stores recovery as `numeric(5,4)`; the module's `recoverable_rate` uses its
+own `RATE` type. C3 must verify no live value loses precision in projection
+rather than assuming the scales agree.
+
+---
+
+## 6. The outbound projection
+
+`project_determination_set(apply, *, accounts, expected_fingerprint,
+fiscal_period_id) -> ConsequencePosting` is a **pure function**. It verifies,
+resolves accounts, and renders into `JournalInput`/`JournalLineInput` — the
+accounting owner's own input type. It performs no write; invoking
+`BasePostingAdapter.create_approve_and_post_journal` and writing the document /
+tax-transaction snapshot is C4.
+
+Purity buys three things. It is testable with no database, no session and no
+`dotmac-tax` installed. It cannot half-write, so "refuse the whole source row"
+is structural rather than a `rollback()` someone has to remember. And the
+preconditions it cannot check itself become REQUIRED ARGUMENTS: `fiscal_period_id`
+is what `PeriodGuardService.require_open_period()` returns, so a caller that has
+not proved the period open has nothing to pass; `expected_fingerprint` is what
+ERP recorded when it submitted the fact, so a silently re-determined set cannot
+be posted against a document priced on the previous one.
+
+Which way the ignorance runs: the module produces amounts, code/rule identity
+and treatment, and is never asked about an account, a journal, a period or a
+side. Accounts enter through `TaxAccountMap` — an ERP-owned effective mapping
+**keyed by module tax-code id**, deliberately not read from
+`tax.tax_code.tax_collected_account_id` &c., because those columns belong to the
+rows being replaced and their ids are a different identifier space.
+
+Consequence shapes (`reversal` flips every line):
+
+| `AccountingConsequence` | Lines |
+|---|---|
+| `ar_output_tax` | CREDIT collected per component; DEBIT the receivable counterpart for the total |
+| `ap_input_tax` | DEBIT recoverable → tax-paid (asset); DEBIT non-recoverable → tax-expense; CREDIT the payable counterpart. The one place a component yields two lines, and the reason the module's `recoverable_rate` must arrive as an AMOUNT split rather than a ratio ERP re-applies. |
+| `withholding_payable` | CREDIT collected (WHT payable); DEBIT the counterpart, preserving `net + WHT = gross` |
+| `payroll_tax_payable` | CREDIT collected (PAYE payable); DEBIT the payroll counterpart |
+
+Refusals: changed fingerprint, missing or ambiguous account mapping, a closed
+period (by construction), a currency mismatch, components out of calculation
+order, a recovery split that does not total its component, components that do
+not total the set, `net + tax != gross`, an inclusive set whose `source != gross`,
+an exclusive set whose `source != net`, an inclusive component combined with any
+other (mirroring the a2 candidate's own refusal), a standard-rated component
+holding zero tax, and a projected posting that does not balance —
+`JournalService._require_balanced` admits no tolerance, so it is refused here,
+where the offending component can still be named.
+
+Zero treatments are **carried, not dropped**. `zero_rated`, `exempt` and
+`out_of_scope` are distinct treatments that all produce zero tax, and a zero
+component is still reportable — it belongs in a return box. They land on
+`ConsequencePosting.reportable_zero_components`. A set in which EVERY component
+is a zero treatment is refused for posting with a message naming the return-box
+consequence, rather than emitting a meaningless zero-value journal for every
+exempt line.
+
+Unlike the legacy `TAXPostingAdapter` — whose own docstring records that it emits
+tax lines alone and leaves the contra to the source document — a
+`ConsequencePosting` is self-balancing. A projection that cannot balance itself
+can only be validated after being combined with something else, which is exactly
+when a shadow comparison stops being able to attribute a difference.
+
+Two ERP account mappings for one module tax code is an ambiguity, not
+last-one-wins: it is refused at `TaxAccountMap` construction, per the boundary
+document's "multiple plausible accounts" adjudication rule. A missing account is
+never substituted with a suspense or a default.
+
+---
+
+## 7. The one-way import rule
+
+`dotmac_tax` imports nothing from ERP. ERP touches `dotmac_tax` in exactly one
+place — `inbound.to_tax_fact` — through a lazy import of the package's PUBLIC
+surface (`from dotmac_tax import TaxFact`), never a submodule and never a model.
+`outbound.py` contains no reference to the module at all; it mirrors the
+reviewable fields of an approved determination set as ERP-owned types, which is
+what lets the consequence path be written, reviewed and tested before the
+package is ever pinned. `test_the_module_is_never_asked_about_an_account_or_a_journal`
+asserts the absence.
+
+`to_tax_fact_kwargs` is pure and separate from `to_tax_fact` so the field-by-
+field mapping stays testable with the distribution absent. `TAX_FACT_FIELDS`
+mirrors the released field list and is asserted equal to the real dataclass when
+the package IS installed, so a contract that grows a required field fails a test
+rather than a production call.
+
+---
+
+## 8. Verification performed
+
+Static only, and deliberately incomplete — ERP dev dependencies are not
+installed in this worktree and, per repository policy, tests are executed by CI,
+not here.
+
+Ran:
+
+- `python3 -m py_compile` over all four adapter modules and the test module — clean.
+- Line-length conformance against `[tool.ruff] line-length = 88` — clean.
+
+NOT run here (must be green in CI before this is merged):
+
+- `make lint` (`poetry run ruff check`), `make format-check`, `mypy`;
+- `pytest tests/ifrs/tax/test_tax_adoption_adapters.py`;
+- the architecture suites.
+
+## 9. What C1 did not do
+
+No dependency pin, no `alembic.ini` version location, no migration, no backfill,
+no shadow run, no writer switch, and no claim that `dotmac-tax 0.1.0a2` is
+installable here. `composition.CONTRACT_VERSION` records the version of the
+published contract these adapters were written against; recording a version is
+not a claim that it is pinned, published or adopted — no authoritative external
+oracle (release run, peeled tag, deployment run) for it exists in this
+repository, and `AGENTS.md` § "Cross-repository engineering governance" is
+explicit that repository-local claims come from repository-local facts. The next
+gated step is C2.
