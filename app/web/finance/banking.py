@@ -2,6 +2,22 @@
 Banking Web Routes.
 
 HTML template routes for Bank Accounts, Statements, and Reconciliations.
+
+Authorization (ADR-0006 — a module-visibility scope is never write authority):
+GET routes rest on ``require_finance_access``, which answers only "may this
+person SEE Finance". Every mutating route names the act it performs with a
+granular permission from ``scripts/seed_rbac.py``:
+
+  - Accounts:        banking:accounts:{read,create,update}
+  - Statements:      banking:statements:{read,import,delete}
+  - Matching/recon:  banking:reconciliation:{create,update,submit,approve}
+  - Rules + payees:  banking:rules:{read,manage}
+
+``POST /statements/{id}/lines/{id}/create-and-match`` creates, submits,
+approves and POSTS a journal to the general ledger in one call, so it asks for
+``gl:journals:post`` — the ledger effect, not the banking one, is what it can
+cause. Payees are pattern/default-GL-account categorization master data, the
+same family as transaction rules, so they use the ``banking:rules:*`` pair.
 """
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -16,6 +32,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     require_finance_access,
+    require_web_permission,
 )
 
 router = APIRouter(prefix="/banking", tags=["banking-web"])
@@ -79,7 +96,7 @@ def new_bank_account_form(
 @router.post("/accounts/new")
 async def new_bank_account_submit(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:accounts:create")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create new bank account from form."""
@@ -102,7 +119,7 @@ async def export_all_accounts(
 @router.post("/accounts/bulk-export")
 async def bulk_export_accounts(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:accounts:read")),
     db: Session = Depends(get_db_for_org),
 ):
     """Export selected bank accounts to CSV."""
@@ -113,7 +130,7 @@ async def bulk_export_accounts(
 async def edit_bank_account_submit(
     request: Request,
     account_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:accounts:update")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update bank account from form."""
@@ -137,7 +154,7 @@ def view_bank_account(
 def unlink_mono_web(
     request: Request,
     account_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:accounts:update")),
     db: Session = Depends(get_db_for_org),
 ):
     """Disconnect a bank account from Mono Connect."""
@@ -263,7 +280,7 @@ def import_statement_form(
 @router.post("/statements/import", response_class=HTMLResponse)
 async def import_statement_submit(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:statements:import")),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle bank statement import submission."""
@@ -273,7 +290,7 @@ async def import_statement_submit(
 @router.post("/statements/import/preview", response_class=JSONResponse)
 async def import_statement_preview(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:statements:import")),
     db: Session = Depends(get_db_for_org),
 ):
     """Preview uploaded statement columns/sample rows for mapping."""
@@ -318,7 +335,7 @@ def view_transaction(
 @router.post("/statements/bulk-delete")
 async def bulk_delete_statements(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:statements:delete")),
     db: Session = Depends(get_db_for_org),
 ):
     """Bulk delete statement batches."""
@@ -328,7 +345,7 @@ async def bulk_delete_statements(
 @router.post("/statements/bulk-export")
 async def bulk_export_statements(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:statements:read")),
     db: Session = Depends(get_db_for_org),
 ):
     """Export selected statements to CSV."""
@@ -341,7 +358,9 @@ async def bulk_export_statements(
 @router.post("/lines/apply-rules")
 async def apply_rules_flat(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Apply categorization rules across all statements for a bank account."""
@@ -358,7 +377,9 @@ async def apply_rules_flat(
 async def accept_suggestion_flat(
     request: Request,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Accept a categorization suggestion from the flat lines view."""
@@ -372,7 +393,9 @@ async def accept_suggestion_flat(
 async def reject_suggestion_flat(
     request: Request,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Reject a categorization suggestion from the flat lines view."""
@@ -429,7 +452,9 @@ def list_suspicious_statement_matches_content(
 @router.post("/statements/suspicious-matches/clear-suggested")
 async def clear_suspicious_statement_suggestions(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Bulk-clear suggested matches that need review."""
@@ -461,7 +486,9 @@ def view_statement(
 async def apply_rules(
     request: Request,
     statement_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Apply categorization rules to statement lines."""
@@ -473,7 +500,9 @@ async def apply_rules(
 async def statement_auto_match(
     request: Request,
     statement_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Run auto-match on a statement's unmatched lines (HTMX action)."""
@@ -488,7 +517,9 @@ async def accept_suggestion(
     request: Request,
     statement_id: str,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Accept a categorization suggestion for a statement line."""
@@ -503,7 +534,9 @@ async def reject_suggestion(
     request: Request,
     statement_id: str,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Reject a categorization suggestion for a statement line."""
@@ -517,7 +550,7 @@ async def reject_suggestion(
 async def delete_statement(
     request: Request,
     statement_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:statements:delete")),
     db: Session = Depends(get_db_for_org),
 ):
     """Delete a bank statement batch and its lines."""
@@ -531,7 +564,9 @@ async def delete_statement(
 async def batch_match_statement_lines(
     request: Request,
     statement_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Match multiple statement lines to GL entries in one request (JSON)."""
@@ -545,7 +580,7 @@ async def create_journal_and_match(
     request: Request,
     statement_id: str,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("gl:journals:post")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create a GL journal entry and match it to a bank line (JSON)."""
@@ -559,7 +594,9 @@ async def match_statement_line(
     request: Request,
     statement_id: str,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Accept a GL transaction match for a statement line (JSON from Alpine.js)."""
@@ -573,7 +610,9 @@ async def unmatch_statement_line(
     request: Request,
     statement_id: str,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Remove a direct match from a statement line (JSON from Alpine.js)."""
@@ -626,7 +665,9 @@ async def multi_match_statement_line(
     request: Request,
     statement_id: str,
     line_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Match one bank line to multiple GL entries (JSON from Alpine.js)."""
@@ -677,7 +718,9 @@ def new_reconciliation_form(
 @router.post("/reconciliations/new")
 async def create_reconciliation_submit(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:create")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Create a new reconciliation from form submission."""
@@ -692,7 +735,9 @@ async def create_reconciliation_submit(
 async def reconciliation_auto_match(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Run auto-match on a reconciliation (HTMX action)."""
@@ -705,7 +750,9 @@ async def reconciliation_auto_match(
 async def reconciliation_submit_for_review(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:submit")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Submit reconciliation for review (HTMX action)."""
@@ -718,7 +765,9 @@ async def reconciliation_submit_for_review(
 async def reconciliation_approve(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:approve")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Approve a reconciliation (HTMX action)."""
@@ -731,7 +780,9 @@ async def reconciliation_approve(
 async def reconciliation_reject(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:approve")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Reject a reconciliation (HTMX action)."""
@@ -744,7 +795,9 @@ async def reconciliation_reject(
 async def reconciliation_add_match(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Add a manual match (JSON from Alpine.js fetch)."""
@@ -757,7 +810,9 @@ async def reconciliation_add_match(
 async def reconciliation_multi_match(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Add multi-match (JSON from Alpine.js fetch)."""
@@ -770,7 +825,9 @@ async def reconciliation_multi_match(
 async def reconciliation_unmatch(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Reverse a confirmed match for a statement line (JSON from Alpine.js fetch)."""
@@ -783,7 +840,9 @@ async def reconciliation_unmatch(
 async def reconciliation_add_reconciling_item(
     request: Request,
     reconciliation_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(
+        require_web_permission("banking:reconciliation:update")
+    ),
     db: Session = Depends(get_db_for_org),
 ):
     """Add a reconciling item (adjustment / outstanding) — JSON from Alpine.js."""
@@ -859,7 +918,7 @@ def new_payee_form(
 @router.post("/payees/new")
 async def new_payee_submit(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create new payee from form."""
@@ -882,7 +941,7 @@ async def export_all_payees(
 @router.post("/payees/bulk-export")
 async def bulk_export_payees(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:read")),
     db: Session = Depends(get_db_for_org),
 ):
     """Export selected payees to CSV."""
@@ -893,7 +952,7 @@ async def bulk_export_payees(
 async def edit_payee_submit(
     request: Request,
     payee_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update payee from form."""
@@ -939,7 +998,7 @@ def new_rule_form(
 @router.post("/rules/new")
 async def create_rule(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Create a new transaction rule."""
@@ -951,7 +1010,7 @@ async def create_rule(
 @router.post("/rules/reorder")
 async def reorder_rule(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Swap a rule's position up or down in evaluation order."""
@@ -982,7 +1041,7 @@ def view_rule(
 async def update_rule(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Update an existing transaction rule."""
@@ -1008,7 +1067,7 @@ def duplicate_rule_form(
 async def duplicate_rule(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Duplicate a rule to selected bank accounts."""
@@ -1049,7 +1108,7 @@ def duplicate_rules_bulk_form(
 @router.post("/rules/duplicate/bulk")
 async def duplicate_rules_bulk(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ):
     """Duplicate selected rules to selected bank accounts."""
@@ -1127,7 +1186,7 @@ def new_match_rule_form(
 @router.post("/match-rules/new")
 async def create_match_rule(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ) -> Response:
     """Create a new match rule."""
@@ -1176,7 +1235,7 @@ def edit_match_rule_form(
 async def update_match_rule(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ) -> Response:
     """Update an existing match rule."""
@@ -1197,7 +1256,7 @@ async def update_match_rule(
 async def toggle_match_rule(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Toggle a match rule's active state."""
@@ -1214,7 +1273,7 @@ async def toggle_match_rule(
 async def delete_match_rule(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("banking:rules:manage")),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Delete a match rule."""

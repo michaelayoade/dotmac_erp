@@ -95,13 +95,15 @@ MODULE_ACCESS_GUARDS = frozenset(
 # the rest of this table is migrating towards. `payments.py`, `exp_limits.py`,
 # `dashboard.py`, `help.py`, `lease.py` and `opening_balance.py` are absent
 # because they are already clean.
+#
+# `gl.py` (21), `banking.py` (43) and `ar.py` (40) left this table together
+# when their 104 mutating routes were decomposed into granular guards — the
+# money-movement core, held by tests/finance/test_readonly_roles_cannot_mutate
+# .py the same way ap.py is held by its own test.
 # ---------------------------------------------------------------------------
 FINANCE_BACKLOG: dict[str, int] = {
-    "ar.py": 40,
     "automation.py": 17,
-    "banking.py": 43,
     "exp.py": 5,
-    "gl.py": 21,
     "import_export.py": 2,
     "quote.py": 7,
     "remita.py": 6,

@@ -423,6 +423,21 @@ FINANCE_PERMISSIONS = [
     ("org:locations:manage", "Manage locations"),
     ("org:segments:read", "View reporting segments"),
     ("org:segments:manage", "Manage reporting segments"),
+    # --- finance write decomposition: gl/banking/ar ---------------------------
+    # ADR-0006: a module-visibility scope is never write authority. Decomposing
+    # the 104 mutating routes in app/web/finance/{gl,banking,ar}.py needed eight
+    # acts the catalogue had no name for. Each mirrors an existing AP/AR name for
+    # the same shape of act, so the portal and the JSON API keep one vocabulary
+    # rather than two. Grants live in the matching block below ROLE_PERMISSIONS.
+    ("gl:journals:update", "Modify draft journal entries"),
+    ("ar:invoices:submit", "Submit AR invoices for approval"),
+    ("ar:invoices:approve", "Approve AR invoices"),
+    ("ar:receipts:update", "Modify draft customer receipts"),
+    ("ar:credit_notes:update", "Modify draft credit notes"),
+    ("ar:credit_notes:submit", "Submit credit notes for approval"),
+    ("ar:credit_notes:approve", "Approve credit notes"),
+    ("ar:credit_notes:void", "Void credit notes"),
+    # --- end finance write decomposition: gl/banking/ar -----------------------
 ]
 
 # =============================================================================
@@ -2699,6 +2714,83 @@ ROLE_PERMISSIONS = {
         "tasks:complete",
     ],
 }
+
+
+# --- finance write decomposition: gl/banking/ar -----------------------------
+# Grants for the eight permissions added to FINANCE_PERMISSIONS above.
+#
+# They are applied here, after the literal, rather than inline in five role
+# lists, for one practical reason: a security narrowing that touches every
+# finance role is far easier to review — and to merge alongside the sibling
+# decomposition of the other nine finance web modules — as one contiguous
+# block naming permission -> roles than as edits scattered through 1800 lines.
+# `admin` needs no entry: it is seeded as every key in DEFAULT_PERMISSIONS.
+#
+# ADR-0006 decision 5: narrowing authority never widens it elsewhere. Each
+# permission below is granted ONLY to roles whose EXISTING granular grants
+# already show them performing that act — `ar:invoices:approve` follows
+# `ap:invoices:approve` (director + manager), the `:update` permissions follow
+# their resource's `:create` holders — and deliberately to none of `auditor`,
+# `finance_viewer`, `junior_accountant`, `asset_viewer` or `inventory_manager`.
+#
+# Two consequences are deliberate, not oversights. `junior_accountant` holds
+# `gl:journals:create` but is NOT given `gl:journals:update`, so it may author
+# a draft journal and no longer edit or delete one. `accountant` holds
+# `ar:receipts:create` but not `ar:credit_notes:create`, so it gets no credit
+# note permission here. Both are existing omissions in the grant table; filling
+# them would be an authority increase hidden inside a security fix, and belongs
+# in its own reviewed change.
+FINANCE_WRITE_DECOMPOSITION_GRANTS: dict[str, tuple[str, ...]] = {
+    "gl:journals:update": (
+        "finance_director",
+        "finance_manager",
+        "senior_accountant",
+        "accountant",
+    ),
+    "ar:invoices:submit": (
+        "finance_director",
+        "finance_manager",
+        "senior_accountant",
+        "accountant",
+        "ar_clerk",
+    ),
+    "ar:invoices:approve": (
+        "finance_director",
+        "finance_manager",
+    ),
+    "ar:receipts:update": (
+        "finance_director",
+        "finance_manager",
+        "senior_accountant",
+        "accountant",
+        "ar_clerk",
+    ),
+    "ar:credit_notes:update": (
+        "finance_director",
+        "finance_manager",
+        "senior_accountant",
+        "ar_clerk",
+    ),
+    "ar:credit_notes:submit": (
+        "finance_director",
+        "finance_manager",
+        "senior_accountant",
+        "ar_clerk",
+    ),
+    "ar:credit_notes:approve": (
+        "finance_director",
+        "finance_manager",
+    ),
+    "ar:credit_notes:void": (
+        "finance_director",
+        "finance_manager",
+    ),
+}
+
+for _permission_key, _granted_roles in FINANCE_WRITE_DECOMPOSITION_GRANTS.items():
+    for _role_name in _granted_roles:
+        ROLE_PERMISSIONS[_role_name].append(_permission_key)
+# --- end finance write decomposition: gl/banking/ar -------------------------
 
 
 def parse_args() -> argparse.Namespace:
