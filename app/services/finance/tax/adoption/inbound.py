@@ -141,17 +141,13 @@ def _require_uuid(value: object, label: str) -> UUID:
 
 def _require_date(value: object, label: str) -> date:
     if not isinstance(value, date):
-        raise TaxAdapterRefusal(
-            f"{label} must be a date, got {type(value).__name__}"
-        )
+        raise TaxAdapterRefusal(f"{label} must be a date, got {type(value).__name__}")
     return value
 
 
 def _require_int(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
-        raise TaxAdapterRefusal(
-            f"{label} must be an int, got {type(value).__name__}"
-        )
+        raise TaxAdapterRefusal(f"{label} must be an int, got {type(value).__name__}")
     return value
 
 

@@ -417,9 +417,9 @@ class ApplyTaxDeterminationSetV1:
                 self, name, _require_text(getattr(self, name), name.replace("_", " "))
             )
         object.__setattr__(
-            self, "correlation_ref", _require_optional_text(
-                self.correlation_ref, "correlation ref"
-            )
+            self,
+            "correlation_ref",
+            _require_optional_text(self.correlation_ref, "correlation ref"),
         )
         for name in ("source_amount", "net_amount", "tax_amount", "gross_amount"):
             _require_money(getattr(self, name), name.replace("_", " "))

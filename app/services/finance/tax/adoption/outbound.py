@@ -457,8 +457,7 @@ def project_determination_set(
     if not lines:
         if not reportable_zero:
             raise TaxAdapterRefusal(
-                "the determination set produced no postable and no reportable "
-                "component"
+                "the determination set produced no postable and no reportable component"
             )
         # Every component was a configured zero treatment: there is a reportable
         # answer and nothing to post. Emitting a zero-value journal would put a
@@ -502,8 +501,7 @@ def project_determination_set(
         reportable_zero_components=tuple(reportable_zero),
         description=(
             apply.description
-            or f"{apply.consequence.value} for {apply.document_type} "
-            f"{apply.source_ref}"
+            or f"{apply.consequence.value} for {apply.document_type} {apply.source_ref}"
         ),
         correlation_ref=apply.correlation_ref,
         business_unit_id=apply.business_unit_id,
