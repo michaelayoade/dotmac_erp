@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ report.report_number }}</title>
+<style>
+@page { size: A4; margin: 12mm; }
+* { box-sizing: border-box; }
+body { margin: 0; color: #0f172a; font: 10pt/1.35 Arial, sans-serif; }
+h1 { margin: 0; font-size: 17pt; text-align: center; } h2 { margin: 10px 0 5px; font-size: 11pt; }
+.subtitle { margin: 2px 0 10px; text-align: center; color: #475569; }
+table { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
+th, td { border: 1px solid #94a3b8; padding: 5px 7px; vertical-align: top; text-align: left; }
+th { background: #f1f5f9; font-size: 8.5pt; text-transform: uppercase; }
+.section { border: 1px solid #94a3b8; padding: 7px; min-height: 34px; white-space: pre-line; page-break-inside: avoid; }
+.meta td:nth-child(odd) { width: 15%; background: #f1f5f9; font-weight: 700; }
+.meta td:nth-child(even) { width: 35%; }
+.toolbar { margin-bottom: 10px; text-align: right; } .toolbar button { padding: 7px 12px; }
+@media print { .toolbar { display: none; } }
+</style></head><body>
+<div class="toolbar"><button type="button" onclick="window.print()">Print</button></div>
+<h1>WEEKLY MEETING REPORT</h1><p class="subtitle">{{ report.report_number }} · Record what was actually discussed.</p>
+<table class="meta"><tr><td>Division</td><td>{{ report.division_name_snapshot }}</td><td>Week Ending</td><td>{{ report.week_ending.strftime('%d %b %Y') }}</td></tr><tr><td>Meeting Date</td><td>{{ report.meeting_date.strftime('%d %b %Y') }}</td><td>Time</td><td>{{ report.meeting_time.strftime('%H:%M') }}</td></tr><tr><td>Division Head</td><td>{{ report.division_head_name_snapshot or '—' }}</td><td>Prepared By</td><td>{{ report.prepared_by_name_snapshot }}</td></tr></table>
+<h2>1. Attendees / Participants</h2><table><thead><tr><th>Name</th><th>Role</th><th>Attendance</th></tr></thead><tbody>{% for participant in report.participants %}<tr><td>{{ participant.name_snapshot }}</td><td>{{ participant.role_snapshot or '—' }}</td><td>{{ participant.attendance_status.value | replace('_', ' ') | title }}</td></tr>{% else %}<tr><td colspan="3">No participants recorded.</td></tr>{% endfor %}</tbody></table>
+{% set sections = [('2. Meeting Purpose / Context', report.purpose_context), ('3. Matters Discussed / Meeting Notes', report.matters_discussed), ('4. Key Decisions / Agreements Reached', report.key_decisions), ('5. Issues, Risks, Dependencies or Support Required', report.issues_risks_support)] %}
+{% for title, value in sections %}<h2>{{ title }}</h2><div class="section">{{ value or 'N/A' }}</div>{% endfor %}
+<h2>6. Action Items / Follow-up</h2><table><thead><tr><th>Action / Follow-up</th><th>Owner</th><th>Due Date</th><th>Status</th></tr></thead><tbody>{% for item in report.action_items %}<tr><td>{{ item.action_text }}</td><td>{{ item.owner_name_snapshot or '—' }}</td><td>{{ item.due_date.strftime('%d %b %Y') if item.due_date else '—' }}</td><td>{{ item.status.value | replace('_', ' ') | title }}</td></tr>{% else %}<tr><td colspan="4">No action items recorded.</td></tr>{% endfor %}</tbody></table>
+<h2>7. Items to Carry Forward / Discuss Next Week</h2><div class="section">{{ report.carry_forward or 'N/A' }}</div>
+</body></html>

@@ -133,6 +133,9 @@ from app.models.people.perf import (
     KPIStatus,
     Scorecard,
     ScorecardItem,
+    WeeklyMeetingActionItem,
+    WeeklyMeetingParticipant,
+    WeeklyMeetingReport,
 )
 
 # Recruitment Models
@@ -274,6 +277,9 @@ __all__ = [
     "AppraisalFeedback",
     "Scorecard",
     "ScorecardItem",
+    "WeeklyMeetingReport",
+    "WeeklyMeetingParticipant",
+    "WeeklyMeetingActionItem",
     # Assets
     "AssetAssignment",
     "AssignmentStatus",

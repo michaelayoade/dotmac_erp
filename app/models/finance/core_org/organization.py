@@ -190,6 +190,11 @@ class Organization(Base):
     website_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # HR Settings
+    hr_weekly_report_email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Recipient for submitted weekly meeting reports",
+    )
     hr_employee_id_format: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
