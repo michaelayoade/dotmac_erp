@@ -57,6 +57,7 @@ from uuid import UUID
 from dotmac_kernel.money import Money
 
 __all__ = [
+    "MIRROR_RETIREMENT_GATE",
     "RECOGNITION_BASIS_ACCRUAL",
     "RECOGNITION_BASIS_CASH",
     "RECOGNITION_BASIS_PAYROLL_PERIOD",
@@ -366,9 +367,47 @@ class AccountingConsequence(str, enum.Enum):
     PAYROLL_TAX_PAYABLE = "payroll_tax_payable"
 
 
+#: The condition under which `ApplyTaxDeterminationSetV1` is DELETED.
+#:
+#: The mirror exists for exactly one reason: `dotmac_tax` publishes input
+#: contracts and `TaxFact`, but no read-side determination contract —
+#: `determine_tax_set` returns the `TaxDeterminationSet` ORM object.  ERP may
+#: not import module models (`docs/architecture/dotmac-tax-adoption-boundary.md`
+#: § "Outcome"), so the only remaining way to consume a determination is to
+#: restate its reviewable fields as ERP-owned types.  That is what this is.
+#:
+#: It is therefore TEMPORARY BY CONSTRUCTION, not a contract ERP intends to own.
+#: A mirror that outlives its cause becomes a second, drifting definition of the
+#: module's output — the exact failure ADR-0006's extraction rule and the
+#: one-writer standard exist to prevent.
+#:
+#: Retire it when ALL of the following hold, and not before:
+#:
+#: 1. `dotmac-tax` publishes a read-side determination contract on its public
+#:    surface (a frozen value type, not an ORM row), at a released version;
+#: 2. ERP pins that release and composes the `tx` lineage (gate C2);
+#: 3. `project_determination_set` accepts the published type directly; and
+#: 4. this class and its construction sites are DELETED in the same change —
+#:    not left importable alongside the published contract, which would leave
+#:    two shapes for one answer.
+#:
+#: Until (1) exists, this is a blocked dependency on the module, tracked as a
+#: separate change against `dotmac-tax` rather than as ERP work.
+MIRROR_RETIREMENT_GATE: str = (
+    "delete when dotmac-tax publishes a released read-side determination "
+    "contract and ERP consumes it directly (see module docstring)"
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ApplyTaxDeterminationSetV1:
     """An approved determination set, plus the ERP target it applies to.
+
+    **TEMPORARY.**  This is an ERP-owned MIRROR of the module's determination
+    output, held only because `dotmac-tax` publishes no read-side determination
+    contract today.  It is scheduled for deletion, not for ownership — see
+    :data:`MIRROR_RETIREMENT_GATE` for the exact conditions and why a mirror
+    that outlives its cause is a defect rather than an asset.
 
     `source_fingerprint` is CARRIED and re-checked rather than trusted: the
     consequence adapter refuses a set whose fingerprint does not match the one
