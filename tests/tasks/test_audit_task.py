@@ -42,7 +42,7 @@ class TestLogAuditEvent:
                     status_code=200,
                     is_success=True,
                     ip_address="172.18.0.1",
-                    user_agent="DotMac-CRM/1.0",
+                    user_agent="DotMac-Sub/1.0",
                     request_id="req-123",
                     metadata_={"path": "/api/v1/sync/crm/bulk"},
                 )
@@ -103,7 +103,7 @@ class TestLogAuditEvent:
                 status_code=200,
                 is_success=True,
                 ip_address="172.18.0.1",
-                user_agent="DotMac-CRM/1.0",
+                user_agent="DotMac-Sub/1.0",
                 request_id="req-123",
                 metadata_={"path": "/api/v1/sync/crm/bulk"},
             )
@@ -134,7 +134,7 @@ class TestLogAuditEvent:
                 status_code=200,
                 is_success=True,
                 ip_address="172.18.0.1",
-                user_agent="DotMac-CRM/1.0",
+                user_agent="DotMac-Sub/1.0",
                 request_id="req-123",
                 metadata_={"path": "/api/v1/sync/crm/bulk"},
             )
@@ -166,7 +166,7 @@ class TestLogAuditEvent:
                     status_code=200,
                     is_success=True,
                     ip_address="172.18.0.1",
-                    user_agent="DotMac-CRM/1.0",
+                    user_agent="DotMac-Sub/1.0",
                     request_id="req-123",
                     metadata_={"path": "/api/v1/sync/crm/bulk"},
                 )

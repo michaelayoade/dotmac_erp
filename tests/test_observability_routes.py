@@ -176,7 +176,7 @@ def test_readiness_probe_reports_degraded_optional_dependencies(monkeypatch) -> 
                 "healthy": False,
                 "required": False,
                 "status": "degraded",
-                "message": "CRM timeout",
+                "message": "Provider timeout",
             }
         },
     )

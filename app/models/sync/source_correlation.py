@@ -1,8 +1,4 @@
-"""
-DotMac CRM Sync Mapping Model - Track entities synced from DotMac CRM.
-
-Maps CRM entity IDs to local ERP entities (Project, Ticket, Task).
-"""
+"""Source-qualified correlations for rebuildable cross-application context."""
 
 import enum
 import uuid
@@ -25,8 +21,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 
-class CRMEntityType(str, enum.Enum):
-    """Type of entity synced from DotMac CRM."""
+class SourceEntityType(str, enum.Enum):
+    """Type of source fact correlated to an ERP projection."""
 
     PROJECT = "PROJECT"
     TICKET = "TICKET"
@@ -35,8 +31,8 @@ class CRMEntityType(str, enum.Enum):
     PURCHASE_ORDER = "PURCHASE_ORDER"
 
 
-class CRMSyncStatus(str, enum.Enum):
-    """Status of CRM sync mapping."""
+class SourceCorrelationStatus(str, enum.Enum):
+    """Lifecycle of a source correlation, not of the local domain row."""
 
     ACTIVE = "ACTIVE"
     COMPLETED = "COMPLETED"
@@ -44,29 +40,23 @@ class CRMSyncStatus(str, enum.Enum):
     ARCHIVED = "ARCHIVED"
 
 
-class CRMSyncMapping(Base):
-    """
-    Maps DotMac CRM entities to local ERP entities.
+class SourceCorrelation(Base):
+    """Map a source-qualified observation to its rebuildable ERP row."""
 
-    Enables:
-    - Tracking which CRM entities are synced
-    - Looking up local entity from CRM ID
-    - Storing CRM metadata for display without re-fetching
-    """
-
-    __tablename__ = "crm_sync_mapping"
+    __tablename__ = "source_correlation"
     __table_args__ = (
         UniqueConstraint(
             "organization_id",
-            "crm_entity_type",
-            "crm_id",
-            name="uq_crm_sync_org_type_id",
+            "source_application",
+            "source_entity_type",
+            "source_reference",
+            name="uq_source_correlation_org_app_type_ref",
         ),
-        Index("idx_crm_sync_org", "organization_id"),
-        Index("idx_crm_sync_crm_id", "crm_id"),
-        Index("idx_crm_sync_local", "local_entity_type", "local_entity_id"),
+        Index("idx_source_correlation_org", "organization_id"),
+        Index("idx_source_correlation_source_reference", "source_reference"),
+        Index("idx_source_correlation_local", "local_entity_type", "local_entity_id"),
         Index(
-            "idx_crm_sync_status", "organization_id", "crm_entity_type", "crm_status"
+            "idx_source_correlation_status", "organization_id", "source_entity_type", "source_status"
         ),
         {"schema": "sync"},
     )
@@ -86,15 +76,19 @@ class CRMSyncMapping(Base):
         nullable=False,
     )
 
-    # CRM source identification
-    crm_entity_type: Mapped[CRMEntityType] = mapped_column(
-        Enum(CRMEntityType, name="crm_entity_type", schema="sync"),
+    source_application: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="Owning source application; legacy_unknown is never inferred",
+    )
+    source_entity_type: Mapped[SourceEntityType] = mapped_column(
+        Enum(SourceEntityType, name="source_entity_type", schema="sync"),
         nullable=False,
     )
-    crm_id: Mapped[str] = mapped_column(
+    source_reference: Mapped[str] = mapped_column(
         String(36),
         nullable=False,
-        comment="UUID from DotMac CRM",
+        comment="Opaque identifier inside source_application",
     )
 
     # Local ERP entity reference
@@ -109,35 +103,39 @@ class CRMSyncMapping(Base):
         comment="UUID of the entity in ERP",
     )
 
-    # CRM status tracking (mirrors CRM's status for filtering)
-    crm_status: Mapped[CRMSyncStatus] = mapped_column(
-        Enum(CRMSyncStatus, name="crm_sync_status", schema="sync"),
+    # Projection correlation status; never treated as the local lifecycle.
+    source_status: Mapped[SourceCorrelationStatus] = mapped_column(
+        Enum(
+            SourceCorrelationStatus,
+            name="source_correlation_status",
+            schema="sync",
+        ),
         nullable=False,
-        default=CRMSyncStatus.ACTIVE,
+        default=SourceCorrelationStatus.ACTIVE,
     )
 
-    # Cached display data from CRM (avoids re-fetching for dropdowns)
+    # Rebuildable display facts from the source observation.
     display_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
-        comment="Name/subject/title from CRM for display",
+        comment="Name/subject/title from the source for display",
     )
     display_code: Mapped[str | None] = mapped_column(
         String(80),
         nullable=True,
-        comment="Code/number from CRM",
+        comment="Code/number from the source",
     )
     customer_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
-        comment="Customer name from CRM",
+        comment="Customer name from the source",
     )
 
-    # Full CRM data cache (for detailed views)
-    crm_data: Mapped[dict | None] = mapped_column(
+    # Rebuildable source observation used for local context.
+    source_payload: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,
-        comment="Full payload from CRM for reference",
+        comment="Source observation payload for repair and reconciliation",
     )
 
     # Sync tracking
@@ -146,10 +144,10 @@ class CRMSyncMapping(Base):
         nullable=False,
         server_default=func.now(),
     )
-    crm_updated_at: Mapped[datetime | None] = mapped_column(
+    source_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        comment="Last update time in CRM",
+        comment="Last update time reported by the source",
     )
 
     # Error tracking
@@ -172,6 +170,7 @@ class CRMSyncMapping(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<CRMSyncMapping({self.crm_entity_type.value}:"
-            f"{self.crm_id} -> {self.local_entity_type}:{self.local_entity_id})>"
+            f"<SourceCorrelation({self.source_application}:"
+            f"{self.source_entity_type.value}:"
+            f"{self.source_reference} -> {self.local_entity_type}:{self.local_entity_id})>"
         )

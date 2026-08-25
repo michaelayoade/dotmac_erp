@@ -35,7 +35,7 @@ semantics.
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
 | `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation | One service decides what a payment intent's status is; webhooks, routes and schedulers validate, authorize and delegate |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
-| `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support, legacy CRM procurement mappings | External systems are transports or contracted authorities; mirrors are rebuildable |
+| `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support and source-qualified correlations | External systems are transports or contracted authorities; mirrors are rebuildable |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
@@ -129,13 +129,12 @@ operating slice. Dotmac Sub retains its service work order, operational material
 need, and customer outcome. ERP alone decides warehouse availability, serial
 validity, fiscal-period eligibility, stock issue, and the material-support
 outcome. The neutral `/sync/sub/material-requests` routes delegate to this owner;
-they do not call the legacy CRM route adapter.
+they do not call a provider-named route adapter.
 
-The inherited CRM procurement implementation is an explicit compatibility
-engine during migration, not a second business owner. The per-flow Sub cutover
-guard prevents CRM and Sub from originating the ERP write concurrently. The
-full request, outcome, reconciliation, cutover, rollback, and retirement rules
-are in `docs/dotmac_sub_material_support_contract.md`.
+`sync.sub_procurement` is a provider-neutral adapter over ERP-owned procurement
+and inventory decisions. The retired CRM runtime cannot originate an ERP write.
+The full request, outcome, reconciliation, cutover, rollback, and retirement
+rules are in `docs/dotmac_sub_material_support_contract.md`.
 
 ## Replaceable application boundary
 

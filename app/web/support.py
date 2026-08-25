@@ -15,14 +15,14 @@ router = APIRouter(prefix="/support", tags=["support-web"])
 
 
 def _manual_ticket_creation_disabled_response(request: Request):
-    """Manual ticket creation is disabled; tickets are CRM-synced."""
+    """Manual ticket creation is disabled; tickets are projected from Sub."""
     from app.templates import templates
 
     return templates.TemplateResponse(
         request,
         "errors/404.html",
         {
-            "message": "Manual ticket creation is disabled. Tickets are synced from CRM.",
+            "message": "Manual ticket creation is disabled. Tickets are projected from Sub.",
         },
         status_code=404,
     )

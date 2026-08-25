@@ -1,6 +1,6 @@
-"""Project / ticket / work-order (task) synchronization from DotMac CRM.
+"""Project / ticket / work-order (task) synchronization from Dotmac Sub.
 
-Extracted from the former monolithic dotmac_crm_sync_service.
+Extracted from the former monolithic dotmac_sub_sync_service.
 """
 
 from __future__ import annotations
@@ -30,30 +30,30 @@ from app.models.person import Person
 from app.models.pm.task import Task, TaskPriority, TaskStatus
 from app.models.support.comment import CommentType, TicketComment
 from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
-from app.models.sync.dotmac_crm_sync import (
-    CRMEntityType,
-    CRMSyncMapping,
-    CRMSyncStatus,
+from app.models.sync.source_correlation import (
+    SourceEntityType,
+    SourceCorrelation,
+    SourceCorrelationStatus,
 )
 from app.models.sync.sync_entity import SyncEntity, SyncStatus
-from app.schemas.sync.dotmac_crm import (
-    CRMProjectPayload,
-    CRMProjectTaskPayload,
-    CRMProjectRead,
-    CRMTicketActivityEntry,
-    CRMTicketCommentItem,
-    CRMTicketPayload,
-    CRMTicketRead,
-    CRMWorkOrderPayload,
-    CRMWorkOrderRead,
+from app.schemas.sync.sub_operational import (
+    SubProjectPayload,
+    SubProjectTaskPayload,
+    SubProjectRead,
+    SubTicketActivityEntry,
+    SubTicketCommentItem,
+    SubTicketPayload,
+    SubTicketRead,
+    SubWorkOrderPayload,
+    SubWorkOrderRead,
 )
 
-# CRM → ERP translation policy lives in crm_mappings (pure, side-effect-free).
+# Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
 # Re-imported here so the canonical import sites
-# (`from ...dotmac_crm_sync_service import PROJECT_STATUS_MAP`) and the in-class
+# (`from ...dotmac_sub_sync_service import PROJECT_STATUS_MAP`) and the in-class
 # references keep resolving against this module's namespace.
-from app.services.sync.crm_mappings import (  # noqa: E402
-    CRM_SYNC_STATUS_MAP,
+from app.services.sync.sub_mappings import (  # noqa: E402
+    SOURCE_STATUS_MAP,
     PROJECT_STATUS_MAP,
     TASK_STATUS_MAP,
     TICKET_STATUS_MAP,
@@ -62,14 +62,14 @@ from app.services.sync.crm_mappings import (  # noqa: E402
     map_ticket_priority,
 )
 
-from app.services.sync.crm.base import _CRMSyncBase
+from app.services.sync.sub.base import _SubSyncBase
 
 logger = logging.getLogger(__name__)
 
-# Orphan-reconciliation guards — the exact rails proven in dotmac_crm
+# Orphan-reconciliation guards — the exact rails proven in dotmac_sub
 # ``app/services/selfcare.py::_reconcile_selfcare_orphans``: skip when the
 # reported id set looks suspiciously small (likely a partial fetch/outage on
-# the CRM side) or when too large a fraction of the known mappings would be
+# the Sub side) or when too large a fraction of the known mappings would be
 # closed in one run — failing safe rather than mass-closing live entities.
 _ORPHAN_MIN_FETCH_RATIO = 0.5
 _ORPHAN_MAX_TERMINATE_RATIO = 0.2
@@ -77,19 +77,19 @@ _ORPHAN_MAX_TERMINATE_RATIO = 0.2
 # blocked) — kept low so it can't bypass the ratio guard and wipe a small base.
 _ORPHAN_MAX_TERMINATE_FLOOR = 3
 
-# Reconcile entity_type strings (CRM wire values) -> mapping entity types.
+# Reconcile entity_type strings (Sub wire values) -> mapping entity types.
 _RECONCILE_ENTITY_TYPES = {
-    "project": CRMEntityType.PROJECT,
-    "ticket": CRMEntityType.TICKET,
-    "work_order": CRMEntityType.WORK_ORDER,
+    "project": SourceEntityType.PROJECT,
+    "ticket": SourceEntityType.TICKET,
+    "work_order": SourceEntityType.WORK_ORDER,
 }
 
 
-class _ProjectSyncMixin(_CRMSyncBase):
+class _ProjectSyncMixin(_SubSyncBase):
     _SUB_PROJECT_TASK_SOURCE = "sub_project_task"
 
     def sync_project_task(
-        self, org_id: UUID, data: CRMProjectTaskPayload
+        self, org_id: UUID, data: SubProjectTaskPayload
     ) -> SyncEntity:
         """Idempotently project one Sub project task into ERP PM."""
         project_id = self._resolve_project_id(org_id, data.project_source_id)
@@ -168,15 +168,15 @@ class _ProjectSyncMixin(_CRMSyncBase):
     def sync_project(
         self,
         org_id: UUID,
-        data: CRMProjectPayload,
-    ) -> CRMSyncMapping:
+        data: SubProjectPayload,
+    ) -> SourceCorrelation:
         """
-        Sync a project from CRM to ERP.
+        Sync a project from Sub to ERP.
 
-        Creates or updates both the local Project and the CRMSyncMapping.
+        Creates or updates both the local Project and the SourceCorrelation.
         """
         # Check if mapping exists
-        mapping = self._get_mapping(org_id, CRMEntityType.PROJECT, data.crm_id)
+        mapping = self._get_mapping(org_id, SourceEntityType.PROJECT, data.source_reference)
 
         if mapping:
             # Update existing project
@@ -201,39 +201,40 @@ class _ProjectSyncMixin(_CRMSyncBase):
             project = self._create_project(org_id, data)
             self.db.flush()  # Get project_id
 
-            mapping = CRMSyncMapping(
+            mapping = SourceCorrelation(
                 organization_id=org_id,
-                crm_entity_type=CRMEntityType.PROJECT,
-                crm_id=data.crm_id,
+                source_application=self._SOURCE_APPLICATION,
+                source_entity_type=SourceEntityType.PROJECT,
+                source_reference=data.source_reference,
                 local_entity_type="project",
                 local_entity_id=project.project_id,
-                crm_status=CRM_SYNC_STATUS_MAP.get(
-                    data.status.lower(), CRMSyncStatus.ACTIVE
+                source_status=SOURCE_STATUS_MAP.get(
+                    data.status.lower(), SourceCorrelationStatus.ACTIVE
                 ),
                 display_name=data.name,
                 display_code=data.code,
                 customer_name=data.customer_name,
-                crm_data=data.metadata,
+                source_payload=data.metadata,
                 synced_at=datetime.now(UTC),
             )
             self.db.add(mapping)
 
-        logger.info("Synced CRM project %s -> %s", data.crm_id, mapping.local_entity_id)
+        logger.info("Synced Sub project %s -> %s", data.source_reference, mapping.local_entity_id)
         return mapping
 
     def sync_ticket(
         self,
         org_id: UUID,
-        data: CRMTicketPayload,
+        data: SubTicketPayload,
         item_errors: list[str] | None = None,
-    ) -> CRMSyncMapping:
+    ) -> SourceCorrelation:
         """
-        Sync a ticket from CRM to ERP.
+        Sync a ticket from Sub to ERP.
 
-        Creates or updates both the local Ticket and the CRMSyncMapping.
+        Creates or updates both the local Ticket and the SourceCorrelation.
         """
-        ticket_crm_data = self._build_ticket_crm_data(data)
-        mapping = self._get_mapping(org_id, CRMEntityType.TICKET, data.crm_id)
+        ticket_source_payload = self._build_ticket_source_payload(data)
+        mapping = self._get_mapping(org_id, SourceEntityType.TICKET, data.source_reference)
 
         if mapping:
             ticket = self.db.get(Ticket, mapping.local_entity_id)
@@ -250,25 +251,26 @@ class _ProjectSyncMixin(_CRMSyncBase):
                 data.ticket_number,
                 data.customer_name,
                 data.status,
-                ticket_crm_data,
+                ticket_source_payload,
             )
         else:
             ticket = self._create_ticket(org_id, data)
             self.db.flush()
 
-            mapping = CRMSyncMapping(
+            mapping = SourceCorrelation(
                 organization_id=org_id,
-                crm_entity_type=CRMEntityType.TICKET,
-                crm_id=data.crm_id,
+                source_application=self._SOURCE_APPLICATION,
+                source_entity_type=SourceEntityType.TICKET,
+                source_reference=data.source_reference,
                 local_entity_type="ticket",
                 local_entity_id=ticket.ticket_id,
-                crm_status=CRM_SYNC_STATUS_MAP.get(
-                    data.status.lower(), CRMSyncStatus.ACTIVE
+                source_status=SOURCE_STATUS_MAP.get(
+                    data.status.lower(), SourceCorrelationStatus.ACTIVE
                 ),
                 display_name=data.subject,
                 display_code=data.ticket_number,
                 customer_name=data.customer_name,
-                crm_data=ticket_crm_data,
+                source_payload=ticket_source_payload,
                 synced_at=datetime.now(UTC),
             )
             self.db.add(mapping)
@@ -285,9 +287,9 @@ class _ProjectSyncMixin(_CRMSyncBase):
             item_errors.extend(activity_errors)
 
         logger.info(
-            "Synced CRM ticket %s -> %s comments_processed=%d activity_processed=%d "
+            "Synced Sub ticket %s -> %s comments_processed=%d activity_processed=%d "
             "dedupe_hits=%d",
-            data.crm_id,
+            data.source_reference,
             mapping.local_entity_id,
             comments_processed,
             activity_processed,
@@ -298,20 +300,20 @@ class _ProjectSyncMixin(_CRMSyncBase):
     def sync_work_order(
         self,
         org_id: UUID,
-        data: CRMWorkOrderPayload,
-    ) -> CRMSyncMapping:
+        data: SubWorkOrderPayload,
+    ) -> SourceCorrelation:
         """
-        Sync a work order from CRM to ERP as a Task.
+        Sync a work order from Sub to ERP as a Task.
 
-        Creates or updates both the local Task and the CRMSyncMapping.
+        Creates or updates both the local Task and the SourceCorrelation.
         """
-        mapping = self._get_mapping(org_id, CRMEntityType.WORK_ORDER, data.crm_id)
+        mapping = self._get_mapping(org_id, SourceEntityType.WORK_ORDER, data.source_reference)
 
         # Resolve project reference if provided
-        project_id = self._resolve_project_id(org_id, data.project_crm_id)
+        project_id = self._resolve_project_id(org_id, data.project_source_reference)
 
         # Resolve ticket reference if provided
-        ticket_id = self._resolve_ticket_id(org_id, data.ticket_crm_id)
+        ticket_id = self._resolve_ticket_id(org_id, data.ticket_source_reference)
 
         # Resolve employee by email
         employee_id = self._resolve_employee_id(org_id, data.assigned_employee_email)
@@ -340,23 +342,24 @@ class _ProjectSyncMixin(_CRMSyncBase):
             task = self._create_task(org_id, data, project_id, ticket_id, employee_id)
             self.db.flush()
 
-            mapping = CRMSyncMapping(
+            mapping = SourceCorrelation(
                 organization_id=org_id,
-                crm_entity_type=CRMEntityType.WORK_ORDER,
-                crm_id=data.crm_id,
+                source_application=self._SOURCE_APPLICATION,
+                source_entity_type=SourceEntityType.WORK_ORDER,
+                source_reference=data.source_reference,
                 local_entity_type="task",
                 local_entity_id=task.task_id,
-                crm_status=CRM_SYNC_STATUS_MAP.get(
-                    data.status.lower(), CRMSyncStatus.ACTIVE
+                source_status=SOURCE_STATUS_MAP.get(
+                    data.status.lower(), SourceCorrelationStatus.ACTIVE
                 ),
                 display_name=data.title,
-                crm_data=data.metadata,
+                source_payload=data.metadata,
                 synced_at=datetime.now(UTC),
             )
             self.db.add(mapping)
 
         logger.info(
-            "Synced CRM work order %s -> %s", data.crm_id, mapping.local_entity_id
+            "Synced Sub work order %s -> %s", data.source_reference, mapping.local_entity_id
         )
         return mapping
 
@@ -365,15 +368,15 @@ class _ProjectSyncMixin(_CRMSyncBase):
         org_id: UUID,
         *,
         entity_type: str,
-        seen_crm_ids: list[str],
+        seen_source_references: list[str],
         active_count: int = 0,
     ) -> dict[str, Any]:
-        """Soft-close ERP entities whose CRM source vanished from a full push.
+        """Soft-close ERP entities whose Sub source vanished from a full push.
 
-        CRM's ``sync_all_active`` only pushes active entities, so a canceled/
-        soft-deleted CRM entity simply stops appearing — no tombstone ever
+        Sub's ``sync_all_active`` only pushes active entities, so a canceled/
+        soft-deleted Sub entity simply stops appearing — no tombstone ever
         arrives and the upsert-only sync leaves the ERP copy live forever.
-        After a clean FULL run, CRM reports the complete set of ids it saw;
+        After a clean FULL run, Sub reports the complete set of ids it saw;
         ACTIVE mappings for that entity type not in the set are orphans.
 
         Applies the reference safety rails (see module constants) before
@@ -381,8 +384,8 @@ class _ProjectSyncMixin(_CRMSyncBase):
         model's terminal status and marks the mapping CANCELLED. Rows are
         isolated in savepoints so one failure doesn't abort the batch.
         """
-        crm_entity_type = _RECONCILE_ENTITY_TYPES.get(entity_type)
-        if crm_entity_type is None:
+        source_entity_type = _RECONCILE_ENTITY_TYPES.get(entity_type)
+        if source_entity_type is None:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
         result: dict[str, Any] = {
@@ -394,24 +397,25 @@ class _ProjectSyncMixin(_CRMSyncBase):
             "errors": [],
         }
 
-        seen = {str(crm_id).strip() for crm_id in seen_crm_ids if str(crm_id).strip()}
-        stmt = select(CRMSyncMapping).where(
-            CRMSyncMapping.organization_id == org_id,
-            CRMSyncMapping.crm_entity_type == crm_entity_type,
-            CRMSyncMapping.crm_status == CRMSyncStatus.ACTIVE,
+        seen = {str(source_reference).strip() for source_reference in seen_source_references if str(source_reference).strip()}
+        stmt = select(SourceCorrelation).where(
+            SourceCorrelation.organization_id == org_id,
+            SourceCorrelation.source_application == self._SOURCE_APPLICATION,
+            SourceCorrelation.source_entity_type == source_entity_type,
+            SourceCorrelation.source_status == SourceCorrelationStatus.ACTIVE,
         )
         mappings = list(self.db.scalars(stmt).all())
         examined = len(mappings)
         result["examined"] = examined
 
-        orphans = [m for m in mappings if str(m.crm_id).strip() not in seen]
+        orphans = [m for m in mappings if str(m.source_reference).strip() not in seen]
         result["orphaned"] = len(orphans)
         if not orphans:
             return result
 
         if len(seen) < examined * _ORPHAN_MIN_FETCH_RATIO:
             logger.warning(
-                "CRM_ORPHAN_RECONCILE_SKIPPED reason=small_fetch entity_type=%s "
+                "Sub_ORPHAN_RECONCILE_SKIPPED reason=small_fetch entity_type=%s "
                 "seen=%d active_count=%d examined=%d orphans=%d",
                 entity_type,
                 len(seen),
@@ -426,7 +430,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
             _ORPHAN_MAX_TERMINATE_FLOOR, int(examined * _ORPHAN_MAX_TERMINATE_RATIO)
         ):
             logger.warning(
-                "CRM_ORPHAN_RECONCILE_SKIPPED reason=too_many entity_type=%s "
+                "Sub_ORPHAN_RECONCILE_SKIPPED reason=too_many entity_type=%s "
                 "examined=%d orphans=%d",
                 entity_type,
                 examined,
@@ -440,7 +444,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
             savepoint = self.db.begin_nested()
             try:
                 self._soft_close_local_entity(mapping)
-                mapping.crm_status = CRMSyncStatus.CANCELLED
+                mapping.source_status = SourceCorrelationStatus.CANCELLED
                 mapping.synced_at = now
                 self.db.flush()
                 savepoint.commit()
@@ -448,14 +452,14 @@ class _ProjectSyncMixin(_CRMSyncBase):
             except Exception as exc:
                 savepoint.rollback()
                 logger.exception(
-                    "CRM_ORPHAN_CLOSE_FAILED entity_type=%s crm_id=%s",
+                    "Sub_ORPHAN_CLOSE_FAILED entity_type=%s source_reference=%s",
                     entity_type,
-                    mapping.crm_id,
+                    mapping.source_reference,
                 )
-                result["errors"].append(f"{mapping.crm_id}: {exc}"[:200])
+                result["errors"].append(f"{mapping.source_reference}: {exc}"[:200])
 
         logger.info(
-            "CRM_ORPHAN_RECONCILE_COMPLETE entity_type=%s examined=%d orphaned=%d closed=%d",
+            "Sub_ORPHAN_RECONCILE_COMPLETE entity_type=%s examined=%d orphaned=%d closed=%d",
             entity_type,
             examined,
             len(orphans),
@@ -463,12 +467,12 @@ class _ProjectSyncMixin(_CRMSyncBase):
         )
         return result
 
-    def _soft_close_local_entity(self, mapping: CRMSyncMapping) -> None:
+    def _soft_close_local_entity(self, mapping: SourceCorrelation) -> None:
         """Soft-close the local ERP entity behind an orphaned mapping.
 
         Uses each model's terminal status (none of Project/Ticket/Task has an
         ``is_active`` soft-delete column): Project -> CANCELLED, Ticket ->
-        CLOSED, Task -> CANCELLED — the same targets the CRM status maps use
+        CLOSED, Task -> CANCELLED — the same targets the Sub status maps use
         for a canceled upstream entity. A missing local row is a no-op; the
         mapping still gets marked so it stops surfacing as active.
         """
@@ -486,9 +490,9 @@ class _ProjectSyncMixin(_CRMSyncBase):
                 task.status = TaskStatus.CANCELLED
         else:
             logger.warning(
-                "CRM_ORPHAN_UNKNOWN_LOCAL_TYPE local_entity_type=%s crm_id=%s",
+                "Sub_ORPHAN_UNKNOWN_LOCAL_TYPE local_entity_type=%s source_reference=%s",
                 mapping.local_entity_type,
-                mapping.crm_id,
+                mapping.source_reference,
             )
 
     def list_projects(
@@ -497,48 +501,51 @@ class _ProjectSyncMixin(_CRMSyncBase):
         search: str | None = None,
         status: str | None = None,
         limit: int = 50,
-    ) -> list[CRMProjectRead]:
-        """List CRM projects for expense claim dropdown."""
+    ) -> list[SubProjectRead]:
+        """List Sub projects for expense claim dropdown."""
         stmt = (
-            select(CRMSyncMapping)
-            .where(CRMSyncMapping.organization_id == org_id)
-            .where(CRMSyncMapping.crm_entity_type == CRMEntityType.PROJECT)
+            select(SourceCorrelation)
+            .where(SourceCorrelation.organization_id == org_id)
+            .where(
+                SourceCorrelation.source_application == self._SOURCE_APPLICATION
+            )
+            .where(SourceCorrelation.source_entity_type == SourceEntityType.PROJECT)
         )
 
         if search:
             search_filter = f"%{search}%"
             stmt = stmt.where(
-                (CRMSyncMapping.display_name.ilike(search_filter))
-                | (CRMSyncMapping.display_code.ilike(search_filter))
+                (SourceCorrelation.display_name.ilike(search_filter))
+                | (SourceCorrelation.display_code.ilike(search_filter))
             )
 
         if status:
             stmt = stmt.where(
-                CRMSyncMapping.crm_status
-                == CRM_SYNC_STATUS_MAP.get(status.lower(), CRMSyncStatus.ACTIVE)
+                SourceCorrelation.source_status
+                == SOURCE_STATUS_MAP.get(status.lower(), SourceCorrelationStatus.ACTIVE)
             )
         else:
-            # Hide cancelled/archived CRM entities so a canceled project isn't
-            # selectable for new expense claims. CRM sends the cancellation via
+            # Hide cancelled/archived Sub entities so a canceled project isn't
+            # selectable for new expense claims. Sub sends the cancellation via
             # the recently-updated delta (canceling keeps is_active=True), which
             # marks the mapping CANCELLED — it just wasn't being filtered here.
             stmt = stmt.where(
-                CRMSyncMapping.crm_status.notin_(
-                    [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+                SourceCorrelation.source_status.notin_(
+                    [SourceCorrelationStatus.CANCELLED, SourceCorrelationStatus.ARCHIVED]
                 )
             )
 
-        stmt = stmt.order_by(CRMSyncMapping.display_name).limit(limit)
+        stmt = stmt.order_by(SourceCorrelation.display_name).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
 
         return [
-            CRMProjectRead(
+            SubProjectRead(
                 mapping_id=m.mapping_id,
-                crm_id=m.crm_id,
+                source_reference=m.source_reference,
                 local_entity_id=m.local_entity_id,
                 name=m.display_name,
                 code=m.display_code,
-                status=m.crm_status.value,
+                status=m.source_status.value,
                 customer_name=m.customer_name,
             )
             for m in mappings
@@ -549,38 +556,41 @@ class _ProjectSyncMixin(_CRMSyncBase):
         org_id: UUID,
         search: str | None = None,
         limit: int = 50,
-    ) -> list[CRMTicketRead]:
-        """List CRM tickets for expense claim dropdown."""
+    ) -> list[SubTicketRead]:
+        """List Sub tickets for expense claim dropdown."""
         stmt = (
-            select(CRMSyncMapping)
-            .where(CRMSyncMapping.organization_id == org_id)
-            .where(CRMSyncMapping.crm_entity_type == CRMEntityType.TICKET)
+            select(SourceCorrelation)
+            .where(SourceCorrelation.organization_id == org_id)
+            .where(
+                SourceCorrelation.source_application == self._SOURCE_APPLICATION
+            )
+            .where(SourceCorrelation.source_entity_type == SourceEntityType.TICKET)
         )
 
         if search:
             search_filter = f"%{search}%"
             stmt = stmt.where(
-                (CRMSyncMapping.display_name.ilike(search_filter))
-                | (CRMSyncMapping.display_code.ilike(search_filter))
+                (SourceCorrelation.display_name.ilike(search_filter))
+                | (SourceCorrelation.display_code.ilike(search_filter))
             )
 
         # Hide cancelled/archived tickets from the expense-claim picker.
         stmt = stmt.where(
-            CRMSyncMapping.crm_status.notin_(
-                [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+            SourceCorrelation.source_status.notin_(
+                [SourceCorrelationStatus.CANCELLED, SourceCorrelationStatus.ARCHIVED]
             )
         )
-        stmt = stmt.order_by(CRMSyncMapping.created_at.desc()).limit(limit)
+        stmt = stmt.order_by(SourceCorrelation.created_at.desc()).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
 
         return [
-            CRMTicketRead(
+            SubTicketRead(
                 mapping_id=m.mapping_id,
-                crm_id=m.crm_id,
+                source_reference=m.source_reference,
                 local_entity_id=m.local_entity_id,
                 subject=m.display_name,
                 ticket_number=m.display_code,
-                status=m.crm_status.value,
+                status=m.source_status.value,
                 customer_name=m.customer_name,
             )
             for m in mappings
@@ -592,49 +602,52 @@ class _ProjectSyncMixin(_CRMSyncBase):
         search: str | None = None,
         employee_id: UUID | None = None,
         limit: int = 50,
-    ) -> list[CRMWorkOrderRead]:
-        """List CRM work orders for expense claim dropdown."""
+    ) -> list[SubWorkOrderRead]:
+        """List Sub work orders for expense claim dropdown."""
         stmt = (
-            select(CRMSyncMapping)
-            .where(CRMSyncMapping.organization_id == org_id)
-            .where(CRMSyncMapping.crm_entity_type == CRMEntityType.WORK_ORDER)
+            select(SourceCorrelation)
+            .where(SourceCorrelation.organization_id == org_id)
+            .where(
+                SourceCorrelation.source_application == self._SOURCE_APPLICATION
+            )
+            .where(SourceCorrelation.source_entity_type == SourceEntityType.WORK_ORDER)
         )
 
         if search:
-            stmt = stmt.where(CRMSyncMapping.display_name.ilike(f"%{search}%"))
+            stmt = stmt.where(SourceCorrelation.display_name.ilike(f"%{search}%"))
 
         # If employee_id filter, join to Task and filter by assigned_to
         if employee_id:
             stmt = stmt.join(
                 Task,
-                (CRMSyncMapping.local_entity_id == Task.task_id)
-                & (CRMSyncMapping.local_entity_type == "task"),
+                (SourceCorrelation.local_entity_id == Task.task_id)
+                & (SourceCorrelation.local_entity_type == "task"),
             ).where(Task.assigned_to_id == employee_id)
 
         # Hide cancelled/archived work orders from the expense-claim picker.
         stmt = stmt.where(
-            CRMSyncMapping.crm_status.notin_(
-                [CRMSyncStatus.CANCELLED, CRMSyncStatus.ARCHIVED]
+            SourceCorrelation.source_status.notin_(
+                [SourceCorrelationStatus.CANCELLED, SourceCorrelationStatus.ARCHIVED]
             )
         )
-        stmt = stmt.order_by(CRMSyncMapping.created_at.desc()).limit(limit)
+        stmt = stmt.order_by(SourceCorrelation.created_at.desc()).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
 
         return [
-            CRMWorkOrderRead(
+            SubWorkOrderRead(
                 mapping_id=m.mapping_id,
-                crm_id=m.crm_id,
+                source_reference=m.source_reference,
                 local_entity_id=m.local_entity_id,
                 title=m.display_name,
-                status=m.crm_status.value,
+                status=m.source_status.value,
                 project_name=None,  # Could be enriched if needed
                 ticket_subject=None,
             )
             for m in mappings
         ]
 
-    def _create_project(self, org_id: UUID, data: CRMProjectPayload) -> Project:
-        """Create a local Project from CRM data."""
+    def _create_project(self, org_id: UUID, data: SubProjectPayload) -> Project:
+        """Create a local Project from Sub data."""
         source_code = (data.code or "").strip()
         source_code_in_use = (
             self.db.scalar(
@@ -649,7 +662,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
         project_code = (
             source_code
             if source_code and len(source_code) <= 20 and source_code_in_use is None
-            else self._generate_unique_code("CRM", data.crm_id, max_len=20)
+            else self._generate_unique_code("Sub", data.source_reference, max_len=20)
         )
 
         project = Project(
@@ -665,8 +678,8 @@ class _ProjectSyncMixin(_CRMSyncBase):
         self.db.add(project)
         return project
 
-    def _update_project(self, project: Project, data: CRMProjectPayload) -> None:
-        """Update existing project from CRM data."""
+    def _update_project(self, project: Project, data: SubProjectPayload) -> None:
+        """Update existing project from Sub data."""
         project.project_name = data.name
         project.description = data.description
         project.status = PROJECT_STATUS_MAP.get(
@@ -677,10 +690,10 @@ class _ProjectSyncMixin(_CRMSyncBase):
         )
         project.end_date = data.due_at.date() if data.due_at else project.end_date
 
-    def _create_ticket(self, org_id: UUID, data: CRMTicketPayload) -> Ticket:
-        """Create a local Ticket from CRM data."""
+    def _create_ticket(self, org_id: UUID, data: SubTicketPayload) -> Ticket:
+        """Create a local Ticket from Sub data."""
         ticket_number = data.ticket_number or self._generate_unique_code(
-            "CRM", data.crm_id, max_len=50
+            "Sub", data.source_reference, max_len=50
         )
 
         ticket = Ticket(
@@ -694,24 +707,24 @@ class _ProjectSyncMixin(_CRMSyncBase):
         self.db.add(ticket)
         return ticket
 
-    def _update_ticket(self, ticket: Ticket, data: CRMTicketPayload) -> None:
-        """Update existing ticket from CRM data."""
+    def _update_ticket(self, ticket: Ticket, data: SubTicketPayload) -> None:
+        """Update existing ticket from Sub data."""
         ticket.subject = data.subject
         if data.description is not None:
             ticket.description = data.description
         ticket.status = TICKET_STATUS_MAP.get(data.status.lower(), TicketStatus.OPEN)
         ticket.priority = self._map_ticket_priority(data.priority)
 
-    def _build_ticket_crm_data(self, data: CRMTicketPayload) -> dict | None:
-        """Build mapping crm_data for ticket payload, preserving backward compatibility."""
-        crm_data: dict = dict(data.metadata or {})
+    def _build_ticket_source_payload(self, data: SubTicketPayload) -> dict | None:
+        """Build mapping source_payload for ticket payload, preserving backward compatibility."""
+        source_payload: dict = dict(data.metadata or {})
         if data.description is not None:
-            crm_data["description"] = data.description
+            source_payload["description"] = data.description
         if data.comments:
-            crm_data["comments"] = data.comments
+            source_payload["comments"] = data.comments
         if data.activity_log:
-            crm_data["activity_log"] = data.activity_log
-        return crm_data or None
+            source_payload["activity_log"] = data.activity_log
+        return source_payload or None
 
     def _sync_ticket_comments(
         self,
@@ -719,21 +732,21 @@ class _ProjectSyncMixin(_CRMSyncBase):
         ticket: Ticket,
         raw_comments: list[dict[str, Any]],
     ) -> tuple[int, int, list[str]]:
-        """Sync CRM comment items to support.ticket_comment with idempotent dedupe."""
+        """Sync Sub comment items to support.ticket_comment with idempotent dedupe."""
         processed = 0
         dedupe_hits = 0
         errors: list[str] = []
 
         for idx, raw in enumerate(raw_comments or []):
             try:
-                item = CRMTicketCommentItem.model_validate(raw)
+                item = SubTicketCommentItem.model_validate(raw)
             except ValidationError as exc:
                 errors.append(
                     f"comments[{idx}] validation failed: {exc.errors()[0].get('msg', 'invalid')}"
                 )
                 continue
 
-            _, dedupe = self._upsert_crm_comment_item(org_id, ticket, item)
+            _, dedupe = self._upsert_sub_comment_item(org_id, ticket, item)
             processed += 1
             dedupe_hits += dedupe
 
@@ -746,7 +759,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
         raw_activity: list[dict[str, Any]],
         raw_comments: list[dict[str, Any]],
     ) -> tuple[int, int, list[str]]:
-        """Sync CRM activity_log entries to support.ticket_comment (activity timeline)."""
+        """Sync Sub activity_log entries to support.ticket_comment (activity timeline)."""
         processed = 0
         dedupe_hits = 0
         errors: list[str] = []
@@ -759,7 +772,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
 
         for idx, raw in enumerate(raw_activity or []):
             try:
-                entry = CRMTicketActivityEntry.model_validate(raw)
+                entry = SubTicketActivityEntry.model_validate(raw)
             except ValidationError as exc:
                 errors.append(
                     f"activity_log[{idx}] validation failed: {exc.errors()[0].get('msg', 'invalid')}"
@@ -770,35 +783,35 @@ class _ProjectSyncMixin(_CRMSyncBase):
             if entry.kind == "comment" and entry.id in comment_ids:
                 dedupe_hits += 1
                 logger.debug(
-                    "CRM ticket activity dedupe hit: kind=comment id=%s ticket=%s",
+                    "Sub ticket activity dedupe hit: kind=comment id=%s ticket=%s",
                     entry.id,
                     ticket.ticket_number,
                 )
                 continue
 
-            _, dedupe = self._upsert_crm_activity_item(org_id, ticket, entry)
+            _, dedupe = self._upsert_sub_activity_item(org_id, ticket, entry)
             processed += 1
             dedupe_hits += dedupe
 
         return processed, dedupe_hits, errors
 
-    def _upsert_crm_comment_item(
+    def _upsert_sub_comment_item(
         self,
         org_id: UUID,
         ticket: Ticket,
-        item: CRMTicketCommentItem,
+        item: SubTicketCommentItem,
     ) -> tuple[TicketComment, int]:
-        """Upsert a CRM comment item by SyncEntity(source='crm', doctype, id)."""
+        """Upsert a Sub comment item by SyncEntity(source='sub', doctype, id)."""
         sync = self.db.scalar(
             select(SyncEntity).where(
                 SyncEntity.organization_id == org_id,
-                SyncEntity.source_system == "crm",
+                SyncEntity.source_system == "sub",
                 SyncEntity.source_doctype == "ticket_comment",
                 SyncEntity.source_name == item.id,
             )
         )
 
-        author_id = self._resolve_crm_person_id(org_id, item.author_person_id)
+        author_id = self._resolve_sub_person_id(org_id, item.author_person_id)
         comment_type = (
             CommentType.INTERNAL_NOTE if item.is_internal else CommentType.COMMENT
         )
@@ -815,7 +828,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
                     existing.created_at = item.timestamp
                 sync.mark_synced(existing.comment_id)
                 logger.debug(
-                    "CRM ticket comment dedupe hit: id=%s ticket=%s",
+                    "Sub ticket comment dedupe hit: id=%s ticket=%s",
                     item.id,
                     ticket.ticket_number,
                 )
@@ -841,7 +854,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
             self.db.add(
                 SyncEntity(
                     organization_id=org_id,
-                    source_system="crm",
+                    source_system="sub",
                     source_doctype="ticket_comment",
                     source_name=item.id,
                     target_table="support.ticket_comment",
@@ -851,23 +864,23 @@ class _ProjectSyncMixin(_CRMSyncBase):
             )
         return comment, 0
 
-    def _upsert_crm_activity_item(
+    def _upsert_sub_activity_item(
         self,
         org_id: UUID,
         ticket: Ticket,
-        entry: CRMTicketActivityEntry,
+        entry: SubTicketActivityEntry,
     ) -> tuple[TicketComment, int]:
-        """Upsert a CRM activity item by SyncEntity(source='crm', kind, id)."""
+        """Upsert a Sub activity item by SyncEntity(source='sub', kind, id)."""
         doctype = f"ticket_activity_{entry.kind}"
         sync = self.db.scalar(
             select(SyncEntity).where(
                 SyncEntity.organization_id == org_id,
-                SyncEntity.source_system == "crm",
+                SyncEntity.source_system == "sub",
                 SyncEntity.source_doctype == doctype,
                 SyncEntity.source_name == entry.id,
             )
         )
-        author_id = self._resolve_crm_person_id(org_id, entry.author_person_id)
+        author_id = self._resolve_sub_person_id(org_id, entry.author_person_id)
 
         if entry.kind == "comment":
             comment_type = (
@@ -886,7 +899,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
             content = (
                 entry.body or f"{entry.event_type or 'event'} {details_str}".strip()
             )
-            action = entry.event_type or "crm_event"
+            action = entry.event_type or "sub_event"
             old_value = None
             new_value = entry.status
             is_internal = True
@@ -906,7 +919,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
                     existing.created_at = entry.timestamp
                 sync.mark_synced(existing.comment_id)
                 logger.debug(
-                    "CRM ticket activity dedupe hit: kind=%s id=%s ticket=%s",
+                    "Sub ticket activity dedupe hit: kind=%s id=%s ticket=%s",
                     entry.kind,
                     entry.id,
                     ticket.ticket_number,
@@ -936,7 +949,7 @@ class _ProjectSyncMixin(_CRMSyncBase):
             self.db.add(
                 SyncEntity(
                     organization_id=org_id,
-                    source_system="crm",
+                    source_system="sub",
                     source_doctype=doctype,
                     source_name=entry.id,
                     target_table="support.ticket_comment",
@@ -946,10 +959,10 @@ class _ProjectSyncMixin(_CRMSyncBase):
             )
         return comment, 0
 
-    def _resolve_crm_person_id(
+    def _resolve_sub_person_id(
         self, org_id: UUID, author_person_id: str | None
     ) -> UUID | None:
-        """Resolve CRM author to local Person ID.
+        """Resolve Sub author to local Person ID.
 
         Accepts either:
         - Person UUID (people.id)
@@ -979,13 +992,13 @@ class _ProjectSyncMixin(_CRMSyncBase):
     def _create_task(
         self,
         org_id: UUID,
-        data: CRMWorkOrderPayload,
+        data: SubWorkOrderPayload,
         project_id: UUID,
         ticket_id: UUID | None,
         employee_id: UUID | None,
     ) -> Task:
-        """Create a local Task from CRM work order data."""
-        task_code = self._generate_unique_code("WO", data.crm_id, max_len=30)
+        """Create a local Task from Sub work order data."""
+        task_code = self._generate_unique_code("WO", data.source_reference, max_len=30)
 
         task = Task(
             organization_id=org_id,
@@ -1005,12 +1018,12 @@ class _ProjectSyncMixin(_CRMSyncBase):
     def _update_task(
         self,
         task: Task,
-        data: CRMWorkOrderPayload,
+        data: SubWorkOrderPayload,
         project_id: UUID | None,
         ticket_id: UUID | None,
         employee_id: UUID | None,
     ) -> None:
-        """Update existing task from CRM work order data."""
+        """Update existing task from Sub work order data."""
         task.task_name = data.title
         task.status = TASK_STATUS_MAP.get(data.status.lower(), TaskStatus.OPEN)
         task.priority = self._map_task_priority(data.priority)
@@ -1026,13 +1039,13 @@ class _ProjectSyncMixin(_CRMSyncBase):
             task.due_date = data.scheduled_end.date()
 
     def _map_project_type(self, type_str: str | None) -> ProjectType:
-        """Map CRM project type to local enum (delegates to crm_mappings)."""
+        """Map Sub project type to local enum (delegates to sub_mappings)."""
         return map_project_type(type_str)
 
     def _map_ticket_priority(self, priority_str: str | None) -> TicketPriority:
-        """Map CRM priority to local enum (delegates to crm_mappings)."""
+        """Map Sub priority to local enum (delegates to sub_mappings)."""
         return map_ticket_priority(priority_str)
 
     def _map_task_priority(self, priority_str: str | None) -> TaskPriority:
-        """Map CRM priority to local enum (delegates to crm_mappings)."""
+        """Map Sub priority to local enum (delegates to sub_mappings)."""
         return map_task_priority(priority_str)

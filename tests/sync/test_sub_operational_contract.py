@@ -1,17 +1,17 @@
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from app.api.sync import dotmac_crm
+from app.api.sync import dotmac_sub
 from app.models.pm.task import TaskStatus
-from app.schemas.sync.dotmac_crm import BulkSyncRequest, CRMProjectTaskPayload
-from app.services.sync.crm_mappings import TASK_STATUS_MAP
+from app.schemas.sync.sub_operational import BulkSyncRequest, SubProjectTaskPayload
+from app.services.sync.sub_mappings import TASK_STATUS_MAP
 
 
 def test_bulk_contract_accepts_project_tasks_without_breaking_older_payloads() -> None:
     assert BulkSyncRequest().project_tasks == []
     payload = BulkSyncRequest(
         project_tasks=[
-            CRMProjectTaskPayload(
+            SubProjectTaskPayload(
                 source_id="task-1",
                 project_source_id="project-1",
                 title="Survey route",
@@ -51,10 +51,10 @@ def test_bulk_sync_processes_dependencies_before_project_tasks(monkeypatch) -> N
         def sync_work_order(self, _org_id, _payload) -> None:
             calls.append("work_order")
 
-    monkeypatch.setattr(dotmac_crm, "DotMacCRMSyncService", Service)
+    monkeypatch.setattr(dotmac_sub, "DotMacSubSyncService", Service)
     db = MagicMock()
     db.begin_nested.return_value = MagicMock()
-    payload = dotmac_crm.BulkSyncRequest.model_validate(
+    payload = dotmac_sub.BulkSyncRequest.model_validate(
         {
             "projects": [{"source_id": "p1", "name": "Build"}],
             "tickets": [{"source_id": "t1", "subject": "Install"}],
@@ -70,7 +70,7 @@ def test_bulk_sync_processes_dependencies_before_project_tasks(monkeypatch) -> N
         }
     )
 
-    result = dotmac_crm.bulk_sync(
+    result = dotmac_sub.sync_sub_operational_domains(
         payload,
         auth={"organization_id": "00000000-0000-0000-0000-000000000001"},
         db=db,

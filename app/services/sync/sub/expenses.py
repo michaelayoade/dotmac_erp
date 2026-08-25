@@ -1,6 +1,6 @@
-"""Expense-total roll-ups and CRM → ERP expense-claim sync.
+"""Expense-total roll-ups and Sub → ERP expense-claim sync.
 
-Extracted from the former monolithic dotmac_crm_sync_service.
+Extracted from the former monolithic dotmac_sub_sync_service.
 """
 
 from __future__ import annotations
@@ -33,36 +33,36 @@ from app.models.expense.expense_claim import (
     ExpenseClaim,
     ExpenseClaimStatus,
 )
-from app.models.sync.dotmac_crm_sync import (
-    CRMEntityType,
+from app.models.sync.source_correlation import (
+    SourceEntityType,
 )
-from app.schemas.sync.dotmac_crm import (
-    CRMExpenseCategoriesResponse,
-    CRMExpenseCategoryItem,
-    CRMExpenseClaimPayload,
-    CRMExpenseClaimResponse,
-    CRMExpenseClaimStatusResponse,
+from app.schemas.sync.sub_operational import (
+    SubExpenseCategoriesResponse,
+    SubExpenseCategoryItem,
+    SubExpenseClaimPayload,
+    SubExpenseClaimResponse,
+    SubExpenseClaimStatusResponse,
     ExpenseTotals,
 )
 
-# CRM → ERP translation policy lives in crm_mappings (pure, side-effect-free).
+# Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
 # Re-imported here so the canonical import sites
-# (`from ...dotmac_crm_sync_service import PROJECT_STATUS_MAP`) and the in-class
+# (`from ...dotmac_sub_sync_service import PROJECT_STATUS_MAP`) and the in-class
 # references keep resolving against this module's namespace.
 
-from app.services.sync.crm.base import _CRMSyncBase
+from app.services.sync.sub.base import _SubSyncBase
 
 logger = logging.getLogger(__name__)
 
 
-class _ExpenseTotalsMixin(_CRMSyncBase):
+class _ExpenseTotalsMixin(_SubSyncBase):
     def get_expense_totals_for_project(
         self,
         org_id: UUID,
-        crm_id: str,
+        source_reference: str,
     ) -> ExpenseTotals | None:
-        """Get expense totals for a CRM project."""
-        mapping = self._get_mapping(org_id, CRMEntityType.PROJECT, crm_id)
+        """Get expense totals for a Sub project."""
+        mapping = self._get_mapping(org_id, SourceEntityType.PROJECT, source_reference)
         if not mapping:
             return None
 
@@ -74,10 +74,10 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
     def get_expense_totals_for_ticket(
         self,
         org_id: UUID,
-        crm_id: str,
+        source_reference: str,
     ) -> ExpenseTotals | None:
-        """Get expense totals for a CRM ticket."""
-        mapping = self._get_mapping(org_id, CRMEntityType.TICKET, crm_id)
+        """Get expense totals for a Sub ticket."""
+        mapping = self._get_mapping(org_id, SourceEntityType.TICKET, source_reference)
         if not mapping:
             return None
 
@@ -89,10 +89,10 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
     def get_expense_totals_for_work_order(
         self,
         org_id: UUID,
-        crm_id: str,
+        source_reference: str,
     ) -> ExpenseTotals | None:
-        """Get expense totals for a CRM work order."""
-        mapping = self._get_mapping(org_id, CRMEntityType.WORK_ORDER, crm_id)
+        """Get expense totals for a Sub work order."""
+        mapping = self._get_mapping(org_id, SourceEntityType.WORK_ORDER, source_reference)
         if not mapping:
             return None
 
@@ -104,39 +104,39 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
     def get_batch_expense_totals(
         self,
         org_id: UUID,
-        project_crm_ids: list[str],
-        ticket_crm_ids: list[str],
-        work_order_crm_ids: list[str],
+        project_source_references: list[str],
+        ticket_source_references: list[str],
+        work_order_source_references: list[str],
     ) -> dict[str, ExpenseTotals]:
         """
-        Get expense totals for multiple CRM entities in batched queries.
+        Get expense totals for multiple Sub entities in batched queries.
 
-        Instead of 2 queries per CRM ID (mapping lookup + aggregation),
+        Instead of 2 queries per Sub ID (mapping lookup + aggregation),
         resolves all mappings in up to 3 queries then aggregates in up to 3.
         """
         result: dict[str, ExpenseTotals] = {}
 
         # Batch-resolve mappings (up to 3 queries)
         project_map = self._batch_get_mappings(
-            org_id, CRMEntityType.PROJECT, project_crm_ids
+            org_id, SourceEntityType.PROJECT, project_source_references
         )
         ticket_map = self._batch_get_mappings(
-            org_id, CRMEntityType.TICKET, ticket_crm_ids
+            org_id, SourceEntityType.TICKET, ticket_source_references
         )
         wo_map = self._batch_get_mappings(
-            org_id, CRMEntityType.WORK_ORDER, work_order_crm_ids
+            org_id, SourceEntityType.WORK_ORDER, work_order_source_references
         )
 
         # Batch-aggregate expenses (up to 3 queries)
-        for crm_to_local, fk_col in [
+        for sub_to_local, fk_col in [
             (project_map, ExpenseClaim.project_id),
             (ticket_map, ExpenseClaim.ticket_id),
             (wo_map, ExpenseClaim.task_id),
         ]:
-            if not crm_to_local:
+            if not sub_to_local:
                 continue
-            local_to_crm = {v: k for k, v in crm_to_local.items()}
-            local_ids = list(crm_to_local.values())
+            local_to_sub = {v: k for k, v in sub_to_local.items()}
+            local_ids = list(sub_to_local.values())
 
             stmt = (
                 select(
@@ -174,9 +174,9 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
                     totals.paid = amount
 
             for local_id, totals in grouped.items():
-                crm_id = local_to_crm.get(local_id)
-                if crm_id:
-                    result[crm_id] = totals
+                source_reference = local_to_sub.get(local_id)
+                if source_reference:
+                    result[source_reference] = totals
 
         return result
 
@@ -224,38 +224,39 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
         return totals
 
     # ------------------------------------------------------------------
-    # CRM → ERP expense-claim sync (field-technician expense requests)
+    # Sub → ERP expense-claim sync (field-technician expense requests)
     # ------------------------------------------------------------------
 
-    def _find_claim_by_omni_id(self, org_id: UUID, omni_id: str) -> ExpenseClaim | None:
-        """Load an existing claim (with items) for this CRM omni_id, if any."""
+    def _find_claim_by_source_claim_id(self, org_id: UUID, source_claim_id: str) -> ExpenseClaim | None:
+        """Load an existing claim (with items) for this Sub source_claim_id, if any."""
         return self.db.scalar(
             select(ExpenseClaim)
             .options(joinedload(ExpenseClaim.items))
             .where(
                 ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.crm_id == omni_id,
+                ExpenseClaim.source_system == "sub",
+                ExpenseClaim.source_reference == source_claim_id,
             )
         )
 
     def create_expense_claim(
         self,
         org_id: UUID,
-        data: CRMExpenseClaimPayload,
+        data: SubExpenseClaimPayload,
         created_by_person_id: UUID | None = None,
-    ) -> CRMExpenseClaimResponse:
+    ) -> SubExpenseClaimResponse:
         """
-        Create-and-submit an expense claim from a CRM expense request.
+        Create-and-submit an expense claim from a Sub expense request.
 
-        Immutable idempotency by omni_id (mirrors material requests):
+        Immutable idempotency by source_claim_id (mirrors material requests):
         - first send creates the claim and submits it into the approval flow
         - identical resend returns the existing claim unchanged
-        - changed resend is rejected (CRM must create a new expense request)
+        - changed resend is rejected (Sub must create a new expense request)
 
         Raises:
             HTTPException 422: unknown employee email / category codes, or
                 submit-side validation failures (missing receipts, limits).
-            HTTPException 409: changed resend of an existing omni_id.
+            HTTPException 409: changed resend of an existing source_claim_id.
             ValueError: malformed dates.
         """
         from app.services.expense import ExpenseService, ExpenseServiceError
@@ -272,17 +273,17 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
                 ),
             )
 
-        claim_date_val = self._parse_crm_date(data.claim_date, "claim_date")
+        claim_date_val = self._parse_sub_date(data.claim_date, "claim_date")
 
         # Optional cross-references — ignore when unmapped, never fail.
-        project_id = self._resolve_project_id(org_id, data.project_crm_id)
-        ticket_id = self._resolve_ticket_id(org_id, data.ticket_crm_id)
+        project_id = self._resolve_project_id(org_id, data.project_source_reference)
+        ticket_id = self._resolve_ticket_id(org_id, data.ticket_source_reference)
 
         categories = self._resolve_expense_categories(org_id, data)
 
         notes_parts: list[str] = []
         if data.reference_number:
-            notes_parts.append(f"CRM expense request: {data.reference_number}")
+            notes_parts.append(f"Sub expense request: {data.reference_number}")
         if data.remarks:
             notes_parts.append(data.remarks)
         notes = "\n".join(notes_parts) or None
@@ -290,7 +291,7 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
         resolved_items: list[dict[str, Any]] = []
         for seq, item in enumerate(data.items):
             expense_date_val = (
-                self._parse_crm_date(item.expense_date, "expense_date")
+                self._parse_sub_date(item.expense_date, "expense_date")
                 if item.expense_date
                 else claim_date_val
             )
@@ -322,7 +323,7 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
             items=resolved_items,
         )
 
-        existing = self._find_claim_by_omni_id(org_id, data.omni_id)
+        existing = self._find_claim_by_source_claim_id(org_id, data.source_claim_id)
         if existing is not None:
             existing_fingerprint = self._build_expense_claim_fingerprint(
                 employee_id=existing.employee_id,
@@ -351,28 +352,28 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
                     status_code=409,
                     detail=(
                         "Expense claim already exists and cannot be modified; "
-                        "create a new CRM expense request."
+                        "create a new Sub expense request."
                     ),
                 )
             logger.info(
-                "CRM expense claim duplicate accepted unchanged "
-                "(omni_id=%s, claim_number=%s)",
-                data.omni_id,
+                "Sub expense claim duplicate accepted unchanged "
+                "(source_claim_id=%s, claim_number=%s)",
+                data.source_claim_id,
                 existing.claim_number,
             )
-            return CRMExpenseClaimResponse(
+            return SubExpenseClaimResponse(
                 claim_id=existing.claim_id,
                 claim_number=existing.claim_number,
                 status=existing.status.value.lower(),
-                omni_id=data.omni_id,
+                source_claim_id=data.source_claim_id,
             )
 
         service = ExpenseService(self.db)
         # Create inside a savepoint so a concurrent first-send of the same
-        # omni_id — where both requests passed the existence check above —
-        # degrades gracefully: the loser hits uq_expense_claim_org_crm_id, rolls
+        # source_claim_id — where both requests passed the existence check above —
+        # degrades gracefully: the loser hits uq_expense_claim_org_source_reference, rolls
         # back its own partial insert, and returns the winner's claim instead of
-        # a 500. Both requests carry the same CRM expense request, so returning
+        # a 500. Both requests carry the same Sub expense request, so returning
         # the existing claim matches the immutable-idempotent contract. Mirrors
         # the race handling in _get_or_create_default_project.
         savepoint = self.db.begin_nested()
@@ -389,7 +390,8 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
                 items=resolved_items,
                 created_by_id=created_by_person_id,
             )
-            claim.crm_id = data.omni_id
+            claim.source_reference = data.source_claim_id
+            claim.source_system = "sub"
             claim.last_synced_at = datetime.now(UTC)
             self.db.flush()
             service.submit_claim(
@@ -401,51 +403,52 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
             savepoint.commit()
         except (ExpenseServiceError, ValidationError) as exc:
             # Surface a readable validation error (missing receipts, category
-            # limits, blocked limit rules, …) so the CRM records the reason.
+            # limits, blocked limit rules, …) so the Sub records the reason.
             savepoint.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except IntegrityError:
-            # Lost the create race for this omni_id — return the winner's claim.
+            # Lost the create race for this source_claim_id — return the winner's claim.
             savepoint.rollback()
             raced = self.db.scalar(
                 select(ExpenseClaim).where(
                     ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.crm_id == data.omni_id,
+                    ExpenseClaim.source_system == "sub",
+                    ExpenseClaim.source_reference == data.source_claim_id,
                 )
             )
             if raced is None:
-                raise  # not the crm_id collision we anticipated — surface it
+                raise  # not the source_reference collision we anticipated — surface it
             logger.info(
-                "CRM expense claim create raced; returning existing "
-                "(omni_id=%s, claim_number=%s)",
-                data.omni_id,
+                "Sub expense claim create raced; returning existing "
+                "(source_claim_id=%s, claim_number=%s)",
+                data.source_claim_id,
                 raced.claim_number,
             )
-            return CRMExpenseClaimResponse(
+            return SubExpenseClaimResponse(
                 claim_id=raced.claim_id,
                 claim_number=raced.claim_number,
                 status=raced.status.value.lower(),
-                omni_id=data.omni_id,
+                source_claim_id=data.source_claim_id,
             )
 
         logger.info(
-            "CRM expense claim %s created (omni_id=%s, status=%s, items=%d)",
+            "Sub expense claim %s created (source_claim_id=%s, status=%s, items=%d)",
             claim.claim_number,
-            data.omni_id,
+            data.source_claim_id,
             claim.status.value,
             len(resolved_items),
         )
-        return CRMExpenseClaimResponse(
+        return SubExpenseClaimResponse(
             claim_id=claim.claim_id,
             claim_number=claim.claim_number,
             status=claim.status.value.lower(),
-            omni_id=data.omni_id,
+            source_claim_id=data.source_claim_id,
         )
 
     def _resolve_expense_categories(
         self,
         org_id: UUID,
-        data: CRMExpenseClaimPayload,
+        data: SubExpenseClaimPayload,
     ) -> dict[str, ExpenseCategory]:
         """Resolve payload category codes to active org categories (batched)."""
         codes = {item.category_code for item in data.items}
@@ -466,7 +469,7 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
         return by_code
 
     @staticmethod
-    def _parse_crm_date(value: str, label: str) -> date:
+    def _parse_sub_date(value: str, label: str) -> date:
         """Parse a YYYY-MM-DD payload date, raising a readable ValueError."""
         try:
             return date.fromisoformat(value)
@@ -522,21 +525,22 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
-    def get_expense_claim_by_crm_id(
+    def get_expense_claim_by_source_reference(
         self,
         org_id: UUID,
-        omni_id: str,
-    ) -> CRMExpenseClaimStatusResponse | None:
-        """Get expense claim status by CRM omni_id (None when not found)."""
+        source_claim_id: str,
+    ) -> SubExpenseClaimStatusResponse | None:
+        """Get expense claim status by Sub source_claim_id (None when not found)."""
         claim = self.db.scalar(
             select(ExpenseClaim).where(
                 ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.crm_id == omni_id,
+                ExpenseClaim.source_system == "sub",
+                ExpenseClaim.source_reference == source_claim_id,
             )
         )
         if not claim:
             return None
-        return CRMExpenseClaimStatusResponse(
+        return SubExpenseClaimStatusResponse(
             claim_id=claim.claim_id,
             claim_number=claim.claim_number,
             status=claim.status.value.lower(),
@@ -544,11 +548,11 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
             paid_on=claim.paid_on,
             total_claimed_amount=claim.total_claimed_amount,
             total_approved_amount=claim.total_approved_amount,
-            omni_id=omni_id,
+            source_claim_id=source_claim_id,
         )
 
-    def list_expense_categories(self, org_id: UUID) -> CRMExpenseCategoriesResponse:
-        """List active expense categories (ordered by code) for the CRM form."""
+    def list_expense_categories(self, org_id: UUID) -> SubExpenseCategoriesResponse:
+        """List active expense categories (ordered by code) for the Sub form."""
         rows = self.db.scalars(
             select(ExpenseCategory)
             .where(
@@ -557,9 +561,9 @@ class _ExpenseTotalsMixin(_CRMSyncBase):
             )
             .order_by(ExpenseCategory.category_code)
         ).all()
-        return CRMExpenseCategoriesResponse(
+        return SubExpenseCategoriesResponse(
             items=[
-                CRMExpenseCategoryItem(
+                SubExpenseCategoryItem(
                     category_code=category.category_code,
                     category_name=category.category_name,
                     requires_receipt=category.requires_receipt,

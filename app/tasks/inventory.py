@@ -9,7 +9,7 @@ from uuid import UUID
 from celery import shared_task
 
 from app.db.session_context import session_for_org
-from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
+from app.services.inventory.material_support import MaterialSupportService
 from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def _list_active_organization_ids() -> list[UUID]:
 def auto_issue_pending_stock_material_requests(
     limit_per_org: int = 100,
 ) -> dict[str, Any]:
-    """Issue CRM material requests that were waiting for stock and notify requesters."""
+    """Issue Sub material requests that were waiting for stock."""
     results: dict[str, Any] = {
         "organizations_checked": 0,
         "checked": 0,
@@ -37,9 +37,7 @@ def auto_issue_pending_stock_material_requests(
         results["organizations_checked"] += 1
         try:
             with session_for_org(org_id) as db:
-                org_result = DotMacCRMSyncService(
-                    db
-                ).process_pending_stock_material_requests(
+                org_result = MaterialSupportService(db).process_pending_stock_material_requests(
                     org_id,
                     limit=limit_per_org,
                 )

@@ -20,7 +20,8 @@ class ExternalSource(str, enum.Enum):
 
     SPLYNX = "SPLYNX"
     ERPNEXT = "ERPNEXT"
-    CRM = "CRM"
+    # Reserved database token for historical rows from the retired application.
+    LEGACY_RETIRED = "CRM"
     DOTMAC_SUB = "DOTMAC_SUB"
 
 

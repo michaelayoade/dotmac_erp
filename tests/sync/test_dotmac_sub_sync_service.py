@@ -1,7 +1,7 @@
 """
-Tests for DotMac CRM Sync Service.
+Tests for Dotmac Sub Sync Service.
 
-Tests the business logic for syncing CRM entities to the ERP system.
+Tests the business logic for syncing Sub entities to the ERP system.
 Uses mocking for database operations since sync models use PostgreSQL-specific features.
 """
 
@@ -18,21 +18,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.schemas.sync.dotmac_crm import (
-    CRMInventoryItemPayload,
-    CRMMaterialRequestItemPayload,
-    CRMMaterialRequestPayload,
-    CRMProjectPayload,
-    CRMTicketPayload,
-    CRMWorkOrderPayload,
+from app.schemas.sync.sub_operational import (
+    SubInventoryItemPayload,
+    SubMaterialRequestItemPayload,
+    SubMaterialRequestPayload,
+    SubProjectPayload,
+    SubTicketPayload,
+    SubWorkOrderPayload,
     ExpenseTotals,
 )
-from app.services.sync.dotmac_crm_sync_service import (
-    CRM_SYNC_STATUS_MAP,
+from app.services.sync.dotmac_sub_sync_service import (
+    SOURCE_STATUS_MAP,
     PROJECT_STATUS_MAP,
     TASK_STATUS_MAP,
     TICKET_STATUS_MAP,
-    DotMacCRMSyncService,
+    DotMacSubSyncService,
 )
 
 
@@ -45,7 +45,7 @@ def mock_db():
 @pytest.fixture
 def service(mock_db):
     """Create a service instance with mocked db."""
-    return DotMacCRMSyncService(mock_db)
+    return DotMacSubSyncService(mock_db)
 
 
 @pytest.fixture
@@ -55,10 +55,10 @@ def org_id():
 
 
 class TestStatusMappings:
-    """Test the CRM status mappings are correctly defined."""
+    """Test the Sub status mappings are correctly defined."""
 
     def test_project_status_map_keys(self):
-        """Project status map should have common CRM statuses."""
+        """Project status map should have common Sub statuses."""
         expected_keys = {
             "planned",
             "active",
@@ -70,19 +70,19 @@ class TestStatusMappings:
         assert expected_keys.issubset(set(PROJECT_STATUS_MAP.keys()))
 
     def test_ticket_status_map_keys(self):
-        """Ticket status map should have common CRM statuses."""
+        """Ticket status map should have common Sub statuses."""
         expected_keys = {"open", "active", "in_progress", "resolved", "closed"}
         assert expected_keys.issubset(set(TICKET_STATUS_MAP.keys()))
 
     def test_task_status_map_keys(self):
-        """Task status map should have common CRM statuses."""
+        """Task status map should have common Sub statuses."""
         expected_keys = {"draft", "scheduled", "active", "in_progress", "completed"}
         assert expected_keys.issubset(set(TASK_STATUS_MAP.keys()))
 
-    def test_crm_sync_status_map_keys(self):
-        """CRM sync status map should handle all common statuses."""
+    def test_sub_sync_status_map_keys(self):
+        """Sub sync status map should handle all common statuses."""
         expected_keys = {"active", "completed", "cancelled", "archived"}
-        assert expected_keys.issubset(set(CRM_SYNC_STATUS_MAP.keys()))
+        assert expected_keys.issubset(set(SOURCE_STATUS_MAP.keys()))
 
 
 class TestGenerateUniqueCode:
@@ -90,21 +90,21 @@ class TestGenerateUniqueCode:
 
     def test_generate_code_format(self, service):
         """Generated code should have prefix-hash format."""
-        code = service._generate_unique_code("CRM", "test-uuid-123")
-        assert code.startswith("CRM-")
+        code = service._generate_unique_code("Sub", "test-uuid-123")
+        assert code.startswith("Sub-")
         assert len(code) <= 20
 
     def test_generate_code_deterministic(self, service):
         """Same input should produce same code."""
-        crm_id = "550e8400-e29b-41d4-a716-446655440000"
-        code1 = service._generate_unique_code("CRM", crm_id)
-        code2 = service._generate_unique_code("CRM", crm_id)
+        source_reference = "550e8400-e29b-41d4-a716-446655440000"
+        code1 = service._generate_unique_code("Sub", source_reference)
+        code2 = service._generate_unique_code("Sub", source_reference)
         assert code1 == code2
 
     def test_generate_code_different_inputs(self, service):
         """Different inputs should produce different codes."""
-        code1 = service._generate_unique_code("CRM", "uuid-1")
-        code2 = service._generate_unique_code("CRM", "uuid-2")
+        code1 = service._generate_unique_code("Sub", "uuid-1")
+        code2 = service._generate_unique_code("Sub", "uuid-2")
         assert code1 != code2
 
     def test_generate_code_max_length(self, service):
@@ -114,7 +114,7 @@ class TestGenerateUniqueCode:
 
     def test_generate_code_uppercase(self, service):
         """Hash portion should be uppercase."""
-        code = service._generate_unique_code("CRM", "test")
+        code = service._generate_unique_code("Sub", "test")
         hash_part = code.split("-")[1]
         assert hash_part == hash_part.upper()
 
@@ -123,11 +123,11 @@ class TestSyncProject:
     """Test project sync operations."""
 
     def test_sync_new_project(self, service, org_id, mock_db):
-        """Syncing a new project should create both Project and CRMSyncMapping."""
+        """Syncing a new project should create both Project and SourceCorrelation."""
         # Arrange
-        crm_id = str(uuid.uuid4())
-        payload = CRMProjectPayload(
-            crm_id=crm_id,
+        source_reference = str(uuid.uuid4())
+        payload = SubProjectPayload(
+            source_reference=source_reference,
             name="Test Project",
             code="PROJ-001",
             status="active",
@@ -148,20 +148,20 @@ class TestSyncProject:
 
         # Assert
         mock_create.assert_called_once()
-        mock_db.add.assert_called()  # CRMSyncMapping added
+        mock_db.add.assert_called()  # SourceCorrelation added
 
     def test_sync_existing_project(self, service, org_id, mock_db):
         """Syncing an existing project should update both records."""
         # Arrange
-        crm_id = str(uuid.uuid4())
+        source_reference = str(uuid.uuid4())
         existing_mapping = MagicMock()
         existing_mapping.local_entity_id = uuid.uuid4()
 
         existing_project = MagicMock()
         mock_db.get.return_value = existing_project
 
-        payload = CRMProjectPayload(
-            crm_id=crm_id,
+        payload = SubProjectPayload(
+            source_reference=source_reference,
             name="Updated Project Name",
             code="PROJ-001",
             status="completed",
@@ -180,13 +180,13 @@ class TestSyncProject:
 
     def test_sync_project_recreates_missing_local(self, service, org_id, mock_db):
         """Missing local project should be recreated and mapping updated."""
-        crm_id = str(uuid.uuid4())
+        source_reference = str(uuid.uuid4())
         existing_mapping = MagicMock()
         existing_mapping.local_entity_id = uuid.uuid4()
         mock_db.get.return_value = None
 
-        payload = CRMProjectPayload(
-            crm_id=crm_id,
+        payload = SubProjectPayload(
+            source_reference=source_reference,
             name="Recovered Project",
             code="PROJ-RECOVER",
             status="active",
@@ -208,10 +208,10 @@ class TestSyncTicket:
     """Test ticket sync operations."""
 
     def test_sync_new_ticket(self, service, org_id, mock_db):
-        """Syncing a new ticket should create both Ticket and CRMSyncMapping."""
-        crm_id = str(uuid.uuid4())
-        payload = CRMTicketPayload(
-            crm_id=crm_id,
+        """Syncing a new ticket should create both Ticket and SourceCorrelation."""
+        source_reference = str(uuid.uuid4())
+        payload = SubTicketPayload(
+            source_reference=source_reference,
             subject="Test Ticket",
             ticket_number="TKT-001",
             status="open",
@@ -231,13 +231,13 @@ class TestSyncTicket:
 
     def test_sync_ticket_recreates_missing_local(self, service, org_id, mock_db):
         """Missing local ticket should be recreated and mapping updated."""
-        crm_id = str(uuid.uuid4())
+        source_reference = str(uuid.uuid4())
         existing_mapping = MagicMock()
         existing_mapping.local_entity_id = uuid.uuid4()
         mock_db.get.return_value = None
 
-        payload = CRMTicketPayload(
-            crm_id=crm_id,
+        payload = SubTicketPayload(
+            source_reference=source_reference,
             subject="Recovered Ticket",
             ticket_number="TKT-RECOVER",
             status="open",
@@ -255,7 +255,7 @@ class TestSyncTicket:
         mock_create.assert_called_once()
 
     def test_sync_ticket_status_mapping(self, service, org_id, mock_db):
-        """Ticket status should be mapped correctly from CRM status."""
+        """Ticket status should be mapped correctly from Sub status."""
         from app.models.support.ticket import TicketStatus
 
         # Test different status mappings
@@ -264,9 +264,9 @@ class TestSyncTicket:
         assert TICKET_STATUS_MAP.get("closed") == TicketStatus.CLOSED
 
     def test_create_ticket_maps_description(self, service, org_id):
-        """Ticket description should be mapped from CRM payload."""
-        payload = CRMTicketPayload(
-            crm_id=str(uuid.uuid4()),
+        """Ticket description should be mapped from Sub payload."""
+        payload = SubTicketPayload(
+            source_reference=str(uuid.uuid4()),
             subject="Ticket with description",
             status="open",
             description="Customer reported intermittent outage",
@@ -277,25 +277,25 @@ class TestSyncTicket:
         assert ticket.description == "Customer reported intermittent outage"
 
     def test_update_ticket_maps_description(self, service):
-        """Existing ticket description should update from CRM payload."""
+        """Existing ticket description should update from Sub payload."""
         ticket = MagicMock()
-        payload = CRMTicketPayload(
-            crm_id=str(uuid.uuid4()),
+        payload = SubTicketPayload(
+            source_reference=str(uuid.uuid4()),
             subject="Updated subject",
             status="open",
-            description="Updated from CRM",
+            description="Updated from Sub",
         )
 
         service._update_ticket(ticket, payload)
 
-        assert ticket.description == "Updated from CRM"
+        assert ticket.description == "Updated from Sub"
 
     def test_update_ticket_keeps_description_when_missing(self, service):
-        """Description should not be cleared when CRM omits/nulls description."""
+        """Description should not be cleared when Sub omits/nulls description."""
         ticket = MagicMock()
         ticket.description = "Keep me"
-        payload = CRMTicketPayload(
-            crm_id=str(uuid.uuid4()),
+        payload = SubTicketPayload(
+            source_reference=str(uuid.uuid4()),
             subject="Updated subject",
             status="open",
             description=None,
@@ -305,25 +305,25 @@ class TestSyncTicket:
 
         assert ticket.description == "Keep me"
 
-    def test_build_ticket_crm_data_includes_new_fields(self, service):
-        """crm_data should include comments/activity_log with metadata."""
-        payload = CRMTicketPayload(
-            crm_id=str(uuid.uuid4()),
+    def test_build_ticket_source_payload_includes_new_fields(self, service):
+        """source_payload should include comments/activity_log with metadata."""
+        payload = SubTicketPayload(
+            source_reference=str(uuid.uuid4()),
             subject="Test",
             status="open",
             description="Desc",
-            metadata={"source": "crm"},
+            metadata={"source": "sub"},
             comments=[{"id": "c-1", "body": "First comment"}],
             activity_log=[{"id": "a-1", "action": "status_changed"}],
         )
 
-        crm_data = service._build_ticket_crm_data(payload)
+        source_payload = service._build_ticket_source_payload(payload)
 
-        assert crm_data is not None
-        assert crm_data["source"] == "crm"
-        assert crm_data["description"] == "Desc"
-        assert crm_data["comments"][0]["id"] == "c-1"
-        assert crm_data["activity_log"][0]["id"] == "a-1"
+        assert source_payload is not None
+        assert source_payload["source"] == "sub"
+        assert source_payload["description"] == "Desc"
+        assert source_payload["comments"][0]["id"] == "c-1"
+        assert source_payload["activity_log"][0]["id"] == "a-1"
 
     def test_sync_ticket_comments_invalid_item_continues(self, service, org_id):
         """Malformed comment items should be captured as item-level errors."""
@@ -331,7 +331,7 @@ class TestSyncTicket:
         ticket.ticket_id = uuid.uuid4()
 
         with patch.object(
-            service, "_upsert_crm_comment_item", return_value=(MagicMock(), 0)
+            service, "_upsert_sub_comment_item", return_value=(MagicMock(), 0)
         ) as mock_upsert:
             processed, dedupe_hits, errors = service._sync_ticket_comments(
                 org_id,
@@ -355,7 +355,7 @@ class TestSyncTicket:
         ticket.ticket_id = uuid.uuid4()
         ticket.ticket_number = "TKT-001"
 
-        with patch.object(service, "_upsert_crm_activity_item") as mock_upsert:
+        with patch.object(service, "_upsert_sub_activity_item") as mock_upsert:
             processed, dedupe_hits, errors = service._sync_ticket_activity(
                 org_id,
                 ticket,
@@ -368,10 +368,10 @@ class TestSyncTicket:
         assert errors == []
         mock_upsert.assert_not_called()
 
-    def test_upsert_crm_comment_item_dedupe_hit(self, service, org_id, mock_db):
+    def test_upsert_sub_comment_item_dedupe_hit(self, service, org_id, mock_db):
         """Existing sync mapping should update existing comment instead of inserting duplicate."""
         from app.models.sync.sync_entity import SyncStatus
-        from app.schemas.sync.dotmac_crm import CRMTicketCommentItem
+        from app.schemas.sync.sub_operational import SubTicketCommentItem
 
         ticket = MagicMock()
         ticket.ticket_id = uuid.uuid4()
@@ -387,21 +387,21 @@ class TestSyncTicket:
         mock_db.scalar.return_value = existing_sync
         mock_db.get.return_value = existing_comment
 
-        item = CRMTicketCommentItem(
+        item = SubTicketCommentItem(
             id="comment-1",
             body="Updated body",
             is_internal=True,
         )
 
-        _, dedupe = service._upsert_crm_comment_item(org_id, ticket, item)
+        _, dedupe = service._upsert_sub_comment_item(org_id, ticket, item)
 
         assert dedupe == 1
         mock_db.add.assert_not_called()
 
-    def test_upsert_crm_activity_item_dedupe_hit(self, service, org_id, mock_db):
+    def test_upsert_sub_activity_item_dedupe_hit(self, service, org_id, mock_db):
         """Existing activity sync mapping should dedupe on replay."""
         from app.models.sync.sync_entity import SyncStatus
-        from app.schemas.sync.dotmac_crm import CRMTicketActivityEntry
+        from app.schemas.sync.sub_operational import SubTicketActivityEntry
 
         ticket = MagicMock()
         ticket.ticket_id = uuid.uuid4()
@@ -417,7 +417,7 @@ class TestSyncTicket:
         mock_db.scalar.return_value = existing_sync
         mock_db.get.return_value = existing_comment
 
-        entry = CRMTicketActivityEntry(
+        entry = SubTicketActivityEntry(
             kind="event",
             id="event-1",
             event_type="status_changed",
@@ -425,12 +425,12 @@ class TestSyncTicket:
             details={"from": "open", "to": "resolved"},
         )
 
-        _, dedupe = service._upsert_crm_activity_item(org_id, ticket, entry)
+        _, dedupe = service._upsert_sub_activity_item(org_id, ticket, entry)
 
         assert dedupe == 1
         mock_db.add.assert_not_called()
 
-    def test_resolve_crm_person_id_accepts_employee_id(self, service, org_id, mock_db):
+    def test_resolve_sub_person_id_accepts_employee_id(self, service, org_id, mock_db):
         """author_person_id fallback should resolve employee_id -> person_id."""
         person_id = uuid.uuid4()
 
@@ -441,7 +441,7 @@ class TestSyncTicket:
         # First db.get(Person, external_id) -> None; then db.get(Employee, external_id) -> employee
         mock_db.get.side_effect = [None, mock_employee]
 
-        resolved = service._resolve_crm_person_id(org_id, str(uuid.uuid4()))
+        resolved = service._resolve_sub_person_id(org_id, str(uuid.uuid4()))
 
         assert resolved == person_id
 
@@ -451,15 +451,15 @@ class TestSyncWorkOrder:
 
     def test_sync_new_work_order_with_project(self, service, org_id, mock_db):
         """Work order with project reference should link to that project."""
-        crm_id = str(uuid.uuid4())
-        project_crm_id = str(uuid.uuid4())
+        source_reference = str(uuid.uuid4())
+        project_source_reference = str(uuid.uuid4())
         project_local_id = uuid.uuid4()
 
-        payload = CRMWorkOrderPayload(
-            crm_id=crm_id,
+        payload = SubWorkOrderPayload(
+            source_reference=source_reference,
             title="Test Work Order",
             status="active",
-            project_crm_id=project_crm_id,
+            project_source_reference=project_source_reference,
         )
 
         with patch.object(service, "_get_mapping", return_value=None):
@@ -486,11 +486,11 @@ class TestSyncWorkOrder:
         self, service, org_id, mock_db
     ):
         """Work order without project should use default project."""
-        crm_id = str(uuid.uuid4())
+        source_reference = str(uuid.uuid4())
         default_project_id = uuid.uuid4()
 
-        payload = CRMWorkOrderPayload(
-            crm_id=crm_id,
+        payload = SubWorkOrderPayload(
+            source_reference=source_reference,
             title="Orphan Work Order",
             status="active",
         )
@@ -519,14 +519,14 @@ class TestSyncWorkOrder:
 
     def test_sync_work_order_recreates_missing_local(self, service, org_id, mock_db):
         """Missing local work order should be recreated and mapping updated."""
-        crm_id = str(uuid.uuid4())
+        source_reference = str(uuid.uuid4())
         default_project_id = uuid.uuid4()
         existing_mapping = MagicMock()
         existing_mapping.local_entity_id = uuid.uuid4()
         mock_db.get.return_value = None
 
-        payload = CRMWorkOrderPayload(
-            crm_id=crm_id,
+        payload = SubWorkOrderPayload(
+            source_reference=source_reference,
             title="Recovered Work Order",
             status="active",
         )
@@ -581,16 +581,16 @@ class TestListOperations:
     """Test list operations for UI dropdowns."""
 
     def test_list_projects_returns_correct_format(self, service, org_id, mock_db):
-        """list_projects should return CRMProjectRead objects."""
-        from app.models.sync.dotmac_crm_sync import CRMSyncStatus
+        """list_projects should return SubProjectRead objects."""
+        from app.models.sync.source_correlation import SourceCorrelationStatus
 
         mock_mapping = MagicMock()
         mock_mapping.mapping_id = uuid.uuid4()
-        mock_mapping.crm_id = "crm-123"
+        mock_mapping.source_reference = "sub-123"
         mock_mapping.local_entity_id = uuid.uuid4()
         mock_mapping.display_name = "Test Project"
         mock_mapping.display_code = "PROJ-001"
-        mock_mapping.crm_status = CRMSyncStatus.ACTIVE
+        mock_mapping.source_status = SourceCorrelationStatus.ACTIVE
         mock_mapping.customer_name = "Customer"
 
         mock_db.scalars.return_value.all.return_value = [mock_mapping]
@@ -613,16 +613,16 @@ class TestListOperations:
         mock_db.scalars.assert_called()
 
     def test_list_tickets_returns_correct_format(self, service, org_id, mock_db):
-        """list_tickets should return CRMTicketRead objects."""
-        from app.models.sync.dotmac_crm_sync import CRMSyncStatus
+        """list_tickets should return SubTicketRead objects."""
+        from app.models.sync.source_correlation import SourceCorrelationStatus
 
         mock_mapping = MagicMock()
         mock_mapping.mapping_id = uuid.uuid4()
-        mock_mapping.crm_id = "crm-456"
+        mock_mapping.source_reference = "sub-456"
         mock_mapping.local_entity_id = uuid.uuid4()
         mock_mapping.display_name = "Test Ticket Subject"
         mock_mapping.display_code = "TKT-001"
-        mock_mapping.crm_status = CRMSyncStatus.ACTIVE
+        mock_mapping.source_status = SourceCorrelationStatus.ACTIVE
         mock_mapping.customer_name = "Customer"
 
         mock_db.scalars.return_value.all.return_value = [mock_mapping]
@@ -634,15 +634,15 @@ class TestListOperations:
         assert result[0].ticket_number == "TKT-001"
 
     def test_list_work_orders_returns_correct_format(self, service, org_id, mock_db):
-        """list_work_orders should return CRMWorkOrderRead objects."""
-        from app.models.sync.dotmac_crm_sync import CRMSyncStatus
+        """list_work_orders should return SubWorkOrderRead objects."""
+        from app.models.sync.source_correlation import SourceCorrelationStatus
 
         mock_mapping = MagicMock()
         mock_mapping.mapping_id = uuid.uuid4()
-        mock_mapping.crm_id = "crm-789"
+        mock_mapping.source_reference = "sub-789"
         mock_mapping.local_entity_id = uuid.uuid4()
         mock_mapping.display_name = "Test Work Order"
-        mock_mapping.crm_status = CRMSyncStatus.ACTIVE
+        mock_mapping.source_status = SourceCorrelationStatus.ACTIVE
 
         mock_db.scalars.return_value.all.return_value = [mock_mapping]
 
@@ -699,7 +699,7 @@ class TestLookupHelpers:
         mock_mapping.local_entity_id = local_id
 
         with patch.object(service, "_get_mapping", return_value=mock_mapping):
-            result = service.get_local_project_id(org_id, "crm-123")
+            result = service.get_local_project_id(org_id, "sub-123")
 
         assert result == local_id
 
@@ -717,7 +717,7 @@ class TestLookupHelpers:
         mock_mapping.local_entity_id = local_id
 
         with patch.object(service, "_get_mapping", return_value=mock_mapping):
-            result = service.get_local_ticket_id(org_id, "crm-456")
+            result = service.get_local_ticket_id(org_id, "sub-456")
 
         assert result == local_id
 
@@ -728,7 +728,7 @@ class TestLookupHelpers:
         mock_mapping.local_entity_id = local_id
 
         with patch.object(service, "_get_mapping", return_value=mock_mapping):
-            result = service.get_local_task_id(org_id, "crm-789")
+            result = service.get_local_task_id(org_id, "sub-789")
 
         assert result == local_id
 
@@ -826,7 +826,7 @@ class TestProjectTypeMapping:
 
 
 class TestInventorySync:
-    """Test inventory sync methods for CRM."""
+    """Test inventory sync methods for Sub."""
 
     def test_list_inventory_items_empty(self, service, org_id):
         """Should return empty list when no items match."""
@@ -1190,11 +1190,11 @@ class TestInventorySync:
         assert result[1]["code"] == "WH-FIELD"
 
 
-# ============ New CRM API Endpoint Tests ============
+# ============ New Sub adapter Endpoint Tests ============
 
 
 class TestListDepartments:
-    """Test list_departments for CRM workforce sync."""
+    """Test list_departments for Sub workforce sync."""
 
     def test_list_departments_empty(self, service, org_id, mock_db):
         """Should return empty list when no departments exist."""
@@ -1281,7 +1281,7 @@ class TestListDepartments:
 
 
 class TestListWorkforceEmployees:
-    """Test list_workforce_employees for CRM staff lookup."""
+    """Test list_workforce_employees for Sub staff lookup."""
 
     def test_list_workforce_employees_returns_required_fields(
         self, service, org_id, mock_db
@@ -1357,7 +1357,7 @@ class TestListWorkforceEmployees:
 
 
 class TestListCompanies:
-    """Test list_companies for CRM contacts sync."""
+    """Test list_companies for Sub contacts sync."""
 
     def test_list_companies_empty(self, service, org_id, mock_db):
         """Should return empty list when no companies exist."""
@@ -1379,7 +1379,7 @@ class TestListCompanies:
         mock_customer.tax_identification_number = "12345678"
         mock_customer.billing_address = {"city": "Lagos"}
         mock_customer.primary_contact = {"name": "Boss", "email": "boss@acme.com"}
-        mock_customer.crm_id = "crm-abc-123"
+        mock_customer.source_reference = "sub-abc-123"
 
         mock_db.scalar.return_value = 1
         mock_db.scalars.return_value.all.return_value = [mock_customer]
@@ -1391,7 +1391,7 @@ class TestListCompanies:
         assert company.customer_code == "CUST-001"
         assert company.legal_name == "Acme Corp"
         assert company.tax_id == "12345678"
-        assert company.crm_id == "crm-abc-123"
+        assert company.source_reference == "sub-abc-123"
 
     def test_list_companies_has_more(self, service, org_id, mock_db):
         """Should set has_more when more results exist beyond limit."""
@@ -1402,7 +1402,7 @@ class TestListCompanies:
         mock_c1.tax_identification_number = None
         mock_c1.billing_address = None
         mock_c1.primary_contact = None
-        mock_c1.crm_id = None
+        mock_c1.source_reference = None
 
         mock_c2 = MagicMock()
         mock_c2.customer_id = uuid.uuid4()
@@ -1411,7 +1411,7 @@ class TestListCompanies:
         mock_c2.tax_identification_number = None
         mock_c2.billing_address = None
         mock_c2.primary_contact = None
-        mock_c2.crm_id = None
+        mock_c2.source_reference = None
 
         mock_db.scalar.return_value = 2
         # Return limit+1 items to trigger has_more
@@ -1424,7 +1424,7 @@ class TestListCompanies:
 
 
 class TestListPeopleContacts:
-    """Test list_people_contacts for CRM contacts sync."""
+    """Test list_people_contacts for Sub contacts sync."""
 
     def test_list_people_empty(self, service, org_id, mock_db):
         """Should return empty list when no individual customers exist."""
@@ -1446,7 +1446,7 @@ class TestListPeopleContacts:
             "email": "john@example.com",
             "phone": "+2341234567",
         }
-        mock_customer.crm_id = None
+        mock_customer.source_reference = None
 
         mock_db.scalar.return_value = 1
         mock_db.scalars.return_value.all.return_value = [mock_customer]
@@ -1466,7 +1466,7 @@ class TestListPeopleContacts:
         mock_customer.customer_code = "IND-002"
         mock_customer.legal_name = "No Contact Info"
         mock_customer.primary_contact = None
-        mock_customer.crm_id = None
+        mock_customer.source_reference = None
 
         mock_db.scalar.return_value = 1
         mock_db.scalars.return_value.all.return_value = [mock_customer]
@@ -1479,7 +1479,7 @@ class TestListPeopleContacts:
 
 
 class TestCreateMaterialRequest:
-    """Test create_material_request for CRM material request sync."""
+    """Test create_material_request for Sub material request sync."""
 
     def test_create_material_request_upserts_existing(self, service, org_id, mock_db):
         """Should return existing request unchanged for identical duplicate send."""
@@ -1517,12 +1517,12 @@ class TestCreateMaterialRequest:
         # item lookup -> warehouse lookup -> existing MR lookup
         mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
 
-        payload = CRMMaterialRequestPayload(
-            omni_id="crm-mr-123",
+        payload = SubMaterialRequestPayload(
+            source_request_id="sub-mr-123",
             request_type="ISSUE",
             status="issued",
             items=[
-                CRMMaterialRequestItemPayload(
+                SubMaterialRequestItemPayload(
                     item_code="ITEM001",
                     quantity=Decimal("5"),
                     from_warehouse_code="Stores - DT",
@@ -1534,7 +1534,7 @@ class TestCreateMaterialRequest:
 
         assert result.request_id == existing_mr.request_id
         assert result.request_number == "MAT-MR-2026-00001"
-        assert result.omni_id == "crm-mr-123"
+        assert result.source_request_id == "sub-mr-123"
         mock_db.add.assert_not_called()
 
     def test_create_material_request_happy_path(self, service, org_id, mock_db):
@@ -1569,12 +1569,12 @@ class TestCreateMaterialRequest:
             mock_numbering.generate_next_number.return_value = "MAT-MR-2026-00001"
             mock_numbering_cls.return_value = mock_numbering
 
-            payload = CRMMaterialRequestPayload(
-                omni_id="crm-mr-new-456",
+            payload = SubMaterialRequestPayload(
+                source_request_id="sub-mr-new-456",
                 request_type="ISSUE",
                 status="issued",
                 items=[
-                    CRMMaterialRequestItemPayload(
+                    SubMaterialRequestItemPayload(
                         item_code="CABLE-01",
                         quantity=Decimal("10"),
                         uom="METER",
@@ -1589,12 +1589,12 @@ class TestCreateMaterialRequest:
                 "app.services.inventory.transaction.InventoryTransactionService.get_current_balance",
                 return_value=Decimal("999"),
             ):
-                with patch.object(service, "_post_crm_issue_transaction"):
+                with patch.object(service, "_post_sub_issue_transaction"):
                     result = service.create_material_request(org_id, payload)
 
         assert result.request_number == "MAT-MR-2026-00001"
         assert result.status == "ISSUED"
-        assert result.omni_id == "crm-mr-new-456"
+        assert result.source_request_id == "sub-mr-new-456"
         assert result.request_id is not None
         # Header is explicitly added; lines are attached through relationship append
         assert mock_db.add.call_count >= 1
@@ -1603,12 +1603,12 @@ class TestCreateMaterialRequest:
         """Should raise ValueError when item_code not found."""
         mock_db.scalar.return_value = None
 
-        payload = CRMMaterialRequestPayload(
-            omni_id="crm-mr-bad-item",
+        payload = SubMaterialRequestPayload(
+            source_request_id="sub-mr-bad-item",
             request_type="ISSUE",
             status="issued",
             items=[
-                CRMMaterialRequestItemPayload(
+                SubMaterialRequestItemPayload(
                     item_code="NONEXISTENT",
                     quantity=Decimal("1"),
                     from_warehouse_code="Stores - DT",
@@ -1623,12 +1623,12 @@ class TestCreateMaterialRequest:
         """Should raise ValueError for unknown request_type."""
         mock_db.scalar.return_value = None  # No existing MR
 
-        payload = CRMMaterialRequestPayload(
-            omni_id="crm-mr-bad-type",
+        payload = SubMaterialRequestPayload(
+            source_request_id="sub-mr-bad-type",
             request_type="UNKNOWN",
             status="issued",
             items=[
-                CRMMaterialRequestItemPayload(
+                SubMaterialRequestItemPayload(
                     item_code="ITEM001",
                     quantity=Decimal("1"),
                     from_warehouse_code="Stores - DT",
@@ -1642,7 +1642,7 @@ class TestCreateMaterialRequest:
     def test_create_material_request_project_ticket_linking(
         self, service, org_id, mock_db
     ):
-        """Should resolve project and ticket CRM IDs."""
+        """Should resolve project and ticket Sub IDs."""
         mock_item = MagicMock()
         mock_item.item_id = uuid.uuid4()
         mock_item.base_uom = "Nos"
@@ -1681,35 +1681,35 @@ class TestCreateMaterialRequest:
                         )
                         mock_numbering_cls.return_value = mock_numbering
 
-                        payload = CRMMaterialRequestPayload(
-                            omni_id="crm-mr-linked",
+                        payload = SubMaterialRequestPayload(
+                            source_request_id="sub-mr-linked",
                             request_type="ISSUE",
                             status="issued",
                             items=[
-                                CRMMaterialRequestItemPayload(
+                                SubMaterialRequestItemPayload(
                                     item_code="ITEM001",
                                     quantity=Decimal("3"),
                                     from_warehouse_code="Stores - DT",
                                 )
                             ],
-                            project_crm_id="proj-crm-123",
-                            ticket_crm_id="ticket-crm-456",
+                            project_source_reference="proj-sub-123",
+                            ticket_source_reference="ticket-sub-456",
                         )
 
                         with patch(
                             "app.services.inventory.transaction.InventoryTransactionService.get_current_balance",
                             return_value=Decimal("999"),
                         ):
-                            with patch.object(service, "_post_crm_issue_transaction"):
+                            with patch.object(service, "_post_sub_issue_transaction"):
                                 service.create_material_request(org_id, payload)
 
-        mock_resolve_proj.assert_called_once_with(org_id, "proj-crm-123")
-        mock_resolve_ticket.assert_called_once_with(org_id, "ticket-crm-456")
+        mock_resolve_proj.assert_called_once_with(org_id, "proj-sub-123")
+        mock_resolve_ticket.assert_called_once_with(org_id, "ticket-sub-456")
 
     def test_create_material_request_issued_posts_issue_transactions(
         self, service, org_id, mock_db
     ):
-        """Should post inventory issues when CRM status is issued."""
+        """Should post inventory issues when Sub status is issued."""
         from app.models.inventory.material_request import MaterialRequestStatus
 
         mock_item = MagicMock()
@@ -1754,14 +1754,14 @@ class TestCreateMaterialRequest:
                 ],
             ):
                 with patch.object(
-                    service, "_post_crm_issue_transaction"
+                    service, "_post_sub_issue_transaction"
                 ) as mock_issue_post:
-                    payload = CRMMaterialRequestPayload(
-                        omni_id="crm-mr-issued-001",
+                    payload = SubMaterialRequestPayload(
+                        source_request_id="sub-mr-issued-001",
                         request_type="ISSUE",
                         status="issued",
                         items=[
-                            CRMMaterialRequestItemPayload(
+                            SubMaterialRequestItemPayload(
                                 item_code="ITEM001",
                                 quantity=Decimal("2"),
                                 from_warehouse_code="Stores - DT",
@@ -1778,10 +1778,10 @@ class TestCreateMaterialRequest:
         assert result.status == MaterialRequestStatus.ISSUED.value
         mock_issue_post.assert_called_once()
 
-    def test_post_crm_issue_transaction_passes_selected_serials(
+    def test_post_sub_issue_transaction_passes_selected_serials(
         self, service, org_id, mock_db
     ):
-        """Selected CRM serials should be passed to inventory issue posting."""
+        """Selected Sub serials should be passed to inventory issue posting."""
         from app.models.inventory.item import Item
         from app.services.inventory.transaction import TransactionInput
 
@@ -1805,7 +1805,7 @@ class TestCreateMaterialRequest:
         with patch(
             "app.services.inventory.transaction.InventoryTransactionService.create_issue"
         ) as mock_create_issue:
-            service._post_crm_issue_transaction(
+            service._post_sub_issue_transaction(
                 org_id=org_id,
                 request=request,
                 line={
@@ -1829,7 +1829,7 @@ class TestCreateMaterialRequest:
     def test_create_material_request_issued_insufficient_stock_pending_stock(
         self, service, org_id, mock_db
     ):
-        """Issued CRM requests should park in pending stock when inventory is short."""
+        """Issued Sub requests should park in pending stock when inventory is short."""
         from app.models.inventory.material_request import MaterialRequestStatus
 
         mock_item = MagicMock()
@@ -1859,13 +1859,13 @@ class TestCreateMaterialRequest:
                 "app.services.inventory.transaction.InventoryTransactionService.get_current_balance",
                 return_value=Decimal("1"),
             ):
-                with patch.object(service, "_post_crm_issue_transaction") as mock_issue:
-                    payload = CRMMaterialRequestPayload(
-                        omni_id="crm-mr-pending-stock-001",
+                with patch.object(service, "_post_sub_issue_transaction") as mock_issue:
+                    payload = SubMaterialRequestPayload(
+                        source_request_id="sub-mr-pending-stock-001",
                         request_type="ISSUE",
                         status="issued",
                         items=[
-                            CRMMaterialRequestItemPayload(
+                            SubMaterialRequestItemPayload(
                                 item_code="ITEM001",
                                 quantity=Decimal("2"),
                                 from_warehouse_code="Stores - DT",
@@ -1881,7 +1881,7 @@ class TestCreateMaterialRequest:
     def test_create_material_request_submitted_insufficient_stock_pending_stock(
         self, service, org_id, mock_db
     ):
-        """Submitted CRM requests should still be accepted but flagged pending stock."""
+        """Submitted Sub requests should still be accepted but flagged pending stock."""
         from app.models.inventory.material_request import MaterialRequestStatus
 
         mock_item = MagicMock()
@@ -1911,12 +1911,12 @@ class TestCreateMaterialRequest:
                 "app.services.inventory.transaction.InventoryTransactionService.get_current_balance",
                 return_value=Decimal("0"),
             ):
-                payload = CRMMaterialRequestPayload(
-                    omni_id="crm-mr-pending-stock-002",
+                payload = SubMaterialRequestPayload(
+                    source_request_id="sub-mr-pending-stock-002",
                     request_type="ISSUE",
                     status="submitted",
                     items=[
-                        CRMMaterialRequestItemPayload(
+                        SubMaterialRequestItemPayload(
                             item_code="ITEM001",
                             quantity=Decimal("2"),
                             from_warehouse_code="Stores - DT",
@@ -1931,7 +1931,7 @@ class TestCreateMaterialRequest:
     def test_create_material_request_issued_reconcile_existing(
         self, service, org_id, mock_db
     ):
-        """Should reject changed duplicate sends for existing omni_id."""
+        """Should reject changed duplicate sends for existing source_request_id."""
         from fastapi import HTTPException
         from app.models.inventory.material_request import (
             MaterialRequestStatus,
@@ -1965,12 +1965,12 @@ class TestCreateMaterialRequest:
         wh_id = existing_line.warehouse_id
         mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
 
-        payload = CRMMaterialRequestPayload(
-            omni_id="crm-mr-issued-002",
+        payload = SubMaterialRequestPayload(
+            source_request_id="sub-mr-issued-002",
             request_type="ISSUE",
             status="issued",
             items=[
-                CRMMaterialRequestItemPayload(
+                SubMaterialRequestItemPayload(
                     item_code="ITEM001",
                     quantity=Decimal("3"),
                     from_warehouse_code="Stores - DT",
@@ -1985,7 +1985,7 @@ class TestCreateMaterialRequest:
 
 
 class TestPendingStockMaterialRequestAutomation:
-    """Test pending-stock CRM material request automation."""
+    """Test pending-stock Sub material request automation."""
 
     def test_process_pending_stock_auto_issues_and_notifies(
         self, service, org_id, mock_db
@@ -2017,16 +2017,16 @@ class TestPendingStockMaterialRequestAutomation:
             ],
         ):
             with patch.object(
-                service, "_crm_material_request_has_sufficient_stock", return_value=True
+                service, "_sub_material_request_has_sufficient_stock", return_value=True
             ):
                 with patch.object(
                     service,
-                    "_advance_crm_material_request_status",
+                    "_advance_sub_material_request_status",
                     return_value=MagicMock(status=MaterialRequestStatus.ISSUED.value),
                 ):
                     with patch.object(
                         service,
-                        "_notify_crm_material_request_auto_issued",
+                        "_notify_sub_material_request_auto_issued",
                         return_value=True,
                     ):
                         result = service.process_pending_stock_material_requests(org_id)
@@ -2037,13 +2037,13 @@ class TestPendingStockMaterialRequestAutomation:
 
 
 class TestGetMaterialRequestByCrmId:
-    """Test get_material_request_by_crm_id."""
+    """Test get_material_request_by_source_reference."""
 
     def test_not_found_returns_none(self, service, org_id, mock_db):
-        """Should return None when no MR matches the omni_id."""
+        """Should return None when no MR matches the source_request_id."""
         mock_db.scalar.return_value = None
 
-        result = service.get_material_request_by_crm_id(org_id, "nonexistent")
+        result = service.get_material_request_by_source_reference(org_id, "nonexistent")
 
         assert result is None
 
@@ -2077,7 +2077,7 @@ class TestGetMaterialRequestByCrmId:
             (item_id, "FIBER-CABLE", "Fiber Cable")
         ]
 
-        result = service.get_material_request_by_crm_id(org_id, "crm-mr-123")
+        result = service.get_material_request_by_source_reference(org_id, "sub-mr-123")
 
         assert result is not None
         assert result.request_number == "MAT-MR-2026-00001"
@@ -2089,7 +2089,7 @@ class TestGetMaterialRequestByCrmId:
 
 
 class TestUpsertInventoryItem:
-    """Test CRM inventory item upsert flow."""
+    """Test Sub inventory item upsert flow."""
 
     def test_upsert_inventory_item_creates_new(self, service, org_id, mock_db):
         category = MagicMock()
@@ -2107,8 +2107,8 @@ class TestUpsertInventoryItem:
 
         mock_db.flush.side_effect = simulate_flush
 
-        payload = CRMInventoryItemPayload(
-            crm_id="crm-item-001",
+        payload = SubInventoryItemPayload(
+            source_reference="sub-item-001",
             item_code="ITEM202602-00001",
             item_name="Test Item",
             category_code="DEFAULT",
@@ -2120,7 +2120,7 @@ class TestUpsertInventoryItem:
 
         assert result.status == "created"
         assert result.item_code == "ITEM202602-00001"
-        assert result.crm_id == "crm-item-001"
+        assert result.source_reference == "sub-item-001"
         mock_db.add.assert_called_once()
         assert mock_db.flush.called
 
@@ -2135,8 +2135,8 @@ class TestUpsertInventoryItem:
         # first active category fallback -> existing item lookup
         mock_db.scalar.side_effect = [category, existing]
 
-        payload = CRMInventoryItemPayload(
-            crm_id="crm-item-001",
+        payload = SubInventoryItemPayload(
+            source_reference="sub-item-001",
             item_code="ITEM202602-00001",
             item_name="Test Item Updated",
             base_uom="PCS",
@@ -2151,7 +2151,7 @@ class TestUpsertInventoryItem:
         assert existing.base_uom == "PCS"
         assert existing.purchase_uom == "PCS"
         assert existing.sales_uom == "PCS"
-        assert existing.erpnext_id == "crm-item-001"
+        assert existing.erpnext_id == "sub-item-001"
         assert mock_db.add.call_count == 0
         assert mock_db.flush.called
 
@@ -2159,8 +2159,8 @@ class TestUpsertInventoryItem:
         self, service, org_id, mock_db
     ):
         mock_db.scalar.return_value = None
-        payload = CRMInventoryItemPayload(
-            crm_id="crm-item-001",
+        payload = SubInventoryItemPayload(
+            source_reference="sub-item-001",
             item_code="ITEM202602-00001",
             item_name="Test Item",
             category_code="MISSING",
@@ -2174,9 +2174,9 @@ class TestEnhancedBulkPayloads:
     """Test that enhanced payload fields are accepted."""
 
     def test_project_payload_service_team_fields(self):
-        """CRMProjectPayload should accept new service team fields."""
-        payload = CRMProjectPayload(
-            crm_id="test-123",
+        """SubProjectPayload should accept new service team fields."""
+        payload = SubProjectPayload(
+            source_reference="test-123",
             name="Test Project",
             status="active",
             service_team_name="Team Alpha",
@@ -2186,9 +2186,9 @@ class TestEnhancedBulkPayloads:
         assert payload.service_team_department_id == "dept-123"
 
     def test_project_payload_backward_compatible(self):
-        """CRMProjectPayload should work without new fields."""
-        payload = CRMProjectPayload(
-            crm_id="test-123",
+        """SubProjectPayload should work without new fields."""
+        payload = SubProjectPayload(
+            source_reference="test-123",
             name="Test Project",
             status="active",
         )
@@ -2196,9 +2196,9 @@ class TestEnhancedBulkPayloads:
         assert payload.service_team_department_id is None
 
     def test_ticket_payload_assigned_emails(self):
-        """CRMTicketPayload should accept assigned_employee_emails."""
-        payload = CRMTicketPayload(
-            crm_id="test-456",
+        """SubTicketPayload should accept assigned_employee_emails."""
+        payload = SubTicketPayload(
+            source_reference="test-456",
             subject="Test Ticket",
             status="open",
             service_team_name="Team Beta",
@@ -2208,9 +2208,9 @@ class TestEnhancedBulkPayloads:
         assert len(payload.assigned_employee_emails) == 2
 
     def test_ticket_payload_backward_compatible(self):
-        """CRMTicketPayload should work without new fields."""
-        payload = CRMTicketPayload(
-            crm_id="test-456",
+        """SubTicketPayload should work without new fields."""
+        payload = SubTicketPayload(
+            source_reference="test-456",
             subject="Test Ticket",
             status="open",
         )
@@ -2220,9 +2220,9 @@ class TestEnhancedBulkPayloads:
         assert payload.activity_log == []
 
     def test_ticket_payload_accepts_comments_activity_log(self):
-        """CRMTicketPayload should accept new comments and activity_log fields."""
-        payload = CRMTicketPayload(
-            crm_id="test-456",
+        """SubTicketPayload should accept new comments and activity_log fields."""
+        payload = SubTicketPayload(
+            source_reference="test-456",
             subject="Test Ticket",
             status="open",
             description="Ticket description",
@@ -2234,10 +2234,10 @@ class TestEnhancedBulkPayloads:
         assert payload.activity_log[0]["id"] == "activity-1"
 
     def test_ticket_payload_accepts_alias_fields(self):
-        """CRMTicketPayload should accept alternate CRM key names."""
-        payload = CRMTicketPayload.model_validate(
+        """SubTicketPayload should accept alternate Sub key names."""
+        payload = SubTicketPayload.model_validate(
             {
-                "crm_id": "test-456",
+                "source_reference": "test-456",
                 "subject": "Test Ticket",
                 "status": "open",
                 "body": "Alt description",
@@ -2250,9 +2250,9 @@ class TestEnhancedBulkPayloads:
         assert payload.activity_log[0]["id"] == "a-1"
 
     def test_work_order_payload_assigned_emails(self):
-        """CRMWorkOrderPayload should accept assigned_employee_emails."""
-        payload = CRMWorkOrderPayload(
-            crm_id="test-789",
+        """SubWorkOrderPayload should accept assigned_employee_emails."""
+        payload = SubWorkOrderPayload(
+            source_reference="test-789",
             title="Test WO",
             status="active",
             assigned_employee_emails=["tech@co.com"],
@@ -2260,9 +2260,9 @@ class TestEnhancedBulkPayloads:
         assert len(payload.assigned_employee_emails) == 1
 
     def test_work_order_payload_backward_compatible(self):
-        """CRMWorkOrderPayload should work without new fields."""
-        payload = CRMWorkOrderPayload(
-            crm_id="test-789",
+        """SubWorkOrderPayload should work without new fields."""
+        payload = SubWorkOrderPayload(
+            source_reference="test-789",
             title="Test WO",
             status="active",
         )

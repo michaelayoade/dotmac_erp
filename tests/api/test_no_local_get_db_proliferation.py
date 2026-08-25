@@ -70,7 +70,7 @@ _PRE_MIGRATION_BASELINE = {
 
 # Match both ``def get_db`` and ``def _get_db`` — the original regex
 # missed the underscored variant, which hid two real RLS holes
-# (app/api/sync/dotmac_crm.py::_get_db, app/api/finance/fx.py::_get_db)
+# (app/api/finance/fx.py::_get_db)
 # until the 2026-05-16 route-layer audit. Both route modules are now migrated;
 # service-principal bootstrap is owned by the canonical shared dependency.
 _DEF_GET_DB = re.compile(r"^def _?get_db\b", re.MULTILINE)

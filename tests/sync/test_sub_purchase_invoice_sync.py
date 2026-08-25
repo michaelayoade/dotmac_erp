@@ -5,18 +5,18 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
-from app.schemas.sync.dotmac_crm import (
-    CRMPurchaseInvoiceItemPayload,
-    CRMPurchaseInvoicePayload,
+from app.schemas.sync.sub_operational import (
+    SubPurchaseInvoiceItemPayload,
+    SubPurchaseInvoicePayload,
 )
-from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
+from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
 
 
-def _payload() -> CRMPurchaseInvoicePayload:
-    return CRMPurchaseInvoicePayload(
-        crm_invoice_id=str(uuid.uuid4()),
-        crm_invoice_number="VENDOR-2026-014",
-        crm_project_id=str(uuid.uuid4()),
+def _payload() -> SubPurchaseInvoicePayload:
+    return SubPurchaseInvoicePayload(
+        source_invoice_id=str(uuid.uuid4()),
+        source_invoice_number="VENDOR-2026-014",
+        source_project_id=str(uuid.uuid4()),
         installation_project_id=str(uuid.uuid4()),
         erp_purchase_order_id="PO-2026-0042",
         vendor_erp_id="SUP-0001",
@@ -29,7 +29,7 @@ def _payload() -> CRMPurchaseInvoicePayload:
         tax_total=Decimal("0.00"),
         total=Decimal("1000.00"),
         items=[
-            CRMPurchaseInvoiceItemPayload(
+            SubPurchaseInvoiceItemPayload(
                 item_type="service",
                 description="Fiber installation",
                 quantity=Decimal("1"),
@@ -53,15 +53,15 @@ def _invoice(source_id: str):
 def test_purchase_invoice_retry_returns_existing() -> None:
     db = MagicMock()
     payload = _payload()
-    existing = _invoice(payload.crm_invoice_id)
+    existing = _invoice(payload.source_invoice_id)
     db.scalar.return_value = existing
 
-    result = DotMacCRMSyncService(db).create_purchase_invoice(
+    result = DotMacSubSyncService(db).create_purchase_invoice(
         uuid.uuid4(), payload, uuid.uuid4()
     )
 
     assert result.invoice_id == existing.invoice_id
-    assert result.crm_invoice_id == payload.crm_invoice_id
+    assert result.source_invoice_id == payload.source_invoice_id
     assert result.status == "draft"
     db.begin_nested.assert_not_called()
 
@@ -99,11 +99,11 @@ def test_purchase_invoice_is_matched_to_po_lines() -> None:
     supplier.default_tax_code_id = None
     supplier.payment_terms_days = 30
 
-    created = _invoice(payload.crm_invoice_id)
+    created = _invoice(payload.source_invoice_id)
     db.scalar.side_effect = [None, po, Decimal("0")]
     savepoint = MagicMock()
     db.begin_nested.return_value = savepoint
-    service = DotMacCRMSyncService(db)
+    service = DotMacSubSyncService(db)
 
     with (
         patch.object(service, "_resolve_supplier", return_value=supplier),
@@ -116,8 +116,8 @@ def test_purchase_invoice_is_matched_to_po_lines() -> None:
         result = service.create_purchase_invoice(org_id, payload, actor_id)
 
     invoice_input = create_invoice.call_args.args[2]
-    assert invoice_input.correlation_id == f"sub-invoice:{payload.crm_invoice_id}"
-    assert invoice_input.supplier_invoice_number == payload.crm_invoice_number
+    assert invoice_input.correlation_id == f"sub-invoice:{payload.source_invoice_id}"
+    assert invoice_input.supplier_invoice_number == payload.source_invoice_number
     assert invoice_input.lines[0].po_line_id == po_line.line_id
     assert invoice_input.lines[0].expense_account_id == po_line.expense_account_id
     assert result.invoice_id == created.invoice_id
@@ -142,7 +142,7 @@ def test_purchase_invoice_rejects_amount_above_po_remaining() -> None:
     )
     supplier = MagicMock(supplier_id=po.supplier_id)
     db.scalar.side_effect = [None, po, Decimal("0")]
-    service = DotMacCRMSyncService(db)
+    service = DotMacSubSyncService(db)
 
     with (
         patch.object(service, "_resolve_supplier", return_value=supplier),

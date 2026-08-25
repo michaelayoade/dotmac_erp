@@ -2,7 +2,7 @@
 
 ERP adopts the Governance-owned schema-9 ratchet from accepted ADR 0011 at
 immutable canonical-main commit
-`4f6fbf98c25f7cfbb3dacc4f3d2f5fd7e473f193`.
+`a19259b10568d29dc0a9617347498fea7f1e7a97`.
 
 The ratchet freezes measured legacy connector surface while providers move
 behind Dotmac Integrator. It is transitional defence in depth, not runtime
@@ -16,25 +16,24 @@ centrally, and reports every untracked Python source as an error.
 
 ## Accepted baseline
 
-Measured on 2026-08-17 against current `origin/main` with the accepted schema-9
-engine: 2,147 tracked Python sources measured, 591 centrally proven test-only
-or unreachable sources excluded, zero untracked Python, nine conserved
-findings, and no syntax errors.
+Remeasured on 2026-08-25 in the direct-CRM retirement change with the pinned
+schema-9 engine. The exact file inventory below and the profile baselines are
+lowered together; nine conserved findings remain unchanged.
 
 | Category | Baseline |
 | --- | ---: |
-| `outbound_transport` | 22 |
-| `webhook_surface` | 8 |
+| `outbound_transport` | 20 |
+| `webhook_surface` | 6 |
 | `provider_credential` | 6 |
-| `connector_task` | 12 |
-| `sync_checkpoint` | 18 |
-| `delivery_retry` | 6 |
+| `connector_task` | 11 |
+| `sync_checkpoint` | 17 |
+| `delivery_retry` | 4 |
 
-### `outbound_transport` — 22 files
+### `outbound_transport` — 20 files
 
 `app/dependency_health.py`, `app/monitoring.py`,
-`app/services/careers/captcha.py`, `app/services/crm/client.py`,
-`app/services/dotmac_sub/client.py`, `app/services/email.py`,
+`app/services/careers/captcha.py`, `app/services/dotmac_sub/client.py`,
+`app/services/email.py`,
 `app/services/finance/automation/workflow.py`,
 `app/services/finance/banking/mono_client.py`,
 `app/services/finance/payments/paystack_client.py`,
@@ -42,15 +41,13 @@ findings, and no syntax errors.
 `app/services/hooks/registry.py`, `app/services/mailcow/cleanup_queue.py`,
 `app/services/mailcow/client.py`, `app/services/nextcloud/client.py`,
 `app/services/push.py`, `app/services/remita/client.py`,
-`app/services/secrets.py`, `app/services/storage.py`,
-`app/services/sync/inventory_push_service.py`, `app/tasks/email.py`,
+`app/services/secrets.py`, `app/services/storage.py`, `app/tasks/email.py`,
 `app/tasks/hooks.py`, and `tests/e2e/conftest.py`.
 
-### `webhook_surface` — 8 files
+### `webhook_surface` — 6 files
 
-`app/api/crm.py`, `app/api/dotmac_academy.py`, `app/api/dotmac_sub.py`,
+`app/api/dotmac_academy.py`, `app/api/dotmac_sub.py`,
 `app/api/finance/banking.py`, `app/api/finance/payments.py`,
-`app/api/sync/dotmac_crm.py`,
 `app/services/finance/banking/mono_client.py`, and
 `app/services/finance/payments/paystack_client.py`.
 
@@ -60,20 +57,19 @@ findings, and no syntax errors.
 `app/services/finance/settings_web.py`, `app/services/storage.py`, and
 `tests/conftest.py`.
 
-### `connector_task` — 12 files
+### `connector_task` — 11 files
 
 `app/api/dotmac_sub.py`, `app/services/finance/banking/mono_sync.py`,
-`app/services/people/hr/employees.py`, `app/tasks/crm.py`,
-`app/tasks/dotmac_sub.py`, `app/tasks/exchange_rates.py`,
+`app/services/people/hr/employees.py`, `app/tasks/dotmac_sub.py`,
+`app/tasks/exchange_rates.py`,
 `app/tasks/expense.py`, `app/tasks/finance.py`, `app/tasks/hr.py`,
 `app/tasks/payments_sync.py`, `app/tasks/performance.py`, and
 `app/tasks/staff_sync.py`.
 
-### `sync_checkpoint` — 18 files
+### `sync_checkpoint` — 17 files
 
 `app/models/finance/ar/customer_payment.py`,
 `app/models/finance/ar/invoice.py`,
-`app/models/finance/platform/event_handler_checkpoint.py`,
 `app/models/inventory/material_request.py`, `app/models/mixins.py`,
 `app/models/people/base.py`, `app/models/people/training/academy.py`,
 `app/models/pm/time_entry.py`, `app/schemas/support.py`,
@@ -84,20 +80,13 @@ findings, and no syntax errors.
 `app/services/dotmac_sub/sync/_resellers.py`,
 `app/services/dotmac_sub/sync/_subscribers.py`,
 `app/services/people/training/academy.py`,
-`app/services/sync/crm/expenses.py`, and
-`app/services/sync/crm/inventory.py`.
+`app/services/sync/sub/expenses.py`, and
+`app/services/sync/sub/inventory.py`.
 
-The `event_handler_checkpoint.py` path is retained in this measured inventory
-even though its persistence model is a local ERP-outbox receipt rather than an
-external feed cursor. The two-directional ratchet favours recall: that known
-false positive inflates the floor instead of creating an adopter-controlled
-exemption that could hide a real connector.
+### `delivery_retry` — 4 files
 
-### `delivery_retry` — 6 files
-
-`app/dependency_health.py`, `app/services/crm/client.py`,
-`app/services/dotmac_sub/client.py`,
-`app/services/sync/inventory_push_service.py`, `app/tasks/email.py`, and
+`app/dependency_health.py`, `app/services/dotmac_sub/client.py`,
+`app/tasks/email.py`, and
 `app/tasks/hooks.py`.
 
 ## Conserved findings

@@ -7,9 +7,8 @@ link costs to that work. ERP does not become the workflow owner.
 ## Contract and retry behavior
 
 Self-Care sends `POST /api/v1/sync/sub/bulk` with API-key scope
-`sub:domain:write`. The legacy `crm:sync:write` scope remains a transition-only
-compatibility grant. The version-2 request contains these arrays, processed in
-this order:
+`sub:domain:write`. No provider or retired-application scope is accepted. The
+version-2 request contains these arrays, processed in this order:
 
 1. `projects`
 2. `tickets`
@@ -34,8 +33,8 @@ A successful response has the real ERP shape:
 }
 ```
 
-An item error contains `entity_type`, `crm_id` (the source identifier retained
-for compatibility), and `error`. Self-Care validates this response and advances
+An item error contains `entity_type`, `source_reference`, and `error`.
+Self-Care validates this response and advances
 its watermarks only when the complete batch has no errors.
 
 The endpoint is safe to retry. Projects and tickets use their organization and
@@ -70,8 +69,7 @@ expense, and replays the request to prove idempotency.
   are projected and orphan reconciliation remains separate.
 - The expense-link migration must run before enabling the new Finance Ticket and
   Task fields.
-- The CRM-named bulk route remains a compatibility path and currently shares the
-  same version-2 projection implementation. New Self-Care callers use only the
-  neutral `/api/v1/sync/sub/bulk` route.
+- The retired CRM route, task, client, credentials, and mappings are absent.
+  Self-Care callers use only `/api/v1/sync/sub/bulk`.
 - Deploy ERP contract and migration changes before enabling the Self-Care sync
   worker. A failed or older response leaves Self-Care watermarks unchanged.

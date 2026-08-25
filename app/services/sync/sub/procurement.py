@@ -1,6 +1,6 @@
-"""Material-request and purchase-order creation from CRM.
+"""Material-request and purchase-order creation from Sub.
 
-Extracted from the former monolithic dotmac_crm_sync_service.
+Extracted from the former monolithic dotmac_sub_sync_service.
 """
 
 from __future__ import annotations
@@ -30,55 +30,50 @@ if TYPE_CHECKING:
 
 from app.models.people.hr.employee import Employee
 from app.models.person import Person
-from app.models.sync.dotmac_crm_sync import (
-    CRMEntityType,
-    CRMSyncMapping,
-    CRMSyncStatus,
+from app.models.sync.source_correlation import (
+    SourceEntityType,
+    SourceCorrelation,
+    SourceCorrelationStatus,
 )
-from app.schemas.sync.dotmac_crm import (
-    CRMMaterialRequestItemRead,
-    CRMMaterialRequestPayload,
-    CRMMaterialRequestResponse,
-    CRMMaterialRequestStatusRead,
-    CRMPurchaseOrderPayload,
-    CRMPurchaseOrderResponse,
-    CRMPurchaseOrderVariationPayload,
-    CRMPurchaseInvoicePayload,
-    CRMPurchaseInvoiceResponse,
+from app.schemas.sync.sub_operational import (
+    SubMaterialRequestItemRead,
+    SubMaterialRequestPayload,
+    SubMaterialRequestResponse,
+    SubMaterialRequestStatusRead,
+    SubPurchaseOrderPayload,
+    SubPurchaseOrderResponse,
+    SubPurchaseInvoicePayload,
+    SubPurchaseInvoiceResponse,
 )
 
-# CRM → ERP translation policy lives in crm_mappings (pure, side-effect-free).
+# Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
 # Re-imported here so the canonical import sites
-# (`from ...dotmac_crm_sync_service import PROJECT_STATUS_MAP`) and the in-class
+# (`from ...dotmac_sub_sync_service import PROJECT_STATUS_MAP`) and the in-class
 # references keep resolving against this module's namespace.
-from app.services.sync.crm_mappings import (  # noqa: E402
-    map_crm_material_request_status,
-    map_crm_material_request_type,
+from app.services.sync.sub_mappings import (  # noqa: E402
+    map_sub_material_request_status,
+    map_sub_material_request_type,
 )
-from app.services.sync.crm_mappings import (  # noqa: E402
-    is_variation_id_conflict as _is_variation_id_conflict,
-)
-
-from app.services.sync.crm.base import _CRMSyncBase
+from app.services.sync.sub.base import _SubSyncBase
 
 logger = logging.getLogger(__name__)
 
 
-class _ProcurementMixin(_CRMSyncBase):
+class _ProcurementMixin(_SubSyncBase):
     def create_material_request(
         self,
         org_id: UUID,
-        data: CRMMaterialRequestPayload,
+        data: SubMaterialRequestPayload,
         created_by_person_id: UUID | None = None,
-        source_system: str = "crm",
-    ) -> CRMMaterialRequestResponse:
+        source_system: str = "sub",
+    ) -> SubMaterialRequestResponse:
         """
-        Create a material request from CRM.
+        Create a material request from Sub.
 
-        Immutable idempotency by omni_id:
+        Immutable idempotency by source_request_id:
         - first send creates the request
         - identical resend returns existing request unchanged
-        - changed resend is rejected (CRM must create a new omni_id)
+        - changed resend is rejected (Sub must create a new source_request_id)
 
         Raises:
             ValueError: If validation fails.
@@ -96,17 +91,17 @@ class _ProcurementMixin(_CRMSyncBase):
         now = datetime.now(UTC)
 
         # Resolve cross-references
-        project_id = self._resolve_project_id(org_id, data.project_crm_id)
-        ticket_id = self._resolve_ticket_id(org_id, data.ticket_crm_id)
+        project_id = self._resolve_project_id(org_id, data.project_source_reference)
+        ticket_id = self._resolve_ticket_id(org_id, data.ticket_source_reference)
         employee_id = self._resolve_employee_id(org_id, data.requested_by_email)
         actor_person_id = created_by_person_id or employee_id
 
-        request_type = self._map_crm_material_request_type(data.request_type)
+        request_type = self._map_sub_material_request_type(data.request_type)
         if request_type != MaterialRequestType.ISSUE:
             raise ValueError(
-                "This sync path only supports request_type=ISSUE for CRM payloads."
+                "This sync path only supports request_type=ISSUE for Sub payloads."
             )
-        requested_status = self._map_crm_material_request_status(data.status)
+        requested_status = self._map_sub_material_request_status(data.status)
         if requested_status not in {
             MaterialRequestStatus.DRAFT,
             MaterialRequestStatus.SUBMITTED,
@@ -138,7 +133,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 raise ValueError(f"Item not found: {item_payload.item_code}")
             if item.track_lots:
                 raise ValueError(
-                    f"Lot-tracked item not supported for CRM sync without lot info: "
+                    f"Lot-tracked item not supported for Sub sync without lot info: "
                     f"{item_payload.item_code}"
                 )
             warehouse_id = self._resolve_warehouse_id(
@@ -161,7 +156,7 @@ class _ProcurementMixin(_CRMSyncBase):
                         item,
                         "track_serial_numbers",
                     ),
-                    "serial_numbers": self._validate_crm_material_request_serials(
+                    "serial_numbers": self._validate_sub_material_request_serials(
                         org_id=org_id,
                         item=item,
                         warehouse_id=warehouse_id,
@@ -211,7 +206,7 @@ class _ProcurementMixin(_CRMSyncBase):
             .options(joinedload(MaterialRequest.items))
             .where(
                 MaterialRequest.organization_id == org_id,
-                MaterialRequest.crm_id == data.omni_id,
+                MaterialRequest.source_reference == data.source_request_id,
             )
         )
         mr = self.db.scalar(existing_stmt)
@@ -225,7 +220,7 @@ class _ProcurementMixin(_CRMSyncBase):
                     )
                 )
                 if incoming_body_fingerprint == existing_body_fingerprint:
-                    return self._advance_crm_material_request_status(
+                    return self._advance_sub_material_request_status(
                         org_id=org_id,
                         request=mr,
                         requested_status=requested_status,
@@ -248,8 +243,8 @@ class _ProcurementMixin(_CRMSyncBase):
                         MaterialRequestStatus.PENDING_STOCK,
                     }
                 ):
-                    self._apply_crm_material_request_line_serials(mr, resolved_items)
-                    return self._advance_crm_material_request_status(
+                    self._apply_sub_material_request_line_serials(mr, resolved_items)
+                    return self._advance_sub_material_request_status(
                         org_id=org_id,
                         request=mr,
                         requested_status=requested_status,
@@ -261,19 +256,19 @@ class _ProcurementMixin(_CRMSyncBase):
                     status_code=409,
                     detail=(
                         "Material request already exists and cannot be modified; "
-                        "create a new CRM material request."
+                        "create a new Sub material request."
                     ),
                 )
             logger.info(
-                "CRM material request duplicate accepted unchanged (omni_id=%s, request_number=%s)",
-                data.omni_id,
+                "Sub material request duplicate accepted unchanged (source_request_id=%s, request_number=%s)",
+                data.source_request_id,
                 mr.request_number,
             )
-            return CRMMaterialRequestResponse(
+            return SubMaterialRequestResponse(
                 request_id=mr.request_id,
                 request_number=mr.request_number,
                 status=mr.status.value,
-                omni_id=data.omni_id,
+                source_request_id=data.source_request_id,
             )
 
         has_sufficient_stock = True
@@ -281,7 +276,7 @@ class _ProcurementMixin(_CRMSyncBase):
             MaterialRequestStatus.SUBMITTED,
             MaterialRequestStatus.ISSUED,
         }:
-            has_sufficient_stock = self._crm_material_request_has_sufficient_stock(
+            has_sufficient_stock = self._sub_material_request_has_sufficient_stock(
                 org_id,
                 resolved_items,
             )
@@ -308,7 +303,7 @@ class _ProcurementMixin(_CRMSyncBase):
             project_id=project_id,
             ticket_id=ticket_id,
             remarks=data.remarks,
-            crm_id=data.omni_id,
+            source_reference=data.source_request_id,
             source_system=source_system,
             created_by_id=actor_person_id,
         )
@@ -350,7 +345,7 @@ class _ProcurementMixin(_CRMSyncBase):
                     "Please ensure an OPEN/REOPENED fiscal period exists."
                 )
             for line in current_line_snapshots:
-                self._post_crm_issue_transaction(
+                self._post_sub_issue_transaction(
                     org_id=org_id,
                     request=mr,
                     line=line,
@@ -360,7 +355,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 )
             mr.status = target_status
         self.db.flush()
-        self._emit_crm_material_request_status_changed(
+        self._emit_sub_material_request_status_changed(
             org_id=org_id,
             request=mr,
             old_status=None,
@@ -369,17 +364,17 @@ class _ProcurementMixin(_CRMSyncBase):
         )
 
         logger.info(
-            "CRM material request %s created (omni_id=%s, status=%s, items=%d)",
+            "Sub material request %s created (source_request_id=%s, status=%s, items=%d)",
             mr.request_number,
-            data.omni_id,
+            data.source_request_id,
             mr.status.value,
             len(current_line_snapshots),
         )
-        return CRMMaterialRequestResponse(
+        return SubMaterialRequestResponse(
             request_id=mr.request_id,
             request_number=mr.request_number,
             status=mr.status.value,
-            omni_id=data.omni_id,
+            source_request_id=data.source_request_id,
         )
 
     def _build_material_request_payload_fingerprint(
@@ -395,7 +390,7 @@ class _ProcurementMixin(_CRMSyncBase):
         resolved_items: list[dict[str, Any]],
         include_serial_numbers: bool = True,
     ) -> str:
-        """Build deterministic fingerprint from inbound CRM payload (effective values)."""
+        """Build deterministic fingerprint from inbound Sub payload (effective values)."""
         items_payload = []
         for item in sorted(resolved_items, key=lambda i: i["sequence"]):
             item_payload = {
@@ -466,12 +461,12 @@ class _ProcurementMixin(_CRMSyncBase):
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
-    def _crm_material_request_has_sufficient_stock(
+    def _sub_material_request_has_sufficient_stock(
         self,
         org_id: UUID,
         resolved_items: list[dict[str, Any]],
     ) -> bool:
-        """Return whether all requested CRM MR lines can be fulfilled from stock."""
+        """Return whether all requested Sub MR lines can be fulfilled from stock."""
         from app.models.inventory.item import Item
         from app.services.inventory.transaction import InventoryTransactionService
 
@@ -483,7 +478,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 tracks_serial_numbers = self._model_flag(item, "track_serial_numbers")
             if tracks_serial_numbers and not resolved.get("serial_numbers"):
                 logger.info(
-                    "CRM material request pending serial selection: item_id=%s warehouse_id=%s",
+                    "Sub material request pending serial selection: item_id=%s warehouse_id=%s",
                     resolved["item_id"],
                     resolved["warehouse_id"],
                 )
@@ -502,7 +497,7 @@ class _ProcurementMixin(_CRMSyncBase):
             )
             if available_qty < required_qty:
                 logger.info(
-                    "CRM material request pending stock: item_id=%s warehouse_id=%s available=%s required=%s",
+                    "Sub material request pending stock: item_id=%s warehouse_id=%s available=%s required=%s",
                     item_id,
                     warehouse_id,
                     available_qty,
@@ -511,12 +506,12 @@ class _ProcurementMixin(_CRMSyncBase):
                 return False
         return True
 
-    def _apply_crm_material_request_line_serials(
+    def _apply_sub_material_request_line_serials(
         self,
         request,
         resolved_items: list[dict[str, Any]],
     ) -> None:
-        """Apply CRM serial selections to an existing immutable MR body."""
+        """Apply Sub serial selections to an existing immutable MR body."""
         resolved_by_sequence = {
             item["sequence"]: item.get("serial_numbers") or []
             for item in resolved_items
@@ -526,25 +521,25 @@ class _ProcurementMixin(_CRMSyncBase):
                 line.serial_numbers = resolved_by_sequence[line.sequence] or None
         self.db.flush()
 
-    def _advance_crm_material_request_status(
+    def _advance_sub_material_request_status(
         self,
         *,
         org_id: UUID,
         request,
         requested_status,
         actor_person_id: UUID | None,
-    ) -> CRMMaterialRequestResponse:
-        """Apply a CRM status-only resend to an existing immutable MR."""
+    ) -> SubMaterialRequestResponse:
+        """Apply a Sub status-only resend to an existing immutable MR."""
         from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
         from app.models.inventory.material_request import MaterialRequestStatus
 
         old_status = request.status
         if request.status == MaterialRequestStatus.ISSUED:
-            return CRMMaterialRequestResponse(
+            return SubMaterialRequestResponse(
                 request_id=request.request_id,
                 request_number=request.request_number,
                 status=request.status.value,
-                omni_id=request.crm_id,
+                source_request_id=request.source_reference,
             )
 
         if requested_status == MaterialRequestStatus.DRAFT:
@@ -557,7 +552,7 @@ class _ProcurementMixin(_CRMSyncBase):
             line_snapshots = self._snapshot_material_request_lines(request.items)
             target_status = (
                 MaterialRequestStatus.SUBMITTED
-                if self._crm_material_request_has_sufficient_stock(
+                if self._sub_material_request_has_sufficient_stock(
                     org_id,
                     line_snapshots,
                 )
@@ -565,7 +560,7 @@ class _ProcurementMixin(_CRMSyncBase):
             )
         elif requested_status == MaterialRequestStatus.ISSUED:
             line_snapshots = self._snapshot_material_request_lines(request.items)
-            if self._crm_material_request_has_sufficient_stock(org_id, line_snapshots):
+            if self._sub_material_request_has_sufficient_stock(org_id, line_snapshots):
                 now = datetime.now(UTC)
                 fiscal_period = self.db.scalar(
                     select(FiscalPeriod).where(
@@ -581,7 +576,7 @@ class _ProcurementMixin(_CRMSyncBase):
                         "Please ensure an OPEN/REOPENED fiscal period exists."
                     )
                 for line in line_snapshots:
-                    self._post_crm_issue_transaction(
+                    self._post_sub_issue_transaction(
                         org_id=org_id,
                         request=request,
                         line=line,
@@ -600,27 +595,27 @@ class _ProcurementMixin(_CRMSyncBase):
         request.status = target_status
         self.db.flush()
         if request.status != old_status:
-            self._emit_crm_material_request_status_changed(
+            self._emit_sub_material_request_status_changed(
                 org_id=org_id,
                 request=request,
                 old_status=old_status,
                 new_status=request.status,
                 actor_person_id=actor_person_id,
             )
-        return CRMMaterialRequestResponse(
+        return SubMaterialRequestResponse(
             request_id=request.request_id,
             request_number=request.request_number,
             status=request.status.value,
-            omni_id=request.crm_id,
+            source_request_id=request.source_reference,
         )
 
-    def _map_crm_material_request_type(self, request_type: str):
-        """Map CRM request type to local MaterialRequestType (via crm_mappings)."""
-        return map_crm_material_request_type(request_type)
+    def _map_sub_material_request_type(self, request_type: str):
+        """Map Sub request type to local MaterialRequestType (via sub_mappings)."""
+        return map_sub_material_request_type(request_type)
 
-    def _map_crm_material_request_status(self, status: str):
-        """Map CRM status string to local MaterialRequestStatus (via crm_mappings)."""
-        return map_crm_material_request_status(status)
+    def _map_sub_material_request_status(self, status: str):
+        """Map Sub status string to local MaterialRequestStatus (via sub_mappings)."""
+        return map_sub_material_request_status(status)
 
     def _resolve_warehouse_id(
         self,
@@ -673,7 +668,7 @@ class _ProcurementMixin(_CRMSyncBase):
             return False
         return bool(value)
 
-    def _validate_crm_material_request_serials(
+    def _validate_sub_material_request_serials(
         self,
         *,
         org_id: UUID,
@@ -683,7 +678,7 @@ class _ProcurementMixin(_CRMSyncBase):
         serial_numbers: list[str] | None,
         require_serials: bool,
     ) -> list[str]:
-        """Validate CRM-selected serials for a material request line."""
+        """Validate Sub-selected serials for a material request line."""
         from fastapi import HTTPException
 
         from app.models.inventory.inventory_serial import InventorySerial
@@ -729,7 +724,7 @@ class _ProcurementMixin(_CRMSyncBase):
 
         return serials
 
-    def _post_crm_issue_transaction(
+    def _post_sub_issue_transaction(
         self,
         *,
         org_id: UUID,
@@ -739,7 +734,7 @@ class _ProcurementMixin(_CRMSyncBase):
         transaction_date: datetime,
         created_by_user_id: UUID | None,
     ) -> None:
-        """Post a single ISSUE transaction for a CRM-synced MR line."""
+        """Post a single ISSUE transaction for a Sub-synced MR line."""
         from app.models.inventory.item import Item
         from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
@@ -771,11 +766,11 @@ class _ProcurementMixin(_CRMSyncBase):
             uom=line.get("uom") or item.base_uom or "",
             currency_code=item.currency_code
             or settings.default_presentation_currency_code,
-            source_document_type="CRM_MATERIAL_REQUEST",
+            source_document_type="Sub_MATERIAL_REQUEST",
             source_document_id=request.request_id,
             source_document_line_id=line.get("line_id"),
             reference=request.request_number,
-            reason_code="CRM_SYNC_ISSUE",
+            reason_code="Sub_SYNC_ISSUE",
             serial_numbers=line.get("serial_numbers") or None,
         )
         InventoryTransactionService.create_issue(
@@ -792,7 +787,7 @@ class _ProcurementMixin(_CRMSyncBase):
         *,
         limit: int = 100,
     ) -> dict[str, Any]:
-        """Auto-issue CRM material requests once pending stock becomes available."""
+        """Auto-issue Sub material requests once pending stock becomes available."""
         from app.models.inventory.material_request import (
             MaterialRequest,
             MaterialRequestStatus,
@@ -805,7 +800,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 .options(joinedload(MaterialRequest.items))
                 .where(
                     MaterialRequest.organization_id == org_id,
-                    MaterialRequest.crm_id.is_not(None),
+                    MaterialRequest.source_reference.is_not(None),
                     MaterialRequest.request_type == MaterialRequestType.ISSUE,
                     MaterialRequest.status == MaterialRequestStatus.PENDING_STOCK,
                 )
@@ -830,14 +825,14 @@ class _ProcurementMixin(_CRMSyncBase):
                     line_snapshots = self._snapshot_material_request_lines(
                         request.items
                     )
-                    if not self._crm_material_request_has_sufficient_stock(
+                    if not self._sub_material_request_has_sufficient_stock(
                         org_id,
                         line_snapshots,
                     ):
                         result["still_pending"] += 1
                         continue
 
-                    status_result = self._advance_crm_material_request_status(
+                    status_result = self._advance_sub_material_request_status(
                         org_id=org_id,
                         request=request,
                         requested_status=MaterialRequestStatus.ISSUED,
@@ -845,7 +840,7 @@ class _ProcurementMixin(_CRMSyncBase):
                     )
                     if status_result.status == MaterialRequestStatus.ISSUED.value:
                         result["issued"] += 1
-                        if self._notify_crm_material_request_auto_issued(
+                        if self._notify_sub_material_request_auto_issued(
                             org_id,
                             request,
                         ):
@@ -854,7 +849,7 @@ class _ProcurementMixin(_CRMSyncBase):
                         result["still_pending"] += 1
             except Exception as exc:
                 logger.exception(
-                    "Failed to auto-issue pending-stock CRM material request %s",
+                    "Failed to auto-issue pending-stock Sub material request %s",
                     getattr(request, "request_number", request.request_id),
                 )
                 result["errors"].append(
@@ -867,12 +862,12 @@ class _ProcurementMixin(_CRMSyncBase):
 
         return result
 
-    def _notify_crm_material_request_auto_issued(
+    def _notify_sub_material_request_auto_issued(
         self,
         org_id: UUID,
         request,
     ) -> bool:
-        """Notify the requester that a pending-stock CRM material request was issued."""
+        """Notify the requester that a pending-stock Sub material request was issued."""
         from app.models.notification import (
             EntityType,
             NotificationChannel,
@@ -913,7 +908,7 @@ class _ProcurementMixin(_CRMSyncBase):
         )
         return True
 
-    def _emit_crm_material_request_status_changed(
+    def _emit_sub_material_request_status_changed(
         self,
         *,
         org_id: UUID,
@@ -922,8 +917,8 @@ class _ProcurementMixin(_CRMSyncBase):
         new_status,
         actor_person_id: UUID | None,
     ) -> None:
-        """Emit a service-hook event for CRM material request status propagation."""
-        if not request.crm_id or request.source_system != "sub":
+        """Emit a service-hook event for Sub material request status propagation."""
+        if not request.source_reference or request.source_system != "sub":
             return
 
         from app.services.hooks import emit_hook_event
@@ -937,7 +932,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 entity_type="MaterialRequest",
                 entity_id=request.request_id,
                 actor_user_id=actor_person_id,
-                payload=self._build_crm_material_request_status_event_payload(
+                payload=self._build_sub_material_request_status_event_payload(
                     request,
                     old_status=old_status,
                     new_status=new_status,
@@ -945,20 +940,20 @@ class _ProcurementMixin(_CRMSyncBase):
             )
         except Exception:
             logger.exception(
-                "Failed to emit CRM material request status hook event for %s",
+                "Failed to emit Sub material request status hook event for %s",
                 request.request_number,
             )
 
-    def _build_crm_material_request_status_event_payload(
+    def _build_sub_material_request_status_event_payload(
         self,
         request,
         *,
         old_status,
         new_status,
     ) -> dict[str, Any]:
-        """Build CRM-facing status event payload for material requests."""
+        """Build Sub-facing status event payload for material requests."""
         return {
-            "omni_id": request.crm_id,
+            "source_request_id": request.source_reference,
             "request_id": str(request.request_id),
             "request_number": request.request_number,
             "old_status": old_status.value if old_status else None,
@@ -988,12 +983,12 @@ class _ProcurementMixin(_CRMSyncBase):
             else None,
         }
 
-    def get_material_request_by_crm_id(
+    def get_material_request_by_source_reference(
         self,
         org_id: UUID,
-        omni_id: str,
-    ) -> CRMMaterialRequestStatusRead | None:
-        """Get material request status by CRM omni_id."""
+        source_request_id: str,
+    ) -> SubMaterialRequestStatusRead | None:
+        """Get material request status by Sub source_request_id."""
         from app.models.inventory.material_request import MaterialRequest
 
         stmt = (
@@ -1001,7 +996,7 @@ class _ProcurementMixin(_CRMSyncBase):
             .options(joinedload(MaterialRequest.items))
             .where(
                 MaterialRequest.organization_id == org_id,
-                MaterialRequest.crm_id == omni_id,
+                MaterialRequest.source_reference == source_request_id,
             )
         )
         mr = self.db.scalar(stmt)
@@ -1021,13 +1016,13 @@ class _ProcurementMixin(_CRMSyncBase):
                 row[0]: (row[1], row[2]) for row in self.db.execute(items_stmt).all()
             }
 
-        return CRMMaterialRequestStatusRead(
+        return SubMaterialRequestStatusRead(
             request_id=mr.request_id,
             request_number=mr.request_number,
             status=mr.status.value,
             request_type=mr.request_type.value,
             items=[
-                CRMMaterialRequestItemRead(
+                SubMaterialRequestItemRead(
                     item_code=items_map.get(line.inventory_item_id, ("", ""))[0],
                     item_name=items_map.get(line.inventory_item_id, ("", ""))[1],
                     requested_qty=line.requested_qty,
@@ -1044,17 +1039,17 @@ class _ProcurementMixin(_CRMSyncBase):
     def create_purchase_order(
         self,
         org_id: UUID,
-        data: CRMPurchaseOrderPayload,
+        data: SubPurchaseOrderPayload,
         created_by_person_id: UUID,
-    ) -> CRMPurchaseOrderResponse:
+    ) -> SubPurchaseOrderResponse:
         """
-        Create a DRAFT purchase order from a CRM vendor quote approval.
+        Create a DRAFT purchase order from a Sub vendor quote approval.
 
-        Idempotent: if a PO for the same omni_work_order_id already exists, return it.
+        Idempotent: if a PO for the same source_work_order_id already exists, return it.
 
         Args:
             org_id: Organization scope.
-            data: CRM purchase order payload.
+            data: Sub purchase order payload.
             created_by_person_id: Person ID of the API key user (fallback creator).
 
         Raises:
@@ -1067,29 +1062,29 @@ class _ProcurementMixin(_CRMSyncBase):
             PurchaseOrderService,
         )
 
-        correlation_id = f"crm-wo:{data.omni_work_order_id}"
+        correlation_id = f"sub-wo:{data.source_work_order_id}"
 
-        # 1. Idempotency: check CRMSyncMapping first
+        # 1. Idempotency: check SourceCorrelation first
         existing_mapping = self._get_mapping(
-            org_id, CRMEntityType.PURCHASE_ORDER, data.omni_work_order_id
+            org_id, SourceEntityType.PURCHASE_ORDER, data.source_work_order_id
         )
         if existing_mapping:
             po = self.db.get(PurchaseOrder, existing_mapping.local_entity_id)
             if po:
                 logger.info(
-                    "PO already exists for omni_work_order_id=%s (mapping), returning existing",
-                    data.omni_work_order_id,
+                    "PO already exists for source_work_order_id=%s (mapping), returning existing",
+                    data.source_work_order_id,
                 )
-                return CRMPurchaseOrderResponse(
+                return SubPurchaseOrderResponse(
                     purchase_order_id=po.po_number,
                     po_id=po.po_id,
                     status=po.status.value.lower(),
-                    omni_work_order_id=data.omni_work_order_id,
+                    source_work_order_id=data.source_work_order_id,
                 )
 
             logger.warning(
-                "Stale PO sync mapping for omni_work_order_id=%s points to missing PO %s; recreating",
-                data.omni_work_order_id,
+                "Stale PO sync mapping for source_work_order_id=%s points to missing PO %s; recreating",
+                data.source_work_order_id,
                 existing_mapping.local_entity_id,
             )
             self.db.delete(existing_mapping)
@@ -1103,9 +1098,9 @@ class _ProcurementMixin(_CRMSyncBase):
         existing_po = self.db.scalar(fallback_stmt)
         if existing_po:
             logger.info(
-                "PO already exists for omni_work_order_id=%s (correlation_id), "
+                "PO already exists for source_work_order_id=%s (correlation_id), "
                 "re-creating mapping",
-                data.omni_work_order_id,
+                data.source_work_order_id,
             )
             existing_po_id = existing_po.po_id
             existing_po_number = existing_po.po_number
@@ -1116,18 +1111,18 @@ class _ProcurementMixin(_CRMSyncBase):
                 org_id, data, existing_po_id, existing_po_number
             )
             self.db.commit()
-            return CRMPurchaseOrderResponse(
+            return SubPurchaseOrderResponse(
                 purchase_order_id=existing_po_number,
                 po_id=existing_po_id,
                 status=existing_po_status,
-                omni_work_order_id=data.omni_work_order_id,
+                source_work_order_id=data.source_work_order_id,
             )
 
         # 3. Resolve supplier
         supplier = self._resolve_supplier(org_id, data.vendor_erp_id, data.vendor_code)
 
         # 4. Resolve project (optional)
-        project_id = self._resolve_project_id(org_id, data.omni_project_id)
+        project_id = self._resolve_project_id(org_id, data.source_project_id)
 
         # 5. Resolve approver → person_id for created_by
         approver_person_id = self._resolve_person_id_by_email(
@@ -1175,30 +1170,30 @@ class _ProcurementMixin(_CRMSyncBase):
         po_status = po.status.value.lower()
         supplier_code = supplier.supplier_code
 
-        # 8. Create CRMSyncMapping (tracks the PO for idempotency)
+        # 8. Create SourceCorrelation (tracks the PO for idempotency)
         self._create_po_sync_mapping(org_id, data, po_id, po_number)
         self.db.commit()
 
         logger.info(
-            "Created PO %s for omni_work_order_id=%s, supplier=%s",
+            "Created PO %s for source_work_order_id=%s, supplier=%s",
             po_number,
-            data.omni_work_order_id,
+            data.source_work_order_id,
             supplier_code,
         )
 
-        return CRMPurchaseOrderResponse(
+        return SubPurchaseOrderResponse(
             purchase_order_id=po_number,
             po_id=po_id,
             status=po_status,
-            omni_work_order_id=data.omni_work_order_id,
+            source_work_order_id=data.source_work_order_id,
         )
 
     def create_purchase_invoice(
         self,
         org_id: UUID,
-        data: CRMPurchaseInvoicePayload,
+        data: SubPurchaseInvoicePayload,
         created_by_person_id: UUID,
-    ) -> CRMPurchaseInvoiceResponse:
+    ) -> SubPurchaseInvoiceResponse:
         """Create one DRAFT AP invoice matched to an existing ERP purchase order."""
         from app.models.finance.ap.purchase_order import PurchaseOrder
         from app.models.finance.ap.supplier_invoice import (
@@ -1213,7 +1208,7 @@ class _ProcurementMixin(_CRMSyncBase):
             SupplierInvoiceService,
         )
 
-        correlation_id = f"sub-invoice:{data.crm_invoice_id}"
+        correlation_id = f"sub-invoice:{data.source_invoice_id}"
         existing = self.db.scalar(
             select(SupplierInvoice).where(
                 SupplierInvoice.organization_id == org_id,
@@ -1221,7 +1216,7 @@ class _ProcurementMixin(_CRMSyncBase):
             )
         )
         if existing:
-            return self._purchase_invoice_response(existing, data.crm_invoice_id)
+            return self._purchase_invoice_response(existing, data.source_invoice_id)
 
         po_query = select(PurchaseOrder).where(PurchaseOrder.organization_id == org_id)
         try:
@@ -1252,7 +1247,7 @@ class _ProcurementMixin(_CRMSyncBase):
         if len(data.items) > len(po_lines):
             raise ValueError("Invoice has more lines than its purchase order")
 
-        project_id = self._resolve_project_id(org_id, data.crm_project_id)
+        project_id = self._resolve_project_id(org_id, data.source_project_id)
         invoice_lines: list[InvoiceLineInput] = []
         for index, item in enumerate(data.items):
             po_line = po_lines[index]
@@ -1309,7 +1304,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 f"{data.project_name or data.project_code or 'Vendor project'}; "
                 f"PO {po.po_number}"
             ),
-            supplier_invoice_number=data.crm_invoice_number,
+            supplier_invoice_number=data.source_invoice_number,
             correlation_id=correlation_id,
         )
 
@@ -1332,24 +1327,24 @@ class _ProcurementMixin(_CRMSyncBase):
                 )
             )
             if existing:
-                return self._purchase_invoice_response(existing, data.crm_invoice_id)
+                return self._purchase_invoice_response(existing, data.source_invoice_id)
             raise
         except Exception:
             savepoint.rollback()
             raise
 
-        return self._purchase_invoice_response(invoice, data.crm_invoice_id)
+        return self._purchase_invoice_response(invoice, data.source_invoice_id)
 
     @staticmethod
     def _purchase_invoice_response(
-        invoice, crm_invoice_id: str
-    ) -> CRMPurchaseInvoiceResponse:
-        return CRMPurchaseInvoiceResponse(
+        invoice, source_invoice_id: str
+    ) -> SubPurchaseInvoiceResponse:
+        return SubPurchaseInvoiceResponse(
             purchase_invoice_id=str(invoice.invoice_id),
             invoice_id=invoice.invoice_id,
             invoice_number=invoice.invoice_number,
             status=invoice.status.value.lower(),
-            crm_invoice_id=crm_invoice_id,
+            source_invoice_id=source_invoice_id,
         )
 
     def _resolve_supplier(
@@ -1369,7 +1364,7 @@ class _ProcurementMixin(_CRMSyncBase):
         normalized_vendor_code = (vendor_code or "").strip() or None
 
         logger.info(
-            "CRM supplier resolution org=%s erp_id=%r vendor_code=%r normalized_erp_id=%r normalized_vendor_code=%r",
+            "Sub supplier resolution org=%s erp_id=%r vendor_code=%r normalized_erp_id=%r normalized_vendor_code=%r",
             org_id,
             vendor_erp_id,
             vendor_code,
@@ -1397,7 +1392,7 @@ class _ProcurementMixin(_CRMSyncBase):
             if supplier:
                 return supplier
 
-            # CRM has historically sent vendor display names in vendor_code.
+            # Sub has historically sent vendor display names in vendor_code.
             stmt = select(Supplier).where(
                 Supplier.organization_id == org_id,
                 Supplier.is_active.is_(True),
@@ -1413,7 +1408,7 @@ class _ProcurementMixin(_CRMSyncBase):
                 return supplier
 
         logger.warning(
-            "CRM supplier resolution failed org=%s erp_id=%r vendor_code=%r normalized_erp_id=%r normalized_vendor_code=%r",
+            "Sub supplier resolution failed org=%s erp_id=%r vendor_code=%r normalized_erp_id=%r normalized_vendor_code=%r",
             org_id,
             vendor_erp_id,
             vendor_code,
@@ -1454,25 +1449,26 @@ class _ProcurementMixin(_CRMSyncBase):
     def _create_po_sync_mapping(
         self,
         org_id: UUID,
-        data: CRMPurchaseOrderPayload,
+        data: SubPurchaseOrderPayload,
         po_id: UUID,
         po_number: str,
     ) -> None:
-        """Create a CRMSyncMapping for a purchase order."""
-        mapping = CRMSyncMapping(
+        """Create a SourceCorrelation for a purchase order."""
+        mapping = SourceCorrelation(
             organization_id=org_id,
-            crm_entity_type=CRMEntityType.PURCHASE_ORDER,
-            crm_id=data.omni_work_order_id,
+            source_application=self._SOURCE_APPLICATION,
+            source_entity_type=SourceEntityType.PURCHASE_ORDER,
+            source_reference=data.source_work_order_id,
             local_entity_type="purchase_order",
             local_entity_id=po_id,
-            crm_status=CRMSyncStatus.ACTIVE,
+            source_status=SourceCorrelationStatus.ACTIVE,
             display_name=data.title[:255],
             display_code=po_number,
             customer_name=data.vendor_name,
-            crm_data={
-                "omni_work_order_id": data.omni_work_order_id,
-                "omni_quote_id": data.omni_quote_id,
-                "omni_project_id": data.omni_project_id,
+            source_payload={
+                "source_work_order_id": data.source_work_order_id,
+                "source_quote_id": data.source_quote_id,
+                "source_project_id": data.source_project_id,
                 "project_code": data.project_code,
                 "vendor_erp_id": data.vendor_erp_id,
                 "vendor_code": data.vendor_code,
@@ -1481,235 +1477,3 @@ class _ProcurementMixin(_CRMSyncBase):
         )
         self.db.add(mapping)
         self.db.flush()
-
-    def create_purchase_order_variation(
-        self,
-        org_id: UUID,
-        data: CRMPurchaseOrderVariationPayload,
-        created_by_person_id: UUID,
-    ) -> CRMPurchaseOrderResponse:
-        """
-        Create a PO amendment from a CRM variation approval.
-
-        Strategy:
-        1. Idempotency — if a PO with this variation_id exists, return it.
-        2. Find the baseline PO via the original work-order sync mapping.
-        3. Mark the baseline as SUPERSEDED (preserving audit trail).
-        4. Create a new amendment PO linked to the baseline.
-        5. Update the sync mapping to point to the new PO.
-
-        SoD is maintained: the amendment PO starts in DRAFT and must go
-        through the same approval workflow as the original.
-
-        Raises:
-            ValueError: If baseline PO not found, supplier resolution fails,
-                        or the baseline is already CANCELLED/CLOSED.
-        """
-        from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
-        from app.services.finance.ap.purchase_order import (
-            POLineInput,
-            PurchaseOrderInput,
-            PurchaseOrderService,
-        )
-
-        # 1. Idempotency: check if we already created a PO for this variation_id
-        existing_stmt = select(PurchaseOrder).where(
-            PurchaseOrder.organization_id == org_id,
-            PurchaseOrder.variation_id == data.variation_id,
-        )
-        existing_variation_po = self.db.scalar(existing_stmt)
-        if existing_variation_po:
-            logger.info(
-                "PO variation already exists for variation_id=%s, returning",
-                data.variation_id,
-            )
-            return CRMPurchaseOrderResponse(
-                purchase_order_id=existing_variation_po.po_number,
-                po_id=existing_variation_po.po_id,
-                status=existing_variation_po.status.value.lower(),
-                omni_work_order_id=data.omni_work_order_id,
-                is_amendment=True,
-                variation_id=data.variation_id,
-                amendment_version=existing_variation_po.amendment_version,
-                superseded_po_id=existing_variation_po.original_po_id,
-            )
-
-        # 2. Find the baseline PO via sync mapping
-        baseline_mapping = self._get_mapping(
-            org_id, CRMEntityType.PURCHASE_ORDER, data.omni_work_order_id
-        )
-        if not baseline_mapping:
-            raise ValueError(
-                f"No baseline PO found for omni_work_order_id={data.omni_work_order_id}"
-            )
-
-        baseline_po = self.db.get(PurchaseOrder, baseline_mapping.local_entity_id)
-        if not baseline_po:
-            raise ValueError(
-                f"Baseline PO entity missing for mapping={baseline_mapping.mapping_id}"
-            )
-
-        # Prevent amendments on terminal or already-superseded states
-        blocked = {POStatus.CANCELLED, POStatus.CLOSED, POStatus.SUPERSEDED}
-        if baseline_po.status in blocked:
-            raise ValueError(
-                f"Cannot amend PO {baseline_po.po_number} in "
-                f"{baseline_po.status.value} status"
-            )
-
-        # Accounting safety: block supersede when PO has received or
-        # invoiced quantities — orphaning those financial records is unsafe.
-        # A future residual-safe change-order flow can relax this guard.
-        #
-        # Belt-and-suspenders: check both header-level summary amounts AND
-        # individual line quantities.  The header fields are updated by
-        # update_received_amount(), but a race or bug could leave them stale.
-        from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
-
-        has_header_activity = (
-            baseline_po.amount_received > 0 or baseline_po.amount_invoiced > 0
-        )
-        has_line_activity = self.db.scalar(
-            select(PurchaseOrderLine.line_id)
-            .where(
-                PurchaseOrderLine.po_id == baseline_po.po_id,
-                or_(
-                    PurchaseOrderLine.quantity_received > 0,
-                    PurchaseOrderLine.quantity_invoiced > 0,
-                ),
-            )
-            .limit(1)
-        )
-        if has_header_activity or has_line_activity:
-            raise ValueError(
-                f"Cannot supersede PO {baseline_po.po_number}: "
-                f"amount_received={baseline_po.amount_received}, "
-                f"amount_invoiced={baseline_po.amount_invoiced}. "
-                f"POs with received or invoiced quantities cannot be amended "
-                f"until residual-safe change-order logic is implemented."
-            )
-
-        # 3. Resolve dependencies (same as create flow)
-        supplier = self._resolve_supplier(org_id, data.vendor_erp_id, data.vendor_code)
-        project_id = self._resolve_project_id(org_id, data.omni_project_id)
-        approver_person_id = self._resolve_person_id_by_email(
-            org_id, data.approved_by_email
-        )
-        creator_id = approver_person_id or created_by_person_id
-
-        # 4. Build PO input with amendment metadata
-        po_lines: list[POLineInput] = []
-        line_subtotal = sum(i.amount for i in data.items) or Decimal("1")
-        tax_distributed = Decimal("0")
-        for idx, item in enumerate(data.items):
-            if idx == len(data.items) - 1:
-                line_tax = data.tax_total - tax_distributed
-            else:
-                line_tax = (data.tax_total * item.amount / line_subtotal).quantize(
-                    Decimal("0.01")
-                )
-                tax_distributed += line_tax
-            po_lines.append(
-                POLineInput(
-                    description=item.description,
-                    quantity_ordered=item.quantity,
-                    unit_price=item.unit_price,
-                    tax_amount=line_tax,
-                    project_id=project_id,
-                )
-            )
-
-        # Determine version: baseline version + 1, or explicit from payload
-        amendment_version = data.variation_version
-
-        correlation_id = f"crm-wo:{data.omni_work_order_id}:v{amendment_version}"
-
-        po_input = PurchaseOrderInput(
-            supplier_id=supplier.supplier_id,
-            po_date=date.today(),
-            currency_code=data.currency,
-            lines=po_lines,
-            correlation_id=correlation_id,
-            terms_and_conditions=data.title,
-        )
-
-        # 5. Create the amendment PO
-        new_po = PurchaseOrderService.create_po(self.db, org_id, po_input, creator_id)
-
-        # Set amendment-specific fields
-        new_po.is_amendment = True
-        new_po.original_po_id = baseline_po.po_id
-        new_po.amendment_version = amendment_version
-        new_po.amendment_reason = data.amendment_reason
-        new_po.variation_id = data.variation_id
-
-        # 6. Supersede the baseline PO (preserving its data for audit)
-        baseline_po.status = POStatus.SUPERSEDED
-        self.db.flush()
-
-        # 7. Update sync mapping to point to the new PO
-        baseline_mapping.local_entity_id = new_po.po_id
-        baseline_mapping.display_code = new_po.po_number
-        baseline_mapping.display_name = data.title[:255]
-        baseline_mapping.crm_data = {
-            **(baseline_mapping.crm_data or {}),
-            "variation_id": data.variation_id,
-            "variation_version": amendment_version,
-            "amendment_reason": data.amendment_reason,
-            "superseded_po_id": str(baseline_po.po_id),
-            "total": str(data.total),
-        }
-        baseline_mapping.synced_at = datetime.now(UTC)
-
-        try:
-            self.db.commit()
-        except IntegrityError as exc:
-            if not _is_variation_id_conflict(exc):
-                self.db.rollback()
-                raise
-
-            # Race condition: another request already created this variation.
-            # Roll back and return the existing PO (idempotent).
-            self.db.rollback()
-            logger.warning(
-                "Concurrent variation creation for variation_id=%s, "
-                "returning existing PO",
-                data.variation_id,
-            )
-            existing = self.db.scalar(
-                select(PurchaseOrder).where(
-                    PurchaseOrder.organization_id == org_id,
-                    PurchaseOrder.variation_id == data.variation_id,
-                )
-            )
-            if existing:
-                return CRMPurchaseOrderResponse(
-                    purchase_order_id=existing.po_number,
-                    po_id=existing.po_id,
-                    status=existing.status.value.lower(),
-                    omni_work_order_id=data.omni_work_order_id,
-                    is_amendment=True,
-                    variation_id=data.variation_id,
-                    amendment_version=existing.amendment_version,
-                    superseded_po_id=existing.original_po_id,
-                )
-            raise  # Re-raise if existing not found (unexpected)
-
-        logger.info(
-            "Created PO amendment %s (v%d) for variation_id=%s, superseding %s",
-            new_po.po_number,
-            amendment_version,
-            data.variation_id,
-            baseline_po.po_number,
-        )
-
-        return CRMPurchaseOrderResponse(
-            purchase_order_id=new_po.po_number,
-            po_id=new_po.po_id,
-            status=new_po.status.value.lower(),
-            omni_work_order_id=data.omni_work_order_id,
-            is_amendment=True,
-            variation_id=data.variation_id,
-            amendment_version=amendment_version,
-            superseded_po_id=baseline_po.po_id,
-        )

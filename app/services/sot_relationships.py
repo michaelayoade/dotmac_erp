@@ -412,7 +412,7 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             ),
             SOTService(
                 name="sync.sub_operational_context",
-                module="app.services.sync.crm.projects",
+                module="app.services.sync.sub.projects",
                 owns=(
                     "version-2 Sub operational-context intake",
                     "ERP project, ticket, project-task, and work-order projections",
@@ -421,8 +421,8 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 notes=(
                     "Sub owns operational lifecycle decisions. ERP projections are "
                     "rebuildable context for finance and employee-expense links; "
-                    "the neutral /sync/sub/bulk route reuses the established "
-                    "idempotent projection service during compatibility migration."
+                    "the /sync/sub/bulk route delegates to the source-neutral "
+                    "idempotent projection service."
                 ),
             ),
             SOTService(
@@ -433,28 +433,28 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "ERP material-support outcome lookup",
                     "routing accepted support needs through ERP inventory policy",
                 ),
-                depends_on=("sync.crm_procurement",),
+                depends_on=("sync.sub_procurement",),
                 notes=(
                     "Sub owns the service work order and material need; ERP owns "
                     "warehouse, stock, serial, fiscal-period, and issue decisions. "
-                    "The crm_id/omni_id names are temporary compatibility storage "
-                    "for the immutable Sub request UUID, not CRM authority. See "
+                    "The source-qualified opaque reference stores the immutable "
+                    "Sub request UUID, not an external lifecycle. See "
                     "docs/dotmac_sub_material_support_contract.md."
                 ),
             ),
             SOTService(
-                name="sync.crm_procurement",
-                module="app.services.sync.crm.procurement",
+                name="sync.sub_procurement",
+                module="app.services.sync.sub.procurement",
                 owns=(
-                    "legacy CRM material/PO/purchase-invoice sync mappings",
-                    "compatibility material-request inventory policy engine",
+                    "Sub material, PO, and purchase-invoice intake mappings",
+                    "material-request inventory policy adapter",
                 ),
                 notes=(
                     "REPAIR-FIRST (ledger finding 9): the #118 money-bug "
                     "class lives on this edge; no extraction or convergence "
-                    "until closed. New Sub material requests enter through "
-                    "inventory.material_support; this service remains its "
-                    "compatibility engine until the CRM path is retired."
+                    "until closed. Sub material requests enter through "
+                    "inventory.material_support; external delivery belongs to "
+                    "Integrator, not this service."
                 ),
             ),
         ),

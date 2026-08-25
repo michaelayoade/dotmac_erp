@@ -2,8 +2,7 @@
 dotmac_sub Integration API Routes.
 
 Inbound webhook receiver for the dotmac_sub subscriber-management system. The
-endpoint is unauthenticated and instead verifies an HMAC-SHA256 signature
-(mirrors the CRM webhook handler in app/api/crm.py).
+endpoint is unauthenticated and instead verifies an HMAC-SHA256 signature.
 """
 
 from __future__ import annotations

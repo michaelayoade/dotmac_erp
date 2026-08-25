@@ -93,10 +93,7 @@ def _build_web_app() -> FastAPI:
 
     # Admin
     from app.web.admin import router as admin_web_router
-    from app.web.admin_crm_sync import router as admin_crm_sync_router
-
     app.include_router(admin_web_router)
-    app.include_router(admin_crm_sync_router)
 
     # Finance (main module + standalone routers)
     from app.web.finance import (

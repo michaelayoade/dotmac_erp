@@ -193,7 +193,6 @@
     "support.support_team",
     "support.ticket",
     "support.ticket_category",
-    "sync.crm_sync_mapping",
     "sync.integration_config",
     "sync.staging_department",
     "sync.staging_designation",

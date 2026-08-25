@@ -1,7 +1,7 @@
 """
-Tests for CRM → ERP expense-claim sync (field-technician expense requests).
+Tests for Sub → ERP expense-claim sync (field-technician expense requests).
 
-DB-backed (SQLite via conftest): exercises DotMacCRMSyncService.create_expense_claim
+DB-backed (SQLite via conftest): exercises DotMacSubSyncService.create_expense_claim
 end-to-end through ExpenseService.create_claim + submit_claim, plus the status
 poll and category listing, and the 200/201 endpoint idempotency logic.
 """
@@ -27,11 +27,11 @@ from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.position import Position
 from app.models.people.hr.position_assignment import PositionAssignment
 from app.models.person import Person
-from app.schemas.sync.dotmac_crm import (
-    CRMExpenseClaimItemPayload,
-    CRMExpenseClaimPayload,
+from app.schemas.sync.sub_operational import (
+    SubExpenseClaimItemPayload,
+    SubExpenseClaimPayload,
 )
-from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
+from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
 
 
 def _ensure_hr_tables(engine) -> None:
@@ -66,7 +66,7 @@ def org_id():
 @pytest.fixture()
 def service(db_session):
     _ensure_hr_tables(db_session.get_bind())
-    return DotMacCRMSyncService(db_session)
+    return DotMacSubSyncService(db_session)
 
 
 @pytest.fixture()
@@ -121,18 +121,18 @@ def numbering_patch():
         yield
 
 
-def _payload(employee, omni_id=None, **overrides) -> CRMExpenseClaimPayload:
+def _payload(employee, source_claim_id=None, **overrides) -> SubExpenseClaimPayload:
     items = overrides.pop(
         "items",
         [
-            CRMExpenseClaimItemPayload(
+            SubExpenseClaimItemPayload(
                 category_code="FUEL",
                 description="Fuel for site visit",
                 claimed_amount=Decimal("5000.00"),
                 expense_date="2026-07-01",
                 vendor_name="Total Energies",
             ),
-            CRMExpenseClaimItemPayload(
+            SubExpenseClaimItemPayload(
                 category_code="FUEL",
                 description="Okada to customer premises",
                 claimed_amount=Decimal("1500"),
@@ -140,7 +140,7 @@ def _payload(employee, omni_id=None, **overrides) -> CRMExpenseClaimPayload:
         ],
     )
     defaults = dict(
-        omni_id=omni_id or str(uuid.uuid4()),
+        source_claim_id=source_claim_id or str(uuid.uuid4()),
         purpose="Site survey expenses",
         claim_date="2026-07-02",
         requested_by_email=employee.person.email,
@@ -149,7 +149,7 @@ def _payload(employee, omni_id=None, **overrides) -> CRMExpenseClaimPayload:
         reference_number="EXP-REQ-00042",
     )
     defaults.update(overrides)
-    return CRMExpenseClaimPayload(items=items, **defaults)
+    return SubExpenseClaimPayload(items=items, **defaults)
 
 
 class TestCreateExpenseClaim:
@@ -160,7 +160,7 @@ class TestCreateExpenseClaim:
 
         result = service.create_expense_claim(org_id, payload, employee.person_id)
 
-        assert result.omni_id == payload.omni_id
+        assert result.source_claim_id == payload.source_claim_id
         assert result.claim_number.startswith("EXP-2026-")
         # No approval chain configured -> plain SUBMITTED (lowercase in response)
         assert result.status in {"submitted", "pending_approval"}
@@ -169,7 +169,7 @@ class TestCreateExpenseClaim:
             db_session.query(ExpenseClaim)
             .filter(
                 ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.crm_id == payload.omni_id,
+                ExpenseClaim.source_reference == payload.source_claim_id,
             )
             .one_or_none()
         )
@@ -207,13 +207,13 @@ class TestCreateExpenseClaim:
 
         assert second.claim_id == first.claim_id
         assert second.claim_number == first.claim_number
-        assert second.omni_id == payload.omni_id
+        assert second.source_claim_id == payload.source_claim_id
 
         count = (
             db_session.query(ExpenseClaim)
             .filter(
                 ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.crm_id == payload.omni_id,
+                ExpenseClaim.source_reference == payload.source_claim_id,
             )
             .count()
         )
@@ -222,27 +222,28 @@ class TestCreateExpenseClaim:
     def test_concurrent_create_race_returns_existing_not_500(
         self, service, db_session, org_id, employee, fuel_category, numbering_patch
     ):
-        """A concurrent first-send that loses the omni_id race must return the
-        winner's claim (via uq_expense_claim_org_crm_id), not a 500."""
+        """A concurrent first-send that loses the source_claim_id race must return the
+        winner's claim (via uq_expense_claim_org_source_ref), not a 500."""
         payload = _payload(employee)
         # The race winner creates and persists the claim.
         first = service.create_expense_claim(org_id, payload, employee.person_id)
 
         # Simulate the losing request: its pre-check misses the row the winner
         # already wrote (the TOCTOU window), so it enters the create path where
-        # the unique constraint on (organization_id, crm_id) then fires.
-        with patch.object(type(service), "_find_claim_by_omni_id", return_value=None):
+        # the unique constraint on (organization_id, source_system,
+        # source_reference) then fires.
+        with patch.object(type(service), "_find_claim_by_source_claim_id", return_value=None):
             second = service.create_expense_claim(org_id, payload, employee.person_id)
 
         # It recovered by returning the winner's claim — no exception, no dup.
         assert second.claim_id == first.claim_id
         assert second.claim_number == first.claim_number
-        assert second.omni_id == payload.omni_id
+        assert second.source_claim_id == payload.source_claim_id
         count = (
             db_session.query(ExpenseClaim)
             .filter(
                 ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.crm_id == payload.omni_id,
+                ExpenseClaim.source_reference == payload.source_claim_id,
             )
             .count()
         )
@@ -256,16 +257,16 @@ class TestCreateExpenseClaim:
 
         changed = _payload(
             employee,
-            omni_id=payload.omni_id,
+            source_claim_id=payload.source_claim_id,
             items=[
-                CRMExpenseClaimItemPayload(
+                SubExpenseClaimItemPayload(
                     category_code="FUEL",
                     description="Fuel for site visit",
                     claimed_amount=Decimal("9999.00"),
                     expense_date="2026-07-01",
                     vendor_name="Total Energies",
                 ),
-                CRMExpenseClaimItemPayload(
+                SubExpenseClaimItemPayload(
                     category_code="FUEL",
                     description="Okada to customer premises",
                     claimed_amount=Decimal("1500"),
@@ -293,7 +294,7 @@ class TestCreateExpenseClaim:
         payload = _payload(
             employee,
             items=[
-                CRMExpenseClaimItemPayload(
+                SubExpenseClaimItemPayload(
                     category_code="NOPE",
                     description="Mystery expense",
                     claimed_amount=Decimal("100"),
@@ -322,7 +323,7 @@ class TestCreateExpenseClaim:
         payload = _payload(
             employee,
             items=[
-                CRMExpenseClaimItemPayload(
+                SubExpenseClaimItemPayload(
                     category_code="HOTEL",
                     description="Overnight stay",
                     claimed_amount=Decimal("20000"),
@@ -341,7 +342,7 @@ class TestCreateExpenseClaim:
             db_session.query(ExpenseClaim)
             .filter(
                 ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.crm_id == payload.omni_id,
+                ExpenseClaim.source_reference == payload.source_claim_id,
             )
             .count()
         )
@@ -352,8 +353,8 @@ class TestCreateExpenseClaim:
     ):
         payload = _payload(
             employee,
-            project_crm_id=str(uuid.uuid4()),
-            ticket_crm_id=str(uuid.uuid4()),
+            project_source_reference=str(uuid.uuid4()),
+            ticket_source_reference=str(uuid.uuid4()),
         )
         with patch.object(service, "_get_mapping", return_value=None):
             result = service.create_expense_claim(org_id, payload, employee.person_id)
@@ -383,7 +384,7 @@ class TestExpenseClaimStatusPoll:
         claim.paid_on = date(2026, 7, 5)
         db_session.flush()
 
-        result = service.get_expense_claim_by_crm_id(org_id, payload.omni_id)
+        result = service.get_expense_claim_by_source_reference(org_id, payload.source_claim_id)
         assert result is not None
         assert result.claim_id == created.claim_id
         assert result.claim_number == created.claim_number
@@ -391,10 +392,10 @@ class TestExpenseClaimStatusPoll:
         assert result.total_claimed_amount == Decimal("6500.00")
         assert result.total_approved_amount == Decimal("6000.00")
         assert result.paid_on == date(2026, 7, 5)
-        assert result.omni_id == payload.omni_id
+        assert result.source_claim_id == payload.source_claim_id
 
     def test_status_missing_returns_none(self, service, org_id):
-        assert service.get_expense_claim_by_crm_id(org_id, str(uuid.uuid4())) is None
+        assert service.get_expense_claim_by_source_reference(org_id, str(uuid.uuid4())) is None
 
 
 class TestListExpenseCategories:
@@ -445,33 +446,35 @@ class TestExpenseClaimEndpoints:
     def test_post_returns_201_then_200_for_identical_resend(
         self, db_session, org_id, employee, fuel_category, numbering_patch
     ):
-        from app.api.sync.dotmac_crm import create_expense_claim
+        from app.api.sync.dotmac_sub import create_sub_expense_claim
 
         _ensure_hr_tables(db_session.get_bind())
         auth = {"organization_id": org_id, "person_id": employee.person_id}
         payload = _payload(employee)
 
         first_response = Response()
-        first = create_expense_claim(payload, first_response, auth=auth, db=db_session)
+        first = create_sub_expense_claim(
+            payload, first_response, auth=auth, db=db_session
+        )
         assert first_response.status_code == 201
 
         second_response = Response()
-        second = create_expense_claim(
+        second = create_sub_expense_claim(
             payload, second_response, auth=auth, db=db_session
         )
         assert second_response.status_code == 200
         assert second.claim_id == first.claim_id
 
     def test_get_status_404_when_missing(self, db_session, org_id):
-        from app.api.sync.dotmac_crm import get_expense_claim_status
+        from app.api.sync.dotmac_sub import get_sub_expense_claim_status
 
         auth = {"organization_id": org_id, "person_id": uuid.uuid4()}
         with pytest.raises(HTTPException) as exc:
-            get_expense_claim_status(str(uuid.uuid4()), auth=auth, db=db_session)
+            get_sub_expense_claim_status(str(uuid.uuid4()), auth=auth, db=db_session)
         assert exc.value.status_code == 404
 
     def test_get_categories_endpoint(self, db_session, org_id):
-        from app.api.sync.dotmac_crm import list_expense_categories
+        from app.api.sync.dotmac_sub import list_sub_expense_categories
 
         db_session.add(
             ExpenseCategory(
@@ -486,5 +489,5 @@ class TestExpenseClaimEndpoints:
         db_session.flush()
 
         auth = {"organization_id": org_id, "person_id": uuid.uuid4()}
-        result = list_expense_categories(auth=auth, db=db_session)
+        result = list_sub_expense_categories(auth=auth, db=db_session)
         assert [item.category_code for item in result.items] == ["TOOLS"]

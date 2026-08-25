@@ -2,34 +2,28 @@
 Sync Schemas - Pydantic models for sync operations.
 """
 
-from .dotmac_crm import (
+from .sub_operational import (
     BulkSyncRequest,
     BulkSyncResponse,
-    CRMProjectPayload,
-    CRMProjectRead,
-    CRMSyncMappingRead,
-    CRMTicketPayload,
-    CRMTicketRead,
-    CRMWorkOrderPayload,
-    CRMWorkOrderRead,
-    ExpenseTotals,
-    ExpenseTotalsRequest,
-    ExpenseTotalsResponse,
+    SourceCorrelationRead,
+    SubProjectPayload,
+    SubProjectRead,
+    SubTicketPayload,
+    SubTicketRead,
+    SubWorkOrderPayload,
+    SubWorkOrderRead,
     SyncError,
 )
 
 __all__ = [
     "BulkSyncRequest",
     "BulkSyncResponse",
-    "CRMProjectPayload",
-    "CRMProjectRead",
-    "CRMSyncMappingRead",
-    "CRMTicketPayload",
-    "CRMTicketRead",
-    "CRMWorkOrderPayload",
-    "CRMWorkOrderRead",
-    "ExpenseTotals",
-    "ExpenseTotalsRequest",
-    "ExpenseTotalsResponse",
+    "SourceCorrelationRead",
+    "SubProjectPayload",
+    "SubProjectRead",
+    "SubTicketPayload",
+    "SubTicketRead",
+    "SubWorkOrderPayload",
+    "SubWorkOrderRead",
     "SyncError",
 ]

@@ -1,13 +1,13 @@
 """
-Tests for CRM Purchase Order Sync.
+Tests for  Sub Purchase Order Sync.
 
 Tests the create_purchase_order flow including:
-- Idempotency via CRMSyncMapping
+- Idempotency via SourceCorrelation
 - Fallback idempotency via correlation_id
 - Supplier resolution (erpnext_id, supplier_code, not found)
-- Project linkage via CRM project mapping
+- Project linkage via Sub project mapping
 - PO line creation
-- CRMSyncMapping creation
+- SourceCorrelation creation
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.sync.dotmac_crm_sync import CRMEntityType, CRMSyncMapping
-from app.schemas.sync.dotmac_crm import (
-    CRMPurchaseOrderItemPayload,
-    CRMPurchaseOrderPayload,
+from app.models.sync.source_correlation import SourceEntityType, SourceCorrelation
+from app.schemas.sync.sub_operational import (
+    SubPurchaseOrderItemPayload,
+    SubPurchaseOrderPayload,
 )
-from app.services.sync.dotmac_crm_sync_service import DotMacCRMSyncService
+from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
 
 
 @pytest.fixture
@@ -33,9 +33,9 @@ def mock_db() -> MagicMock:
 
 
 @pytest.fixture
-def service(mock_db: MagicMock) -> DotMacCRMSyncService:
+def service(mock_db: MagicMock) -> DotMacSubSyncService:
     """Create a service instance with mocked db."""
-    return DotMacCRMSyncService(mock_db)
+    return DotMacSubSyncService(mock_db)
 
 
 @pytest.fixture
@@ -51,10 +51,10 @@ def person_id() -> uuid.UUID:
 
 
 @pytest.fixture
-def sample_payload() -> CRMPurchaseOrderPayload:
+def sample_payload() -> SubPurchaseOrderPayload:
     """Minimal valid PO payload."""
-    return CRMPurchaseOrderPayload(
-        omni_work_order_id="wo-abc-123",
+    return SubPurchaseOrderPayload(
+        source_work_order_id="wo-abc-123",
         vendor_erp_id="SUP-0001",
         vendor_name="Acme Fiber Supplies",
         vendor_code="ACME",
@@ -64,7 +64,7 @@ def sample_payload() -> CRMPurchaseOrderPayload:
         tax_total=Decimal("3750"),
         total=Decimal("53750"),
         items=[
-            CRMPurchaseOrderItemPayload(
+            SubPurchaseOrderItemPayload(
                 item_type="material",
                 description="Single-mode fiber cable 12-core",
                 quantity=Decimal("500"),
@@ -73,7 +73,7 @@ def sample_payload() -> CRMPurchaseOrderPayload:
                 cable_type="SM",
                 fiber_count=12,
             ),
-            CRMPurchaseOrderItemPayload(
+            SubPurchaseOrderItemPayload(
                 item_type="labor",
                 description="Splicing — 24 joints",
                 quantity=Decimal("24"),
@@ -86,17 +86,17 @@ def sample_payload() -> CRMPurchaseOrderPayload:
 
 
 class TestCreatePurchaseOrderIdempotency:
-    """Test idempotency via CRMSyncMapping and correlation_id."""
+    """Test idempotency via SourceCorrelation and correlation_id."""
 
     def test_returns_existing_po_when_mapping_exists(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
         mock_db: MagicMock,
-        sample_payload: CRMPurchaseOrderPayload,
+        sample_payload: SubPurchaseOrderPayload,
     ) -> None:
-        """If CRMSyncMapping already exists for this work order, return existing PO."""
+        """If SourceCorrelation already exists for this work order, return existing PO."""
         from app.models.finance.ap.purchase_order import POStatus
 
         # Existing mapping
@@ -118,17 +118,17 @@ class TestCreatePurchaseOrderIdempotency:
         assert result.purchase_order_id == "PO-2026-00001"
         assert result.po_id == existing_po.po_id
         assert result.status == "draft"
-        assert result.omni_work_order_id == "wo-abc-123"
+        assert result.source_work_order_id == "wo-abc-123"
         # Should not create any new records
         mock_db.add.assert_not_called()
 
     def test_returns_existing_po_via_correlation_id_fallback(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
         mock_db: MagicMock,
-        sample_payload: CRMPurchaseOrderPayload,
+        sample_payload: SubPurchaseOrderPayload,
     ) -> None:
         """If mapping doesn't exist but PO has matching correlation_id, return it."""
         from app.models.finance.ap.purchase_order import POStatus
@@ -144,7 +144,7 @@ class TestCreatePurchaseOrderIdempotency:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return None  # No CRMSyncMapping
+                return None  # No SourceCorrelation
             return existing_po  # correlation_id lookup finds PO
 
         mock_db.scalar.side_effect = scalar_side_effect
@@ -153,13 +153,13 @@ class TestCreatePurchaseOrderIdempotency:
         result = service.create_purchase_order(org_id, sample_payload, person_id)
 
         assert result.purchase_order_id == "PO-2026-00002"
-        assert result.omni_work_order_id == "wo-abc-123"
+        assert result.source_work_order_id == "wo-abc-123"
         # Should create the missing mapping and commit it
         assert mock_db.add.call_count == 1
         added = mock_db.add.call_args[0][0]
-        assert isinstance(added, CRMSyncMapping)
-        assert added.crm_entity_type == CRMEntityType.PURCHASE_ORDER
-        assert added.crm_id == "wo-abc-123"
+        assert isinstance(added, SourceCorrelation)
+        assert added.source_entity_type == SourceEntityType.PURCHASE_ORDER
+        assert added.source_reference == "wo-abc-123"
         # Verify the re-created mapping was committed
         mock_db.commit.assert_called_once()
 
@@ -169,7 +169,7 @@ class TestSupplierResolution:
 
     def test_resolve_by_erpnext_id(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:
@@ -186,7 +186,7 @@ class TestSupplierResolution:
 
     def test_resolve_fallback_to_supplier_code(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:
@@ -212,11 +212,11 @@ class TestSupplierResolution:
 
     def test_resolve_trims_identifiers_before_lookup(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:
-        """Should trim incoming ERP IDs and supplier codes from CRM."""
+        """Should trim incoming ERP IDs and supplier codes from Sub."""
         mock_supplier = MagicMock()
         mock_supplier.supplier_id = uuid.uuid4()
 
@@ -238,11 +238,11 @@ class TestSupplierResolution:
 
     def test_resolve_fallback_to_supplier_name(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:
-        """Should fall back to legal/trading name when CRM sends a display name."""
+        """Should fall back to legal/trading name when Sub sends a display name."""
         mock_supplier = MagicMock()
         mock_supplier.supplier_id = uuid.uuid4()
 
@@ -264,7 +264,7 @@ class TestSupplierResolution:
 
     def test_raises_value_error_when_supplier_not_found(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:
@@ -276,7 +276,7 @@ class TestSupplierResolution:
 
     def test_raises_when_both_identifiers_none(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:
@@ -290,13 +290,13 @@ class TestCreatePurchaseOrderHappyPath:
 
     def test_creates_po_with_lines_and_mapping(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
         mock_db: MagicMock,
-        sample_payload: CRMPurchaseOrderPayload,
+        sample_payload: SubPurchaseOrderPayload,
     ) -> None:
-        """Full happy path: creates PO, lines, and CRMSyncMapping."""
+        """Full happy path: creates PO, lines, and SourceCorrelation."""
         mock_supplier = MagicMock()
         mock_supplier.supplier_id = uuid.uuid4()
         mock_supplier.supplier_code = "ACME"
@@ -314,7 +314,7 @@ class TestCreatePurchaseOrderHappyPath:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return None  # No CRMSyncMapping
+                return None  # No SourceCorrelation
             if call_count == 2:
                 return None  # No PO by correlation_id
             if call_count == 3:
@@ -332,7 +332,7 @@ class TestCreatePurchaseOrderHappyPath:
         assert result.purchase_order_id == "PO-2026-00042"
         assert result.po_id == mock_po.po_id
         assert result.status == "draft"
-        assert result.omni_work_order_id == "wo-abc-123"
+        assert result.source_work_order_id == "wo-abc-123"
 
         # Verify create_po was called with correct arguments
         mock_create_po.assert_called_once()
@@ -356,14 +356,14 @@ class TestCreatePurchaseOrderHappyPath:
         assert po_input.lines[0].tax_amount == Decimal("3000.00")  # 40000/50000 * 3750
         assert po_input.lines[1].tax_amount == Decimal("750")  # remainder
 
-        # Verify CRMSyncMapping was created
+        # Verify SourceCorrelation was created
         mapping_add_calls = [
-            c for c in mock_db.add.call_args_list if isinstance(c[0][0], CRMSyncMapping)
+            c for c in mock_db.add.call_args_list if isinstance(c[0][0], SourceCorrelation)
         ]
         assert len(mapping_add_calls) == 1
         mapping = mapping_add_calls[0][0][0]
-        assert mapping.crm_entity_type == CRMEntityType.PURCHASE_ORDER
-        assert mapping.crm_id == "wo-abc-123"
+        assert mapping.source_entity_type == SourceEntityType.PURCHASE_ORDER
+        assert mapping.source_reference == "wo-abc-123"
         assert mapping.local_entity_type == "purchase_order"
         assert mapping.local_entity_id == mock_po.po_id
         assert mapping.display_code == "PO-2026-00042"
@@ -371,11 +371,11 @@ class TestCreatePurchaseOrderHappyPath:
 
     def test_uses_approver_person_id_when_email_resolved(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
         mock_db: MagicMock,
-        sample_payload: CRMPurchaseOrderPayload,
+        sample_payload: SubPurchaseOrderPayload,
     ) -> None:
         """When approved_by_email resolves, use that person as creator."""
         sample_payload.approved_by_email = "approver@example.com"
@@ -421,11 +421,11 @@ class TestCreatePurchaseOrderHappyPath:
 
     def test_falls_back_to_api_key_person_when_email_not_resolved(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
         mock_db: MagicMock,
-        sample_payload: CRMPurchaseOrderPayload,
+        sample_payload: SubPurchaseOrderPayload,
     ) -> None:
         """When approved_by_email is None, use the API key's person_id."""
         sample_payload.approved_by_email = None
@@ -466,18 +466,18 @@ class TestCreatePurchaseOrderHappyPath:
 
 
 class TestCreatePurchaseOrderProjectLinkage:
-    """Test that PO lines get project_id when CRM project is mapped."""
+    """Test that PO lines get project_id when Sub project is mapped."""
 
-    def test_lines_get_project_id_when_omni_project_id_resolved(
+    def test_lines_get_project_id_when_source_project_id_resolved(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
         mock_db: MagicMock,
-        sample_payload: CRMPurchaseOrderPayload,
+        sample_payload: SubPurchaseOrderPayload,
     ) -> None:
-        """PO lines should have project_id when omni_project_id maps to local project."""
-        sample_payload.omni_project_id = "crm-proj-789"
+        """PO lines should have project_id when source_project_id maps to local project."""
+        sample_payload.source_project_id = "crm-proj-789"
 
         mock_supplier = MagicMock()
         mock_supplier.supplier_id = uuid.uuid4()
@@ -504,7 +504,7 @@ class TestCreatePurchaseOrderProjectLinkage:
             if call_count == 3:
                 return mock_supplier  # Supplier
             if call_count == 4:
-                return project_mapping  # Project CRMSyncMapping
+                return project_mapping  # Project SourceCorrelation
             return None  # Person lookup
 
         mock_db.scalar.side_effect = scalar_side_effect
@@ -525,11 +525,11 @@ class TestCreatePurchaseOrderErrors:
 
     def test_raises_value_error_when_supplier_not_found(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
         mock_db: MagicMock,
-        sample_payload: CRMPurchaseOrderPayload,
+        sample_payload: SubPurchaseOrderPayload,
     ) -> None:
         """Should propagate ValueError when supplier can't be resolved."""
         mock_db.scalar.return_value = None  # Nothing found anywhere
@@ -544,7 +544,7 @@ class TestResolvePersonIdByEmail:
 
     def test_returns_none_when_email_is_none(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
     ) -> None:
         """Should return None immediately when email is None."""
@@ -553,7 +553,7 @@ class TestResolvePersonIdByEmail:
 
     def test_returns_person_id_from_work_email(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:
@@ -569,7 +569,7 @@ class TestResolvePersonIdByEmail:
 
     def test_falls_back_to_personal_email(
         self,
-        service: DotMacCRMSyncService,
+        service: DotMacSubSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
     ) -> None:

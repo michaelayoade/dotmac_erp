@@ -47,12 +47,12 @@ MANUAL_PROJECT_CREATION_ENABLED = False
 
 
 def _manual_project_creation_disabled_response(request: Request):
-    """Manual project creation is disabled; projects are CRM-synced."""
+    """Manual project creation is disabled; projects are projected from Sub."""
     return templates.TemplateResponse(
         request,
         "errors/404.html",
         {
-            "message": "Manual project creation is disabled. Projects are synced from CRM.",
+            "message": "Manual project creation is disabled. Projects are projected from Sub.",
         },
         status_code=404,
     )

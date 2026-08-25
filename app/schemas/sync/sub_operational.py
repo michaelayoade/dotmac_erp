@@ -1,5 +1,5 @@
 """
-DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
+Dotmac Sub Sync Schemas - Pydantic models for Sub sync API.
 """
 
 from __future__ import annotations
@@ -68,16 +68,16 @@ def _require_wire_money_string(value: object) -> object:
     )
 
 
-# ============ Inbound Sync Payloads (CRM → ERP) ============
+# ============ Inbound Sync Payloads (Sub → ERP) ============
 
 
-class CRMProjectPayload(BaseModel):
-    """Project data from DotMac CRM."""
+class SubProjectPayload(BaseModel):
+    """Project data from Dotmac Sub."""
 
-    crm_id: str = Field(
+    source_reference: str = Field(
         ...,
         description="Opaque source UUID",
-        validation_alias=AliasChoices("source_id", "crm_id"),
+        validation_alias=AliasChoices("source_id", "source_reference"),
     )
     name: str = Field(..., max_length=160)
     code: str | None = Field(None, max_length=80)
@@ -88,20 +88,23 @@ class CRMProjectPayload(BaseModel):
     start_at: datetime | None = None
     due_at: datetime | None = None
     customer_name: str | None = Field(None, max_length=200)
-    customer_crm_id: str | None = Field(None, max_length=36)
+    customer_source_reference: str | None = Field(
+        None,
+        max_length=36,
+    )
     metadata: dict | None = None
     # Service team integration (optional, backward-compatible)
     service_team_name: str | None = Field(None, max_length=200)
     service_team_department_id: str | None = Field(None, max_length=36)
 
 
-class CRMTicketPayload(BaseModel):
-    """Support ticket data from DotMac CRM."""
+class SubTicketPayload(BaseModel):
+    """Support ticket data from Dotmac Sub."""
 
-    crm_id: str = Field(
+    source_reference: str = Field(
         ...,
         description="Opaque source UUID",
-        validation_alias=AliasChoices("source_id", "crm_id"),
+        validation_alias=AliasChoices("source_id", "source_reference"),
     )
     subject: str = Field(..., max_length=255)
     ticket_number: str | None = Field(None, max_length=40)
@@ -121,15 +124,18 @@ class CRMTicketPayload(BaseModel):
         validation_alias=AliasChoices("activity_log", "activityLog", "activities"),
     )
     customer_name: str | None = Field(None, max_length=200)
-    customer_crm_id: str | None = Field(None, max_length=36)
+    customer_source_reference: str | None = Field(
+        None,
+        max_length=36,
+    )
     metadata: dict | None = None
     # Service team integration (optional, backward-compatible)
     service_team_name: str | None = Field(None, max_length=200)
     assigned_employee_emails: list[str] = Field(default_factory=list)
 
 
-class CRMTicketCommentItem(BaseModel):
-    """CRM ticket comment item."""
+class SubTicketCommentItem(BaseModel):
+    """Sub ticket comment item."""
 
     id: str = Field(..., min_length=1, max_length=255)
     timestamp: datetime | None = Field(
@@ -153,8 +159,8 @@ class CRMTicketCommentItem(BaseModel):
     )
 
 
-class CRMTicketActivityEntry(BaseModel):
-    """CRM ticket activity item (comment-style or event-style)."""
+class SubTicketActivityEntry(BaseModel):
+    """Sub ticket activity item (comment-style or event-style)."""
 
     kind: Literal["comment", "event"]
     id: str = Field(..., min_length=1, max_length=255)
@@ -186,20 +192,26 @@ class CRMTicketActivityEntry(BaseModel):
     details: dict[str, Any] | None = None
 
 
-class CRMWorkOrderPayload(BaseModel):
-    """Work order data from DotMac CRM."""
+class SubWorkOrderPayload(BaseModel):
+    """Work order data from Dotmac Sub."""
 
-    crm_id: str = Field(
+    source_reference: str = Field(
         ...,
         description="Opaque source UUID",
-        validation_alias=AliasChoices("source_id", "crm_id"),
+        validation_alias=AliasChoices("source_id", "source_reference"),
     )
     title: str = Field(..., max_length=200)
     work_type: str | None = Field(None, max_length=80)
     status: str = Field("active", description="active, completed, cancelled")
     priority: str | None = Field(None, max_length=40)
-    project_crm_id: str | None = Field(None, description="Links to CRM project")
-    ticket_crm_id: str | None = Field(None, description="Links to CRM ticket")
+    project_source_reference: str | None = Field(
+        None,
+        description="Links to Sub project",
+    )
+    ticket_source_reference: str | None = Field(
+        None,
+        description="Links to Sub ticket",
+    )
     assigned_employee_email: str | None = Field(None, max_length=255)
     assigned_employee_emails: list[str] = Field(default_factory=list)
     scheduled_start: datetime | None = None
@@ -207,7 +219,7 @@ class CRMWorkOrderPayload(BaseModel):
     metadata: dict | None = None
 
 
-class CRMProjectTaskPayload(BaseModel):
+class SubProjectTaskPayload(BaseModel):
     """Project task projected from Sub into ERP project management."""
 
     source_id: str = Field(..., min_length=1, max_length=120)
@@ -226,10 +238,10 @@ class CRMProjectTaskPayload(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class CRMInventoryItemPayload(BaseModel):
-    """Inventory item data from DotMac CRM."""
+class SubInventoryItemPayload(BaseModel):
+    """Inventory item data from Dotmac Sub."""
 
-    crm_id: str = Field(..., description="UUID from CRM")
+    source_reference: str = Field(..., description="UUID from Sub")
     item_code: str = Field(..., max_length=50)
     item_name: str = Field(..., max_length=200)
     description: str | None = None
@@ -248,21 +260,21 @@ class CRMInventoryItemPayload(BaseModel):
 
 
 class BulkSyncRequest(BaseModel):
-    """Bulk sync request from DotMac CRM."""
+    """Bulk sync request from Dotmac Sub."""
 
-    projects: list[CRMProjectPayload] = Field(default_factory=list, max_length=500)
-    project_tasks: list[CRMProjectTaskPayload] = Field(
+    projects: list[SubProjectPayload] = Field(default_factory=list, max_length=500)
+    project_tasks: list[SubProjectTaskPayload] = Field(
         default_factory=list, max_length=500
     )
-    tickets: list[CRMTicketPayload] = Field(default_factory=list, max_length=500)
-    work_orders: list[CRMWorkOrderPayload] = Field(default_factory=list, max_length=500)
+    tickets: list[SubTicketPayload] = Field(default_factory=list, max_length=500)
+    work_orders: list[SubWorkOrderPayload] = Field(default_factory=list, max_length=500)
 
 
 class SyncError(BaseModel):
     """Error detail for sync operation."""
 
     entity_type: str
-    crm_id: str
+    source_reference: str
     error: str
 
 
@@ -278,17 +290,17 @@ class BulkSyncResponse(BaseModel):
 
 
 class ReconcileOrphansRequest(BaseModel):
-    """Full-run reconcile summary from DotMac CRM for one entity type.
+    """Full-run reconcile summary from Dotmac Sub for one entity type.
 
-    ``seen_crm_ids`` is the complete set of CRM ids a FULL ``sync_all_active``
+    ``seen_source_references`` is the complete set of Sub ids a FULL ``sync_all_active``
     run saw upstream-side; mappings for that entity type not in the set are
-    orphan candidates (canceled/soft-deleted in CRM, so they silently dropped
+    orphan candidates (canceled/soft-deleted in Sub, so they silently dropped
     out of the push).
     """
 
     entity_type: Literal["project", "ticket", "work_order"]
-    seen_crm_ids: list[str] = Field(default_factory=list, max_length=50_000)
-    active_count: int = Field(0, ge=0, description="CRM-side active count for the run")
+    seen_source_references: list[str] = Field(default_factory=list, max_length=50_000)
+    active_count: int = Field(0, ge=0, description="Sub-side active count for the run")
 
 
 class ReconcileOrphansResponse(BaseModel):
@@ -302,42 +314,42 @@ class ReconcileOrphansResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
-class CRMInventoryItemResponse(BaseModel):
-    """Response for CRM inventory item upsert."""
+class SubInventoryItemResponse(BaseModel):
+    """Response for Sub inventory item upsert."""
 
     item_id: UUID
     item_code: str
     status: str
-    crm_id: str
+    source_reference: str
 
 
-# ============ Read Schemas (ERP → CRM or UI) ============
+# ============ Read Schemas (ERP → Sub or UI) ============
 
 
-class CRMSyncMappingRead(BaseModel):
-    """Read schema for CRM sync mapping."""
+class SourceCorrelationRead(BaseModel):
+    """Read schema for Sub sync mapping."""
 
     model_config = ConfigDict(from_attributes=True)
 
     mapping_id: UUID
-    crm_entity_type: str
-    crm_id: str
+    source_entity_type: str
+    source_reference: str
     local_entity_type: str
     local_entity_id: UUID
-    crm_status: str
+    source_status: str
     display_name: str
     display_code: str | None = None
     customer_name: str | None = None
     synced_at: datetime
 
 
-class CRMProjectRead(BaseModel):
+class SubProjectRead(BaseModel):
     """Project info for expense claim dropdowns."""
 
     model_config = ConfigDict(from_attributes=True)
 
     mapping_id: UUID
-    crm_id: str
+    source_reference: str
     local_entity_id: UUID
     name: str
     code: str | None = None
@@ -345,13 +357,13 @@ class CRMProjectRead(BaseModel):
     customer_name: str | None = None
 
 
-class CRMTicketRead(BaseModel):
+class SubTicketRead(BaseModel):
     """Ticket info for expense claim dropdowns."""
 
     model_config = ConfigDict(from_attributes=True)
 
     mapping_id: UUID
-    crm_id: str
+    source_reference: str
     local_entity_id: UUID
     subject: str
     ticket_number: str | None = None
@@ -359,13 +371,13 @@ class CRMTicketRead(BaseModel):
     customer_name: str | None = None
 
 
-class CRMWorkOrderRead(BaseModel):
+class SubWorkOrderRead(BaseModel):
     """Work order info for expense claim dropdowns."""
 
     model_config = ConfigDict(from_attributes=True)
 
     mapping_id: UUID
-    crm_id: str
+    source_reference: str
     local_entity_id: UUID
     title: str
     status: str
@@ -373,11 +385,11 @@ class CRMWorkOrderRead(BaseModel):
     ticket_subject: str | None = None
 
 
-# ============ Expense Totals (ERP → CRM) ============
+# ============ Expense Totals (ERP → Sub) ============
 
 
 class ExpenseTotals(BaseModel):
-    """Expense totals by status for a CRM entity."""
+    """Expense totals by status for a Sub entity."""
 
     draft: Decimal = Decimal("0.00")
     submitted: Decimal = Decimal("0.00")
@@ -389,22 +401,22 @@ class ExpenseTotals(BaseModel):
 class ExpenseTotalsRequest(BaseModel):
     """Request for expense totals."""
 
-    project_crm_ids: list[str] = Field(default_factory=list, max_length=200)
-    ticket_crm_ids: list[str] = Field(default_factory=list, max_length=200)
-    work_order_crm_ids: list[str] = Field(default_factory=list, max_length=200)
+    project_source_references: list[str] = Field(default_factory=list, max_length=200)
+    ticket_source_references: list[str] = Field(default_factory=list, max_length=200)
+    work_order_source_references: list[str] = Field(default_factory=list, max_length=200)
 
 
 class ExpenseTotalsResponse(BaseModel):
-    """Response with expense totals keyed by CRM ID."""
+    """Response with expense totals keyed by Sub ID."""
 
     totals: dict[str, ExpenseTotals] = Field(default_factory=dict)
 
 
-# ============ Inventory Sync (ERP → CRM) ============
+# ============ Inventory Sync (ERP → Sub) ============
 
 
 class InventoryItemStock(BaseModel):
-    """Single item with stock levels for CRM installations."""
+    """Single item with stock levels for Sub installations."""
 
     item_id: UUID
     item_code: str
@@ -422,7 +434,7 @@ class InventoryItemStock(BaseModel):
     barcode: str | None = None
     is_below_reorder: bool = False
 
-    # Computed aliases for CRM client backward compatibility
+    # Computed aliases for Sub client backward compatibility
     @computed_field  # type: ignore[prop-decorator]
     @property
     def stock_uom(self) -> str:
@@ -472,8 +484,8 @@ class InventoryItemDetail(BaseModel):
     warehouses: list[WarehouseStock] = Field(default_factory=list)
 
 
-class CRMAvailableSerialRead(BaseModel):
-    """Available serial unit for CRM material request selection."""
+class SubAvailableSerialRead(BaseModel):
+    """Available serial unit for Sub material request selection."""
 
     serial_id: UUID
     serial_number: str
@@ -482,7 +494,7 @@ class CRMAvailableSerialRead(BaseModel):
     warehouse_code: str
 
 
-class CRMAvailableSerialListResponse(BaseModel):
+class SubAvailableSerialListResponse(BaseModel):
     """Available serials for one item and warehouse."""
 
     item_code: str
@@ -490,7 +502,7 @@ class CRMAvailableSerialListResponse(BaseModel):
     warehouse_code: str
     warehouse_name: str
     track_serial_numbers: bool
-    serials: list[CRMAvailableSerialRead] = Field(default_factory=list)
+    serials: list[SubAvailableSerialRead] = Field(default_factory=list)
     total_count: int = 0
     has_more: bool = False
 
@@ -503,11 +515,11 @@ class InventoryListResponse(BaseModel):
     has_more: bool = False
 
 
-# ============ Workforce / Department Sync (ERP → CRM) ============
+# ============ Workforce / Department Sync (ERP → Sub) ============
 
 
 class DepartmentMemberRead(BaseModel):
-    """Member of a department for CRM workforce sync."""
+    """Member of a department for Sub workforce sync."""
 
     employee_id: UUID
     email: str | None = None
@@ -519,7 +531,7 @@ class DepartmentMemberRead(BaseModel):
 
 
 class DepartmentRead(BaseModel):
-    """Department data for CRM service team mapping."""
+    """Department data for Sub service team mapping."""
 
     department_id: str
     department_name: str
@@ -538,7 +550,7 @@ class DepartmentListResponse(BaseModel):
 
 
 class WorkforceEmployeeRead(BaseModel):
-    """Employee row for CRM workforce lookup."""
+    """Employee row for Sub workforce lookup."""
 
     employee_id: UUID
     email: str
@@ -558,11 +570,11 @@ class WorkforceEmployeeListResponse(BaseModel):
     has_more: bool = False
 
 
-# ============ Contact Sync (ERP → CRM) ============
+# ============ Contact Sync (ERP → Sub) ============
 
 
 class CompanyContactRead(BaseModel):
-    """Company/government customer for CRM contacts sync."""
+    """Company/government customer for Sub contacts sync."""
 
     customer_id: UUID
     customer_code: str
@@ -570,7 +582,7 @@ class CompanyContactRead(BaseModel):
     tax_id: str | None = None
     billing_address: dict | None = None
     primary_contact: dict | None = None
-    crm_id: str | None = None
+    source_reference: str | None = None
 
 
 class CompanyListResponse(BaseModel):
@@ -584,14 +596,14 @@ class CompanyListResponse(BaseModel):
 
 
 class PersonContactRead(BaseModel):
-    """Individual customer as a person contact for CRM sync."""
+    """Individual customer as a person contact for Sub sync."""
 
     contact_id: UUID
     customer_code: str
     legal_name: str
     email: str | None = None
     phone: str | None = None
-    crm_id: str | None = None
+    source_reference: str | None = None
 
 
 class PersonListResponse(BaseModel):
@@ -604,11 +616,11 @@ class PersonListResponse(BaseModel):
     has_more: bool = False
 
 
-# ============ Material Request Sync (CRM → ERP) ============
+# ============ Material Request Sync (Sub → ERP) ============
 
 
-class CRMMaterialRequestItemPayload(BaseModel):
-    """Single item in a CRM material request."""
+class SubMaterialRequestItemPayload(BaseModel):
+    """Single item in a Sub material request."""
 
     item_code: str = Field(..., max_length=50)
     quantity: Decimal = Field(..., gt=0)
@@ -623,11 +635,11 @@ class CRMMaterialRequestItemPayload(BaseModel):
     )
 
 
-class CRMMaterialRequestPayload(BaseModel):
-    """Material request from DotMac CRM."""
+class SubMaterialRequestPayload(BaseModel):
+    """Material request from Dotmac Sub."""
 
-    omni_id: str = Field(
-        ..., max_length=36, description="CRM-side unique ID for idempotency"
+    source_request_id: str = Field(
+        ..., max_length=36, description="Sub-side unique ID for idempotency"
     )
     request_type: str = Field(
         "ISSUE", description="PURCHASE, TRANSFER, ISSUE, MANUFACTURE"
@@ -635,28 +647,34 @@ class CRMMaterialRequestPayload(BaseModel):
     status: str = Field(
         ...,
         description=(
-            "CRM request status mapped to local MaterialRequest status "
+            "Sub request status mapped to local MaterialRequest status "
             "(e.g. submitted, issued)"
         ),
     )
-    items: list[CRMMaterialRequestItemPayload] = Field(..., min_length=1)
-    project_crm_id: str | None = Field(None, max_length=36)
-    ticket_crm_id: str | None = Field(None, max_length=36)
+    items: list[SubMaterialRequestItemPayload] = Field(..., min_length=1)
+    project_source_reference: str | None = Field(
+        None,
+        max_length=36,
+    )
+    ticket_source_reference: str | None = Field(
+        None,
+        max_length=36,
+    )
     requested_by_email: str | None = Field(None, max_length=255)
     schedule_date: str | None = Field(None, description="YYYY-MM-DD schedule date")
     remarks: str | None = None
 
 
-class CRMMaterialRequestResponse(BaseModel):
-    """Response after creating a material request from CRM."""
+class SubMaterialRequestResponse(BaseModel):
+    """Response after creating a material request from Sub."""
 
     request_id: UUID
     request_number: str
     status: str
-    omni_id: str
+    source_request_id: str
 
 
-class CRMMaterialRequestItemRead(BaseModel):
+class SubMaterialRequestItemRead(BaseModel):
     """Item detail in a material request status response."""
 
     item_code: str
@@ -667,22 +685,22 @@ class CRMMaterialRequestItemRead(BaseModel):
     serial_numbers: list[str] | None = None
 
 
-class CRMMaterialRequestStatusRead(BaseModel):
-    """Full status of a material request for CRM."""
+class SubMaterialRequestStatusRead(BaseModel):
+    """Full status of a material request for Sub."""
 
     request_id: UUID
     request_number: str
     status: str
     request_type: str
-    items: list[CRMMaterialRequestItemRead] = Field(default_factory=list)
+    items: list[SubMaterialRequestItemRead] = Field(default_factory=list)
     created_at: datetime
 
 
-# ============ Expense Claim Sync (CRM → ERP) ============
+# ============ Expense Claim Sync (Sub → ERP) ============
 
 
-class CRMExpenseClaimItemPayload(BaseModel):
-    """Single expense line in a CRM field-technician expense request."""
+class SubExpenseClaimItemPayload(BaseModel):
+    """Single expense line in a Sub field-technician expense request."""
 
     category_code: str = Field(..., min_length=1, max_length=30)
     description: str = Field(..., min_length=1, max_length=500)
@@ -695,36 +713,42 @@ class CRMExpenseClaimItemPayload(BaseModel):
     notes: str | None = None
 
 
-class CRMExpenseClaimPayload(BaseModel):
-    """Expense claim from DotMac CRM (field-technician expense request)."""
+class SubExpenseClaimPayload(BaseModel):
+    """Expense claim from Dotmac Sub (field-technician expense request)."""
 
-    omni_id: str = Field(
-        ..., max_length=36, description="CRM expense request UUID for idempotency"
+    source_claim_id: str = Field(
+        ..., max_length=36, description="Sub expense request UUID for idempotency"
     )
     purpose: str = Field(..., min_length=1, max_length=500)
     claim_date: str = Field(..., description="YYYY-MM-DD claim date")
     requested_by_email: str = Field(..., min_length=3, max_length=255)
-    ticket_crm_id: str | None = Field(None, max_length=36)
-    project_crm_id: str | None = Field(None, max_length=36)
+    ticket_source_reference: str | None = Field(
+        None,
+        max_length=36,
+    )
+    project_source_reference: str | None = Field(
+        None,
+        max_length=36,
+    )
     currency_code: str | None = Field(None, min_length=3, max_length=3)
     remarks: str | None = None
     reference_number: str | None = Field(
-        None, max_length=50, description="CRM expense request number"
+        None, max_length=50, description="Sub expense request number"
     )
-    items: list[CRMExpenseClaimItemPayload] = Field(..., min_length=1)
+    items: list[SubExpenseClaimItemPayload] = Field(..., min_length=1)
 
 
-class CRMExpenseClaimResponse(BaseModel):
-    """Response after creating an expense claim from CRM."""
+class SubExpenseClaimResponse(BaseModel):
+    """Response after creating an expense claim from Sub."""
 
     claim_id: UUID
     claim_number: str
     status: str
-    omni_id: str
+    source_claim_id: str
 
 
-class CRMExpenseClaimStatusResponse(BaseModel):
-    """Expense claim status for CRM polling."""
+class SubExpenseClaimStatusResponse(BaseModel):
+    """Expense claim status for Sub polling."""
 
     claim_id: UUID
     claim_number: str
@@ -733,11 +757,11 @@ class CRMExpenseClaimStatusResponse(BaseModel):
     paid_on: date | None = None
     total_claimed_amount: Decimal
     total_approved_amount: Decimal | None = None
-    omni_id: str
+    source_claim_id: str
 
 
-class CRMExpenseCategoryItem(BaseModel):
-    """Active expense category exposed to the CRM expense-request form."""
+class SubExpenseCategoryItem(BaseModel):
+    """Active expense category exposed to the Sub expense-request form."""
 
     category_code: str
     category_name: str
@@ -745,17 +769,17 @@ class CRMExpenseCategoryItem(BaseModel):
     max_amount_per_claim: Decimal | None = None
 
 
-class CRMExpenseCategoriesResponse(BaseModel):
-    """Response with active expense categories for CRM."""
+class SubExpenseCategoriesResponse(BaseModel):
+    """Response with active expense categories for Sub."""
 
-    items: list[CRMExpenseCategoryItem] = Field(default_factory=list)
-
-
-# ============ Purchase Order Sync (CRM → ERP) ============
+    items: list[SubExpenseCategoryItem] = Field(default_factory=list)
 
 
-class CRMPurchaseOrderItemPayload(BaseModel):
-    """Single line item in a CRM purchase order."""
+# ============ Purchase Order Sync (Sub → ERP) ============
+
+
+class SubPurchaseOrderItemPayload(BaseModel):
+    """Single line item in a Sub purchase order."""
 
     item_type: str = Field(..., max_length=50)
     description: str = Field(..., max_length=500)
@@ -768,14 +792,14 @@ class CRMPurchaseOrderItemPayload(BaseModel):
     notes: str | None = None
 
 
-class CRMPurchaseOrderPayload(BaseModel):
-    """Purchase order from DotMac CRM (triggered on vendor quote approval)."""
+class SubPurchaseOrderPayload(BaseModel):
+    """Purchase order from Dotmac Sub (triggered on vendor quote approval)."""
 
-    omni_work_order_id: str = Field(
-        ..., max_length=36, description="CRM work order ID for idempotency"
+    source_work_order_id: str = Field(
+        ..., max_length=36, description="Sub work order ID for idempotency"
     )
-    omni_quote_id: str | None = Field(None, max_length=36)
-    omni_project_id: str | None = Field(None, max_length=36)
+    source_quote_id: str | None = Field(None, max_length=36)
+    source_project_id: str | None = Field(None, max_length=36)
     project_code: str | None = Field(None, max_length=80)
     project_name: str | None = Field(None, max_length=200)
     vendor_erp_id: str | None = Field(None, max_length=255)
@@ -788,60 +812,23 @@ class CRMPurchaseOrderPayload(BaseModel):
     total: Decimal
     approved_at: datetime | None = None
     approved_by_email: str | None = Field(None, max_length=255)
-    items: list[CRMPurchaseOrderItemPayload] = Field(..., min_length=1)
+    items: list[SubPurchaseOrderItemPayload] = Field(..., min_length=1)
 
 
-class CRMPurchaseOrderVariationPayload(BaseModel):
-    """Variation/amendment payload for an existing PO from CRM.
-
-    Sent when a CRM work order has an approved variation (scope change,
-    price adjustment, etc.).  The ERP creates a new amendment PO linked
-    to the baseline, superseding the original.
-    """
-
-    omni_work_order_id: str = Field(
-        ..., max_length=36, description="CRM work order ID (same as baseline)"
-    )
-    variation_id: str = Field(
-        ..., max_length=36, description="Unique CRM variation identifier"
-    )
-    variation_version: int = Field(
-        ..., ge=2, description="Monotonic version (2 = first amendment)"
-    )
-    amendment_reason: str = Field(
-        ..., max_length=500, description="Reason for the variation"
-    )
-    omni_quote_id: str | None = Field(None, max_length=36)
-    omni_project_id: str | None = Field(None, max_length=36)
-    project_code: str | None = Field(None, max_length=80)
-    project_name: str | None = Field(None, max_length=200)
-    vendor_erp_id: str | None = Field(None, max_length=255)
-    vendor_name: str | None = Field(None, max_length=255)
-    vendor_code: str | None = Field(None, max_length=30)
-    title: str = Field(..., max_length=500)
-    currency: str = Field(settings.default_functional_currency_code, max_length=3)
-    subtotal: Decimal
-    tax_total: Decimal = Decimal("0")
-    total: Decimal
-    approved_at: datetime | None = None
-    approved_by_email: str | None = Field(None, max_length=255)
-    items: list[CRMPurchaseOrderItemPayload] = Field(..., min_length=1)
-
-
-class CRMPurchaseOrderResponse(BaseModel):
-    """Response after creating a purchase order from CRM."""
+class SubPurchaseOrderResponse(BaseModel):
+    """Response after creating a purchase order from Sub."""
 
     purchase_order_id: str
     po_id: UUID
     status: str
-    omni_work_order_id: str
+    source_work_order_id: str
     is_amendment: bool = False
     variation_id: str | None = None
     amendment_version: int = 1
     superseded_po_id: UUID | None = None
 
 
-class CRMPurchaseInvoiceItemPayload(BaseModel):
+class SubPurchaseInvoiceItemPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     item_type: str | None = Field(None, max_length=80)
@@ -858,35 +845,16 @@ class CRMPurchaseInvoiceItemPayload(BaseModel):
     )
 
 
-class CRMPurchaseInvoicePayload(BaseModel):
-    """Approved vendor invoice originated by CRM/Sub and matched to an ERP PO."""
+class SubPurchaseInvoicePayload(BaseModel):
+    """Approved vendor invoice originated by Sub/Sub and matched to an ERP PO."""
 
     model_config = ConfigDict(extra="forbid")
 
-    crm_invoice_id: str = Field(
-        ...,
-        min_length=1,
-        max_length=36,
-        validation_alias=AliasChoices("source_invoice_id", "crm_invoice_id"),
-    )
-    crm_invoice_number: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        validation_alias=AliasChoices("source_invoice_number", "crm_invoice_number"),
-    )
-    crm_project_id: str = Field(
-        ...,
-        min_length=1,
-        max_length=36,
-        validation_alias=AliasChoices("source_project_id", "crm_project_id"),
-    )
+    source_invoice_id: str = Field(..., min_length=1, max_length=36)
+    source_invoice_number: str = Field(..., min_length=1, max_length=100)
+    source_project_id: str = Field(..., min_length=1, max_length=36)
     installation_project_id: str = Field(..., min_length=1, max_length=36)
-    crm_quote_id: str | None = Field(
-        None,
-        max_length=36,
-        validation_alias=AliasChoices("source_quote_id", "crm_quote_id"),
-    )
+    source_quote_id: str | None = Field(None, max_length=36)
     erp_purchase_order_id: str = Field(..., min_length=1, max_length=100)
     vendor_erp_id: str | None = Field(None, max_length=255)
     vendor_name: str = Field(..., min_length=1, max_length=255)
@@ -903,7 +871,7 @@ class CRMPurchaseInvoicePayload(BaseModel):
     total: Decimal = Field(..., gt=0)
     approved_at: datetime | None = None
     approved_by_email: str | None = Field(None, max_length=255)
-    items: list[CRMPurchaseInvoiceItemPayload] = Field(..., min_length=1)
+    items: list[SubPurchaseInvoiceItemPayload] = Field(..., min_length=1)
 
     # Pre-coercion strings-only enforcement for the header money facts (see
     # ``_require_wire_money_string`` for the wire policy).
@@ -912,8 +880,8 @@ class CRMPurchaseInvoicePayload(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_boundary_money(self) -> CRMPurchaseInvoicePayload:
-        """E4 fail-closed money boundary for the Sub/CRM payables command.
+    def _validate_boundary_money(self) -> SubPurchaseInvoicePayload:
+        """E4 fail-closed money boundary for the Sub/Sub payables command.
 
         Header totals and line amounts must be exact in the document
         currency's minor units (typed kernel Money at the boundary; no
@@ -931,7 +899,7 @@ class CRMPurchaseInvoicePayload(BaseModel):
         rates/quantities and deliberately stay plain decimals. ERP-internal
         AP posting/tax precision is unchanged.
         """
-        label = f"purchase invoice {self.crm_invoice_id}"
+        label = f"purchase invoice {self.source_invoice_id}"
         minor_units = boundary_currency(
             self.currency, field=f"{label} currency"
         ).minor_units
@@ -958,15 +926,15 @@ class CRMPurchaseInvoicePayload(BaseModel):
         return self
 
 
-class CRMPurchaseInvoiceResponse(BaseModel):
+class SubPurchaseInvoiceResponse(BaseModel):
     purchase_invoice_id: str
     invoice_id: UUID
     invoice_number: str
     status: str
-    crm_invoice_id: str
+    source_invoice_id: str
 
 
-class CRMPurchaseInvoiceAttachmentPayload(BaseModel):
+class SubPurchaseInvoiceAttachmentPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     file_name: str = Field(..., min_length=1, max_length=255)
@@ -974,7 +942,7 @@ class CRMPurchaseInvoiceAttachmentPayload(BaseModel):
     content_base64: str = Field(..., min_length=1)
 
 
-class CRMPurchaseInvoiceAttachmentResponse(BaseModel):
+class SubPurchaseInvoiceAttachmentResponse(BaseModel):
     attachment_id: UUID
     purchase_invoice_id: UUID
     file_name: str

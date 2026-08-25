@@ -1,6 +1,6 @@
-"""Inventory item, category and warehouse views for CRM.
+"""Inventory item, category and warehouse views for Sub.
 
-Extracted from the former monolithic dotmac_crm_sync_service.
+Extracted from the former monolithic dotmac_sub_sync_service.
 """
 
 from __future__ import annotations
@@ -24,34 +24,34 @@ from app.config import settings
 if TYPE_CHECKING:
     from app.models.finance.ap.supplier import Supplier  # noqa: F401
 
-from app.schemas.sync.dotmac_crm import (
-    CRMAvailableSerialListResponse,
-    CRMAvailableSerialRead,
-    CRMInventoryItemPayload,
-    CRMInventoryItemResponse,
+from app.schemas.sync.sub_operational import (
+    SubAvailableSerialListResponse,
+    SubAvailableSerialRead,
+    SubInventoryItemPayload,
+    SubInventoryItemResponse,
     InventoryItemDetail,
     InventoryItemStock,
     InventoryListResponse,
     WarehouseStock,
 )
 
-# CRM → ERP translation policy lives in crm_mappings (pure, side-effect-free).
+# Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
 # Re-imported here so the canonical import sites
-# (`from ...dotmac_crm_sync_service import PROJECT_STATUS_MAP`) and the in-class
+# (`from ...dotmac_sub_sync_service import PROJECT_STATUS_MAP`) and the in-class
 # references keep resolving against this module's namespace.
 
-from app.services.sync.crm.base import _CRMSyncBase
+from app.services.sync.sub.base import _SubSyncBase
 
 logger = logging.getLogger(__name__)
 
 
-class _InventoryMixin(_CRMSyncBase):
+class _InventoryMixin(_SubSyncBase):
     def upsert_inventory_item(
         self,
         org_id: UUID,
-        data: CRMInventoryItemPayload,
-    ) -> CRMInventoryItemResponse:
-        """Create or update an ERP inventory item from CRM payload."""
+        data: SubInventoryItemPayload,
+    ) -> SubInventoryItemResponse:
+        """Create or update an ERP inventory item from Sub payload."""
         from app.models.inventory.item import CostingMethod, Item, ItemType
         from app.models.inventory.item_category import ItemCategory
 
@@ -87,7 +87,7 @@ class _InventoryMixin(_CRMSyncBase):
                     "No active item category available in ERP for this organization"
                 )
         if category is None:
-            raise ValueError("No item category available for CRM item sync")
+            raise ValueError("No item category available for Sub item sync")
 
         item = self.db.scalar(
             select(Item).where(
@@ -113,8 +113,8 @@ class _InventoryMixin(_CRMSyncBase):
             item.reorder_point = data.reorder_point
             item.barcode = data.barcode
             item.is_active = data.is_active
-            # Reuse sync-tracking fields for CRM source correlation.
-            item.erpnext_id = data.crm_id
+            # Reuse sync-tracking fields for Sub source correlation.
+            item.erpnext_id = data.source_reference
             item.last_synced_at = datetime.now(UTC)
             status = "updated"
         else:
@@ -141,7 +141,7 @@ class _InventoryMixin(_CRMSyncBase):
                 is_active=data.is_active,
                 is_purchaseable=True,
                 is_saleable=True,
-                erpnext_id=data.crm_id,
+                erpnext_id=data.source_reference,
                 last_synced_at=datetime.now(UTC),
             )
             self.db.add(item)
@@ -149,16 +149,16 @@ class _InventoryMixin(_CRMSyncBase):
 
         self.db.flush()
         logger.info(
-            "Upserted CRM inventory item crm_id=%s item_code=%s status=%s",
-            data.crm_id,
+            "Upserted Sub inventory item source_reference=%s item_code=%s status=%s",
+            data.source_reference,
             item.item_code,
             status,
         )
-        return CRMInventoryItemResponse(
+        return SubInventoryItemResponse(
             item_id=item.item_id,
             item_code=item.item_code,
             status=status,
-            crm_id=data.crm_id,
+            source_reference=data.source_reference,
         )
 
     def list_inventory_items(
@@ -174,7 +174,7 @@ class _InventoryMixin(_CRMSyncBase):
         offset: int = 0,
     ) -> InventoryListResponse:
         """
-        List inventory items with current stock levels for CRM.
+        List inventory items with current stock levels for Sub.
 
         Uses batch stock loading (2 queries) instead of per-item queries.
 
@@ -532,7 +532,7 @@ class _InventoryMixin(_CRMSyncBase):
             for wh_id, code, name in results
         ]
 
-    def list_available_serials_for_crm(
+    def list_available_serials_for_sub(
         self,
         org_id: UUID,
         *,
@@ -540,8 +540,8 @@ class _InventoryMixin(_CRMSyncBase):
         warehouse_code: str,
         limit: int = 100,
         offset: int = 0,
-    ) -> CRMAvailableSerialListResponse:
-        """List available serials for one item in one warehouse for CRM selection."""
+    ) -> SubAvailableSerialListResponse:
+        """List available serials for one item in one warehouse for Sub selection."""
         from app.models.inventory.inventory_serial import InventorySerial
         from app.models.inventory.item import Item
         from app.models.inventory.warehouse import Warehouse
@@ -574,7 +574,7 @@ class _InventoryMixin(_CRMSyncBase):
             raise ValueError(f"Warehouse not found: {normalized_warehouse_code}")
 
         if not bool(item.track_serial_numbers):
-            return CRMAvailableSerialListResponse(
+            return SubAvailableSerialListResponse(
                 item_code=item.item_code,
                 item_name=item.item_name,
                 warehouse_code=warehouse.warehouse_code,
@@ -610,7 +610,7 @@ class _InventoryMixin(_CRMSyncBase):
             serial_rows = serial_rows[:limit]
 
         serials = [
-            CRMAvailableSerialRead(
+            SubAvailableSerialRead(
                 serial_id=row.serial_id,
                 serial_number=row.serial_number,
                 status=row.status,
@@ -619,7 +619,7 @@ class _InventoryMixin(_CRMSyncBase):
             )
             for row in serial_rows
         ]
-        return CRMAvailableSerialListResponse(
+        return SubAvailableSerialListResponse(
             item_code=item.item_code,
             item_name=item.item_name,
             warehouse_code=warehouse.warehouse_code,
