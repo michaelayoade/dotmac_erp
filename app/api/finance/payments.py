@@ -21,7 +21,10 @@ from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.payments.payment_intent import PaymentIntentStatus
 from app.rls import set_current_organization_sync
-from app.services.auth_dependencies import require_tenant_permission
+from app.services.auth_dependencies import (
+    has_live_admin_grant,
+    require_tenant_permission,
+)
 from app.services.common import coerce_uuid
 from app.services.finance.payments import (
     PaymentService,
@@ -65,15 +68,92 @@ def get_db():
         db.close()
 
 
-def require_expense_reimburse_access(
-    auth=Depends(require_tenant_auth),
-    db: Session = Depends(get_db_with_org),
-):
-    """
-    Allow finance users and expense approvers to reimburse via Paystack.
+# =============================================================================
+# Reimbursement authorization
+# =============================================================================
+#
+# The reimburse flow used to run through ONE dependency,
+# ``require_expense_reimburse_access``, whose admit set mixed the read
+# permission ``payments:read`` in with the execute permissions and admitted on
+# any intersection. It guarded all five reimburse routes, including
+# ``POST /transfers/{intent_id}/initiate`` — which performs a real Paystack
+# ``POST /transfer``. A principal holding only ``payments:read`` could
+# therefore move money: a read permission bought a disbursement.
+#
+# It is now three guards, tiered by what the route can actually do:
+#
+#   lookup  - provider lookups that write nothing here and nothing at Paystack
+#             (list banks, resolve an account name). ``payments:read`` belongs
+#             on this tier and ONLY on this tier.
+#   prepare - mutates local payout state and Paystack recipient state, but
+#             moves no money (create / reset a payment intent).
+#   execute - sends the money. ONE exact permission, no list, no intersection,
+#             no blanket module scope.
+#
+# Each guard declares the permission set it admits on the function object
+# (``authorized_permissions``) so
+# ``tests/architecture/test_money_routes_reject_read_permissions.py`` can read
+# the authorization of a mounted route statically. A mutating payments route
+# whose guard does not declare its set fails that test as unmonitored.
 
-    This covers the reimburse UI flow (list banks, resolve account, initialize
-    transfer, initiate transfer).
+
+def _declares(*permissions: str):
+    """Record, on a guard, the exact permission set it admits.
+
+    A guard's admit set is otherwise only visible by reading its body, which
+    is how ``payments:read`` sat unnoticed in a payout admit set. Declaring it
+    makes the set machine-readable for the architecture gate.
+    """
+
+    def _decorate(guard):
+        guard.authorized_permissions = frozenset(permissions)  # type: ignore[attr-defined]
+        return guard
+
+    return _decorate
+
+
+# Lookup tier: unchanged from the historic admit set. These routes read from
+# Paystack and write nothing, so a read permission is correct here.
+PAYMENTS_LOOKUP_PERMISSIONS: tuple[str, ...] = (
+    "payments:read",
+    "payments:expense:initialize",
+    "payments:transfer:initiate",
+    "expense:claims:reimburse",
+    "expense:claims:approve:tier1",
+    "expense:claims:approve:tier2",
+    "expense:claims:approve:tier3",
+)
+
+# Prepare tier: the historic admit set MINUS ``payments:read``. That single
+# removal is the whole change on this tier — every other principal the old
+# guard admitted is still admitted. Narrowing the tier approvers out of payout
+# preparation is a separate, product-owned decision and is deliberately not
+# made here.
+EXPENSE_PAYOUT_PREPARE_PERMISSIONS: tuple[str, ...] = (
+    "payments:expense:initialize",
+    "payments:transfer:initiate",
+    "expense:claims:reimburse",
+    "expense:claims:approve:tier1",
+    "expense:claims:approve:tier2",
+    "expense:claims:approve:tier3",
+)
+
+# Execute tier: the disbursement itself. Exactly one permission.
+EXPENSE_PAYOUT_EXECUTE_PERMISSION = "payments:transfer:initiate"
+
+
+def _admit_by_any_permission(
+    auth: dict,
+    db: Session,
+    permissions: tuple[str, ...],
+) -> dict:
+    """Historic ``require_expense_reimburse_access`` admit logic, verbatim.
+
+    Kept intact for the lookup and prepare tiers so this change does not alter
+    who can reach a non-disbursing route. The ``admin`` role and the
+    ``finance:access`` module scope still short-circuit here; see
+    :func:`require_expense_payout_execute_access` for why neither does on the
+    execute tier.
     """
     roles = set(auth.get("roles") or [])
     if "admin" in roles:
@@ -83,16 +163,7 @@ def require_expense_reimburse_access(
     if "finance:access" in scopes:
         return auth
 
-    allowed_permissions = [
-        "payments:read",
-        "payments:expense:initialize",
-        "payments:transfer:initiate",
-        "expense:claims:reimburse",
-        "expense:claims:approve:tier1",
-        "expense:claims:approve:tier2",
-        "expense:claims:approve:tier3",
-    ]
-    if scopes.intersection(allowed_permissions):
+    if scopes.intersection(permissions):
         return auth
 
     person_id = auth.get("person_id")
@@ -101,10 +172,100 @@ def require_expense_reimburse_access(
         if AuthorizationService.check_any_permission(
             db,
             coerce_uuid(person_id),
-            allowed_permissions,
+            list(permissions),
             coerce_uuid(organization_id),
         ):
             return auth
+
+    raise HTTPException(status_code=403, detail="Forbidden")
+
+
+@_declares(*PAYMENTS_LOOKUP_PERMISSIONS)
+def require_payments_lookup_access(
+    auth=Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """READ tier: Paystack bank list and account-name resolution.
+
+    These routes read from the payment provider and write nothing, locally or
+    at Paystack, so ``payments:read`` is a correct admit here.
+    """
+    return _admit_by_any_permission(auth, db, PAYMENTS_LOOKUP_PERMISSIONS)
+
+
+@_declares(*EXPENSE_PAYOUT_PREPARE_PERMISSIONS)
+def require_expense_payout_prepare_access(
+    auth=Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """PREPARE tier: create or reset an expense payout intent.
+
+    No money moves on these routes, but they are not reads: they create a
+    Paystack transfer recipient, write ``recipient_account_name`` onto the
+    claim, insert a ``PaymentIntent``, or abandon an existing one so a payout
+    can be retried. A read permission must not reach any of that.
+    """
+    return _admit_by_any_permission(auth, db, EXPENSE_PAYOUT_PREPARE_PERMISSIONS)
+
+
+@_declares(EXPENSE_PAYOUT_EXECUTE_PERMISSION)
+def require_expense_payout_execute_access(
+    auth=Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """EXECUTE tier: the outbound transfer. Money leaves the account here.
+
+    Exactly one permission, ``payments:transfer:initiate``. The check is set
+    MEMBERSHIP, so it is an exact string equality against each held scope —
+    never an intersection over a list, a ``startswith``, or an ``in`` over a
+    string. Neither ``payments:transfer`` nor a longer
+    ``payments:transfer:initiate:review`` satisfies it.
+
+    In practice the grant is read from the DATABASE, not the token:
+    ``auth_flow._load_rbac_claims`` puts only module-access keys in a JWT, and
+    ``payments:transfer:initiate`` is not one, so the scope branch below is a
+    fast path for a token that carries it while the real answer comes from
+    ``person_roles`` per request. That is the desired shape for a disbursement
+    — revoking the grant takes effect immediately rather than at token expiry.
+    ``scripts/seed_rbac.py`` grants it to ``expense_admin``,
+    ``expense_processor`` and ``expense_reimburser``: exactly the roles that
+    could already reach this route through the old shared guard.
+
+    ``finance:access`` deliberately no longer short-circuits. It is a
+    module-access scope granted to a dozen roles by ``scripts/seed_rbac.py``
+    and it is one of the few permissions that JWTs actually carry
+    (``auth_flow._load_rbac_claims`` restricts token scopes to module-access
+    keys). A blanket "can see the finance module" scope satisfying a
+    disbursement guard is the same defect one level up, so it is gone from
+    this tier. Operators who reimburse must hold
+    ``payments:transfer:initiate``.
+
+    The ``admin`` role is preserved as an authority path, but it is no longer
+    taken from the TOKEN. A token's ``roles`` claim is a login-time snapshot:
+    revoking someone's admin role leaves every already-issued token asserting
+    it until that token expires. On a payout that window is a removed
+    administrator who can still move money, so the grant is re-asked of the
+    live tables per request via
+    :func:`app.services.auth_dependencies.has_live_admin_grant` — the function
+    extracted for exactly this hazard.
+    """
+    scopes = set(auth.get("scopes") or [])
+    if EXPENSE_PAYOUT_EXECUTE_PERMISSION in scopes:
+        return auth
+
+    person_id = auth.get("person_id")
+    organization_id = auth.get("organization_id")
+    if person_id and organization_id:
+        if AuthorizationService.check_permission(
+            db,
+            coerce_uuid(person_id),
+            EXPENSE_PAYOUT_EXECUTE_PERMISSION,
+            coerce_uuid(organization_id),
+        ):
+            return auth
+
+    if has_live_admin_grant(db, person_id):
+        return auth
 
     raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -449,7 +610,7 @@ def verify_payment(
 def list_banks(
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
-    auth: dict = Depends(require_expense_reimburse_access),
+    auth: dict = Depends(require_payments_lookup_access),
 ):
     """
     List supported banks for transfers.
@@ -479,7 +640,7 @@ def resolve_bank_account(
     request_data: ResolveAccountRequest,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
-    auth: dict = Depends(require_expense_reimburse_access),
+    auth: dict = Depends(require_payments_lookup_access),
 ):
     """
     Resolve a bank account to verify it exists and get the account name.
@@ -521,7 +682,7 @@ def initialize_expense_payment(
     request_data: InitializeExpensePaymentRequest,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
-    auth: dict = Depends(require_expense_reimburse_access),
+    auth: dict = Depends(require_expense_payout_prepare_access),
 ):
     """
     Initialize an expense reimbursement payment (transfer).
@@ -589,7 +750,7 @@ def reset_expense_payment_intent(
     request_data: ResetExpensePaymentIntentRequest,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
-    auth: dict = Depends(require_expense_reimburse_access),
+    auth: dict = Depends(require_expense_payout_prepare_access),
 ):
     """
     Reset a non-completed expense payment intent so reimbursement can be retried.
@@ -628,7 +789,7 @@ def initiate_transfer(
     intent_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
-    auth: dict = Depends(require_expense_reimburse_access),
+    auth: dict = Depends(require_expense_payout_execute_access),
 ):
     """
     Initiate a Paystack transfer for an expense reimbursement.
@@ -636,7 +797,10 @@ def initiate_transfer(
     The payment intent must have been created with /initialize/expense first.
     This actually sends the money to the recipient's bank account.
 
-    Authorization: Requires appropriate permission to process payments.
+    Authorization: requires the exact ``payments:transfer:initiate``
+    permission (or a live ``admin`` grant). A read permission, or the
+    ``finance:access`` module scope, is NOT sufficient — see
+    :func:`require_expense_payout_execute_access`.
     """
     set_payment_tenant_context(db, organization_id)
 

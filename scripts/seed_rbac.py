@@ -392,6 +392,22 @@ FINANCE_PERMISSIONS = [
     ("payments:intents:create", "Create payment intents"),
     ("payments:webhooks:manage", "Manage payment webhooks"),
     ("payments:settings:manage", "Manage payment gateway settings"),
+    # Expense reimbursement payouts. These three are TIERED and are graded by
+    # what the holder can cause, not by which screen they sit behind:
+    #   read       - provider lookups (bank list, account-name resolution)
+    #   initialize - prepares a payout: creates the Paystack transfer
+    #                recipient and the local PaymentIntent. No money moves.
+    #   initiate   - EXECUTES the outbound transfer. Money leaves the account.
+    # Keep them separately grantable. `payments:transfer:initiate` is the
+    # disbursement authority and is the ONLY thing that satisfies
+    # `require_expense_payout_execute_access`; see the guard tiers in
+    # app/api/finance/payments.py.
+    ("payments:read", "View payment intents and resolve bank details"),
+    ("payments:expense:initialize", "Prepare an expense reimbursement payout"),
+    (
+        "payments:transfer:initiate",
+        "Execute an outbound expense transfer (moves money)",
+    ),
     # -------------------------------------------------------------------------
     # Automation
     # -------------------------------------------------------------------------
@@ -2433,6 +2449,12 @@ ROLE_PERMISSIONS = {
         "expense:claims:approve:tier3",
         "expense:claims:reject",
         "expense:claims:reimburse",
+        # Payout tiers. Granted here because these roles could already reach
+        # the transfer through the old shared reimburse guard; splitting that
+        # guard must not take the capability away from its intended holders.
+        "payments:read",
+        "payments:expense:initialize",
+        "payments:transfer:initiate",
         "expense:claims:post",
         "expense:categories:read",
         "expense:categories:manage",
@@ -2474,6 +2496,12 @@ ROLE_PERMISSIONS = {
         "expense:dashboard",
         "expense:claims:read",
         "expense:claims:reimburse",
+        # Payout tiers. Granted here because these roles could already reach
+        # the transfer through the old shared reimburse guard; splitting that
+        # guard must not take the capability away from its intended holders.
+        "payments:read",
+        "payments:expense:initialize",
+        "payments:transfer:initiate",
         "expense:claims:post",
         "expense:advances:read",
         "expense:advances:disburse",
@@ -2495,6 +2523,12 @@ ROLE_PERMISSIONS = {
         "expense:dashboard",
         "expense:claims:read",
         "expense:claims:reimburse",
+        # Payout tiers. Granted here because these roles could already reach
+        # the transfer through the old shared reimburse guard; splitting that
+        # guard must not take the capability away from its intended holders.
+        "payments:read",
+        "payments:expense:initialize",
+        "payments:transfer:initiate",
         "expense:reports:read",
     ],
     # -------------------------------------------------------------------------
