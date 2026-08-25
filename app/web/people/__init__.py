@@ -30,7 +30,9 @@ from app.web.people.scheduling import router as scheduling_router
 from app.web.people.self_service import router as self_service_router
 from app.web.people.settings import router as settings_router
 from app.web.people.training import router as training_router
-from app.web.people.weekly_meeting_reports import router as weekly_meeting_reports_router
+from app.web.people.weekly_meeting_reports import (
+    router as weekly_meeting_reports_router,
+)
 
 # Create main people web router
 router = APIRouter(prefix="/people", tags=["people-web"])

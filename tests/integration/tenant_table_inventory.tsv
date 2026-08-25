@@ -301,6 +301,9 @@ perf	pms_stakeholder_feedback	direct	false	false	app_admin	0	false	--	--
 perf	scorecard	direct	true	false	app_admin	1	false	--	--
 perf	scorecard_item	direct	true	false	app_admin	1	false	--	--
 perf	strategic_objective	direct	false	false	app_admin	0	false	--	--
+perf	weekly_meeting_action_item	direct	true	true	app_admin	1	false	--	--
+perf	weekly_meeting_participant	direct	true	true	app_admin	1	false	--	--
+perf	weekly_meeting_report	direct	true	true	app_admin	1	false	--	--
 platform	event_handler_checkpoint	unclassified	false	false	app_admin	0	false	--	--
 platform	event_outbox	unclassified	false	false	app_admin	0	false	--	--
 platform	idempotency_record	direct	true	true	app_admin	4	true	--	--
