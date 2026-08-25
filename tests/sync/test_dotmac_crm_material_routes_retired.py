@@ -13,4 +13,3 @@ def test_legacy_crm_material_request_routes_are_not_registered() -> None:
     }
 
     assert retired.isdisjoint(actual)
-
