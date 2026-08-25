@@ -189,17 +189,15 @@ FORCEd RLS; `upgrade heads` is repeatable; and the kernel's composed migration
 gate reports nothing against either module lineage.
 
 **Two head-related corrections, both of which a draft got wrong.** First, ERP
-does not have one global Alembic head and must not expect one — each composed
-module lineage is an independent root with its own branch label, which is why
-the deploy path has always been `alembic upgrade heads`, plural. Second, the
-adoption run showed `alembic_version` held only TWO rows
-(`ac_0001_accounting`, `fi_0001_stored_files`): the prerequisite provider
-`20260820_idempotency_ledger` was subsumed because both modules carry a
+does not have one Alembic head and must not expect one — each composed module
+lineage is an independent root with its own branch label, which is why the
+deploy path has always been `alembic upgrade heads`, plural. Second, the live
+run showed `alembic_version` holds only TWO rows (`ac_0001_accounting`,
+`fi_0001_stored_files`): ERP's own head is subsumed because both modules carry a
 `depends_on` edge onto it, and Alembic treats a depended-upon revision as an
-ancestor. Later ERP revisions remain separately stamped effective heads, so
-the current composed graph has 3 graph heads and 3 stamped rows. The expectation
-is derived from the script directory, and a separate test distinguishes
-"provider subsumed" from "provider never ran" — indistinguishable in the
+ancestor. Graph heads = 3, stamped rows = 2, and both are correct. The
+expectation is derived from the script directory, and a separate test
+distinguishes "subsumed" from "the branch never ran" — indistinguishable in the
 version table alone. `app/migration_bindings.py` now declares
 `COMPOSED_MODULE_LINEAGES` as the checked expectation.
 

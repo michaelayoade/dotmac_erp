@@ -227,21 +227,19 @@ revision `COMPOSED_MODULE_LINEAGES` names, exactly one ERP head, and no
 unintended heads. The last is the one with teeth — a second ERP root or an
 orphaned revision makes `upgrade heads` apply a graph nobody drew.
 
-**And the live run found a second, subtler thing.** At the original adoption
-point, after `upgrade heads`, `alembic_version` held only TWO rows:
+**And the live run found a second, subtler thing.** After `upgrade heads`,
+`alembic_version` holds only TWO rows:
 
 ```
 ac_0001_accounting
 fi_0001_stored_files
 ```
 
-The prerequisite provider, `20260820_idempotency_ledger`, is absent — correctly.
-Both module lineages declare logical prerequisites that ERP's bindings resolve
-onto ERP revisions, so each carries a `depends_on` edge onto that provider, and
-Alembic treats a depended-upon revision as an ancestor of its dependent. It
-stops being an effective head and its row is subsumed. Later ERP revisions are
-not prerequisites of those module revisions, so the current ERP head remains a
-separately stamped effective head.
+ERP's own head, `20260820_idempotency_ledger`, is absent — correctly. Both
+module lineages declare logical prerequisites that ERP's bindings resolve onto
+ERP revisions, so each carries a `depends_on` edge onto ERP's head, and Alembic
+treats a depended-upon revision as an ancestor of its dependent. It stops being
+an effective head and its row is subsumed.
 
 So there are three numbers, not one, and they are all correct:
 
@@ -249,14 +247,14 @@ So there are three numbers, not one, and they are all correct:
 | --- | ---: | --- |
 | graph heads (`alembic heads`) | 3 | one ERP + one per module lineage |
 | depended-upon | 3 ERP revisions | the bound prerequisite providers |
-| stamped rows | derived | graph heads minus those subsumed by `depends_on`; currently 3 |
+| stamped rows | 2 | graph heads minus those subsumed by `depends_on` |
 
 The test derives the expected stamped set from the script directory rather than
 hard-coding 2, because the answer changes with the composition: a future module
 needing no ERP prerequisite would leave ERP's head stamped. A separate test
-distinguishes "subsumed" from "the provider never ran" — those look identical
-in the version table — by requiring the provider revision to be depended upon
-AND its tables to exist.
+distinguishes "subsumed" from "the branch never ran" — those look identical in
+the version table — by requiring the ERP head to be depended upon AND its
+tables to exist.
 
 ### The composed gate must see the whole composition
 
@@ -382,17 +380,6 @@ Each gate is a separate authorized change. None is implied by the one before it.
 - **Gate D — backfill and shadow.** Backfill masters, then periods oldest first,
   comparing each as it lands. Acceptance is `ShadowComparison.matches` at all
   three levels for every period, with the unbalanced-period list empty.
-
-  **Planned in detail: `docs/architecture/accounting-gate-d-plan.md`**, on
-  measured evidence in
-  `docs/inventories/accounting-backfill-survey-2026-08-21.md`. The survey
-  settled the scope rule — backfill exactly the journals that carry posted
-  ledger lines, 190,179 of 206,071 — and cleared the one thing that could have
-  blocked the gate behind a Starter release: ERP's four journal types with no
-  module counterpart have zero rows. Four small data defects are the first work,
-  and with one organization the rehearsal must manufacture a second tenant,
-  because a mis-scoped write would otherwise have no observable symptom.
-
 - **Gate E — dual write and parity.** Both sides post; every posting is compared.
   Divergence is a stop, not a warning.
 - **Gate F — cutover.** One writer at a time, in the order the writer ledger
@@ -408,15 +395,6 @@ Each gate is a separate authorized change. None is implied by the one before it.
   4 `retained_erp_caller` rows, and the ratchets are retired with the authority
   they were tracking. Reaching that state is checkable — it is what the two
   ledgers reduce to, not a judgement call.
-
-  **Additional blocking condition: every remaining APPROVED-but-unposted journal
-  must carry an explicit disposition.** At the 2026-08-21 survey there were
-  14,263, of which at least 2,038 belong to the known stranded repost cohort.
-  Retiring ERP's GL writers while any remain undisposed would strand live
-  workflow state inside a retired system — work someone approved, that was never
-  posted, and that no longer has a system able to post it. The remediation track
-  is described in `accounting-gate-d-plan.md`; it runs in parallel with gate D
-  and blocks here.
 
 Production deployment and any authority move are separate authorizations, and
 neither is granted by this document.

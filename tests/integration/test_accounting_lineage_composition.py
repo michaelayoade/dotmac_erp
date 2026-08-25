@@ -75,7 +75,6 @@ pytestmark = pytest.mark.integration
 
 ACCOUNTING_SCHEMA = "mod_accounting"
 ACCOUNTING_REVISION = "ac_0001_accounting"
-IDEMPOTENCY_PROVIDER_REVISION = "20260820_idempotency_ledger"
 REQUIRED_EFFECTS = (
     "tenant_scope_catalog.v1",
     "module_database_roles.v1",
@@ -238,9 +237,9 @@ def _depended_upon(database_url: URL) -> set[str]:
 
     A module lineage declares logical prerequisites, and ERP's bindings resolve
     them to real ERP revisions — so `ac_0001` and `fi_0001` each carry a
-    `depends_on` edge onto the revision providing the required effect. Alembic
-    treats a depended-upon revision as an ANCESTOR of the dependent one, so it
-    stops being an effective head and its `alembic_version` row is subsumed.
+    `depends_on` edge onto ERP's own head. Alembic treats a depended-upon
+    revision as an ANCESTOR of the dependent one, so it stops being an effective
+    head and its `alembic_version` row is subsumed.
     """
     script = ScriptDirectory.from_config(_config(database_url))
     depended: set[str] = set()
@@ -413,13 +412,12 @@ def test_the_applied_stamp_matches_the_effective_heads(
     This is the subtlety gate C existed to find, and a first draft got it wrong
     by asserting `applied == script_heads`.
 
-    Both module lineages declare logical prerequisites that ERP's bindings
-    resolve onto ERP revisions. The idempotency prerequisite resolves to
-    `20260820_idempotency_ledger`, so `ac_0001_accounting` and
-    `fi_0001_stored_files` each carry a `depends_on` edge onto that provider.
-    Alembic treats the provider as an ancestor of its dependent and subsumes
-    its version row. Later ERP revisions remain effective heads and stay
-    stamped alongside the two module revisions.
+    ERP's own head is `20260820_idempotency_ledger`. Both module lineages
+    declare logical prerequisites that ERP's bindings resolve onto ERP
+    revisions, so `ac_0001_accounting` and `fi_0001_stored_files` each carry a
+    `depends_on` edge onto it. Alembic treats a depended-upon revision as an
+    ancestor of its dependent, so after `upgrade heads` the version table holds
+    exactly the two module revisions and NOT ERP's head:
 
         ac_0001_accounting
         fi_0001_stored_files
@@ -436,20 +434,21 @@ def test_the_applied_stamp_matches_the_effective_heads(
     assert _applied_revisions(composed_database) == _effective_heads(composed_database)
 
 
-def test_idempotency_provider_is_subsumed_rather_than_missing(
+def test_erps_own_head_is_subsumed_rather_than_missing(
     composed_database: URL,
 ) -> None:
-    """Prove the provider's absence is subsumption, not a skipped migration.
+    """Prove the absence above is subsumption, not a branch that failed to run.
 
-    The provider may no longer be ERP's head after later ERP-only migrations.
-    Its absence from `alembic_version` and a provider migration that never ran
+    "ERP's head is not in `alembic_version`" and "ERP's lineage did not finish"
     look identical from the version table. They are distinguished by the
-    `depends_on` edge and by the provider's effects actually being present.
+    `depends_on` edge and by the ERP revision's effects actually being present.
     """
-    assert IDEMPOTENCY_PROVIDER_REVISION not in _applied_revisions(composed_database)
-    assert IDEMPOTENCY_PROVIDER_REVISION in _depended_upon(composed_database), (
-        f"{IDEMPOTENCY_PROVIDER_REVISION} is unstamped and NOT depended upon — "
-        "its branch did not run"
+    erp_head = (
+        _script_heads(composed_database) - set(COMPOSED_MODULE_LINEAGES.values())
+    ).pop()
+    assert erp_head not in _applied_revisions(composed_database)
+    assert erp_head in _depended_upon(composed_database), (
+        f"{erp_head} is unstamped and NOT depended upon — its branch did not run"
     )
 
     engine = create_engine(composed_database)
@@ -461,7 +460,7 @@ def test_idempotency_provider_is_subsumed_rather_than_missing(
                         text("SELECT to_regclass(:name)"), {"name": f"public.{table}"}
                     )
                     is not None
-                ), f"public.{table} missing — the provider revision did not run"
+                ), f"public.{table} missing — ERP's head really did not run"
     finally:
         engine.dispose()
 

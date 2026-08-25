@@ -33,7 +33,6 @@ from app.services.common import coerce_uuid
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.org_context import org_context_service
-from app.services.finance.posting.residue import sum_at_persisted_scale
 from app.services.finance.platform.sequence import SequenceService
 from app.services.formatters import parse_date
 from app.services.response import ListResponseMixin
@@ -88,41 +87,6 @@ class JournalService(ListResponseMixin):
 
     Manages creation, editing, submission, approval, and posting.
     """
-
-    @staticmethod
-    def _require_balanced(
-        lines: list[JournalLineInput],
-    ) -> tuple[Decimal, Decimal]:
-        """Refuse a journal whose debits and credits are not EQUAL.
-
-        This replaced `abs(total_debit - total_credit) > Decimal("0.000001")`,
-        which admitted a difference of exactly one micro-unit — the smallest
-        amount `NUMERIC(20, 6)` can hold. That is not a rounding allowance; it
-        is permission to store an imbalance. `JE202604-40653`, `JE202604-40818`
-        and `JE202604-42111` each passed through this comparison with credits
-        one micro-unit over.
-
-        Totals are taken at persisted scale (quantise each line, then add), so
-        the check asks about the rows the database will actually hold.
-        """
-        total_debit = sum_at_persisted_scale(
-            (line.debit_amount or Decimal("0")) for line in lines
-        )
-        total_credit = sum_at_persisted_scale(
-            (line.credit_amount or Decimal("0")) for line in lines
-        )
-
-        if total_debit != total_credit:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Journal is unbalanced: debits={total_debit}, "
-                    f"credits={total_credit}, "
-                    f"difference={total_debit - total_credit}"
-                ),
-            )
-
-        return total_debit, total_credit
 
     @staticmethod
     def build_input_from_payload(
@@ -275,11 +239,21 @@ class JournalService(ListResponseMixin):
                 status_code=400, detail="Journal must have at least one line"
             )
 
-        # Validate balance. Debits must equal credits EXACTLY once quantised to
-        # the scale the ledger stores — see `_require_balanced` for why the old
-        # `> Decimal("0.000001")` was not that. The totals it returns are the
-        # ones stored on the header, so header and lines cannot disagree.
-        total_debit, total_credit = JournalService._require_balanced(input.lines)
+        # Validate balance
+        total_debit = sum(
+            (l.debit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
+        total_credit = sum(
+            (l.credit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
+
+        if abs(total_debit - total_credit) > Decimal("0.000001"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}",
+            )
 
         # Validate that every line targets an account where posting is allowed.
         # Without this, integration code that hardcodes legacy account IDs
@@ -469,11 +443,21 @@ class JournalService(ListResponseMixin):
                 status_code=400, detail="Journal must have at least one line"
             )
 
-        # Validate balance. Debits must equal credits EXACTLY once quantised to
-        # the scale the ledger stores — see `_require_balanced` for why the old
-        # `> Decimal("0.000001")` was not that. The totals it returns are the
-        # ones stored on the header, so header and lines cannot disagree.
-        total_debit, total_credit = JournalService._require_balanced(input.lines)
+        # Validate balance
+        total_debit = sum(
+            (l.debit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
+        total_credit = sum(
+            (l.credit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
+
+        if abs(total_debit - total_credit) > Decimal("0.000001"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}",
+            )
 
         # Get fiscal period
         period = PeriodGuardService.get_period_for_date(db, org_id, input.posting_date)

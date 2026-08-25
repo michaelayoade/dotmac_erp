@@ -27,9 +27,6 @@ def _build_notification(
         organization_id="org-1",
         channel=None,
         entity_type=entity_type,
-        email_retry_count=0,
-        email_next_retry_at=None,
-        email_dead_lettered=False,
     )
 
 
@@ -76,7 +73,10 @@ def test_process_pending_notification_emails_sends_active_notification() -> None
         mock_session_local.return_value.__enter__.return_value = db
         mock_session_local.return_value.__exit__.return_value = False
         execute_result = MagicMock()
-        execute_result.scalars.return_value.all.return_value = [_build_notification()]
+        execute_result.scalars.return_value.all.side_effect = [
+            [],
+            [_build_notification()],
+        ]
         db.execute.return_value = execute_result
 
         result = process_pending_notification_emails(batch_size=1)
@@ -104,8 +104,9 @@ def test_process_pending_notification_emails_routes_non_leave_to_admin() -> None
         mock_session_local.return_value.__enter__.return_value = db
         mock_session_local.return_value.__exit__.return_value = False
         execute_result = MagicMock()
-        execute_result.scalars.return_value.all.return_value = [
-            _build_notification(entity_type=EntityType.TICKET)
+        execute_result.scalars.return_value.all.side_effect = [
+            [],
+            [_build_notification(entity_type=EntityType.TICKET)],
         ]
         db.execute.return_value = execute_result
 
@@ -131,8 +132,9 @@ def test_process_pending_invoice_mention_email_uses_admin_profile() -> None:
         mock_session_local.return_value.__enter__.return_value = db
         mock_session_local.return_value.__exit__.return_value = False
         execute_result = MagicMock()
-        execute_result.scalars.return_value.all.return_value = [
-            _build_notification(entity_type=EntityType.INVOICE)
+        execute_result.scalars.return_value.all.side_effect = [
+            [],
+            [_build_notification(entity_type=EntityType.INVOICE)],
         ]
         db.execute.return_value = execute_result
 
@@ -158,8 +160,9 @@ def test_process_pending_notification_emails_routes_employee_to_people_payroll()
         mock_session_local.return_value.__enter__.return_value = db
         mock_session_local.return_value.__exit__.return_value = False
         execute_result = MagicMock()
-        execute_result.scalars.return_value.all.return_value = [
-            _build_notification(entity_type=EntityType.EMPLOYEE)
+        execute_result.scalars.return_value.all.side_effect = [
+            [],
+            [_build_notification(entity_type=EntityType.EMPLOYEE)],
         ]
         db.execute.return_value = execute_result
 
@@ -182,8 +185,9 @@ def test_process_pending_notification_emails_skips_when_email_missing() -> None:
         mock_session_local.return_value.__enter__.return_value = db
         mock_session_local.return_value.__exit__.return_value = False
         execute_result = MagicMock()
-        execute_result.scalars.return_value.all.return_value = [
-            _build_notification(email=None)
+        execute_result.scalars.return_value.all.side_effect = [
+            [],
+            [_build_notification(email=None)],
         ]
         db.execute.return_value = execute_result
 
@@ -193,25 +197,3 @@ def test_process_pending_notification_emails_skips_when_email_missing() -> None:
         assert result["sent"] == 0
         assert result["skipped"] == 1
         mock_send_email.assert_not_called()
-
-
-def test_process_pending_notification_emails_backs_off_after_send_failure() -> None:
-    with (
-        patch("app.tasks.notifications.cross_org_session") as mock_session_local,
-        patch("app.tasks.notifications.person_can_receive_email", return_value=True),
-        patch("app.tasks.notifications.send_email", return_value=False),
-    ):
-        from app.tasks.notifications import process_pending_notification_emails
-
-        db = MagicMock()
-        mock_session_local.return_value.__enter__.return_value = db
-        mock_session_local.return_value.__exit__.return_value = False
-        notification = _build_notification()
-        db.execute.return_value.scalars.return_value.all.return_value = [notification]
-
-        result = process_pending_notification_emails(batch_size=1)
-
-    assert result["failed"] == 1
-    assert notification.email_retry_count == 1
-    assert notification.email_next_retry_at is not None
-    assert notification.email_dead_lettered is False

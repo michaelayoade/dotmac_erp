@@ -29,7 +29,6 @@ from app.services.formatting_context import (
 from app.services.settings_spec import (
     DOMAIN_SETTINGS_SERVICE,
     SettingScopeAuthority,
-    coerce_value,
     get_spec,
     list_specs,
     resolve_value,
@@ -388,137 +387,6 @@ class SettingsWebService:
             "module_settings": module_settings,
         }
 
-    def _global_smtp_candidate(
-        self, db, data: dict[str, Any]
-    ) -> tuple[SMTPConfig | None, str | None]:
-        """Build a non-persisted global SMTP config from current form data."""
-        from app.services.email import _get_smtp_config
-
-        candidate_config: dict[str, object] = dict(_get_smtp_config(db))
-        smtp_field_map = {
-            "smtp_host": "host",
-            "smtp_port": "port",
-            "smtp_username": "username",
-            "smtp_password": SMTP_PASSWORD_FIELD,
-            "smtp_use_tls": "use_tls",
-            "smtp_use_ssl": "use_ssl",
-            "smtp_from_email": "from_email",
-            "smtp_from_name": "from_name",
-            "email_reply_to": "reply_to",
-        }
-
-        form_data = dict(data)
-        form_data.setdefault("smtp_use_tls", "false")
-        form_data.setdefault("smtp_use_ssl", "false")
-
-        for key, value in form_data.items():
-            if key not in smtp_field_map:
-                continue
-            spec = get_spec(SettingDomain.email, key)
-            if not spec:
-                continue
-            if spec.is_secret and value == "":
-                continue
-
-            coerced, error = coerce_value(spec, value)
-            if error:
-                return None, error
-            candidate_config[smtp_field_map[key]] = coerced
-
-        return cast(SMTPConfig, candidate_config), None
-
-    def _module_smtp_candidate(
-        self, db, organization_id: uuid.UUID, module_key: str, data: dict[str, Any]
-    ) -> tuple[str, SMTPConfig | None, str | None]:
-        """Build a non-persisted module SMTP config from current form data."""
-        module_def = next(
-            (item for item in EMAIL_MODULE_SETTINGS if item["key"] == module_key), None
-        )
-        if module_def is None:
-            return "Module", None, "Unknown email module."
-
-        label = module_def["label"]
-        prefix = f"module_{module_key}_"
-        raw_use_default = data.get(f"{prefix}use_default", "false")
-        if _coerce_bool(raw_use_default):
-            smtp_config, error = self._global_smtp_candidate(db, data)
-            return f"{label} (default)", smtp_config, error
-
-        smtp_host = str(data.get(f"{prefix}smtp_host", "")).strip()
-        if not smtp_host:
-            return label, None, f"{label}: SMTP host is required."
-
-        smtp_from_email = str(data.get(f"{prefix}smtp_from_email", "")).strip()
-        if not smtp_from_email:
-            return label, None, f"{label}: From email is required."
-
-        try:
-            smtp_port = int(str(data.get(f"{prefix}smtp_port", 587)).strip() or "587")
-        except (TypeError, ValueError):
-            return label, None, f"{label}: SMTP port must be a valid integer."
-
-        smtp_username = str(data.get(f"{prefix}smtp_username", "")).strip() or None
-        smtp_password = str(data.get(f"{prefix}smtp_password", "")).strip() or None
-        if smtp_password is None:
-            routing = db.scalar(
-                select(ModuleEmailRouting).where(
-                    ModuleEmailRouting.organization_id == organization_id,
-                    ModuleEmailRouting.module == module_def["module"],
-                )
-            )
-            if routing and routing.email_profile_id:
-                profile = db.get(EmailProfile, routing.email_profile_id)
-                if profile is not None:
-                    smtp_password = profile.smtp_password
-        if smtp_username and not smtp_password:
-            return (
-                label,
-                None,
-                f"{label}: SMTP password is required when username is set.",
-            )
-
-        config: SMTPConfig = {
-            "host": smtp_host,
-            "port": smtp_port,
-            "username": smtp_username,
-            "password": smtp_password,
-            "use_tls": _coerce_bool(data.get(f"{prefix}smtp_use_tls")),
-            "use_ssl": _coerce_bool(data.get(f"{prefix}smtp_use_ssl")),
-            "from_email": smtp_from_email,
-            "from_name": str(data.get(f"{prefix}smtp_from_name", "")).strip()
-            or "Dotmac ERP",
-            "reply_to": str(data.get(f"{prefix}email_reply_to", "")).strip() or None,
-        }
-        return label, config, None
-
-    def test_email_settings(
-        self,
-        db,
-        organization_id: uuid.UUID,
-        data: dict[str, Any],
-        target: str,
-    ) -> tuple[bool, str]:
-        """Test global or module SMTP settings without persisting changes."""
-        from app.services.email import validate_smtp_config
-
-        if target.startswith("module:"):
-            label, config, error = self._module_smtp_candidate(
-                db, organization_id, target.split(":", 1)[1], data
-            )
-        else:
-            label = "Global"
-            config, error = self._global_smtp_candidate(db, data)
-
-        if error:
-            return False, error
-        if config is None:
-            return False, f"{label}: SMTP configuration could not be resolved."
-
-        ok, error = validate_smtp_config(config)
-        if ok:
-            return True, f"{label} SMTP connection succeeded."
-        return False, f"{label}: {error or 'SMTP connection failed.'}"
-
     def update_email_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
     ) -> tuple[bool, str | None]:
@@ -533,6 +401,7 @@ class SettingsWebService:
 
         # Validate SMTP settings before persisting changes
         from app.services.email import _get_smtp_config, validate_smtp_config
+        from app.services.settings_spec import coerce_value
 
         candidate_config: dict[str, object] = dict(_get_smtp_config(db))
         has_smtp_change = False

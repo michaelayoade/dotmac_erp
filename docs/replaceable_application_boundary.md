@@ -53,11 +53,9 @@ accounting functions when Sub is unavailable.
 ## Active vertical replacement programme
 
 ERP is being replaced one domain at a time by released Starter-owned modules
-composed by the thin **Dotmac ERP** product assembly (corrected 2026-08-19 —
-the destination is not an internally framed `dotmac_backoffice` application;
-see `dotmac-erp-recomposition-into-domain-modules`). Composition alone does not
-move authority. Each domain must expose a versioned source projection, backfill
-into the composed product, shadow and reconcile, switch one sole writer, and
+composed by the thin `dotmac_backoffice` application. Composition alone does
+not move authority. Each domain must expose a versioned source projection,
+backfill into Backoffice, shadow and reconcile, switch one sole writer, and
 then remove the matching ERP writer before it counts as retired.
 
 People is the first vertical slice. Its read-only source contract, exact writer
