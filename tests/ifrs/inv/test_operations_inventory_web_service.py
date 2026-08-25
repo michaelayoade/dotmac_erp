@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -1513,26 +1513,26 @@ def test_second_count_adjustment_failure_reaches_request_rollback(monkeypatch) -
         if adjustment_calls == 2:
             raise RuntimeError("second adjustment failed")
 
-    monkeypatch.setattr(
-        inventory_transaction_service,
-        "create_adjustment",
-        _create_adjustment,
-    )
     auth = MagicMock(organization_id=org_id, user_id=user_id)
     dependency = web_deps.get_db_for_org(auth=auth)
     request_db = next(dependency)
 
-    try:
-        OperationsInventoryWebService().post_count_response(
-            count_id=str(count_id),
-            auth=auth,
-            db=request_db,
-        )
-    except RuntimeError as exc:
-        with pytest.raises(RuntimeError, match="second adjustment failed"):
-            dependency.throw(exc)
-    else:  # pragma: no cover - the canary must observe the planted failure
-        pytest.fail("second adjustment failure was swallowed")
+    with patch.object(
+        inventory_transaction_service,
+        "create_adjustment",
+        _create_adjustment,
+    ):
+        try:
+            OperationsInventoryWebService().post_count_response(
+                count_id=str(count_id),
+                auth=auth,
+                db=request_db,
+            )
+        except RuntimeError as exc:
+            with pytest.raises(RuntimeError, match="second adjustment failed"):
+                dependency.throw(exc)
+        else:  # pragma: no cover - the canary must observe the planted failure
+            pytest.fail("second adjustment failure was swallowed")
 
     assert adjustment_calls == 2
     assert db.rollback_calls == 1

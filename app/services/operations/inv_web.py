@@ -5383,7 +5383,9 @@ class OperationsInventoryWebService:
         try:
             lid = UUID_Type(line_id)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid count line ID") from exc
+            raise HTTPException(
+                status_code=400, detail="Invalid count line ID"
+            ) from exc
 
         line = db.get(InventoryCountLine, lid)
         if not line or str(line.count_id) != count_id:
