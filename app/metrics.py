@@ -90,6 +90,30 @@ def observe_outbox_reconciliation(result: str, count: int = 1) -> None:
         OUTBOX_RECONCILIATION.labels(result=normalize_metric_label(result)).inc(count)
 
 
+# ── Outbound transfers whose outcome could not be observed ─────────────
+# An INDETERMINATE payment intent is not an error rate: it is money whose
+# fate nobody knows, and it stays that way until a human or the slow
+# reconciler resolves it. The AGE of the oldest one is the number an operator
+# should be paged on, not the count (ADR-0007).
+TRANSFER_UNRESOLVED = Counter(
+    "payment_transfer_unresolved_total",
+    "Outbound transfers recorded INDETERMINATE because the outcome was not observed",
+    ["stage"],  # initiation | polling | unrecognised_status
+)
+TRANSFER_UNRESOLVED_OLDEST_AGE = Gauge(
+    "payment_transfer_unresolved_oldest_age_seconds",
+    "Age of the oldest INDETERMINATE outbound transfer intent (0 when none)",
+)
+
+
+def observe_transfer_unresolved(stage: str) -> None:
+    TRANSFER_UNRESOLVED.labels(stage=normalize_metric_label(stage)).inc()
+
+
+def set_transfer_unresolved_oldest_age(age_seconds: float) -> None:
+    TRANSFER_UNRESOLVED_OLDEST_AGE.set(max(0.0, age_seconds))
+
+
 LOKI_LOGS_SENT = Counter(
     "loki_logs_sent_total",
     "Log records successfully pushed to Loki",
