@@ -1,0 +1,169 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Weekly Meeting Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people/perf" class="hover:text-violet-600 dark:hover:text-violet-400">Performance</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li><a href="/people/perf/weekly-meeting-reports" class="hover:text-violet-600 dark:hover:text-violet-400">Weekly Meeting Reports</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if report else 'New' }}</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6" x-data='weeklyMeetingReportForm({{ form_values | tojson }}, {{ employee_options | tojson }})'>
+    {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300" role="alert">{{ error }}</div>{% endif %}
+    {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ success }}</div>{% endif %}
+
+    <div class="card p-6 text-center">
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">WEEKLY MEETING REPORT</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Record what was actually discussed. Submitted reports preserve a historical snapshot.</p>
+    </div>
+
+    <form method="post" action="{{ '/people/perf/weekly-meeting-reports/' ~ report.report_id ~ '/edit' if report else '/people/perf/weekly-meeting-reports/new' }}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <input type="hidden" name="participants_json" :value="JSON.stringify(participants)">
+        <input type="hidden" name="action_items_json" :value="JSON.stringify(actionItems)">
+
+        <section class="card p-6">
+            <h2 class="mb-5 text-lg font-semibold text-slate-900 dark:text-white">Meeting Information</h2>
+            <div class="grid gap-5 md:grid-cols-2">
+                <div>
+                    <label for="department_id" class="form-label">Division / Department <span class="text-rose-500">*</span></label>
+                    <select id="department_id" name="department_id" class="form-select" x-model="departmentId" @change="loadDepartment" required>
+                        <option value="">Select a division</option>
+                        {% for department in departments %}<option value="{{ department.department_id }}">{{ department.department_name }}</option>{% endfor %}
+                    </select>
+                    <p class="form-hint" x-show="loading">Fetching the current head and employee roster…</p>
+                </div>
+                <div>
+                    <label for="division_head_employee_id" class="form-label">Division Head</label>
+                    <select id="division_head_employee_id" name="division_head_employee_id" class="form-select" x-model="headId">
+                        <option value="">Not specified</option>
+                        <template x-for="employee in employees" :key="employee.employee_id"><option :value="employee.employee_id" x-text="employee.name + (employee.role ? ' — ' + employee.role : '')"></option></template>
+                    </select>
+                    <p class="form-hint">Auto-filled from HR and adjustable for this report only.</p>
+                </div>
+                <div>
+                    <label for="week_ending" class="form-label">Week Ending <span class="text-rose-500">*</span></label>
+                    <input id="week_ending" name="week_ending" type="date" class="form-input" value="{{ form_values.week_ending }}" required>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label for="meeting_date" class="form-label">Meeting Date <span class="text-rose-500">*</span></label><input id="meeting_date" name="meeting_date" type="date" class="form-input" value="{{ form_values.meeting_date }}" required></div>
+                    <div><label for="meeting_time" class="form-label">Time <span class="text-rose-500">*</span></label><input id="meeting_time" name="meeting_time" type="time" class="form-input" value="{{ form_values.meeting_time }}" required></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card p-6">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div><h2 class="text-lg font-semibold text-slate-900 dark:text-white">1. Attendees / Participants</h2><p class="text-sm text-slate-500 dark:text-slate-400">The selected division supplies the initial roster; you remain in control.</p></div>
+                <div class="flex gap-2"><button type="button" class="btn btn-secondary btn-sm" @click="addExternal">Add External</button></div>
+            </div>
+            <div class="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <select class="form-select" x-model="selectedEmployee"><option value="">Add an employee from any division…</option><template x-for="employee in employees" :key="employee.employee_id"><option :value="employee.employee_id" x-text="employee.name + (employee.role ? ' — ' + employee.role : '')"></option></template></select>
+                <button type="button" class="btn btn-secondary" @click="addEmployee">Add Employee</button>
+            </div>
+            <div class="table-container">
+                <table class="table min-w-full">
+                    <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Attendance</th><th scope="col" class="text-right">Action</th></tr></thead>
+                    <tbody>
+                        <template x-for="(row, index) in participants" :key="row.employee_id || 'external-' + index">
+                            <tr>
+                                <td><span x-show="row.employee_id" class="font-medium" x-text="row.name"></span><input x-show="!row.employee_id" x-model="row.name" maxlength="160" class="form-input" placeholder="Participant name" aria-label="External participant name"></td>
+                                <td><input x-model="row.role" @input="row.role_overridden = true" maxlength="160" class="form-input" placeholder="Meeting role or job title" aria-label="Participant role"></td>
+                                <td><select x-model="row.attendance_status" class="form-select" aria-label="Meeting attendance">{% for status in attendance_statuses %}<option value="{{ status }}">{{ status | replace('_', ' ') | title }}</option>{% endfor %}</select></td>
+                                <td class="text-right"><button type="button" class="btn btn-danger-outline btn-sm" @click="participants.splice(index, 1)" aria-label="Remove participant">Remove</button></td>
+                            </tr>
+                        </template>
+                        <tr x-show="participants.length === 0"><td colspan="4" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400">Select a division to load its active employee roster.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        {% set sections = [
+            ('2. Meeting Purpose / Context', 'purpose_context', 'Briefly state why the meeting was held.'),
+            ('3. Matters Discussed / Meeting Notes', 'matters_discussed', 'Summarize what was actually discussed.'),
+            ('4. Key Decisions / Agreements Reached', 'key_decisions', 'Record decisions, approvals, agreed positions, or changes in direction.'),
+            ('5. Issues, Risks, Dependencies or Support Required', 'issues_risks_support', 'Record unresolved issues, blockers, risks, dependencies, or management support required.')
+        ] %}
+        {% for title, name, hint in sections %}
+        <section class="card p-6"><label for="{{ name }}" class="mb-2 block text-lg font-semibold text-slate-900 dark:text-white">{{ title }}</label><textarea id="{{ name }}" name="{{ name }}" rows="4" class="form-textarea" placeholder="{{ hint }}">{{ form_values[name] }}</textarea><p class="form-hint">Use N/A when this section is not relevant.</p></section>
+        {% endfor %}
+
+        <section class="card p-6">
+            <div class="mb-4 flex items-center justify-between gap-3"><h2 class="text-lg font-semibold text-slate-900 dark:text-white">6. Action Items / Follow-up</h2><button type="button" class="btn btn-secondary btn-sm" @click="addAction">Add Action</button></div>
+            <div class="table-container">
+                <table class="table min-w-full"><thead><tr><th scope="col">Action / Follow-up</th><th scope="col">Owner</th><th scope="col">Due Date</th><th scope="col">Status</th><th scope="col" class="text-right">Action</th></tr></thead>
+                <tbody>
+                    <template x-for="(item, index) in actionItems" :key="index"><tr>
+                        <td><textarea x-model="item.action_text" class="form-textarea" rows="2" aria-label="Action item"></textarea></td>
+                        <td><select x-model="item.owner_employee_id" @change="setActionOwner(item)" class="form-select" aria-label="Action owner"><option value="">Manual / unassigned</option><template x-for="employee in employees" :key="employee.employee_id"><option :value="employee.employee_id" x-text="employee.name"></option></template></select><input x-show="!item.owner_employee_id" x-model="item.owner_name" maxlength="160" class="form-input mt-2" placeholder="Owner name" aria-label="Manual owner name"></td>
+                        <td><input x-model="item.due_date" type="date" class="form-input" aria-label="Action due date"></td>
+                        <td><select x-model="item.status" class="form-select" aria-label="Action status">{% for status in action_statuses %}<option value="{{ status }}">{{ status | replace('_', ' ') | title }}</option>{% endfor %}</select></td>
+                        <td class="text-right"><button type="button" class="btn btn-danger-outline btn-sm" @click="actionItems.splice(index, 1)" aria-label="Remove action item">Remove</button></td>
+                    </tr></template>
+                    <tr x-show="actionItems.length === 0"><td colspan="5" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No action items recorded.</td></tr>
+                </tbody></table>
+            </div>
+        </section>
+
+        <section class="card p-6"><label for="carry_forward" class="mb-2 block text-lg font-semibold text-slate-900 dark:text-white">7. Items to Carry Forward / Discuss Next Week</label><textarea id="carry_forward" name="carry_forward" rows="4" class="form-textarea" placeholder="Record open matters requiring continued monitoring.">{{ form_values.carry_forward }}</textarea></section>
+
+        <div class="card flex flex-col-reverse justify-between gap-3 p-5 sm:flex-row sm:items-center">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Keep the final report concise enough for a two-page printout.</p>
+            <div class="flex flex-wrap justify-end gap-3">
+                <a href="/people/perf/weekly-meeting-reports" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-secondary">Save Draft</button>
+                <button type="submit" class="btn btn-primary" formaction="{{ '/people/perf/weekly-meeting-reports/' ~ report.report_id ~ '/submit' if report else '/people/perf/weekly-meeting-reports/new/submit' }}">Submit Report</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+function weeklyMeetingReportForm(initial, employees) {
+    return {
+        departmentId: initial.department_id || '',
+        headId: initial.division_head_employee_id || '',
+        participants: initial.participants || [],
+        actionItems: initial.action_items || [],
+        employees: employees || [],
+        selectedEmployee: '',
+        loading: false,
+        async loadDepartment() {
+            if (!this.departmentId) { this.headId = ''; this.participants = []; return; }
+            this.loading = true;
+            try {
+                const response = await fetch(`/people/perf/weekly-meeting-reports/department/${this.departmentId}/roster`, {headers: {'Accept': 'application/json'}});
+                if (!response.ok) throw new Error('Unable to load the current HR roster');
+                const data = await response.json();
+                this.headId = data.head ? data.head.employee_id : '';
+                this.participants = data.participants || [];
+            } catch (error) {
+                window.showToast(error.message, 'error');
+            } finally { this.loading = false; }
+        },
+        addEmployee() {
+            const employee = this.employees.find(item => item.employee_id === this.selectedEmployee);
+            if (!employee) return;
+            if (this.participants.some(item => item.employee_id === employee.employee_id)) { window.showToast('Employee is already listed', 'warning'); return; }
+            this.participants.push({employee_id: employee.employee_id, name: employee.name, role: employee.role || '', attendance_status: 'INVITED', source: 'EMPLOYEE', role_overridden: false});
+            this.selectedEmployee = '';
+        },
+        addExternal() { this.participants.push({employee_id: '', name: '', role: '', attendance_status: 'INVITED', source: 'EXTERNAL', role_overridden: true}); },
+        addAction() { this.actionItems.push({action_text: '', owner_employee_id: '', owner_name: '', due_date: '', status: 'NOT_STARTED'}); },
+        setActionOwner(item) { const employee = this.employees.find(row => row.employee_id === item.owner_employee_id); item.owner_name = employee ? employee.name : ''; }
+    };
+}
+</script>
+{% endblock %}

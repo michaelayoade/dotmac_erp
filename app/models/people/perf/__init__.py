@@ -53,6 +53,16 @@ from app.models.people.perf.pms_enums import (
 )
 from app.models.people.perf.scorecard import Scorecard, ScorecardItem
 from app.models.people.perf.strategic_objective import StrategicObjective
+from app.models.people.perf.weekly_meeting_report import (
+    MeetingActionStatus,
+    MeetingAttendanceStatus,
+    MeetingParticipantSource,
+    ReportEmailStatus,
+    WeeklyMeetingActionItem,
+    WeeklyMeetingParticipant,
+    WeeklyMeetingReport,
+    WeeklyMeetingReportStatus,
+)
 
 __all__ = [
     # Existing
@@ -100,4 +110,12 @@ __all__ = [
     "PIPCauseCategory",
     "PIPOutcome",
     "PIPStatus",
+    "WeeklyMeetingReport",
+    "WeeklyMeetingParticipant",
+    "WeeklyMeetingActionItem",
+    "WeeklyMeetingReportStatus",
+    "MeetingAttendanceStatus",
+    "MeetingParticipantSource",
+    "MeetingActionStatus",
+    "ReportEmailStatus",
 ]

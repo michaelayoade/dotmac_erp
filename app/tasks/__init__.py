@@ -137,6 +137,7 @@ from app.tasks.staff_sync import (
 from app.tasks.project_sla import (
     process_project_sla_breaches,
 )
+from app.tasks.weekly_meeting_reports import send_weekly_meeting_report_hr_email
 
 __all__ = [
     # Expense module tasks
@@ -266,4 +267,5 @@ __all__ = [
     "cleanup_published_outbox_events",
     "reconcile_outbox_balance_projection",
     "run_infrastructure_health_checks_task",
+    "send_weekly_meeting_report_hr_email",
 ]

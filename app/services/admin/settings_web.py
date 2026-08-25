@@ -184,6 +184,7 @@ class AdminSettingsWebService:
             "date_format",
             "number_format",
             "contact_email",
+            "hr_weekly_report_email",
             "contact_phone",
             "address_line1",
             "address_line2",
