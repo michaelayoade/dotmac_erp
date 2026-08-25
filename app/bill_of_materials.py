@@ -370,12 +370,13 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
     ),
     SelectedModule(
         distribution="dotmac-numbering",
-        state="selected",
+        state="composed",
         release_state="released",
         capabilities=("document-numbering",),
         rationale=(
-            "ERP is cutover 1, one series family at a time. Every caller must "
-            "first thread an explicit business date."
+            "Tenant-plane storage is composed without a runtime caller. ERP is "
+            "cutover 1, one series family at a time; every caller must first "
+            "thread an explicit business date."
         ),
     ),
     SelectedModule(
@@ -1342,7 +1343,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     ),
     CompositionStep(
         distribution="dotmac-numbering",
-        tranche=1,
+        tranche=0,
         kernel_floor="0.1.0a66",
         schema="mod_numbering",
         lineage_branch="numbering",
