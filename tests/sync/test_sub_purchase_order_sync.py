@@ -342,7 +342,7 @@ class TestCreatePurchaseOrderHappyPath:
         po_input = args[0][2]
         assert po_input.supplier_id == mock_supplier.supplier_id
         assert po_input.currency_code == "NGN"
-        assert po_input.correlation_id == "crm-wo:wo-abc-123"
+        assert po_input.correlation_id == "source-work-order:wo-abc-123"
         assert len(po_input.lines) == 2
         assert po_input.lines[0].description == "Single-mode fiber cable 12-core"
         assert po_input.lines[0].quantity_ordered == Decimal("500")
@@ -477,7 +477,7 @@ class TestCreatePurchaseOrderProjectLinkage:
         sample_payload: SubPurchaseOrderPayload,
     ) -> None:
         """PO lines should have project_id when source_project_id maps to local project."""
-        sample_payload.source_project_id = "crm-proj-789"
+        sample_payload.source_project_id = "source-project-789"
 
         mock_supplier = MagicMock()
         mock_supplier.supplier_id = uuid.uuid4()

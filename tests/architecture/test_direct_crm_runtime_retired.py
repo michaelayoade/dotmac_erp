@@ -8,8 +8,10 @@ Historical rows are sealed by the retirement migration rather than kept live.
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 
+from app.models.finance.ar.external_sync import ExternalSource, ExternalSync
 from app.schemas.sync.sub_operational import (
     BulkSyncResponse,
     SubExpenseClaimPayload,
@@ -18,7 +20,6 @@ from app.schemas.sync.sub_operational import (
     SubWorkOrderPayload,
     SyncError,
 )
-from app.models.finance.ar.external_sync import ExternalSource, ExternalSync
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,16 +54,11 @@ RETIRED_LIVE_ALIASES = frozenset(
     }
 )
 
-SUB_CONTRACT_PATHS = (
+SUB_CONTRACT_FIXED_PATHS = (
     "app/api/sync/dotmac_sub.py",
     "app/schemas/sync/sub_operational.py",
     "app/services/inventory/material_support.py",
     "app/services/sync/dotmac_sub_sync_service.py",
-    "app/services/sync/sub/base.py",
-    "app/services/sync/sub/expenses.py",
-    "app/services/sync/sub/inventory.py",
-    "app/services/sync/sub/procurement.py",
-    "app/services/sync/sub/projects.py",
     "app/services/sync/sub_mappings.py",
 )
 
@@ -72,7 +68,7 @@ def _source(path: str) -> str:
 
 
 def _retired_alias_hits(source: str) -> set[str]:
-    """Find retired identifiers in declarations, aliases, paths and calls."""
+    """Find retired developer vocabulary in code, paths and documentation."""
     hits: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         candidates: list[str] = []
@@ -217,9 +213,15 @@ def test_sub_wire_contract_uses_only_source_neutral_references() -> None:
     assert response["errors"][0]["source_reference"] == "project-1"
     assert invoice["source_invoice_id"] == "source-1"
 
+    service_paths = tuple(
+        path.relative_to(ROOT).as_posix()
+        for path in sorted((ROOT / "app/services/sync/sub").rglob("*.py"))
+    )
+    assert service_paths
+    contract_paths = SUB_CONTRACT_FIXED_PATHS + service_paths
     hits = {
         path: sorted(found)
-        for path in SUB_CONTRACT_PATHS
+        for path in contract_paths
         if (found := _retired_alias_hits(_source(path)))
     }
     assert hits == {}
@@ -253,6 +255,11 @@ def test_live_domain_models_have_no_crm_identity_columns() -> None:
     ):
         source = _source(path)
         assert "crm_id" not in source
+
+
+def test_every_surviving_material_source_read_is_sub_qualified() -> None:
+    source = _source("app/services/sync/sub/procurement.py")
+    assert source.count('MaterialRequest.source_system == "sub"') == 3
 
 
 def test_retirement_migration_seals_credentials_and_historical_mappings() -> None:
@@ -292,3 +299,18 @@ def test_reserved_historical_enum_values_have_no_executable_consumer() -> None:
         "CRM",
         "DOTMAC_SUB",
     ]
+
+
+def test_committed_openapi_surface_has_no_retired_crm_contract() -> None:
+    manifest = json.loads(
+        _source("tests/architecture/openapi_contract_surface.json")
+    )
+    routes = manifest["routes"]
+    schemas = manifest["schemas"]
+    assert not [
+        route
+        for route in routes
+        if "/api/v1/crm" in route or "/api/v1/sync/crm" in route
+    ]
+    assert len([route for route in routes if "/api/v1/sync/sub/" in route]) == 17
+    assert not [name for name in schemas if "CRM" in name or "Crm" in name]

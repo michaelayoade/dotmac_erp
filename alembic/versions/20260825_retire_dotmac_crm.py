@@ -190,6 +190,10 @@ def upgrade() -> None:
         "ALTER INDEX inv.idx_material_request_crm_id "
         "RENAME TO idx_material_request_source_reference"
     )
+    op.execute(
+        "COMMENT ON COLUMN inv.material_request.source_reference IS "
+        "'Opaque idempotency key within source_system'"
+    )
 
     # Expense intake was also shared and carried no discriminator. Preserve it
     # as ambiguous history; every new Sub write is explicitly source-qualified.
@@ -216,6 +220,14 @@ def upgrade() -> None:
     op.execute(
         "ALTER INDEX expense.idx_expense_claim_crm_id "
         "RENAME TO idx_expense_claim_source_reference"
+    )
+    op.execute(
+        "COMMENT ON COLUMN expense.expense_claim.source_reference IS "
+        "'Opaque source claim identifier within source_system'"
+    )
+    op.execute(
+        "COMMENT ON COLUMN expense.expense_claim.source_system IS "
+        "'Owning source namespace for source_reference'"
     )
 
     # Customer correlation had no remaining reader. It is not domain state and

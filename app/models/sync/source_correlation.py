@@ -27,7 +27,6 @@ class SourceEntityType(str, enum.Enum):
     PROJECT = "PROJECT"
     TICKET = "TICKET"
     WORK_ORDER = "WORK_ORDER"
-    MATERIAL_REQUEST = "MATERIAL_REQUEST"
     PURCHASE_ORDER = "PURCHASE_ORDER"
 
 

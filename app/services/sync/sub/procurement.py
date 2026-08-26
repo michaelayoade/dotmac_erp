@@ -206,6 +206,7 @@ class _ProcurementMixin(_SubSyncBase):
             .options(joinedload(MaterialRequest.items))
             .where(
                 MaterialRequest.organization_id == org_id,
+                MaterialRequest.source_system == "sub",
                 MaterialRequest.source_reference == data.source_request_id,
             )
         )
@@ -800,6 +801,7 @@ class _ProcurementMixin(_SubSyncBase):
                 .options(joinedload(MaterialRequest.items))
                 .where(
                     MaterialRequest.organization_id == org_id,
+                    MaterialRequest.source_system == "sub",
                     MaterialRequest.source_reference.is_not(None),
                     MaterialRequest.request_type == MaterialRequestType.ISSUE,
                     MaterialRequest.status == MaterialRequestStatus.PENDING_STOCK,
@@ -996,6 +998,7 @@ class _ProcurementMixin(_SubSyncBase):
             .options(joinedload(MaterialRequest.items))
             .where(
                 MaterialRequest.organization_id == org_id,
+                MaterialRequest.source_system == "sub",
                 MaterialRequest.source_reference == source_request_id,
             )
         )

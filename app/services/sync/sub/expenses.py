@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -33,16 +33,12 @@ from app.models.expense.expense_claim import (
     ExpenseClaim,
     ExpenseClaimStatus,
 )
-from app.models.sync.source_correlation import (
-    SourceEntityType,
-)
 from app.schemas.sync.sub_operational import (
     SubExpenseCategoriesResponse,
     SubExpenseCategoryItem,
     SubExpenseClaimPayload,
     SubExpenseClaimResponse,
     SubExpenseClaimStatusResponse,
-    ExpenseTotals,
 )
 
 # Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
@@ -55,174 +51,7 @@ from app.services.sync.sub.base import _SubSyncBase
 logger = logging.getLogger(__name__)
 
 
-class _ExpenseTotalsMixin(_SubSyncBase):
-    def get_expense_totals_for_project(
-        self,
-        org_id: UUID,
-        source_reference: str,
-    ) -> ExpenseTotals | None:
-        """Get expense totals for a Sub project."""
-        mapping = self._get_mapping(org_id, SourceEntityType.PROJECT, source_reference)
-        if not mapping:
-            return None
-
-        return self._calculate_expense_totals(
-            org_id,
-            project_id=mapping.local_entity_id,
-        )
-
-    def get_expense_totals_for_ticket(
-        self,
-        org_id: UUID,
-        source_reference: str,
-    ) -> ExpenseTotals | None:
-        """Get expense totals for a Sub ticket."""
-        mapping = self._get_mapping(org_id, SourceEntityType.TICKET, source_reference)
-        if not mapping:
-            return None
-
-        return self._calculate_expense_totals(
-            org_id,
-            ticket_id=mapping.local_entity_id,
-        )
-
-    def get_expense_totals_for_work_order(
-        self,
-        org_id: UUID,
-        source_reference: str,
-    ) -> ExpenseTotals | None:
-        """Get expense totals for a Sub work order."""
-        mapping = self._get_mapping(org_id, SourceEntityType.WORK_ORDER, source_reference)
-        if not mapping:
-            return None
-
-        return self._calculate_expense_totals(
-            org_id,
-            task_id=mapping.local_entity_id,
-        )
-
-    def get_batch_expense_totals(
-        self,
-        org_id: UUID,
-        project_source_references: list[str],
-        ticket_source_references: list[str],
-        work_order_source_references: list[str],
-    ) -> dict[str, ExpenseTotals]:
-        """
-        Get expense totals for multiple Sub entities in batched queries.
-
-        Instead of 2 queries per Sub ID (mapping lookup + aggregation),
-        resolves all mappings in up to 3 queries then aggregates in up to 3.
-        """
-        result: dict[str, ExpenseTotals] = {}
-
-        # Batch-resolve mappings (up to 3 queries)
-        project_map = self._batch_get_mappings(
-            org_id, SourceEntityType.PROJECT, project_source_references
-        )
-        ticket_map = self._batch_get_mappings(
-            org_id, SourceEntityType.TICKET, ticket_source_references
-        )
-        wo_map = self._batch_get_mappings(
-            org_id, SourceEntityType.WORK_ORDER, work_order_source_references
-        )
-
-        # Batch-aggregate expenses (up to 3 queries)
-        for sub_to_local, fk_col in [
-            (project_map, ExpenseClaim.project_id),
-            (ticket_map, ExpenseClaim.ticket_id),
-            (wo_map, ExpenseClaim.task_id),
-        ]:
-            if not sub_to_local:
-                continue
-            local_to_sub = {v: k for k, v in sub_to_local.items()}
-            local_ids = list(sub_to_local.values())
-
-            stmt = (
-                select(
-                    fk_col,
-                    ExpenseClaim.status,
-                    func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0).label(
-                        "total"
-                    ),
-                )
-                .where(
-                    ExpenseClaim.organization_id == org_id,
-                    fk_col.in_(local_ids),
-                )
-                .group_by(fk_col, ExpenseClaim.status)
-            )
-            rows = self.db.execute(stmt).all()
-
-            # Group by local_id
-            grouped: dict[UUID, ExpenseTotals] = {}
-            for local_id, status, total in rows:
-                if local_id not in grouped:
-                    grouped[local_id] = ExpenseTotals()
-                amount = Decimal(str(total)) if total else Decimal("0.00")
-                totals = grouped[local_id]
-                if status == ExpenseClaimStatus.DRAFT:
-                    totals.draft = amount
-                elif status == ExpenseClaimStatus.SUBMITTED:
-                    totals.submitted = amount
-                elif status in (
-                    ExpenseClaimStatus.APPROVED,
-                    ExpenseClaimStatus.PENDING_APPROVAL,
-                ):
-                    totals.approved += amount
-                elif status == ExpenseClaimStatus.PAID:
-                    totals.paid = amount
-
-            for local_id, totals in grouped.items():
-                source_reference = local_to_sub.get(local_id)
-                if source_reference:
-                    result[source_reference] = totals
-
-        return result
-
-    def _calculate_expense_totals(
-        self,
-        org_id: UUID,
-        project_id: UUID | None = None,
-        ticket_id: UUID | None = None,
-        task_id: UUID | None = None,
-    ) -> ExpenseTotals:
-        """Calculate expense totals grouped by status."""
-        # Build base query
-        stmt = select(
-            ExpenseClaim.status,
-            func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0).label(
-                "total"
-            ),
-        ).where(ExpenseClaim.organization_id == org_id)
-
-        if project_id:
-            stmt = stmt.where(ExpenseClaim.project_id == project_id)
-        if ticket_id:
-            stmt = stmt.where(ExpenseClaim.ticket_id == ticket_id)
-        if task_id:
-            stmt = stmt.where(ExpenseClaim.task_id == task_id)
-
-        stmt = stmt.group_by(ExpenseClaim.status)
-        results = self.db.execute(stmt).all()
-
-        totals = ExpenseTotals()
-        for status, total in results:
-            amount = Decimal(str(total)) if total else Decimal("0.00")
-            if status == ExpenseClaimStatus.DRAFT:
-                totals.draft = amount
-            elif status == ExpenseClaimStatus.SUBMITTED:
-                totals.submitted = amount
-            elif status in (
-                ExpenseClaimStatus.APPROVED,
-                ExpenseClaimStatus.PENDING_APPROVAL,
-            ):
-                totals.approved += amount
-            elif status == ExpenseClaimStatus.PAID:
-                totals.paid = amount
-
-        return totals
-
+class _ExpenseSyncMixin(_SubSyncBase):
     # ------------------------------------------------------------------
     # Sub → ERP expense-claim sync (field-technician expense requests)
     # ------------------------------------------------------------------

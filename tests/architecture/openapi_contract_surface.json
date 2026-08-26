@@ -1207,41 +1207,6 @@
     "422": "a11c9d9b2af8"
    }
   },
-  "GET /api/v1/crm/health": {
-   "params": [
-    "cookie:access_token",
-    "header:authorization"
-   ],
-   "request": null,
-   "responses": {
-    "200": "d96eac4a1f33",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/crm/project/{crm_project_id}": {
-   "params": [
-    "cookie:access_token",
-    "header:authorization",
-    "path:crm_project_id!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "a2431939694c",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/crm/ticket/{crm_ticket_id}": {
-   "params": [
-    "cookie:access_token",
-    "header:authorization",
-    "path:crm_ticket_id!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "a2431939694c",
-    "422": "a11c9d9b2af8"
-   }
-  },
   "GET /api/v1/expense-limits/approvers": {
    "params": [
     "cookie:access_token",
@@ -4260,209 +4225,6 @@
     "422": "a11c9d9b2af8"
    }
   },
-  "GET /api/v1/sync/crm/contacts/companies": {
-   "params": [
-    "header:x-api-key!",
-    "query:include_inactive",
-    "query:limit",
-    "query:offset",
-    "query:updated_since"
-   ],
-   "request": null,
-   "responses": {
-    "200": "f87421494213",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/contacts/people": {
-   "params": [
-    "header:x-api-key!",
-    "query:include_inactive",
-    "query:limit",
-    "query:offset",
-    "query:updated_since"
-   ],
-   "request": null,
-   "responses": {
-    "200": "b34915d69fa6",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/expense-categories": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "f0e0def408f1",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/expense-claims/{omni_id}": {
-   "params": [
-    "header:x-api-key!",
-    "path:omni_id!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "8a5d79a92ba9",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/inventory": {
-   "params": [
-    "header:x-api-key!",
-    "query:category_code",
-    "query:include_zero_stock",
-    "query:limit",
-    "query:offset",
-    "query:only_below_reorder",
-    "query:only_with_available_serials",
-    "query:search",
-    "query:warehouse_id"
-   ],
-   "request": null,
-   "responses": {
-    "200": "272351e21ad1",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/inventory/meta/categories": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "342a41bdd56d",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/inventory/meta/warehouses": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "bc3583b047c3",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/inventory/serials/available": {
-   "params": [
-    "header:x-api-key!",
-    "query:item_code!",
-    "query:limit",
-    "query:offset",
-    "query:warehouse_code!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "d156c6fcebe7",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/inventory/{item_id}": {
-   "params": [
-    "header:x-api-key!",
-    "path:item_id!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "e61715e2f96e",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/ncc/financials": {
-   "params": [
-    "header:x-api-key!",
-    "query:as_of_date",
-    "query:end_date",
-    "query:start_date",
-    "query:year"
-   ],
-   "request": null,
-   "responses": {
-    "200": "b7e41049ab9a",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/ncc/staff-headcount": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": null,
-   "responses": {
-    "200": "ca9126bd6a84",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/projects": {
-   "params": [
-    "cookie:access_token",
-    "header:authorization",
-    "query:limit",
-    "query:search",
-    "query:status"
-   ],
-   "request": null,
-   "responses": {
-    "200": "97bf8b42a343",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/tickets": {
-   "params": [
-    "cookie:access_token",
-    "header:authorization",
-    "query:limit",
-    "query:search"
-   ],
-   "request": null,
-   "responses": {
-    "200": "489d81ebc3aa",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/work-orders": {
-   "params": [
-    "cookie:access_token",
-    "header:authorization",
-    "query:employee_id",
-    "query:limit",
-    "query:search"
-   ],
-   "request": null,
-   "responses": {
-    "200": "dc8b467c3c39",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/workforce/departments": {
-   "params": [
-    "header:x-api-key!",
-    "query:include_inactive",
-    "query:limit",
-    "query:offset"
-   ],
-   "request": null,
-   "responses": {
-    "200": "778643a05d77",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "GET /api/v1/sync/crm/workforce/employees": {
-   "params": [
-    "header:x-api-key!",
-    "query:include_inactive",
-    "query:limit",
-    "query:offset"
-   ],
-   "request": null,
-   "responses": {
-    "200": "9b77e94ee5a2",
-    "422": "a11c9d9b2af8"
-   }
-  },
   "GET /api/v1/sync/sub/attendance/today": {
    "params": [
     "header:X-Selfcare-Subject!",
@@ -4480,18 +4242,18 @@
    ],
    "request": null,
    "responses": {
-    "200": "f0e0def408f1",
+    "200": "49e372e82a73",
     "422": "a11c9d9b2af8"
    }
   },
-  "GET /api/v1/sync/sub/expense-claims/{omni_id}": {
+  "GET /api/v1/sync/sub/expense-claims/{source_claim_id}": {
    "params": [
     "header:x-api-key!",
-    "path:omni_id!"
+    "path:source_claim_id!"
    ],
    "request": null,
    "responses": {
-    "200": "8a5d79a92ba9",
+    "200": "f823752583f3",
     "422": "a11c9d9b2af8"
    }
   },
@@ -4543,7 +4305,7 @@
    ],
    "request": null,
    "responses": {
-    "200": "d156c6fcebe7",
+    "200": "1bf1c0d96975",
     "422": "a11c9d9b2af8"
    }
   },
@@ -4558,14 +4320,38 @@
     "422": "a11c9d9b2af8"
    }
   },
-  "GET /api/v1/sync/sub/material-requests/{omni_id}": {
+  "GET /api/v1/sync/sub/material-requests/{source_request_id}": {
    "params": [
     "header:x-api-key!",
-    "path:omni_id!"
+    "path:source_request_id!"
    ],
    "request": null,
    "responses": {
-    "200": "8d066627ad7c",
+    "200": "40cd22af4977",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/sync/sub/ncc/financials": {
+   "params": [
+    "header:x-api-key!",
+    "query:as_of_date",
+    "query:end_date",
+    "query:start_date",
+    "query:year"
+   ],
+   "request": null,
+   "responses": {
+    "200": "2d49d36815e7",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/sync/sub/ncc/staff-headcount": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "16235e8e5047",
     "422": "a11c9d9b2af8"
    }
   },
@@ -6202,27 +5988,6 @@
    "request": null,
    "responses": {
     "200": "d272e111154d",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/crm/sync": {
-   "params": [
-    "cookie:access_token",
-    "header:authorization"
-   ],
-   "request": "626d72b5e241",
-   "responses": {
-    "200": "1604e6fde67b",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/crm/webhook": {
-   "params": [
-    "header:X-CRM-Signature"
-   ],
-   "request": null,
-   "responses": {
-    "200": "cb8f63088b76",
     "422": "a11c9d9b2af8"
    }
   },
@@ -8823,108 +8588,6 @@
     "422": "a11c9d9b2af8"
    }
   },
-  "POST /api/v1/sync/crm/bulk": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "ea22a9f7e022",
-   "responses": {
-    "200": "a09597a01914",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/expense-claims": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "c338af942bad",
-   "responses": {
-    "201": "0138ce8883c1",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/expense-totals": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "96ab54c3ff39",
-   "responses": {
-    "200": "58556bc346e9",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/inventory-items": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "5c8525eb306c",
-   "responses": {
-    "201": "127d92d1f58f",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/purchase-invoices": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "07ceb119e0ba",
-   "responses": {
-    "201": "5d9bfdbf7c29",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/purchase-invoices/{purchase_invoice_id}/attachments": {
-   "params": [
-    "header:x-api-key!",
-    "path:purchase_invoice_id!"
-   ],
-   "request": "9010aa1bdf9b",
-   "responses": {
-    "201": "065e9d00c77d",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/purchase-orders": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "eaff8fa0d59a",
-   "responses": {
-    "201": "26251356a584",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/purchase-orders/variations": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "a278859b7d23",
-   "responses": {
-    "201": "26251356a584",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/reconcile-orphans": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "7f3901179ffb",
-   "responses": {
-    "200": "182e85dd77ae",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/crm/webhook/{entity_type}": {
-   "params": [
-    "header:x-api-key!",
-    "path:entity_type!"
-   ],
-   "request": "5da12bc2702f",
-   "responses": {
-    "200": "c0354b501cdd",
-    "422": "a11c9d9b2af8"
-   }
-  },
   "POST /api/v1/sync/sub/attendance/check-in": {
    "params": [
     "header:Idempotency-Key",
@@ -8965,9 +8628,9 @@
    "params": [
     "header:x-api-key!"
    ],
-   "request": "c338af942bad",
+   "request": "5721526adb7c",
    "responses": {
-    "201": "0138ce8883c1",
+    "201": "5a36e7299db9",
     "422": "a11c9d9b2af8"
    }
   },
@@ -8975,9 +8638,9 @@
    "params": [
     "header:x-api-key!"
    ],
-   "request": "e2cf22d2eeed",
+   "request": "43a4f6627a40",
    "responses": {
-    "201": "7cb3867d5e9b",
+    "201": "bf7bf1884981",
     "422": "a11c9d9b2af8"
    }
   },
@@ -8985,9 +8648,9 @@
    "params": [
     "header:x-api-key!"
    ],
-   "request": "07ceb119e0ba",
+   "request": "614db37733a4",
    "responses": {
-    "201": "5d9bfdbf7c29",
+    "201": "bd03ddc36089",
     "422": "a11c9d9b2af8"
    }
   },
@@ -8996,9 +8659,9 @@
     "header:x-api-key!",
     "path:purchase_invoice_id!"
    ],
-   "request": "9010aa1bdf9b",
+   "request": "43dbcbcb48e2",
    "responses": {
-    "201": "065e9d00c77d",
+    "201": "a9677c9da041",
     "422": "a11c9d9b2af8"
    }
   },
@@ -9006,19 +8669,9 @@
    "params": [
     "header:x-api-key!"
    ],
-   "request": "eaff8fa0d59a",
+   "request": "525a98a5f277",
    "responses": {
-    "201": "26251356a584",
-    "422": "a11c9d9b2af8"
-   }
-  },
-  "POST /api/v1/sync/sub/purchase-orders/variations": {
-   "params": [
-    "header:x-api-key!"
-   ],
-   "request": "a278859b7d23",
-   "responses": {
-    "201": "26251356a584",
+    "201": "b8290c3a1272",
     "422": "a11c9d9b2af8"
    }
   },
@@ -9585,40 +9238,9 @@
   "BudgetLineItem": "c46794fe1ea8",
   "BulkCountLineRecord": "c815e8e35a2e",
   "BulkCountRecordRequest": "33f1125d1ded",
-  "BulkSyncRequest": "38ee5d28d1bb",
+  "BulkSyncRequest": "3bdda2a4feda",
   "BulkSyncResponse": "889d7d1f6163",
   "ButtonStyle": "a7df6e4cf9f1",
-  "CRMAvailableSerialListResponse": "9bcd618bf2f7",
-  "CRMAvailableSerialRead": "7a803b23bfea",
-  "CRMExpenseCategoriesResponse": "f0a6defeca62",
-  "CRMExpenseCategoryItem": "e657270a6edb",
-  "CRMExpenseClaimItemPayload": "a71112676152",
-  "CRMExpenseClaimPayload": "f7a3de884a7a",
-  "CRMExpenseClaimResponse": "5d8e3cf70fd7",
-  "CRMExpenseClaimStatusResponse": "3fb01ed186da",
-  "CRMInventoryItemPayload": "a9b848be9fab",
-  "CRMInventoryItemResponse": "e515ff461a01",
-  "CRMMaterialRequestItemPayload": "6a6188dc3290",
-  "CRMMaterialRequestItemRead": "44a36e6255de",
-  "CRMMaterialRequestPayload": "1fc674ee1d0a",
-  "CRMMaterialRequestResponse": "7b3b6885f443",
-  "CRMMaterialRequestStatusRead": "e48eba6b88b5",
-  "CRMProjectPayload": "4b9c5556a53f",
-  "CRMProjectRead": "468753137ad9",
-  "CRMProjectTaskPayload": "54dc65676386",
-  "CRMPurchaseInvoiceAttachmentPayload": "030f6ceb823d",
-  "CRMPurchaseInvoiceAttachmentResponse": "cb8f111dd89a",
-  "CRMPurchaseInvoiceItemPayload": "25aa1e71b862",
-  "CRMPurchaseInvoicePayload": "2bf9b948cc58",
-  "CRMPurchaseInvoiceResponse": "2d62094dc23c",
-  "CRMPurchaseOrderItemPayload": "4f859ca32cda",
-  "CRMPurchaseOrderPayload": "029232574517",
-  "CRMPurchaseOrderResponse": "2e9ba102661f",
-  "CRMPurchaseOrderVariationPayload": "10daf8a83fd1",
-  "CRMTicketPayload": "6e8e6838a8a3",
-  "CRMTicketRead": "c28594c0e0be",
-  "CRMWorkOrderPayload": "ca86bfc31bde",
-  "CRMWorkOrderRead": "d41cf7a5df11",
   "CardTransactionCreate": "3a7f2a69c785",
   "CardTransactionListResponse": "58410a18bdd6",
   "CardTransactionRead": "692b11300c65",
@@ -9640,8 +9262,6 @@
   "CoachInsightSummary": "80a46eaa9f6d",
   "ColorPaletteResponse": "12c20bab6193",
   "CommitmentResponse": "b2bbc966081f",
-  "CompanyContactRead": "7be72fee71c3",
-  "CompanyListResponse": "16df538261ff",
   "ConsolidationMethod": "050841e63fab",
   "ConsolidationRunCreate": "0a470c910b7d",
   "ConsolidationRunRead": "e08d00d8a204",
@@ -9667,10 +9287,7 @@
   "DeferredTaxBasisCreate": "d62708042cf4",
   "DeferredTaxBasisRead": "411cf8324c2e",
   "DeferredTaxSummaryRead": "cbcae224272a",
-  "DepartmentListResponse": "bfe86160ba4a",
-  "DepartmentMemberRead": "ee7259d8e388",
   "DepartmentProjection": "a01f5291ccc9",
-  "DepartmentRead": "5bdd337eb016",
   "DepartmentWithCount": "976efdc942c7",
   "DependencyType": "b0dfc94abce3",
   "DepreciationRunCreate": "264f36cf3aab",
@@ -9749,9 +9366,6 @@
   "ExpensePeriodUsageRead": "d846c8c28e4f",
   "ExpenseStats": "3f984bae3af5",
   "ExpenseSummary": "bf6a15d032bb",
-  "ExpenseTotals": "f3faa10b552e",
-  "ExpenseTotalsRequest": "76d6dab5fdff",
-  "ExpenseTotalsResponse": "a57e60a710d1",
   "FIFOInventoryRead": "bc93daf81a13",
   "FIFOLayerRead": "dc0491f468a7",
   "FiscalPeriodCreate": "f7d6a8efc032",
@@ -9780,7 +9394,6 @@
   "GanttTask": "3f2b396d9e47",
   "GroupStructureRead": "024e5eca2155",
   "HTTPValidationError": "7373c21f1389",
-  "HealthResponse": "8e6f0d676e51",
   "HookExecutionMode": "e3fba43d87c5",
   "HookHandlerType": "4826b789c826",
   "IncidentBrief": "ebd7d17b01e0",
@@ -9805,7 +9418,7 @@
   "InventoryItemCreate": "1431cadb884a",
   "InventoryItemDetail": "025aac792f10",
   "InventoryItemRead": "c66e3e4eb678",
-  "InventoryItemStock": "eaf1185db0bf",
+  "InventoryItemStock": "d26ae7b78bd7",
   "InventoryListResponse": "f6d63c73ad24",
   "ItemApprovalAmount": "cf28e03cf520",
   "ItemCategoryCreate": "d8dd93c9b548",
@@ -9942,7 +9555,6 @@
   "NCISummaryRead": "0a1d8e517489",
   "NRVCalculationRead": "68df6f423abb",
   "NccFinancialsResponse": "50b7b30995f6",
-  "NccStaffHeadcountResponse": "d02be62e46d9",
   "NotificationListResponse": "ef5a0abc1a58",
   "NotificationRead": "f829e0a4468b",
   "OdometerUpdate": "573f9ed89d9d",
@@ -9972,9 +9584,7 @@
   "PermissionCreate": "9fb6db789888",
   "PermissionRead": "00e265d0ec99",
   "PermissionUpdate": "5349589d7f5f",
-  "PersonContactRead": "93a2cde9c3ef",
   "PersonCreate": "26dfd015bbc4",
-  "PersonListResponse": "dbf1ee07bb56",
   "PersonRead": "dd276fffd167",
   "PersonRoleCreate": "bf951bc92ea5",
   "PersonRoleRead": "dc6a0648bbd6",
@@ -10018,8 +9628,6 @@
   "RFQStatus": "425951b560fa",
   "RFQUpdate": "8623223158e7",
   "ReceiptAllocationCreate": "84f1886c2e71",
-  "ReconcileOrphansRequest": "a138f91e00c2",
-  "ReconcileOrphansResponse": "068ff5ba4e62",
   "ReconciliationAdjustmentCreate": "1491faf95291",
   "ReconciliationApproval": "9e16721327ba",
   "ReconciliationCreate": "189e8075df4e",
@@ -10121,13 +9729,38 @@
   "StatusCheckRequest": "4477acfa6554",
   "StatusCheckResponse": "c6d10c82dff2",
   "StockBalanceRead": "a8b074040ca3",
+  "SubAvailableSerialListResponse": "49709352abc9",
+  "SubAvailableSerialRead": "5e22182e9288",
+  "SubExpenseCategoriesResponse": "d2fa1a1bebde",
+  "SubExpenseCategoryItem": "d005e565d191",
+  "SubExpenseClaimItemPayload": "f3e8a2b0f9a2",
+  "SubExpenseClaimPayload": "588dde1c48f5",
+  "SubExpenseClaimResponse": "5567fab6c2f5",
+  "SubExpenseClaimStatusResponse": "10d8c8211987",
+  "SubMaterialRequestItemPayload": "b9286a24d0e6",
+  "SubMaterialRequestItemRead": "abbdf2c168e4",
+  "SubMaterialRequestPayload": "7eee87bdee45",
+  "SubMaterialRequestResponse": "8888154e7a23",
+  "SubMaterialRequestStatusRead": "354410dd91bd",
+  "SubNccFinancialsResponse": "4e971c5e1b42",
+  "SubNccStaffHeadcountResponse": "97c553690417",
+  "SubProjectPayload": "1d60f6ae633e",
+  "SubProjectTaskPayload": "24e8e4169ebd",
+  "SubPurchaseInvoiceAttachmentPayload": "2b00a6d5c842",
+  "SubPurchaseInvoiceAttachmentResponse": "094588543714",
+  "SubPurchaseInvoiceItemPayload": "d2e4691036bb",
+  "SubPurchaseInvoicePayload": "89e5c44d3aa2",
+  "SubPurchaseInvoiceResponse": "d5492acbcc49",
   "SubPurchaseInvoiceStatusResponse": "87c793a503f6",
+  "SubPurchaseOrderItemPayload": "ffbcc56d991b",
+  "SubPurchaseOrderPayload": "499d4c3368f2",
+  "SubPurchaseOrderResponse": "f7ca51c8af34",
+  "SubTicketPayload": "b672b21de0a4",
+  "SubWorkOrderPayload": "b5967b6d5749",
   "SupplierCreate": "02f1e6b5db4a",
   "SupplierRead": "3810c24b704c",
   "SupplierUpdate": "9ac48b235796",
-  "SyncError": "688e47d461cd",
-  "SyncRequest": "8f9f7aa1195f",
-  "SyncResponse": "0792888caca4",
+  "SyncError": "6b91bdbd9a06",
   "TaskAssignRequest": "cbc3a1c29375",
   "TaskCompleteResponse": "680fa6d4ce0c",
   "TaskCreate": "6f3ab507a9e1",
@@ -10204,9 +9837,6 @@
   "WorkflowTaskSnoozeRequest": "13a0fab57071",
   "WorkflowTaskStatus": "82ea333bb828",
   "WorkflowTaskStatusUpdate": "325187ee3ad8",
-  "WorkforceEmployeeListResponse": "ff4ee85fc237",
-  "WorkforceEmployeeRead": "703b9d4f88d8",
-  "app__api__crm__WebhookResponse": "e46e91d1073d",
   "app__api__dotmac_academy__WebhookResponse": "e3567a22528d",
   "app__api__dotmac_sub__WebhookResponse": "e3567a22528d",
   "app__api__finance__ar_routes__contracts__ContractCreate": "6a11cfd357f6",

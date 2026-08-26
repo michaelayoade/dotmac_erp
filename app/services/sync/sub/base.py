@@ -52,21 +52,6 @@ class _SubSyncBase:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_local_project_id(self, org_id: UUID, source_reference: str) -> UUID | None:
-        """Get local project ID for a Sub project."""
-        mapping = self._get_mapping(org_id, SourceEntityType.PROJECT, source_reference)
-        return mapping.local_entity_id if mapping else None
-
-    def get_local_ticket_id(self, org_id: UUID, source_reference: str) -> UUID | None:
-        """Get local ticket ID for a Sub ticket."""
-        mapping = self._get_mapping(org_id, SourceEntityType.TICKET, source_reference)
-        return mapping.local_entity_id if mapping else None
-
-    def get_local_task_id(self, org_id: UUID, source_reference: str) -> UUID | None:
-        """Get local task ID for a Sub work order."""
-        mapping = self._get_mapping(org_id, SourceEntityType.WORK_ORDER, source_reference)
-        return mapping.local_entity_id if mapping else None
-
     def _get_mapping(
         self,
         org_id: UUID,

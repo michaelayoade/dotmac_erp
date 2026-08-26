@@ -34,7 +34,7 @@ same database transaction. The current compatibility payload uses:
 
 | Field | Meaning |
 |---|---|
-| `source_request_id` | Immutable Sub `FieldMaterialRequest.id`; the legacy name is temporary |
+| `source_request_id` | Immutable Sub `FieldMaterialRequest.id` |
 | `request_type` | `ISSUE` |
 | `status` | Requested ERP state, `submitted`; it never asks ERP to issue automatically |
 | `requested_by_email` | Staff identity used to resolve the ERP employee |
@@ -117,5 +117,4 @@ to completion. It never restores the retired CRM runtime.
 
 After one agreed observation window with zero unexplained drift, remove the
 local Sub issue/fulfil endpoints. The retired CRM origin path is already absent;
-the frozen version-2 wire aliases remain until a separately versioned contract
-replaces them.
+ERP and Sub deploy the provider-neutral source-reference fields together.

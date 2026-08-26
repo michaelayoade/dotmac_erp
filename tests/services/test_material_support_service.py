@@ -81,3 +81,41 @@ def test_get_sub_outcome_uses_source_request_identity() -> None:
         )
 
     get_status.assert_called_once_with(org_id, source_request_id)
+
+
+def test_sub_status_lookup_is_qualified_against_legacy_collision() -> None:
+    db = MagicMock()
+    service = MaterialSupportService(db)
+    db.scalar.return_value = None
+
+    assert (
+        service.get_sub_outcome(
+            organization_id=uuid4(),
+            source_request_id="same-reference",
+        )
+        is None
+    )
+
+    sql = str(db.scalar.call_args.args[0])
+    assert "material_request.source_system" in sql
+    assert "material_request.source_reference" in sql
+
+
+def test_pending_worker_leaves_legacy_unknown_request_unchecked() -> None:
+    db = MagicMock()
+    service = MaterialSupportService(db)
+    legacy_unknown = MagicMock(source_system="legacy_unknown", status="PENDING_STOCK")
+
+    def rows_for(statement):
+        sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+        assert "source_system = 'sub'" in sql
+        result = MagicMock()
+        result.unique.return_value.all.return_value = []
+        return result
+
+    db.scalars.side_effect = rows_for
+    result = service.process_pending_stock_material_requests(uuid4())
+
+    assert result["checked"] == 0
+    assert result["issued"] == 0
+    assert legacy_unknown.status == "PENDING_STOCK"
