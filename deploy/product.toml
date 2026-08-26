@@ -318,6 +318,14 @@ pids = 256
 # not derived from any ERP schedule config; making it real requires Beat to
 # actually publish a tick timestamp somewhere a probe can read.
 last_tick_max_age_seconds = 120
+# HOW to read the last tick, declared rather than guessed. **And a recorded
+# gap**: this reads the schedule FILE's mtime, which Beat touches whether or not
+# the tasks it scheduled succeeded — so a Beat that is running and failing
+# everything still looks fresh. It is the only signal ERP has today. Closing
+# this properly needs Beat to publish a real last-successful-tick timestamp;
+# until it does, this budget detects a DEAD scheduler and not a broken one, and
+# the descriptor should not pretend otherwise.
+tick_command = ["sh", "-c", "stat -c %%Y /tmp/celerybeat-schedule"]
 
 # NO [roles.health.live] here either. Beat runs no HTTP server, and there is
 # no `ping_command` equivalent for it — it drains no queue, so `celery inspect
@@ -339,6 +347,10 @@ last_tick_max_age_seconds = 120
 # effectively "run alembic via the installed poetry shim," matching the exact
 # invocation scripts/deploy.sh uses inside the migration container.
 command = ["poetry", "run", "alembic", "upgrade", "heads"]
+# `poetry run` is load-bearing here, not decorative — ERP's deploy step uses it
+# (scripts/deploy.sh:201), so the read command must carry it too or it resolves
+# a different alembic.
+heads_command = ["poetry", "run", "alembic", "current"]
 owner_material = "MIGRATION_DATABASE_URL"
 
 # ─────────────────────────────────────────────────────────────────────────
