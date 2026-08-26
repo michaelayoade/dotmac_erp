@@ -1,0 +1,30 @@
+name: Deployment conformance
+
+# Calls the Starter-owned reusable gate, pinned by immutable commit.
+#
+# !! THE PIN BELOW IS NOT YET VALID ON A REMOTE. It is the SHA of the local
+# Starter branch that introduced the reusable workflow. Re-pin it to the
+# revision that lands on Starter's protected `main`, in the same change that
+# makes this job a required check. A branch or tag is not an admissible
+# substitute (Governance ADR 0006).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  deployment:
+    uses: michaelayoade/dotmac_starter_mt/.github/workflows/deployment-conformance.yml@436ad67a295946391a86ec4065124fa82f029fc7
+    with:
+      descriptor: deploy/product.toml
+      rendered-dir: deploy/rendered
+      thresholds: deploy/alerts/thresholds.json
+      # Not yet released. The job cannot pass until the distribution exists,
+      # which is the correct failure: a gate that went green by skipping an
+      # unpublished dependency would be worse than no gate.
+      foundation-version: "0.1.0a1"
