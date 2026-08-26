@@ -1,0 +1,104 @@
+{
+  "schema_version": 6,
+  "profile_id": "dotmac-erp-engineering-standards",
+  "repository": {
+    "canonical_url": "https://github.com/michaelayoade/dotmac_erp",
+    "default_branch": "main"
+  },
+  "governance_model": {
+    "kind": "pinned",
+    "canonical_url": "https://github.com/michaelayoade/dotmac_governance",
+    "revision": "0000000000000000000000000000000000000000",
+    "source": "docs/adr/0010-external-connector-surface-ratchet.md",
+    "status": "accepted"
+  },
+  "enforcement_mode": "required",
+  "authorities": [
+    {
+      "authority_id": "sub-material-support-intake",
+      "subject": "ERP admission and authoritative outcome for Sub-originated material-support requests.",
+      "protected_resources": [
+        "sub-material-support-acceptance",
+        "sub-material-support-outcome"
+      ],
+      "owner_component": "material-support-service",
+      "owner_implementation": "app/services/inventory/material_support.py",
+      "decision_interface": "app.services.inventory.material_support.MaterialSupportService",
+      "canonical_writer_paths": [
+        "app/services/inventory/material_support.py"
+      ],
+      "adapter_paths": [
+        "app/api/sync/dotmac_sub.py"
+      ],
+      "drift_test_paths": [
+        "tests/services/test_material_support_service.py",
+        "tests/sync/test_dotmac_sub_route_aliases.py"
+      ]
+    }
+  ],
+  "typed_contract_surfaces": [
+    {
+      "surface_id": "sub-material-support-contract",
+      "paths": [
+        "app/services/inventory/material_support.py"
+      ],
+      "require_public_annotations": true,
+      "forbid_any": true,
+      "require_immutable_records": true
+    },
+    {
+      "surface_id": "setting-domain-registry-contract",
+      "paths": [
+        "app/services/setting_domains.py",
+        "app/services/setting_domain_declaration.py"
+      ],
+      "require_public_annotations": true,
+      "forbid_any": true,
+      "require_immutable_records": true
+    }
+  ],
+  "module_declared_vocabularies": [
+    {
+      "vocabulary_id": "setting-domains",
+      "subject": "Setting domains are declared by the module that owns the settings and validated at the domain_settings write boundary.",
+      "member_type": {
+        "kind": "declared",
+        "name": "SettingDomain",
+        "path": "app/models/domain_settings.py"
+      },
+      "registry_interface": "app.services.setting_domains.registry",
+      "registry_implementation": "app/services/setting_domains.py",
+      "declaration_field": "setting_domains",
+      "declaration_paths": [
+        "app/services/setting_domain_declaration.py"
+      ],
+      "storage": {
+        "column": "domain",
+        "paths": [
+          "app/models/domain_settings.py"
+        ]
+      }
+    }
+  ],
+  "testing_kit_boundary": {
+    "test_roots": [
+      "tests"
+    ],
+    "kit_source_roots": [],
+    "conformance_probes": []
+  },
+  "external_connector_surface": {
+    "runtime_roots": [
+      "app"
+    ],
+    "baselines": {
+      "http_client": 21,
+      "webhook_surface": 11,
+      "provider_credential": 3,
+      "connector_task": 12,
+      "sync_checkpoint": 7,
+      "delivery_retry": 6
+    },
+    "exclusions": []
+  }
+}

@@ -1,6 +1,23 @@
 """
-Event Handler Checkpoint - Tracks handler processing for idempotency.
+Event Handler Receipt - per (event, handler) at-most-once execution receipt.
 Document 10: Event-Driven Architecture.
+
+This is LOCAL at-most-once machinery, not a position in an external feed.
+``event_id`` is a foreign key into ERP's own ``platform.event_outbox``; the
+relay (``app/tasks/outbox_relay.py``) claims, delivers and settles those rows
+in-process, and nothing here records progress over any upstream stream. The
+row is a receipt: "handler H has been run for local event E, with this
+outcome". Renamed from ``EventHandlerCheckpoint`` after the Governance ADR 0010
+adjudication recorded in ``docs/inventories/external-connector-surface.md``.
+
+PERSISTENCE IDENTITY IS UNCHANGED BY THAT RENAME, deliberately: the table is
+still ``platform.event_handler_checkpoint``, the primary key column is still
+``checkpoint_id``, the unique constraint is still
+``uq_checkpoint_event_handler``, and the PostgreSQL enum type is still
+``checkpoint_status``. The migration lineage
+(``alembic/versions/create_ifrs_schemas.py``) is untouched. Changing any of
+those names would be a migration wearing a rename's clothes; the frozen set is
+enforced by ``scripts/check_connector_adoption.py --persistence``.
 """
 
 import enum
@@ -24,16 +41,19 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 
-class CheckpointStatus(str, enum.Enum):
+class HandlerReceiptStatus(str, enum.Enum):
+    # The member values and the PostgreSQL type name (``checkpoint_status``,
+    # declared on the column below) are persistence identity and stay as
+    # created.
     PENDING = "PENDING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
 
 
-class EventHandlerCheckpoint(Base):
+class EventHandlerReceipt(Base):
     """
-    Tracks event handler processing for idempotency.
-    Ensures each handler processes an event exactly once.
+    Records that one handler has processed one LOCAL outbox event.
+    Ensures each handler applies an event's consequence at most once.
     """
 
     __tablename__ = "event_handler_checkpoint"
@@ -63,10 +83,10 @@ class EventHandlerCheckpoint(Base):
         DateTime(timezone=True),
         nullable=True,
     )
-    status: Mapped[CheckpointStatus] = mapped_column(
-        Enum(CheckpointStatus, name="checkpoint_status"),
+    status: Mapped[HandlerReceiptStatus] = mapped_column(
+        Enum(HandlerReceiptStatus, name="checkpoint_status"),
         nullable=False,
-        default=CheckpointStatus.PENDING,
+        default=HandlerReceiptStatus.PENDING,
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

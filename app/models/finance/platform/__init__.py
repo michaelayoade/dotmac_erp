@@ -3,9 +3,9 @@ Platform Infrastructure Schema - Document 10 & 11.
 Transactional outbox for reliable event delivery, API idempotency, and saga orchestration.
 """
 
-from app.models.finance.platform.event_handler_checkpoint import (
-    CheckpointStatus,
-    EventHandlerCheckpoint,
+from app.models.finance.platform.event_handler_receipt import (
+    EventHandlerReceipt,
+    HandlerReceiptStatus,
 )
 from app.models.finance.platform.event_outbox import (
     EventOutbox,
@@ -33,8 +33,8 @@ __all__ = [
     "EventOutbox",
     "EventStatus",
     "TerminalReason",
-    "EventHandlerCheckpoint",
-    "CheckpointStatus",
+    "EventHandlerReceipt",
+    "HandlerReceiptStatus",
     "IdempotencyRecord",
     "ServiceHook",
     "HookHandlerType",

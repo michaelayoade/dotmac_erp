@@ -261,10 +261,10 @@ from app.models.finance.payments import (
     WebhookStatus,
 )
 from app.models.finance.platform import (
-    CheckpointStatus,
-    EventHandlerCheckpoint,
+    EventHandlerReceipt,
     EventOutbox,
     EventStatus,
+    HandlerReceiptStatus,
     HookExecutionMode,
     HookHandlerType,
     IdempotencyRecord,
@@ -356,8 +356,8 @@ __all__ = [
     # Platform
     "EventOutbox",
     "EventStatus",
-    "EventHandlerCheckpoint",
-    "CheckpointStatus",
+    "EventHandlerReceipt",
+    "HandlerReceiptStatus",
     "IdempotencyRecord",
     "ServiceHook",
     "HookHandlerType",

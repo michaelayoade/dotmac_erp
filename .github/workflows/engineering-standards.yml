@@ -27,3 +27,62 @@ jobs:
         uses: michaelayoade/dotmac_governance/.github/actions/standards-check@b1dfd824bde6f9644ad5c805a71714b5093ced7f
         with:
           default-branch: ${{ github.event.repository.default_branch }}
+
+  # STAGED, AND DELIBERATELY RED. Governance ADR 0010 (the external-connector
+  # surface ratchet) is `Proposed`: no named human has accepted it and no
+  # revision carries it on canonical `main`, so there is nothing to pin. This
+  # job therefore refuses to run rather than reporting a pass it has not
+  # earned, and it is NOT added to the protected-branch required checks until
+  # the pin below is real.
+  #
+  # To unblock, in ONE change:
+  #   1. replace GOVERNANCE_REF with the 40-character SHA of the Governance
+  #      commit that accepts ADR 0010 on canonical `main`;
+  #   2. replace `governance_model.revision` in
+  #      `.dotmac/standards-profile.v6.json` with the SAME SHA;
+  #   3. promote `.dotmac/standards-profile.v6.json` over
+  #      `.dotmac/standards-profile.json` and repin the `standards` job above;
+  #   4. make this job required on `main`.
+  # `scripts/check_connector_adoption.py --pin` fails while any of 1-2 is
+  # outstanding, including the half-migrated state where only one is done.
+  connector-surface:
+    name: External connector surface ratchet (staged, blocked)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Placeholder. MUST become the accepted Governance ADR 0010 revision.
+      GOVERNANCE_REF: "PENDING-APPROVAL"
+    steps:
+      - name: Check out the evaluated product revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Refuse to run against an unapproved Governance revision
+        run: python3 scripts/check_connector_adoption.py --pin
+
+      # Runs even though the pin barrier above already failed the job, so the
+      # log shows the whole adoption state rather than only its first problem.
+      - name: Check the staged profile, the adjudicated rename, and inventory freshness
+        if: always()
+        run: |
+          python3 scripts/check_connector_adoption.py --profile
+          python3 scripts/check_connector_adoption.py --persistence
+          python3 scripts/check_connector_adoption.py --inventory
+
+      # Unreachable until the pin above is real; kept in the diff so the
+      # reviewer of the unblocking change sees the whole path, not a stub.
+      - name: Check out the accepted Governance engine
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: michaelayoade/dotmac_governance
+          ref: ${{ env.GOVERNANCE_REF }}
+          path: .governance
+
+      - name: Enforce the external-connector surface ratchet
+        run: |
+          python3 .governance/tools/dotmac-standards verify \
+            --root . \
+            --profile .dotmac/standards-profile.v6.json \
+            --default-branch "${{ github.event.repository.default_branch }}" \
+            --governance-root .governance \
+            --governance-repository michaelayoade/dotmac_governance \
+            --governance-revision "${GOVERNANCE_REF}"
