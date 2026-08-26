@@ -320,6 +320,12 @@ def validate_startup(db: Session | None = None, exit_on_failure: bool = True) ->
     # than in whatever request first reads it.
     all_errors.extend(validate_setting_domains())
 
+    # Install the shared OIDC client once. Secret material is held by the
+    # process and never fetched or reconstructed by a request handler.
+    from app.services.oidc_bootstrap import install_oidc_provider
+
+    all_errors.extend(install_oidc_provider(db))
+
     # Non-fatal security warning for potentially unsafe webhook automation config.
     warn_unconfigured_webhook_allowlist(db)
 

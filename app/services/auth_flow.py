@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 
@@ -1160,6 +1161,36 @@ class AuthFlow(ListResponseMixin):
         roles, permissions = _load_rbac_claims(db, str(person_uuid))
         access_token = _issue_access_token(
             db, str(person_uuid), str(session.id), roles, permissions
+        )
+        return {"access_token": access_token, "refresh_token": refresh_token}
+
+    @staticmethod
+    def issue_external_identity_session(
+        db: Session,
+        *,
+        person_id: uuid.UUID,
+        external_identity_binding_id: uuid.UUID,
+        request: Request,
+    ) -> dict[str, str]:
+        """Issue one ERP session inside the caller-owned finalizer transaction."""
+        refresh_token = secrets.token_urlsafe(48)
+        now = _now()
+        session = AuthSession(
+            person_id=person_id,
+            external_identity_binding_id=external_identity_binding_id,
+            status=SessionStatus.active,
+            token_hash=_hash_token(refresh_token),
+            ip_address=request.client.host if request.client else None,
+            user_agent=_truncate_user_agent(request.headers.get("user-agent")),
+            created_at=now,
+            last_seen_at=now,
+            expires_at=now + timedelta(days=_refresh_ttl_days(db)),
+        )
+        db.add(session)
+        db.flush()
+        roles, permissions = _load_rbac_claims(db, str(person_id))
+        access_token = _issue_access_token(
+            db, str(person_id), str(session.id), roles, permissions
         )
         return {"access_token": access_token, "refresh_token": refresh_token}
 

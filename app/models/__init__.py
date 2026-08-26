@@ -19,12 +19,16 @@ import app.models.procurement as procurement  # noqa: F401
 import app.models.support as support  # noqa: F401
 from app.models.audit import AuditActorType, AuditEvent  # noqa: F401
 from app.models.audit_field_tracking import FieldChangeLog  # noqa: F401
+from app.models.application_lifecycle import (  # noqa: F401
+    ApplicationLifecycleOperation,
+)
 from app.models.auth import (  # noqa: F401
     ApiKey,
     AuthProvider,
     FederatedIdentity,
     MFAMethod,
     MFAMethodType,
+    OIDCLoginState,
     Session,
     SessionStatus,
     UserCredential,

@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -48,6 +49,9 @@ class PersonStatus(enum.Enum):
 
 class Person(Base):
     __tablename__ = "people"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "id", name="uq_people_organization_id_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

@@ -107,6 +107,36 @@ admissible. Revision 0001 is still atomic, and its incompatible ERP identity,
 RBAC and audit tables plus RLS/grant effects remain blocked by
 `docs/architecture/kernel-0001-dispositions.md`.
 
+## Managed application lifecycle — ERP-local identity authority adopted
+
+ERP now owns the namespaced `erp.application.lifecycle.v1` contract and its
+organization-scoped local operation receipt. Admin activation and HR
+offboarding converge on `app.services.application_lifecycle`; Integrator remains
+the transport command/retry owner and performs all provider I/O.
+
+Boundary 4 remains intact. ADR-0004 adopts published stateless
+`dotmac-auth-oidc` while ERP Person/`sessions` stay authoritative. The
+organization-scoped `federated_identities` table has one writer, sessions carry
+binding provenance, and finalize/issue or disable/selective-revoke occur in one
+ERP transaction. Login has no JIT, email linking, provider role, or kernel
+Party/AuthSession path.
+
+The product-owned `erp.identity-user-application-lifecycle.v1` composition
+maps managed-identity public APPLY evidence `/issuer_url` and `/subject` into
+ERP desired input without values. Provider binding stays local. Exact kernel
+a69 and managed-identity a1 publication/lock resolution is the remaining
+release gate; no path dependency or caller-value fallback is admitted.
+
+The contract snapshot, composition and every held JSON Schema document are
+verified through Kernel a69's `CapabilityContractSnapshot`,
+`CapabilityCompositionSnapshot` and `CapabilitySchemaDocument`. The grammar
+binds canonical draft-2020-12 bytes, `$id`, digest and local-only references;
+ERP has no parallel canonicalizer. `pyproject.toml` names exact a69/auth-oidc
+a1/managed-identity a1 artifacts, but the lock still resolves kernel a56 until
+those immutable artifacts can be resolved from the private index. Observer
+must regenerate the lock and run the installed-wheel contract gates before
+activation.
+
 ## UI slice U1 — packaged empty-state consumer
 
 `dotmac-ui` owns the fleet presentation contract; ERP owns its FastAPI/Jinja
@@ -481,6 +511,7 @@ slice that adopts them, in the same change that updates this table.
 |---|---|---|---|
 | `dotmac_kernel.money` | consume-pure | Early (E4) | `Money`/`Currency`/immutable `ExchangeRate` values at API/event boundaries only; ERP `Numeric(20,6)`, FX `(20,10)`, tax ratios, functional currency stay internal (boundary 6) |
 | `dotmac_kernel.capabilities` | consume-pure | Early (E7) | `CapabilityCatalogue`; one domain owner per capability code |
+| `dotmac_kernel.capability_contract` + `capability_composition` | consume-pure, lock pending | Managed lifecycle (a69) | Pure grammar for exact product-owned capability and value-free composition snapshots. ERP owns `erp.application.lifecycle.v1` and `erp.identity-user-application-lifecycle.v1`; `pyproject.toml` has the exact a69 pin, while the stale a56 lock keeps installed-wheel and Observer acceptance fail-closed. No copied parser or path dependency is admitted. |
 | `dotmac_kernel.features` | consume-pure | Early (E7) | `FeatureManifest` as declared metadata ONLY — `mount_features` is never called; ERP routers keep mounting via `app/main.py` |
 | `dotmac_kernel.profiles` | consume-pure | Early (E7) | `DeploymentProfileSpec`/registry for release preflight; never branch business logic on profile strings |
 | `dotmac_kernel.assembly` | consume-pure | Early (E7) | `ProductAssemblySpec` as metadata/release validation; does not replace ERP app startup |
@@ -615,9 +646,9 @@ incl. `hr`, `lease`, `core_org`, `tax`, `rpt`, `pm`, `fa`, `support`,
   `Person` (`public.people`) + `user_credentials`/`sessions`/`mfa_methods`/
   `api_keys` (`app/models/auth.py`). Prohibited for this program (boundary 4);
   guarded already by `tests/architecture/test_identity_protocol_boundary.py`.
-  There is no OIDC adapter to compare against: `app/services/sso/` was deleted
-  on 2026-08-15 (never enabled, zero rows). `federated_identities` survives as
-  an empty table with no reader, pending a separate retirement change.
+  Deleted `app/services/sso/` remains retired. Published `dotmac-auth-oidc`
+  owns protocol verification; ERP's binding authority owns
+  `federated_identities`, and ERP sessions carry binding provenance.
 
 ### Outbox
 

@@ -7048,6 +7048,46 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/integrations/application-lifecycle/apply": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "83fcb372afaa",
+   "responses": {
+    "200": "f7b33687c8ee",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/integrations/application-lifecycle/cancel": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "35ea27be4c6f",
+   "responses": {
+    "200": "f7b33687c8ee",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/integrations/application-lifecycle/observe": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "35ea27be4c6f",
+   "responses": {
+    "200": "f7b33687c8ee",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/integrations/application-lifecycle/plan": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "388b66ddc730",
+   "responses": {
+    "200": "f7b33687c8ee",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/inventory/categories": {
    "params": [
     "cookie:access_token",
@@ -9471,6 +9511,15 @@
   "ApiKeyGenerateResponse": "a85993b47321",
   "ApiKeyRead": "7f014ebe0be0",
   "ApiKeyUpdate": "b3dfdcfeb9d7",
+  "ApplicationLifecycleApplyRequest": "2ed489ada83d",
+  "ApplicationLifecycleFailure": "a85348470ee1",
+  "ApplicationLifecycleOperationState": "e35c71f0adcb",
+  "ApplicationLifecycleOutcome": "c921e2089c1d",
+  "ApplicationLifecyclePlanRequest": "ff2824cf1401",
+  "ApplicationLifecycleReferenceRequest": "7a0708b7f1a7",
+  "ApplicationLifecycleResult": "c5c26293bf09",
+  "ApplicationLifecycleState": "7528d11aebe0",
+  "ApplicationLifecycleTarget": "4239504f5f06",
   "ApplicationStatusResponse": "015370235cf5",
   "ApplicationSubmitRequest": "156eb8ab9d53",
   "ApplicationSubmitResponse": "b94ad4ea6f47",
@@ -9623,6 +9672,7 @@
   "DepreciationRunCreate": "264f36cf3aab",
   "DepreciationRunRead": "58a7c1d04517",
   "DepreciationScheduleRead": "feb6baa9231a",
+  "DesiredApplicationState": "b6d77e1e9675",
   "DeviceRegisterRequest": "a5059796ac48",
   "DeviceUnregisterRequest": "e9bc5bf17e3f",
   "DimensionFilters": "ac56ef5ab02f",
@@ -9694,6 +9744,7 @@
   "ExpenseTotals": "f3faa10b552e",
   "ExpenseTotalsRequest": "76d6dab5fdff",
   "ExpenseTotalsResponse": "a57e60a710d1",
+  "ExternalSubject": "34191f303a8f",
   "FIFOInventoryRead": "bc93daf81a13",
   "FIFOLayerRead": "dc0491f468a7",
   "FiscalPeriodCreate": "f7d6a8efc032",

@@ -1,9 +1,53 @@
 # OIDC Identity Contract
 
-> **Status: NOT IMPLEMENTED (amended 2026-08-15).** Dotmac ERP has no OpenID
-> Connect implementation and accepts no external identity assertion. The
-> contract below is retained as the *target* boundary and as the record of what
-> was removed and why. It is not a description of running code.
+> **Status: SHARED ADAPTER ADOPTED (amended 2026-08-17).** ERP has no local
+> protocol implementation. It deliberately composes published
+> `dotmac-auth-oidc` and keeps Person, binding, session and cookie authority
+> local as recorded by ADR-0004.
+
+## Amendment — 2026-08-17 ERP-local finalization is implemented
+
+This amendment supersedes the earlier “login is still blocked” state below,
+which remains as decision history. `ERPExternalIdentityAuthority` is the sole
+writer for an organization-scoped exact `(provider_binding, issuer, subject)`
+binding. Login only finalizes an active pre-provisioned binding and active
+Person; it never creates or links by email. `AuthFlow` issues a provenance-
+bearing ERP session under the same database transaction. Disable locks the same
+binding row and selectively revokes only its sessions in that transaction.
+
+The published adapter owns discovery, HTTPS endpoints, asymmetric signature
+verification, required issuer/subject/audience, multi-audience `azp`, S256 and
+nonce. ERP consumes only verified issuer and subject. Its server-side ceremony
+store is FORCE-RLS protected and claims with atomic `DELETE ... RETURNING`.
+Client secret material is installed once at startup; an explicit failed refresh
+retains the working held registration, and request paths do not read the
+environment or secret store. Kernel Party/AuthSession remain prohibited.
+
+Managed provisioning does not trust caller-copied subject values. The
+product-owned capability composition maps the public `identity.user.lifecycle`
+APPLY receipt's exact `issuer_url` and immutable `subject` into ERP's desired
+external-subject tuple. The upstream `identity_ref` remains the IdP account's
+stable lookup/correlation key; ERP still resolves only its own exact tuple to
+Person. ERP's local `provider_binding` is never sourced from provider evidence.
+
+## Superseded decision history — managed lifecycle was present while login was blocked
+
+ERP now owns the provider-neutral `erp.application.lifecycle.v1` contract and a
+durable local PLAN/APPLY/OBSERVE/CANCEL receipt. This does **not** reintroduce
+OIDC. PLAN records the exact target and current-state digests; APPLY verifies
+those pins and then returns the stable failure
+`external_identity_not_adopted` before changing Person, credentials or sessions.
+
+The reason is an authoritative conflict, not missing adapter code:
+`docs/PLATFORM_ADOPTION_LEDGER.md` prohibits kernel `Party`, `UserCredential`
+and `AuthSession`, while the released `dotmac-auth-oidc` adoption path resolves
+kernel external-identity bindings and stamps kernel session provenance. Using
+the retained, globally unique ERP `federated_identities` table would restore the
+retired parallel identity owner; writing provenance into ERP `sessions` would
+create a second session-revocation contract. An explicit ERP identity/session
+authority migration ADR must supersede that prohibition before APPLY or login
+can be enabled. Until then, the capability's activation check remains false and
+the API fails closed.
 
 ## Amendment — the implementation was deleted
 

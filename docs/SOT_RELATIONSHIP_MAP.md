@@ -28,7 +28,7 @@ semantics.
 | Domain | Owns | Rule in one line |
 |---|---|---|
 | `organization_tenancy` | org context priming, ORM filter, RLS GUCs | Both enforcement layers are primed together or not at all |
-| `identity_access` | auth flows, guards, RBAC catalogue | Person is the single login identity; RBAC scope decision pending (ledger finding 2) |
+| `identity_access` | auth flows, exact external binding/finalization, local access lifecycle, RBAC catalogue | Person is the login identity; ERP alone writes bindings and sessions |
 | `configuration_control` | settings writes + history, specs, flags | One canonical settings writer; flags never substitute for authorization |
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
@@ -78,15 +78,24 @@ Dotmac ERP owns only the backoffice and accounting records created inside ERP.
 - Delivery failure is retried and reconciled locally; there is no shared
   transaction or required shared business-domain runtime.
 
-Authentication follows the same boundary, in its strongest form: ERP accepts no
-external identity assertion at all. Login is local username and password, and
-ERP is the sole issuer of its sessions and cookies. The unshipped OIDC adapter
-was deleted on 2026-08-15 (never enabled, zero rows in production), so no
-protocol owner is registered in `app/services/sot_relationships.py`. ERP does
-not query an identity-provider database, share JWT signing secrets, share
-cookies, or accept provider roles as ERP permissions. Reintroducing external
-identity means adopting the released `dotmac-auth-oidc` package under the terms
-in `docs/oidc_identity_contract.md`.
+Authentication preserves the product boundary. Published `dotmac-auth-oidc`
+verifies the external ceremony; `ERPExternalIdentityAuthority` resolves an
+exact pre-provisioned subject to Person; and `AuthFlow` issues an ERP session
+carrying binding provenance. ERP does not create identities at login, link by
+email, share cookies or signing keys, or accept provider roles.
+
+`app.services.application_lifecycle` is the one ERP owner for Person login
+eligibility, credential activation/deactivation orchestration, and the durable
+product-local plan/receipt exposed at
+`/api/v1/integrations/application-lifecycle/{plan,apply,observe,cancel}`. Admin
+activation and HR offboarding delegate to that owner. Its namespaced
+`erp.application.lifecycle.v1` contract is provider-neutral and carries only an
+exact organization/person/desired-state/external-subject target; Integrator owns
+transport commands and retries. The local operation row is ERP execution
+evidence, not a second Integrator ledger. APPLY activates only when the exact
+provider registration is held at startup. Provisioning or
+disable/selective-revocation occurs in one ERP transaction; no kernel identity
+or session table is composed.
 
 The detailed local contract is `docs/replaceable_application_boundary.md`.
 

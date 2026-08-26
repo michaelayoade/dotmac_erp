@@ -97,6 +97,10 @@ def test_attendance_scope_requires_explicit_grant() -> None:
     with pytest.raises(HTTPException) as exc:
         dependency(auth={"scopes": []})
     assert exc.value.status_code == 403
+    assert exc.value.detail == {
+        "code": "authorization_failed",
+        "message": "Service credential lacks the required scope.",
+    }
     assert dependency(auth={"scopes": ["sub:attendance:write"]})["scopes"]
 
 

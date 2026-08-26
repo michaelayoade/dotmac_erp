@@ -40,6 +40,7 @@ from app.models.person import Person, PersonStatus
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
+from app.services.application_lifecycle import ApplicationAccessLifecycle
 from app.services.common import coerce_uuid
 from app.services.formatters import format_datetime as _format_datetime
 from app.services.infrastructure_health import infrastructure_health_service
@@ -1161,21 +1162,10 @@ class AdminWebService:
             raise HTTPException(status_code=404, detail="User not found")
 
         try:
-            person.status = PersonStatus.active
-            person.is_active = True
-
-            credential = db.scalar(
-                select(UserCredential).where(
-                    UserCredential.person_id == person.id,
-                    UserCredential.provider == AuthProvider.local,
+            with db.begin_nested():
+                change = ApplicationAccessLifecycle(db).activate(
+                    person.organization_id, person.id
                 )
-            )
-            if credential:
-                credential.is_active = True
-                credential.failed_login_attempts = 0
-                credential.locked_until = None
-
-            db.commit()
 
             fire_audit_event(
                 db=db,
@@ -1187,13 +1177,12 @@ class AdminWebService:
                 new_values={
                     "status": PersonStatus.active.value,
                     "is_active": True,
-                    "credential_unlocked": bool(credential),
+                    "credential_unlocked": change.credentials_changed > 0,
                 },
             )
             return None
 
         except Exception as e:
-            db.rollback()
             return f"Failed to activate user: {str(e)}"
 
     @staticmethod

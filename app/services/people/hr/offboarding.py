@@ -6,21 +6,14 @@ import logging
 import secrets
 import string
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-try:
-    from datetime import UTC  # type: ignore
-except ImportError:  # pragma: no cover
-    UTC = timezone.utc
-
-from app.models.auth import UserCredential
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.models.person import Person, PersonStatus
-from app.services.auth_flow import revoke_sessions_for_person
+from app.models.person import Person
+from app.services.application_lifecycle import ApplicationAccessLifecycle
 from app.services.mailcow.client import MailcowClient
 from app.services.mailcow.cleanup_queue import SogoCleanupQueueClient
 from app.services.mailcow.config import (
@@ -114,17 +107,18 @@ class EmployeeOffboardingService:
             result.errors.append("employee has no linked person")
             return result
 
+        access_change = ApplicationAccessLifecycle(self.db).deactivate(
+            organization_id, person.id
+        )
+        result.erp_credentials_disabled = access_change.credentials_changed
+        result.erp_sessions_revoked = access_change.sessions_revoked
+        result.person_deactivated = access_change.changed
+
         email = (person.email or "").strip().lower()
         result.email = email
         if not email:
             result.errors.append("linked person has no email")
             return result
-
-        result.erp_credentials_disabled = self._disable_erp_credentials(person.id)
-        result.erp_sessions_revoked = revoke_sessions_for_person(
-            self.db, str(person.id)
-        )
-        result.person_deactivated = self._deactivate_person(person)
 
         if not self.config.enabled:
             result.skipped.append("mailcow offboarding integration disabled")
@@ -133,30 +127,6 @@ class EmployeeOffboardingService:
         result.mailcow_enabled = True
         self._run_mailcow_steps(employee, person, email, result)
         return result
-
-    def _disable_erp_credentials(self, person_id: UUID) -> int:
-        credentials = self.db.scalars(
-            select(UserCredential).where(
-                UserCredential.person_id == person_id,
-                UserCredential.is_active.is_(True),
-            )
-        ).all()
-        now = datetime.now(UTC)
-        for credential in credentials:
-            credential.is_active = False
-            credential.locked_until = now
-            credential.must_change_password = True
-            credential.failed_login_attempts = 0
-        return len(credentials)
-
-    def _deactivate_person(self, person: Person) -> bool:
-        changed = (
-            person.is_active is not False or person.status != PersonStatus.inactive
-        )
-        person.is_active = False
-        person.status = PersonStatus.inactive
-        person.updated_at = datetime.now(UTC)
-        return changed
 
     def _run_mailcow_steps(
         self,

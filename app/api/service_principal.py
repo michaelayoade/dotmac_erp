@@ -126,7 +126,7 @@ def require_explicit_service_scope(scope: str):
                 status_code=403,
                 detail={
                     "code": "authorization_failed",
-                    "message": "Service credential lacks the required attendance scope.",
+                    "message": "Service credential lacks the required scope.",
                 },
             )
         return auth

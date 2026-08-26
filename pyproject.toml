@@ -50,7 +50,12 @@ pymysql = "^1.1.1"
 # tests/architecture/test_kernel_import_boundary.py. No extras: [testing]'s
 # only pull (httpx) and [licensing]'s (cryptography) are already ERP main
 # dependencies at compatible versions.
-dotmac-kernel = {version = "0.1.0a56", source = "forgejo"}
+dotmac-kernel = {version = "0.1.0a69", source = "forgejo"}
+
+# Stateless OIDC protocol adapter. ERP retains Person/session authority and
+# supplies its request-transaction-bound PostgreSQL StateStore.
+dotmac-auth-oidc = {version = "0.1.0a1", source = "forgejo"}
+dotmac-managed-identity-contracts = {version = "0.1.0a1", source = "forgejo"}
 
 # Shared presentation contract: compiled assets and inert Jinja package data.
 # ERP supplies the host loader and never vendors or recompiles this package.

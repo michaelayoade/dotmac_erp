@@ -131,10 +131,34 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "single has_permission owner is the consolidation target."
                 ),
             ),
-            # No external-identity protocol owner is registered: ERP's
-            # unshipped OIDC adapter was deleted, and the registry records
-            # as-built owners only. Reintroduction adopts the released
-            # dotmac-auth-oidc package and re-registers an owner here.
+            SOTService(
+                name="auth.application_access",
+                module="app.services.application_lifecycle",
+                owns=(
+                    "Person login-eligibility transitions",
+                    "local credential activation/deactivation orchestration",
+                    "managed application lifecycle plans and execution receipts",
+                ),
+                depends_on=("auth.flow",),
+                notes=(
+                    "Activation delegates exact binding changes to the ERP "
+                    "external-identity authority; Integrator remains transport."
+                ),
+            ),
+            SOTService(
+                name="auth.external_identity",
+                module="app.services.external_identity",
+                owns=(
+                    "exact external-subject to Person bindings",
+                    "locked external-login finalization",
+                    "binding disable and selective session revocation",
+                ),
+                depends_on=("auth.flow",),
+                notes=(
+                    "dotmac-auth-oidc verifies protocol assertions; ERP alone "
+                    "writes bindings and ERP session provenance."
+                ),
+            ),
             SOTService(
                 name="auth.rbac",
                 module="app.services.rbac",
@@ -149,11 +173,17 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 ),
             ),
         ),
-        entrypoints=("app.api.auth_flow", "app.web.auth", "app.api.rbac"),
+        entrypoints=(
+            "app.api.auth_flow",
+            "app.api.application_lifecycle",
+            "app.web.auth",
+            "app.api.rbac",
+        ),
         rule=(
             "Person is the single ERP login identity; credentials, sessions, "
-            "MFA, and API keys resolve to person_id. ERP accepts no external "
-            "identity assertion today. External authorization claims and "
+            "MFA, API keys and application access resolve to person_id. ERP "
+            "accepts only a shared-adapter verified exact external subject. "
+            "External authorization claims and "
             "counterparties (Customer, Supplier) are not ERP identities or "
             "permission owners."
         ),

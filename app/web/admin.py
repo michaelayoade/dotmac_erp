@@ -21,6 +21,7 @@ from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
     get_db,
+    get_db_for_org,
     optional_web_auth,
     require_admin_access,
     resolve_brand_context,
@@ -223,7 +224,7 @@ def admin_users_delete(
 def admin_users_activate(
     request: Request,
     user_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Reactivate a user account."""

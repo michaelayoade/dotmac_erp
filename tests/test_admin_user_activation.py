@@ -27,6 +27,11 @@ def test_activate_user_account_reactivates_profile_and_local_credential(
     user_credential.locked_until = datetime.now(UTC) + timedelta(minutes=15)
     db_session.commit()
 
+    def reject_service_commit() -> None:
+        raise AssertionError("the request dependency owns commit")
+
+    monkeypatch.setattr(db_session, "commit", reject_service_commit)
+
     error = admin_web_service.activate_user_account(db_session, str(person.id))
 
     assert error is None

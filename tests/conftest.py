@@ -398,6 +398,7 @@ from app.models.auth import (  # noqa: E402
     ApiKey,
     FederatedIdentity,
     MFAMethod,
+    OIDCLoginState,
     SessionStatus,
     UserCredential,
 )
@@ -419,6 +420,9 @@ from app.models.expense import (  # noqa: E402
     ExpenseClaimItem,
 )
 from app.models.feature_flag import FeatureFlagRegistry  # noqa: E402
+from app.models.application_lifecycle import (  # noqa: E402
+    ApplicationLifecycleOperation,
+)
 from app.models.finance.ar.dotmac_sub_sync_watermark import (  # noqa: E402
     DotmacSubSyncWatermark,
 )
@@ -443,9 +447,11 @@ from app.models.scheduler import ScheduledTask, ScheduleType  # noqa: E402
 # List of tables that are SQLite-compatible (public schema models only)
 # IFRS models use PostgreSQL-specific types (JSONB, ARRAY) that SQLite doesn't support
 SQLITE_COMPATIBLE_TABLES = [
+    ApplicationLifecycleOperation.__table__,
     Person.__table__,
     UserCredential.__table__,
     FederatedIdentity.__table__,
+    OIDCLoginState.__table__,
     AuthSession.__table__,
     ApiKey.__table__,
     MFAMethod.__table__,

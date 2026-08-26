@@ -3,10 +3,9 @@ Auth web view service.
 
 Provides response builders for auth-related web routes.
 
-ERP has no external-identity protocol adapter: login is local username and
-password only, and ERP is the sole issuer of its sessions and cookies. See
-``docs/oidc_identity_contract.md`` for what reintroducing an external identity
-provider would require.
+ERP remains the sole issuer of its sessions and cookies. External protocol
+verification is deliberately delegated to the published shared adapter; this
+view service retains only ERP navigation and rendering decisions.
 """
 
 import logging

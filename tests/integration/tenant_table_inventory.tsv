@@ -320,6 +320,7 @@ public	_migration_tz_affected	direct	false	false	app_admin	0	false	--	--
 public	_migration_void_erpnext_invoices	unclassified	false	false	app_admin	0	false	--	--
 public	_migration_void_orphan_journals	unclassified	false	false	app_admin	0	false	--	--
 public	alembic_version	unclassified	false	false	app_admin	0	false	--	--
+public	application_lifecycle_operations	direct	true	true	app_admin	1	false	rw	--
 public	api_keys	inherited	false	false	app_admin	0	false	--	--
 public	audit_events	direct	false	false	app_admin	0	false	--	--
 public	batch_operations	direct	false	false	app_admin	0	false	--	--
@@ -330,7 +331,7 @@ public	domain_setting_history	direct	false	false	app_admin	0	false	--	--
 public	domain_settings	direct	false	false	app_admin	0	false	--	--
 public	email_profile	direct	false	false	app_admin	0	false	--	--
 public	feature_flag_registry	inherited	false	false	app_admin	0	false	--	--
-public	federated_identities	inherited	false	false	app_admin	0	false	--	--
+public	federated_identities	direct	true	true	app_admin	1	false	rw	--
 public	help_article_feedback	direct	false	false	app_admin	0	false	--	--
 public	help_article_override	direct	false	false	app_admin	0	false	--	--
 public	help_search_event	direct	false	false	app_admin	0	false	--	--
@@ -340,6 +341,7 @@ public	infrastructure_health_status	unclassified	false	false	app_admin	0	false	-
 public	mfa_methods	inherited	false	false	app_admin	0	false	--	--
 public	module_email_routing	direct	false	false	app_admin	0	false	--	--
 public	notification	direct	false	false	app_admin	0	false	--	--
+public	oidc_login_states	direct	true	true	app_admin	1	false	rw	--
 public	org_metric_snapshot	direct	false	false	app_admin	0	false	--	--
 public	people	direct	true	true	app_admin	4	true	--	--
 public	permissions	unclassified	false	false	app_admin	0	false	--	--

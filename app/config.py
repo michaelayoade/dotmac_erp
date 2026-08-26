@@ -126,9 +126,22 @@ class Settings:
     # Application URL (for email links)
     app_url: str = os.getenv("APP_URL", "http://localhost:8000")
 
-    # ERP has no external-identity protocol adapter. The OIDC_* settings that
-    # used to live here were deleted with the unshipped OIDC implementation and
-    # must not be restored ad hoc — see docs/oidc_identity_contract.md.
+    # Deliberate dotmac-auth-oidc adoption. ERP_* names are a new composition,
+    # not a revival of the deleted local OIDC protocol implementation.
+    erp_oidc_enabled: bool = os.getenv("ERP_OIDC_ENABLED", "false").lower() == "true"
+    erp_oidc_provider_binding: str = os.getenv("ERP_OIDC_PROVIDER_BINDING", "primary")
+    erp_oidc_issuer: str = os.getenv("ERP_OIDC_ISSUER", "")
+    erp_oidc_client_id: str = os.getenv("ERP_OIDC_CLIENT_ID", "")
+    erp_oidc_client_secret: str = os.getenv("ERP_OIDC_CLIENT_SECRET", "")
+    erp_oidc_redirect_uri: str = os.getenv("ERP_OIDC_REDIRECT_URI", "")
+    erp_oidc_discovery_url: str | None = os.getenv("ERP_OIDC_DISCOVERY_URL") or None
+    erp_oidc_timeout_seconds: float = float(os.getenv("ERP_OIDC_TIMEOUT_SECONDS", "10"))
+    erp_oidc_ceremony_ttl_seconds: int = int(
+        os.getenv("ERP_OIDC_CEREMONY_TTL_SECONDS", "600")
+    )
+    erp_oidc_clock_skew_seconds: int = int(
+        os.getenv("ERP_OIDC_CLOCK_SKEW_SECONDS", "60")
+    )
 
     # ==========================================================================
     # S3 / MinIO Object Storage

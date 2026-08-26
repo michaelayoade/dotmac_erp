@@ -21,6 +21,7 @@ import app.models as app_models  # noqa: F401
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
+from app.api.application_lifecycle import router as application_lifecycle_router
 from app.api.careers import router as careers_api_router
 from app.api.coach import router as coach_router
 from app.api.crm import router as crm_router
@@ -703,6 +704,7 @@ def _include_api_router(router, dependencies=None):
 # ---------------------------------------------------------------------------
 _include_api_router(auth_router, dependencies=[Depends(require_role("admin"))])
 _include_api_router(auth_flow_router)
+app.include_router(application_lifecycle_router, prefix="/api/v1")
 _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(me_router)
 _include_api_router(workflow_tasks_router, dependencies=[Depends(require_tenant_auth)])
