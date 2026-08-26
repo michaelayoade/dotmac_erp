@@ -1186,6 +1186,27 @@ url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
 reference = "forgejo"
 
 [[package]]
+name = "dotmac-tax"
+version = "0.1.0a3"
+description = "Composable tax determination, statutory reporting and return-lifecycle owner"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["main"]
+files = [
+    {file = "dotmac_tax-0.1.0a3-py3-none-any.whl", hash = "sha256:a058df0e57c808e0014da0a8e1a98a887f25d7ff2695e884e48bbf714eacb2c4"},
+    {file = "dotmac_tax-0.1.0a3.tar.gz", hash = "sha256:63842b89962331e1cdb3351679616f0d93e057186744f63bd04c01a4371340ca"},
+]
+
+[package.dependencies]
+dotmac-kernel = ">=0.1.0a85"
+sqlalchemy = ">=2.0,<3.0"
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
 name = "dotmac-ui"
 version = "0.1.0a7"
 description = "DotMac shared UI design system — semantic design tokens and compiled, self-hosted, CSP-compatible assets (ADR-0006 U1)"
@@ -5137,4 +5158,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "292deb8f51ca17452949df51deb1dc7cb30cc60286936ab234274ac8b7324c4f"
+content-hash = "ffb68b1c0213c00dce89f0c485c806216833107476656a7f6e935a3038745752"

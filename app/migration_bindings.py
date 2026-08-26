@@ -114,6 +114,7 @@ COMPOSED_MODULE_LINEAGES: Final[dict[str, str]] = {
     "accounting": "ac_0001_accounting",
     "imports": "im_0001_import_runs",
     "numbering": "nu_0001_numbering",
+    "tax": "tx_0003_result_fingerprint",
 }
 
 __all__ = ["ASSEMBLY_PREREQUISITE_BINDINGS", "COMPOSED_MODULE_LINEAGES"]

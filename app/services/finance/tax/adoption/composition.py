@@ -1,27 +1,10 @@
-"""Where ERP's `dotmac-tax` adoption actually stands: NOT COMPOSED.
+"""ERP's `dotmac-tax` composition declaration: installed, migrated, disabled.
 
-The sibling of `app/accounting_adoption.py`, deliberately much smaller, because
-much less has happened.  For Accounting the pin and the lineage are in place and
-only the flag is off.  For Tax:
-
-- `dotmac-tax` is **not** a dependency (it is absent from `pyproject.toml` and
-  from `poetry.lock`);
-- its `tx` lineage is **not** in `alembic.ini`'s `version_locations`;
-- `mod_tax` does not exist in any ERP database; and
-- no ERP writer, reader, calculator or filing path has been repointed.
-
-Ledger item C1 delivers the two typed adapters and their tests and nothing
-else.  Adapters can be written, reviewed and unit-tested before the package is
-pinned precisely because they speak ERP-owned contracts
-(`app/services/finance/tax/adoption/contracts.py`); the ONLY place that touches
-`dotmac_tax` is `to_tax_fact`, and it imports lazily so that importing ERP's
-tax package does not require a distribution ERP has not adopted.
-
-Pinning, composing the lineage, backfilling policy data and switching a cohort's
-writer are C2/C3/C4 — each with its own gate in
-`docs/architecture/dotmac-tax-adoption-boundary.md` § "Composition and release
-gates".  Supplying a module's tables does not cut anything over, and neither
-does supplying an adapter.
+C2 pins the released a3 artifact and composes its independent ``tx`` lineage.
+That creates module-owned storage and lets the adapters consume the released
+public contract. It does not backfill policy, run a shadow, repoint a writer or
+move tax authority. ``TAX_COMPOSITION_ENABLED`` therefore remains false by
+default and every runtime owner remains ERP's legacy path.
 """
 
 from __future__ import annotations
@@ -29,25 +12,19 @@ from __future__ import annotations
 import os
 from typing import Final
 
-#: The distribution and import names ERP will eventually depend on.  Named as
-#: constants so the "is it absent?" assertions have one literal to check.
+#: The exact released distribution and public import ERP composes.
 DISTRIBUTION: Final = "dotmac-tax"
 IMPORT_PACKAGE: Final = "dotmac_tax"
 MODULE_CODE: Final = "tax"
 
-#: The version of the published contract these adapters were written against.
-#: Recorded so that a future pin, the lock and the mirrored contract are checked
-#: against ONE literal.  Recording a version is NOT a claim that it is pinned,
-#: published or adopted: this repository holds no authoritative external oracle
-#: (release run, peeled tag, deployment run) for it, and per the cross-repository
-#: engineering governance in `AGENTS.md` a repository-local claim may only be
-#: derived from repository-local facts.  What IS checkable here — and what
-#: `composition_state()` reports — is whether the distribution is installed.
-CONTRACT_VERSION: Final = "0.1.0a2"
+#: Published contract and artifact version proved by release run 32898397980;
+#: annotated tag ``dotmac-tax-v0.1.0a3`` peels to Starter commit
+#: ``531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9``.
+CONTRACT_VERSION: Final = "0.1.0a3"
 
-#: The Alembic version location ERP would compose at C2.  Present as a literal
-#: so a test can assert `alembic.ini` does NOT contain it yet.
+#: The released lineage and exact reviewed head ERP composes.
 MIGRATION_VERSION_LOCATION: Final = "dotmac_tax.migrations:versions"
+LINEAGE_HEAD: Final = "tx_0003_result_fingerprint"
 
 #: The single deploy-time knob, prod-safe default.  Read at import and never
 #: per-request: "who owns tax determination?" must have one answer for the life
@@ -82,7 +59,7 @@ def composition_state() -> dict[str, object]:
         "contract_version": CONTRACT_VERSION,
         "enabled": COMPOSITION_ENABLED,
         "installed_version": installed,
-        "ready": COMPOSITION_ENABLED and installed is not None,
+        "ready": COMPOSITION_ENABLED and installed == CONTRACT_VERSION,
     }
 
 
@@ -98,9 +75,14 @@ def require_composition_ready() -> str:
     installed = _module_version()
     if installed is None:
         raise TaxCompositionNotReady(
-            f"{DISTRIBUTION} is not installed. ERP has not pinned it; C1 "
-            "delivers adapters only. See docs/architecture/"
+            f"{DISTRIBUTION} is not installed although ERP pins it at C2. See "
+            "docs/architecture/"
             "dotmac-tax-adoption-boundary.md."
+        )
+    if installed != CONTRACT_VERSION:
+        raise TaxCompositionNotReady(
+            f"{DISTRIBUTION}=={installed} is installed but ERP reviewed "
+            f"{CONTRACT_VERSION}; refusing contract or migration drift"
         )
     if not COMPOSITION_ENABLED:
         raise TaxCompositionNotReady(
@@ -116,6 +98,7 @@ __all__ = [
     "CONTRACT_VERSION",
     "DISTRIBUTION",
     "IMPORT_PACKAGE",
+    "LINEAGE_HEAD",
     "MIGRATION_VERSION_LOCATION",
     "MODULE_CODE",
     "TaxCompositionNotReady",
