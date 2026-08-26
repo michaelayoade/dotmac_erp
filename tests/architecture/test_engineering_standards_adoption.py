@@ -111,9 +111,10 @@ def test_the_workflow_has_a_manual_recovery_trigger() -> None:
 
 def test_the_manual_recovery_trigger_canary_bites() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
-    armed = source.replace("  push:\n", "  workflow_dispatch: {}\n  push:\n", 1)
-    assert _workflow_triggers(armed)["workflow_dispatch"] == {}
-    assert "workflow_dispatch" not in _workflow_triggers(source)
+    disarmed = source.replace("  workflow_dispatch: {}\n", "", 1)
+    assert disarmed != source
+    assert _workflow_triggers(source)["workflow_dispatch"] == {}
+    assert "workflow_dispatch" not in _workflow_triggers(disarmed)
 
 
 def test_the_action_ref_parser_refuses_a_moving_or_missing_reference() -> None:
