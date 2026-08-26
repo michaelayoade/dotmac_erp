@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE = ROOT / ".dotmac" / "standards-profile.json"
 WORKFLOW = ROOT / ".github" / "workflows" / "engineering-standards.yml"
@@ -42,6 +44,12 @@ def _profile() -> dict[str, Any]:
 
 def _action_refs(text: str) -> list[str]:
     return _ACTION_REF.findall(text)
+
+
+def _workflow_triggers(text: str) -> dict[str, Any]:
+    workflow = cast(dict[str, Any], yaml.safe_load(text))
+    # PyYAML follows YAML 1.1 and may decode the bare `on` key as True.
+    return cast(dict[str, Any], workflow.get("on", workflow.get(True, {})))
 
 
 def test_the_profile_declares_the_accepted_schema_nine_surface() -> None:
@@ -94,6 +102,18 @@ def test_the_workflow_executes_the_profile_pin_exactly_once() -> None:
     refs = _action_refs(WORKFLOW.read_text(encoding="utf-8"))
     assert profile_pin == ACCEPTED_GOVERNANCE_SHA
     assert refs == [profile_pin]
+
+
+def test_the_workflow_has_a_manual_recovery_trigger() -> None:
+    triggers = _workflow_triggers(WORKFLOW.read_text(encoding="utf-8"))
+    assert triggers["workflow_dispatch"] == {}
+
+
+def test_the_manual_recovery_trigger_canary_bites() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    armed = source.replace("  push:\n", "  workflow_dispatch: {}\n  push:\n", 1)
+    assert _workflow_triggers(armed)["workflow_dispatch"] == {}
+    assert "workflow_dispatch" not in _workflow_triggers(source)
 
 
 def test_the_action_ref_parser_refuses_a_moving_or_missing_reference() -> None:
