@@ -25,5 +25,5 @@ The ERP script creates a non-human API key with only `sub:inventory:read`, `sub:
 
 Confirm that a submitted Sub request is created once, can be issued only in ERP,
 and produces an HMAC-signed callback whose `source_request_id` is the Sub UUID. Confirm the
-15 `/sync/sub` operations retain their versioned wire contracts and no retired
+17 `/sync/sub` operations retain their versioned wire contracts and no retired
 CRM route is mounted.

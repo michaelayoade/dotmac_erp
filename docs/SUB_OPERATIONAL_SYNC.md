@@ -54,6 +54,16 @@ Finance verifies that every selection belongs to the current organization. A
 selected task must match the selected project and selected ticket. Selecting a
 task can also supply its project and ticket when those fields are omitted.
 
+## NCC regulatory projection
+
+Sub reads ERP-owned NCC Section F/G evidence through
+`GET /api/v1/sync/sub/ncc/financials` and
+`GET /api/v1/sync/sub/ncc/staff-headcount`. The service key configured for
+Sub's `ERP_REGULATORY_CAPABILITY` must be granted `sub:ncc:read` before this
+contract is deployed. The material-support bootstrap does not own that key and
+must not grant the regulatory scope. The retired `crm:ncc:read` scope is
+refused.
+
 ## Test evidence
 
 `tests/integration/test_sub_operational_sync_v2.py` calls the actual ERP FastAPI

@@ -289,6 +289,22 @@ class BulkSyncResponse(BaseModel):
     errors: list[SyncError] = Field(default_factory=list)
 
 
+class SubNccFinancialsResponse(BaseModel):
+    """NCC Section F financial statement projection consumed by Sub."""
+
+    period: dict
+    summary: dict
+    detail: dict
+    note: str
+
+
+class SubNccStaffHeadcountResponse(BaseModel):
+    """NCC Section G matrix: category -> nationality -> gender -> count."""
+
+    total_active: int
+    by_category: dict[str, dict[str, dict[str, int]]]
+
+
 class ReconcileOrphansRequest(BaseModel):
     """Full-run reconcile summary from Dotmac Sub for one entity type.
 

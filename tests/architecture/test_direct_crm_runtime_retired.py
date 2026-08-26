@@ -7,6 +7,7 @@ Historical rows are sealed by the retirement migration rather than kept live.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from app.schemas.sync.sub_operational import (
@@ -17,6 +18,7 @@ from app.schemas.sync.sub_operational import (
     SubWorkOrderPayload,
     SyncError,
 )
+from app.models.finance.ar.external_sync import ExternalSource, ExternalSync
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,9 +39,56 @@ RETIRED_RUNTIME_PATHS = (
     "templates/admin/sync/crm",
 )
 
+RETIRED_LIVE_ALIASES = frozenset(
+    {
+        "customer_crm_id",
+        "project_crm_id",
+        "ticket_crm_id",
+        "crm_id",
+        "crm_invoice_id",
+        "omni_id",
+        "omni_work_order_id",
+        "omni_quote_id",
+        "omni_project_id",
+    }
+)
+
+SUB_CONTRACT_PATHS = (
+    "app/api/sync/dotmac_sub.py",
+    "app/schemas/sync/sub_operational.py",
+    "app/services/inventory/material_support.py",
+    "app/services/sync/dotmac_sub_sync_service.py",
+    "app/services/sync/sub/base.py",
+    "app/services/sync/sub/expenses.py",
+    "app/services/sync/sub/inventory.py",
+    "app/services/sync/sub/procurement.py",
+    "app/services/sync/sub/projects.py",
+    "app/services/sync/sub_mappings.py",
+)
+
 
 def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def _retired_alias_hits(source: str) -> set[str]:
+    """Find retired identifiers in declarations, aliases, paths and calls."""
+    hits: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        candidates: list[str] = []
+        if isinstance(node, ast.Name):
+            candidates.append(node.id)
+        elif isinstance(node, ast.Attribute):
+            candidates.append(node.attr)
+        elif isinstance(node, ast.arg):
+            candidates.append(node.arg)
+        elif isinstance(node, ast.keyword) and node.arg is not None:
+            candidates.append(node.arg)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            candidates.append(node.value)
+        for candidate in candidates:
+            hits.update(alias for alias in RETIRED_LIVE_ALIASES if alias in candidate)
+    return hits
 
 
 def test_direct_crm_runtime_files_are_deleted() -> None:
@@ -96,7 +145,7 @@ def test_sub_routes_delegate_only_to_source_neutral_ports() -> None:
         assert forbidden not in source
     assert "MaterialSupportService" in source
     assert "get_purchase_invoice_status" in source
-    assert source.count("@router.") == 15
+    assert source.count("@router.") == 17
     assert '"/purchase-orders/variations"' not in source
 
 
@@ -168,18 +217,32 @@ def test_sub_wire_contract_uses_only_source_neutral_references() -> None:
     assert response["errors"][0]["source_reference"] == "project-1"
     assert invoice["source_invoice_id"] == "source-1"
 
-    schemas = _source("app/schemas/sync/sub_operational.py")
-    for retired_alias in (
+    hits = {
+        path: sorted(found)
+        for path in SUB_CONTRACT_PATHS
+        if (found := _retired_alias_hits(_source(path)))
+    }
+    assert hits == {}
+
+
+def test_retired_alias_detector_catches_every_live_pydantic_shape() -> None:
+    planted = """
+class Payload(BaseModel):
+    customer_crm_id: str
+    value: str = Field(validation_alias=AliasChoices("project_crm_id", "value"))
+
+Payload(ticket_crm_id="ticket", omni_id="request")
+router.get("/records/{crm_id}")
+Field(serialization_alias="crm_invoice_id")
+"""
+    assert _retired_alias_hits(planted) == {
+        "customer_crm_id",
         "project_crm_id",
         "ticket_crm_id",
+        "crm_id",
         "crm_invoice_id",
-        'serialization_alias="crm_id"',
         "omni_id",
-        "omni_work_order_id",
-        "omni_quote_id",
-        "omni_project_id",
-    ):
-        assert retired_alias not in schemas
+    }
 
 
 def test_live_domain_models_have_no_crm_identity_columns() -> None:
@@ -208,3 +271,24 @@ def test_retirement_migration_seals_credentials_and_historical_mappings() -> Non
     ):
         assert proof in migration
     assert "key_hash" not in migration
+
+
+def test_reserved_historical_enum_values_have_no_executable_consumer() -> None:
+    dotmac_crm_readers: list[str] = []
+    external_crm_readers: list[str] = []
+    for path in sorted((ROOT / "app").rglob("*.py")):
+        relative = path.relative_to(ROOT).as_posix()
+        source = path.read_text(encoding="utf-8")
+        if "DOTMAC_CRM" in source and relative != "app/models/sync/integration_config.py":
+            dotmac_crm_readers.append(relative)
+        if "ExternalSource.CRM" in source:
+            external_crm_readers.append(relative)
+    assert dotmac_crm_readers == []
+    assert external_crm_readers == []
+    assert ExternalSource.CRM.value == "CRM"
+    assert ExternalSync.__table__.c.source.type.enums == [
+        "SPLYNX",
+        "ERPNEXT",
+        "CRM",
+        "DOTMAC_SUB",
+    ]

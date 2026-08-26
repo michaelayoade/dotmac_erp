@@ -26,7 +26,7 @@ lowered together; nine conserved findings remain unchanged.
 | `webhook_surface` | 6 |
 | `provider_credential` | 6 |
 | `connector_task` | 11 |
-| `sync_checkpoint` | 17 |
+| `sync_checkpoint` | 18 |
 | `delivery_retry` | 4 |
 
 ### `outbound_transport` — 20 files
@@ -66,10 +66,11 @@ lowered together; nine conserved findings remain unchanged.
 `app/tasks/payments_sync.py`, `app/tasks/performance.py`, and
 `app/tasks/staff_sync.py`.
 
-### `sync_checkpoint` — 17 files
+### `sync_checkpoint` — 18 files
 
 `app/models/finance/ar/customer_payment.py`,
 `app/models/finance/ar/invoice.py`,
+`app/models/finance/platform/event_handler_checkpoint.py`,
 `app/models/inventory/material_request.py`, `app/models/mixins.py`,
 `app/models/people/base.py`, `app/models/people/training/academy.py`,
 `app/models/pm/time_entry.py`, `app/schemas/support.py`,
@@ -104,7 +105,7 @@ revision, so its two entries also preserve that stronger dead-code signal.
 | `tests/services/test_dotmac_sub_incremental_sync.py` | `test_customer_feeds_forward_their_watermarks` | `sync_checkpoint` | `c60a65c1214a478fd7909fe746b7c3b6d607b4d074ae09ceddaa9cbd1e301c41` |
 | `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature` | `webhook_surface` | `7a87e6ab27b39d6e01e49ccac47818926bce03ed12bd764665023a16a583c57c` |
 | `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature_unconfigured` | `webhook_surface` | `7a87e6ab27b39d6e01e49ccac47818926bce03ed12bd764665023a16a583c57c` |
-| `tests/services/test_hook_registry.py` | `TestHookRegistry` | `webhook_surface` | `3241007e58c4c3fd6974f234bc622472ac6ce8d84dfeb0235ae38bca818678aa` |
+| `tests/services/test_hook_registry.py` | `TestHookRegistry` | `webhook_surface` | `eec0ca322ca2be69c1b0860550a85bf268ffef1ef7783869e0af2b9adabdc8f7` |
 | `tests/services/test_mono_sync.py` | `test_verify_webhook_rejects_empty_secrets` | `webhook_surface` | `3db300e89674052e47d62060f10e90da27fa084ee070ba39df0a9a577d6bf628` |
 | `tests/tasks/test_hooks_tasks.py` | `TestExecuteAsyncHook` | `delivery_retry` | `ced43bd99de9a2af6ac3d9d4be8e3bb3a254f17d4b7435bb8eedb1c29a399ff6` |
 | `tests/test_email_services.py` | `TestSendEmail` | `outbound_transport` | `5691ef206ab4756c077e82cda323498492adcb4195916005f4eef6fe185868a8` |

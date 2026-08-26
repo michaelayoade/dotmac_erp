@@ -33,6 +33,8 @@ from app.schemas.sync.sub_operational import (
     SubMaterialRequestPayload,
     SubMaterialRequestResponse,
     SubMaterialRequestStatusRead,
+    SubNccFinancialsResponse,
+    SubNccStaffHeadcountResponse,
     SubPurchaseInvoiceAttachmentPayload,
     SubPurchaseInvoiceAttachmentResponse,
     SubPurchaseInvoicePayload,
@@ -42,6 +44,8 @@ from app.schemas.sync.sub_operational import (
     SyncError,
 )
 from app.services.inventory.material_support import MaterialSupportService
+from app.services.finance.rpt.ncc_financials import ncc_financials_context
+from app.services.people.hr.ncc_staff_report import NccStaffReportService
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
 from app.services.sync.sub_purchase_invoice_status import (
     PurchaseInvoiceStatusNotFoundError,
@@ -101,6 +105,10 @@ def require_sub_expense_scope(auth: dict = Depends(require_service_auth)) -> dic
 
 def require_sub_po_scope(auth: dict = Depends(require_service_auth)) -> dict:
     return _require_sub_flow_scope(auth, "sub:po:write")
+
+
+def require_sub_ncc_read_scope(auth: dict = Depends(require_service_auth)) -> dict:
+    return _require_sub_flow_scope(auth, "sub:ncc:read")
 
 
 @router.post(
@@ -525,3 +533,40 @@ def get_sub_inventory_item(
     if detail is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return detail
+
+
+@router.get(
+    "/ncc/financials",
+    response_model=SubNccFinancialsResponse,
+    dependencies=[Depends(require_sub_ncc_read_scope)],
+)
+def get_sub_ncc_financials(
+    year: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    as_of_date: str | None = None,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubNccFinancialsResponse:
+    data = ncc_financials_context(
+        db,
+        UUID(str(auth["organization_id"])),
+        year=year,
+        start_date=start_date,
+        end_date=end_date,
+        as_of_date=as_of_date,
+    )
+    return SubNccFinancialsResponse(**data)
+
+
+@router.get(
+    "/ncc/staff-headcount",
+    response_model=SubNccStaffHeadcountResponse,
+    dependencies=[Depends(require_sub_ncc_read_scope)],
+)
+def get_sub_ncc_staff_headcount(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubNccStaffHeadcountResponse:
+    report = NccStaffReportService(db).build(UUID(str(auth["organization_id"])))
+    return SubNccStaffHeadcountResponse(**report)

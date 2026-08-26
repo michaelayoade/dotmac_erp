@@ -10,6 +10,8 @@ def test_sub_sync_router_covers_every_phase5_transport() -> None:
         ("GET", "/sync/sub/expense-categories"),
         ("POST", "/sync/sub/material-requests"),
         ("GET", "/sync/sub/material-requests/{source_request_id}"),
+        ("GET", "/sync/sub/ncc/financials"),
+        ("GET", "/sync/sub/ncc/staff-headcount"),
         ("POST", "/sync/sub/purchase-orders"),
         ("POST", "/sync/sub/purchase-invoices"),
         ("GET", "/sync/sub/purchase-invoices/{source_invoice_id}"),

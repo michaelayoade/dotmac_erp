@@ -93,7 +93,7 @@
       "webhook_surface": 6,
       "provider_credential": 6,
       "connector_task": 11,
-      "sync_checkpoint": 17,
+      "sync_checkpoint": 18,
       "delivery_retry": 4
     },
     "conserved_exclusions": [
@@ -131,7 +131,7 @@
         "path": "tests/services/test_hook_registry.py",
         "symbol": "TestHookRegistry",
         "category": "webhook_surface",
-        "fingerprint": "3241007e58c4c3fd6974f234bc622472ac6ce8d84dfeb0235ae38bca818678aa"
+        "fingerprint": "eec0ca322ca2be69c1b0860550a85bf268ffef1ef7783869e0af2b9adabdc8f7"
       },
       {
         "path": "tests/services/test_mono_sync.py",
