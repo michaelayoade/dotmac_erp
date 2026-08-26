@@ -15,6 +15,7 @@
 groups:
   - name: "dotmac_foundation"
     rules:
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_HTTP_5XX_RATE_HIGH"
         expr: "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (service,instance) / sum(rate(http_requests_total[5m])) by (service,instance) > 0.02"
         for: "600s"
@@ -22,12 +23,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "HTTP availability SLO"
           runbook: "#http-5xx-rate"
           recovery: "ratio below threshold for 2 consecutive windows"
           protects: "HTTP availability SLO"
           dedup_by: "service,instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_HTTP_5XX_RATE_CRITICAL"
         expr: "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (service,instance) / sum(rate(http_requests_total[5m])) by (service,instance) > 0.05"
         for: "300s"
@@ -35,12 +38,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "HTTP availability SLO"
           runbook: "#http-5xx-rate"
           recovery: "ratio below threshold for 2 consecutive windows"
           protects: "HTTP availability SLO"
           dedup_by: "service,instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_HTTP_LATENCY_P99_HIGH"
         expr: "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le,service,instance)) > 2.0"
         for: "600s"
@@ -48,12 +53,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "request-latency SLO"
           runbook: "#http-latency-p99"
           recovery: "p99 under threshold for 10m"
           protects: "request-latency SLO"
           dedup_by: "service,instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_HTTP_TRAFFIC_DROP"
         expr: "sum(rate(http_requests_total[5m])) by (service) < sum(rate(http_requests_total[5m] offset 1d)) by (service) * 0.5"
         for: "600s"
@@ -61,6 +68,7 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "silent routing/ingress failure detection"
           runbook: "#http-traffic-drop"
@@ -93,6 +101,7 @@ groups:
           recovery: "3 consecutive successful probes"
           protects: "crash-loop prevention"
           dedup_by: "service,instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_CONTAINER_RESTART_LOOP"
         expr: "increase(container_restarts_total[10m]) > 3"
         for: "0s"
@@ -100,6 +109,7 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "crash-loop detection"
           runbook: "#restart-loop"
@@ -119,6 +129,7 @@ groups:
           recovery: "manual ack (limit is a config decision)"
           protects: "memory-limit correctness"
           dedup_by: "container"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_CONTAINER_EXITED_UNEXPECTEDLY"
         expr: "container_last_seen < time() - 60 and container_exit_code != 0"
         for: "60s"
@@ -126,6 +137,7 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "unplanned-exit detection"
           runbook: "#container-exited"
@@ -262,6 +274,7 @@ groups:
           recovery: "ratio below 80%"
           protects: "request-serving capacity"
           dedup_by: "instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_PG_LOCK_WAIT_HIGH"
         expr: "max(pg_locks_wait_seconds) by (instance) > 30"
         for: "300s"
@@ -269,6 +282,7 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "latency-cascade prevention"
           runbook: "#pg-long-lock"
@@ -314,6 +328,7 @@ groups:
           recovery: "free > threshold"
           protects: "data-plane disk exhaustion"
           dedup_by: "instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_PG_MIGRATION_HEAD_DRIFT"
         expr: "pg_alembic_version_info != on() product_expected_migration_head"
         for: "300s"
@@ -321,6 +336,7 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "deploy correctness"
           runbook: "#migration-head-drift"
@@ -366,6 +382,7 @@ groups:
           recovery: "fresh save observed"
           protects: "data-loss-on-restart exposure"
           dedup_by: "instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_REDIS_QUEUE_DEPTH_HIGH"
         expr: "redis_queue_depth{queue=~\".*\"} > 5000"
         for: "900s"
@@ -373,12 +390,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "queue backlog visibility"
           runbook: "#redis-queue-depth"
           recovery: "depth under threshold"
           protects: "queue backlog visibility"
           dedup_by: "instance,queue"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_WORKER_BACKLOG_HIGH"
         expr: "worker_queue_backlog{queue=~\".*\"} > 1000"
         for: "900s"
@@ -386,12 +405,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "worker throughput SLO"
           runbook: "#worker-backlog"
           recovery: "depth under threshold"
           protects: "worker throughput SLO"
           dedup_by: "service,queue"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_WORKER_FAILURE_RATE_HIGH"
         expr: "sum(rate(worker_task_failures_total[15m])) by (service,task) / sum(rate(worker_task_runs_total[15m])) by (service,task) > 0.05"
         for: "900s"
@@ -399,12 +420,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "job-success SLO"
           runbook: "#worker-failure-rate"
           recovery: "ratio under threshold"
           protects: "job-success SLO"
           dedup_by: "service,task"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_WORKER_HEARTBEAT_STALE"
         expr: "time() - worker_last_success_timestamp_seconds{task=~\".*\"} > 600"
         for: "300s"
@@ -412,12 +435,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "dead-man for scheduled work"
           runbook: "#worker-heartbeat-stale"
           recovery: "fresh success observed"
           protects: "dead-man for scheduled work"
           dedup_by: "service,task"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_WORKER_POISON_JOBS_DETECTED"
         expr: "increase(worker_task_poison_total[30m]) > 5"
         for: "600s"
@@ -425,12 +450,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "queue-blocking prevention"
           runbook: "#worker-poison-job"
           recovery: "0 increase for 30m"
           protects: "queue-blocking prevention"
           dedup_by: "service,task"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_SCHEDULER_TICK_STALE"
         expr: "time() - scheduler_last_tick_timestamp_seconds{job=~\".*\"} > 900"
         for: "600s"
@@ -438,12 +465,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "scheduled-job liveness"
           runbook: "#scheduler-tick-stale"
           recovery: "fresh tick observed"
           protects: "scheduled-job liveness"
           dedup_by: "service,job"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_OUTBOX_BACKLOG_HIGH"
         expr: "outbox_queue_depth{state=\"pending\"} > 500"
         for: "900s"
@@ -451,12 +480,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "eventual-delivery SLO"
           runbook: "#outbox-backlog"
           recovery: "depth under threshold"
           protects: "eventual-delivery SLO"
           dedup_by: "service,outbox"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_OUTBOX_RETRY_AGE_HIGH"
         expr: "outbox_oldest_pending_age_seconds > 1800"
         for: "900s"
@@ -464,12 +495,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "delivery-latency SLO (age hides behind depth)"
           runbook: "#outbox-retry-age"
           recovery: "age under threshold"
           protects: "delivery-latency SLO (age hides behind depth)"
           dedup_by: "service,outbox"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_OUTBOX_DEAD_LETTERS_PRESENT"
         expr: "outbox_dead_letter_count > 0"
         for: "1800s"
@@ -477,12 +510,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "no-silent-data-loss invariant"
           runbook: "#outbox-dead-letters"
           recovery: "count back to 0 or acked"
           protects: "no-silent-data-loss invariant"
           dedup_by: "service,outbox"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_INBOX_BACKLOG_HIGH"
         expr: "inbox_queue_depth{state=\"unprocessed\"} > 500"
         for: "900s"
@@ -490,12 +525,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "inbound-processing SLO"
           runbook: "#inbox-backlog"
           recovery: "depth under threshold"
           protects: "inbound-processing SLO"
           dedup_by: "service,inbox"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_INBOX_RETRY_AGE_HIGH"
         expr: "inbox_oldest_unprocessed_age_seconds > 1800"
         for: "900s"
@@ -503,12 +540,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "inbound-processing latency"
           runbook: "#inbox-retry-age"
           recovery: "age under threshold"
           protects: "inbound-processing latency"
           dedup_by: "service,inbox"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_INBOX_DEAD_LETTERS_PRESENT"
         expr: "inbox_dead_letter_count > 0"
         for: "1800s"
@@ -516,12 +555,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "no-silent-data-loss invariant"
           runbook: "#inbox-dead-letters"
           recovery: "count back to 0 or acked"
           protects: "no-silent-data-loss invariant"
           dedup_by: "service,inbox"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_INGRESS_4XX_RATE_HIGH"
         expr: "sum(rate(ingress_requests_total{status=~\"4..\"}[10m])) by (vhost) / sum(rate(ingress_requests_total[10m])) by (vhost) > 0.25"
         for: "900s"
@@ -529,12 +570,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "client-error surge / probing detection"
           runbook: "#ingress-4xx"
           recovery: "ratio under threshold"
           protects: "client-error surge / probing detection"
           dedup_by: "vhost"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_INGRESS_5XX_RATE_HIGH"
         expr: "sum(rate(ingress_requests_total{status=~\"5..\"}[5m])) by (vhost) / sum(rate(ingress_requests_total[5m])) by (vhost) > 0.02"
         for: "300s"
@@ -542,12 +585,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "edge availability SLO"
           runbook: "#ingress-5xx"
           recovery: "ratio under threshold"
           protects: "edge availability SLO"
           dedup_by: "vhost"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_INGRESS_UPSTREAM_LATENCY_HIGH"
         expr: "histogram_quantile(0.99, sum(rate(ingress_upstream_response_seconds_bucket[5m])) by (le,vhost)) > 3.0"
         for: "600s"
@@ -555,6 +600,7 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "upstream-latency SLO"
           runbook: "#ingress-upstream-latency"
@@ -587,6 +633,7 @@ groups:
           recovery: "renewed cert observed"
           protects: "outage-by-expired-cert prevention"
           dedup_by: "hostname"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_EXTERNAL_DEP_LATENCY_HIGH"
         expr: "histogram_quantile(0.95, sum(rate(external_dependency_request_duration_seconds_bucket[10m])) by (le,service,dependency)) > 5.0"
         for: "900s"
@@ -594,12 +641,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "external-call latency SLO"
           runbook: "#external-dep-latency"
           recovery: "p95 under threshold"
           protects: "external-call latency SLO"
           dedup_by: "service,dependency"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_EXTERNAL_DEP_ERROR_RATE_HIGH"
         expr: "sum(rate(external_dependency_requests_total{outcome=\"error\"}[10m])) by (service,dependency) / sum(rate(external_dependency_requests_total[10m])) by (service,dependency) > 0.10"
         for: "900s"
@@ -607,12 +656,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "external-call error SLO"
           runbook: "#external-dep-errors"
           recovery: "ratio under threshold"
           protects: "external-call error SLO"
           dedup_by: "service,dependency"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_EXTERNAL_DEP_BREAKER_OPEN"
         expr: "external_dependency_circuit_open{dependency=~\".*\"} == 1"
         for: "300s"
@@ -620,12 +671,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "cascading-failure prevention"
           runbook: "#external-dep-breaker-open"
           recovery: "circuit closed for 5m"
           protects: "cascading-failure prevention"
           dedup_by: "service,dependency"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_SECRET_REFRESH_FAILED"
         expr: "time() - secret_refresh_last_success_timestamp_seconds{secret=~\".*\"} > 2 * 3600"
         for: "300s"
@@ -633,12 +686,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "rotation correctness (ADR-0009 boundary)"
           runbook: "#secret-refresh-failed"
           recovery: "successful refresh observed"
           protects: "rotation correctness (ADR-0009 boundary)"
           dedup_by: "service,secret_name"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_SECRET_MATERIAL_EXPIRING"
         expr: "(secret_material_expiry_timestamp_seconds{secret=~\".*\"} - time()) / 86400 < 30"
         for: "3600s"
@@ -646,12 +701,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "rotation lead time"
           runbook: "#secret-expiring"
           recovery: "new material installed"
           protects: "rotation lead time"
           dedup_by: "service,secret_name"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_OBJSTORE_FAILURE_RATE_HIGH"
         expr: "sum(rate(objstore_requests_total{outcome=\"error\"}[10m])) by (bucket) / sum(rate(objstore_requests_total[10m])) by (bucket) > 0.05"
         for: "900s"
@@ -659,12 +716,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "storage-dependent-feature SLO"
           runbook: "#objstore-failures"
           recovery: "ratio under threshold"
           protects: "storage-dependent-feature SLO"
           dedup_by: "bucket"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_OBJSTORE_CAPACITY_HIGH"
         expr: "objstore_used_bytes{bucket=~\".*\"} / objstore_quota_bytes{bucket=~\".*\"} > 0.85"
         for: "3600s"
@@ -672,12 +731,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "capacity exhaustion"
           runbook: "#objstore-capacity"
           recovery: "ratio under threshold"
           protects: "capacity exhaustion"
           dedup_by: "bucket"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_BACKUP_AGE_STALE"
         expr: "time() - backup_last_success_timestamp_seconds{database=~\".*\"} > 86400 * 2"
         for: "900s"
@@ -685,12 +746,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "RPO"
           runbook: "#backup-stale"
           recovery: "fresh success observed"
           protects: "RPO"
           dedup_by: "database"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_BACKUP_JOB_FAILED"
         expr: "increase(backup_job_failures_total{database=~\".*\"}[1d]) > 0"
         for: "0s"
@@ -698,12 +761,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "RPO"
           runbook: "#backup-failed"
           recovery: "next run succeeds"
           protects: "RPO"
           dedup_by: "database,run_id"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_RESTORE_NOT_VERIFIED"
         expr: "time() - backup_last_restore_verified_timestamp_seconds{database=~\".*\"} > 30 * 86400"
         for: "86400s"
@@ -711,12 +776,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "RTO confidence"
           runbook: "#restore-not-verified"
           recovery: "drill recorded"
           protects: "RTO confidence"
           dedup_by: "database"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_IMAGE_DRIFT_DETECTED"
         expr: "deployed_image_digest{service=~\".*\"} != on(service) desired_image_digest"
         for: "300s"
@@ -724,12 +791,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "supply-chain/deploy correctness"
           runbook: "#image-drift"
           recovery: "digests match"
           protects: "supply-chain/deploy correctness"
           dedup_by: "service,instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_CONFIG_DRIFT_DETECTED"
         expr: "deployed_config_digest{service=~\".*\"} != on(service) desired_config_digest"
         for: "300s"
@@ -737,12 +806,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "config correctness"
           runbook: "#config-drift"
           recovery: "digests match"
           protects: "config correctness"
           dedup_by: "service,instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_MANIFEST_DRIFT_DETECTED"
         expr: "deployed_manifest_digest{product=~\".*\"} != on(product) approved_manifest_digest"
         for: "300s"
@@ -750,6 +821,7 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "approved-plan conformance"
           runbook: "#manifest-drift"
@@ -769,6 +841,7 @@ groups:
           recovery: "3 consecutive successes"
           protects: "end-to-end reachability"
           dedup_by: "product"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_SYNTHETIC_JOURNEY_FAILING"
         expr: "increase(synthetic_journey_failures_total{journey=~\".*\"}[15m]) >= 2"
         for: "0s"
@@ -776,12 +849,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "end-to-end customer-facing correctness"
           runbook: "#synthetic-journey-fail"
           recovery: "1 success observed"
           protects: "end-to-end customer-facing correctness"
           dedup_by: "product,journey"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_SCRAPE_TARGET_DOWN"
         expr: "up{job=~\".*\"} == 0"
         for: "300s"
@@ -789,12 +864,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "telemetry pipeline (scrape) health"
           runbook: "#scrape-target-down"
           recovery: "up == 1"
           protects: "telemetry pipeline (scrape) health"
           dedup_by: "instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_REMOTE_WRITE_FAILING"
         expr: "rate(prometheus_remote_storage_failed_samples_total[10m]) > 0"
         for: "600s"
@@ -802,12 +879,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "metrics durability"
           runbook: "#remote-write-failing"
           recovery: "0 failures for 10m"
           protects: "metrics durability"
           dedup_by: "instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_LOG_INGESTION_GAP"
         expr: "absent_over_time(log_lines_received_total{instance=~\".+\"}[15m])"
         for: "900s"
@@ -815,12 +894,14 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "log-pipeline dead-man"
           runbook: "#log-ingest-gap"
           recovery: "logs resume"
           protects: "log-pipeline dead-man"
           dedup_by: "instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_TRACE_EXPORT_FAILING"
         expr: "rate(otel_exporter_send_failed_spans_total[15m]) > 0"
         for: "900s"
@@ -828,12 +909,14 @@ groups:
           severity: "ticket"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "trace completeness"
           runbook: "#trace-export-failing"
           recovery: "0 failures for 15m"
           protects: "trace completeness"
           dedup_by: "instance"
+      # UNBACKED: no producer emits the metric(s) this expression reads today. See docs/inventories/deployment-foundation-alert-producers.md.
       - alert: "FDN_TELEMETRY_DEADMAN"
         expr: "absent(deadman_heartbeat_total)"
         for: "300s"
@@ -841,6 +924,7 @@ groups:
           severity: "page"
           owner: "foundation"
           product: "dotmac_erp"
+          dotmac_unbacked: "true"
         annotations:
           summary: "pipeline-is-alive invariant, distinct from \"everything is quiet\""
           runbook: "#deadman-silent"
