@@ -11,6 +11,8 @@ import binascii
 import hashlib
 import io
 import logging
+from collections.abc import Callable
+from functools import partial
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -59,6 +61,42 @@ _MAX_ERROR_LEN = 200
 
 def _sanitize_error(exc: Exception) -> str:
     return str(exc)[:_MAX_ERROR_LEN]
+
+
+def _sync_one(
+    db: Session,
+    operation: Callable[[], object],
+    *,
+    entity_type: str,
+    source_reference: str,
+    errors: list[SyncError],
+    item_errors: list[str] | None = None,
+) -> bool:
+    savepoint = db.begin_nested()
+    try:
+        operation()
+        if item_errors is not None:
+            errors.extend(
+                SyncError(
+                    entity_type="ticket_item",
+                    source_reference=source_reference,
+                    error=error,
+                )
+                for error in item_errors
+            )
+        savepoint.commit()
+    except Exception as exc:
+        savepoint.rollback()
+        logger.exception("Failed to accept Sub %s %s", entity_type, source_reference)
+        errors.append(
+            SyncError(
+                entity_type=entity_type,
+                source_reference=source_reference,
+                error=_sanitize_error(exc),
+            )
+        )
+        return False
+    return True
 
 
 def _require_sub_flow_scope(auth: dict, *accepted: str) -> dict:
@@ -125,67 +163,65 @@ def sync_sub_operational_domains(
     organization_id = UUID(str(auth["organization_id"]))
     service = DotMacSubSyncService(db)
     errors: list[SyncError] = []
-    counts = {
-        "projects_synced": 0,
-        "project_tasks_synced": 0,
-        "tickets_synced": 0,
-        "work_orders_synced": 0,
-    }
+    projects_synced = 0
+    tickets_synced = 0
+    project_tasks_synced = 0
+    work_orders_synced = 0
 
-    for entity_type, rows, operation, identity in (
-        ("project", payload.projects, service.sync_project, "source_reference"),
-        ("ticket", payload.tickets, service.sync_ticket, "source_reference"),
-        (
-            "project_task",
-            payload.project_tasks,
-            service.sync_project_task,
-            "source_id",
-        ),
-        (
-            "work_order",
-            payload.work_orders,
-            service.sync_work_order,
-            "source_reference",
-        ),
-    ):
-        for row in rows:
-            savepoint = db.begin_nested()
-            try:
-                if entity_type == "ticket":
-                    item_errors: list[str] = []
-                    operation(organization_id, row, item_errors=item_errors)
-                    errors.extend(
-                        SyncError(
-                            entity_type="ticket_item",
-                            source_reference=getattr(row, identity),
-                            error=error,
-                        )
-                        for error in item_errors
-                    )
-                else:
-                    operation(organization_id, row)
-                savepoint.commit()
-                count_key = (
-                    "project_tasks_synced"
-                    if entity_type == "project_task"
-                    else f"{entity_type}s_synced"
-                )
-                counts[count_key] += 1
-            except Exception as exc:
-                savepoint.rollback()
-                source_reference = str(getattr(row, identity))
-                logger.exception(
-                    "Failed to accept Sub %s %s", entity_type, source_reference
-                )
-                errors.append(
-                    SyncError(
-                        entity_type=entity_type,
-                        source_reference=source_reference,
-                        error=_sanitize_error(exc),
-                    )
-                )
+    for project in payload.projects:
+        if _sync_one(
+            db,
+            partial(service.sync_project, organization_id, project),
+            entity_type="project",
+            source_reference=project.source_reference,
+            errors=errors,
+        ):
+            projects_synced += 1
 
-    return BulkSyncResponse(**counts, errors=errors)
+    for ticket in payload.tickets:
+        item_errors: list[str] = []
+        if _sync_one(
+            db,
+            partial(
+                service.sync_ticket,
+                organization_id,
+                ticket,
+                item_errors=item_errors,
+            ),
+            entity_type="ticket",
+            source_reference=ticket.source_reference,
+            errors=errors,
+            item_errors=item_errors,
+        ):
+            tickets_synced += 1
+
+    for project_task in payload.project_tasks:
+        if _sync_one(
+            db,
+            partial(service.sync_project_task, organization_id, project_task),
+            entity_type="project_task",
+            source_reference=project_task.source_id,
+            errors=errors,
+        ):
+            project_tasks_synced += 1
+
+    for work_order in payload.work_orders:
+        if _sync_one(
+            db,
+            partial(service.sync_work_order, organization_id, work_order),
+            entity_type="work_order",
+            source_reference=work_order.source_reference,
+            errors=errors,
+        ):
+            work_orders_synced += 1
+
+    return BulkSyncResponse(
+        projects_synced=projects_synced,
+        project_tasks_synced=project_tasks_synced,
+        tickets_synced=tickets_synced,
+        work_orders_synced=work_orders_synced,
+        errors=errors,
+    )
 
 
 @router.post(
