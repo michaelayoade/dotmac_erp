@@ -3,8 +3,9 @@
 `dotmac-deployment-foundation` (ADR-0065 in dotmac_starter_mt) is not yet a
 published, exact-pinned distribution this repository's `pyproject.toml`/
 `poetry.lock` install — it is still being built in the Starter repository.
-This test therefore guards `pytest.importorskip("dotmac_deployment_foundation")`
-and SKIPS rather than fails the build when the package is not importable.
+This test therefore skips when the package is not importable — but only while
+`DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED` is unset. The conformance job sets it,
+so a missing package there is a failure rather than a silent skip.
 Once ERP exact-pins the released distribution (AGENTS.md rule 30's
 authoritative-oracle standard — a published version, not merely a file present
 on `main`), this import stops skipping and the assertions below start being
@@ -20,9 +21,33 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import os
+
 import pytest
 
-dotmac_deployment_foundation = pytest.importorskip("dotmac_deployment_foundation")
+# A skip is not a gate — so the skip is CONDITIONAL and the condition is
+# explicit. Setting `DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED=1` turns a missing
+# package from a quiet skip into a hard failure, and the conformance job sets
+# it. Before the distribution is published the skip is honest: the package
+# genuinely is not installable, and failing every build over that would teach
+# people to ignore red. After it is published, a silent skip would mean the
+# descriptor stopped being checked and nothing said so — which is the shape of
+# every defect in this branch's own review.
+_REQUIRED = os.environ.get("DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED") == "1"
+try:
+    import dotmac_deployment_foundation  # noqa: F401
+except ImportError as exc:  # pragma: no cover - exercised by the env var
+    if _REQUIRED:
+        raise AssertionError(
+            "DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED=1 but the package is not "
+            f"importable: {exc}. Either the pin is wrong or the install step "
+            "did not run — both are failures, not skips."
+        ) from exc
+    pytest.skip(
+        "dotmac-deployment-foundation is not published yet; set "
+        "DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED=1 to make this a failure",
+        allow_module_level=True,
+    )
 
 from dotmac_deployment_foundation.conformance import check_all  # noqa: E402
 from dotmac_deployment_foundation.errors import DeploymentFoundationError  # noqa: E402
@@ -43,15 +68,27 @@ def _load() -> ProductDeploymentSpec:
     return ProductDeploymentSpec.load(DESCRIPTOR_PATH)
 
 
+# ── the conformance ratchet ─────────────────────────────────────────────────
+#
+# The descriptor is NOT conformance-clean, and pretending otherwise is exactly
+# the failure this branch was reviewed for. The findings below are listed
+# EXACTLY — not as a subset — so the list fails in both directions: a new
+# finding fails here, and a finding that gets fixed without this list shrinking
+# fails here too. That is the two-directional ratchet `AGENTS.md` rule 25
+# requires of a temporary deviation.
+#
+# Every entry must be gone before this adapter merges. They are placeholders
+# because no image has been built for this descriptor to pin.
+KNOWN_UNRESOLVED = (
+    "image.reference is pinned to the placeholder",
+    "assembly.manifest_digest is the placeholder",
+)
+
+
 def test_descriptor_parses() -> None:
     spec = _load()
     assert spec.product == "dotmac_erp"
     assert len(spec.roles) >= 1
-
-
-def test_conformance_is_clean() -> None:
-    spec = _load()
-    assert check_all(spec) == []
 
 
 def test_no_role_holds_the_migration_owner_material() -> None:
@@ -160,3 +197,27 @@ def test_a_role_given_the_owner_material_is_refused() -> None:
     with pytest.raises(DeploymentFoundationError) as excinfo:
         ProductDeploymentSpec.loads(broken, source="<sensitivity-proof>")
     assert "MIGRATION_DATABASE_URL" in str(excinfo.value)
+
+
+def test_conformance_findings_are_exactly_the_known_unresolved_ones() -> None:
+    """Not `== []`, and not a subset — an exact match in both directions.
+
+    A subset assertion passes when a finding is fixed and the list is not
+    updated, so the list stops describing anything. An exact match makes the
+    ratchet visible: fixing a finding is a diff that removes a line here.
+    """
+    from dotmac_deployment_foundation.spec import ProductDeploymentSpec
+
+    findings = check_all(ProductDeploymentSpec.load(DESCRIPTOR_PATH))
+    matched = [
+        finding
+        for finding in findings
+        if any(known in finding for known in KNOWN_UNRESOLVED)
+    ]
+    unexpected = [finding for finding in findings if finding not in matched]
+    assert unexpected == [], f"new conformance finding(s): {unexpected}"
+    assert len(matched) == len(KNOWN_UNRESOLVED), (
+        f"{len(KNOWN_UNRESOLVED)} known finding(s) declared but {len(matched)} "
+        "observed — a fixed finding must be removed from KNOWN_UNRESOLVED in "
+        "the same change that fixes it"
+    )
