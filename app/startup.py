@@ -14,6 +14,7 @@ import sys
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.authz.profile import validate_authorization_profile
 from app.db.multi_tenant import MissingOrgContextError
 from app.services.finance.automation.webhook_policy import (
     any_tenant_has_an_active_webhook_rule,
@@ -350,6 +351,10 @@ def validate_startup(db: Session | None = None, exit_on_failure: bool = True) ->
     # its default stood in silently — so it belongs in the startup gate rather
     # than in whatever request first reads it.
     all_errors.extend(validate_setting_domains())
+
+    # Authored role bundles are runtime contracts, not seed-script constants.
+    # Startup validates their references but never writes RBAC persistence.
+    all_errors.extend(validate_authorization_profile())
 
     if all_errors:
         logger.error("=" * 60)

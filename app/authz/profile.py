@@ -130,8 +130,60 @@ EXPENSE_PAYOUT_ROLE_GRANTS: dict[str, tuple[str, ...]] = {
     "expense_reimburser": _ALL_EXPENSE_PAYOUT_PERMISSION_CODES,
 }
 
+
+def validate_authorization_profile() -> list[str]:
+    """Return deterministic errors for invalid authored RBAC references."""
+    permission_codes = [
+        code
+        for code, _description in (
+            *EXPENSE_PERMISSION_DEFINITIONS,
+            *EXPENSE_PAYOUT_PERMISSION_DEFINITIONS,
+        )
+    ]
+    duplicate_codes = sorted(
+        {code for code in permission_codes if permission_codes.count(code) > 1}
+    )
+    unnamespaced_codes = sorted(
+        code for code in permission_codes if ":" not in code and "." not in code
+    )
+    grant_profiles = (EXPENSE_ROLE_GRANTS, EXPENSE_PAYOUT_ROLE_GRANTS)
+    granted_roles = set().union(*(profile.keys() for profile in grant_profiles))
+    granted_codes = set().union(
+        *(
+            set(permission_codes_for_role)
+            for profile in grant_profiles
+            for permission_codes_for_role in profile.values()
+        )
+    )
+    unknown_roles = sorted(granted_roles - EXPENSE_BASELINE_ROLES.keys())
+    unknown_codes = sorted(granted_codes - set(permission_codes))
+
+    errors: list[str] = []
+    if duplicate_codes:
+        errors.append(
+            "Duplicate authored permission codes: " + ", ".join(duplicate_codes)
+        )
+    if unnamespaced_codes:
+        errors.append(
+            "Authored permission codes must be namespaced: "
+            + ", ".join(unnamespaced_codes)
+        )
+    if unknown_roles:
+        errors.append(
+            "Authorization grants reference undeclared roles: "
+            + ", ".join(unknown_roles)
+        )
+    if unknown_codes:
+        errors.append(
+            "Authorization grants reference undeclared permissions: "
+            + ", ".join(unknown_codes)
+        )
+    return errors
+
+
 __all__ = [
     "EXPENSE_BASELINE_ROLES",
     "EXPENSE_PAYOUT_ROLE_GRANTS",
     "EXPENSE_ROLE_GRANTS",
+    "validate_authorization_profile",
 ]

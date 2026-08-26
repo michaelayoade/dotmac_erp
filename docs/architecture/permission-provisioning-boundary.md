@@ -15,7 +15,9 @@ payout permissions Expense consumes: read provider data, prepare a payout, and
 execute a transfer. `app/authz/profile.py` is the
 product/assembly owner of the Expense baseline roles and both grant bundles.
 These are pure declarations: they import no persistence layer and perform no
-I/O.
+I/O. Application startup consumes the profile and fails closed when a bundle
+references an undeclared role or permission, duplicates a permission code, or
+uses an unnamespaced code; startup does not write RBAC state.
 
 The deployment path runs `alembic upgrade heads`. It does not run
 `scripts/seed_rbac.py`. The seed imports those declarations and remains a
@@ -77,3 +79,5 @@ desired state is refused. The normal migration rehearsal remains the proof
 that the SQL applies to the real PostgreSQL catalogue.
 `tests/architecture/test_authz_declarations_are_pure.py` prevents the authored
 catalogues from acquiring a web, service, database, ORM, or persistence import.
+It also proves that the live profile is internally consistent and that its
+validator detects an unknown grant reference.

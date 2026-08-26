@@ -176,16 +176,6 @@ def sync_sub_operational_domains(
         source_reference=lambda row: row.source_reference,
     )
     errors.extend(project_errors)
-    project_tasks_synced, project_task_errors = _sync_operational_rows(
-        db,
-        entity_type="project_task",
-        rows=payload.project_tasks,
-        operation=lambda row, _item_errors: service.sync_project_task(
-            organization_id, row
-        ),
-        source_reference=lambda row: row.source_id,
-    )
-    errors.extend(project_task_errors)
     tickets_synced, ticket_errors = _sync_operational_rows(
         db,
         entity_type="ticket",
@@ -196,6 +186,16 @@ def sync_sub_operational_domains(
         source_reference=lambda row: row.source_reference,
     )
     errors.extend(ticket_errors)
+    project_tasks_synced, project_task_errors = _sync_operational_rows(
+        db,
+        entity_type="project_task",
+        rows=payload.project_tasks,
+        operation=lambda row, _item_errors: service.sync_project_task(
+            organization_id, row
+        ),
+        source_reference=lambda row: row.source_id,
+    )
+    errors.extend(project_task_errors)
     work_orders_synced, work_order_errors = _sync_operational_rows(
         db,
         entity_type="work_order",

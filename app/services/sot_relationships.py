@@ -175,8 +175,9 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 ),
                 notes=(
                     "Modules own permission definitions. The full seed imports "
-                    "these product declarations; deployments materialize "
-                    "approved bundles through scoped additive migrations."
+                    "these product declarations; startup validates their internal "
+                    "references, and deployments materialize approved bundles "
+                    "through scoped additive migrations."
                 ),
             ),
         ),

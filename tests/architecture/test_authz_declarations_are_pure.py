@@ -5,6 +5,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
+from app.authz import profile
+
 
 DECLARATION_ROOT = Path("app/authz")
 FORBIDDEN_IMPORTS = (
@@ -52,3 +56,22 @@ def test_authz_declarations_import_no_runtime_or_persistence_layer() -> None:
                     violations.append(f"{path}:{node.lineno}: {imported}")
 
     assert violations == []
+
+
+def test_authored_authorization_profile_is_internally_consistent() -> None:
+    assert profile.validate_authorization_profile() == []
+
+
+def test_authorization_profile_rejects_an_unknown_grant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        profile,
+        "EXPENSE_PAYOUT_ROLE_GRANTS",
+        {"expense_reimburser": ("payments:undeclared",)},
+    )
+
+    assert profile.validate_authorization_profile() == [
+        "Authorization grants reference undeclared permissions: "
+        "payments:undeclared"
+    ]

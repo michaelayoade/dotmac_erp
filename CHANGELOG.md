@@ -25,6 +25,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - Expense routes no longer depend on an optional seed script having run; normal
   Alembic deployment now provisions the declared catalogue and baseline roles.
+- Authored Expense role bundles are now validated at application startup, so an
+  undeclared or malformed permission reference fails before requests are served.
 
 ## [1.33.0] - 2026-08-18
 
