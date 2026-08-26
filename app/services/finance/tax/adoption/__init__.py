@@ -1,18 +1,16 @@
-"""ERP's typed seams for `dotmac-tax` — adoption ledger item C1.
+"""ERP's typed seams for ``dotmac-tax`` adoption.
 
-Three modules, one direction each:
+The module's public ``TaxDeterminationSetV1`` is the read result; ERP owns the
+source fact, application context, FX evidence and accounting consequence.
 
-- `contracts` — the two ERP-owned value objects
-  (`ERPSourceTaxFactV1`, `ApplyTaxDeterminationSetV1`) named by
-  `docs/architecture/dotmac-tax-adoption-boundary.md` § "Typed ERP seams".
+- `contracts` — ERP-owned source, application and FX values.
 - `inbound` — one mapper per named source-fact family, ERP row → source fact
   → public `dotmac_tax.TaxFact`.
-- `outbound` — an approved determination set → ERP's accounting-consequence
-  path, without the module learning that a general ledger exists.
+- `outbound` — the public module result → ERP's accounting consequence.
+- `shadow` — typed C3 comparison or retained adjudication evidence.
 
-Nothing here composes the module.  `composition` states, and tests assert,
-that `dotmac-tax` is not pinned, its lineage is not in `alembic.ini`, and no
-ERP writer has been repointed.  C2/C3/C4 are separate gated steps.
+Nothing here changes authority. The a3 dependency/lineage composition remains
+isolated until the release has an authoritative publication oracle.
 """
 
 from app.services.finance.tax.adoption.composition import (
@@ -32,12 +30,16 @@ from app.services.finance.tax.adoption.contracts import (
     RECOGNITION_BASIS_PAYROLL_PERIOD,
     TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE,
     AccountingConsequence,
-    ApplyTaxDeterminationSetV1,
     ERPSourceTaxFactV1,
     SourceFactFamily,
+    TaxApplicationContextV1,
     TaxAdapterRefusal,
-    TaxDeterminationComponentV1,
+    TaxPostingFXEvidenceV1,
     TransactionSide,
+)
+from app.services.finance.tax.adoption.fx import (
+    FunctionalPostingAmounts,
+    allocate_functional_line_amounts,
 )
 from app.services.finance.tax.adoption.inbound import (
     MAPPED_FAMILIES,
@@ -57,6 +59,16 @@ from app.services.finance.tax.adoption.outbound import (
     TaxCodeAccounts,
     project_determination_set,
 )
+from app.services.finance.tax.adoption.shadow import (
+    LegacyTaxComponentProjectionV1,
+    LegacyTaxProjectionV1,
+    ShadowComparedField,
+    ShadowComparisonOutcomeV1,
+    ShadowComparisonStatus,
+    ShadowMismatchV1,
+    ShadowNonComparableReason,
+    compare_shadow_determination,
+)
 
 __all__ = [
     "COMPOSITION_ENABLED",
@@ -74,20 +86,30 @@ __all__ = [
     "TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE",
     "UNMAPPED_FAMILIES",
     "AccountingConsequence",
-    "ApplyTaxDeterminationSetV1",
     "ConsequencePosting",
     "ConsequencePostingLine",
     "ERPSourceTaxFactV1",
+    "FunctionalPostingAmounts",
+    "LegacyTaxComponentProjectionV1",
+    "LegacyTaxProjectionV1",
+    "ShadowComparedField",
+    "ShadowComparisonOutcomeV1",
+    "ShadowComparisonStatus",
+    "ShadowMismatchV1",
+    "ShadowNonComparableReason",
     "SourceFactFamily",
+    "TaxApplicationContextV1",
     "TaxAccountMap",
     "TaxAdapterRefusal",
     "TaxCodeAccounts",
     "TaxCompositionNotReady",
-    "TaxDeterminationComponentV1",
+    "TaxPostingFXEvidenceV1",
     "TransactionSide",
+    "allocate_functional_line_amounts",
     "ap_supplier_invoice_line_fact",
     "ar_invoice_line_fact",
     "composition_state",
+    "compare_shadow_determination",
     "payroll_taxable_pay_fact",
     "project_determination_set",
     "require_composition_ready",

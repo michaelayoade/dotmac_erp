@@ -1,68 +1,24 @@
-"""An approved determination set → ERP's accounting-consequence path.
+"""Public tax determination result -> ERP accounting consequence.
 
-`docs/architecture/dotmac-tax-adoption-boundary.md` § "Typed ERP seams" defines
-the job precisely: the consequence adapter "verifies the module fingerprint and
-arithmetic, resolves an unambiguous effective ERP account mapping for every
-component, writes the local document/tax-transaction snapshot, and calls the
-accounting owner in the same transaction. Missing mappings, closed fiscal
-periods, currency mismatches, duplicate source versions or changed fingerprints
-refuse the whole source row. A module determination never writes GL directly."
+The module owns the immutable determination result; ERP separately owns the
+posting context, account mapping, fiscal-period proof and FX evidence. This
+projection is pure and shadow-safe: it validates the public result, creates a
+complete balanced proposal, and performs no database write or authority switch.
 
-C1 delivers the PROJECTION half of that, in full, as a pure function:
-:func:`project_determination_set` verifies, resolves and produces a complete,
-self-balancing :class:`ConsequencePosting` that renders into ERP's existing
-`JournalInput`/`JournalLineInput` — the accounting owner's own input type.  It
-performs no write.  Writing the snapshot and invoking
-`BasePostingAdapter.create_approve_and_post_journal` is the cohort cutover
-(C4), which is gated on a zero-drift shadow; supplying an adapter does not cut
-anything over.
+Purity is load-bearing: every refusal happens before a partial write, and the
+preconditions this function cannot prove become required typed arguments.
+``fiscal_period_id`` is evidence from ``require_open_period``;
+``expected_fingerprint`` is the fingerprint recorded when ERP submitted the
+fact; ``TaxAccountMap`` is keyed by module tax-code identity rather than the
+legacy calculator's different identifier space. A module result never chooses
+an account, period, debit/credit side or FX rate and never writes GL directly.
 
-## Why the projection is pure
-
-Three things follow from it and all three matter:
-
-- it is testable with no database, no session and no `dotmac-tax` installed;
-- it cannot half-write.  A refusal happens before anything exists, so "refuse
-  the whole source row" is structural rather than a `rollback()` someone has to
-  remember; and
-- the preconditions it cannot check itself become REQUIRED ARGUMENTS instead of
-  silent assumptions.  `fiscal_period_id` is the value
-  `PeriodGuardService.require_open_period()` returns, so a caller that has not
-  proved the period open has nothing to pass.  `expected_fingerprint` is the
-  fingerprint ERP recorded when it submitted the fact, so a set that was
-  silently re-determined cannot be posted against a document priced on the
-  previous one.
-
-## Which way the ignorance runs
-
-The module produces amounts, code/rule identity and treatment.  It is never
-asked about an account, a journal, a period or a side.  Those are ERP's, and
-they enter here through :class:`TaxAccountMap` — an ERP-owned, effective account
-mapping KEYED BY MODULE TAX-CODE ID, which is what the boundary document's
-backfill table means by "effective account mapping keyed to module tax-code id".
-It is deliberately not read from `tax.tax_code.tax_collected_account_id` &c.:
-those columns belong to rows the module is replacing, and their ids are a
-different identifier space.
-
-## Debit/credit, and why per-consequence rather than per-rate-sign
-
-`AccountingConsequence` is chosen by ERP at the call site and decides the shape:
-
-- `ar_output_tax` — tax is a liability owed to the authority: CREDIT the
-  collected account per component, DEBIT the receivable counterpart.
-- `ap_input_tax` — the recovery split becomes two different accounts: DEBIT the
-  recoverable portion to the tax-paid (asset) account and the non-recoverable
-  portion to the tax-expense account, CREDIT the payable counterpart.  This is
-  the one place a single component yields two lines, and it is the reason the
-  module's `recoverable_rate` has to arrive as an AMOUNT split rather than a
-  ratio ERP re-applies.
-- `withholding_payable` — CREDIT the collected (withholding-payable) account,
-  DEBIT the counterpart, preserving `net + WHT = gross` at the document level.
-- `payroll_tax_payable` — CREDIT the collected (PAYE-payable) account, DEBIT the
-  payroll counterpart.
-
-`reversal` flips every line.  It is taken from the set, which took it from the
-source fact's document type; nothing here re-derives direction from a sign.
+The consequence shapes preserve C1's accounting decisions. Output tax,
+withholding and payroll tax credit the authority liability; input tax debits
+the exact recoverable/non-recoverable split; the required counterpart makes the
+proposal self-balancing. Reversal flips every side rather than changing the
+module's non-negative determination amounts. Explicit zero treatments remain
+reportable even though they correctly produce no journal.
 """
 
 from __future__ import annotations
@@ -74,15 +30,20 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from dotmac_kernel.money import Money
+
 from app.services.finance.tax.adoption.contracts import (
     TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE,
     AccountingConsequence,
-    ApplyTaxDeterminationSetV1,
     TaxAdapterRefusal,
-    TaxDeterminationComponentV1,
+    TaxApplicationContextV1,
+    TaxPostingFXEvidenceV1,
 )
+from app.services.finance.tax.adoption.fx import allocate_functional_line_amounts
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from dotmac_tax import TaxDeterminationComponentV1, TaxDeterminationSetV1
+
     from app.services.finance.gl.journal import JournalInput
 
 __all__ = [
@@ -95,15 +56,13 @@ __all__ = [
 ]
 
 _ZERO = Decimal("0")
+_KNOWN_TREATMENTS = TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE | {"standard_rated"}
+_KNOWN_CALCULATION_BASES = frozenset({"source_amount", "source_plus_prior_tax"})
 
-#: What the journal is stamped with.  ERP's existing `TAXPostingAdapter`
-#: already uses `source_module="TAX"`; reusing it keeps one module name in the
-#: ledger across the cutover rather than splitting tax history in two.
+# ERP's existing tax journals already use this source module. The adoption
+# path must not split one ledger history into two names.
 SOURCE_MODULE = "TAX"
 
-#: Account roles, named once.  `collected` is the authority-owed liability
-#: (output VAT, withholding payable, PAYE payable), `paid` the recoverable
-#: input-tax asset, `expense` the irrecoverable input tax that becomes cost.
 _ROLE_COLLECTED = "collected"
 _ROLE_PAID = "paid"
 _ROLE_EXPENSE = "expense"
@@ -111,15 +70,7 @@ _ROLE_EXPENSE = "expense"
 
 @dataclass(frozen=True, slots=True)
 class TaxCodeAccounts:
-    """ERP's effective account choice for ONE module tax code.
-
-    Every role is optional because a code legitimately needs only some of them
-    — an output VAT code has no recoverable-input account — but a role that is
-    REQUIRED by the consequence being projected and is missing here refuses the
-    whole row.  An absent account is never substituted with a suspense or a
-    default: that is how an unmapped tax silently posts to the wrong place and
-    is discovered at a return.
-    """
+    """ERP's effective account choice for one module tax-code identity."""
 
     tax_code_id: UUID
     collected_account_id: UUID | None = None
@@ -129,13 +80,7 @@ class TaxCodeAccounts:
 
 @dataclass(frozen=True, slots=True)
 class TaxAccountMap:
-    """The effective ERP account mapping, keyed by MODULE tax-code id.
-
-    Constructed by the caller from ERP-owned mapping rows and passed in, so the
-    projection stays pure.  Two entries for one tax code is an ambiguity, not a
-    last-one-wins: the boundary document lists "multiple plausible accounts"
-    among the conditions that make a row `operator_adjudication_required`.
-    """
+    """Effective ERP account mappings, refusing duplicates and missing roles."""
 
     entries: tuple[TaxCodeAccounts, ...]
     _by_code: Mapping[UUID, TaxCodeAccounts] = field(
@@ -149,42 +94,41 @@ class TaxAccountMap:
         for entry in entries:
             if not isinstance(entry, TaxCodeAccounts):
                 raise TaxAdapterRefusal(
-                    f"account map entries must be TaxCodeAccounts, got "
+                    "account map entries must be TaxCodeAccounts, got "
                     f"{type(entry).__name__}"
                 )
             if entry.tax_code_id in by_code:
                 raise TaxAdapterRefusal(
                     f"tax code {entry.tax_code_id} has more than one account "
-                    "mapping; an ambiguous mapping is an operator adjudication, "
-                    "not a last-one-wins"
+                    "mapping; ambiguous mapping requires operator adjudication"
                 )
             by_code[entry.tax_code_id] = entry
         object.__setattr__(self, "_by_code", by_code)
 
     def require(self, tax_code_id: UUID, *, role: str) -> UUID:
+        role_field = {
+            _ROLE_COLLECTED: "collected_account_id",
+            _ROLE_PAID: "paid_account_id",
+            _ROLE_EXPENSE: "expense_account_id",
+        }.get(role)
+        if role_field is None:
+            raise TaxAdapterRefusal(f"unknown ERP tax account role {role!r}")
         entry = self._by_code.get(tax_code_id)
         if entry is None:
             raise TaxAdapterRefusal(
-                f"no ERP account mapping for module tax code {tax_code_id}; "
-                "refusing the whole determination set rather than posting a "
-                "component to a default account"
+                f"no ERP account mapping for module tax code {tax_code_id}"
             )
-        account_id = {
-            _ROLE_COLLECTED: entry.collected_account_id,
-            _ROLE_PAID: entry.paid_account_id,
-            _ROLE_EXPENSE: entry.expense_account_id,
-        }[role]
+        account_id = getattr(entry, role_field)
         if account_id is None:
             raise TaxAdapterRefusal(
-                f"module tax code {tax_code_id} has no {role} account mapped; "
-                "this consequence requires one"
+                f"module tax code {tax_code_id} has no {role} account mapped"
             )
         return account_id
 
 
 @dataclass(frozen=True, slots=True)
 class ConsequencePostingLine:
-    """One proposed journal line. Exactly one side carries an amount."""
+    """One proposed transaction-currency journal line."""
 
     account_id: UUID
     debit_amount: Decimal
@@ -194,31 +138,25 @@ class ConsequencePostingLine:
     tax_code_id: UUID | None = None
 
     def __post_init__(self) -> None:
-        if self.debit_amount < _ZERO or self.credit_amount < _ZERO:
-            raise TaxAdapterRefusal(
-                "a posting line amount is never negative; direction is the "
-                "debit/credit side, not a sign"
-            )
+        for amount, label in (
+            (self.debit_amount, "debit"),
+            (self.credit_amount, "credit"),
+        ):
+            if isinstance(amount, (bool, float)) or not isinstance(amount, Decimal):
+                raise TaxAdapterRefusal(f"posting-line {label} must be Decimal")
+            if not amount.is_finite() or amount < _ZERO:
+                raise TaxAdapterRefusal(
+                    f"posting-line {label} must be finite and non-negative"
+                )
         if (self.debit_amount != _ZERO) == (self.credit_amount != _ZERO):
             raise TaxAdapterRefusal(
-                "a posting line carries a debit or a credit, never both and "
-                f"never neither (debit={self.debit_amount}, "
-                f"credit={self.credit_amount})"
+                "a posting line carries exactly one debit/credit side"
             )
 
 
 @dataclass(frozen=True, slots=True)
 class ConsequencePosting:
-    """A complete, balanced posting request ERP can validate on its own.
-
-    Deliberately self-balancing, unlike the legacy `TAXPostingAdapter`, whose
-    own docstring records that it emits tax lines alone and leaves the contra
-    to the source document.  `JournalService._require_balanced` demands equality
-    at persisted scale with no tolerance, so a projection that cannot balance
-    itself can only be validated after it has been combined with something else
-    — which is precisely when a shadow comparison stops being able to attribute
-    a difference.
-    """
+    """Complete ERP proposal, including report-only outcomes and FX evidence."""
 
     organization_id: UUID
     determination_set_id: UUID
@@ -232,8 +170,7 @@ class ConsequencePosting:
     entry_date: date
     posting_date: date
     fiscal_period_id: UUID
-    currency_code: str
-    exchange_rate: Decimal
+    fx_evidence: TaxPostingFXEvidenceV1
     lines: tuple[ConsequencePostingLine, ...]
     reportable_zero_components: tuple[TaxDeterminationComponentV1, ...]
     description: str
@@ -244,6 +181,18 @@ class ConsequencePosting:
     segment_id: UUID | None = None
 
     @property
+    def currency_code(self) -> str:
+        return self.fx_evidence.transaction_currency.code
+
+    @property
+    def exchange_rate(self) -> Decimal:
+        return self.fx_evidence.exchange_rate
+
+    @property
+    def is_postable(self) -> bool:
+        return bool(self.lines)
+
+    @property
     def total_debit(self) -> Decimal:
         return sum((line.debit_amount for line in self.lines), _ZERO)
 
@@ -251,18 +200,19 @@ class ConsequencePosting:
     def total_credit(self) -> Decimal:
         return sum((line.credit_amount for line in self.lines), _ZERO)
 
-    def to_journal_input(self) -> JournalInput:
-        """Render into the accounting owner's own input type.
+    def to_journal_input(self) -> JournalInput | None:
+        """Render ERP's journal input, or ``None`` for a report-only result."""
 
-        Imported lazily: `app.services.finance.gl.journal` pulls in the GL
-        service graph, and this package is otherwise importable — and testable —
-        without it.  Nothing about the module reaches this call; by the time a
-        `ConsequencePosting` exists, every module value has already been turned
-        into an ERP account, an ERP side and an ERP amount.
-        """
+        if not self.lines:
+            return None
+
         from app.models.finance.gl.journal_entry import JournalType
         from app.services.finance.gl.journal import JournalInput, JournalLineInput
 
+        functional = allocate_functional_line_amounts(
+            [(line.debit_amount, line.credit_amount) for line in self.lines],
+            evidence=self.fx_evidence,
+        )
         return JournalInput(
             journal_type=JournalType.STANDARD,
             entry_date=self.entry_date,
@@ -273,6 +223,8 @@ class ConsequencePosting:
                     account_id=line.account_id,
                     debit_amount=line.debit_amount,
                     credit_amount=line.credit_amount,
+                    debit_amount_functional=functional_line.debit_amount,
+                    credit_amount_functional=functional_line.credit_amount,
                     description=line.description,
                     currency_code=self.currency_code,
                     exchange_rate=self.exchange_rate,
@@ -281,11 +233,14 @@ class ConsequencePosting:
                     project_id=self.project_id,
                     segment_id=self.segment_id,
                 )
-                for line in self.lines
+                for line, functional_line in zip(
+                    self.lines, functional, strict=True
+                )
             ],
             reference=self.source_ref,
             currency_code=self.currency_code,
             exchange_rate=self.exchange_rate,
+            exchange_rate_type_id=self.fx_evidence.rate_type_id,
             source_module=SOURCE_MODULE,
             source_document_type=self.document_type,
             source_document_id=self.document_id,
@@ -293,42 +248,115 @@ class ConsequencePosting:
         )
 
 
-def _verify_inclusive_arithmetic(apply: ApplyTaxDeterminationSetV1) -> None:
-    """Re-derive the set's own totals rather than trusting them.
+def _require_public_set(value: object) -> TaxDeterminationSetV1:
+    """Require the released read contract without a module-level dependency."""
 
-    `ApplyTaxDeterminationSetV1.__post_init__` already proves the components sum
-    to the set's tax and that `net + tax == gross`.  What is left, and what only
-    makes sense here, is the relationship of `source_amount` to those totals,
-    because it encodes the one thing ERP is trying to stop modelling as data:
-
-    - an EXCLUSIVE set was determined ON the source amount, so `source == net`;
-    - an INCLUSIVE set had its tax extracted FROM the source amount, so
-      `source == gross`.
-
-    The a2 candidate deliberately refuses an inclusive component combined with
-    any other component, because the source amount is otherwise ambiguous. That
-    refusal is mirrored here rather than assumed: a set that reached ERP with an
-    inclusive component alongside others would be a module defect, and posting
-    it would silently pick one of two incompatible readings of `source_amount`.
-    """
-    inclusive = [c for c in apply.components if c.inclusive]
-    if inclusive and len(apply.components) > 1:
+    try:
+        from dotmac_tax import TaxDeterminationSetV1
+    except ImportError as exc:
         raise TaxAdapterRefusal(
-            "an inclusive component cannot be combined with any other "
-            f"component (set has {len(apply.components)}); the source amount "
-            "is ambiguous and ERP will not choose a reading"
+            "dotmac-tax public read contract is unavailable; pin the verified "
+            "0.1.0a3 release before composing this C2 consumer"
+        ) from exc
+    if not isinstance(value, TaxDeterminationSetV1):
+        raise TaxAdapterRefusal(
+            "expected dotmac_tax.TaxDeterminationSetV1, got "
+            f"{type(value).__name__}"
         )
-    if inclusive:
-        if apply.source_amount != apply.gross_amount:
+    return value
+
+
+def _require_result_money(value: object, label: str) -> Money:
+    if not isinstance(value, Money):
+        raise TaxAdapterRefusal(f"{label} must be kernel Money")
+    if not value.amount.is_finite() or value.amount < _ZERO:
+        raise TaxAdapterRefusal(f"{label} must be finite and non-negative")
+    return value
+
+
+def _verify_public_result(result: TaxDeterminationSetV1) -> None:
+    """Revalidate the untrusted public value at ERP's consequence boundary."""
+
+    if not result.components:
+        raise TaxAdapterRefusal(
+            "a determination set needs a configured component; no component is "
+            "not an out-of-scope determination"
+        )
+    set_money = {
+        name: _require_result_money(getattr(result, name), name.replace("_", " "))
+        for name in ("source_amount", "net_amount", "tax_amount", "gross_amount")
+    }
+    currency = set_money["tax_amount"].currency
+    if any(money.currency != currency for money in set_money.values()):
+        raise TaxAdapterRefusal("determination-set money currencies/scales differ")
+
+    sequences: list[int] = []
+    component_tax = _ZERO
+    for component in result.components:
+        sequences.append(component.component_sequence)
+        if component.determination_set_id != result.determination_set_id:
             raise TaxAdapterRefusal(
-                f"inclusive set: source {apply.source_amount.amount} must equal "
-                f"gross {apply.gross_amount.amount}"
+                f"component {component.component_sequence} belongs to another set"
             )
-    elif apply.source_amount != apply.net_amount:
+        if component.component_sequence < 1 or component.rule_version < 1:
+            raise TaxAdapterRefusal("component sequence/rule version must be positive")
+        if component.treatment_code not in _KNOWN_TREATMENTS:
+            raise TaxAdapterRefusal(
+                f"unknown tax treatment {component.treatment_code!r}"
+            )
+        if component.calculation_base_code not in _KNOWN_CALCULATION_BASES:
+            raise TaxAdapterRefusal(
+                f"unknown calculation base {component.calculation_base_code!r}"
+            )
+        amounts = {
+            name: _require_result_money(
+                getattr(component, name),
+                f"component {component.component_sequence} {name.replace('_', ' ')}",
+            )
+            for name in (
+                "base_amount",
+                "tax_amount",
+                "recoverable_amount",
+                "non_recoverable_amount",
+            )
+        }
+        if any(money.currency != currency for money in amounts.values()):
+            raise TaxAdapterRefusal(
+                f"component {component.component_sequence} currency/scale differs"
+            )
+        if amounts["recoverable_amount"] + amounts["non_recoverable_amount"] != amounts["tax_amount"]:
+            raise TaxAdapterRefusal(
+                f"component {component.component_sequence} recovery split is invalid"
+            )
+        if (
+            component.treatment_code in TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE
+            and amounts["tax_amount"].amount != _ZERO
+        ):
+            raise TaxAdapterRefusal(
+                f"zero treatment {component.component_sequence} carries tax"
+            )
+        component_tax += amounts["tax_amount"].amount
+
+    if sequences != sorted(sequences) or len(sequences) != len(set(sequences)):
         raise TaxAdapterRefusal(
-            f"exclusive set: source {apply.source_amount.amount} must equal net "
-            f"{apply.net_amount.amount}"
+            f"component sequence must be strictly increasing and unique: {sequences}"
         )
+    if component_tax != set_money["tax_amount"].amount:
+        raise TaxAdapterRefusal(
+            f"components total {component_tax}, set claims {set_money['tax_amount'].amount}"
+        )
+    if set_money["net_amount"] + set_money["tax_amount"] != set_money["gross_amount"]:
+        raise TaxAdapterRefusal("determination net plus tax does not equal gross")
+
+    inclusive = [component for component in result.components if component.inclusive]
+    if inclusive and len(result.components) > 1:
+        raise TaxAdapterRefusal(
+            "an inclusive component cannot be combined with another component"
+        )
+    if inclusive and set_money["source_amount"] != set_money["gross_amount"]:
+        raise TaxAdapterRefusal("inclusive result source must equal gross")
+    if not inclusive and set_money["source_amount"] != set_money["net_amount"]:
+        raise TaxAdapterRefusal("exclusive result source must equal net")
 
 
 def _component_lines(
@@ -338,8 +366,6 @@ def _component_lines(
     accounts: TaxAccountMap,
     reversal: bool,
 ) -> list[ConsequencePostingLine]:
-    """The account-side decision, made once, per consequence."""
-
     def line(
         account_id: UUID, amount: Decimal, *, credit: bool
     ) -> ConsequencePostingLine:
@@ -357,24 +383,21 @@ def _component_lines(
             tax_code_id=component.tax_code_id,
         )
 
-    tax = component.tax_amount.amount
     if consequence is AccountingConsequence.AP_INPUT_TAX:
         lines: list[ConsequencePostingLine] = []
-        recoverable = component.recoverable_amount.amount
-        non_recoverable = component.non_recoverable_amount.amount
-        if recoverable != _ZERO:
+        if component.recoverable_amount.amount != _ZERO:
             lines.append(
                 line(
                     accounts.require(component.tax_code_id, role=_ROLE_PAID),
-                    recoverable,
+                    component.recoverable_amount.amount,
                     credit=False,
                 )
             )
-        if non_recoverable != _ZERO:
+        if component.non_recoverable_amount.amount != _ZERO:
             lines.append(
                 line(
                     accounts.require(component.tax_code_id, role=_ROLE_EXPENSE),
-                    non_recoverable,
+                    component.non_recoverable_amount.amount,
                     credit=False,
                 )
             )
@@ -382,139 +405,109 @@ def _component_lines(
     return [
         line(
             accounts.require(component.tax_code_id, role=_ROLE_COLLECTED),
-            tax,
+            component.tax_amount.amount,
             credit=True,
         )
     ]
 
 
 def project_determination_set(
-    apply: ApplyTaxDeterminationSetV1,
+    determination: TaxDeterminationSetV1,
     *,
+    application: TaxApplicationContextV1,
     accounts: TaxAccountMap,
     expected_fingerprint: str,
     fiscal_period_id: UUID,
 ) -> ConsequencePosting:
-    """Verify, resolve and project. No write, no session, no module import.
+    """Validate and project the public result. No write and no authority change."""
 
-    `expected_fingerprint` is the fingerprint ERP recorded when it SUBMITTED the
-    source fact.  Comparing it here is the check the boundary document asks for
-    ("changed fingerprints refuse the whole source row") and it is the reason a
-    set that was quietly re-determined after the document was priced cannot be
-    posted against it.
-
-    `fiscal_period_id` is `PeriodGuardService.require_open_period(...)`'s return
-    value.  It is a required argument rather than an internal lookup so that a
-    pure function can still make "closed fiscal periods refuse the row" a
-    precondition a caller cannot skip.
-    """
-    if not isinstance(apply, ApplyTaxDeterminationSetV1):
-        raise TaxAdapterRefusal(
-            f"expected an ApplyTaxDeterminationSetV1, got {type(apply).__name__}"
-        )
+    result = _require_public_set(determination)
+    _verify_public_result(result)
+    if not isinstance(application, TaxApplicationContextV1):
+        raise TaxAdapterRefusal("application must be TaxApplicationContextV1")
     if not isinstance(accounts, TaxAccountMap):
-        raise TaxAdapterRefusal(
-            f"expected a TaxAccountMap, got {type(accounts).__name__}"
-        )
+        raise TaxAdapterRefusal("accounts must be TaxAccountMap")
     if not isinstance(fiscal_period_id, UUID):
         raise TaxAdapterRefusal(
-            "an open fiscal period id is required; pass the value "
-            "PeriodGuardService.require_open_period() returned"
+            "pass the fiscal period id returned by require_open_period()"
         )
-    if apply.source_fingerprint != expected_fingerprint:
+    if result.tenant_id != application.organization_id:
         raise TaxAdapterRefusal(
-            "determination fingerprint changed since ERP submitted the fact "
-            f"({apply.source_fingerprint!r} != {expected_fingerprint!r}); "
-            "refusing the whole source row"
+            "determination tenant and ERP application organization differ"
         )
-    _verify_inclusive_arithmetic(apply)
+    if result.source_fingerprint != expected_fingerprint:
+        raise TaxAdapterRefusal(
+            "determination fingerprint changed since ERP submitted the fact"
+        )
+    application.fx_evidence.require_transaction_currency(
+        result.tax_amount.currency
+    )
 
     lines: list[ConsequencePostingLine] = []
     reportable_zero: list[TaxDeterminationComponentV1] = []
-    for component in apply.components:
+    for component in result.components:
         if not component.has_tax_consequence:
-            if component.treatment_code not in TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE:
+            if not component.is_reportable_zero:
                 raise TaxAdapterRefusal(
-                    f"component {component.component_sequence} is "
-                    f"{component.treatment_code} with zero tax; a standard-rated "
-                    "component producing nothing is a determination defect, not "
-                    "a line ERP may drop"
+                    f"standard-rated component {component.component_sequence} "
+                    "has no tax consequence"
                 )
-            # A zero-rated / exempt / out-of-scope component still belongs in a
-            # return box, so it is CARRIED rather than discarded for having
-            # produced no journal line.
             reportable_zero.append(component)
             continue
         lines.extend(
             _component_lines(
                 component,
-                consequence=apply.consequence,
+                consequence=application.consequence,
                 accounts=accounts,
-                reversal=apply.reversal,
+                reversal=application.reversal,
             )
         )
 
-    if not lines:
-        if not reportable_zero:
-            raise TaxAdapterRefusal(
-                "the determination set produced no postable and no reportable component"
+    if lines:
+        counterpart_credit = application.consequence is AccountingConsequence.AP_INPUT_TAX
+        if application.reversal:
+            counterpart_credit = not counterpart_credit
+        lines.append(
+            ConsequencePostingLine(
+                account_id=application.counterpart_account_id,
+                debit_amount=_ZERO if counterpart_credit else result.tax_amount.amount,
+                credit_amount=result.tax_amount.amount if counterpart_credit else _ZERO,
+                description=f"Tax counterpart for {result.source_ref}",
             )
-        # Every component was a configured zero treatment: there is a reportable
-        # answer and nothing to post. Emitting a zero-value journal would put a
-        # meaningless entry in the ledger for every exempt line.
-        raise TaxAdapterRefusal(
-            "every component is a zero treatment "
-            f"({', '.join(sorted({c.treatment_code for c in reportable_zero}))}); "
-            "there is a return-box consequence but no journal. Record the "
-            "reportable components and do not post."
         )
-
-    total_tax = apply.tax_amount.amount
-    counterpart_credit = apply.consequence is AccountingConsequence.AP_INPUT_TAX
-    if apply.reversal:
-        counterpart_credit = not counterpart_credit
-    lines.append(
-        ConsequencePostingLine(
-            account_id=apply.counterpart_account_id,
-            debit_amount=_ZERO if counterpart_credit else total_tax,
-            credit_amount=total_tax if counterpart_credit else _ZERO,
-            description=f"Tax counterpart for {apply.source_ref}",
-        )
-    )
+    elif not reportable_zero:  # pragma: no cover - validated above
+        raise TaxAdapterRefusal("determination has no postable or reportable result")
 
     posting = ConsequencePosting(
-        organization_id=apply.organization_id,
-        determination_set_id=apply.determination_set_id,
-        source_ref=apply.source_ref,
-        source_version=apply.source_version,
-        source_fingerprint=apply.source_fingerprint,
-        consequence=apply.consequence,
-        document_id=apply.document_id,
-        document_type=apply.document_type,
-        line_id=apply.line_id,
-        entry_date=apply.occurred_on,
-        posting_date=apply.posting_date,
+        organization_id=application.organization_id,
+        determination_set_id=result.determination_set_id,
+        source_ref=result.source_ref,
+        source_version=result.source_version,
+        source_fingerprint=result.source_fingerprint,
+        consequence=application.consequence,
+        document_id=application.document_id,
+        document_type=application.document_type,
+        line_id=application.line_id,
+        entry_date=result.occurred_on,
+        posting_date=application.posting_date,
         fiscal_period_id=fiscal_period_id,
-        currency_code=apply.currency_code,
-        exchange_rate=apply.exchange_rate,
+        fx_evidence=application.fx_evidence,
         lines=tuple(lines),
         reportable_zero_components=tuple(reportable_zero),
         description=(
-            apply.description
-            or f"{apply.consequence.value} for {apply.document_type} {apply.source_ref}"
+            application.description
+            or f"{application.consequence.value} for "
+            f"{application.document_type} {result.source_ref}"
         ),
-        correlation_ref=apply.correlation_ref,
-        business_unit_id=apply.business_unit_id,
-        cost_center_id=apply.cost_center_id,
-        project_id=apply.project_id,
-        segment_id=apply.segment_id,
+        correlation_ref=application.correlation_ref,
+        business_unit_id=application.business_unit_id,
+        cost_center_id=application.cost_center_id,
+        project_id=application.project_id,
+        segment_id=application.segment_id,
     )
     if posting.total_debit != posting.total_credit:
         raise TaxAdapterRefusal(
-            "projected posting is unbalanced: debits "
-            f"{posting.total_debit}, credits {posting.total_credit}. "
-            "JournalService._require_balanced enforces equality at persisted "
-            "scale with no tolerance, so this is refused here, where the "
-            "component that caused it can still be named."
+            "projected posting is unbalanced in transaction currency: "
+            f"debits {posting.total_debit}, credits {posting.total_credit}"
         )
     return posting

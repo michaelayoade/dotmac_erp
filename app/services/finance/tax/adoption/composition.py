@@ -10,12 +10,11 @@ only the flag is off.  For Tax:
 - `mod_tax` does not exist in any ERP database; and
 - no ERP writer, reader, calculator or filing path has been repointed.
 
-Ledger item C1 delivers the two typed adapters and their tests and nothing
-else.  Adapters can be written, reviewed and unit-tested before the package is
-pinned precisely because they speak ERP-owned contracts
-(`app/services/finance/tax/adoption/contracts.py`); the ONLY place that touches
-`dotmac_tax` is `to_tax_fact`, and it imports lazily so that importing ERP's
-tax package does not require a distribution ERP has not adopted.
+Ledger item C1 delivered typed adapters without composition. The staged C2
+consumer now names the module's proposed a3 public determination result
+directly, while importing it lazily so this branch does not claim an unreleased
+dependency. The exact pin, lock and lineage composition are a separate final
+change after an authoritative release oracle exists.
 
 Pinning, composing the lineage, backfilling policy data and switching a cohort's
 writer are C2/C3/C4 — each with its own gate in
@@ -44,6 +43,11 @@ MODULE_CODE: Final = "tax"
 #: derived from repository-local facts.  What IS checkable here — and what
 #: `composition_state()` reports — is whether the distribution is installed.
 CONTRACT_VERSION: Final = "0.1.0a2"
+
+#: Public read-result contract this staged consumer is written against. This is
+#: a TARGET, not a publication or adoption claim. Do not turn it into a package
+#: pin until the release run/install-back/peeled-tag oracle proves a3 exists.
+READ_CONTRACT_TARGET_VERSION: Final = "0.1.0a3"
 
 #: The Alembic version location ERP would compose at C2.  Present as a literal
 #: so a test can assert `alembic.ini` does NOT contain it yet.
@@ -80,6 +84,7 @@ def composition_state() -> dict[str, object]:
     return {
         "distribution": DISTRIBUTION,
         "contract_version": CONTRACT_VERSION,
+        "read_contract_target_version": READ_CONTRACT_TARGET_VERSION,
         "enabled": COMPOSITION_ENABLED,
         "installed_version": installed,
         "ready": COMPOSITION_ENABLED and installed is not None,
@@ -118,6 +123,7 @@ __all__ = [
     "IMPORT_PACKAGE",
     "MIGRATION_VERSION_LOCATION",
     "MODULE_CODE",
+    "READ_CONTRACT_TARGET_VERSION",
     "TaxCompositionNotReady",
     "composition_state",
     "require_composition_ready",
