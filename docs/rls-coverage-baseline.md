@@ -7,14 +7,18 @@ measured against the live catalog on 2026-08-10.
 ```
 tables                    414
 carrying organization_id  309
-  fully protected          86   (27.8% of scoped)
-  unprotected             157   (RLS not enabled)
+  fully protected          85   (27.5% of scoped)
+  unprotected             158   (RLS not enabled)
   unforced                 66   (RLS enabled, not FORCED)
 inherited                   6   (no scope column; policy joins to a scoped parent)
 global                     99
 ```
 
-223 entries: the 157 unprotected plus the 66 unforced.
+The current ratchet state, after the CRM retirement protected
+`sync.source_correlation`, is 223 entries: 157 unprotected plus 66 unforced.
+Among the same 309 organization-scoped tables, 86 are now fully protected
+(27.8%). The dated block above remains the creation snapshot; current
+enforcement reads the JSON baseline rather than copying that snapshot.
 
 ## What the file is for
 
