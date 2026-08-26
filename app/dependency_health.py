@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import SessionLocal
 from app.models.domain_settings import DomainSetting, SettingDomain
-from app.services.crm.client import CRMClient, CRMConfig
 from app.services.email import _get_smtp_config, validate_smtp_config
 from app.services.finance.payments.paystack_client import (
     PaystackClient,
@@ -41,7 +40,6 @@ def collect_dependency_health() -> dict[str, dict[str, object]]:
             "smtp": _check_smtp(db),
             "storage": _check_storage(),
             "openbao": _check_openbao(db),
-            "crm": _check_crm(),
             "paystack": _check_paystack(db),
             "nextcloud": _check_nextcloud(db),
             "dotmac_sub": _check_dotmac_sub(),
@@ -243,31 +241,6 @@ def _check_openbao(db: Session) -> dict[str, object]:
         configured=True,
         healthy=healthy,
         message=f"OpenBao health returned HTTP {response.status_code}",
-    )
-
-
-def _check_crm() -> dict[str, object]:
-    configured = bool(settings.crm_api_url and settings.crm_api_token)
-    if not configured:
-        return _result(
-            configured=False,
-            healthy=False,
-            message="CRM API is not configured",
-        )
-
-    try:
-        config = CRMConfig.from_settings()
-        config.timeout = min(config.timeout, 5.0)
-        config.max_retries = 1
-        with CRMClient(config) as client:
-            healthy = client.health_check()
-    except Exception as exc:
-        return _result(configured=True, healthy=False, message=str(exc)[:160])
-
-    return _result(
-        configured=True,
-        healthy=healthy,
-        message="CRM API reachable" if healthy else "CRM API health check failed",
     )
 
 

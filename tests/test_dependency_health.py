@@ -8,7 +8,7 @@ class _DummySession:
 
 def test_collect_dependency_health_marks_required_dependencies(monkeypatch) -> None:
     monkeypatch.delenv("READINESS_CHECK_ALL_CONFIGURED_DEPENDENCIES", raising=False)
-    monkeypatch.setenv("READINESS_REQUIRED_DEPENDENCIES", "crm,paystack")
+    monkeypatch.setenv("READINESS_REQUIRED_DEPENDENCIES", "storage,paystack")
     monkeypatch.setattr(
         dependency_health_module,
         "SessionLocal",
@@ -38,16 +38,6 @@ def test_collect_dependency_health_marks_required_dependencies(monkeypatch) -> N
         dependency_health_module,
         "_check_openbao",
         lambda db: {
-            "configured": True,
-            "healthy": True,
-            "status": "healthy",
-            "message": "ok",
-        },
-    )
-    monkeypatch.setattr(
-        dependency_health_module,
-        "_check_crm",
-        lambda: {
             "configured": True,
             "healthy": True,
             "status": "healthy",
@@ -99,7 +89,6 @@ def test_collect_dependency_health_marks_required_dependencies(monkeypatch) -> N
 
     assert checks["storage"]["required"] is True
     assert checks["openbao"]["required"] is True
-    assert checks["crm"]["required"] is True
     assert checks["paystack"]["required"] is True
     assert checks["nextcloud"]["required"] is False
     assert checks["dotmac_sub"]["required"] is False
@@ -113,7 +102,7 @@ def test_readiness_failures_only_include_required_unhealthy_dependencies() -> No
                 "healthy": False,
                 "required": True,
             },
-            "crm": {
+            "nextcloud": {
                 "configured": True,
                 "healthy": False,
                 "required": False,

@@ -1,17 +1,9 @@
-"""Inventory item, category and warehouse views for CRM.
+"""Inventory item, category and warehouse views for Sub.
 
-Extracted from the former monolithic dotmac_crm_sync_service.
+Extracted from the former monolithic dotmac_sub_sync_service.
 """
 
 from __future__ import annotations
-
-import logging
-from datetime import datetime, timezone
-
-try:
-    from datetime import UTC  # type: ignore
-except ImportError:  # pragma: no cover
-    UTC = timezone.utc
 
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -19,148 +11,27 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
-from app.config import settings
-
 if TYPE_CHECKING:
     from app.models.finance.ap.supplier import Supplier  # noqa: F401
 
-from app.schemas.sync.dotmac_crm import (
-    CRMAvailableSerialListResponse,
-    CRMAvailableSerialRead,
-    CRMInventoryItemPayload,
-    CRMInventoryItemResponse,
+from app.schemas.sync.sub_operational import (
+    SubAvailableSerialListResponse,
+    SubAvailableSerialRead,
     InventoryItemDetail,
     InventoryItemStock,
     InventoryListResponse,
     WarehouseStock,
 )
 
-# CRM → ERP translation policy lives in crm_mappings (pure, side-effect-free).
+# Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
 # Re-imported here so the canonical import sites
-# (`from ...dotmac_crm_sync_service import PROJECT_STATUS_MAP`) and the in-class
+# (`from ...dotmac_sub_sync_service import PROJECT_STATUS_MAP`) and the in-class
 # references keep resolving against this module's namespace.
 
-from app.services.sync.crm.base import _CRMSyncBase
-
-logger = logging.getLogger(__name__)
+from app.services.sync.sub.base import _SubSyncBase
 
 
-class _InventoryMixin(_CRMSyncBase):
-    def upsert_inventory_item(
-        self,
-        org_id: UUID,
-        data: CRMInventoryItemPayload,
-    ) -> CRMInventoryItemResponse:
-        """Create or update an ERP inventory item from CRM payload."""
-        from app.models.inventory.item import CostingMethod, Item, ItemType
-        from app.models.inventory.item_category import ItemCategory
-
-        item_code = (data.item_code or "").strip()
-        item_name = (data.item_name or "").strip()
-        if not item_code:
-            raise ValueError("item_code is required")
-        if not item_name:
-            raise ValueError("item_name is required")
-
-        category: ItemCategory | None
-        if data.category_code:
-            category = self.db.scalar(
-                select(ItemCategory).where(
-                    ItemCategory.organization_id == org_id,
-                    ItemCategory.category_code == data.category_code,
-                    ItemCategory.is_active.is_(True),
-                )
-            )
-            if not category:
-                raise ValueError(f"Item category not found: {data.category_code}")
-        else:
-            category = self.db.scalar(
-                select(ItemCategory)
-                .where(
-                    ItemCategory.organization_id == org_id,
-                    ItemCategory.is_active.is_(True),
-                )
-                .order_by(ItemCategory.category_code.asc())
-            )
-            if not category:
-                raise ValueError(
-                    "No active item category available in ERP for this organization"
-                )
-        if category is None:
-            raise ValueError("No item category available for CRM item sync")
-
-        item = self.db.scalar(
-            select(Item).where(
-                Item.organization_id == org_id,
-                Item.item_code == item_code,
-            )
-        )
-
-        if item:
-            item.item_name = item_name
-            item.description = data.description
-            if data.category_code:
-                item.category_id = category.category_id
-            item.base_uom = (data.base_uom or "EA").strip().upper()
-            item.purchase_uom = item.base_uom
-            item.sales_uom = item.base_uom
-            item.currency_code = (
-                (data.currency_code or settings.default_functional_currency_code)
-                .strip()
-                .upper()
-            )
-            item.list_price = data.list_price
-            item.reorder_point = data.reorder_point
-            item.barcode = data.barcode
-            item.is_active = data.is_active
-            # Reuse sync-tracking fields for CRM source correlation.
-            item.erpnext_id = data.crm_id
-            item.last_synced_at = datetime.now(UTC)
-            status = "updated"
-        else:
-            item = Item(
-                organization_id=org_id,
-                item_code=item_code,
-                item_name=item_name,
-                description=data.description,
-                item_type=ItemType.INVENTORY,
-                category_id=category.category_id,
-                base_uom=(data.base_uom or "EA").strip().upper(),
-                purchase_uom=(data.base_uom or "EA").strip().upper(),
-                sales_uom=(data.base_uom or "EA").strip().upper(),
-                costing_method=CostingMethod.WEIGHTED_AVERAGE,
-                currency_code=(
-                    data.currency_code or settings.default_functional_currency_code
-                )
-                .strip()
-                .upper(),
-                list_price=data.list_price,
-                reorder_point=data.reorder_point,
-                barcode=data.barcode,
-                track_inventory=True,
-                is_active=data.is_active,
-                is_purchaseable=True,
-                is_saleable=True,
-                erpnext_id=data.crm_id,
-                last_synced_at=datetime.now(UTC),
-            )
-            self.db.add(item)
-            status = "created"
-
-        self.db.flush()
-        logger.info(
-            "Upserted CRM inventory item crm_id=%s item_code=%s status=%s",
-            data.crm_id,
-            item.item_code,
-            status,
-        )
-        return CRMInventoryItemResponse(
-            item_id=item.item_id,
-            item_code=item.item_code,
-            status=status,
-            crm_id=data.crm_id,
-        )
-
+class _InventoryMixin(_SubSyncBase):
     def list_inventory_items(
         self,
         org_id: UUID,
@@ -174,7 +45,7 @@ class _InventoryMixin(_CRMSyncBase):
         offset: int = 0,
     ) -> InventoryListResponse:
         """
-        List inventory items with current stock levels for CRM.
+        List inventory items with current stock levels for Sub.
 
         Uses batch stock loading (2 queries) instead of per-item queries.
 
@@ -532,7 +403,7 @@ class _InventoryMixin(_CRMSyncBase):
             for wh_id, code, name in results
         ]
 
-    def list_available_serials_for_crm(
+    def list_available_serials_for_sub(
         self,
         org_id: UUID,
         *,
@@ -540,8 +411,8 @@ class _InventoryMixin(_CRMSyncBase):
         warehouse_code: str,
         limit: int = 100,
         offset: int = 0,
-    ) -> CRMAvailableSerialListResponse:
-        """List available serials for one item in one warehouse for CRM selection."""
+    ) -> SubAvailableSerialListResponse:
+        """List available serials for one item in one warehouse for Sub selection."""
         from app.models.inventory.inventory_serial import InventorySerial
         from app.models.inventory.item import Item
         from app.models.inventory.warehouse import Warehouse
@@ -574,7 +445,7 @@ class _InventoryMixin(_CRMSyncBase):
             raise ValueError(f"Warehouse not found: {normalized_warehouse_code}")
 
         if not bool(item.track_serial_numbers):
-            return CRMAvailableSerialListResponse(
+            return SubAvailableSerialListResponse(
                 item_code=item.item_code,
                 item_name=item.item_name,
                 warehouse_code=warehouse.warehouse_code,
@@ -610,7 +481,7 @@ class _InventoryMixin(_CRMSyncBase):
             serial_rows = serial_rows[:limit]
 
         serials = [
-            CRMAvailableSerialRead(
+            SubAvailableSerialRead(
                 serial_id=row.serial_id,
                 serial_number=row.serial_number,
                 status=row.status,
@@ -619,7 +490,7 @@ class _InventoryMixin(_CRMSyncBase):
             )
             for row in serial_rows
         ]
-        return CRMAvailableSerialListResponse(
+        return SubAvailableSerialListResponse(
             item_code=item.item_code,
             item_name=item.item_name,
             warehouse_code=warehouse.warehouse_code,

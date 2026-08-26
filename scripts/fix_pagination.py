@@ -24,7 +24,6 @@ TARGETS = [
     "templates/admin/permissions.html",
     "templates/admin/roles.html",
     "templates/admin/settings.html",
-    "templates/admin/sync/crm/entities.html",
     "templates/admin/tasks.html",
     "templates/admin/users.html",
     "templates/careers/job_list.html",

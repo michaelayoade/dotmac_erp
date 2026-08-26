@@ -1,17 +1,18 @@
 from app.api.sync.dotmac_sub import router
-from app.schemas.sync.dotmac_crm import BulkSyncResponse
+from app.schemas.sync.sub_operational import BulkSyncResponse
 
 
 def test_sub_sync_router_covers_every_phase5_transport() -> None:
     expected = {
         ("POST", "/sync/sub/bulk"),
         ("POST", "/sync/sub/expense-claims"),
-        ("GET", "/sync/sub/expense-claims/{omni_id}"),
+        ("GET", "/sync/sub/expense-claims/{source_claim_id}"),
         ("GET", "/sync/sub/expense-categories"),
         ("POST", "/sync/sub/material-requests"),
-        ("GET", "/sync/sub/material-requests/{omni_id}"),
+        ("GET", "/sync/sub/material-requests/{source_request_id}"),
+        ("GET", "/sync/sub/ncc/financials"),
+        ("GET", "/sync/sub/ncc/staff-headcount"),
         ("POST", "/sync/sub/purchase-orders"),
-        ("POST", "/sync/sub/purchase-orders/variations"),
         ("POST", "/sync/sub/purchase-invoices"),
         ("GET", "/sync/sub/purchase-invoices/{source_invoice_id}"),
         (
@@ -30,7 +31,7 @@ def test_sub_sync_router_covers_every_phase5_transport() -> None:
         for method in (route.methods or set())
     }
 
-    assert expected <= actual
+    assert expected == actual
 
 
 def test_material_support_routes_use_the_neutral_sub_adapter() -> None:
@@ -47,7 +48,7 @@ def test_material_support_routes_use_the_neutral_sub_adapter() -> None:
     )
     assert (
         material_routes[
-            ("GET", "/sync/sub/material-requests/{omni_id}")
+            ("GET", "/sync/sub/material-requests/{source_request_id}")
         ].endpoint.__module__
         == "app.api.sync.dotmac_sub"
     )

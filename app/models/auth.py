@@ -244,7 +244,7 @@ class ApiKey(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Least-privilege scopes this key grants, e.g. ["crm:ncc:read"]. NULL or
+    # Least-privilege scopes this key grants, e.g. ["sub:inventory:read"]. NULL or
     # empty identifies a legacy key for audit; it grants no operation.
     scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
