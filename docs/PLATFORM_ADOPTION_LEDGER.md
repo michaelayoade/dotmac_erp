@@ -8,12 +8,20 @@ No code, schema, dependency, or runtime change is authorized by this document.
 **Evidence pins:**
 
 - `dotmac_erp` `origin/main` at `96928fa1774612ecd5cd28db1ab04b8e45425df4`.
-- `dotmac-kernel==0.1.0a13` (source of record:
+- `dotmac-kernel==0.1.0a18` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
   The dependency **is installed** at this exact pin since slice E2 (below).
   Moved from `0.1.0a8` on 2026-08-07 — see "Pin history" below.
 
 ## Pin history
+
+**2026-08-08 — `0.1.0a13` → `0.1.0a18`.** The releases carrying the settings
+subsystem ERP is adopting: the port from ERP's own implementation (`a14`), open
+value types with exact `Money` (`a15`), scope depth with isolation kept a stored
+fact (`a16`), bulk reads and change events (`a17`), and per-scope requirements,
+per-tenant encryption keys and history retention (`a18`). Note `a15`-`a17` were
+intermediate versions in one merged stack and were never published separately —
+`a18` is the artifact.
 
 **2026-08-07 — `0.1.0a8` → `0.1.0a13`.** The kernel release carrying the
 white-label foundation: the module registry and manifest declarations, D1's
