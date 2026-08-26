@@ -36,18 +36,38 @@ unmonitored, which is the failure mode the fleet's own guard-exemption rule
 test would have noticed.
 
 The detector now walks every `app/web/**/*.py`. `WEB_BACKLOG` below records
-what that measured — 489 mutating routes authorized by module visibility alone
-across 41 files — on the same two-directional ratchet, and
+what that measured — 481 mutating routes authorized by module visibility alone
+across 39 files — on the same two-directional ratchet, and
 `UNAUTHENTICATED_WEB_MUTATIONS` separates out the strictly worse category
 underneath it: mutating routes reachable with no authenticated principal at
 all. Job (2) widened too and found its own debt —
 `WEB_UNSEEDABLE_PERMISSIONS`. None of these tables is an assessment. All three
 are debt markers.
+
+## Guards live in the service layer too (2026-08-25, second amendment)
+
+The first widened scan classified all eight mutating routes in
+`app/web/admin_crm_sync.py` and `app/web/admin_dotmac_sub_sync.py` as having no
+authorization at all. That was WRONG, and wrong in a way the detector caused:
+both files are thin wrappers in the sense `AGENTS.md` requires, so their whole
+handler body is `return <service>.<x>_response(request, db, auth, ...)`, and
+every one of those service methods opens with `self._require_admin(request,
+auth)` and honours its refusal before touching anything. A classifier that
+reads only the route decorator and the argument defaults cannot see a guard
+that sits one call away in the layer this repository's own rules put it in.
+
+So the detector follows the handler into its delegate — see
+`_service_guarded_routes` — and credits a service-layer guard only against an
+enforceable premise, with the same "classify by body, never by name" rule
+applied one layer down. What that credits is pinned in
+`SERVICE_GUARDED_WEB_MUTATIONS` and re-derived on every run, so a deleted
+guard fails two tests at once.
 """
 
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -189,12 +209,22 @@ FINANCE_BACKLOG: dict[str, int] = {
 # the finance decomposition is in flight against the one above. Keys are paths
 # relative to `app/web/`, so nested modules keep their directory.
 #
-# 489 mutating routes across 41 files whose only authorization is module
+# 481 mutating routes across 39 files whose only authorization is module
 # visibility. Nobody has confirmed that any individual route here is
 # acceptable. These are not exemptions and this table is not an assessment: it
 # is a measurement, taken so the debt is bounded and cannot grow silently.
 #
+# This table is FROZEN DEBT, not a cleanup queue. ERP is being recomposed into
+# Starter modules domain by domain, and broad legacy guard cleanup is
+# deliberately stopped: a domain's rows leave here when that domain cuts over,
+# not before. Do not restart the decomposition program off the back of this
+# list — see the 2026-08-25 amendments in
+# docs/adr/0006-module-access-is-not-write-authority.md.
+#
 # Absent because they are already granular, not because they were skipped:
+# `app/web/admin_crm_sync.py` and `app/web/admin_dotmac_sub_sync.py` (every
+# handler is a thin wrapper over a service method that opens with
+# `self._require_admin` — see SERVICE_GUARDED_WEB_MUTATIONS),
 # `app/web/fleet.py` (every mutating route carries a
 # `require_fleet_<resource>_manage` built from `require_fleet_permissions`,
 # which ANDs a real `fleet:<resource>:manage` permission onto module access),
@@ -208,8 +238,6 @@ FINANCE_BACKLOG: dict[str, int] = {
 # amendment in docs/adr/0006-module-access-is-not-write-authority.md.
 # ---------------------------------------------------------------------------
 WEB_BACKLOG: dict[str, int] = {
-    "admin_crm_sync.py": 5,
-    "admin_dotmac_sub_sync.py": 3,
     "careers.py": 4,
     "help.py": 6,
     "inventory.py": 31,
@@ -255,13 +283,16 @@ WEB_BACKLOG: dict[str, int] = {
 # The severe subset of WEB_BACKLOG: mutating routes an ANONYMOUS caller
 # reaches. Counted per file, and a strict subset of the entry above it.
 #
-# `admin_crm_sync.py` (mounted at `/admin/sync/crm` whenever the `crm` module
-# is enabled) and `admin_dotmac_sub_sync.py` (prefix `/admin/sync/dotmac-sub`,
-# currently imported by nothing, so unreachable until somebody mounts it) both
-# guard every route with `optional_web_auth` and neither router carries a
-# `dependencies=` list. Unlike `admin.py` next to them, nothing supplies
-# `require_admin_access`. These are NOT grandfathered-acceptable: they save
-# integration credentials and mint and revoke API keys.
+# `admin_crm_sync.py` and `admin_dotmac_sub_sync.py` were recorded here on
+# 2026-08-25 and REMOVED the same day: the classification was refuted by
+# reading the delegates. Both files do guard every route with
+# `optional_web_auth` and neither router carries a `dependencies=` list, but
+# every handler in them is a thin wrapper whose service method opens with
+# `self._require_admin` — an anonymous caller gets a 302 to `/admin/login` and
+# an authenticated non-admin a 403, before any effect. The detector now sees
+# that (`_service_guarded_routes`) and the evidence is pinned in
+# `SERVICE_GUARDED_WEB_MUTATIONS`; they are not exempted here, they are not
+# offenders.
 #
 # `careers.py` and `onboarding_portal.py` are deliberately public portals and
 # their premise is enforceable and stated: the four careers routes are a job
@@ -274,10 +305,68 @@ WEB_BACKLOG: dict[str, int] = {
 # are wrong.
 # ---------------------------------------------------------------------------
 UNAUTHENTICATED_WEB_MUTATIONS: dict[str, int] = {
-    "admin_crm_sync.py": 5,
-    "admin_dotmac_sub_sync.py": 3,
     "careers.py": 4,
     "onboarding_portal.py": 1,
+}
+
+# ---------------------------------------------------------------------------
+# Mutating web routes whose authorization lives in the service method the
+# handler delegates to. NOT an allowlist and not an exemption: every row is
+# DERIVED by `_service_guarded_routes` on each run and re-checked against this
+# table, so the entries are a pinned claim about code that must still be
+# there, not a promise nobody verifies.
+#
+# Delete a `self._require_admin` call and the route drops OUT of here (failing
+# `test_the_credited_service_guards_are_exactly_the_recorded_ones`) and back
+# INTO `WEB_BACKLOG` and `UNAUTHENTICATED_WEB_MUTATIONS` (failing both of
+# those). The premise cannot lapse quietly in either direction, which is what
+# ADR-0018 requires of an exemption and what a bare allowlist would not give.
+#
+# Current guard sites, for a reader who wants to check by hand:
+# `app/services/admin/crm_sync_web.py` lines 254, 305, 376, 542, 589 and
+# `app/services/admin/dotmac_sub_sync_web.py` lines 199, 252, 288 — each
+# `error_response = self._require_admin(request, auth)` immediately followed
+# by `if error_response: return error_response`. `_require_admin` itself
+# (crm_sync_web.py:74, dotmac_sub_sync_web.py:72) redirects an anonymous
+# caller to `/admin/login` and raises 403 on `not auth.is_admin`.
+# ---------------------------------------------------------------------------
+SERVICE_GUARDED_WEB_MUTATIONS: dict[str, dict[str, str]] = {
+    "admin_crm_sync.py": {
+        "crm_sync_config_save": (
+            "app/services/admin/crm_sync_web.py "
+            "CRMSyncWebService.config_save_response -> self._require_admin"
+        ),
+        "crm_sync_generate_key": (
+            "app/services/admin/crm_sync_web.py "
+            "CRMSyncWebService.generate_api_key_response -> self._require_admin"
+        ),
+        "crm_sync_revoke_key": (
+            "app/services/admin/crm_sync_web.py "
+            "CRMSyncWebService.revoke_api_key_response -> self._require_admin"
+        ),
+        "crm_trigger_inventory_push": (
+            "app/services/admin/crm_sync_web.py "
+            "CRMSyncWebService.trigger_inventory_push_response -> self._require_admin"
+        ),
+        "crm_inventory_health_check": (
+            "app/services/admin/crm_sync_web.py "
+            "CRMSyncWebService.inventory_health_check_response -> self._require_admin"
+        ),
+    },
+    "admin_dotmac_sub_sync.py": {
+        "config_save": (
+            "app/services/admin/dotmac_sub_sync_web.py "
+            "DotmacSubSyncWebService.config_save_response -> self._require_admin"
+        ),
+        "test_connection": (
+            "app/services/admin/dotmac_sub_sync_web.py "
+            "DotmacSubSyncWebService.test_connection_response -> self._require_admin"
+        ),
+        "trigger_sync": (
+            "app/services/admin/dotmac_sub_sync_web.py "
+            "DotmacSubSyncWebService.trigger_sync_response -> self._require_admin"
+        ),
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -452,12 +541,262 @@ def _router_level_guards(source: str) -> list[str]:
     return guards
 
 
-def _visibility_only_mutations(source: str) -> list[str]:
-    """Mutating routes whose only authorization is module visibility."""
+# ---------------------------------------------------------------------------
+# Service-layer guards: following a thin wrapper into its delegate
+#
+# A route's own dependencies are not the whole guard either. `app/web/
+# admin_crm_sync.py` and `app/web/admin_dotmac_sub_sync.py` are thin wrappers
+# in the sense AGENTS.md requires: every handler body is `return
+# <service>.<x>_response(request, db, auth, ...)`, and every one of those
+# service methods opens with `self._require_admin(request, auth)` and honours
+# its refusal before anything happens. Reading only the route decorator and
+# the argument defaults reported all eight of their mutating routes as having
+# NO authorization at all, which is false — the guard is one call away, in the
+# layer this repository's own thin-wrapper rule puts it in.
+#
+# The detector therefore resolves the delegate statically. A route is credited
+# only when EVERY one of the following holds, so the exemption rests on an
+# enforceable premise rather than on a name:
+#
+# 1. every `return` in the handler's OWN body (nested functions excluded) is a
+#    call `<name>.<method>(...)`. One non-delegating return and the handler is
+#    not a thin wrapper, so no credit — the detector cannot see what that
+#    other path does;
+# 2. `<name>` resolves to a module-level singleton `<name> = <Class>()` in a
+#    module the handler imports by `from ... import <name>`;
+# 3. `<method>` on that class begins — after its docstring and any local
+#    imports, before any other statement — with `X = self.<guard>(...)`
+#    followed by `if X: return` or `if X: raise`. The refusal must be honoured
+#    FIRST; a guard whose result is computed and ignored is not a guard;
+# 4. that guard method's OWN BODY decides on an authority signal: it consults
+#    `is_admin`, and it does NOT consult `has_module_access` /
+#    `accessible_modules` or admit a literal `<module>:access` scope.
+#
+# (4) is ADR-0006's classification rule applied one layer down — by body,
+# never by name. A service guard that admits module visibility is precisely
+# the defect this file measures, so it earns no credit and its routes stay in
+# the backlog. Anything the four rules cannot prove is left an offender:
+# unproven is not the same as absent, and this detector must never guess a
+# guard into existence.
+# ---------------------------------------------------------------------------
+
+SERVICE_AUTHORITY_SIGNAL = "is_admin"
+SERVICE_VISIBILITY_SIGNALS = frozenset({"has_module_access", "accessible_modules"})
+
+# (dotted module) -> (display path, source). Injectable so the sensitivity
+# proofs below can plant a service module without touching the repository.
+ServiceLoader = Callable[[str], "tuple[str, str] | None"]
+
+
+def _load_service_module(dotted: str) -> tuple[str, str] | None:
+    """Read an `app.*` module by dotted path, as (display path, source)."""
+    if not dotted.startswith("app."):
+        return None
+    base = REPO_ROOT.joinpath(*dotted.split("."))
+    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+        if candidate.is_file():
+            return (
+                candidate.relative_to(REPO_ROOT).as_posix(),
+                candidate.read_text(encoding="utf-8"),
+            )
+    return None
+
+
+def _import_source_module(source: str, name: str) -> str | None:
+    """The dotted module a top-level `from X import name` brought `name` from."""
+    for node in ast.parse(source).body:
+        if not isinstance(node, ast.ImportFrom) or node.level or not node.module:
+            continue
+        for alias in node.names:
+            if (alias.asname or alias.name) == name:
+                return node.module
+    return None
+
+
+def _singleton_class(source: str, name: str) -> str | None:
+    """`name = SomeClass()` at module level -> `"SomeClass"`."""
+    for node in ast.parse(source).body:
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+            continue
+        if not isinstance(node.value.func, ast.Name):
+            continue
+        if any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            return node.value.func.id
+    return None
+
+
+def _class_method(
+    source: str, class_name: str, method_name: str
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    for node in ast.parse(source).body:
+        if not isinstance(node, ast.ClassDef) or node.name != class_name:
+            continue
+        for sub in node.body:
+            if (
+                isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and sub.name == method_name
+            ):
+                return sub
+    return None
+
+
+def _leading_guard_call(
+    method: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[str, int] | None:
+    """`X = self.<guard>(...)` / `if X: return|raise` before any other effect."""
+    body = list(method.body)
+    index = 0
+    while index < len(body):
+        statement = body[index]
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            index += 1
+            continue
+        if (
+            index == 0
+            and isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        ):
+            index += 1
+            continue
+        break
+    if index + 1 >= len(body):
+        return None
+    assign, following = body[index], body[index + 1]
+    if not isinstance(assign, ast.Assign) or len(assign.targets) != 1:
+        return None
+    target, call = assign.targets[0], assign.value
+    if not isinstance(target, ast.Name) or not isinstance(call, ast.Call):
+        return None
+    func = call.func
+    if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
+        return None
+    if func.value.id != "self" or not _is_guard_name(func.attr):
+        return None
+    if not isinstance(following, ast.If) or not isinstance(following.test, ast.Name):
+        return None
+    if following.test.id != target.id:
+        return None
+    if not following.body or not isinstance(following.body[0], (ast.Return, ast.Raise)):
+        return None
+    return func.attr, assign.lineno
+
+
+def _guard_decides_on_authority(source: str, class_name: str, guard: str) -> bool:
+    """Classify the service guard by its BODY — rule (4) above."""
+    method = _class_method(source, class_name, guard)
+    if method is None:
+        return False
+    referenced: set[str] = set()
+    literals: set[str] = set()
+    for node in ast.walk(method):
+        if isinstance(node, ast.Attribute):
+            referenced.add(node.attr)
+        elif isinstance(node, ast.Name):
+            referenced.add(node.id)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            literals.add(node.value)
+    if referenced & SERVICE_VISIBILITY_SIGNALS:
+        return False
+    if any(literal.endswith(":access") for literal in literals):
+        return False
+    return SERVICE_AUTHORITY_SIGNAL in referenced
+
+
+def _own_returns(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.Return]:
+    """`return` statements in a function's own body, not in a nested one's."""
+    returns: list[ast.Return] = []
+    stack: list[ast.AST] = list(func.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+        ):
+            continue
+        if isinstance(node, ast.Return):
+            returns.append(node)
+        stack.extend(ast.iter_child_nodes(node))
+    return returns
+
+
+def _delegate_calls(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[tuple[str, str]] | None:
+    """(object, method) per return, or None if the handler is not a pure delegate."""
+    returns = _own_returns(func)
+    if not returns:
+        return None
+    targets: list[tuple[str, str]] = []
+    for statement in returns:
+        value = statement.value
+        if isinstance(value, ast.Await):
+            value = value.value
+        if not isinstance(value, ast.Call):
+            return None
+        called = value.func
+        if not isinstance(called, ast.Attribute) or not isinstance(
+            called.value, ast.Name
+        ):
+            return None
+        targets.append((called.value.id, called.attr))
+    return targets
+
+
+def _service_guarded_routes(
+    source: str, load: ServiceLoader = _load_service_module
+) -> dict[str, str]:
+    """Route function name -> guard evidence, for routes a delegate authorizes."""
+    credited: dict[str, str] = {}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not _router_methods(node):
+            continue
+        targets = _delegate_calls(node)
+        if not targets:
+            continue
+        evidence: list[str] = []
+        for obj, method_name in targets:
+            dotted = _import_source_module(source, obj)
+            loaded = load(dotted) if dotted else None
+            if loaded is None:
+                break
+            display, service_source = loaded
+            class_name = _singleton_class(service_source, obj)
+            if class_name is None:
+                break
+            method = _class_method(service_source, class_name, method_name)
+            if method is None:
+                break
+            found = _leading_guard_call(method)
+            if found is None:
+                break
+            guard, _ = found
+            if not _guard_decides_on_authority(service_source, class_name, guard):
+                break
+            evidence.append(f"{display} {class_name}.{method_name} -> self.{guard}")
+        else:
+            credited[node.name] = "; ".join(sorted(set(evidence)))
+    return credited
+
+
+def _visibility_only_mutations(
+    source: str, service_guarded: set[str] | None = None
+) -> list[str]:
+    """Mutating routes whose only authorization is module visibility.
+
+    `service_guarded` names routes a delegate authorizes (see
+    `_service_guarded_routes`); pass `None` — the default — to classify from
+    the route and router declarations alone, which is what the synthetic
+    proofs below want.
+    """
     router_guards = _router_level_guards(source)
+    credited = service_guarded or set()
     offenders = []
     for lineno, name, methods, guards, _ in _routes(source):
         if not methods & MUTATING_METHODS:
+            continue
+        if name in credited:
             continue
         effective = [*guards, *router_guards]
         if effective and not all(g in MODULE_ACCESS_GUARDS for g in effective):
@@ -467,16 +806,21 @@ def _visibility_only_mutations(source: str) -> list[str]:
     return offenders
 
 
-def _unauthenticated_mutations(source: str) -> list[str]:
+def _unauthenticated_mutations(
+    source: str, service_guarded: set[str] | None = None
+) -> list[str]:
     """The subset of the above that no authenticated principal is needed for.
 
     A route qualifies when its effective guard set is empty or contains
-    nothing but NO_AUTHORIZATION_GUARDS.
+    nothing but NO_AUTHORIZATION_GUARDS — and when no delegate authorizes it.
     """
     router_guards = _router_level_guards(source)
+    credited = service_guarded or set()
     offenders = []
     for lineno, name, methods, guards, _ in _routes(source):
         if not methods & MUTATING_METHODS:
+            continue
+        if name in credited:
             continue
         effective = {*guards, *router_guards}
         if effective - NO_AUTHORIZATION_GUARDS:
@@ -486,13 +830,21 @@ def _unauthenticated_mutations(source: str) -> list[str]:
     return offenders
 
 
+def _scan(
+    path: Path, detector: Callable[[str, set[str] | None], list[str]]
+) -> list[str]:
+    """Run a detector over a real module, delegates resolved."""
+    source = path.read_text(encoding="utf-8")
+    return detector(source, set(_service_guarded_routes(source)))
+
+
 # ---------------------------------------------------------------------------
 # (a) Fixed Assets: no mutating route may rest on module visibility alone
 # ---------------------------------------------------------------------------
 
 
 def test_no_mutating_fixed_assets_route_rests_on_module_visibility() -> None:
-    offenders = _visibility_only_mutations(FIXED_ASSETS.read_text(encoding="utf-8"))
+    offenders = _scan(FIXED_ASSETS, _visibility_only_mutations)
     assert offenders == [], (
         "these mutating Fixed Assets routes are authorized by module "
         "visibility alone:\n  " + "\n  ".join(offenders) + "\n\n"
@@ -703,7 +1055,7 @@ def test_the_permission_extractor_actually_extracts() -> None:
 def _observed_finance_backlog() -> dict[str, int]:
     observed: dict[str, int] = {}
     for path in sorted(FINANCE_WEB.glob("*.py")):
-        count = len(_visibility_only_mutations(path.read_text(encoding="utf-8")))
+        count = len(_scan(path, _visibility_only_mutations))
         if count:
             observed[path.name] = count
     return observed
@@ -876,6 +1228,220 @@ def test_the_extended_module_access_guards_are_real_dependencies() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Sensitivity for the service-layer resolution
+#
+# Removing eight rows from a ratchet is only a correction if the classifier
+# was corrected with them. Otherwise the next person to regenerate the table
+# re-adds them, and the eight deletions were a weakening. So the proof here is
+# the same two-sided shape as every other one in this file: a thin wrapper
+# whose service method LACKS the guard must be reported, and the identical
+# wrapper whose service method HAS it must go quiet.
+# ---------------------------------------------------------------------------
+
+
+_THIN_WRAPPER_ROUTER = """
+from fastapi import APIRouter, Depends, Request
+from app.services.admin.example_web import example_web_service
+from app.web.deps import get_db, optional_web_auth
+
+router = APIRouter(prefix="/admin/sync/example")
+
+@router.post("/config")
+def save_config(request: Request, db=Depends(get_db), auth=Depends(optional_web_auth)):
+    return example_web_service.config_save_response(request, db, auth)
+"""
+
+_SERVICE_HEAD = """
+class ExampleWebService:
+"""
+
+_SERVICE_ADMIN_GUARD = """
+    def _require_admin(self, request, auth):
+        if not auth or not auth.is_authenticated:
+            return RedirectResponse(url="/admin/login", status_code=302)
+        if not auth.is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return None
+"""
+
+_SERVICE_VISIBILITY_GUARD = """
+    def _require_admin(self, request, auth):
+        if auth.is_admin or auth.has_module_access("crm"):
+            return None
+        raise HTTPException(status_code=403, detail="No")
+"""
+
+_SERVICE_GUARDED_METHOD = """
+    def config_save_response(self, request, db, auth):
+        \"\"\"Save the integration config.\"\"\"
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+        return self._save(db)
+"""
+
+_SERVICE_UNGUARDED_METHOD = """
+    def config_save_response(self, request, db, auth):
+        \"\"\"Save the integration config.\"\"\"
+        return self._save(db)
+"""
+
+_SERVICE_TAIL = """
+example_web_service = ExampleWebService()
+"""
+
+
+def _service_loader(source: str) -> ServiceLoader:
+    """A loader that resolves the one planted module and nothing else."""
+
+    def load(dotted: str) -> tuple[str, str] | None:
+        if dotted == "app.services.admin.example_web":
+            return ("app/services/admin/example_web.py", source)
+        return None
+
+    return load
+
+
+def _guarded_service() -> str:
+    return _SERVICE_HEAD + _SERVICE_ADMIN_GUARD + _SERVICE_GUARDED_METHOD + _SERVICE_TAIL
+
+
+def _unguarded_service() -> str:
+    return (
+        _SERVICE_HEAD + _SERVICE_ADMIN_GUARD + _SERVICE_UNGUARDED_METHOD + _SERVICE_TAIL
+    )
+
+
+def test_a_thin_wrapper_whose_service_lacks_the_guard_is_reported() -> None:
+    """Half one, and the load-bearing half.
+
+    The handler is `optional_web_auth` and nothing else, exactly like
+    `app/web/admin_crm_sync.py`. If the service method it delegates to does no
+    authorization, the route really is reachable by an anonymous caller and
+    both detectors must say so.
+    """
+    load = _service_loader(_unguarded_service())
+    credited = _service_guarded_routes(_THIN_WRAPPER_ROUTER, load)
+    assert credited == {}, credited
+
+    offenders = _visibility_only_mutations(_THIN_WRAPPER_ROUTER, set(credited))
+    assert len(offenders) == 1, offenders
+    assert "save_config" in offenders[0]
+    assert "optional_web_auth" in offenders[0]
+
+    anonymous = _unauthenticated_mutations(_THIN_WRAPPER_ROUTER, set(credited))
+    assert len(anonymous) == 1, anonymous
+    assert "save_config" in anonymous[0]
+
+
+def test_a_thin_wrapper_whose_service_has_the_guard_goes_quiet() -> None:
+    """Half two: the same route, the same dependencies, a guarded delegate."""
+    load = _service_loader(_guarded_service())
+    credited = _service_guarded_routes(_THIN_WRAPPER_ROUTER, load)
+    assert set(credited) == {"save_config"}, credited
+    assert "ExampleWebService.config_save_response -> self._require_admin" in (
+        credited["save_config"]
+    )
+
+    assert _visibility_only_mutations(_THIN_WRAPPER_ROUTER, set(credited)) == []
+    assert _unauthenticated_mutations(_THIN_WRAPPER_ROUTER, set(credited)) == []
+
+
+def test_a_service_guard_that_admits_module_visibility_is_not_credited() -> None:
+    """Rule (4): classify by body, one layer down.
+
+    A delegate that lets a holder of `hr:access` through is the ADR-0006
+    defect wearing a service method, not a fix for it. The shape matches; the
+    body does not; no credit.
+    """
+    source = (
+        _SERVICE_HEAD
+        + _SERVICE_VISIBILITY_GUARD
+        + _SERVICE_GUARDED_METHOD
+        + _SERVICE_TAIL
+    )
+    credited = _service_guarded_routes(_THIN_WRAPPER_ROUTER, _service_loader(source))
+    assert credited == {}, credited
+    assert len(_visibility_only_mutations(_THIN_WRAPPER_ROUTER, set(credited))) == 1
+
+
+def test_a_service_guard_whose_refusal_is_ignored_is_not_credited() -> None:
+    """Rule (3): the refusal must be honoured, not merely computed."""
+    ignored = _SERVICE_GUARDED_METHOD.replace(
+        "        if error_response:\n            return error_response\n", ""
+    )
+    source = _SERVICE_HEAD + _SERVICE_ADMIN_GUARD + ignored + _SERVICE_TAIL
+    assert _service_guarded_routes(_THIN_WRAPPER_ROUTER, _service_loader(source)) == {}
+
+
+def test_a_handler_that_does_more_than_delegate_is_not_credited() -> None:
+    """Rule (1): one non-delegating return and the detector cannot see the
+    whole handler, so it must not credit any of it. Unproven is not absent."""
+    source = _THIN_WRAPPER_ROUTER.replace(
+        "    return example_web_service.config_save_response(request, db, auth)",
+        "    if not db:\n"
+        "        return RedirectResponse('/admin')\n"
+        "    return example_web_service.config_save_response(request, db, auth)",
+    )
+    load = _service_loader(_guarded_service())
+    assert _service_guarded_routes(source, load) == {}
+    assert len(_visibility_only_mutations(source, set())) == 1
+
+
+def test_an_unresolvable_delegate_is_not_credited() -> None:
+    """A delegate the loader cannot find is an offender, not an exemption."""
+    load: ServiceLoader = lambda dotted: None  # noqa: E731
+    assert _service_guarded_routes(_THIN_WRAPPER_ROUTER, load) == {}
+
+
+def test_the_credited_service_guards_are_exactly_the_recorded_ones() -> None:
+    """The pinned evidence, re-derived.
+
+    `SERVICE_GUARDED_WEB_MUTATIONS` is not an allowlist that someone promised
+    to keep true. It is recomputed here from the delegates, so deleting a
+    `self._require_admin` call fails this test AND puts the route back into
+    WEB_BACKLOG and UNAUTHENTICATED_WEB_MUTATIONS, failing those too.
+    """
+    observed: dict[str, dict[str, str]] = {}
+    for path in _web_backlog_modules():
+        source = path.read_text(encoding="utf-8")
+        credited = _service_guarded_routes(source)
+        if not credited:
+            continue
+        mutating = {
+            name: credited[name]
+            for _, name, methods, _, _ in _routes(source)
+            if name in credited and methods & MUTATING_METHODS
+        }
+        if mutating:
+            observed[path.relative_to(WEB_ROOT).as_posix()] = mutating
+
+    assert observed == SERVICE_GUARDED_WEB_MUTATIONS, (
+        "the set of mutating web routes authorized by the service method they "
+        f"delegate to moved:\n  observed: {observed}\n  "
+        f"recorded: {SERVICE_GUARDED_WEB_MUTATIONS}\n\n"
+        "A route that LEFT this table has lost its guard — check WEB_BACKLOG "
+        "and UNAUTHENTICATED_WEB_MUTATIONS, which it has just rejoined. A "
+        "route that ENTERED it is newly credited and the credit needs "
+        "reading, not recording: the four rules in _service_guarded_routes "
+        "prove a guard is called and honoured, not that it names the right "
+        "authority for the act. See "
+        "docs/adr/0006-module-access-is-not-write-authority.md."
+    )
+
+
+def test_the_service_guarded_table_does_not_overlap_the_backlogs() -> None:
+    """One route, one table — the same rule the two backlogs already keep."""
+    for name in SERVICE_GUARDED_WEB_MUTATIONS:
+        assert name not in WEB_BACKLOG, (
+            f"{name} is both service-guarded and recorded as visibility-only"
+        )
+        assert name not in UNAUTHENTICATED_WEB_MUTATIONS, (
+            f"{name} is both service-guarded and recorded as anonymous"
+        )
+
+
+# ---------------------------------------------------------------------------
 # The rest-of-web backlog ratchet
 # ---------------------------------------------------------------------------
 
@@ -883,7 +1449,7 @@ def test_the_extended_module_access_guards_are_real_dependencies() -> None:
 def _observed_web_backlog() -> dict[str, int]:
     observed: dict[str, int] = {}
     for path in _web_backlog_modules():
-        count = len(_visibility_only_mutations(path.read_text(encoding="utf-8")))
+        count = len(_scan(path, _visibility_only_mutations))
         if count:
             observed[path.relative_to(WEB_ROOT).as_posix()] = count
     return observed
@@ -918,7 +1484,7 @@ def test_the_unauthenticated_web_mutations_are_a_two_directional_ratchet() -> No
     489 coarse ones sitting above it."""
     observed: dict[str, int] = {}
     for path in _web_backlog_modules():
-        count = len(_unauthenticated_mutations(path.read_text(encoding="utf-8")))
+        count = len(_scan(path, _unauthenticated_mutations))
         if count:
             observed[path.relative_to(WEB_ROOT).as_posix()] = count
 
