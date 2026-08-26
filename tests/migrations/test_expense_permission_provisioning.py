@@ -123,7 +123,7 @@ def test_migration_is_a_frozen_copy_of_the_expense_seed_profile() -> None:
     assert migration.ROLE_DESCRIPTIONS == EXPENSE_BASELINE_ROLES
     assert migration.ROLE_EXPENSE_GRANTS == EXPENSE_ROLE_GRANTS
     assert migration.ROLE_EXPENSE_PAYOUT_GRANTS == EXPENSE_PAYOUT_ROLE_GRANTS
-    assert migration.ROLE_GRANTS == _declared_role_grants()
+    assert _declared_role_grants() == migration.ROLE_GRANTS
 
 
 def test_every_grant_references_a_declared_permission_and_role() -> None:

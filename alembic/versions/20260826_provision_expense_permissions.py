@@ -11,7 +11,7 @@ inactive desired role or permission is a conflict: the migration refuses to
 silently reactivate an operator-disabled record.
 
 Revision ID: 20260826_expense_permissions
-Revises: 20260825_weekly_meeting_reports
+Revises: 20260825_retire_dotmac_crm
 Create Date: 2026-08-26
 """
 
@@ -23,7 +23,7 @@ from typing import Any
 from alembic import op
 
 revision: str = "20260826_expense_permissions"
-down_revision: str | None = "20260825_weekly_meeting_reports"
+down_revision: str | None = "20260825_retire_dotmac_crm"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
