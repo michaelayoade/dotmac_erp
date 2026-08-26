@@ -19,7 +19,7 @@ relation the ledger's
    :func:`test_unprotected_rows_have_no_reachable_target_yet` records the
    number as a two-directional ratchet.  It becomes a real assertion in the
    change that adds the grants.
-2. **A protected-target row is not proved refused.**  157 of the 224 relations in
+2. **A protected-target row is not proved refused.**  157 of the 223 relations in
    ``docs/rls-coverage-baseline.json`` carry no RLS at all.  Once grants land,
    those return EVERY organization's rows to ``app_user``; ``denied-no-grant``
    is the absence of a privilege, not the presence of a boundary.

@@ -79,3 +79,55 @@ def test_bulk_sync_processes_dependencies_before_project_tasks(monkeypatch) -> N
     assert calls == ["project", "ticket", "project_task", "work_order"]
     assert result.project_tasks_synced == 1
     assert result.errors == []
+
+
+def test_bulk_sync_keeps_ticket_item_errors_before_commit_failure(
+    monkeypatch,
+) -> None:
+    class Service:
+        def __init__(self, _db) -> None:
+            pass
+
+        def sync_project(self, _org_id, _payload) -> None:
+            pass
+
+        def sync_ticket(self, _org_id, _payload, item_errors: list[str]) -> None:
+            item_errors.extend(["comment failed", "activity failed"])
+
+        def sync_project_task(self, _org_id, _payload) -> None:
+            pass
+
+        def sync_work_order(self, _org_id, _payload) -> None:
+            pass
+
+    monkeypatch.setattr(dotmac_sub, "DotMacSubSyncService", Service)
+    monkeypatch.setattr(dotmac_sub.logger, "exception", MagicMock())
+    savepoint = MagicMock()
+    savepoint.commit.side_effect = RuntimeError("commit failed")
+    db = MagicMock()
+    db.begin_nested.return_value = savepoint
+    payload = dotmac_sub.BulkSyncRequest.model_validate(
+        {"tickets": [{"source_id": "t1", "subject": "Install"}]}
+    )
+
+    result = dotmac_sub.sync_sub_operational_domains(
+        payload,
+        auth={"organization_id": "00000000-0000-0000-0000-000000000001"},
+        db=db,
+    )
+
+    assert result.tickets_synced == 0
+    assert [error.entity_type for error in result.errors] == [
+        "ticket_item",
+        "ticket_item",
+        "ticket",
+    ]
+    assert [error.error for error in result.errors] == [
+        "comment failed",
+        "activity failed",
+        "commit failed",
+    ]
+    savepoint.rollback.assert_called_once_with()
+    dotmac_sub.logger.exception.assert_called_once_with(
+        "Failed to accept Sub %s %s", "ticket", "t1"
+    )
