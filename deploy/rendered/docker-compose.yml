@@ -5,6 +5,7 @@
 # product:          dotmac_erp
 # schema:           ProductDeploymentSpec.v1
 # image:            ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000
+# descriptor image: ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000
 # source revision:  7b62974b366eead1b32bead380e47d9cf10ec4c7
 # manifest digest:  sha256:0000000000000000000000000000000000000000000000000000000000000000
 # ============================================================================
