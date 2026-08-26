@@ -57,6 +57,9 @@ services:
       - alembic
       - upgrade
       - heads
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
       MIGRATION_DATABASE_URL: "${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL must be set}"
     networks:
