@@ -1,11 +1,10 @@
-"""C1: the two typed `dotmac-tax` seams, exercised through their real contracts.
+"""C2: ERP source facts and public `dotmac-tax` results at the real seams.
 
 Every test here builds the SAME value objects a production caller builds —
-`ERPSourceTaxFactV1` via the named family mappers, `ApplyTaxDeterminationSetV1`
-via its constructor — rather than poking at private helpers.  Nothing installs,
-pins or composes `dotmac-tax`: the only test that touches the distribution is
-`test_tax_fact_field_mirror_matches_the_installed_contract`, which skips when it
-is absent and asserts ERP's mirror is exact when it is present.
+`ERPSourceTaxFactV1` via the named family mappers and the released public
+`TaxDeterminationSetV1` via its constructor — rather than poking at private
+helpers. ERP adds a separate `TaxApplicationContextV1`; it never mirrors the
+module's result.
 
 The amounts are the ones ERP actually runs on in production: VAT 7.5 %, WHT 2 %
 compounding on top of it, and a 1 % stamp duty.
@@ -14,10 +13,17 @@ compounding on top of it, and a 1 % stamp duty.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from dataclasses import replace
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
+from dotmac_tax import (
+    TaxDeterminationComponentV1,
+    TaxDeterminationLineV1,
+    TaxDeterminationSetV1,
+    TaxFact,
+)
 
 from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceType
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
@@ -28,16 +34,14 @@ from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.services.finance.money_boundary import to_boundary_money
 from app.services.finance.tax.adoption import (
     MAPPED_FAMILIES,
-    TAX_FACT_FIELDS,
     UNMAPPED_FAMILIES,
     AccountingConsequence,
-    ApplyTaxDeterminationSetV1,
     ConsequencePosting,
     ERPSourceTaxFactV1,
     SourceFactFamily,
     TaxAccountMap,
+    TaxApplicationContextV1,
     TaxAdapterRefusal,
-    TaxDeterminationComponentV1,
     TransactionSide,
     ap_supplier_invoice_line_fact,
     ar_invoice_line_fact,
@@ -61,8 +65,10 @@ WHT_EXPENSE_ACCOUNT = uuid.UUID("aaaaaaaa-0000-4000-8000-000000000003")
 WHT_COLLECTED_ACCOUNT = uuid.UUID("aaaaaaaa-0000-4000-8000-000000000004")
 COUNTERPART_ACCOUNT = uuid.UUID("aaaaaaaa-0000-4000-8000-000000000009")
 FISCAL_PERIOD_ID = uuid.UUID("bbbbbbbb-0000-4000-8000-000000000001")
+DETERMINATION_SET_ID = uuid.UUID("cccccccc-0000-4000-8000-000000000001")
 
 FINGERPRINT = "f" * 64
+RESULT_FINGERPRINT = "rv1:" + "a" * 64
 
 
 def ngn(amount: str):
@@ -581,7 +587,7 @@ def test_to_tax_fact_kwargs_matches_the_contract_field_list_exactly():
     fact = ar_invoice_line_fact(
         invoice, build_ar_line(invoice), jurisdiction_id=JURISDICTION_ID
     )
-    assert set(to_tax_fact_kwargs(fact)) == set(TAX_FACT_FIELDS)
+    assert set(to_tax_fact_kwargs(fact)) == set(TaxFact.__dataclass_fields__)
 
 
 def test_every_erp_only_field_is_dropped_before_the_module_sees_it():
@@ -628,14 +634,6 @@ def test_an_unmapped_cohort_is_refused_by_name():
         to_tax_fact_kwargs(fact)
 
 
-def test_tax_fact_field_mirror_matches_the_installed_contract():
-    """The mirror is only a mirror while the package agrees with it."""
-    dotmac_tax = pytest.importorskip(
-        "dotmac_tax", reason="dotmac-tax is not pinned; C1 delivers adapters only"
-    )
-    assert set(dotmac_tax.TaxFact.__dataclass_fields__) == set(TAX_FACT_FIELDS)
-
-
 # ===================================================== OUTBOUND: determinations
 
 
@@ -643,6 +641,8 @@ def vat_component(*, sequence: int = 100, inclusive: bool = False, recoverable=T
     tax = ngn("7500.00")
     zero = ngn("0.00")
     return TaxDeterminationComponentV1(
+        determination_id=uuid.uuid4(),
+        determination_set_id=DETERMINATION_SET_ID,
         component_sequence=sequence,
         tax_code_id=VAT_CODE_ID,
         rule_id=uuid.uuid4(),
@@ -650,10 +650,24 @@ def vat_component(*, sequence: int = 100, inclusive: bool = False, recoverable=T
         treatment_code="standard_rated",
         calculation_base_code="source_amount",
         inclusive=inclusive,
+        party_category=None,
+        supply_category=None,
+        place_code=None,
+        party_classification_id=None,
+        supply_classification_id=None,
+        place_classification_id=None,
         base_amount=ngn("100000.00"),
         tax_amount=tax,
         recoverable_amount=tax if recoverable else zero,
         non_recoverable_amount=zero if recoverable else tax,
+        lines=(
+            TaxDeterminationLineV1(
+                sequence=1,
+                taxable_amount=ngn("100000.00"),
+                rate=Decimal("0.075"),
+                tax_amount=tax,
+            ),
+        ),
     )
 
 
@@ -661,6 +675,8 @@ def wht_component(*, sequence: int = 200):
     """WHT 2 %: compound (on source + prior tax) and NOT recoverable."""
     tax = ngn("2150.00")
     return TaxDeterminationComponentV1(
+        determination_id=uuid.uuid4(),
+        determination_set_id=DETERMINATION_SET_ID,
         component_sequence=sequence,
         tax_code_id=WHT_2_CODE_ID,
         rule_id=uuid.uuid4(),
@@ -668,16 +684,32 @@ def wht_component(*, sequence: int = 200):
         treatment_code="standard_rated",
         calculation_base_code="source_plus_prior_tax",
         inclusive=False,
+        party_category=None,
+        supply_category=None,
+        place_code=None,
+        party_classification_id=None,
+        supply_classification_id=None,
+        place_classification_id=None,
         base_amount=ngn("107500.00"),
         tax_amount=tax,
         recoverable_amount=ngn("0.00"),
         non_recoverable_amount=tax,
+        lines=(
+            TaxDeterminationLineV1(
+                sequence=1,
+                taxable_amount=ngn("107500.00"),
+                rate=Decimal("0.02"),
+                tax_amount=tax,
+            ),
+        ),
     )
 
 
 def exempt_component(*, sequence: int = 300):
     zero = ngn("0.00")
     return TaxDeterminationComponentV1(
+        determination_id=uuid.uuid4(),
+        determination_set_id=DETERMINATION_SET_ID,
         component_sequence=sequence,
         tax_code_id=STAMP_DUTY_CODE_ID,
         rule_id=uuid.uuid4(),
@@ -685,10 +717,24 @@ def exempt_component(*, sequence: int = 300):
         treatment_code="exempt",
         calculation_base_code="source_amount",
         inclusive=False,
+        party_category=None,
+        supply_category=None,
+        place_code=None,
+        party_classification_id=None,
+        supply_classification_id=None,
+        place_classification_id=None,
         base_amount=ngn("100000.00"),
         tax_amount=zero,
         recoverable_amount=zero,
         non_recoverable_amount=zero,
+        lines=(
+            TaxDeterminationLineV1(
+                sequence=1,
+                taxable_amount=ngn("100000.00"),
+                rate=None,
+                tax_amount=zero,
+            ),
+        ),
     )
 
 
@@ -702,6 +748,8 @@ def zero_treatment_component(
     """
     zero = ngn("0.00")
     return TaxDeterminationComponentV1(
+        determination_id=uuid.uuid4(),
+        determination_set_id=DETERMINATION_SET_ID,
         component_sequence=sequence,
         tax_code_id=STAMP_DUTY_CODE_ID,
         rule_id=uuid.uuid4(),
@@ -709,41 +757,77 @@ def zero_treatment_component(
         treatment_code=treatment,
         calculation_base_code="source_amount",
         inclusive=False,
+        party_category=None,
+        supply_category=None,
+        place_code=None,
+        party_classification_id=None,
+        supply_classification_id=None,
+        place_classification_id=None,
         base_amount=ngn("100000.00"),
         tax_amount=zero,
         recoverable_amount=zero,
         non_recoverable_amount=zero,
+        lines=(
+            TaxDeterminationLineV1(
+                sequence=1,
+                taxable_amount=ngn("100000.00"),
+                rate=None,
+                tax_amount=zero,
+            ),
+        ),
     )
 
 
-def build_apply(
+def build_result(
     *,
-    consequence: AccountingConsequence = AccountingConsequence.AR_OUTPUT_TAX,
     components=None,
     source: str = "100000.00",
     net: str = "100000.00",
     tax: str = "7500.00",
     gross: str = "107500.00",
-    reversal: bool = False,
     fingerprint: str = FINGERPRINT,
-) -> ApplyTaxDeterminationSetV1:
-    return ApplyTaxDeterminationSetV1(
-        organization_id=ORG_ID,
-        determination_set_id=uuid.uuid4(),
-        source_ref="erp:ar.invoice_line:abc",
-        source_version="v3",
-        source_fingerprint=fingerprint,
+    transaction_side: str = "output",
+) -> TaxDeterminationSetV1:
+    return TaxDeterminationSetV1(
+        tenant_id=ORG_ID,
+        determination_set_id=DETERMINATION_SET_ID,
+        jurisdiction_id=JURISDICTION_ID,
         occurred_on=date(2026, 3, 31),
-        posting_date=date(2026, 3, 31),
-        consequence=consequence,
-        components=tuple(components if components is not None else [vat_component()]),
+        fact_kind="sale",
+        recognition_basis_code="accrual",
+        transaction_side=transaction_side,
         source_amount=ngn(source),
         net_amount=ngn(net),
         tax_amount=ngn(tax),
         gross_amount=ngn(gross),
+        source_ref="erp:ar.invoice_line:abc",
+        source_version="v3",
+        source_fingerprint=fingerprint,
+        result_fingerprint=RESULT_FINGERPRINT,
+        evidence_ref="erp:ar.invoice_line:abc",
+        counterparty_ref="erp:customer:123",
+        supply_ref="erp:item:456",
+        place_ref=None,
+        determined_at=datetime(2026, 3, 31, 12, 0, tzinfo=UTC),
+        components=tuple(components if components is not None else [vat_component()]),
+    )
+
+
+def application_context(
+    *,
+    consequence: AccountingConsequence = AccountingConsequence.AR_OUTPUT_TAX,
+    reversal: bool = False,
+    organization_id: uuid.UUID = ORG_ID,
+    exchange_rate: Decimal = Decimal("1"),
+) -> TaxApplicationContextV1:
+    return TaxApplicationContextV1(
+        organization_id=organization_id,
+        posting_date=date(2026, 3, 31),
+        consequence=consequence,
         document_id=uuid.uuid4(),
         document_type="AR_INVOICE",
         counterpart_account_id=COUNTERPART_ACCOUNT,
+        exchange_rate=exchange_rate,
         reversal=reversal,
     )
 
@@ -771,15 +855,16 @@ def account_map(
     )
 
 
-def project(apply: ApplyTaxDeterminationSetV1, **kwargs) -> ConsequencePosting:
+def project(result: TaxDeterminationSetV1, **kwargs) -> ConsequencePosting:
+    kwargs.setdefault("application", application_context())
     kwargs.setdefault("accounts", account_map())
-    kwargs.setdefault("expected_fingerprint", apply.source_fingerprint)
+    kwargs.setdefault("expected_fingerprint", result.source_fingerprint)
     kwargs.setdefault("fiscal_period_id", FISCAL_PERIOD_ID)
-    return project_determination_set(apply, **kwargs)
+    return project_determination_set(result, **kwargs)
 
 
 def test_ar_output_tax_credits_the_collected_account_and_balances():
-    posting = project(build_apply())
+    posting = project(build_result())
 
     assert len(posting.lines) == 2
     tax_line, counterpart = posting.lines
@@ -792,18 +877,22 @@ def test_ar_output_tax_credits_the_collected_account_and_balances():
     assert posting.total_debit == posting.total_credit
     assert posting.fiscal_period_id == FISCAL_PERIOD_ID
     assert posting.currency_code == NGN
+    assert posting.result_fingerprint == RESULT_FINGERPRINT
 
 
 def test_ap_input_tax_splits_recoverable_from_irrecoverable():
     """The one place a component yields two lines, and why the split is amounts."""
-    apply = build_apply(
-        consequence=AccountingConsequence.AP_INPUT_TAX,
+    result = build_result(
         components=[vat_component(), wht_component()],
         tax="9650.00",
         gross="109650.00",
+        transaction_side="input",
     )
 
-    posting = project(apply)
+    posting = project(
+        result,
+        application=application_context(consequence=AccountingConsequence.AP_INPUT_TAX),
+    )
 
     by_account = {line.account_id: line for line in posting.lines}
     assert by_account[VAT_PAID_ACCOUNT].debit_amount == Decimal("7500.00")
@@ -813,7 +902,7 @@ def test_ap_input_tax_splits_recoverable_from_irrecoverable():
 
 
 def test_reversal_flips_every_line_and_still_balances():
-    posting = project(build_apply(reversal=True))
+    posting = project(build_result(), application=application_context(reversal=True))
 
     tax_line, counterpart = posting.lines
     assert tax_line.debit_amount == Decimal("7500.00")
@@ -824,13 +913,13 @@ def test_reversal_flips_every_line_and_still_balances():
 
 def test_a_missing_account_mapping_refuses_the_whole_set():
     with pytest.raises(TaxAdapterRefusal, match="no collected account mapped"):
-        project(build_apply(), accounts=account_map(vat_collected=False))
+        project(build_result(), accounts=account_map(vat_collected=False))
 
 
 def test_an_unmapped_tax_code_refuses_the_whole_set():
     empty = TaxAccountMap(entries=())
     with pytest.raises(TaxAdapterRefusal, match="no ERP account mapping"):
-        project(build_apply(), accounts=empty)
+        project(build_result(), accounts=empty)
 
 
 def test_two_mappings_for_one_tax_code_is_an_adjudication_not_last_one_wins():
@@ -848,15 +937,62 @@ def test_two_mappings_for_one_tax_code_is_an_adjudication_not_last_one_wins():
 
 
 def test_a_changed_fingerprint_refuses_the_row():
-    apply = build_apply()
+    result = build_result()
     with pytest.raises(TaxAdapterRefusal, match="fingerprint changed"):
-        project(apply, expected_fingerprint="0" * 64)
+        project(result, expected_fingerprint="0" * 64)
+
+
+def test_a_cross_organization_result_refuses_the_posting_context():
+    other_org = uuid.UUID("dddddddd-0000-4000-8000-000000000001")
+    with pytest.raises(TaxAdapterRefusal, match="tenant does not match"):
+        project(
+            build_result(), application=application_context(organization_id=other_org)
+        )
+
+
+@pytest.mark.parametrize(
+    ("transaction_side", "wrong_consequence"),
+    (
+        ("output", AccountingConsequence.AP_INPUT_TAX),
+        ("input", AccountingConsequence.AR_OUTPUT_TAX),
+        ("withholding", AccountingConsequence.AR_OUTPUT_TAX),
+        ("liability", AccountingConsequence.AR_OUTPUT_TAX),
+    ),
+)
+def test_accounting_consequence_cannot_contradict_the_determination_side(
+    transaction_side: str,
+    wrong_consequence: AccountingConsequence,
+):
+    with pytest.raises(TaxAdapterRefusal, match="consequence contradicts"):
+        project(
+            build_result(transaction_side=transaction_side),
+            application=application_context(consequence=wrong_consequence),
+        )
+
+
+def test_application_context_requires_an_explicit_exact_exchange_rate():
+    with pytest.raises(TaxAdapterRefusal, match="exact Decimal"):
+        replace(application_context(), exchange_rate=1.0)
+    with pytest.raises(TaxAdapterRefusal, match="finite and positive"):
+        replace(application_context(), exchange_rate=Decimal("0"))
+
+
+def test_only_the_public_result_contract_crosses_the_boundary():
+    with pytest.raises(TaxAdapterRefusal, match="TaxDeterminationSetV1"):
+        project_determination_set(  # type: ignore[arg-type]
+            object(),
+            application=application_context(),
+            accounts=account_map(),
+            expected_fingerprint=FINGERPRINT,
+            fiscal_period_id=FISCAL_PERIOD_ID,
+        )
 
 
 def test_an_open_period_cannot_be_asserted_by_omission():
     with pytest.raises(TaxAdapterRefusal, match="open fiscal period id is required"):
         project_determination_set(
-            build_apply(),
+            build_result(),
+            application=application_context(),
             accounts=account_map(),
             expected_fingerprint=FINGERPRINT,
             fiscal_period_id=None,  # type: ignore[arg-type]
@@ -869,45 +1005,42 @@ def test_an_open_period_cannot_be_asserted_by_omission():
 def test_an_inclusive_set_requires_source_to_equal_gross():
     """`VAT-7.5 (inclusive)` becomes rule-level treatment, and the arithmetic
     that distinguishes it is re-derived here rather than trusted."""
-    apply = build_apply(
+    result = build_result(
         components=[vat_component(inclusive=True)],
         source="107500.00",
         net="100000.00",
         tax="7500.00",
         gross="107500.00",
     )
-    posting = project(apply)
+    posting = project(result)
     assert posting.total_debit == posting.total_credit == Decimal("7500.00")
 
 
 def test_an_inclusive_set_whose_source_equals_net_is_refused():
-    apply = build_apply(components=[vat_component(inclusive=True)])
-    with pytest.raises(TaxAdapterRefusal, match="inclusive set"):
-        project(apply)
+    with pytest.raises(ValueError, match="source amount must equal gross"):
+        build_result(components=[vat_component(inclusive=True)])
 
 
 def test_an_exclusive_set_whose_source_equals_gross_is_refused():
-    apply = build_apply(source="107500.00")
-    with pytest.raises(TaxAdapterRefusal, match="exclusive set"):
-        project(apply)
+    with pytest.raises(ValueError, match="source amount must equal net"):
+        build_result(source="107500.00")
 
 
 def test_an_inclusive_component_beside_any_other_is_refused():
-    """Mirrors the a2 candidate's own refusal: the source amount is ambiguous."""
-    apply = build_apply(
-        components=[vat_component(inclusive=True), wht_component()],
-        source="107500.00",
-        net="100000.00",
-        tax="9650.00",
-        gross="109650.00",
-    )
-    with pytest.raises(TaxAdapterRefusal, match="cannot be combined"):
-        project(apply)
+    """The public a3 contract refuses the ambiguous source amount."""
+    with pytest.raises(ValueError, match="cannot be combined"):
+        build_result(
+            components=[vat_component(inclusive=True), wht_component()],
+            source="107500.00",
+            net="100000.00",
+            tax="9650.00",
+            gross="109650.00",
+        )
 
 
 def test_components_out_of_calculation_order_are_refused():
-    with pytest.raises(TaxAdapterRefusal, match="strictly increasing"):
-        build_apply(
+    with pytest.raises(ValueError, match="strict unique ordering"):
+        build_result(
             components=[wht_component(sequence=100), vat_component(sequence=50)],
             tax="9650.00",
             gross="109650.00",
@@ -915,39 +1048,27 @@ def test_components_out_of_calculation_order_are_refused():
 
 
 def test_a_component_whose_recovery_split_does_not_add_up_is_refused():
-    with pytest.raises(TaxAdapterRefusal, match="recovery split"):
-        TaxDeterminationComponentV1(
-            component_sequence=100,
-            tax_code_id=VAT_CODE_ID,
-            rule_id=uuid.uuid4(),
-            rule_version=1,
-            treatment_code="standard_rated",
-            calculation_base_code="source_amount",
-            inclusive=False,
-            base_amount=ngn("100000.00"),
-            tax_amount=ngn("7500.00"),
-            recoverable_amount=ngn("7500.00"),
-            non_recoverable_amount=ngn("0.01"),
-        )
+    with pytest.raises(ValueError, match="recovery split"):
+        replace(vat_component(), non_recoverable_amount=ngn("0.01"))
 
 
 def test_components_that_do_not_total_the_set_are_refused():
-    with pytest.raises(TaxAdapterRefusal, match="components total"):
-        build_apply(tax="9999.00", gross="109999.00")
+    with pytest.raises(ValueError, match="components must total"):
+        build_result(tax="9999.00", gross="109999.00")
 
 
 def test_net_plus_tax_must_equal_gross():
-    with pytest.raises(TaxAdapterRefusal, match="does not equal gross"):
-        build_apply(gross="107500.01")
+    with pytest.raises(ValueError, match="net plus tax must equal gross"):
+        build_result(gross="107500.01")
 
 
 # ================================================ OUTBOUND: zero treatments
 
 
 def test_a_zero_treatment_component_is_carried_not_dropped():
-    apply = build_apply(components=[vat_component(), exempt_component()])
+    result = build_result(components=[vat_component(), exempt_component()])
 
-    posting = project(apply)
+    posting = project(result)
 
     assert posting.is_postable is True
     assert len(posting.lines) == 2, "the exempt component produces no journal line"
@@ -955,8 +1076,8 @@ def test_a_zero_treatment_component_is_carried_not_dropped():
     assert posting.reportable_zero_components[0].treatment_code == "exempt"
 
 
-def _all_exempt() -> ApplyTaxDeterminationSetV1:
-    return build_apply(components=[exempt_component()], tax="0.00", gross="100000.00")
+def _all_exempt() -> TaxDeterminationSetV1:
+    return build_result(components=[exempt_component()], tax="0.00", gross="100000.00")
 
 
 def test_an_all_zero_set_returns_its_reportable_components_and_posts_nothing():
@@ -995,11 +1116,11 @@ def test_an_all_zero_set_emits_no_counterpart_line():
 
 def test_a_reversing_all_zero_set_is_still_reportable_and_still_posts_nothing():
     """Reversal flips sides; it cannot manufacture a line where there is no tax."""
-    apply = build_apply(
-        components=[exempt_component()], tax="0.00", gross="100000.00", reversal=True
+    result = build_result(
+        components=[exempt_component()], tax="0.00", gross="100000.00"
     )
 
-    posting = project(apply)
+    posting = project(result, application=application_context(reversal=True))
 
     assert posting.is_postable is False
     assert posting.lines == ()
@@ -1008,7 +1129,7 @@ def test_a_reversing_all_zero_set_is_still_reportable_and_still_posts_nothing():
 
 def test_every_zero_treatment_is_reportable_not_only_exempt():
     """All three zero treatments survive to the return box, distinctly."""
-    apply = build_apply(
+    result = build_result(
         components=[
             zero_treatment_component(sequence=sequence, treatment=treatment)
             for sequence, treatment in enumerate(
@@ -1019,7 +1140,7 @@ def test_every_zero_treatment_is_reportable_not_only_exempt():
         gross="100000.00",
     )
 
-    posting = project(apply)
+    posting = project(result)
 
     assert posting.is_postable is False
     assert {c.treatment_code for c in posting.reportable_zero_components} == {
@@ -1031,7 +1152,7 @@ def test_every_zero_treatment_is_reportable_not_only_exempt():
 
 def test_a_postable_set_is_unchanged_by_the_reportable_only_path():
     """Regression: C1.1 must not alter the ordinary path."""
-    posting = project(build_apply())
+    posting = project(build_result())
 
     assert posting.is_postable is True
     journal = posting.to_journal_input()
@@ -1040,39 +1161,29 @@ def test_a_postable_set_is_unchanged_by_the_reportable_only_path():
 
 
 def test_a_standard_rated_component_holding_no_tax_is_a_defect():
-    zero = ngn("0.00")
-    component = TaxDeterminationComponentV1(
-        component_sequence=100,
-        tax_code_id=VAT_CODE_ID,
-        rule_id=uuid.uuid4(),
-        rule_version=1,
+    component = replace(
+        exempt_component(),
         treatment_code="standard_rated",
-        calculation_base_code="source_amount",
-        inclusive=False,
-        base_amount=ngn("100000.00"),
-        tax_amount=zero,
-        recoverable_amount=zero,
-        non_recoverable_amount=zero,
     )
-    apply = build_apply(components=[component], tax="0.00", gross="100000.00")
+    result = build_result(components=[component], tax="0.00", gross="100000.00")
     with pytest.raises(TaxAdapterRefusal, match="determination defect"):
-        project(apply)
+        project(result)
 
 
 def test_a_zero_treatment_holding_money_is_refused_at_the_contract():
-    with pytest.raises(TaxAdapterRefusal, match="a zero treatment holding money"):
-        TaxDeterminationComponentV1(
-            component_sequence=100,
-            tax_code_id=VAT_CODE_ID,
-            rule_id=uuid.uuid4(),
-            rule_version=1,
-            treatment_code="exempt",
-            calculation_base_code="source_amount",
-            inclusive=False,
-            base_amount=ngn("100000.00"),
+    with pytest.raises(ValueError, match="must have zero tax"):
+        replace(
+            exempt_component(),
             tax_amount=ngn("1.00"),
             recoverable_amount=ngn("1.00"),
-            non_recoverable_amount=ngn("0.00"),
+            lines=(
+                TaxDeterminationLineV1(
+                    sequence=1,
+                    taxable_amount=ngn("100000.00"),
+                    rate=None,
+                    tax_amount=ngn("1.00"),
+                ),
+            ),
         )
 
 
@@ -1080,7 +1191,7 @@ def test_a_zero_treatment_holding_money_is_refused_at_the_contract():
 
 
 def test_the_projection_renders_into_the_accounting_owners_own_input_type():
-    posting = project(build_apply())
+    posting = project(build_result())
 
     journal = posting.to_journal_input()
 
@@ -1097,14 +1208,16 @@ def test_the_projection_renders_into_the_accounting_owners_own_input_type():
 
 
 def test_the_module_is_never_asked_about_an_account_or_a_journal():
-    """The outbound contract mirrors determinations; it imports no module type."""
+    """The public result has no ERP account or journal fields."""
     import app.services.finance.tax.adoption.outbound as outbound
 
     source = (outbound.__file__ or "").replace(".pyc", ".py")
     with open(source, encoding="utf-8") as handle:
         text = handle.read()
-    assert "import dotmac_tax" not in text
-    assert "from dotmac_tax" not in text
+    assert "from dotmac_tax import TaxDeterminationComponentV1" in text
+    assert "TaxDeterminationSetV1" in text
+    assert "dotmac_tax.models" not in text
+    assert "dotmac_tax.contracts" not in text
 
     component_fields = set(TaxDeterminationComponentV1.__dataclass_fields__)
     assert not component_fields & {
@@ -1114,3 +1227,11 @@ def test_the_module_is_never_asked_about_an_account_or_a_journal():
         "debit_amount",
         "credit_amount",
     }
+
+
+def test_erp_has_deleted_the_temporary_determination_mirrors():
+    import app.services.finance.tax.adoption.contracts as contracts
+
+    assert not hasattr(contracts, "ApplyTaxDeterminationSetV1")
+    assert not hasattr(contracts, "TaxDeterminationComponentV1")
+    assert not hasattr(contracts, "MIRROR_RETIREMENT_GATE")

@@ -51,6 +51,32 @@ mapping and run-loop ownership is removed and the two-directional caller
 ratchet is lowered in the same change. The exact contract is
 `docs/architecture/imports-adoption-boundary.md`.
 
+## Tax C2 — released contract and storage composed, authority unchanged
+
+ERP pins `dotmac-tax==0.1.0a3` from the private index and composes the module's
+tenant-only `tx` lineage at `tx_0003_result_fingerprint`. The external release
+oracle is Starter run `32898397980`; annotated tag
+`dotmac-tax-v0.1.0a3` peels to
+`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`, and generated release-record PR
+#443 merged at `fca290ac7a32755e9ab000661e8bc6a35c138173` with post-merge CI and
+Engineering Standards green.
+
+C2 deletes ERP's temporary determination-result mirror and consumes the
+released public `TaxDeterminationSetV1`/component/line contract directly. ERP
+retains only its typed source observation and accounting-application context,
+including explicit posting target, account consequence and exact exchange
+rate. Source and result fingerprints stay distinct. Reportable zero outcomes
+remain reachable without creating a zero journal, and an ERP consequence that
+contradicts the module transaction side is refused.
+
+This is supply and storage, not cutover. `TAX_COMPOSITION_ENABLED` defaults to
+false; no calculator, source writer, reader or filing path calls the module.
+C3 must backfill policy/classification/account mappings and compare every field
+and proposed balanced consequence before any cohort moves. A foreign-source-
+currency cohort remains `ADJUDICATION_REQUIRED` until Finance/Tax approves the
+legal tax-base currency and rate evidence; an invoice-header rate is not
+silently treated as that policy.
+
 ## E8 slice 3 — Organization identity is module tenant identity
 
 The measured RLS audit/ratchet (E8 slices 1 and 2) is followed by the first

@@ -1,14 +1,17 @@
 # `dotmac-tax` C1 — typed source-fact and accounting-consequence adapters
 
-Status: **adapters delivered; module NOT composed**
+Status: **C1 history, amended by C2 composition**
 Companion to `docs/architecture/dotmac-tax-adoption-boundary.md`, which remains
 the authoritative design. This note records what C1 built, what it deliberately
 did not build, and every ERP field that does not map cleanly onto the published
 `dotmac-tax` contract.
 
-Contract read against: `dotmac-tax 0.1.0a2`
-(`packages/dotmac-tax/src/dotmac_tax/contracts.py` in `dotmac_starter_mt`) —
-`TaxFact`, `TaxRuleInput`, `TaxJurisdictionInput`, `TaxRuleBandInput`.
+Original C1 contract: `dotmac-tax 0.1.0a2`. C2 now pins released
+`dotmac-tax 0.1.0a3` (release run `32898397980`, peeled tag
+`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`) and consumes its public
+`TaxFact` and sealed `TaxDeterminationSetV1`/component/line contracts directly.
+The `tx` lineage is composed at `tx_0003_result_fingerprint`; runtime authority
+remains disabled.
 
 Delivered:
 
@@ -20,10 +23,9 @@ Delivered:
 | Composition state (inert) | `app/services/finance/tax/adoption/composition.py` |
 | Tests | `tests/ifrs/tax/test_tax_adoption_adapters.py` |
 
-C1 changes no writer. `dotmac-tax` is absent from `pyproject.toml` and
-`poetry.lock`, its `tx` lineage is absent from `alembic.ini`, `mod_tax` exists in
-no ERP database, and no calculator, reader or filing path has been repointed.
-Pinning, lineage composition, policy backfill and cohort cutover are C2/C3/C4.
+C1 changed no writer. C2 adds the exact dependency and module storage but still
+repoints no calculator, reader or filing writer. Policy backfill, field-by-field
+shadow comparison and cohort cutover remain C3/C4.
 
 ---
 
@@ -133,8 +135,8 @@ record an approved ordering adjudication instead of copying it.
 ## 4. Field-by-field ERP → `TaxFact`
 
 `TaxFact` has fifteen fields. `to_tax_fact_kwargs` produces exactly those and
-nothing else; `TAX_FACT_FIELDS` mirrors the list and is asserted equal to the
-real dataclass whenever the distribution is installed.
+nothing else; C2 checks the mapping keys directly against the installed public
+dataclass, with no ERP-owned field-list mirror left to drift.
 
 Note that `tenant_id` is **not** a `TaxFact` field: the module takes it as a
 separate argument to `determine_tax_set`, and ERP passes `fact.tenant_id`, a
@@ -385,8 +387,10 @@ rather than assuming the scales agree.
 
 ## 6. The outbound projection
 
-`project_determination_set(apply, *, accounts, expected_fingerprint,
-fiscal_period_id) -> ConsequencePosting` is a **pure function**. It verifies,
+`project_determination_set(result, *, application, accounts,
+expected_fingerprint, fiscal_period_id) -> ConsequencePosting` is a **pure
+function**. `result` is the released public `TaxDeterminationSetV1`;
+`application` is ERP's separate posting context. The function verifies,
 resolves accounts, and returns a typed consequence. A postable consequence
 renders into `JournalInput`/`JournalLineInput` — the accounting owner's own
 input type — while a reportable-only zero consequence renders no journal. It
@@ -394,8 +398,8 @@ performs no write; invoking
 `BasePostingAdapter.create_approve_and_post_journal` and writing the document /
 tax-transaction snapshot is C4.
 
-Purity buys three things. It is testable with no database, no session and no
-`dotmac-tax` installed. It cannot half-write, so "refuse the whole source row"
+Purity buys three things. It is testable with no database or session. It cannot
+half-write, so "refuse the whole source row"
 is structural rather than a `rollback()` someone has to remember. And the
 preconditions it cannot check itself become REQUIRED ARGUMENTS: `fiscal_period_id`
 is what `PeriodGuardService.require_open_period()` returns, so a caller that has
@@ -424,7 +428,8 @@ period (by construction), a currency mismatch, components out of calculation
 order, a recovery split that does not total its component, components that do
 not total the set, `net + tax != gross`, an inclusive set whose `source != gross`,
 an exclusive set whose `source != net`, an inclusive component combined with any
-other (mirroring the a2 candidate's own refusal), a standard-rated component
+other (mirroring the released a3 contract's own refusal), a transaction side
+that contradicts ERP's accounting consequence, a standard-rated component
 holding zero tax, and a projected posting that does not balance —
 `JournalService._require_balanced` admits no tolerance, so it is refused here,
 where the offending component can still be named.
@@ -453,28 +458,19 @@ never substituted with a suspense or a default.
 
 ## 7. The one-way import rule
 
-`dotmac_tax` imports nothing from ERP. ERP touches `dotmac_tax` in exactly one
-place — `inbound.to_tax_fact` — through a lazy import of the package's PUBLIC
-surface (`from dotmac_tax import TaxFact`), never a submodule and never a model.
-`outbound.py` contains no reference to the module at all; it mirrors the
-reviewable fields of an approved determination set as ERP-owned types, which is
-what lets the consequence path be written, reviewed and tested before the
-package is ever pinned. `test_the_module_is_never_asked_about_an_account_or_a_journal`
-asserts the absence.
-
-`to_tax_fact_kwargs` is pure and separate from `to_tax_fact` so the field-by-
-field mapping stays testable with the distribution absent. `TAX_FACT_FIELDS`
-mirrors the released field list and is asserted equal to the real dataclass when
-the package IS installed, so a contract that grows a required field fails a test
-rather than a production call.
+`dotmac_tax` imports nothing from ERP. ERP imports only names from the package's
+PUBLIC top-level surface, never module ORM models or internal submodules.
+`inbound.to_tax_fact` builds the released `TaxFact`; `outbound.py` accepts the
+released sealed result contracts. ERP owns only its source observation and
+accounting-application context. `to_tax_fact_kwargs` remains a pure explicit
+translation and is checked directly against the installed public dataclass;
+there is no ERP field-list or result mirror left to drift.
 
 ---
 
 ## 8. Verification performed
 
-Static only, and deliberately incomplete — ERP dev dependencies are not
-installed in this worktree and, per repository policy, tests are executed by CI,
-not here.
+The following is C1's historical verification record; it is not C2 evidence.
 
 Ran:
 
@@ -495,12 +491,7 @@ CI on the final SHA is the acceptance evidence.
 
 ## 9. What C1 did not do
 
-No dependency pin, no `alembic.ini` version location, no migration, no backfill,
-no shadow run, no writer switch, and no claim that `dotmac-tax 0.1.0a2` is
-installable here. `composition.CONTRACT_VERSION` records the version of the
-published contract these adapters were written against; recording a version is
-not a claim that it is pinned, published or adopted — no authoritative external
-oracle (release run, peeled tag, deployment run) for it exists in this
-repository, and `AGENTS.md` § "Cross-repository engineering governance" is
-explicit that repository-local claims come from repository-local facts. The next
-gated step is C2.
+Historically, C1 added no dependency, lineage, backfill, shadow run or writer
+switch. C2 now supplies the exact a3 artifact and storage lineage and deletes
+the temporary result mirror. It still performs no backfill, shadow comparison,
+module determination call or writer switch. The next gated step is C3.

@@ -16,12 +16,9 @@ Everything else in this package is ERP-owned types, which is why the mappers can
 be written, reviewed and unit-tested before the distribution is pinned.
 
 :func:`to_tax_fact_kwargs` is the whole translation and it is pure: it returns
-the exact keyword arguments `TaxFact(**kwargs)` is built from.  That keeps the
-field-by-field mapping testable with the package absent, and
-:data:`TAX_FACT_FIELDS` — ERP's mirror of the released contract's field list —
-is checked against the real dataclass whenever the package IS installed.  A
-contract that grows a required field therefore fails a test rather than a
-production call.
+the exact keyword arguments `TaxFact(**kwargs)` is built from. C2 pins the
+released package, so the adapter validates against that public dataclass
+directly rather than maintaining a second field-list mirror.
 
 ## What a mapper deliberately refuses to do
 
@@ -58,6 +55,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from dotmac_kernel.money import Money
+from dotmac_tax import TaxFact
 
 from app.services.finance.money_boundary import MoneyBoundaryError, to_boundary_money
 from app.services.finance.tax.adoption.contracts import (
@@ -70,8 +68,6 @@ from app.services.finance.tax.adoption.contracts import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from dotmac_tax import TaxFact
-
     from app.models.finance.ap.supplier_invoice import SupplierInvoice
     from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
     from app.models.finance.ar.invoice import Invoice
@@ -79,7 +75,6 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 __all__ = [
     "MAPPED_FAMILIES",
-    "TAX_FACT_FIELDS",
     "UNMAPPED_FAMILIES",
     "ap_supplier_invoice_line_fact",
     "ar_invoice_line_fact",
@@ -105,31 +100,6 @@ MAPPED_FAMILIES: frozenset[SourceFactFamily] = frozenset(
 #: The C1 note records why each is out of scope.
 UNMAPPED_FAMILIES: frozenset[SourceFactFamily] = (
     frozenset(SourceFactFamily) - MAPPED_FAMILIES
-)
-
-#: ERP's mirror of `dotmac_tax.TaxFact`'s field list at the version recorded in
-#: `composition.CONTRACT_VERSION`.  A mirror, not an import: it must be
-#: checkable with the distribution absent.  When the distribution IS installed,
-#: `tests/ifrs/tax/test_tax_adoption_adapters.py` asserts the two agree exactly,
-#: so a contract that adds a field fails a test instead of a production call.
-TAX_FACT_FIELDS: frozenset[str] = frozenset(
-    {
-        "jurisdiction_id",
-        "occurred_on",
-        "fact_kind",
-        "recognition_basis_code",
-        "transaction_side",
-        "base_amount",
-        "source_ref",
-        "source_version",
-        "evidence_ref",
-        "party_category",
-        "supply_category",
-        "place_code",
-        "counterparty_ref",
-        "supply_ref",
-        "place_ref",
-    }
 )
 
 
@@ -749,20 +719,6 @@ def to_tax_fact_kwargs(fact: ERPSourceTaxFactV1) -> dict[str, object]:
 
 
 def to_tax_fact(fact: ERPSourceTaxFactV1) -> TaxFact:
-    """The ONLY place in ERP that touches `dotmac_tax`.
+    """Build the released public module fact without importing internals."""
 
-    Lazily imported so that importing ERP's tax package does not require a
-    distribution ERP has not pinned (see `composition`).  The import is of the
-    package's PUBLIC surface — `from dotmac_tax import TaxFact` — never a
-    submodule, so ERP depends on the released contract rather than on the
-    module's internal layout.
-    """
-    try:
-        from dotmac_tax import TaxFact as ModuleTaxFact
-    except ImportError as exc:  # pragma: no cover - exercised only when unpinned
-        raise TaxAdapterRefusal(
-            "dotmac-tax is not installed; ERP has not pinned it. C1 delivers "
-            "adapters only — see docs/architecture/"
-            "dotmac-tax-adoption-boundary.md § 'Composition and release gates'."
-        ) from exc
-    return ModuleTaxFact(**to_tax_fact_kwargs(fact))  # type: ignore[arg-type]
+    return TaxFact(**to_tax_fact_kwargs(fact))  # type: ignore[arg-type]

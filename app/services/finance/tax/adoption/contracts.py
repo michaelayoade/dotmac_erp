@@ -1,4 +1,4 @@
-"""The two ERP-owned typed seams for `dotmac-tax` (adoption ledger item C1).
+"""ERP-owned typed seams around the public `dotmac-tax` contract.
 
 `docs/architecture/dotmac-tax-adoption-boundary.md` § "Typed ERP seams" names
 both of these and says what they must carry.  They exist so that:
@@ -9,11 +9,10 @@ both of these and says what they must carry.  They exist so that:
   string references (`counterparty_ref`, `supply_ref`, `place_ref`,
   `source_ref`, `evidence_ref`) and exact money.  It is given no account, no
   journal, no ERP identity and no ERP enum.
-- **ERP never learns anything about tax internals.**  Nothing in this module
-  imports `dotmac_tax`; the outbound contract MIRRORS the reviewable fields of
-  an approved determination set as ERP-owned types, which is what lets the
-  consequence path be written, reviewed and tested before the package is ever
-  pinned.
+- **ERP never learns anything about tax internals.**  The released public
+  `dotmac_tax.TaxDeterminationSetV1` is the result boundary. ERP does not mirror
+  it or import module models; it adds only an ERP-owned posting context after a
+  determination exists.
 
 Money is kernel `Money`, built through `app.services.finance.money_boundary`
 — ERP's existing, single boundary owner for exact money.  That is deliberate
@@ -57,17 +56,14 @@ from uuid import UUID
 from dotmac_kernel.money import Money
 
 __all__ = [
-    "MIRROR_RETIREMENT_GATE",
     "RECOGNITION_BASIS_ACCRUAL",
     "RECOGNITION_BASIS_CASH",
     "RECOGNITION_BASIS_PAYROLL_PERIOD",
-    "TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE",
     "AccountingConsequence",
-    "ApplyTaxDeterminationSetV1",
     "ERPSourceTaxFactV1",
     "SourceFactFamily",
+    "TaxApplicationContextV1",
     "TaxAdapterRefusal",
-    "TaxDeterminationComponentV1",
     "TransactionSide",
 ]
 
@@ -121,26 +117,6 @@ class TransactionSide(str, enum.Enum):
 RECOGNITION_BASIS_ACCRUAL = "accrual"
 RECOGNITION_BASIS_CASH = "cash"
 RECOGNITION_BASIS_PAYROLL_PERIOD = "payroll_period"
-
-#: Treatments that are a real, configured legal answer with no money to post.
-#: `zero_rated`, `exempt` and `out_of_scope` are DISTINCT treatments that all
-#: produce zero tax, and the module keeps them distinct on purpose.  ERP keeps
-#: them distinct too: a zero-value component is still REPORTABLE — it belongs
-#: in a return box — so the consequence adapter records it separately rather
-#: than dropping it for having produced no journal line.
-TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE: frozenset[str] = frozenset(
-    {"zero_rated", "exempt", "out_of_scope"}
-)
-
-#: The module's `ck_tax_determinations_treatment` vocabulary in full.
-_KNOWN_TREATMENTS: frozenset[str] = TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE | {
-    "standard_rated"
-}
-
-#: The module's `ck_tax_determinations_calculation_base` vocabulary.
-_KNOWN_CALCULATION_BASES: frozenset[str] = frozenset(
-    {"source_amount", "source_plus_prior_tax"}
-)
 
 _ZERO = Decimal("0")
 
@@ -267,92 +243,6 @@ class ERPSourceTaxFactV1:
         return self.base_amount.currency.minor_units
 
 
-@dataclass(frozen=True, slots=True)
-class TaxDeterminationComponentV1:
-    """One immutable component of an approved determination set.
-
-    A MIRROR of `mod_tax.tax_determinations`' reviewable columns, not an
-    import of them: ERP holds no opinion about how the module stored the row,
-    and the module is never asked about an account.
-    """
-
-    component_sequence: int
-    tax_code_id: UUID
-    rule_id: UUID
-    rule_version: int
-    treatment_code: str
-    calculation_base_code: str
-    inclusive: bool
-    base_amount: Money
-    tax_amount: Money
-    recoverable_amount: Money
-    non_recoverable_amount: Money
-    party_classification_id: UUID | None = None
-    supply_classification_id: UUID | None = None
-    place_classification_id: UUID | None = None
-
-    def __post_init__(self) -> None:
-        if self.component_sequence < 1:
-            raise TaxAdapterRefusal(
-                f"component sequence must be positive, got {self.component_sequence}"
-            )
-        if self.rule_version < 1:
-            raise TaxAdapterRefusal(
-                f"rule version must be positive, got {self.rule_version}"
-            )
-        if self.treatment_code not in _KNOWN_TREATMENTS:
-            raise TaxAdapterRefusal(
-                f"unknown treatment {self.treatment_code!r}; ERP refuses to "
-                f"post a treatment it cannot classify (known: "
-                f"{sorted(_KNOWN_TREATMENTS)})"
-            )
-        if self.calculation_base_code not in _KNOWN_CALCULATION_BASES:
-            raise TaxAdapterRefusal(
-                f"unknown calculation base {self.calculation_base_code!r} "
-                f"(known: {sorted(_KNOWN_CALCULATION_BASES)})"
-            )
-        for name in (
-            "base_amount",
-            "tax_amount",
-            "recoverable_amount",
-            "non_recoverable_amount",
-        ):
-            _require_money(getattr(self, name), name.replace("_", " "))
-        if (
-            self.recoverable_amount.currency != self.tax_amount.currency
-            or self.non_recoverable_amount.currency != self.tax_amount.currency
-        ):
-            raise TaxAdapterRefusal(
-                "component recovery split must be in the component's tax currency"
-            )
-        split = self.recoverable_amount + self.non_recoverable_amount
-        if split != self.tax_amount:
-            raise TaxAdapterRefusal(
-                "component recovery split does not equal its tax amount: "
-                f"{self.recoverable_amount.amount} + "
-                f"{self.non_recoverable_amount.amount} != {self.tax_amount.amount}"
-            )
-        if (
-            self.treatment_code in TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE
-            and self.tax_amount.amount != _ZERO
-        ):
-            raise TaxAdapterRefusal(
-                f"{self.treatment_code} component carries tax "
-                f"{self.tax_amount.amount}; a zero treatment holding money is a "
-                "determination defect, not an ERP rounding question"
-            )
-
-    @property
-    def has_tax_consequence(self) -> bool:
-        """Whether this component produces journal lines at all.
-
-        Note this is about MONEY, not about reportability: a `zero_rated`
-        component still belongs in a return box.  The consequence adapter
-        records those separately instead of discarding them.
-        """
-        return self.tax_amount.amount != _ZERO
-
-
 class AccountingConsequence(str, enum.Enum):
     """What ERP intends to post — chosen by ERP, never by the module.
 
@@ -367,80 +257,30 @@ class AccountingConsequence(str, enum.Enum):
     PAYROLL_TAX_PAYABLE = "payroll_tax_payable"
 
 
-#: The condition under which `ApplyTaxDeterminationSetV1` is DELETED.
-#:
-#: The mirror exists for exactly one reason: `dotmac_tax` publishes input
-#: contracts and `TaxFact`, but no read-side determination contract —
-#: `determine_tax_set` returns the `TaxDeterminationSet` ORM object.  ERP may
-#: not import module models (`docs/architecture/dotmac-tax-adoption-boundary.md`
-#: § "Outcome"), so the only remaining way to consume a determination is to
-#: restate its reviewable fields as ERP-owned types.  That is what this is.
-#:
-#: It is therefore TEMPORARY BY CONSTRUCTION, not a contract ERP intends to own.
-#: A mirror that outlives its cause becomes a second, drifting definition of the
-#: module's output — the exact failure ADR-0006's extraction rule and the
-#: one-writer standard exist to prevent.
-#:
-#: Retire it when ALL of the following hold, and not before:
-#:
-#: 1. `dotmac-tax` publishes a read-side determination contract on its public
-#:    surface (a frozen value type, not an ORM row), at a released version;
-#: 2. ERP pins that release and composes the `tx` lineage (gate C2);
-#: 3. `project_determination_set` accepts the published type directly; and
-#: 4. this class and its construction sites are DELETED in the same change —
-#:    not left importable alongside the published contract, which would leave
-#:    two shapes for one answer.
-#:
-#: Until (1) exists, this is a blocked dependency on the module, tracked as a
-#: separate change against `dotmac-tax` rather than as ERP work.
-MIRROR_RETIREMENT_GATE: str = (
-    "delete when dotmac-tax publishes a released read-side determination "
-    "contract and ERP consumes it directly (see module docstring)"
-)
-
-
 @dataclass(frozen=True, slots=True)
-class ApplyTaxDeterminationSetV1:
-    """An approved determination set, plus the ERP target it applies to.
+class TaxApplicationContextV1:
+    """ERP-owned context for applying a public tax determination.
 
-    **TEMPORARY.**  This is an ERP-owned MIRROR of the module's determination
-    output, held only because `dotmac-tax` publishes no read-side determination
-    contract today.  It is scheduled for deletion, not for ownership — see
-    :data:`MIRROR_RETIREMENT_GATE` for the exact conditions and why a mirror
-    that outlives its cause is a defect rather than an asset.
+    Tax identities, treatments, classifications and amounts stay exclusively
+    on ``dotmac_tax.TaxDeterminationSetV1``. This value adds only the local
+    accounting decision and target needed to project that result. Keeping the
+    values separate prevents ERP from recreating a second shape for the
+    module's answer.
 
-    `source_fingerprint` is CARRIED and re-checked rather than trusted: the
-    consequence adapter refuses a set whose fingerprint does not match the one
-    ERP recorded when it submitted the fact.  That is what stops a silently
-    re-determined set from being posted against a document that was priced on
-    the previous one.
-
-    `counterpart_account_id` is required because ERP's journal service demands
-    exact balance (`JournalService._require_balanced` — equality at persisted
-    scale, not a tolerance).  The existing `TAXPostingAdapter` emits tax lines
-    alone and leaves the contra to "the source document"; requiring the
-    counterpart here means this projection is a COMPLETE, balanced posting
-    request that can be validated on its own.
+    ``counterpart_account_id`` makes the proposed posting complete and
+    self-balancing. The legacy ``TAXPostingAdapter`` emitted tax lines without
+    their contra, while ``JournalService._require_balanced`` requires exact
+    equality before a journal can be accepted.
     """
 
     organization_id: UUID
-    determination_set_id: UUID
-    source_ref: str
-    source_version: str
-    source_fingerprint: str
-    occurred_on: date
     posting_date: date
     consequence: AccountingConsequence
-    components: tuple[TaxDeterminationComponentV1, ...]
-    source_amount: Money
-    net_amount: Money
-    tax_amount: Money
-    gross_amount: Money
     document_id: UUID
     document_type: str
     counterpart_account_id: UUID
+    exchange_rate: Decimal
     line_id: UUID | None = None
-    exchange_rate: Decimal = Decimal("1.0")
     reversal: bool = False
     correlation_ref: str | None = None
     description: str | None = None
@@ -452,67 +292,25 @@ class ApplyTaxDeterminationSetV1:
     def __post_init__(self) -> None:
         if not isinstance(self.consequence, AccountingConsequence):
             raise TaxAdapterRefusal("consequence must be an AccountingConsequence")
-        for name in (
-            "source_ref",
-            "source_version",
-            "source_fingerprint",
-            "document_type",
-        ):
-            object.__setattr__(
-                self, name, _require_text(getattr(self, name), name.replace("_", " "))
-            )
+        object.__setattr__(
+            self, "document_type", _require_text(self.document_type, "document type")
+        )
         object.__setattr__(
             self,
             "correlation_ref",
             _require_optional_text(self.correlation_ref, "correlation ref"),
         )
-        for name in ("source_amount", "net_amount", "tax_amount", "gross_amount"):
-            _require_money(getattr(self, name), name.replace("_", " "))
-        object.__setattr__(self, "components", tuple(self.components))
-        if not self.components:
-            raise TaxAdapterRefusal(
-                "a determination set with no components is not an empty tax "
-                "answer — a configured zero treatment is. Refusing rather than "
-                "posting nothing silently."
-            )
-
-        currency = self.tax_amount.currency
-        for name in ("source_amount", "net_amount", "gross_amount"):
-            if getattr(self, name).currency != currency:
-                raise TaxAdapterRefusal(
-                    f"{name.replace('_', ' ')} is {getattr(self, name).currency.code} "
-                    f"but the set is {currency.code}"
-                )
-        for component in self.components:
-            if component.tax_amount.currency != currency:
-                raise TaxAdapterRefusal(
-                    f"component {component.component_sequence} is "
-                    f"{component.tax_amount.currency.code} but the set is "
-                    f"{currency.code}"
-                )
-
-        sequences = [component.component_sequence for component in self.components]
-        if sequences != sorted(sequences) or len(set(sequences)) != len(sequences):
-            raise TaxAdapterRefusal(
-                "components must arrive in a strictly increasing, unique "
-                f"calculation order, got {sequences}; a compound tax computed "
-                "out of order is arithmetically wrong, not merely untidy"
-            )
-
-        component_tax = sum(
-            (component.tax_amount.amount for component in self.components), _ZERO
+        object.__setattr__(
+            self,
+            "description",
+            _require_optional_text(self.description, "description"),
         )
-        if component_tax != self.tax_amount.amount:
+        if not isinstance(self.exchange_rate, Decimal):
             raise TaxAdapterRefusal(
-                f"components total {component_tax} but the set claims "
-                f"{self.tax_amount.amount}"
+                "exchange rate must be an exact Decimal; floats are refused"
             )
-        if self.net_amount + self.tax_amount != self.gross_amount:
+        if not self.exchange_rate.is_finite() or self.exchange_rate <= _ZERO:
             raise TaxAdapterRefusal(
-                f"net {self.net_amount.amount} + tax {self.tax_amount.amount} "
-                f"does not equal gross {self.gross_amount.amount}"
+                "exchange rate must be finite and positive; FX policy is not "
+                "inferred at the tax boundary"
             )
-
-    @property
-    def currency_code(self) -> str:
-        return self.tax_amount.currency.code
