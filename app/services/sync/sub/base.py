@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from dotmac_kernel.db import conflict_savepoint
+from app.db import atomic_operation
 
 from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType
 from app.models.people.hr.employee import Employee
@@ -127,7 +127,7 @@ class _SubSyncBase:
             return project.project_id
 
         try:
-            with conflict_savepoint(self.db):
+            with atomic_operation(self.db):
                 project = Project(
                     organization_id=organization_id,
                     project_code="SUB-DEFAULT",

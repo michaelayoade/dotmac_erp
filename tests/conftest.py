@@ -218,6 +218,16 @@ def _get_db_session():
 mock_db_module.get_db_session = _get_db_session
 mock_db_module.get_db = _get_db_session
 
+
+@contextmanager
+def _atomic_operation(db):
+    """Mirror app.db.atomic_operation without importing the real DB runtime."""
+    with db.begin_nested():
+        yield db
+
+
+mock_db_module.atomic_operation = _atomic_operation
+
 # Also mock app.config to prevent .env loading
 mock_config_module = ModuleType("app.config")
 

@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
-from dotmac_kernel.db import conflict_savepoint
+from app.db import atomic_operation
 
 from app.models.expense.expense_claim import ExpenseCategory, ExpenseClaim
 from app.schemas.sync.dotmac_sub import (
@@ -114,7 +114,7 @@ class _ExpenseIntakeMixin(_SubSyncBase):
 
         service = ExpenseService(self.db)
         try:
-            with conflict_savepoint(self.db):
+            with atomic_operation(self.db):
                 claim = service.create_claim(
                     organization_id,
                     employee_id=employee_id,

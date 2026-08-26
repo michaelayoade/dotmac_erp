@@ -26,7 +26,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
-from dotmac_kernel.db import conflict_savepoint
+from app.db import atomic_operation
 from dotmac_kernel.fingerprints import fingerprint_of
 
 from app.config import settings
@@ -871,7 +871,7 @@ class _ProcurementMixin(_SubSyncBase):
 
         for request in requests:
             try:
-                with conflict_savepoint(self.db):
+                with atomic_operation(self.db):
                     line_snapshots = self._snapshot_material_request_lines(
                         request.items
                     )
@@ -1185,7 +1185,7 @@ class _ProcurementMixin(_SubSyncBase):
         # 7. Create PO. The request boundary owns the transaction; this nested
         # savepoint only isolates a concurrent source-identity conflict.
         try:
-            with conflict_savepoint(self.db):
+            with atomic_operation(self.db):
                 po = PurchaseOrderService.create_po(
                     self.db, org_id, po_input, creator_id
                 )
@@ -1358,7 +1358,7 @@ class _ProcurementMixin(_SubSyncBase):
         )
 
         try:
-            with conflict_savepoint(self.db):
+            with atomic_operation(self.db):
                 invoice = SupplierInvoiceService.create_invoice(
                     self.db, org_id, invoice_input, created_by_person_id
                 )
@@ -1725,7 +1725,7 @@ class _ProcurementMixin(_SubSyncBase):
         # 5. Create the amendment and supersede its baseline atomically inside
         # a conflict savepoint. The request boundary remains transaction owner.
         try:
-            with conflict_savepoint(self.db):
+            with atomic_operation(self.db):
                 new_po = PurchaseOrderService.create_po(
                     self.db, org_id, po_input, creator_id
                 )

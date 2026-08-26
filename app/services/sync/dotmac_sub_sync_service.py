@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable
 from typing import Protocol, TypeVar
 from uuid import UUID
 
-from dotmac_kernel.db import conflict_savepoint
+from app.db import atomic_operation
 
 from app.schemas.sync.dotmac_sub import BulkSyncRequest, BulkSyncResponse, SyncError
 from app.services.sync.sub.expenses import _ExpenseIntakeMixin
@@ -87,7 +87,7 @@ class DotmacSubSyncService(
         synced = 0
         for item in items:
             try:
-                with conflict_savepoint(self.db):
+                with atomic_operation(self.db):
                     handler(organization_id, item)
                 synced += 1
             except Exception as exc:
