@@ -228,7 +228,7 @@ class TestHookRegistry:
         monkeypatch.setenv("ERP_SUB_WEBHOOK_SECRET", "shared-secret")
         mock_validate.return_value = (True, None)
         payload = {
-            "omni_id": str(uuid4()),
+            "source_request_id": str(uuid4()),
             "request_id": str(uuid4()),
             "new_status": "ISSUED",
             "updated_at": "2026-08-10T12:00:00+00:00",
@@ -266,7 +266,7 @@ class TestHookRegistry:
         )
         assert kwargs["headers"]["X-Dotmac-Signature"] == expected
         assert kwargs["headers"]["X-Dotmac-Delivery"]
-        assert b'"omni_id"' in kwargs["content"]
+        assert b'"source_request_id"' in kwargs["content"]
         assert b'"payload"' not in kwargs["content"]
 
     @patch("app.services.hooks.registry._validate_webhook_target")

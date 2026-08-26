@@ -16,10 +16,14 @@ The ERP script creates a non-human API key with only `sub:inventory:read`, `sub:
 
 ## Authority cutover
 
-- CRM item writes and CRM inventory/material-request routes return HTTP 410.
+- The retired CRM runtime has no mounted route, client, task, credential or 410 shim.
 - `/sync/sub/inventory*` is the catalogue read path for Sub.
 - `/sync/sub/material-requests` is the external material-request writer.
-- Existing CRM material rows retain `source_system=crm` and never emit callbacks to Sub.
+- Ambiguous legacy material references are sealed as `source_system=legacy_unknown`
+  and never emit callbacks to Sub.
 - New Sub rows use `source_system=sub`; only these rows emit signed Sub callbacks.
 
-Confirm that a submitted Sub request is created once, can be issued only in ERP, and produces an HMAC-signed callback whose `omni_id` is the Sub UUID. Confirm CRM item/material endpoints return 410 while unrelated CRM expense and procurement endpoints remain available.
+Confirm that a submitted Sub request is created once, can be issued only in ERP,
+and produces an HMAC-signed callback whose `source_request_id` is the Sub UUID. Confirm the
+17 `/sync/sub` operations expose only the source-neutral contract and no
+retired CRM route is mounted.

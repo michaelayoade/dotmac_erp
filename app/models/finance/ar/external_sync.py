@@ -20,6 +20,9 @@ class ExternalSource(str, enum.Enum):
 
     SPLYNX = "SPLYNX"
     ERPNEXT = "ERPNEXT"
+    # Reserved member name and database label for historical rows from the
+    # retired application. SQLAlchemy persists Enum member names by default,
+    # so this token cannot be renamed without PostgreSQL enum DDL.
     CRM = "CRM"
     DOTMAC_SUB = "DOTMAC_SUB"
 

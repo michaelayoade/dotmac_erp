@@ -1412,9 +1412,9 @@ class MaterialRequestWebService:
     ) -> None:
         if request.source_system != "sub":
             return
-        from app.services.sync.crm.procurement import _ProcurementMixin
+        from app.services.sync.sub.procurement import _ProcurementMixin
 
-        _ProcurementMixin(db)._emit_crm_material_request_status_changed(
+        _ProcurementMixin(db)._emit_sub_material_request_status_changed(
             org_id=organization_id,
             request=request,
             old_status=old_status,

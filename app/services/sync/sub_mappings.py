@@ -1,29 +1,27 @@
 """
-CRM → ERP translation layer for DotMac CRM sync.
+Sub → ERP translation layer for Dotmac Sub sync.
 
 Pure, side-effect-free mapping policy extracted from
-``dotmac_crm_sync_service``: the CRM-status → ERP-enum lookup tables, the
+``dotmac_sub_sync_service``: the Sub-status → ERP-enum lookup tables, the
 enum translators, and the integrity-conflict classifier. Nothing here touches
 the database or the ORM session, so it is independently unit-testable and can
 evolve without dragging the sync-orchestration class along.
 
-``dotmac_crm_sync_service`` re-imports these names into its own namespace, so
-the canonical import sites (``from app.services.sync.dotmac_crm_sync_service
-import PROJECT_STATUS_MAP``) and the ``DotMacCRMSyncService._map_*`` instance
+``dotmac_sub_sync_service`` re-imports these names into its own namespace, so
+the canonical import sites (``from app.services.sync.dotmac_sub_sync_service
+import PROJECT_STATUS_MAP``) and the ``DotMacSubSyncService._map_*`` instance
 methods that delegate here continue to behave identically.
 """
 
 from __future__ import annotations
 
-from sqlalchemy.exc import IntegrityError
-
 from app.models.finance.core_org.project import ProjectStatus, ProjectType
 from app.models.pm.task import TaskPriority, TaskStatus
 from app.models.support.ticket import TicketPriority, TicketStatus
-from app.models.sync.dotmac_crm_sync import CRMSyncStatus
+from app.models.sync.source_correlation import SourceCorrelationStatus
 
 # ---------------------------------------------------------------------------
-# Status lookup tables: CRM status strings → ERP enums
+# Status lookup tables: Sub status strings → ERP enums
 # ---------------------------------------------------------------------------
 
 PROJECT_STATUS_MAP = {
@@ -61,44 +59,18 @@ TASK_STATUS_MAP = {
     "canceled": TaskStatus.CANCELLED,
 }
 
-CRM_SYNC_STATUS_MAP = {
-    "active": CRMSyncStatus.ACTIVE,
-    "planned": CRMSyncStatus.ACTIVE,
-    "in_progress": CRMSyncStatus.ACTIVE,
-    "open": CRMSyncStatus.ACTIVE,
-    "completed": CRMSyncStatus.COMPLETED,
-    "resolved": CRMSyncStatus.COMPLETED,
-    "closed": CRMSyncStatus.COMPLETED,
-    "cancelled": CRMSyncStatus.CANCELLED,
-    "canceled": CRMSyncStatus.CANCELLED,
-    "archived": CRMSyncStatus.ARCHIVED,
+SOURCE_STATUS_MAP = {
+    "active": SourceCorrelationStatus.ACTIVE,
+    "planned": SourceCorrelationStatus.ACTIVE,
+    "in_progress": SourceCorrelationStatus.ACTIVE,
+    "open": SourceCorrelationStatus.ACTIVE,
+    "completed": SourceCorrelationStatus.COMPLETED,
+    "resolved": SourceCorrelationStatus.COMPLETED,
+    "closed": SourceCorrelationStatus.COMPLETED,
+    "cancelled": SourceCorrelationStatus.CANCELLED,
+    "canceled": SourceCorrelationStatus.CANCELLED,
+    "archived": SourceCorrelationStatus.ARCHIVED,
 }
-
-
-# ---------------------------------------------------------------------------
-# Conflict classification
-# ---------------------------------------------------------------------------
-
-
-def is_variation_id_conflict(error: IntegrityError) -> bool:
-    """Return True when the IntegrityError is the PO variation unique conflict."""
-    orig = getattr(error, "orig", None)
-    diag = getattr(orig, "diag", None)
-    constraint_name = getattr(diag, "constraint_name", None)
-    if constraint_name == "uq_po_variation_id":
-        return True
-
-    error_text = " ".join(
-        str(part)
-        for part in (
-            getattr(orig, "pgcode", None),
-            getattr(orig, "sqlstate", None),
-            constraint_name,
-            orig,
-        )
-        if part
-    ).lower()
-    return "uq_po_variation_id" in error_text
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +79,7 @@ def is_variation_id_conflict(error: IntegrityError) -> bool:
 
 
 def map_project_type(type_str: str | None) -> ProjectType:
-    """Map CRM project type to local enum."""
+    """Map Sub project type to local enum."""
     if not type_str:
         return ProjectType.CLIENT
     type_map = {
@@ -120,7 +92,7 @@ def map_project_type(type_str: str | None) -> ProjectType:
 
 
 def map_ticket_priority(priority_str: str | None) -> TicketPriority:
-    """Map CRM priority to local enum."""
+    """Map Sub priority to local enum."""
     if not priority_str:
         return TicketPriority.MEDIUM
     priority_map = {
@@ -134,7 +106,7 @@ def map_ticket_priority(priority_str: str | None) -> TicketPriority:
 
 
 def map_task_priority(priority_str: str | None) -> TaskPriority:
-    """Map CRM priority to local enum."""
+    """Map Sub priority to local enum."""
     if not priority_str:
         return TaskPriority.MEDIUM
     priority_map = {
@@ -149,8 +121,8 @@ def map_task_priority(priority_str: str | None) -> TaskPriority:
     return priority_map.get(priority_str.lower(), TaskPriority.MEDIUM)
 
 
-def map_crm_material_request_type(request_type: str):
-    """Map CRM request type to local MaterialRequestType."""
+def map_sub_material_request_type(request_type: str):
+    """Map Sub request type to local MaterialRequestType."""
     from app.models.inventory.material_request import MaterialRequestType
 
     request_type_map = {
@@ -168,8 +140,8 @@ def map_crm_material_request_type(request_type: str):
     return value
 
 
-def map_crm_material_request_status(status: str):
-    """Map CRM status string to local MaterialRequestStatus."""
+def map_sub_material_request_status(status: str):
+    """Map Sub status string to local MaterialRequestStatus."""
     from app.models.inventory.material_request import MaterialRequestStatus
 
     status_map = {
