@@ -93,9 +93,7 @@ def _sync_operational_rows(
             synced += 1
         except Exception as exc:
             savepoint.rollback()
-            logger.exception(
-                "Failed to accept Sub %s %s", entity_type, reference
-            )
+            logger.exception("Failed to accept Sub %s %s", entity_type, reference)
             errors.append(
                 SyncError(
                     entity_type=entity_type,
@@ -174,9 +172,7 @@ def sync_sub_operational_domains(
         db,
         entity_type="project",
         rows=payload.projects,
-        operation=lambda row, _item_errors: service.sync_project(
-            organization_id, row
-        ),
+        operation=lambda row, _item_errors: service.sync_project(organization_id, row),
         source_reference=lambda row: row.source_reference,
     )
     errors.extend(project_errors)

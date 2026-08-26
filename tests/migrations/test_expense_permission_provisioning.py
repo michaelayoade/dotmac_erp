@@ -116,10 +116,7 @@ def test_migration_is_a_frozen_copy_of_the_expense_seed_profile() -> None:
         if role in EXPENSE_BASELINE_ROLES
     } == EXPENSE_BASELINE_ROLES
     assert migration.EXPENSE_PERMISSIONS == EXPENSE_PERMISSION_DEFINITIONS
-    assert (
-        migration.EXPENSE_PAYOUT_PERMISSIONS
-        == EXPENSE_PAYOUT_PERMISSION_DEFINITIONS
-    )
+    assert migration.EXPENSE_PAYOUT_PERMISSIONS == EXPENSE_PAYOUT_PERMISSION_DEFINITIONS
     assert migration.ROLE_DESCRIPTIONS == EXPENSE_BASELINE_ROLES
     assert migration.ROLE_EXPENSE_GRANTS == EXPENSE_ROLE_GRANTS
     assert migration.ROLE_EXPENSE_PAYOUT_GRANTS == EXPENSE_PAYOUT_ROLE_GRANTS
