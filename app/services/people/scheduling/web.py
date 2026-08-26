@@ -7,7 +7,7 @@ Provides view-focused data and operations for scheduling web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID
@@ -22,6 +22,7 @@ from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.scheduling import (
     RotationType,
+    ScheduleStatus,
     SwapRequestStatus,
 )
 from app.models.person import Person
@@ -29,6 +30,8 @@ from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.people.scheduling import (
     ScheduleGenerator,
+    ScheduleWorkspaceService,
+    SchedulerAccessService,
     SchedulingService,
     SwapService,
 )
@@ -145,6 +148,148 @@ class SchedulingWebService:
         )
         return list(db.scalars(stmt).all())
 
+    @staticmethod
+    def _can_manage_all_schedules(auth: WebAuthContext) -> bool:
+        roles = {str(role).strip().lower() for role in auth.roles}
+        return bool(
+            auth.is_admin
+            or roles.intersection({"hr_manager", "hr_director"})
+            or auth.has_any_permission(["hr:access", "hr:schedule:*", "hr:schedule:read"])
+        )
+
+    @staticmethod
+    def _can_approve_schedules(auth: WebAuthContext) -> bool:
+        roles = {str(role).strip().lower() for role in auth.roles}
+        return bool(
+            auth.is_admin
+            or roles.intersection({"hr_manager", "hr_director"})
+            or auth.has_any_permission(["hr:schedule:*", "hr:schedule:approve", "hr:schedule:publish"])
+        )
+
+    @staticmethod
+    def workspace_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        department_id: str | None,
+        week_start: str | None,
+    ) -> HTMLResponse:
+        """Composable weekly scheduler workspace."""
+        org_id = coerce_uuid(auth.organization_id)
+        can_view_all = SchedulingWebService._can_manage_all_schedules(auth)
+        access = SchedulerAccessService(db)
+        departments = SchedulingWebService._get_departments(db, org_id)
+        if not can_view_all:
+            allowed = access.authorized_department_ids(
+                org_id,
+                actor_employee_id=auth.employee_id,
+                can_view_all=False,
+            )
+            departments = [department for department in departments if department.department_id in allowed]
+
+        selected_department = SchedulingWebService._parse_uuid(department_id)
+        if selected_department is None and departments:
+            selected_department = departments[0].department_id
+
+        selected_week = SchedulingWebService._parse_date(week_start)
+        if selected_week is None:
+            today = date.today()
+            selected_week = today - timedelta(days=today.weekday())
+        selected_week_end = selected_week + timedelta(days=6)
+        week_days = [selected_week + timedelta(days=offset) for offset in range(7)]
+
+        shift_types = SchedulingWebService._get_shift_types(db, org_id)
+        schedule = None
+        assignments = []
+        employees = []
+        evaluation = None
+        if selected_department:
+            try:
+                schedule = ScheduleWorkspaceService(db).get_or_create_week(
+                    org_id,
+                    department_id=selected_department,
+                    period_start=selected_week,
+                    actor_person_id=auth.person_id,
+                    actor_employee_id=auth.employee_id,
+                    can_view_all=can_view_all,
+                )
+                employees = access.employees_for_department(
+                    org_id,
+                    selected_department,
+                    actor_employee_id=auth.employee_id,
+                    can_view_all=can_view_all,
+                )
+                workspace = ScheduleWorkspaceService(db)
+                assignments = workspace.list_assignments(org_id, schedule.work_schedule_id)
+                evaluation = workspace.evaluation(org_id, schedule.work_schedule_id)
+            except Exception as exc:
+                logger.warning("Unable to load scheduler workspace: %s", exc)
+
+        assignment_items = []
+        for assignment in assignments:
+            shift = assignment.shift_type
+            assignment_items.append(
+                {
+                    "assignment_id": str(assignment.shift_schedule_id),
+                    "employee_id": str(assignment.employee_id),
+                    "shift_date": assignment.shift_date.isoformat(),
+                    "shift_type_id": str(assignment.shift_type_id),
+                    "shift_name": shift.shift_name if shift else "Shift",
+                    "shift_code": shift.shift_code if shift else "",
+                    "start_time": shift.start_time.strftime("%H:%M") if shift else "",
+                    "end_time": shift.end_time.strftime("%H:%M") if shift else "",
+                    "status": assignment.status.value,
+                }
+            )
+
+        ctx = base_context(request, auth, "Shift Scheduler", "scheduling", db=db)
+        ctx.update(
+            {
+                "departments": departments,
+                "selected_department_id": str(selected_department) if selected_department else "",
+                "week_start": selected_week.isoformat(),
+                "week_end": selected_week_end.isoformat(),
+                "previous_week_start": (selected_week - timedelta(days=7)).isoformat(),
+                "next_week_start": (selected_week + timedelta(days=7)).isoformat(),
+                "week_days": week_days,
+                "schedule": schedule,
+                "schedule_json": {
+                    "id": str(schedule.work_schedule_id) if schedule else "",
+                    "status": schedule.status.value if schedule else ScheduleStatus.DRAFT.value,
+                    "version": schedule.version if schedule else 1,
+                    "revision": schedule.revision if schedule else 1,
+                },
+                "employees_json": [
+                    {
+                        "employee_id": str(employee.employee_id),
+                        "employee_code": employee.employee_code or "",
+                        "full_name": employee.full_name,
+                        "department_id": str(employee.department_id) if employee.department_id else "",
+                    }
+                    for employee in employees
+                ],
+                "shift_types_json": [
+                    {
+                        "shift_type_id": str(shift.shift_type_id),
+                        "shift_code": shift.shift_code,
+                        "shift_name": shift.shift_name,
+                        "start_time": shift.start_time.strftime("%H:%M"),
+                        "end_time": shift.end_time.strftime("%H:%M"),
+                        "break_minutes": shift.break_duration_minutes or 0,
+                        "working_hours": float(shift.working_hours or 0),
+                    }
+                    for shift in shift_types
+                ],
+                "assignments_json": assignment_items,
+                "evaluation_json": {
+                    "valid": evaluation.valid if evaluation else True,
+                    "errors": [issue.__dict__ for issue in evaluation.errors] if evaluation else [],
+                    "warnings": [issue.__dict__ for issue in evaluation.warnings] if evaluation else [],
+                },
+                "can_approve_schedule": SchedulingWebService._can_approve_schedules(auth),
+            }
+        )
+        return templates.TemplateResponse(request, "people/scheduling/workspace.html", ctx)
     # =========================================================================
     # Shift Patterns
     # =========================================================================

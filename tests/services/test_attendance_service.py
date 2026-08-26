@@ -132,8 +132,12 @@ def test_trends_report_excludes_leave_days_from_monthly_and_average_percentages(
     assert report["average_attendance_percentage"] == Decimal("77.8")
 
 
-def test_check_in_resolves_employee_shift_and_marks_late_arrival() -> None:
+def test_check_in_resolves_employee_shift_and_marks_late_arrival(monkeypatch) -> None:
     service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.ScheduleResolver",
+        lambda db: SimpleNamespace(resolve_employee_shift=lambda *_args: None),
+    )
     shift_id = uuid.UUID("00000000-0000-0000-0000-000000000003")
     shift = SimpleNamespace(
         shift_type_id=shift_id,
@@ -238,3 +242,48 @@ def test_duplicate_checkout_preserves_original_checkout_and_hours() -> None:
     assert result.working_hours == Decimal("9.0")
     service._validate_geofence.assert_not_called()
     db.flush.assert_not_called()
+
+
+def test_check_in_links_published_schedule_assignment(monkeypatch) -> None:
+    service, db = _make_service()
+    shift_id = uuid.UUID("00000000-0000-0000-0000-000000000003")
+    shift_schedule_id = uuid.UUID("00000000-0000-0000-0000-000000000004")
+    work_schedule_id = uuid.UUID("00000000-0000-0000-0000-000000000005")
+    shift = SimpleNamespace(
+        shift_type_id=shift_id,
+        start_time=time(22, 0),
+        late_entry_grace_period=0,
+    )
+    assignment = SimpleNamespace(
+        shift_schedule_id=shift_schedule_id,
+        shift_type_id=shift_id,
+        shift_type=shift,
+        shift_date=date(2026, 8, 3),
+    )
+    schedule = SimpleNamespace(work_schedule_id=work_schedule_id)
+    resolved = SimpleNamespace(assignment=assignment, schedule=schedule)
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.ScheduleResolver",
+        lambda db: SimpleNamespace(resolve_employee_shift=lambda *_args: resolved),
+    )
+    service.get_attendance_by_date = MagicMock(return_value=None)  # type: ignore[method-assign]
+    service.get_employee_shift = MagicMock()  # type: ignore[method-assign]
+    service._validate_geofence = MagicMock()  # type: ignore[method-assign]
+    service._normalize_in_org_tz = lambda _org_id, value: value  # type: ignore[method-assign]
+
+    attendance = service.check_in(
+        ORG_ID,
+        EMPLOYEE_ID,
+        check_in_time=datetime(2026, 8, 3, 22, 5, tzinfo=UTC),
+    )
+
+    service.get_attendance_by_date.assert_called_once_with(
+        ORG_ID,
+        EMPLOYEE_ID,
+        date(2026, 8, 3),
+    )
+    service.get_employee_shift.assert_not_called()
+    assert attendance.shift_type_id == shift_id
+    assert attendance.shift_schedule_id == shift_schedule_id
+    assert attendance.work_schedule_id == work_schedule_id
+    db.add.assert_called_once_with(attendance)

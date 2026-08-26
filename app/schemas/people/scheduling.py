@@ -485,3 +485,101 @@ class SwapRequestListResponse(BaseModel):
     total: int
     offset: int
     limit: int
+
+
+# =============================================================================
+# Composable Weekly Scheduler Schemas
+# =============================================================================
+
+
+class RuleIssueRead(BaseModel):
+    """Structured scheduler rule issue."""
+
+    rule_key: str
+    severity: str
+    message: str
+    employee_id: UUID | None = None
+    required: str | None = None
+    actual: str | None = None
+
+
+class RuleEvaluationRead(BaseModel):
+    """Rule evaluation result returned by scheduler APIs."""
+
+    valid: bool
+    errors: list[RuleIssueRead]
+    warnings: list[RuleIssueRead]
+
+
+class WorkScheduleCreateRequest(BaseModel):
+    """Create or load a weekly schedule workspace."""
+
+    department_id: UUID
+    period_start: date
+
+
+class WorkScheduleRead(BaseModel):
+    """Weekly schedule workspace response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    work_schedule_id: UUID
+    organization_id: UUID
+    department_id: UUID
+    period_start: date
+    period_end: date
+    status: ScheduleStatus
+    revision: int
+    version: int
+    submitted_at: datetime | None = None
+    approved_at: datetime | None = None
+    published_at: datetime | None = None
+    rejected_at: datetime | None = None
+    rejection_reason: str | None = None
+
+
+class SchedulerEmployeeRead(EmployeeBrief):
+    """Employee available in an authorized scheduler department."""
+
+    full_name: str
+    department_id: UUID | None = None
+
+
+class ScheduleAssignmentRequest(BaseModel):
+    """Create or move one shift assignment."""
+
+    employee_id: UUID
+    shift_date: date
+    shift_type_id: UUID
+    expected_version: int | None = None
+
+
+class ScheduleAssignmentResponse(BaseModel):
+    """Assignment response with backend rule evaluation."""
+
+    assignment: ShiftScheduleRead
+    evaluation: RuleEvaluationRead
+    schedule_version: int
+
+
+class ScheduleRemoveAssignmentRequest(BaseModel):
+    """Remove one assignment from a draft schedule."""
+
+    expected_version: int | None = None
+
+
+class ScheduleRejectRequest(BaseModel):
+    """Reject a submitted schedule."""
+
+    reason: str
+
+
+class ScheduleAmendmentRequest(BaseModel):
+    """Create a controlled draft amendment from a published schedule."""
+
+    reason: str | None = None
+
+class SchedulePublishResponse(BaseModel):
+    """Publish response."""
+
+    notifications_sent: int

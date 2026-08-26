@@ -18,6 +18,13 @@ from app.models.people.scheduling.swap_request import (
     ShiftSwapRequest,
     SwapRequestStatus,
 )
+from app.models.people.scheduling.work_schedule import (
+    ScheduleAuditAction,
+    ScheduleAuditEvent,
+    ScheduleNotificationLog,
+    SchedulingPolicy,
+    WorkSchedule,
+)
 
 __all__ = [
     "ShiftPattern",
@@ -27,4 +34,9 @@ __all__ = [
     "ScheduleStatus",
     "ShiftSwapRequest",
     "SwapRequestStatus",
+    "WorkSchedule",
+    "SchedulingPolicy",
+    "ScheduleAuditAction",
+    "ScheduleAuditEvent",
+    "ScheduleNotificationLog",
 ]

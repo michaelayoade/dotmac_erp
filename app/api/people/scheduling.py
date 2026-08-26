@@ -42,25 +42,93 @@ from app.schemas.people.scheduling import (
     SwapRequestListResponse,
     SwapRequestRead,
     SwapRequestReview,
+    RuleEvaluationRead,
+    RuleIssueRead,
+    ScheduleAmendmentRequest,
+    ScheduleAssignmentRequest,
+    ScheduleAssignmentResponse,
+    SchedulePublishResponse,
+    ScheduleRejectRequest,
+    SchedulerEmployeeRead,
+    WorkScheduleCreateRequest,
+    WorkScheduleRead,
 )
 from app.services.common import PaginationParams
 from app.services.people.scheduling import (
     ScheduleGenerator,
+    ScheduleWorkspaceService,
     SchedulingService,
     SwapService,
 )
 from app.services.people.scheduling.schedule_generator import ScheduleGeneratorError
+from app.services.people.scheduling.access import SchedulerAccessError, SchedulerAccessService
+from app.services.people.scheduling.rules import ScheduleRuleResult
 from app.services.people.scheduling.scheduling_service import (
     PatternAssignmentNotFoundError,
     SchedulingServiceError,
     ShiftPatternNotFoundError,
     ShiftScheduleNotFoundError,
 )
+from app.services.people.scheduling.workspace_service import (
+    ScheduleConcurrencyError,
+    ScheduleWorkflowError,
+)
 from app.services.people.scheduling.swap_service import (
     InvalidSwapTransitionError,
     SwapRequestNotFoundError,
     SwapServiceError,
 )
+
+
+def _auth_person_id(auth: dict) -> UUID | None:
+    person_id = auth.get("person_id")
+    return UUID(str(person_id)) if person_id else None
+
+
+def _auth_can_manage_all_schedules(auth: dict) -> bool:
+    roles = {str(role).strip().lower() for role in auth.get("roles", [])}
+    scopes = {str(scope).strip() for scope in auth.get("scopes", [])}
+    return bool(
+        "admin" in roles
+        or roles.intersection({"hr_manager", "hr_director"})
+        or scopes.intersection({"hr:access", "hr:schedule:*", "hr:schedule:read"})
+    )
+
+
+def _auth_can_approve_schedules(auth: dict) -> bool:
+    roles = {str(role).strip().lower() for role in auth.get("roles", [])}
+    scopes = {str(scope).strip() for scope in auth.get("scopes", [])}
+    return bool(
+        "admin" in roles
+        or roles.intersection({"hr_manager", "hr_director"})
+        or scopes.intersection({"hr:schedule:*", "hr:schedule:approve", "hr:schedule:publish"})
+    )
+
+
+def _rule_result_read(result: ScheduleRuleResult) -> RuleEvaluationRead:
+    return RuleEvaluationRead(
+        valid=result.valid,
+        errors=[RuleIssueRead(**issue.__dict__) for issue in result.errors],
+        warnings=[RuleIssueRead(**issue.__dict__) for issue in result.warnings],
+    )
+
+
+def _assert_schedule_access(
+    db: Session,
+    organization_id: UUID,
+    schedule_id: UUID,
+    *,
+    actor_employee_id: UUID | None,
+    can_view_all: bool,
+):
+    schedule = ScheduleWorkspaceService(db).get_workspace(organization_id, schedule_id)
+    SchedulerAccessService(db).assert_department_access(
+        organization_id,
+        schedule.department_id,
+        actor_employee_id=actor_employee_id,
+        can_view_all=can_view_all,
+    )
+    return schedule
 
 
 def handle_scheduling_error(e: Exception) -> None:
@@ -75,10 +143,12 @@ def handle_scheduling_error(e: Exception) -> None:
         ),
     ):
         raise HTTPException(status_code=404, detail=str(e))
-    elif isinstance(e, InvalidSwapTransitionError):
+    elif isinstance(e, (InvalidSwapTransitionError, ScheduleConcurrencyError)):
         raise HTTPException(status_code=409, detail=str(e))
+    elif isinstance(e, SchedulerAccessError):
+        raise HTTPException(status_code=403, detail=str(e))
     elif isinstance(
-        e, (SchedulingServiceError, ScheduleGeneratorError, SwapServiceError)
+        e, (SchedulingServiceError, ScheduleGeneratorError, SwapServiceError, ScheduleWorkflowError)
     ):
         raise HTTPException(status_code=400, detail=str(e))
     raise
@@ -452,6 +522,307 @@ def delete_schedule(
     """Delete a shift schedule entry (DRAFT only)."""
     svc = SchedulingService(db)
     svc.delete_schedule(organization_id, schedule_id)
+
+
+
+
+# =============================================================================
+# Weekly Scheduler Workspace
+# =============================================================================
+
+
+@router.post("/work-schedules", response_model=WorkScheduleRead)
+def get_or_create_work_schedule(
+    payload: WorkScheduleCreateRequest,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Create or load a weekly schedule workspace for an authorized department."""
+    try:
+        schedule = ScheduleWorkspaceService(db).get_or_create_week(
+            organization_id,
+            department_id=payload.department_id,
+            period_start=payload.period_start,
+            actor_person_id=_auth_person_id(auth),
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return WorkScheduleRead.model_validate(schedule)
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.get("/work-schedules/{schedule_id}", response_model=WorkScheduleRead)
+def get_work_schedule(
+    schedule_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Get one weekly schedule workspace after department-scope enforcement."""
+    try:
+        schedule = _assert_schedule_access(
+            db,
+            organization_id,
+            schedule_id,
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return WorkScheduleRead.model_validate(schedule)
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.get("/work-schedules/{schedule_id}/assignments", response_model=list[ShiftScheduleRead])
+def list_work_schedule_assignments(
+    schedule_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """List assignments in one weekly schedule after department-scope enforcement."""
+    try:
+        _assert_schedule_access(
+            db,
+            organization_id,
+            schedule_id,
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return [
+            ShiftScheduleRead.model_validate(item)
+            for item in ScheduleWorkspaceService(db).list_assignments(
+                organization_id, schedule_id
+            )
+        ]
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.get("/departments/{department_id}/scheduler-employees", response_model=list[SchedulerEmployeeRead])
+def scheduler_employees(
+    department_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """List schedulable employees for a department the actor may manage."""
+    try:
+        employees = SchedulerAccessService(db).employees_for_department(
+            organization_id,
+            department_id,
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return [
+            SchedulerEmployeeRead(
+                employee_id=employee.employee_id,
+                employee_code=employee.employee_code,
+                full_name=employee.full_name,
+                department_id=employee.department_id,
+            )
+            for employee in employees
+        ]
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.post("/work-schedules/{schedule_id}/assignments", response_model=ScheduleAssignmentResponse)
+def assign_work_schedule_shift(
+    schedule_id: UUID,
+    payload: ScheduleAssignmentRequest,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Assign or move an employee shift in a draft weekly schedule."""
+    try:
+        assignment, result = ScheduleWorkspaceService(db).assign_shift(
+            organization_id,
+            schedule_id=schedule_id,
+            employee_id=payload.employee_id,
+            shift_date=payload.shift_date,
+            shift_type_id=payload.shift_type_id,
+            actor_person_id=_auth_person_id(auth),
+            actor_employee_id=actor_employee_id,
+            expected_version=payload.expected_version,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        schedule = _assert_schedule_access(
+            db,
+            organization_id,
+            schedule_id,
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return ScheduleAssignmentResponse(
+            assignment=ShiftScheduleRead.model_validate(assignment),
+            evaluation=_rule_result_read(result),
+            schedule_version=schedule.version,
+        )
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.delete("/work-schedules/{schedule_id}/assignments/{assignment_id}", response_model=RuleEvaluationRead)
+def remove_work_schedule_assignment(
+    schedule_id: UUID,
+    assignment_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    expected_version: int | None = None,
+    db: Session = Depends(get_db_with_org),
+):
+    """Remove an assignment from a draft weekly schedule."""
+    try:
+        result = ScheduleWorkspaceService(db).remove_assignment(
+            organization_id,
+            schedule_id=schedule_id,
+            assignment_id=assignment_id,
+            actor_person_id=_auth_person_id(auth),
+            actor_employee_id=actor_employee_id,
+            expected_version=expected_version,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return _rule_result_read(result)
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.get("/work-schedules/{schedule_id}/evaluation", response_model=RuleEvaluationRead)
+def evaluate_work_schedule(
+    schedule_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Evaluate current schedule rules after department-scope enforcement."""
+    try:
+        _assert_schedule_access(
+            db,
+            organization_id,
+            schedule_id,
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return _rule_result_read(
+            ScheduleWorkspaceService(db).evaluation(organization_id, schedule_id)
+        )
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.post("/work-schedules/{schedule_id}/submit", response_model=RuleEvaluationRead)
+def submit_work_schedule(
+    schedule_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Submit a draft schedule for approval after department-scope enforcement."""
+    try:
+        _assert_schedule_access(
+            db,
+            organization_id,
+            schedule_id,
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+        )
+        return _rule_result_read(
+            ScheduleWorkspaceService(db).submit(
+                organization_id, schedule_id, _auth_person_id(auth)
+            )
+        )
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.post("/work-schedules/{schedule_id}/amend", response_model=WorkScheduleRead)
+def amend_work_schedule(
+    schedule_id: UUID,
+    payload: ScheduleAmendmentRequest,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    actor_employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Create or return a controlled draft revision from a published schedule."""
+    try:
+        schedule = ScheduleWorkspaceService(db).create_amendment(
+            organization_id,
+            schedule_id,
+            actor_person_id=_auth_person_id(auth),
+            actor_employee_id=actor_employee_id,
+            can_view_all=_auth_can_manage_all_schedules(auth),
+            reason=payload.reason,
+        )
+        return WorkScheduleRead.model_validate(schedule)
+    except Exception as e:
+        handle_scheduling_error(e)
+
+@router.post("/work-schedules/{schedule_id}/approve", status_code=status.HTTP_204_NO_CONTENT)
+def approve_work_schedule(
+    schedule_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Approve a submitted schedule with explicit HR schedule authority."""
+    if not _auth_can_approve_schedules(auth):
+        raise HTTPException(status_code=403, detail="Schedule approval permission required")
+    try:
+        ScheduleWorkspaceService(db).approve(
+            organization_id, schedule_id, _auth_person_id(auth)
+        )
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.post("/work-schedules/{schedule_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+def reject_work_schedule(
+    schedule_id: UUID,
+    payload: ScheduleRejectRequest,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Reject a submitted schedule with explicit HR schedule authority."""
+    if not _auth_can_approve_schedules(auth):
+        raise HTTPException(status_code=403, detail="Schedule approval permission required")
+    try:
+        ScheduleWorkspaceService(db).reject(
+            organization_id, schedule_id, _auth_person_id(auth), payload.reason
+        )
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.post("/work-schedules/{schedule_id}/publish", response_model=SchedulePublishResponse)
+def publish_work_schedule(
+    schedule_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db_with_org),
+):
+    """Publish an approved schedule and notify affected employees once."""
+    if not _auth_can_approve_schedules(auth):
+        raise HTTPException(status_code=403, detail="Schedule publish permission required")
+    try:
+        count = ScheduleWorkspaceService(db).publish(
+            organization_id, schedule_id, _auth_person_id(auth)
+        )
+        return SchedulePublishResponse(notifications_sent=count)
+    except Exception as e:
+        handle_scheduling_error(e)
 
 
 # =============================================================================

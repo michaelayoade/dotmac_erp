@@ -36,3 +36,8 @@ __all__ = [
     "SwapRequestNotFoundError",
     "InvalidSwapTransitionError",
 ]
+
+from app.services.people.scheduling.access import SchedulerAccessError, SchedulerAccessService
+from app.services.people.scheduling.resolver import ResolvedShift, ScheduleResolver
+from app.services.people.scheduling.rules import ScheduleRuleEvaluator, ScheduleRuleIssue, ScheduleRuleResult
+from app.services.people.scheduling.workspace_service import ScheduleConcurrencyError, ScheduleWorkflowError, ScheduleWorkspaceService

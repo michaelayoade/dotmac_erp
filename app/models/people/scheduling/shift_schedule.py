@@ -38,6 +38,9 @@ class ScheduleStatus(str, enum.Enum):
     """Schedule lifecycle status."""
 
     DRAFT = "DRAFT"  # Generated but not yet published
+    SUBMITTED = "SUBMITTED"  # Submitted for approval
+    APPROVED = "APPROVED"  # Approved and ready to publish
+    REJECTED = "REJECTED"  # Rejected back to draft
     PUBLISHED = "PUBLISHED"  # Published and visible to employees
     COMPLETED = "COMPLETED"  # Past schedule, marked complete
 
@@ -57,7 +60,8 @@ class ShiftSchedule(Base, AuditMixin):
             "organization_id",
             "employee_id",
             "shift_date",
-            name="uq_shift_schedule_emp_date",
+            "revision",
+            name="uq_shift_schedule_emp_date_revision",
         ),
         Index(
             "idx_shift_schedule_org_month",
@@ -117,6 +121,19 @@ class ShiftSchedule(Base, AuditMixin):
         ForeignKey("attendance.shift_type.shift_type_id"),
         nullable=False,
         comment="The assigned shift type for this date",
+    )
+    work_schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scheduling.work_schedule.work_schedule_id"),
+        nullable=True,
+        index=True,
+        comment="Weekly schedule workspace/revision that owns this assignment",
+    )
+    revision: Mapped[int] = mapped_column(
+        nullable=False,
+        default=1,
+        server_default="1",
+        comment="Schedule revision snapshot for historical attendance traceability",
     )
 
     # Grouping field for monthly views
