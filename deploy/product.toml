@@ -59,6 +59,13 @@ source_revision = "7b62974b366eead1b32bead380e47d9cf10ec4c7"
 names = [
     "DATABASE_URL",
     "REDIS_PASSWORD",
+    # The three the rendered file was missing entirely, which is why ERP's
+    # workers had no broker to connect to (docker-compose.yml:110-112). They are
+    # MATERIALS and not literal environment because each embeds
+    # ${REDIS_PASSWORD} — a literal would put the credential in this file.
+    "REDIS_URL",
+    "CELERY_BROKER_URL",
+    "CELERY_RESULT_BACKEND",
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
@@ -115,6 +122,9 @@ stop_grace_seconds = 35
 materials = [
     "DATABASE_URL",
     "REDIS_PASSWORD",
+    "REDIS_URL",
+    "CELERY_BROKER_URL",
+    "CELERY_RESULT_BACKEND",
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
@@ -124,6 +134,16 @@ materials = [
     # (app/main.py:1102, token_env_keys=("METRICS_TOKEN",)).
     "METRICS_TOKEN",
 ]
+
+[roles.environment]
+# Literal, non-secret configuration the rendered file was missing entirely.
+# Deliberately NOT `OPENBAO_ALLOW_INSECURE` or `CSP_ALLOW_UNSAFE`, which
+# docker-compose.yml:22,25,80-81 hardcodes to 'true' in the PRODUCTION service
+# blocks (inventory defect D4). The code defaults are safe; baking the insecure
+# value is what made them unsafe, and this descriptor does not carry it forward.
+PYTHONUNBUFFERED = "1"
+S3_BUCKET_NAME = "dotmac-erp"
+BANKING_AUTO_MATCH_ENABLED = "false"
 
 [roles.resources]
 # NOT sourced from ERP: docker-compose.yml declares no `deploy.resources`
@@ -181,6 +201,10 @@ start_period_seconds = 30
 
 [[roles]]
 code = "worker"
+# Waits on the managed Redis, and on `service_healthy` rather than the real
+# file's `service_started` — which is satisfied the instant the container
+# exists, before Redis has loaded its dump.
+depends_on = ["redis"]
 command = [
     "/app/entrypoint-monitoring.sh",
     "celery",
@@ -195,12 +219,25 @@ stop_grace_seconds = 120
 materials = [
     "DATABASE_URL",
     "REDIS_PASSWORD",
+    "REDIS_URL",
+    "CELERY_BROKER_URL",
+    "CELERY_RESULT_BACKEND",
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
     "OPENBAO_ADDR",
     "OPENBAO_TOKEN",
 ]
+
+[roles.environment]
+# Literal, non-secret configuration the rendered file was missing entirely.
+# Deliberately NOT `OPENBAO_ALLOW_INSECURE` or `CSP_ALLOW_UNSAFE`, which
+# docker-compose.yml:22,25,80-81 hardcodes to 'true' in the PRODUCTION service
+# blocks (inventory defect D4). The code defaults are safe; baking the insecure
+# value is what made them unsafe, and this descriptor does not carry it forward.
+PYTHONUNBUFFERED = "1"
+S3_BUCKET_NAME = "dotmac-erp"
+BANKING_AUTO_MATCH_ENABLED = "false"
 
 [roles.resources]
 # Same "not sourced from ERP" caveat as the app role above — no resource
@@ -231,6 +268,7 @@ ping_command = ["celery", "-A", "app.celery_app", "inspect", "ping"]
 
 [[roles]]
 code = "beat"
+depends_on = ["redis"]
 command = [
     "/app/entrypoint-monitoring.sh",
     "celery",
@@ -245,12 +283,25 @@ stop_grace_seconds = 30
 materials = [
     "DATABASE_URL",
     "REDIS_PASSWORD",
+    "REDIS_URL",
+    "CELERY_BROKER_URL",
+    "CELERY_RESULT_BACKEND",
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
     "OPENBAO_ADDR",
     "OPENBAO_TOKEN",
 ]
+
+[roles.environment]
+# Literal, non-secret configuration the rendered file was missing entirely.
+# Deliberately NOT `OPENBAO_ALLOW_INSECURE` or `CSP_ALLOW_UNSAFE`, which
+# docker-compose.yml:22,25,80-81 hardcodes to 'true' in the PRODUCTION service
+# blocks (inventory defect D4). The code defaults are safe; baking the insecure
+# value is what made them unsafe, and this descriptor does not carry it forward.
+PYTHONUNBUFFERED = "1"
+S3_BUCKET_NAME = "dotmac-erp"
+BANKING_AUTO_MATCH_ENABLED = "false"
 
 [roles.resources]
 cpus = "0.5"
@@ -532,6 +583,26 @@ kind = "redis"
 # core, like database).
 required_for = ["boot", "ready"]
 material = "REDIS_PASSWORD"
+
+# MANAGED: this deployment runs it (docker-compose.yml:166-176), so it is
+# rendered as a service. An earlier revision declared it as an ordinary external
+# dependency, and the rendered Compose file therefore contained Celery broker
+# configuration and no Redis — internally consistent and non-functional.
+image = "redis:7"
+command = ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+materials = ["REDIS_PASSWORD"]
+# `redis-cli ping` and not a TCP check: this instance requires a password, so a
+# probe that only opens the socket would report ready while every real command
+# was being refused. `-a` reads the same material.
+health_probe = ["redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+memory = "512m"
+cpus = "0.5"
+
+[[external_dependencies.ports]]
+# 127.0.0.1:6382 in the real file — loopback, and a non-default host port so it
+# cannot collide with another product's Redis on a shared host.
+container = 6379
+host = 6382
 
 [[external_dependencies]]
 code = "object_store"

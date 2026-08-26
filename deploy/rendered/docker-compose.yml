@@ -11,6 +11,43 @@
 
 services:
 
+  redis:
+    image: "redis:7"
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD}"
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}"
+    ports:
+      - "127.0.0.1:6382:6379"
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - -a
+        - "${REDIS_PASSWORD}"
+        - ping
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    pids_limit: 256
+    networks:
+      - dotmac_erp_net
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    restart: unless-stopped
+
   migrate:
     image: "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     command:
@@ -54,21 +91,29 @@ services:
       - gunicorn.conf.py
       - "app.main:app"
     environment:
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:?CELERY_BROKER_URL must be set}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:?CELERY_RESULT_BACKEND must be set}"
       DATABASE_URL: "${DATABASE_URL:?DATABASE_URL must be set}"
       METRICS_TOKEN: "${METRICS_TOKEN:?METRICS_TOKEN must be set}"
       OPENBAO_ADDR: "${OPENBAO_ADDR:?OPENBAO_ADDR must be set}"
       OPENBAO_TOKEN: "${OPENBAO_TOKEN:?OPENBAO_TOKEN must be set}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}"
+      REDIS_URL: "${REDIS_URL:?REDIS_URL must be set}"
       S3_ACCESS_KEY: "${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}"
       S3_ENDPOINT_URL: "${S3_ENDPOINT_URL:?S3_ENDPOINT_URL must be set}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:?S3_SECRET_KEY must be set}"
+      BANKING_AUTO_MATCH_ENABLED: "false"
+      PYTHONUNBUFFERED: "1"
+      S3_BUCKET_NAME: dotmac-erp
     depends_on:
       migrate:
         condition: service_completed_successfully
     healthcheck:
       test:
-        - CMD-SHELL
-        - "wget -qO- http://127.0.0.1:8002/health/ready >/dev/null 2>&1 || exit 1"
+        - CMD
+        - python
+        - -c
+        - "import sys,urllib.request;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8002/health/ready',timeout=3).status==200 else 1)"
       interval: 5s
       timeout: 3s
       retries: 6
@@ -113,16 +158,24 @@ services:
       - -l
       - info
     environment:
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:?CELERY_BROKER_URL must be set}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:?CELERY_RESULT_BACKEND must be set}"
       DATABASE_URL: "${DATABASE_URL:?DATABASE_URL must be set}"
       OPENBAO_ADDR: "${OPENBAO_ADDR:?OPENBAO_ADDR must be set}"
       OPENBAO_TOKEN: "${OPENBAO_TOKEN:?OPENBAO_TOKEN must be set}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}"
+      REDIS_URL: "${REDIS_URL:?REDIS_URL must be set}"
       S3_ACCESS_KEY: "${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}"
       S3_ENDPOINT_URL: "${S3_ENDPOINT_URL:?S3_ENDPOINT_URL must be set}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:?S3_SECRET_KEY must be set}"
+      BANKING_AUTO_MATCH_ENABLED: "false"
+      PYTHONUNBUFFERED: "1"
+      S3_BUCKET_NAME: dotmac-erp
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     networks:
       - dotmac_erp_net
     deploy:
@@ -159,16 +212,24 @@ services:
       - -l
       - info
     environment:
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:?CELERY_BROKER_URL must be set}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:?CELERY_RESULT_BACKEND must be set}"
       DATABASE_URL: "${DATABASE_URL:?DATABASE_URL must be set}"
       OPENBAO_ADDR: "${OPENBAO_ADDR:?OPENBAO_ADDR must be set}"
       OPENBAO_TOKEN: "${OPENBAO_TOKEN:?OPENBAO_TOKEN must be set}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}"
+      REDIS_URL: "${REDIS_URL:?REDIS_URL must be set}"
       S3_ACCESS_KEY: "${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}"
       S3_ENDPOINT_URL: "${S3_ENDPOINT_URL:?S3_ENDPOINT_URL must be set}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:?S3_SECRET_KEY must be set}"
+      BANKING_AUTO_MATCH_ENABLED: "false"
+      PYTHONUNBUFFERED: "1"
+      S3_BUCKET_NAME: dotmac-erp
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     networks:
       - dotmac_erp_net
     deploy:
