@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Product-owned Expense permission and role-grant declarations, with an
+  additive deployment migration that materializes all 35 module keys, the
+  three separately tiered payout dependencies, and their baseline grants
+  without erasing operator state.
 - Versioned, tenant-bound read projection for Backoffice People backfill and
   reconciliation, protected by an explicit service-principal scope.
 - Exact two-directional retirement ledger for ERP writers of projected People
@@ -17,6 +21,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Retired the legacy CRM material-request sync transport
   (`GET/POST /sync/crm/material-requests` and canonical `/api/v1` variants);
   Sub material support remains available through `/sync/sub/material-requests`.
+
+### Fixed
+- Expense routes no longer depend on an optional seed script having run; normal
+  Alembic deployment now provisions the declared catalogue and baseline roles.
+- Authored Expense role bundles are now validated at application startup, so an
+  undeclared or malformed permission reference fails before requests are served.
 
 ## [1.33.0] - 2026-08-18
 

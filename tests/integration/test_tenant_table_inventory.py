@@ -204,7 +204,7 @@ def test_the_isolation_debt_is_recorded_and_only_shrinks() -> None:
     being lowered in the same change, so progress is recorded rather than
     silently absorbed.
     """
-    baseline = 158
+    baseline = 157
     unprotected = [
         f"{row['schema']}.{row['table']}"
         for row in _recorded().values()

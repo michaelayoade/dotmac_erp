@@ -38,7 +38,7 @@ def test_new_service_credentials_require_leaf_scope_names(scope):
 
 
 def test_new_and_updated_service_credentials_accept_explicit_leaf_scopes():
-    scopes = ["sub:domain:write", "crm:ncc:read"]
+    scopes = ["sub:domain:write", "sub:inventory:read"]
     assert ApiKeyGenerateRequest(scopes=scopes).scopes == scopes
     assert ApiKeyCreate(key_hash="secret", scopes=scopes).scopes == scopes
     assert ApiKeyUpdate(scopes=scopes).scopes == scopes

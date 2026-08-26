@@ -419,7 +419,7 @@ support	ticket_attachment	inherited	false	false	app_admin	0	false	--	--
 support	ticket_category	direct	false	false	app_admin	0	false	--	--
 support	ticket_comment	inherited	false	false	app_admin	0	false	--	--
 support	ticket_notification	inherited	false	false	app_admin	0	false	--	--
-sync	crm_sync_mapping	direct	false	false	app_admin	0	false	--	--
+sync	source_correlation	direct	true	true	app_admin	1	false	rw	--
 sync	integration_config	direct	false	false	app_admin	0	false	--	--
 sync	staging_department	direct	false	false	app_admin	0	false	--	--
 sync	staging_designation	direct	false	false	app_admin	0	false	--	--

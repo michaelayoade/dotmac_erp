@@ -73,8 +73,9 @@ class MaterialRequest(Base):
         ),
         UniqueConstraint(
             "organization_id",
-            "crm_id",
-            name="uq_material_request_org_crm_id",
+            "source_system",
+            "source_reference",
+            name="uq_material_request_org_source_ref",
         ),
         Index("idx_material_request_org", "organization_id"),
         Index("idx_material_request_status", "status"),
@@ -150,11 +151,11 @@ class MaterialRequest(Base):
 
     # ERPNext sync tracking
     erpnext_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    crm_id: Mapped[str | None] = mapped_column(
+    source_reference: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,
         index=True,
-        comment="DotMac CRM material request ID (omni_id for idempotency)",
+        comment="Opaque idempotency key inside source_system",
     )
     source_system: Mapped[str] = mapped_column(
         String(20), nullable=False, default="erp", server_default=text("'erp'")

@@ -37,14 +37,14 @@ class TestLogAuditEvent:
                     actor_person_id=None,
                     actor_id=None,
                     action="POST",
-                    entity_type="/api/v1/sync/crm/bulk",
+                    entity_type="/api/v1/sync/sub/bulk",
                     entity_id=None,
                     status_code=200,
                     is_success=True,
                     ip_address="172.18.0.1",
-                    user_agent="DotMac-CRM/1.0",
+                    user_agent="DotMac-Sub/1.0",
                     request_id="req-123",
-                    metadata_={"path": "/api/v1/sync/crm/bulk"},
+                    metadata_={"path": "/api/v1/sync/sub/bulk"},
                 )
             except RetryCalled:
                 pass
@@ -98,14 +98,14 @@ class TestLogAuditEvent:
                 actor_person_id=None,
                 actor_id=None,
                 action="POST",
-                entity_type="/api/v1/sync/crm/bulk",
+                entity_type="/api/v1/sync/sub/bulk",
                 entity_id=None,
                 status_code=200,
                 is_success=True,
                 ip_address="172.18.0.1",
-                user_agent="DotMac-CRM/1.0",
+                user_agent="DotMac-Sub/1.0",
                 request_id="req-123",
-                metadata_={"path": "/api/v1/sync/crm/bulk"},
+                metadata_={"path": "/api/v1/sync/sub/bulk"},
             )
 
         assert result == {
@@ -129,14 +129,14 @@ class TestLogAuditEvent:
                 actor_person_id=None,
                 actor_id=None,
                 action="POST",
-                entity_type="/api/v1/sync/crm/bulk",
+                entity_type="/api/v1/sync/sub/bulk",
                 entity_id=None,
                 status_code=200,
                 is_success=True,
                 ip_address="172.18.0.1",
-                user_agent="DotMac-CRM/1.0",
+                user_agent="DotMac-Sub/1.0",
                 request_id="req-123",
-                metadata_={"path": "/api/v1/sync/crm/bulk"},
+                metadata_={"path": "/api/v1/sync/sub/bulk"},
             )
 
         assert result["success"] is False
@@ -161,14 +161,14 @@ class TestLogAuditEvent:
                     actor_person_id=None,
                     actor_id=None,
                     action="POST",
-                    entity_type="/api/v1/sync/crm/bulk",
+                    entity_type="/api/v1/sync/sub/bulk",
                     entity_id=None,
                     status_code=200,
                     is_success=True,
                     ip_address="172.18.0.1",
-                    user_agent="DotMac-CRM/1.0",
+                    user_agent="DotMac-Sub/1.0",
                     request_id="req-123",
-                    metadata_={"path": "/api/v1/sync/crm/bulk"},
+                    metadata_={"path": "/api/v1/sync/sub/bulk"},
                 )
             except OperationalError:
                 pass
