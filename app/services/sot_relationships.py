@@ -157,12 +157,26 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 module="app.services.rbac",
                 owns=(
                     "role/permission/grant CRUD",
-                    "permission-code catalogue (seeded)",
+                    "persisted permission catalogue and role grants",
                 ),
+                depends_on=("auth.rbac_declarations",),
                 notes=(
                     "Tables are GLOBAL, not org-scoped; safety rests on the "
                     "one-person-one-org invariant (ledger finding 2). The "
                     "scope decision is explicit kernel-adoption work."
+                ),
+            ),
+            SOTService(
+                name="auth.rbac_declarations",
+                module="app.authz.profile",
+                owns=(
+                    "product role definitions",
+                    "assembly-owned baseline role-permission bundles",
+                ),
+                notes=(
+                    "Modules own permission definitions. The full seed imports "
+                    "these product declarations; deployments materialize "
+                    "approved bundles through scoped additive migrations."
                 ),
             ),
         ),
