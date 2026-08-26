@@ -7,14 +7,14 @@ measured against the live catalog on 2026-08-10.
 ```
 tables                    414
 carrying organization_id  309
-  fully protected          85   (27.5% of scoped)
-  unprotected             158   (RLS not enabled)
+  fully protected          86   (27.8% of scoped)
+  unprotected             157   (RLS not enabled)
   unforced                 66   (RLS enabled, not FORCED)
 inherited                   6   (no scope column; policy joins to a scoped parent)
 global                     99
 ```
 
-224 entries: the 158 unprotected plus the 66 unforced.
+223 entries: the 157 unprotected plus the 66 unforced.
 
 ## What the file is for
 
@@ -23,7 +23,7 @@ It is a **ratchet, not a target**. `scripts/architecture/rls_coverage_audit.py
 is *not* in this file. So:
 
 - a **new** organization-scoped table without RLS fails immediately;
-- the 224 already here do not fail, because failing 224 times on day one would
+- the 223 already here do not fail, because failing 223 times on day one would
   get the gate switched off rather than the tables fixed;
 - a table that gets fixed must be **removed** from this file, and the audit
   prints which entries are now protected so it cannot silently return.
@@ -35,7 +35,7 @@ should be a conscious act with a reason in the pull request.
 
 ERP isolates in two independent layers (`app/db/session_context.py`): a
 SQLAlchemy ORM listener and PostgreSQL RLS. Every table in this file is still
-filtered by the ORM layer, so this is not 224 open doors. What it measures is
+filtered by the ORM layer, so this is not 223 open doors. What it measures is
 where the *second* layer — the one that holds when something reaches the
 database by another path, such as a raw query, a task that primed only one
 layer, or an export — is absent.

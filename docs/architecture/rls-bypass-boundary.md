@@ -281,7 +281,7 @@ limits the module's own docstring carries:
   than asserted to zero, because a wall of red on the first run is how a gate
   gets deleted. It becomes a real assertion in the change that adds the grants.
 - **A protected-target row is not proved refused.** `denied-no-grant` is the absence of
-  a privilege, not the presence of a boundary; 158 `known_gaps` relations carry
+  a privilege, not the presence of a boundary; 157 `known_gaps` relations carry
   no RLS at all and would return every organization's rows once granted.
 - **Reachability is not isolation.** Every policy's first disjunct is
   `should_bypass_rls()`, and `app.bypass_rls` is `PGC_USERSET` — `app_user` can
