@@ -1,18 +1,16 @@
-"""ERP's typed seams for `dotmac-tax` — adoption ledger item C1.
+"""ERP's typed seams for the composed, disabled `dotmac-tax` adoption.
 
 Three modules, one direction each:
 
-- `contracts` — the two ERP-owned value objects
-  (`ERPSourceTaxFactV1`, `ApplyTaxDeterminationSetV1`) named by
-  `docs/architecture/dotmac-tax-adoption-boundary.md` § "Typed ERP seams".
+- `contracts` — ERP's source fact and local posting context. The determination
+  result comes directly from the released public module contract.
 - `inbound` — one mapper per named source-fact family, ERP row → source fact
   → public `dotmac_tax.TaxFact`.
 - `outbound` — an approved determination set → ERP's accounting-consequence
   path, without the module learning that a general ledger exists.
 
-Nothing here composes the module.  `composition` states, and tests assert,
-that `dotmac-tax` is not pinned, its lineage is not in `alembic.ini`, and no
-ERP writer has been repointed.  C2/C3/C4 are separate gated steps.
+C2 composes storage and the public contract while keeping the authority flag
+off. No ERP writer has been repointed; C3 shadow and C4 cutover remain separate.
 """
 
 from app.services.finance.tax.adoption.composition import (
@@ -20,6 +18,7 @@ from app.services.finance.tax.adoption.composition import (
     CONTRACT_VERSION,
     DISTRIBUTION,
     IMPORT_PACKAGE,
+    LINEAGE_HEAD,
     MIGRATION_VERSION_LOCATION,
     MODULE_CODE,
     TaxCompositionNotReady,
@@ -30,22 +29,20 @@ from app.services.finance.tax.adoption.contracts import (
     RECOGNITION_BASIS_ACCRUAL,
     RECOGNITION_BASIS_CASH,
     RECOGNITION_BASIS_PAYROLL_PERIOD,
-    TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE,
     AccountingConsequence,
-    ApplyTaxDeterminationSetV1,
     ERPSourceTaxFactV1,
     SourceFactFamily,
+    TaxApplicationContextV1,
     TaxAdapterRefusal,
-    TaxDeterminationComponentV1,
     TransactionSide,
 )
 from app.services.finance.tax.adoption.inbound import (
     MAPPED_FAMILIES,
-    TAX_FACT_FIELDS,
     UNMAPPED_FAMILIES,
     ap_supplier_invoice_line_fact,
     ar_invoice_line_fact,
     payroll_taxable_pay_fact,
+    source_fact_content_version,
     to_tax_fact,
     to_tax_fact_kwargs,
 )
@@ -63,6 +60,7 @@ __all__ = [
     "CONTRACT_VERSION",
     "DISTRIBUTION",
     "IMPORT_PACKAGE",
+    "LINEAGE_HEAD",
     "MAPPED_FAMILIES",
     "MIGRATION_VERSION_LOCATION",
     "MODULE_CODE",
@@ -70,26 +68,24 @@ __all__ = [
     "RECOGNITION_BASIS_CASH",
     "RECOGNITION_BASIS_PAYROLL_PERIOD",
     "SOURCE_MODULE",
-    "TAX_FACT_FIELDS",
-    "TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE",
     "UNMAPPED_FAMILIES",
     "AccountingConsequence",
-    "ApplyTaxDeterminationSetV1",
     "ConsequencePosting",
     "ConsequencePostingLine",
     "ERPSourceTaxFactV1",
     "SourceFactFamily",
+    "TaxApplicationContextV1",
     "TaxAccountMap",
     "TaxAdapterRefusal",
     "TaxCodeAccounts",
     "TaxCompositionNotReady",
-    "TaxDeterminationComponentV1",
     "TransactionSide",
     "ap_supplier_invoice_line_fact",
     "ar_invoice_line_fact",
     "composition_state",
     "payroll_taxable_pay_fact",
     "project_determination_set",
+    "source_fact_content_version",
     "require_composition_ready",
     "to_tax_fact",
     "to_tax_fact_kwargs",

@@ -1,10 +1,14 @@
 # `dotmac-tax` adoption boundary
 
-Status: **source inventory and cutover design; module not composed**
-ERP source revision: `bdd4852e93c57e68bc8d3620f2e64ff094e2c92d`
-Candidate module: `dotmac-tax 0.1.0a2` on Starter branch
-`feat/tax-multi-component` at `1e1d062e9498b73ef2ad1baa20d215d844f8b448`
-(PR #385); no release coordinate exists yet
+Status: **C2 composed and disabled; no tax authority has moved**
+ERP C2 base: `7b62974b366eead1b32bead380e47d9cf10ec4c7`
+Released module: `dotmac-tax 0.1.0a3`
+Release run: `32898397980`; annotated tag `dotmac-tax-v0.1.0a3`
+peels to Starter `531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`.
+Release record PR #443 merged at
+`fca290ac7a32755e9ab000661e8bc6a35c138173`; its post-merge CI and
+Engineering Standards passed. ERP pins that exact artifact and composes
+`tx_0003_result_fingerprint`, while `TAX_COMPOSITION_ENABLED` remains false.
 
 ## Outcome
 
@@ -45,7 +49,7 @@ and an explicit `source_amount` or `source_plus_prior_tax` base for every code.
 Alphabetical order is not migration evidence.
 
 ERP currently permits more than one inclusive tax on a line and extracts them
-sequentially. The a2 candidate deliberately refuses an inclusive component
+sequentially. The released a3 contract deliberately refuses an inclusive component
 combined with any other component because the source amount is otherwise
 ambiguous. Any live ERP row using that combination is an adjudication blocker,
 not an expected variance to normalize away.
@@ -91,23 +95,34 @@ One mapper per named fact family translates that contract into public
 observation with missing or ambiguous classification evidence fails closed and
 enters a review worklist.
 
-### `ApplyTaxDeterminationSetV1`
+### Public `TaxDeterminationSetV1` + ERP `TaxApplicationContextV1`
 
-Required fields:
+The module owns and publishes the immutable result shape. It carries source
+and result fingerprints, set/component/line identities, ordered code/rule/
+classification evidence, exact source/net/tax/gross and recovery amounts,
+currency and aware determination time. ERP does not restate that contract.
 
-- module determination-set identity and source fingerprint;
-- ordered component identities, code/rule/version, treatment and selected
-  classification ids;
-- exact calculation base, tax, recoverable and non-recoverable amounts;
-- source/net/tax/gross totals and exact currency; and
-- target document/line identity plus intended accounting consequence.
+`TaxApplicationContextV1` adds only ERP-owned application facts: posting date,
+accounting consequence, counterpart account, functional-currency
+identity and fiscal dimensions. The exact submitted `ERPSourceTaxFactV1` owns
+organization, document/line identity, correlation and reversal, and the result
+must match all of its echoed source fields. The application context cannot
+rebind them. C2 accepts only a result already in ERP's functional currency and
+uses an exchange rate of one; foreign-currency consequences remain sealed until
+a typed, persisted FX-evidence contract exists.
 
-The ERP consequence adapter verifies the module fingerprint and arithmetic,
-resolves an unambiguous effective ERP account mapping for every component,
-writes the local document/tax-transaction snapshot, and calls the accounting
-owner in the same transaction. Missing mappings, closed fiscal periods,
-currency mismatches, duplicate source versions or changed fingerprints refuse
-the whole source row. A module determination never writes GL directly.
+`output`, `input` and `liability` map to AR output tax, AP input tax and PAYE
+payable respectively. Generic `withholding` remains refused in C2 because it
+cannot distinguish customer WHT receivable from supplier WHT payable. Cohort 4
+must publish that document-level distinction before either path is enabled.
+
+The C2 consequence adapter is pure: it verifies the module fingerprint and
+arithmetic, resolves an unambiguous effective ERP account mapping for every
+component and returns a complete balanced posting proposal. At cutover, the
+local owning service will write the document/tax-transaction snapshot and call
+the accounting owner in the same transaction. Missing mappings, closed fiscal
+periods, currency mismatches, duplicate source versions or changed fingerprints
+refuse the whole source row. A module determination never writes GL directly.
 
 ## Backfill mapping
 
@@ -172,19 +187,22 @@ two calculators live as permanent fallback.
 
 ## Composition and release gates
 
-No dependency or migration-lineage change is made from an unreleased candidate.
-Before composition:
+C2 satisfied the external release oracle before changing ERP: release run
+`32898397980` published and installed back a3, the annotated tag peeled to
+`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`, and generated release-record PR
+#443 merged and passed post-merge CI.
 
-1. `dotmac-tax 0.1.0a2` has exact Observer proof;
-2. the release run proves private-index publication and install-back;
-3. the peeled tag commit is recorded; and
-4. the generated Starter release record is merged.
-
-ERP then pins the exact release, composes the `tx` lineage, binds
+ERP now pins the exact release, composes the `tx` lineage, binds
 `tenant_scope_catalog.v1` and `module_database_roles.v1` to its existing ERP
 providers, and proves `alembic upgrade heads` on a fresh disposable PostgreSQL
 database. Composition creates storage only; no authority moves until a cohort
 passes its shadow and cutover gate.
+
+Foreign-source-currency rows remain outside the admissible C3 cohort. ERP must
+not assume that an invoice-header exchange rate is the legal tax-base rate.
+Until Finance/Tax approves the legal base currency, rate owner/type/event date,
+rounding and retained evidence, those rows produce adjudication evidence and no
+module call. This does not block C2 or a jurisdiction-currency-only C3 shadow.
 
 ## Source-of-truth documents changed at cutover
 

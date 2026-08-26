@@ -1,14 +1,17 @@
 # `dotmac-tax` C1 — typed source-fact and accounting-consequence adapters
 
-Status: **adapters delivered; module NOT composed**
+Status: **C1 history, amended by C2 composition**
 Companion to `docs/architecture/dotmac-tax-adoption-boundary.md`, which remains
 the authoritative design. This note records what C1 built, what it deliberately
 did not build, and every ERP field that does not map cleanly onto the published
 `dotmac-tax` contract.
 
-Contract read against: `dotmac-tax 0.1.0a2`
-(`packages/dotmac-tax/src/dotmac_tax/contracts.py` in `dotmac_starter_mt`) —
-`TaxFact`, `TaxRuleInput`, `TaxJurisdictionInput`, `TaxRuleBandInput`.
+Original C1 contract: `dotmac-tax 0.1.0a2`. C2 now pins released
+`dotmac-tax 0.1.0a3` (release run `32898397980`, peeled tag
+`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`) and consumes its public
+`TaxFact` and sealed `TaxDeterminationSetV1`/component/line contracts directly.
+The `tx` lineage is composed at `tx_0003_result_fingerprint`; runtime authority
+remains disabled.
 
 Delivered:
 
@@ -20,10 +23,9 @@ Delivered:
 | Composition state (inert) | `app/services/finance/tax/adoption/composition.py` |
 | Tests | `tests/ifrs/tax/test_tax_adoption_adapters.py` |
 
-C1 changes no writer. `dotmac-tax` is absent from `pyproject.toml` and
-`poetry.lock`, its `tx` lineage is absent from `alembic.ini`, `mod_tax` exists in
-no ERP database, and no calculator, reader or filing path has been repointed.
-Pinning, lineage composition, policy backfill and cohort cutover are C2/C3/C4.
+C1 changed no writer. C2 adds the exact dependency and module storage but still
+repoints no calculator, reader or filing writer. Policy backfill, field-by-field
+shadow comparison and cohort cutover remain C3/C4.
 
 ---
 
@@ -133,8 +135,8 @@ record an approved ordering adjudication instead of copying it.
 ## 4. Field-by-field ERP → `TaxFact`
 
 `TaxFact` has fifteen fields. `to_tax_fact_kwargs` produces exactly those and
-nothing else; `TAX_FACT_FIELDS` mirrors the list and is asserted equal to the
-real dataclass whenever the distribution is installed.
+nothing else; C2 checks the mapping keys directly against the installed public
+dataclass, with no ERP-owned field-list mirror left to drift.
 
 Note that `tenant_id` is **not** a `TaxFact` field: the module takes it as a
 separate argument to `determine_tax_set`, and ERP passes `fact.tenant_id`, a
@@ -152,7 +154,7 @@ derived property returning `organization_id` (same-UUID mapping,
 | `transaction_side` | constant `"output"` | Crosses as the module's plain string, not an ERP enum. |
 | `base_amount` | `ar.invoice_line.line_amount` + `ar.invoice.currency_code` | Exact kernel `Money` via `money_boundary.to_boundary_money`; magnitude only. |
 | `source_ref` | `erp:ar.invoice_line:{line_id}` | The determination unit is the LINE. |
-| `source_version` | **content digest** `cv1:<sha256>` over the tax-relevant fields | NOT `ar.invoice.version`. See § 5.3. |
+| `source_version` | **content digest** `cv2:<sha256>` over the tax-relevant fields | NOT `ar.invoice.version`. See § 5.3. |
 | `evidence_ref` | `erp:ar.invoice:{invoice_id}` | |
 | `counterparty_ref` | `erp:customer:{ar.invoice.customer_id}` | Opaque to the module. |
 | `supply_ref` | `erp:item:{ar.invoice_line.item_id}` or `None` | `item_id` is nullable in ERP. |
@@ -181,7 +183,7 @@ rather than the AR mapper behind a flag:
 | `transaction_side` | constant `"input"` |
 | `base_amount` | `ap.supplier_invoice_line.line_amount` + `ap.supplier_invoice.currency_code` |
 | `source_ref` | `erp:ap.supplier_invoice_line:{line_id}` |
-| `source_version` | **content digest** `cv1:<sha256>`, identical scheme to AR |
+| `source_version` | **content digest** `cv2:<sha256>`, identical scheme to AR |
 | `evidence_ref` | `erp:ap.supplier_invoice:{invoice_id}` |
 | `counterparty_ref` | `erp:supplier:{ap.supplier_invoice.supplier_id}` |
 
@@ -201,7 +203,7 @@ amounts.
 | `transaction_side` | constant `"liability"` | Employer-remitted employee tax is neither an input credit nor an output tax on a supply. |
 | `base_amount` | `PAYEBreakdown.taxable_income` (ANNUAL) | See § 5.7. |
 | `source_ref` | `erp:payroll.salary_slip:{slip_id}:paye` | |
-| `source_version` | **content digest** `cv1:<sha256>`, identical scheme to AR/AP | No caller parameter. See § 5.3. |
+| `source_version` | **content digest** `cv2:<sha256>`, identical scheme to AR/AP | No caller parameter. See § 5.3. |
 | `evidence_ref` | `erp:payroll.payroll_entry:{entry_id}` (falls back to the slip) | |
 | `counterparty_ref` | `erp:employee:{employee_id}` | |
 | `supply_ref`, `place_ref` | always `None` | Payroll has no supply or place. |
@@ -236,8 +238,10 @@ and both invoice headers carry `currency_code` plus `exchange_rate` /
 the tax jurisdiction's.
 
 There is no field on `TaxFact` for an exchange rate or a functional amount, and
-the adapter does not invent one — a fact is submitted in the document currency
-and the module accepts or refuses it. Before cohort 1 shadowing, C3 must
+the adapter does not invent one. C2's outbound boundary structurally refuses a
+result whose currency differs from ERP's declared functional currency, and C3
+must keep such a row out of the module call entirely. Before cohort 1 shadowing,
+C3 must
 establish, from evidence, either that every in-scope document is in the
 jurisdiction currency, or which converted amount is the legal tax base and who
 owns that conversion. **This is an adjudication, not a defaulting decision, and
@@ -283,14 +287,23 @@ It fails in **both** directions, and only one of them is loud:
   evidence — the exact defect this programme exists to remove.
 
 `inbound._content_source_version` now derives the version from CONTENT:
-`cv1:<sha256>` over jurisdiction, `occurred_on`, `fact_kind`, recognition basis,
+`cv2:<sha256>` over jurisdiction, `occurred_on`, `fact_kind`, recognition basis,
 transaction side, exact base amount + currency + minor units, party/supply/place
-refs, the three classification categories, and the SORTED
-`observed_tax_code_refs`. Fields are length-prefixed (`key:len:value`) so no
-reference containing a delimiter can collide with a different field set; money is
-digested as exact decimal text quantized to the currency's minor units and a
-float is refused outright; `None` uses a sentinel no real reference can spell, so
-an absent `supply_ref` and the literal string `"None"` cannot digest identically.
+refs, the three classification categories, `reversal`, `correlation_ref`, and
+the sorted `observed_tax_code_refs`. Fields are length-prefixed
+(`key:len:value`) so no
+reference containing a delimiter can collide with a different field set; money
+is digested as exact decimal text quantized to the currency's minor units and a
+float is refused outright; `None` uses a sentinel no real reference can spell,
+so an absent `supply_ref` and the literal string `"None"` cannot digest
+identically.
+
+C1 originally named this algorithm `cv1` and omitted `reversal`. C2 supersedes
+it with `cv2` before any authority cutover: reversal controls every journal side
+but is intentionally absent from the module fact, so projection now recomputes
+the content version and refuses a source fact whose direction was changed after
+submission. A later removal of shadow-only legacy code observations must use a
+new namespace rather than silently changing `cv2`.
 
 This closes both directions. An edit that changes a tax fact yields a new
 version, correctly. An edit that does not yields the SAME version, so the
@@ -307,7 +320,7 @@ submission, so this is not the identical-fingerprint duplication above — it is
 the shadow comparator's unit of comparison changing, which is what a shadow
 cohort wants to see.
 
-`cv1` namespaces the algorithm so a future, deliberate change to the field set or
+`cv2` namespaces the algorithm so a future, deliberate change to the field set or
 the encoding is a NEW algorithm rather than a silent re-versioning of every fact
 already determined under the old one.
 
@@ -385,8 +398,12 @@ rather than assuming the scales agree.
 
 ## 6. The outbound projection
 
-`project_determination_set(apply, *, accounts, expected_fingerprint,
-fiscal_period_id) -> ConsequencePosting` is a **pure function**. It verifies,
+`project_determination_set(result, *, source_fact, application, accounts,
+expected_fingerprint, fiscal_period_id) -> ConsequencePosting` is a **pure
+function**. `result` is the released public `TaxDeterminationSetV1`;
+`source_fact` is the exact ERP observation submitted for that result, and
+`application` is ERP's separate posting context. The function verifies every
+echoed source field before it
 resolves accounts, and returns a typed consequence. A postable consequence
 renders into `JournalInput`/`JournalLineInput` — the accounting owner's own
 input type — while a reportable-only zero consequence renders no journal. It
@@ -394,8 +411,8 @@ performs no write; invoking
 `BasePostingAdapter.create_approve_and_post_journal` and writing the document /
 tax-transaction snapshot is C4.
 
-Purity buys three things. It is testable with no database, no session and no
-`dotmac-tax` installed. It cannot half-write, so "refuse the whole source row"
+Purity buys three things. It is testable with no database or session. It cannot
+half-write, so "refuse the whole source row"
 is structural rather than a `rollback()` someone has to remember. And the
 preconditions it cannot check itself become REQUIRED ARGUMENTS: `fiscal_period_id`
 is what `PeriodGuardService.require_open_period()` returns, so a caller that has
@@ -410,21 +427,26 @@ side. Accounts enter through `TaxAccountMap` — an ERP-owned effective mapping
 `tax.tax_code.tax_collected_account_id` &c., because those columns belong to the
 rows being replaced and their ids are a different identifier space.
 
-Consequence shapes (`reversal` flips every line):
+Consequence shapes (`source_fact.reversal` flips every line):
 
 | `AccountingConsequence` | Lines |
 |---|---|
 | `ar_output_tax` | CREDIT collected per component; DEBIT the receivable counterpart for the total |
 | `ap_input_tax` | DEBIT recoverable → tax-paid (asset); DEBIT non-recoverable → tax-expense; CREDIT the payable counterpart. The one place a component yields two lines, and the reason the module's `recoverable_rate` must arrive as an AMOUNT split rather than a ratio ERP re-applies. |
-| `withholding_payable` | CREDIT collected (WHT payable); DEBIT the counterpart, preserving `net + WHT = gross` |
 | `payroll_tax_payable` | CREDIT collected (PAYE payable); DEBIT the payroll counterpart |
 
-Refusals: changed fingerprint, missing or ambiguous account mapping, a closed
-period (by construction), a currency mismatch, components out of calculation
+Generic `withholding` is not a C2 consequence. Customer-deducted WHT is a
+receivable while supplier WHT is a payable; cohort 4 must add the typed
+document-level fact and both account shapes before either becomes admissible.
+
+Refusals: a result that disagrees with its exact submitted source fact, changed
+fingerprint, attempted foreign-currency posting, missing or ambiguous account
+mapping, a closed period (by construction), a currency mismatch, components out of calculation
 order, a recovery split that does not total its component, components that do
 not total the set, `net + tax != gross`, an inclusive set whose `source != gross`,
 an exclusive set whose `source != net`, an inclusive component combined with any
-other (mirroring the a2 candidate's own refusal), a standard-rated component
+other (mirroring the released a3 contract's own refusal), a transaction side
+that contradicts ERP's accounting consequence, a standard-rated component
 holding zero tax, and a projected posting that does not balance —
 `JournalService._require_balanced` admits no tolerance, so it is refused here,
 where the offending component can still be named.
@@ -453,28 +475,19 @@ never substituted with a suspense or a default.
 
 ## 7. The one-way import rule
 
-`dotmac_tax` imports nothing from ERP. ERP touches `dotmac_tax` in exactly one
-place — `inbound.to_tax_fact` — through a lazy import of the package's PUBLIC
-surface (`from dotmac_tax import TaxFact`), never a submodule and never a model.
-`outbound.py` contains no reference to the module at all; it mirrors the
-reviewable fields of an approved determination set as ERP-owned types, which is
-what lets the consequence path be written, reviewed and tested before the
-package is ever pinned. `test_the_module_is_never_asked_about_an_account_or_a_journal`
-asserts the absence.
-
-`to_tax_fact_kwargs` is pure and separate from `to_tax_fact` so the field-by-
-field mapping stays testable with the distribution absent. `TAX_FACT_FIELDS`
-mirrors the released field list and is asserted equal to the real dataclass when
-the package IS installed, so a contract that grows a required field fails a test
-rather than a production call.
+`dotmac_tax` imports nothing from ERP. ERP imports only names from the package's
+PUBLIC top-level surface, never module ORM models or internal submodules.
+`inbound.to_tax_fact` builds the released `TaxFact`; `outbound.py` accepts the
+released sealed result contracts. ERP owns only its source observation and
+accounting-application context. `to_tax_fact_kwargs` remains a pure explicit
+translation and is checked directly against the installed public dataclass;
+there is no ERP field-list or result mirror left to drift.
 
 ---
 
 ## 8. Verification performed
 
-Static only, and deliberately incomplete — ERP dev dependencies are not
-installed in this worktree and, per repository policy, tests are executed by CI,
-not here.
+The following is C1's historical verification record; it is not C2 evidence.
 
 Ran:
 
@@ -495,12 +508,7 @@ CI on the final SHA is the acceptance evidence.
 
 ## 9. What C1 did not do
 
-No dependency pin, no `alembic.ini` version location, no migration, no backfill,
-no shadow run, no writer switch, and no claim that `dotmac-tax 0.1.0a2` is
-installable here. `composition.CONTRACT_VERSION` records the version of the
-published contract these adapters were written against; recording a version is
-not a claim that it is pinned, published or adopted — no authoritative external
-oracle (release run, peeled tag, deployment run) for it exists in this
-repository, and `AGENTS.md` § "Cross-repository engineering governance" is
-explicit that repository-local claims come from repository-local facts. The next
-gated step is C2.
+Historically, C1 added no dependency, lineage, backfill, shadow run or writer
+switch. C2 now supplies the exact a3 artifact and storage lineage and deletes
+the temporary result mirror. It still performs no backfill, shadow comparison,
+module determination call or writer switch. The next gated step is C3.

@@ -15,7 +15,7 @@ that constructs its own tables proves something about the test, not the deploy.
 Every composed module lineage is an independent ROOT with its own branch label:
 `fi_0001_stored_files` labels `files`, `ac_0001_accounting` labels `accounting`,
 `im_0001_import_runs` labels `imports`, and `nu_0001_numbering` labels
-`numbering`.
+`numbering`; `tx_0003_result_fingerprint` is the reviewed head of `tax`.
 That is the design — a module owns its history so it can be released and pinned
 without ERP rewriting its graph — and it is why ERP's deploy path has always
 been `alembic upgrade heads`, plural.
@@ -88,6 +88,8 @@ IMPORTS_SCHEMA = "mod_imports"
 IMPORTS_REVISION = "im_0001_import_runs"
 NUMBERING_SCHEMA = "mod_numbering"
 NUMBERING_REVISION = "nu_0001_numbering"
+TAX_SCHEMA = "mod_tax"
+TAX_REVISION = "tx_0003_result_fingerprint"
 IDEMPOTENCY_PROVIDER_REVISION = "20260820_idempotency_ledger"
 REQUIRED_EFFECTS = (
     "tenant_scope_catalog.v1",
@@ -311,6 +313,29 @@ def test_the_module_schema_exists_with_every_declared_table(
         engine.dispose()
     missing = sorted(set(module.tables) - present)
     assert not missing, f"{ACCOUNTING_SCHEMA} is missing declared tables: {missing}"
+
+
+def test_the_tax_lineage_and_every_declared_table_are_present(
+    composed_database: URL,
+) -> None:
+    from dotmac_tax import module
+
+    assert TAX_REVISION in _applied_revisions(composed_database)
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            present = set(
+                connection.execute(
+                    text("SELECT tablename FROM pg_tables WHERE schemaname = :schema"),
+                    {"schema": TAX_SCHEMA},
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+
+    assert module.tables
+    missing = sorted(set(module.tables) - present)
+    assert not missing, f"{TAX_SCHEMA} is missing declared tables: {missing}"
 
 
 def test_the_imports_schema_exists_with_every_declared_table(
@@ -758,6 +783,120 @@ def test_every_imports_table_is_tenant_scoped_and_rls_forced(
             )
     finally:
         engine.dispose()
+
+
+def test_every_tax_table_is_tenant_scoped_and_rls_forced(
+    composed_database: URL,
+) -> None:
+    """The composed tax storage is a tenant plane, not shared policy state."""
+    from dotmac_tax import module
+
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
+                           a.attnotnull
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    JOIN pg_attribute a ON a.attrelid = c.oid
+                    WHERE n.nspname = :schema
+                      AND c.relkind = 'r'
+                      AND a.attname = 'tenant_id'
+                      AND NOT a.attisdropped
+                    ORDER BY c.relname
+                    """
+                ),
+                {"schema": TAX_SCHEMA},
+            ).all()
+    finally:
+        engine.dispose()
+
+    assert {name for name, _, _, _ in rows} == set(module.tables)
+    assert all(enabled and forced and not_null for _, enabled, forced, not_null in rows)
+
+
+def test_tax_rls_is_effective_for_the_online_role_across_two_tenants(
+    composed_database: URL,
+) -> None:
+    """Prove the composed tax plane uses ERP's real tenant provider."""
+    owner_tenant = uuid4()
+    other_tenant = uuid4()
+    owner_authority_id = uuid4()
+
+    admin_engine = create_engine(composed_database)
+    try:
+        with admin_engine.begin() as connection:
+            for tenant_id in (owner_tenant, other_tenant):
+                connection.execute(
+                    text(
+                        "INSERT INTO public.tenants (id, slug, name) "
+                        "VALUES (:id, :slug, 'Tax RLS probe')"
+                    ),
+                    {"id": tenant_id, "slug": f"tax-{tenant_id.hex}"},
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO mod_tax.tax_authorities "
+                    "(id, tenant_id, code, name, status) "
+                    "VALUES (:id, :tenant_id, 'NRS', 'Nigeria Revenue Service', "
+                    "'active')"
+                ),
+                {"id": owner_authority_id, "tenant_id": owner_tenant},
+            )
+    finally:
+        admin_engine.dispose()
+
+    online_database = composed_database.set(username="app_user", password=None)
+    online_engine = create_engine(online_database)
+    try:
+        with online_engine.begin() as connection:
+            connection.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(other_tenant)},
+            )
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM mod_tax.tax_authorities WHERE id = :id"),
+                    {"id": owner_authority_id},
+                )
+                == 0
+            )
+            with pytest.raises(DBAPIError):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "INSERT INTO mod_tax.tax_authorities "
+                            "(id, tenant_id, code, name, status) "
+                            "VALUES (:id, :tenant_id, 'CROSS', "
+                            "'Cross-tenant probe', 'active')"
+                        ),
+                        {"id": uuid4(), "tenant_id": owner_tenant},
+                    )
+
+            connection.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(owner_tenant)},
+            )
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM mod_tax.tax_authorities WHERE id = :id"),
+                    {"id": owner_authority_id},
+                )
+                == 1
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO mod_tax.tax_authorities "
+                    "(id, tenant_id, code, name, status) "
+                    "VALUES (:id, :tenant_id, 'FCT-IRS', 'FCT-IRS', 'active')"
+                ),
+                {"id": uuid4(), "tenant_id": owner_tenant},
+            )
+    finally:
+        online_engine.dispose()
 
 
 def test_every_numbering_table_is_tenant_scoped_and_rls_forced(

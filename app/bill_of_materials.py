@@ -262,7 +262,7 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
     ),
     SelectedModule(
         distribution="dotmac-tax",
-        state="selected",
+        state="composed",
         release_state="released",
         capabilities=("tax-determination", "tax-filing-evidence"),
         rationale=(
@@ -1250,6 +1250,15 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
         lineage_head="ac_0001_accounting",
         requires_effects=(_TENANT, _ROLES, _IDEMPOTENCY),
     ),
+    CompositionStep(
+        distribution="dotmac-tax",
+        tranche=0,
+        kernel_floor="0.1.0a85",
+        schema="mod_tax",
+        lineage_branch="tax",
+        lineage_head="tx_0003_result_fingerprint",
+        requires_effects=(_TENANT, _ROLES),
+    ),
     # -- tranche 1: released, allowlisted, every effect already supplied -----
     CompositionStep(
         distribution="dotmac-payables",
@@ -1267,15 +1276,6 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
         schema="mod_banking",
         lineage_branch="banking",
         lineage_head="bk_0001_banking",
-        requires_effects=(_TENANT, _ROLES),
-    ),
-    CompositionStep(
-        distribution="dotmac-tax",
-        tranche=1,
-        kernel_floor="0.1.0a85",
-        schema="mod_tax",
-        lineage_branch="tax",
-        lineage_head="tx_0001_tax",
         requires_effects=(_TENANT, _ROLES),
     ),
     CompositionStep(

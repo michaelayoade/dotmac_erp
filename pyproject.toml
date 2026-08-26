@@ -104,6 +104,12 @@ dotmac-accounting = {version = "0.1.0a1", source = "forgejo"}
 # time with a caller-supplied business date.
 dotmac-numbering = {version = "0.1.0a2", source = "forgejo"}
 
+# Generic tax policy, determination and statutory evidence. C2 composes the
+# released `tx` lineage and public read contract only. ERP's legacy calculator
+# and filing writers remain authoritative while `TAX_COMPOSITION_ENABLED` is
+# false; policy backfill, shadow comparison and cohort cutover are later gates.
+dotmac-tax = {version = "0.1.0a3", source = "forgejo"}
+
 # Private Forgejo PyPI index (Dotmac packages). Explicit priority: only
 # dependencies that name this source resolve from it; PyPI stays the default.
 # Credentials are NEVER stored in this repository — poetry reads them from its

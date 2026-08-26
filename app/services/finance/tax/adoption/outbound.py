@@ -8,7 +8,8 @@ accounting owner in the same transaction. Missing mappings, closed fiscal
 periods, currency mismatches, duplicate source versions or changed fingerprints
 refuse the whole source row. A module determination never writes GL directly."
 
-C1 delivers the PROJECTION half of that, in full, as a pure function:
+C2 consumes the module's released public read contract and delivers the
+PROJECTION half as a pure function:
 :func:`project_determination_set` verifies, resolves and produces a typed
 :class:`ConsequencePosting`. A postable result is complete, self-balancing and
 renders into ERP's existing `JournalInput`/`JournalLineInput` — the accounting
@@ -23,7 +24,7 @@ anything over.
 
 Three things follow from it and all three matter:
 
-- it is testable with no database, no session and no `dotmac-tax` installed;
+- it is testable with no database and no session;
 - it cannot half-write.  A refusal happens before anything exists, so "refuse
   the whole source row" is structural rather than a `rollback()` someone has to
   remember; and
@@ -58,13 +59,17 @@ different identifier space.
   the one place a single component yields two lines, and it is the reason the
   module's `recoverable_rate` has to arrive as an AMOUNT split rather than a
   ratio ERP re-applies.
-- `withholding_payable` — CREDIT the collected (withholding-payable) account,
-  DEBIT the counterpart, preserving `net + WHT = gross` at the document level.
 - `payroll_tax_payable` — CREDIT the collected (PAYE-payable) account, DEBIT the
   payroll counterpart.
 
-`reversal` flips every line.  It is taken from the set, which took it from the
-source fact's document type; nothing here re-derives direction from a sign.
+Settlement withholding is deliberately refused in C2: customer-deducted WHT is
+a receivable while supplier WHT is a payable, and the public transaction side
+alone cannot select between them. Cohort 4 must add the typed document-level
+fact and both accounting consequences before either path is admissible.
+
+`reversal` flips every line. It is taken only from the exact ERP source fact
+bound to the result; the application context cannot independently reverse or
+rebind a valid determination.
 """
 
 from __future__ import annotations
@@ -76,13 +81,16 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from dotmac_tax import TaxDeterminationComponentV1, TaxDeterminationSetV1
+
 from app.services.finance.tax.adoption.contracts import (
-    TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE,
     AccountingConsequence,
-    ApplyTaxDeterminationSetV1,
+    ERPSourceTaxFactV1,
+    SourceFactFamily,
+    TaxApplicationContextV1,
     TaxAdapterRefusal,
-    TaxDeterminationComponentV1,
 )
+from app.services.finance.tax.adoption.inbound import source_fact_content_version
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.services.finance.gl.journal import JournalInput
@@ -102,6 +110,27 @@ _ZERO = Decimal("0")
 #: already uses `source_module="TAX"`; reusing it keeps one module name in the
 #: ledger across the cutover rather than splitting tax history in two.
 SOURCE_MODULE = "TAX"
+
+# ERP owns the accounting consequence, but it may not contradict the module's
+# transaction-side evidence. This mapping is the typed seam between those two
+# owners, not a second tax-policy vocabulary.
+_CONSEQUENCE_BY_TRANSACTION_SIDE: dict[str, AccountingConsequence] = {
+    "output": AccountingConsequence.AR_OUTPUT_TAX,
+    "input": AccountingConsequence.AP_INPUT_TAX,
+    "liability": AccountingConsequence.PAYROLL_TAX_PAYABLE,
+}
+
+_DOCUMENT_TYPE_BY_FAMILY: dict[SourceFactFamily, tuple[str, str]] = {
+    SourceFactFamily.AR_INVOICE_LINE: ("AR_INVOICE", "AR_CREDIT_NOTE"),
+    SourceFactFamily.AP_INVOICE_LINE: (
+        "AP_SUPPLIER_INVOICE",
+        "AP_SUPPLIER_CREDIT_NOTE",
+    ),
+    SourceFactFamily.PAYROLL_TAXABLE_PAY: (
+        "PAYROLL_SALARY_SLIP",
+        "PAYROLL_SALARY_SLIP",
+    ),
+}
 
 #: Account roles, named once.  `collected` is the authority-owed liability
 #: (output VAT, withholding payable, PAYE payable), `paid` the recoverable
@@ -232,6 +261,7 @@ class ConsequencePosting:
     source_ref: str
     source_version: str
     source_fingerprint: str
+    result_fingerprint: str
     consequence: AccountingConsequence
     document_id: UUID
     document_type: str
@@ -319,11 +349,20 @@ class ConsequencePosting:
         )
 
 
-def _verify_inclusive_arithmetic(apply: ApplyTaxDeterminationSetV1) -> None:
+def _require_public_set(value: object) -> TaxDeterminationSetV1:
+    """Admit only the released public value type, never an ORM row or dict."""
+    if not isinstance(value, TaxDeterminationSetV1):
+        raise TaxAdapterRefusal(
+            f"expected dotmac_tax.TaxDeterminationSetV1, got {type(value).__name__}"
+        )
+    return value
+
+
+def _verify_inclusive_arithmetic(result: TaxDeterminationSetV1) -> None:
     """Re-derive the set's own totals rather than trusting them.
 
-    `ApplyTaxDeterminationSetV1.__post_init__` already proves the components sum
-    to the set's tax and that `net + tax == gross`.  What is left, and what only
+    `TaxDeterminationSetV1.__post_init__` already proves the components sum to
+    the set's tax and that `net + tax == gross`. What is left, and what only
     makes sense here, is the relationship of `source_amount` to those totals,
     because it encodes the one thing ERP is trying to stop modelling as data:
 
@@ -331,29 +370,29 @@ def _verify_inclusive_arithmetic(apply: ApplyTaxDeterminationSetV1) -> None:
     - an INCLUSIVE set had its tax extracted FROM the source amount, so
       `source == gross`.
 
-    The a2 candidate deliberately refuses an inclusive component combined with
+    The public a3 contract refuses an inclusive component combined with
     any other component, because the source amount is otherwise ambiguous. That
     refusal is mirrored here rather than assumed: a set that reached ERP with an
     inclusive component alongside others would be a module defect, and posting
     it would silently pick one of two incompatible readings of `source_amount`.
     """
-    inclusive = [c for c in apply.components if c.inclusive]
-    if inclusive and len(apply.components) > 1:
+    inclusive = [c for c in result.components if c.inclusive]
+    if inclusive and len(result.components) > 1:
         raise TaxAdapterRefusal(
             "an inclusive component cannot be combined with any other "
-            f"component (set has {len(apply.components)}); the source amount "
+            f"component (set has {len(result.components)}); the source amount "
             "is ambiguous and ERP will not choose a reading"
         )
     if inclusive:
-        if apply.source_amount != apply.gross_amount:
+        if result.source_amount != result.gross_amount:
             raise TaxAdapterRefusal(
-                f"inclusive set: source {apply.source_amount.amount} must equal "
-                f"gross {apply.gross_amount.amount}"
+                f"inclusive set: source {result.source_amount.amount} must equal "
+                f"gross {result.gross_amount.amount}"
             )
-    elif apply.source_amount != apply.net_amount:
+    elif result.source_amount != result.net_amount:
         raise TaxAdapterRefusal(
-            f"exclusive set: source {apply.source_amount.amount} must equal net "
-            f"{apply.net_amount.amount}"
+            f"exclusive set: source {result.source_amount.amount} must equal net "
+            f"{result.net_amount.amount}"
         )
 
 
@@ -414,29 +453,146 @@ def _component_lines(
     ]
 
 
-def project_determination_set(
-    apply: ApplyTaxDeterminationSetV1,
+def _document_type(source_fact: ERPSourceTaxFactV1) -> str:
+    document_types = _DOCUMENT_TYPE_BY_FAMILY.get(source_fact.family)
+    if document_types is None:
+        raise TaxAdapterRefusal(
+            f"source family {source_fact.family.value!r} has no C2 consequence "
+            "binding; settlement withholding and later cohorts remain sealed"
+        )
+    return document_types[1 if source_fact.reversal else 0]
+
+
+def _verify_source_binding(
+    result: TaxDeterminationSetV1,
+    source_fact: ERPSourceTaxFactV1,
     *,
+    expected_fingerprint: str,
+) -> None:
+    """Prove the result belongs to the exact ERP fact being applied.
+
+    The application context intentionally carries no tenant, document, line,
+    correlation or reversal fields. Those are authoritative on the submitted
+    source fact and accepting a second copy would permit a valid determination
+    to be rebound to another ERP consequence.
+    """
+    if not isinstance(source_fact, ERPSourceTaxFactV1):
+        raise TaxAdapterRefusal(
+            f"expected an ERPSourceTaxFactV1, got {type(source_fact).__name__}"
+        )
+    _document_type(source_fact)
+    derived_source_version = source_fact_content_version(source_fact)
+    if source_fact.source_version != derived_source_version:
+        raise TaxAdapterRefusal(
+            "ERP source version does not match the submitted source content "
+            f"({source_fact.source_version!r} != {derived_source_version!r}); "
+            "refusing a stale or rebound source fact"
+        )
+    if source_fact.fact_kind != source_fact.family.value:
+        raise TaxAdapterRefusal(
+            "source fact kind does not identify its mapped ERP family "
+            f"({source_fact.fact_kind!r} != {source_fact.family.value!r})"
+        )
+
+    if source_fact.family is SourceFactFamily.AR_INVOICE_LINE:
+        if source_fact.line_id is None:
+            raise TaxAdapterRefusal("AR invoice-line tax requires a source line id")
+        expected_source_ref = f"erp:ar.invoice_line:{source_fact.line_id}"
+        expected_evidence_ref = f"erp:ar.invoice:{source_fact.document_id}"
+    elif source_fact.family is SourceFactFamily.AP_INVOICE_LINE:
+        if source_fact.line_id is None:
+            raise TaxAdapterRefusal("AP invoice-line tax requires a source line id")
+        expected_source_ref = f"erp:ap.supplier_invoice_line:{source_fact.line_id}"
+        expected_evidence_ref = f"erp:ap.supplier_invoice:{source_fact.document_id}"
+    else:
+        expected_source_ref = f"erp:payroll.salary_slip:{source_fact.document_id}:paye"
+        expected_evidence_ref = source_fact.evidence_ref
+
+    if source_fact.source_ref != expected_source_ref:
+        raise TaxAdapterRefusal(
+            "source reference does not bind to the ERP document/line identity "
+            f"({source_fact.source_ref!r} != {expected_source_ref!r})"
+        )
+    if source_fact.evidence_ref != expected_evidence_ref:
+        raise TaxAdapterRefusal(
+            "source evidence does not bind to the ERP document identity "
+            f"({source_fact.evidence_ref!r} != {expected_evidence_ref!r})"
+        )
+
+    expected_values = {
+        "tenant": source_fact.organization_id,
+        "jurisdiction": source_fact.jurisdiction_id,
+        "occurred date": source_fact.occurred_on,
+        "fact kind": source_fact.fact_kind,
+        "recognition basis": source_fact.recognition_basis_code,
+        "transaction side": source_fact.transaction_side.value,
+        "source amount": source_fact.base_amount,
+        "source reference": source_fact.source_ref,
+        "source version": source_fact.source_version,
+        "evidence reference": source_fact.evidence_ref,
+        "counterparty reference": source_fact.counterparty_ref,
+        "supply reference": source_fact.supply_ref,
+        "place reference": source_fact.place_ref,
+    }
+    result_values = {
+        "tenant": result.tenant_id,
+        "jurisdiction": result.jurisdiction_id,
+        "occurred date": result.occurred_on,
+        "fact kind": result.fact_kind,
+        "recognition basis": result.recognition_basis_code,
+        "transaction side": result.transaction_side,
+        "source amount": result.source_amount,
+        "source reference": result.source_ref,
+        "source version": result.source_version,
+        "evidence reference": result.evidence_ref,
+        "counterparty reference": result.counterparty_ref,
+        "supply reference": result.supply_ref,
+        "place reference": result.place_ref,
+    }
+    for label, expected in expected_values.items():
+        actual = result_values[label]
+        if actual != expected:
+            raise TaxAdapterRefusal(
+                f"determination {label} does not match the submitted ERP source "
+                f"fact ({actual!r} != {expected!r})"
+            )
+    if result.source_fingerprint != expected_fingerprint:
+        raise TaxAdapterRefusal(
+            "determination fingerprint changed since ERP submitted the fact "
+            f"({result.source_fingerprint!r} != {expected_fingerprint!r}); "
+            "refusing the whole source row"
+        )
+
+
+def project_determination_set(
+    result: TaxDeterminationSetV1,
+    *,
+    source_fact: ERPSourceTaxFactV1,
+    application: TaxApplicationContextV1,
     accounts: TaxAccountMap,
     expected_fingerprint: str,
     fiscal_period_id: UUID,
 ) -> ConsequencePosting:
-    """Verify, resolve and project. No write, no session, no module import.
+    """Verify, resolve and project a public module result. No write or session.
 
-    `expected_fingerprint` is the fingerprint ERP recorded when it SUBMITTED the
-    source fact.  Comparing it here is the check the boundary document asks for
-    ("changed fingerprints refuse the whole source row") and it is the reason a
-    set that was quietly re-determined after the document was priced cannot be
-    posted against it.
+    ``source_fact`` is the exact typed observation ERP submitted. Its tenant,
+    source/document/line identity, version, evidence, direction and correlation
+    are compared or used directly; the application context cannot supply a
+    conflicting copy. ``expected_fingerprint`` is the fingerprint ERP recorded
+    for that submission, so a quietly re-determined set is also refused.
 
     `fiscal_period_id` is `PeriodGuardService.require_open_period(...)`'s return
     value.  It is a required argument rather than an internal lookup so that a
     pure function can still make "closed fiscal periods refuse the row" a
     precondition a caller cannot skip.
     """
-    if not isinstance(apply, ApplyTaxDeterminationSetV1):
+    result = _require_public_set(result)
+    _verify_source_binding(
+        result, source_fact, expected_fingerprint=expected_fingerprint
+    )
+    if not isinstance(application, TaxApplicationContextV1):
         raise TaxAdapterRefusal(
-            f"expected an ApplyTaxDeterminationSetV1, got {type(apply).__name__}"
+            f"expected a TaxApplicationContextV1, got {type(application).__name__}"
         )
     if not isinstance(accounts, TaxAccountMap):
         raise TaxAdapterRefusal(
@@ -447,19 +603,44 @@ def project_determination_set(
             "an open fiscal period id is required; pass the value "
             "PeriodGuardService.require_open_period() returned"
         )
-    if apply.source_fingerprint != expected_fingerprint:
+    if result.tax_amount.currency.code != application.functional_currency_code:
         raise TaxAdapterRefusal(
-            "determination fingerprint changed since ERP submitted the fact "
-            f"({apply.source_fingerprint!r} != {expected_fingerprint!r}); "
-            "refusing the whole source row"
+            "foreign-currency tax consequences are sealed until C3 carries a "
+            "persisted FX observation with pair, type, date and evidence "
+            f"({result.tax_amount.currency.code} != "
+            f"{application.functional_currency_code})"
         )
-    _verify_inclusive_arithmetic(apply)
+    expected_consequence = _CONSEQUENCE_BY_TRANSACTION_SIDE.get(result.transaction_side)
+    if expected_consequence is None:
+        if result.transaction_side == "withholding":
+            raise TaxAdapterRefusal(
+                "settlement withholding is sealed until cohort 4 distinguishes "
+                "customer WHT receivable from supplier WHT payable"
+            )
+        raise TaxAdapterRefusal(
+            "determination has unsupported transaction side "
+            f"{result.transaction_side!r}"
+        )
+    if application.consequence is not expected_consequence:
+        raise TaxAdapterRefusal(
+            "ERP consequence contradicts the determination transaction side: "
+            f"{result.transaction_side!r} requires "
+            f"{expected_consequence.value!r}, got "
+            f"{application.consequence.value!r}"
+        )
+    _verify_inclusive_arithmetic(result)
 
     lines: list[ConsequencePostingLine] = []
     reportable_zero: list[TaxDeterminationComponentV1] = []
-    for component in apply.components:
+    for component in result.components:
+        if component.determination_set_id != result.determination_set_id:
+            raise TaxAdapterRefusal(
+                f"component {component.determination_id} belongs to determination "
+                f"set {component.determination_set_id}, not "
+                f"{result.determination_set_id}"
+            )
         if not component.has_tax_consequence:
-            if component.treatment_code not in TREATMENTS_WITHOUT_A_TAX_CONSEQUENCE:
+            if not component.is_reportable_zero:
                 raise TaxAdapterRefusal(
                     f"component {component.component_sequence} is "
                     f"{component.treatment_code} with zero tax; a standard-rated "
@@ -474,9 +655,9 @@ def project_determination_set(
         lines.extend(
             _component_lines(
                 component,
-                consequence=apply.consequence,
+                consequence=application.consequence,
                 accounts=accounts,
-                reversal=apply.reversal,
+                reversal=source_fact.reversal,
             )
         )
 
@@ -497,45 +678,49 @@ def project_determination_set(
     # obligation. The components are returned instead, with `is_postable` False
     # and no counterpart line, and `to_journal_input()` yields `None`.
     if lines:
-        total_tax = apply.tax_amount.amount
-        counterpart_credit = apply.consequence is AccountingConsequence.AP_INPUT_TAX
-        if apply.reversal:
+        total_tax = result.tax_amount.amount
+        counterpart_credit = (
+            application.consequence is AccountingConsequence.AP_INPUT_TAX
+        )
+        if source_fact.reversal:
             counterpart_credit = not counterpart_credit
         lines.append(
             ConsequencePostingLine(
-                account_id=apply.counterpart_account_id,
+                account_id=application.counterpart_account_id,
                 debit_amount=_ZERO if counterpart_credit else total_tax,
                 credit_amount=total_tax if counterpart_credit else _ZERO,
-                description=f"Tax counterpart for {apply.source_ref}",
+                description=f"Tax counterpart for {result.source_ref}",
             )
         )
 
     posting = ConsequencePosting(
-        organization_id=apply.organization_id,
-        determination_set_id=apply.determination_set_id,
-        source_ref=apply.source_ref,
-        source_version=apply.source_version,
-        source_fingerprint=apply.source_fingerprint,
-        consequence=apply.consequence,
-        document_id=apply.document_id,
-        document_type=apply.document_type,
-        line_id=apply.line_id,
-        entry_date=apply.occurred_on,
-        posting_date=apply.posting_date,
+        organization_id=source_fact.organization_id,
+        determination_set_id=result.determination_set_id,
+        source_ref=result.source_ref,
+        source_version=result.source_version,
+        source_fingerprint=result.source_fingerprint,
+        result_fingerprint=result.result_fingerprint,
+        consequence=application.consequence,
+        document_id=source_fact.document_id,
+        document_type=_document_type(source_fact),
+        line_id=source_fact.line_id,
+        entry_date=source_fact.occurred_on,
+        posting_date=application.posting_date,
         fiscal_period_id=fiscal_period_id,
-        currency_code=apply.currency_code,
-        exchange_rate=apply.exchange_rate,
+        currency_code=result.tax_amount.currency.code,
+        exchange_rate=Decimal("1"),
         lines=tuple(lines),
         reportable_zero_components=tuple(reportable_zero),
         description=(
-            apply.description
-            or f"{apply.consequence.value} for {apply.document_type} {apply.source_ref}"
+            application.description
+            or f"{application.consequence.value} for "
+            f"{_document_type(source_fact)} {result.source_ref}"
         ),
-        correlation_ref=apply.correlation_ref,
-        business_unit_id=apply.business_unit_id,
-        cost_center_id=apply.cost_center_id,
-        project_id=apply.project_id,
-        segment_id=apply.segment_id,
+        correlation_ref=source_fact.correlation_ref,
+        business_unit_id=application.business_unit_id,
+        cost_center_id=application.cost_center_id,
+        project_id=application.project_id,
+        segment_id=application.segment_id,
     )
     if posting.total_debit != posting.total_credit:
         raise TaxAdapterRefusal(
