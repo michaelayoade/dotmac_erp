@@ -72,6 +72,5 @@ def test_authorization_profile_rejects_an_unknown_grant(
     )
 
     assert profile.validate_authorization_profile() == [
-        "Authorization grants reference undeclared permissions: "
-        "payments:undeclared"
+        "Authorization grants reference undeclared permissions: payments:undeclared"
     ]
