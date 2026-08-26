@@ -11,7 +11,6 @@ SKIP_FILES = {
     "app/api/deps.py",
     "app/services/auth_dependencies.py",
     "app/api/finance/fx.py",
-    "app/api/sync/dotmac_crm.py",
     "app/api/finance/rpt.py",
     "app/api/finance/banking.py",
     "app/api/finance/gl.py",

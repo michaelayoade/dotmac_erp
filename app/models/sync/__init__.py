@@ -1,11 +1,15 @@
 """
 Sync Models - External system sync state tracking.
 
-Tracks migration state from external systems (ERPNext, DotMac CRM) to DotMac ERP.
+Tracks typed observations and migration state from external systems.
 """
 
-from .dotmac_crm_sync import CRMEntityType, CRMSyncMapping, CRMSyncStatus
 from .integration_config import IntegrationConfig, IntegrationType
+from .source_correlation import (
+    SourceCorrelation,
+    SourceCorrelationStatus,
+    SourceEntityType,
+)
 from .staging import (
     StagingDepartment,
     StagingDesignation,
@@ -34,8 +38,7 @@ __all__ = [
     "StagingEmploymentType",
     "StagingStatus",
     "StagingSyncBatch",
-    # DotMac CRM sync
-    "CRMEntityType",
-    "CRMSyncMapping",
-    "CRMSyncStatus",
+    "SourceCorrelation",
+    "SourceCorrelationStatus",
+    "SourceEntityType",
 ]
