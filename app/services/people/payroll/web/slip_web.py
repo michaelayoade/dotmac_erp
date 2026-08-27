@@ -39,6 +39,7 @@ from app.services.people.payroll import (
 )
 from app.services.people.payroll.eligibility import payroll_employee_eligibility_clause
 from app.services.people.payroll.paye_calculator import PAYECalculator
+from app.services.people.payroll_reporting import REPORTABLE_SLIP_STATUSES
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -85,6 +86,9 @@ class SlipWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Render salary slips list page."""
         org_id = coerce_uuid(auth.organization_id)
+        start_date = parse_date(request.query_params.get("start_date"))
+        end_date = parse_date(request.query_params.get("end_date"))
+        status_group = request.query_params.get("status_group") or ""
         try:
             per_page = int(request.query_params.get("limit", str(DEFAULT_PAGE_SIZE)))
         except (TypeError, ValueError):
@@ -102,6 +106,13 @@ class SlipWebService:
         status_enum = parse_slip_status(status)
         if status_enum:
             query = query.where(SalarySlip.status == status_enum)
+        elif status_group == "reportable":
+            query = query.where(SalarySlip.status.in_(REPORTABLE_SLIP_STATUSES))
+
+        if start_date:
+            query = query.where(SalarySlip.start_date >= start_date)
+        if end_date:
+            query = query.where(SalarySlip.start_date <= end_date)
 
         query = query.order_by(SalarySlip.created_at.desc())
         result = paginate(db, query, PaginationParams.from_page(page, per_page))
@@ -128,6 +139,40 @@ class SlipWebService:
             )
             status_counts[s.value] = count
 
+        active_filters = []
+        if status_enum:
+            active_filters.append(
+                {
+                    "name": "status",
+                    "value": status_enum.value,
+                    "display_value": f"Status: {status_enum.value.title()}",
+                }
+            )
+        elif status_group == "reportable":
+            active_filters.append(
+                {
+                    "name": "status_group",
+                    "value": "reportable",
+                    "display_value": "Status: Finalized payroll",
+                }
+            )
+        if start_date:
+            active_filters.append(
+                {
+                    "name": "start_date",
+                    "value": start_date.isoformat(),
+                    "display_value": f"From: {start_date.strftime('%d %b %Y')}",
+                }
+            )
+        if end_date:
+            active_filters.append(
+                {
+                    "name": "end_date",
+                    "value": end_date.isoformat(),
+                    "display_value": f"To: {end_date.strftime('%d %b %Y')}",
+                }
+            )
+
         context = base_context(request, auth, "Salary Slips", "payroll", db=db)
         context["request"] = request
         context.update(
@@ -135,6 +180,9 @@ class SlipWebService:
                 "slips": slips,
                 "search": search or "",
                 "status": status or "",
+                "status_group": status_group,
+                "start_date": start_date.isoformat() if start_date else "",
+                "end_date": end_date.isoformat() if end_date else "",
                 "page": page,
                 "total_pages": total_pages,
                 "total_count": total,
@@ -144,6 +192,7 @@ class SlipWebService:
                 "has_next": page < total_pages,
                 "status_counts": status_counts,
                 "statuses": SLIP_STATUSES,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "people/payroll/slips.html", context)
@@ -158,6 +207,9 @@ class SlipWebService:
     ) -> Response:
         """Export salary slips to CSV."""
         org_id = coerce_uuid(auth.organization_id)
+        start_date = parse_date(request.query_params.get("start_date"))
+        end_date = parse_date(request.query_params.get("end_date"))
+        status_group = request.query_params.get("status_group") or ""
 
         query = (
             select(SalarySlip)
@@ -181,6 +233,13 @@ class SlipWebService:
         status_enum = parse_slip_status(status)
         if status_enum:
             query = query.where(SalarySlip.status == status_enum)
+        elif status_group == "reportable":
+            query = query.where(SalarySlip.status.in_(REPORTABLE_SLIP_STATUSES))
+
+        if start_date:
+            query = query.where(SalarySlip.start_date >= start_date)
+        if end_date:
+            query = query.where(SalarySlip.start_date <= end_date)
 
         slips = db.scalars(query.order_by(SalarySlip.created_at.desc())).all()
 
