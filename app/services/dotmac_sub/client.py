@@ -1132,6 +1132,30 @@ class DotmacSubClient:
                     max(time.perf_counter() - started_at, 0.0),
                 )
 
+    def relay_paystack_webhook(
+        self,
+        *,
+        raw_payload: bytes,
+        signature: str,
+    ) -> dict[str, Any]:
+        """Relay the exact Paystack-signed bytes to Sub's existing ingress."""
+
+        if not raw_payload or not signature.strip():
+            raise ValueError("Paystack payload and signature are required")
+        try:
+            response = self.client.post(
+                "/payment-events/paystack",
+                content=raw_payload,
+                headers={"X-Paystack-Signature": signature.strip()},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise DotmacSubError("Selfcare rejected the Paystack relay") from exc
+        result = response.json()
+        if not isinstance(result, dict):
+            raise DotmacSubError("Selfcare returned an invalid Paystack relay result")
+        return result
+
     def _paginate(
         self,
         endpoint: str,
