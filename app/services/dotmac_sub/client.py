@@ -1132,6 +1132,21 @@ class DotmacSubClient:
                     max(time.perf_counter() - started_at, 0.0),
                 )
 
+    def reconcile_paystack_reference(self, reference: str) -> dict[str, Any]:
+        """Notify Sub to independently verify and reconcile one Paystack reference."""
+
+        normalized = reference.strip()
+        if not normalized:
+            raise ValueError("Paystack reference is required")
+        result = self._request(
+            "POST",
+            "/payment-events/reconcile-reference",
+            json={"provider_type": "paystack", "reference": normalized},
+        )
+        if not isinstance(result, dict):
+            raise DotmacSubError("dotmac_sub returned an invalid reconciliation result")
+        return result
+
     def _paginate(
         self,
         endpoint: str,
