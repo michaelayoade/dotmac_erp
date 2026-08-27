@@ -3,6 +3,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.api.finance.payments import paystack_webhook
+from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
+
+
+def test_reconcile_paystack_reference_posts_minimal_notice() -> None:
+    client = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token="key"))
+    client._request = MagicMock(  # type: ignore[method-assign]
+        return_value={
+            "intent_id": "8d902bb5-54aa-492c-a579-28b9a07d34df",
+            "disposition": "recovered",
+            "payment_id": "c0ab8816-e8c7-4507-8a44-79bf19c14985",
+        }
+    )
+
+    result = client.reconcile_paystack_reference(" DMAC-SELFCARE-1 ")
+
+    assert result["disposition"] == "recovered"
+    client._request.assert_called_once_with(
+        "POST",
+        "/payment-events/reconcile-reference",
+        json={"provider_type": "paystack", "reference": "DMAC-SELFCARE-1"},
+    )
 
 
 @pytest.mark.asyncio
