@@ -1016,6 +1016,7 @@ class EmployeeService:
             employee.dotmac_sub_access_enabled,
             tuple(employee.dotmac_sub_roles or []),
         )
+        prior_department_id = employee.department_id
 
         provided_fields: set[str] = set(getattr(data, "provided_fields", set()))
         use_provided_fields = bool(provided_fields)
@@ -1066,6 +1067,9 @@ class EmployeeService:
             employee.department_id = data.department_id
         elif use_provided_fields and "department_id" in provided_fields:
             employee.department_id = None
+
+        if employee.department_id != prior_department_id:
+            self._sync_scheduling_department(employee)
 
         # Update designation
         if data.designation_id is not None:
@@ -1234,6 +1238,22 @@ class EmployeeService:
             self._enqueue_staff_sync(employee)
 
         return employee
+
+    def _sync_scheduling_department(self, employee: Employee) -> None:
+        """Mirror HR department changes into active scheduling assignments."""
+        from app.services.people.scheduling import SchedulingService
+
+        result = SchedulingService(self.db).sync_employee_department(
+            org_id=employee.organization_id,
+            employee_id=employee.employee_id,
+            new_department_id=employee.department_id,
+        )
+        if result["assignments_updated"] or result["assignments_ended"]:
+            logger.info(
+                "Employee %s department change synced to scheduling assignments: %s",
+                employee.employee_id,
+                result,
+            )
 
     # =========================================================================
     # User Linking / Credentials
