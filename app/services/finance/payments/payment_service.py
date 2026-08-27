@@ -4,7 +4,9 @@ Payment Service.
 Handles payment intent creation and processing for Paystack integration.
 """
 
+import enum
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 try:
@@ -44,6 +46,49 @@ from app.services.finance.platform.org_context import org_context_service
 from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
+
+
+TRANSFER_POLL_MIN_AGE = timedelta(minutes=2)
+"""How old an in-flight transfer must be before the reconciler will poll it.
+
+Paystack webhooks normally land within seconds; anything older than this has
+plausibly lost its webhook.
+"""
+
+TRANSFER_POLL_MAX_ATTEMPTS = 10
+"""Circuit breaker. After this many failed poll attempts the intent is marked
+FAILED rather than polled forever. At the scheduled cadence of one pass every
+two minutes that is roughly twenty minutes of retrying.
+
+This lived in ``app.tasks.expense`` while the worker still made the decision
+itself; it belongs with the owner of the column that decision writes.
+"""
+
+
+class TransferPollOutcome(str, enum.Enum):
+    """What one reconciliation pass concluded about one transfer intent."""
+
+    COMPLETED = "completed"
+    FAILED = "failed"
+    STILL_PENDING = "still_pending"
+    ABANDONED = "abandoned"
+    ERRORED = "errored"
+    SKIPPED = "skipped"
+
+
+@dataclass(frozen=True)
+class TransferPollResult:
+    """Result of reconciling one transfer intent.
+
+    Returned instead of leaving the caller to read ``intent.status`` back:
+    a scheduled worker that reads the status column to decide what happened is
+    one refactor away from writing it.
+    """
+
+    intent_id: UUID
+    outcome: TransferPollOutcome
+    poll_count: int
+    error: str | None = None
 
 
 class PaymentService:
@@ -1662,6 +1707,319 @@ class PaymentService:
             )
 
         return intent
+
+    # ------------------------------------------------------------------
+    # Scheduled reconciliation of in-flight transfers
+    #
+    # `app.tasks.expense.poll_stuck_expense_transfers` used to select these
+    # intents, promote PENDING to PROCESSING, count the attempts and stamp
+    # FAILED itself — a second writer of `PaymentIntent.status` with no tests
+    # around it. The decisions live here now; the worker only supplies the
+    # sessions and aggregates what it is told.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def find_stale_pending_transfer_intents(
+        db: Session,
+        *,
+        now: datetime | None = None,
+    ) -> dict[UUID, list[UUID]]:
+        """Outbound expense intents that expired before a transfer was started.
+
+        Selection only — the caller runs this under a cross-organization
+        session to learn WHICH tenants have work, and every decision about a
+        selected row is re-taken (and re-proved) inside that tenant's own
+        session by :meth:`expire_stale_pending_transfer`.
+
+        Returns organization id -> intent ids.
+        """
+        moment = now or datetime.now(UTC)
+        rows = db.execute(
+            select(PaymentIntent.intent_id, PaymentIntent.organization_id).where(
+                PaymentIntent.direction == PaymentDirection.OUTBOUND,
+                PaymentIntent.status == PaymentIntentStatus.PENDING,
+                PaymentIntent.source_type == "EXPENSE_CLAIM",
+                PaymentIntent.transfer_code.is_(None),
+                PaymentIntent.expires_at.isnot(None),
+                PaymentIntent.expires_at <= moment,
+            )
+        ).all()
+        return PaymentService._group_by_organization(rows)
+
+    @staticmethod
+    def find_stuck_transfer_intents(
+        db: Session,
+        *,
+        now: datetime | None = None,
+        min_age: timedelta = TRANSFER_POLL_MIN_AGE,
+        max_poll_attempts: int = TRANSFER_POLL_MAX_ATTEMPTS,
+    ) -> dict[UUID, list[UUID]]:
+        """Outbound expense transfers that have a transfer code but no verdict.
+
+        Includes PENDING rows that already carry a ``transfer_code``: the money
+        may have left even though the row never reached PROCESSING, so they are
+        reconciled rather than assumed dead.
+
+        Selection only; see :meth:`find_stale_pending_transfer_intents`.
+
+        Returns organization id -> intent ids.
+        """
+        cutoff = (now or datetime.now(UTC)) - min_age
+        rows = db.execute(
+            select(PaymentIntent.intent_id, PaymentIntent.organization_id).where(
+                PaymentIntent.direction == PaymentDirection.OUTBOUND,
+                PaymentIntent.status.in_(
+                    [
+                        PaymentIntentStatus.PROCESSING,
+                        PaymentIntentStatus.PENDING,
+                    ]
+                ),
+                PaymentIntent.source_type == "EXPENSE_CLAIM",
+                PaymentIntent.transfer_code.isnot(None),
+                PaymentIntent.created_at < cutoff,
+                PaymentIntent.poll_count < max_poll_attempts,
+            )
+        ).all()
+        return PaymentService._group_by_organization(rows)
+
+    @staticmethod
+    def _group_by_organization(rows) -> dict[UUID, list[UUID]]:
+        grouped: dict[UUID, list[UUID]] = {}
+        for intent_id, organization_id in rows:
+            grouped.setdefault(organization_id, []).append(intent_id)
+        return grouped
+
+    def resolve_transfer_polling_config(self) -> PaystackConfig | None:
+        """Paystack credentials for this organization, or None if unconfigured.
+
+        Deliberately distinct from the API layer's config builder: this one
+        reads the separately stored ``paystack_webhook_secret`` and tolerates
+        it being absent, because the polling path never verifies a signature.
+        Preserved as it was in the worker rather than unified — unifying the
+        webhook secret across paths is a signature-verification change and does
+        not belong in a single-writer fix.
+        """
+        secret_key = resolve_value(
+            self.db, SettingDomain.payments, "paystack_secret_key"
+        )
+        public_key = resolve_value(
+            self.db, SettingDomain.payments, "paystack_public_key"
+        )
+        webhook_secret = resolve_value(
+            self.db, SettingDomain.payments, "paystack_webhook_secret"
+        )
+        if not secret_key or not public_key:
+            return None
+        return PaystackConfig(
+            secret_key=str(secret_key),
+            public_key=str(public_key),
+            webhook_secret=str(webhook_secret or ""),
+        )
+
+    def _lock_transfer_intent(self, intent_id: UUID) -> PaymentIntent | None:
+        """Load one of this organization's intents FOR UPDATE, refreshed.
+
+        ``populate_existing`` matters as much as the lock. A worker holds one
+        session across a whole tenant's batch and makes a network call per
+        intent, so an intent loaded at the top of the batch can be minutes
+        stale by the time it is acted on — and SQLAlchemy would hand back the
+        identity-mapped copy, showing PENDING for a row a webhook has since
+        moved to COMPLETED. Writing the worker's view back over that is how a
+        settled transfer gets re-posted to the ledger.
+        """
+        return self.db.scalars(
+            select(PaymentIntent)
+            .where(
+                PaymentIntent.intent_id == coerce_uuid(intent_id),
+                PaymentIntent.organization_id == self.organization_id,
+            )
+            .with_for_update(nowait=False)
+            .execution_options(populate_existing=True)
+        ).one_or_none()
+
+    @staticmethod
+    def _is_stale_pending_transfer(intent: PaymentIntent, now: datetime) -> bool:
+        """The premise :meth:`find_stale_pending_transfer_intents` selected on."""
+        return (
+            intent.direction == PaymentDirection.OUTBOUND
+            and intent.status == PaymentIntentStatus.PENDING
+            and intent.source_type == "EXPENSE_CLAIM"
+            and intent.transfer_code is None
+            and intent.expires_at is not None
+            and intent.expires_at <= now
+        )
+
+    def expire_stale_pending_transfer(
+        self,
+        intent_id: UUID,
+        *,
+        now: datetime | None = None,
+    ) -> bool:
+        """Expire one intent whose transfer was never initiated. True if expired.
+
+        The premise is re-proved here, under a row lock, because it was
+        established in a different session: a transfer initiated in that gap
+        has already moved the row to PROCESSING and may have moved money.
+        Stamping EXPIRED over that would hide an in-flight payout.
+        """
+        moment = now or datetime.now(UTC)
+        intent = self._lock_transfer_intent(intent_id)
+        if intent is None:
+            logger.info(
+                "Skipped expiring intent %s - not found in organization %s",
+                intent_id,
+                self.organization_id,
+            )
+            return False
+
+        if not self._is_stale_pending_transfer(intent, moment):
+            logger.info(
+                "Skipped expiring intent %s - state moved (status=%s, transfer_code=%s)",
+                intent.intent_id,
+                intent.status.value,
+                intent.transfer_code,
+            )
+            return False
+
+        intent.status = PaymentIntentStatus.EXPIRED
+        self.db.flush()
+        logger.info(
+            "Expired stale PENDING transfer intent %s (created %s)",
+            intent.intent_id,
+            intent.created_at,
+        )
+        return True
+
+    def reconcile_stuck_transfer(
+        self,
+        intent_id: UUID,
+        paystack_config: PaystackConfig,
+        *,
+        max_poll_attempts: int = TRANSFER_POLL_MAX_ATTEMPTS,
+    ) -> TransferPollResult:
+        """Ask Paystack what happened to one in-flight transfer and settle it.
+
+        Owns every status decision the scheduled poller used to make inline:
+        the promotion of a PENDING-but-initiated intent to PROCESSING, the
+        attempt counting, and the circuit breaker that gives up.
+
+        Never raises for a poll failure: the caller is a batch job and one
+        unreachable transfer must not abandon the rest of the tenant's work.
+        """
+        intent = self._lock_transfer_intent(intent_id)
+        if intent is None:
+            return TransferPollResult(
+                intent_id=coerce_uuid(intent_id),
+                outcome=TransferPollOutcome.SKIPPED,
+                poll_count=0,
+                error="intent not found in this organization",
+            )
+
+        # Re-proved under the lock, for the reason in `_lock_transfer_intent`:
+        # a webhook may have settled this intent since it was selected, and a
+        # settled transfer is not the poller's to reopen.
+        if intent.status not in (
+            PaymentIntentStatus.PENDING,
+            PaymentIntentStatus.PROCESSING,
+        ):
+            logger.info(
+                "Skipped polling intent %s - already settled as %s",
+                intent.intent_id,
+                intent.status.value,
+            )
+            return TransferPollResult(
+                intent_id=intent.intent_id,
+                outcome=TransferPollOutcome.SKIPPED,
+                poll_count=intent.poll_count,
+                error=f"already settled as {intent.status.value}",
+            )
+
+        intent.poll_count += 1
+
+        try:
+            # An intent can hold a transfer_code while still PENDING when the
+            # initiate call was ambiguous (timeout, duplicate reference).
+            # poll_transfer_status only reconciles PROCESSING rows, so promote
+            # it first: the money is in flight either way.
+            if intent.status == PaymentIntentStatus.PENDING:
+                intent.status = PaymentIntentStatus.PROCESSING
+                self.db.flush()
+
+            self.poll_transfer_status(intent, paystack_config)
+        except Exception as exc:  # noqa: BLE001 - recorded, never re-raised
+            return self._record_transfer_poll_failure(
+                intent=intent,
+                error_message=str(exc),
+                max_poll_attempts=max_poll_attempts,
+            )
+
+        if intent.status == PaymentIntentStatus.COMPLETED:
+            outcome = TransferPollOutcome.COMPLETED
+        elif intent.status == PaymentIntentStatus.FAILED:
+            outcome = TransferPollOutcome.FAILED
+        else:
+            outcome = TransferPollOutcome.STILL_PENDING
+
+        return TransferPollResult(
+            intent_id=intent.intent_id,
+            outcome=outcome,
+            poll_count=intent.poll_count,
+        )
+
+    def _record_transfer_poll_failure(
+        self,
+        *,
+        intent: PaymentIntent,
+        error_message: str,
+        max_poll_attempts: int,
+    ) -> TransferPollResult:
+        """Record a failed poll attempt, and give up once the budget is spent.
+
+        Giving up writes FAILED directly rather than going through
+        `mark_transfer_failed`. That is the behaviour this path already had and
+        it is kept deliberately: `mark_transfer_failed` also reverts a PAID
+        claim and replaces `gateway_response`, and "we could not reach Paystack
+        ten times" is not the same claim as "Paystack told us this failed".
+        Whether an unreachable transfer should be settled as FAILED at all is a
+        real question, and not one to answer inside a single-writer fix.
+        """
+        intent.last_poll_error = error_message
+        logger.error(
+            "Failed to poll transfer %s (attempt %d/%d): %s",
+            intent.intent_id,
+            intent.poll_count,
+            max_poll_attempts,
+            error_message,
+        )
+
+        if intent.poll_count < max_poll_attempts:
+            return TransferPollResult(
+                intent_id=intent.intent_id,
+                outcome=TransferPollOutcome.ERRORED,
+                poll_count=intent.poll_count,
+                error=error_message,
+            )
+
+        intent.status = PaymentIntentStatus.FAILED
+        intent.gateway_response = {
+            **(intent.gateway_response or {}),
+            "poll_abandoned": True,
+            "poll_attempts": intent.poll_count,
+            "last_error": error_message,
+        }
+        self.db.flush()
+        logger.warning(
+            "Transfer %s marked FAILED after %d poll attempts: %s",
+            intent.intent_id,
+            intent.poll_count,
+            error_message,
+        )
+        return TransferPollResult(
+            intent_id=intent.intent_id,
+            outcome=TransferPollOutcome.ABANDONED,
+            poll_count=intent.poll_count,
+            error=error_message,
+        )
 
     def process_transfer_reversal(
         self,

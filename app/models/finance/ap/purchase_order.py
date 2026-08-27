@@ -164,7 +164,7 @@ class PurchaseOrder(Base):
     variation_id: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,
-        comment="CRM variation identifier for traceability",
+        comment="Source amendment identifier for traceability",
     )
 
     created_at: Mapped[datetime] = mapped_column(

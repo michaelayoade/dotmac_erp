@@ -1,6 +1,7 @@
 name: Engineering standards
 
 on:
+  workflow_dispatch: {}
   # `dev` is the promotion branch and `integration/**` carries multi-PR
   # adoption programmes (kernel migration). Without both, a pull request into
   # either runs no CI at all and the whole batch meets it for the first time

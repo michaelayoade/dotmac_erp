@@ -227,8 +227,12 @@ fi
 trap - ERR
 
 # Step 6: sync static files + restart worker/beat (only on a healthy deploy)
-echo "→ Syncing static files to Nginx..."
-"$SCRIPT_DIR/sync-static.sh"
+if [[ "${SKIP_STATIC_SYNC:-0}" == "1" ]]; then
+    echo "-> Skipping static file sync (SKIP_STATIC_SYNC=1)."
+else
+    echo "→ Syncing static files to Nginx..."
+    "$SCRIPT_DIR/sync-static.sh"
+fi
 # Recreate (not just restart) so worker/beat pick up the newly-pinned image.
 echo "→ Recreating worker and beat on the pinned image..."
 docker compose up -d worker beat

@@ -34,12 +34,12 @@ same database transaction. The current compatibility payload uses:
 
 | Field | Meaning |
 |---|---|
-| `omni_id` | Immutable Sub `FieldMaterialRequest.id`; the legacy name is temporary |
+| `source_request_id` | Immutable Sub `FieldMaterialRequest.id` |
 | `request_type` | `ISSUE` |
 | `status` | Requested ERP state, `submitted`; it never asks ERP to issue automatically |
 | `requested_by_email` | Staff identity used to resolve the ERP employee |
 | `schedule_date` | Date the operational need was approved |
-| `ticket_crm_id` | Compatibility reference only; it conveys no CRM authority |
+| `ticket_source_reference` | Opaque Sub ticket source reference |
 | `items` | Item code, quantity, UOM, source warehouse, and selected serials |
 | `remarks` | Operational context; never an inventory decision |
 
@@ -47,10 +47,9 @@ same database transaction. The current compatibility payload uses:
 identifier and immutable request body. An identical replay returns the existing
 ERP record. A conflicting body for the same identifier fails closed.
 
-The `crm_id` storage column and `omni_id` wire name are compatibility debt. For
-Sub requests they contain a Sub UUID, not CRM ownership. A later schema-only
-provenance migration may rename them after both clients pass parity; it must not
-create a second identity or writer meanwhile.
+The database and wire contract store `source_system` plus opaque
+`source_reference` fields. `source_request_id` remains the Sub request identifier; no
+provider-named identity field confers authority or creates a second identity.
 
 ## Outcome contract
 
@@ -85,10 +84,10 @@ projection independently. A changed ERP request identifier fails closed.
 
 ## Authority migration and cutover
 
-### Old paths
+### Retired paths
 
-- CRM can originate the ERP material-request sync path.
-- Sub manager actions can locally mark a request issued or fulfilled.
+- The CRM application, its direct route, task, client and credentials are retired.
+- Sub manager actions can no longer mark a request issued or fulfilled locally.
 
 ### New paths
 
@@ -105,19 +104,17 @@ are true:
    with `sub:material:write`;
 2. item, warehouse, employee, and serialized-stock parity checks pass;
 3. the Sub outbox worker and outcome reconciler are enabled and observed;
-4. no pending CRM-originated material request can race the same business need;
+4. ambiguous legacy correlations are sealed as `legacy_unknown` and cannot be retried;
 5. an end-to-end test proves `approved → pending_stock/issued → Sub projection`;
 6. dashboards/alerts cover pending, dead-lettered, and identity-conflict cases.
 
-The master ERP-sync setting and the per-flow owner must both be active. Before
-cutover, Sub creates no material outbox backlog. After cutover, code rejects the
-local Sub issue/fulfil actions. Rollback returns the ownership row to `crm`
-before disabling delivery; already accepted ERP requests remain ERP-owned and
-must be reconciled to completion.
+The master ERP-sync setting and the per-flow owner must both be active. After
+cutover, code rejects local Sub issue/fulfil actions. Rollback disables new
+delivery; already accepted ERP requests remain ERP-owned and must be reconciled
+to completion. It never restores the retired CRM runtime.
 
 ### Retirement gate
 
 After one agreed observation window with zero unexplained drift, remove the
-local Sub issue/fulfil endpoints and the CRM material-request origin path. The
-compatibility `omni_id`/`crm_id` naming can then be migrated separately with a
-backfill, unique-key parity proof, and rollback plan.
+local Sub issue/fulfil endpoints. The retired CRM origin path is already absent;
+ERP and Sub deploy the provider-neutral source-reference fields together.

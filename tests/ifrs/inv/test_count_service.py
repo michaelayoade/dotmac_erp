@@ -867,6 +867,38 @@ class TestPostCount:
         assert mock_count.posted_by_user_id == user_id
         assert mock_count.posted_at is not None
 
+    def test_missing_item_refuses_the_entire_count_post(
+        self, mock_db, org_id, mock_count, user_id
+    ):
+        """A variance line without its item must not be silently omitted."""
+        mock_count.status = CountStatus.COMPLETED
+        variance_line = MockCountLine(
+            count_id=mock_count.count_id,
+            variance_quantity=Decimal("2"),
+        )
+        mock_db.get.side_effect = lambda model, id: (
+            mock_count if id == mock_count.count_id else None
+        )
+        mock_db.scalars.return_value.all.return_value = [variance_line]
+
+        with patch(
+            "app.services.inventory.transaction.InventoryTransactionService.create_adjustment"
+        ) as mock_adjust:
+            with pytest.raises(HTTPException) as exc:
+                InventoryCountService.post_count(
+                    mock_db,
+                    org_id,
+                    mock_count.count_id,
+                    user_id,
+                )
+
+        assert exc.value.status_code == 404
+        assert str(variance_line.line_id) in str(exc.value.detail)
+        mock_adjust.assert_not_called()
+        assert mock_count.status == CountStatus.COMPLETED
+        assert mock_count.posted_by_user_id is None
+        assert mock_count.posted_at is None
+
 
 # ============ Tests for get_count_summary ============
 

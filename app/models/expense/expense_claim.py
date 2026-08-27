@@ -164,8 +164,9 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         ),
         UniqueConstraint(
             "organization_id",
-            "crm_id",
-            name="uq_expense_claim_org_crm_id",
+            "source_system",
+            "source_reference",
+            name="uq_expense_claim_org_source_ref",
         ),
         Index("idx_expense_claim_employee", "employee_id"),
         Index("idx_expense_claim_status", "organization_id", "status"),
@@ -392,12 +393,18 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=True,
     )
 
-    # DotMac CRM sync tracking (last_synced_at comes from ERPNextSyncMixin)
-    crm_id: Mapped[str | None] = mapped_column(
+    # Source-qualified intake correlation (last_synced_at is inherited).
+    source_system: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="local",
+        server_default=text("'local'"),
+    )
+    source_reference: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,
         index=True,
-        comment="DotMac CRM expense request ID (omni_id for idempotency)",
+        comment="Opaque idempotency key inside source_system",
     )
 
     # Notes

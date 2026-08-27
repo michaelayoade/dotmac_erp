@@ -20,7 +20,6 @@ def test_inbound_webhook_receivers_are_mounted():
     for expected in (
         "/dotmac-sub/webhook",
         "/dotmac-academy/webhook",
-        "/crm/webhook",
     ):
         assert any(p == expected or p.endswith(expected) for p in paths), (
             f"webhook receiver {expected} is not mounted on the app — "

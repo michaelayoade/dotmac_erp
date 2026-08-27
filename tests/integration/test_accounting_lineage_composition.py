@@ -1,4 +1,4 @@
-"""Apply `ac_0001_accounting` through ERP's REAL Alembic environment.
+"""Apply every composed module lineage through ERP's REAL Alembic environment.
 
 Gate A could only check declarations: that the effect names the module requires
 resolve, through ERP's bindings, onto revisions ERP runs.  It said so, and said
@@ -14,7 +14,8 @@ that constructs its own tables proves something about the test, not the deploy.
 
 Every composed module lineage is an independent ROOT with its own branch label:
 `fi_0001_stored_files` labels `files`, `ac_0001_accounting` labels `accounting`,
-and `im_0001_import_runs` labels `imports`.
+`im_0001_import_runs` labels `imports`, and `nu_0001_numbering` labels
+`numbering`; `tx_0003_result_fingerprint` is the reviewed head of `tax`.
 That is the design — a module owns its history so it can be released and pinned
 without ERP rewriting its graph — and it is why ERP's deploy path has always
 been `alembic upgrade heads`, plural.
@@ -48,6 +49,11 @@ different from what the author expected, silently.
    without that is a cross-tenant leak wearing a module's name.
 6. **The composed migration gate passes**, where the installed kernel ships one.
 
+Numbering is ERP's first selectable dual-plane module.  The assembly explicitly
+selects its tenant plane, so this rehearsal also proves all four tenant tables
+exist and all four platform tables are absent.  No runtime caller is imported
+or repointed by composing that storage.
+
 None of this enables anything.  `ACCOUNTING_COMPOSITION_ENABLED` stays false and
 no ERP writer is repointed; this is storage, proven to exist and to be shaped
 correctly, and nothing more.
@@ -66,6 +72,7 @@ from psycopg import sql
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from alembic import command
@@ -79,6 +86,10 @@ ACCOUNTING_SCHEMA = "mod_accounting"
 ACCOUNTING_REVISION = "ac_0001_accounting"
 IMPORTS_SCHEMA = "mod_imports"
 IMPORTS_REVISION = "im_0001_import_runs"
+NUMBERING_SCHEMA = "mod_numbering"
+NUMBERING_REVISION = "nu_0001_numbering"
+TAX_SCHEMA = "mod_tax"
+TAX_REVISION = "tx_0003_result_fingerprint"
 IDEMPOTENCY_PROVIDER_REVISION = "20260820_idempotency_ledger"
 REQUIRED_EFFECTS = (
     "tenant_scope_catalog.v1",
@@ -304,6 +315,29 @@ def test_the_module_schema_exists_with_every_declared_table(
     assert not missing, f"{ACCOUNTING_SCHEMA} is missing declared tables: {missing}"
 
 
+def test_the_tax_lineage_and_every_declared_table_are_present(
+    composed_database: URL,
+) -> None:
+    from dotmac_tax import module
+
+    assert TAX_REVISION in _applied_revisions(composed_database)
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            present = set(
+                connection.execute(
+                    text("SELECT tablename FROM pg_tables WHERE schemaname = :schema"),
+                    {"schema": TAX_SCHEMA},
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+
+    assert module.tables
+    missing = sorted(set(module.tables) - present)
+    assert not missing, f"{TAX_SCHEMA} is missing declared tables: {missing}"
+
+
 def test_the_imports_schema_exists_with_every_declared_table(
     composed_database: URL,
 ) -> None:
@@ -323,6 +357,30 @@ def test_the_imports_schema_exists_with_every_declared_table(
     missing = sorted(set(module.tables) - present)
     assert module.tables, "imports manifest declares no tables"
     assert not missing, f"{IMPORTS_SCHEMA} is missing declared tables: {missing}"
+
+
+def test_the_numbering_lineage_applies_on_only_the_selected_tenant_plane(
+    composed_database: URL,
+) -> None:
+    from dotmac_numbering.manifest import module
+
+    assert NUMBERING_REVISION in _applied_revisions(composed_database)
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            present = set(
+                connection.execute(
+                    text("SELECT tablename FROM pg_tables WHERE schemaname = :schema"),
+                    {"schema": NUMBERING_SCHEMA},
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+
+    assert len(module.tables) == 4
+    assert len(module.platform_tables) == 4
+    assert present == set(module.tables)
+    assert not present & set(module.platform_tables)
 
 
 def test_two_concurrent_import_workers_claim_different_partitions(
@@ -727,6 +785,284 @@ def test_every_imports_table_is_tenant_scoped_and_rls_forced(
         engine.dispose()
 
 
+def test_every_tax_table_is_tenant_scoped_and_rls_forced(
+    composed_database: URL,
+) -> None:
+    """The composed tax storage is a tenant plane, not shared policy state."""
+    from dotmac_tax import module
+
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
+                           a.attnotnull
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    JOIN pg_attribute a ON a.attrelid = c.oid
+                    WHERE n.nspname = :schema
+                      AND c.relkind = 'r'
+                      AND a.attname = 'tenant_id'
+                      AND NOT a.attisdropped
+                    ORDER BY c.relname
+                    """
+                ),
+                {"schema": TAX_SCHEMA},
+            ).all()
+    finally:
+        engine.dispose()
+
+    assert {name for name, _, _, _ in rows} == set(module.tables)
+    assert all(enabled and forced and not_null for _, enabled, forced, not_null in rows)
+
+
+def test_tax_rls_is_effective_for_the_online_role_across_two_tenants(
+    composed_database: URL,
+) -> None:
+    """Prove the composed tax plane uses ERP's real tenant provider."""
+    owner_tenant = uuid4()
+    other_tenant = uuid4()
+    owner_authority_id = uuid4()
+
+    admin_engine = create_engine(composed_database)
+    try:
+        with admin_engine.begin() as connection:
+            for tenant_id in (owner_tenant, other_tenant):
+                connection.execute(
+                    text(
+                        "INSERT INTO public.tenants (id, slug, name) "
+                        "VALUES (:id, :slug, 'Tax RLS probe')"
+                    ),
+                    {"id": tenant_id, "slug": f"tax-{tenant_id.hex}"},
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO mod_tax.tax_authorities "
+                    "(id, tenant_id, code, name, status) "
+                    "VALUES (:id, :tenant_id, 'NRS', 'Nigeria Revenue Service', "
+                    "'active')"
+                ),
+                {"id": owner_authority_id, "tenant_id": owner_tenant},
+            )
+    finally:
+        admin_engine.dispose()
+
+    online_database = composed_database.set(username="app_user", password=None)
+    online_engine = create_engine(online_database)
+    try:
+        with online_engine.begin() as connection:
+            connection.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(other_tenant)},
+            )
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM mod_tax.tax_authorities WHERE id = :id"),
+                    {"id": owner_authority_id},
+                )
+                == 0
+            )
+            with pytest.raises(DBAPIError):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "INSERT INTO mod_tax.tax_authorities "
+                            "(id, tenant_id, code, name, status) "
+                            "VALUES (:id, :tenant_id, 'CROSS', "
+                            "'Cross-tenant probe', 'active')"
+                        ),
+                        {"id": uuid4(), "tenant_id": owner_tenant},
+                    )
+
+            connection.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(owner_tenant)},
+            )
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM mod_tax.tax_authorities WHERE id = :id"),
+                    {"id": owner_authority_id},
+                )
+                == 1
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO mod_tax.tax_authorities "
+                    "(id, tenant_id, code, name, status) "
+                    "VALUES (:id, :tenant_id, 'FCT-IRS', 'FCT-IRS', 'active')"
+                ),
+                {"id": uuid4(), "tenant_id": owner_tenant},
+            )
+    finally:
+        online_engine.dispose()
+
+
+def test_every_numbering_table_is_tenant_scoped_and_rls_forced(
+    composed_database: URL,
+) -> None:
+    """The selected tenant plane cannot contain an unscoped table."""
+    from dotmac_numbering.manifest import module
+
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
+                           a.attnotnull
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    JOIN pg_attribute a ON a.attrelid = c.oid
+                    WHERE n.nspname = :schema
+                      AND c.relkind = 'r'
+                      AND a.attname = 'tenant_id'
+                      AND NOT a.attisdropped
+                    ORDER BY c.relname
+                    """
+                ),
+                {"schema": NUMBERING_SCHEMA},
+            ).all()
+    finally:
+        engine.dispose()
+
+    assert {name for name, _, _, _ in rows} == set(module.tables)
+    assert all(enabled and forced and not_null for _, enabled, forced, not_null in rows)
+
+
+def test_numbering_rls_is_effective_for_the_online_role_across_two_tenants(
+    composed_database: URL,
+) -> None:
+    """Prove policy behavior, not only ENABLE/FORCE catalogue flags."""
+    owner_tenant = uuid4()
+    other_tenant = uuid4()
+    owner_series_id = uuid4()
+
+    admin_engine = create_engine(composed_database)
+    try:
+        with admin_engine.begin() as connection:
+            for tenant_id in (owner_tenant, other_tenant):
+                connection.execute(
+                    text(
+                        "INSERT INTO public.tenants (id, slug, name) "
+                        "VALUES (:id, :slug, 'Numbering RLS probe')"
+                    ),
+                    {"id": tenant_id, "slug": f"numbering-{tenant_id.hex}"},
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO mod_numbering.number_series "
+                    "(id, tenant_id, series_code) "
+                    "VALUES (:id, :tenant_id, 'invoice')"
+                ),
+                {"id": owner_series_id, "tenant_id": owner_tenant},
+            )
+    finally:
+        admin_engine.dispose()
+
+    online_database = composed_database.set(username="app_user", password=None)
+    online_engine = create_engine(online_database)
+    try:
+        with online_engine.begin() as connection:
+            connection.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(other_tenant)},
+            )
+            assert (
+                connection.scalar(
+                    text(
+                        "SELECT count(*) FROM mod_numbering.number_series "
+                        "WHERE id = :id"
+                    ),
+                    {"id": owner_series_id},
+                )
+                == 0
+            )
+            with pytest.raises(DBAPIError):
+                with connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "INSERT INTO mod_numbering.number_series "
+                            "(id, tenant_id, series_code) "
+                            "VALUES (:id, :tenant_id, 'cross-tenant')"
+                        ),
+                        {"id": uuid4(), "tenant_id": owner_tenant},
+                    )
+
+            connection.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(owner_tenant)},
+            )
+            assert (
+                connection.scalar(
+                    text(
+                        "SELECT count(*) FROM mod_numbering.number_series "
+                        "WHERE id = :id"
+                    ),
+                    {"id": owner_series_id},
+                )
+                == 1
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO mod_numbering.number_series "
+                    "(id, tenant_id, series_code) "
+                    "VALUES (:id, :tenant_id, 'credit-note')"
+                ),
+                {"id": uuid4(), "tenant_id": owner_tenant},
+            )
+    finally:
+        online_engine.dispose()
+
+
+def test_numbering_online_grants_and_append_only_evidence_match_the_contract(
+    composed_database: URL,
+) -> None:
+    mutable = {"number_series", "series_counters"}
+    immutable = {"allocation_receipts", "series_repairs"}
+
+    engine = create_engine(composed_database)
+    try:
+        with engine.connect() as connection:
+            grants = connection.execute(
+                text(
+                    """
+                    SELECT table_name, privilege_type
+                    FROM information_schema.role_table_grants
+                    WHERE table_schema = :schema AND grantee = 'app_user'
+                    ORDER BY table_name, privilege_type
+                    """
+                ),
+                {"schema": NUMBERING_SCHEMA},
+            ).all()
+            triggers = set(
+                connection.execute(
+                    text(
+                        """
+                        SELECT event_object_table
+                        FROM information_schema.triggers
+                        WHERE trigger_schema = :schema
+                          AND trigger_name LIKE '%_append_only'
+                        """
+                    ),
+                    {"schema": NUMBERING_SCHEMA},
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+
+    by_table: dict[str, set[str]] = {}
+    for table, privilege in grants:
+        by_table.setdefault(table, set()).add(privilege)
+    for table in mutable:
+        assert by_table[table] == {"SELECT", "INSERT", "UPDATE", "DELETE"}
+    for table in immutable:
+        assert by_table[table] == {"SELECT", "INSERT"}
+    assert triggers == immutable
+
+
 def test_the_accounting_schema_stays_out_of_erps_own_namespaces(
     composed_database: URL,
 ) -> None:
@@ -776,17 +1112,20 @@ def _gate_report():
     )
 
     from app.migration_bindings import ASSEMBLY_PREREQUISITE_BINDINGS
+    from app.migration_planes import ASSEMBLY_MODULE_PLANES
     from dotmac_accounting.manifest import module as accounting_module
     from dotmac_files.manifest import module as files_module
     from dotmac_imports.manifest import module as imports_module
+    from dotmac_numbering.manifest import module as numbering_module
 
     previous = tuple(installed_bindings())
     install_prerequisite_bindings(ASSEMBLY_PREREQUISITE_BINDINGS)
     try:
         return run_gate(
-            (accounting_module, files_module, imports_module),
+            (accounting_module, files_module, imports_module, numbering_module),
             _composed_version_locations(),
             bindings=ASSEMBLY_PREREQUISITE_BINDINGS,
+            module_planes=ASSEMBLY_MODULE_PLANES,
         )
     finally:
         install_prerequisite_bindings(previous)
@@ -829,6 +1168,7 @@ def test_the_composed_migration_gate_reports_nothing_against_the_modules() -> No
         ACCOUNTING_REVISION,
         "fi_0001_stored_files",
         IMPORTS_REVISION,
+        NUMBERING_REVISION,
     }
 
     offending = [
@@ -838,6 +1178,7 @@ def test_the_composed_migration_gate_reports_nothing_against_the_modules() -> No
         or "module 'accounting'" in violation
         or "module 'files'" in violation
         or "module 'imports'" in violation
+        or "module 'numbering'" in violation
     ]
     assert not offending, (
         "composed migration gate rejected a module lineage:\n  "

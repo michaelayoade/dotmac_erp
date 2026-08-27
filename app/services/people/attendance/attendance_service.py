@@ -37,6 +37,7 @@ from app.models.people.attendance import (
 )
 from app.models.people.hr.employee import Employee
 from app.services.common import PaginatedResult, PaginationParams, ValidationError
+from app.services.people.scheduling.resolver import ScheduleResolver
 
 logger = logging.getLogger(__name__)
 
@@ -746,6 +747,8 @@ class AttendanceService:
         attendance_date: date,
         status: AttendanceStatus = AttendanceStatus.PRESENT,
         shift_type_id: UUID | None = None,
+        shift_schedule_id: UUID | None = None,
+        work_schedule_id: UUID | None = None,
         check_in: datetime | None = None,
         check_out: datetime | None = None,
         working_hours: Decimal | None = None,
@@ -755,12 +758,14 @@ class AttendanceService:
         remarks: str | None = None,
         marked_by: str = "MANUAL",
         leave_application_id: UUID | None = None,
+        _duplicate_checked: bool = False,
     ) -> Attendance:
         """Create an attendance record."""
         # Check for duplicate
-        existing = self.get_attendance_by_date(org_id, employee_id, attendance_date)
-        if existing:
-            raise DuplicateAttendanceError(employee_id, attendance_date)
+        if not _duplicate_checked:
+            existing = self.get_attendance_by_date(org_id, employee_id, attendance_date)
+            if existing:
+                raise DuplicateAttendanceError(employee_id, attendance_date)
 
         # Manual/web inputs often arrive as timezone-naive local values.
         # Normalize them to the organization's timezone so display round-trips
@@ -781,6 +786,8 @@ class AttendanceService:
             attendance_date=attendance_date,
             status=status,
             shift_type_id=shift_type_id,
+            shift_schedule_id=shift_schedule_id,
+            work_schedule_id=work_schedule_id,
             check_in=check_in,
             check_out=check_out,
             working_hours=working_hours or Decimal("0"),
@@ -814,10 +821,21 @@ class AttendanceService:
             if check_in_time
             else self._now_in_org_tz(org_id)
         )
-        today = now.date()
+        resolved_schedule = None
+        shift = None
+        if shift_type_id is None:
+            resolved_schedule = ScheduleResolver(self.db).resolve_employee_shift(
+                org_id, employee_id, now
+            )
+            if resolved_schedule is not None:
+                shift = resolved_schedule.assignment.shift_type
+
+        attendance_date = (
+            resolved_schedule.assignment.shift_date if resolved_schedule else now.date()
+        )
 
         # Check if already checked in
-        existing = self.get_attendance_by_date(org_id, employee_id, today)
+        existing = self.get_attendance_by_date(org_id, employee_id, attendance_date)
         if existing and existing.check_in:
             raise AttendanceServiceError(
                 f"Employee already checked in at {existing.check_in}"
@@ -832,28 +850,46 @@ class AttendanceService:
         )
 
         # Resolve the shift here so every check-in adapter applies the same
-        # lateness policy, including self-service clients that do not send a
-        # shift ID.
-        resolved_shift_id = shift_type_id or (
-            existing.shift_type_id if existing else None
+        # lateness policy. Published scheduler assignments take precedence;
+        # otherwise preserve the existing dated assignment/default fallback.
+        resolved_shift_id = (
+            shift_type_id
+            or (
+                resolved_schedule.assignment.shift_type_id
+                if resolved_schedule
+                else None
+            )
+            or (existing.shift_type_id if existing else None)
         )
-        shift = (
-            self.get_shift_type(org_id, resolved_shift_id)
-            if resolved_shift_id
-            else self.get_employee_shift(org_id, employee_id, today)
-        )
+        if shift is None:
+            shift = (
+                self.get_shift_type(org_id, resolved_shift_id)
+                if resolved_shift_id
+                else self.get_employee_shift(org_id, employee_id, attendance_date)
+            )
 
         late_entry = False
         late_entry_minutes = 0
         if shift:
             resolved_shift_id = shift.shift_type_id
             late_entry, late_entry_minutes = self._calculate_late_entry(
-                now, today, shift
+                now, attendance_date, shift
             )
+
+        shift_schedule_id = (
+            resolved_schedule.assignment.shift_schedule_id
+            if resolved_schedule
+            else None
+        )
+        work_schedule_id = (
+            resolved_schedule.schedule.work_schedule_id if resolved_schedule else None
+        )
 
         if existing:
             existing.check_in = now
             existing.shift_type_id = resolved_shift_id
+            existing.shift_schedule_id = shift_schedule_id
+            existing.work_schedule_id = work_schedule_id
             existing.late_entry = late_entry
             existing.late_entry_minutes = late_entry_minutes
             existing.status = AttendanceStatus.PRESENT
@@ -866,14 +902,17 @@ class AttendanceService:
         return self.create_attendance(
             org_id,
             employee_id=employee_id,
-            attendance_date=today,
+            attendance_date=attendance_date,
             status=AttendanceStatus.PRESENT,
             shift_type_id=resolved_shift_id,
+            shift_schedule_id=shift_schedule_id,
+            work_schedule_id=work_schedule_id,
             check_in=now,
             late_entry=late_entry,
             late_entry_minutes=late_entry_minutes,
             remarks=notes,
             marked_by=marked_by,
+            _duplicate_checked=True,
         )
 
     def check_out(

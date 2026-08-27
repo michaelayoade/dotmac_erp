@@ -33,7 +33,6 @@ def get_base_url(filepath: Path) -> str:
         "admin/audit_logs.html": "/admin/audit-logs",
         "admin/data_changes.html": "/admin/data-changes",
         "admin/settings.html": "/admin/settings",
-        "admin/sync/crm/entities.html": "/admin/sync/crm/entities",
         # Expense
         "expense/categories.html": "/expense/categories",
         "expense/limits/list.html": "/expense/limits",

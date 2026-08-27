@@ -206,12 +206,6 @@ class Customer(Base):
         index=True,
         comment="Splynx customer ID (for sync lookup)",
     )
-    crm_id: Mapped[str | None] = mapped_column(
-        String(36),
-        nullable=True,
-        index=True,
-        comment="DotMac CRM customer/company ID (for sync lookup)",
-    )
     dotmac_sub_id: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,

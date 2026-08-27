@@ -174,6 +174,16 @@ Payslip Email Dispatch
 - If needed, emails can be re-queued (Resend Payslips) with dedupe safeguards.
 - Run detail shows email progress and polls for updates while running.
 
+Bank Payment File
+-----------------
+- The file represents the complete positive-net payroll run; it is never a
+  best-effort subset.
+- If any included slip lacks an account number or bank name, the whole export
+  is refused and the operator returns to payroll readiness to correct it.
+- If a bank code cannot be resolved, no file is downloaded. A payee who cannot
+  be paid is visible operational state, not a row omitted from a successful
+  batch.
+
 Common Error Messages
 ---------------------
 - "Salary slips already created for this entry"

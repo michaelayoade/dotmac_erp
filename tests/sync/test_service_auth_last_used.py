@@ -1,6 +1,6 @@
 """P3: ApiKey.last_used_at write in require_service_auth is throttled.
 
-Refreshing it on every CRM service call added a row UPDATE + commit to hot read
+Refreshing it on every service call added a row UPDATE + commit to hot read
 paths (per-project expense-totals) and contended on one key. It now writes at
 most once per window.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.api.sync.dotmac_crm import _LAST_USED_THROTTLE, _last_used_is_stale
+from app.api.service_principal import _LAST_USED_THROTTLE, _last_used_is_stale
 
 UTC = timezone.utc
 
