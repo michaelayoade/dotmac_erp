@@ -1,6 +1,6 @@
 # DotMac ERP — ProductDeploymentSpec.v1
 #
-# ERP is the first FULL adopter of the deployment foundation (ADR-0065 in
+# ERP is the first FULL adopter of the deployment foundation (ADR-0070 in
 # dotmac_starter_mt, "Deployment is a stateless versioned foundation, not a
 # module") because it carries the most defects of any of the four Dotmac
 # repositories that were inventoried (dotmac_starter_mt:
@@ -311,7 +311,7 @@ pids = 256
 [roles.scheduler]
 # NOT sourced from ERP: nothing in this repository records or exposes when
 # Beat last ticked (no heartbeat file, no metric). This is the SAME defect
-# class ADR-0065's own context section names by name: "a stale Beat container
+# class ADR-0070's own context section names by name: "a stale Beat container
 # survived a rollout and scheduled failing tasks for hours while every
 # container-level check was green" (dotmac_sub incident, cited in
 # dotmac_starter_mt:docs/adr/0065-...md). 120s is a placeholder tick budget,

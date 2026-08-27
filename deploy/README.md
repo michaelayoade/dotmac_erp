@@ -2,7 +2,7 @@
 
 `deploy/product.toml` is ERP's `ProductDeploymentSpec.v1` — the typed
 deployment descriptor defined by `dotmac-deployment-foundation`
-(`dotmac_starter_mt:packages/dotmac-deployment-foundation`, ADR-0065
+(`dotmac_starter_mt:packages/dotmac-deployment-foundation`, ADR-0070
 "Deployment is a stateless versioned foundation, not a module"). ERP is the
 first full adopter because the source inventory
 (`dotmac_starter_mt:docs/inventories/deployment-foundation-sources.md` § 5-6)
@@ -37,7 +37,7 @@ plan, with no second, hand-maintained copy to drift from the descriptor.
 
 Retirement of the scripts above happens only after PROVEN parity — a separate,
 later change, gated on the renderer existing and `render --check` passing in
-ERP's own CI, per ADR-0065's "Consequences" section. This change adds the
+ERP's own CI, per ADR-0070's "Consequences" section. This change adds the
 descriptor alongside the existing path; it deletes nothing.
 
 ## Defects this descriptor's existence makes checkable

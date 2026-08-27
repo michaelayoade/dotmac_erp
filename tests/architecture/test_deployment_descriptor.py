@@ -1,6 +1,6 @@
 """ERP's `deploy/product.toml` is a real, conformant `ProductDeploymentSpec.v1`.
 
-`dotmac-deployment-foundation` (ADR-0065 in dotmac_starter_mt) is not yet a
+`dotmac-deployment-foundation` (ADR-0070 in dotmac_starter_mt) is not yet a
 published, exact-pinned distribution this repository's `pyproject.toml`/
 `poetry.lock` install — it is still being built in the Starter repository.
 This test therefore skips when the package is not importable — but only while
