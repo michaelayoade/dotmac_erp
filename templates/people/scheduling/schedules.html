@@ -35,18 +35,22 @@
         base_url="/people/scheduling/schedules",
         active_filters=active_filters | default([])
     ) %}
-    <div>
-                <div class="w-64">
-                    <label class="form-label text-xs">Department</label>
-                    <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>
-                        <option value="">Select Department...</option>
-                        {% for dept in departments %}
-                        <option value="{{ dept.department_id }}" {% if department_id == dept.department_id | string %}selected{% endif %}>
-                            {{ dept.department_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+            <label class="form-label text-xs">Department</label>
+            <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>
+                <option value="">Select Department...</option>
+                {% for dept in departments %}
+                <option value="{{ dept.department_id }}" {% if department_id == dept.department_id | string %}selected{% endif %}>
+                    {{ dept.department_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="form-label text-xs">Month</label>
+            <input type="month" name="year_month" aria-label="Month" value="{{ year_month if year_month else '' }}" class="form-input w-full" {{ filter_attrs }}>
+        </div>
     </div>
     {% endcall %}
 
@@ -122,7 +126,7 @@
                 </tbody>
             </table>
         </div>
-    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={"department_id": department_id, "year_month": year_month}) }}
     </div>
     {% elif department_id %}
     <div class="card p-8 text-center">

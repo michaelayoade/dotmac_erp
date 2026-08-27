@@ -573,7 +573,15 @@ class LifecycleWebService:
                         "new_value": new_dept.department_name,
                     }
                 )
-                employee.department_id = coerce_uuid(new_department_id)
+                new_department_uuid = coerce_uuid(new_department_id)
+                employee.department_id = new_department_uuid
+                from app.services.people.scheduling import SchedulingService
+
+                SchedulingService(db).sync_employee_department(
+                    org_id=org_id,
+                    employee_id=employee.employee_id,
+                    new_department_id=new_department_uuid,
+                )
 
         if new_reports_to_id:
             new_manager_id = coerce_uuid(new_reports_to_id)
@@ -768,7 +776,15 @@ class LifecycleWebService:
                         "new_value": new_dept.department_name,
                     }
                 )
-                employee.department_id = coerce_uuid(new_department_id)
+                new_department_uuid = coerce_uuid(new_department_id)
+                employee.department_id = new_department_uuid
+                from app.services.people.scheduling import SchedulingService
+
+                SchedulingService(db).sync_employee_department(
+                    org_id=org_id,
+                    employee_id=employee.employee_id,
+                    new_department_id=new_department_uuid,
+                )
 
         if new_designation_id:
             current_designation = (

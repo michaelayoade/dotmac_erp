@@ -753,6 +753,52 @@ class SchedulingService:
             .values(status=ScheduleStatus.COMPLETED)
         )
 
+    def sync_employee_department(
+        self,
+        org_id: UUID,
+        employee_id: UUID,
+        new_department_id: UUID | None,
+    ) -> dict[str, int]:
+        """Keep active scheduling assignments aligned with HR department changes."""
+        assignments = list(
+            self.db.scalars(
+                select(ShiftPatternAssignment).where(
+                    ShiftPatternAssignment.organization_id == org_id,
+                    ShiftPatternAssignment.employee_id == employee_id,
+                    ShiftPatternAssignment.is_active == True,  # noqa: E712
+                )
+            ).all()
+        )
+
+        assignments_updated = 0
+        assignments_ended = 0
+        if new_department_id is None:
+            for assignment in assignments:
+                assignment.is_active = False
+                if assignment.effective_to is None:
+                    assignment.effective_to = date.today()
+                assignments_ended += 1
+        else:
+            for assignment in assignments:
+                if assignment.department_id != new_department_id:
+                    assignment.department_id = new_department_id
+                    assignments_updated += 1
+
+        if assignments_updated or assignments_ended:
+            self.db.flush()
+            logger.info(
+                "Synced scheduling assignment department for employee %s: "
+                "assignments_updated=%d, assignments_ended=%d",
+                employee_id,
+                assignments_updated,
+                assignments_ended,
+            )
+
+        return {
+            "assignments_updated": assignments_updated,
+            "assignments_ended": assignments_ended,
+        }
+
     def get_active_assignment_for_employee(
         self,
         org_id: UUID,
