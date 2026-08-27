@@ -44,6 +44,40 @@ def _drop_constraint_if_exists(table: str, constraint: str, schema: str) -> None
     op.execute(f"ALTER TABLE {schema}.{table} DROP CONSTRAINT IF EXISTS {constraint}")
 
 
+def _ensure_unique_constraint_if_missing(
+    table: str, constraint: str, columns: list[str], schema: str
+) -> None:
+    column_list = ", ".join(columns)
+    column_array = ", ".join(f"'{column}'" for column in columns)
+    op.execute(
+        f"""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint c
+                JOIN pg_class rel ON rel.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = rel.relnamespace
+                WHERE n.nspname = '{schema}'
+                  AND rel.relname = '{table}'
+                  AND c.contype IN ('p', 'u')
+                  AND ARRAY(
+                      SELECT a.attname
+                      FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+                      JOIN pg_attribute a
+                        ON a.attrelid = c.conrelid
+                       AND a.attnum = k.attnum
+                      ORDER BY k.ord
+                  ) = ARRAY[{column_array}]::name[]
+            ) THEN
+                ALTER TABLE {schema}.{table}
+                ADD CONSTRAINT {constraint} UNIQUE ({column_list});
+            END IF;
+        END $$;
+        """
+    )
+
+
 def _create_tenant_policy(table: str) -> None:
     op.execute(f"ALTER TABLE {SCHEDULE_SCHEMA}.{table} ENABLE ROW LEVEL SECURITY")
     op.execute(f"ALTER TABLE {SCHEDULE_SCHEMA}.{table} FORCE ROW LEVEL SECURITY")
@@ -366,6 +400,12 @@ def upgrade() -> None:
         sa.Column("work_schedule_id", _uuid(), nullable=True),
         schema=ATTENDANCE_SCHEMA,
     )
+    _ensure_unique_constraint_if_missing(
+        "shift_schedule",
+        "uq_shift_schedule_shift_schedule_id",
+        ["shift_schedule_id"],
+        SCHEDULE_SCHEMA,
+    )
     op.create_foreign_key(
         "fk_attendance_shift_schedule",
         "attendance",
@@ -462,6 +502,9 @@ def downgrade() -> None:
     )
     op.drop_column("attendance", "work_schedule_id", schema=ATTENDANCE_SCHEMA)
     op.drop_column("attendance", "shift_schedule_id", schema=ATTENDANCE_SCHEMA)
+    _drop_constraint_if_exists(
+        "shift_schedule", "uq_shift_schedule_shift_schedule_id", SCHEDULE_SCHEMA
+    )
 
     op.drop_constraint(
         "uq_shift_schedule_emp_date_revision",
