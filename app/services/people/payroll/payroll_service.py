@@ -44,6 +44,7 @@ from app.services.people.payroll.eligibility import (
     is_employee_payroll_eligible_for_period,
     payroll_employee_eligibility_clause,
 )
+from app.services.people.payroll_reporting import calculate_active_monthly_net_average
 from app.services.people.payroll.salary_slip_service import (
     SalarySlipInput,
     salary_slip_service,
@@ -1560,7 +1561,7 @@ class PayrollService:
             current = current + relativedelta(months=1)
 
         num_months = len(months_list)
-        average_monthly = total_net / num_months if num_months > 0 else Decimal("0")
+        average_monthly = calculate_active_monthly_net_average(months_list)
 
         return {
             "months": months_list,

@@ -5,7 +5,7 @@ Payroll Web Service - Report operations.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import TypedDict
 
@@ -19,6 +19,10 @@ from app.models.people.hr.employee import Employee
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.services.common import coerce_uuid
 from app.services.people.payroll.payroll_service import PayrollService
+from app.services.people.payroll_reporting import (
+    REPORTABLE_SLIP_STATUSES,
+    calculate_active_monthly_net_average,
+)
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -38,6 +42,9 @@ class MonthSummaryRow(TypedDict):
     month: int
     month_name: str
     month_label: str
+    start_date: str
+    end_date: str
+    detail_url: str
     slip_count: int
     total_gross: Decimal
     total_net: Decimal
@@ -46,6 +53,11 @@ class MonthSummaryRow(TypedDict):
 
 class ReportWebService:
     """Service for payroll report web views."""
+
+    @staticmethod
+    def _reportable_slip_statuses() -> tuple[SalarySlipStatus, ...]:
+        """Statuses that represent finalized payroll values for reports."""
+        return REPORTABLE_SLIP_STATUSES
 
     def summary_report_response(
         self,
@@ -133,9 +145,7 @@ class ReportWebService:
                 .where(
                     SalarySlip.organization_id == org_id,
                     Employee.department_id == dept.department_id,
-                    SalarySlip.status.in_(
-                        [SalarySlipStatus.APPROVED, SalarySlipStatus.POSTED]
-                    ),
+                    SalarySlip.status.in_(self._reportable_slip_statuses()),
                     SalarySlip.start_date >= start_date,
                     SalarySlip.start_date < end_date,
                 )
@@ -224,9 +234,7 @@ class ReportWebService:
             db.scalars(
                 select(SalarySlip).where(
                     SalarySlip.organization_id == org_id,
-                    SalarySlip.status.in_(
-                        [SalarySlipStatus.APPROVED, SalarySlipStatus.POSTED]
-                    ),
+                    SalarySlip.status.in_(self._reportable_slip_statuses()),
                     SalarySlip.start_date >= start_date,
                     SalarySlip.start_date < end_date,
                 )
@@ -329,6 +337,7 @@ class ReportWebService:
                 end_date = date(start_date.year + 1, 1, 1)
             else:
                 end_date = date(start_date.year, start_date.month + 1, 1)
+            detail_end_date = end_date - timedelta(days=1)
 
             result = db.execute(
                 select(
@@ -337,9 +346,7 @@ class ReportWebService:
                     func.sum(SalarySlip.net_pay).label("total_net"),
                 ).where(
                     SalarySlip.organization_id == org_id,
-                    SalarySlip.status.in_(
-                        [SalarySlipStatus.APPROVED, SalarySlipStatus.POSTED]
-                    ),
+                    SalarySlip.status.in_(self._reportable_slip_statuses()),
                     SalarySlip.start_date >= start_date,
                     SalarySlip.start_date < end_date,
                 )
@@ -359,6 +366,14 @@ class ReportWebService:
                     "month": start_date.month,
                     "month_name": start_date.strftime("%B"),
                     "month_label": start_date.strftime("%b %Y"),
+                    "start_date": start_date.isoformat(),
+                    "end_date": detail_end_date.isoformat(),
+                    "detail_url": (
+                        "/people/payroll/slips?"
+                        f"start_date={start_date.isoformat()}"
+                        f"&end_date={detail_end_date.isoformat()}"
+                        "&status_group=reportable"
+                    ),
                     "slip_count": slip_count,
                     "total_gross": total_gross,
                     "total_net": total_net,
@@ -372,7 +387,7 @@ class ReportWebService:
         total_deductions = sum(
             (m["total_deductions"] for m in months_data), Decimal("0")
         )
-        average_monthly = (total_net / total_months) if total_months else Decimal("0")
+        average_monthly = calculate_active_monthly_net_average(months_data)
 
         report = {
             "total_months": total_months,
