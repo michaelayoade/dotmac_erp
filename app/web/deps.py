@@ -1004,6 +1004,7 @@ class WebAuthContext:
         if (
             self.is_admin
             or "hr:access" in scopes_set
+            or any(scope.startswith("hr:schedule:") for scope in scopes_set)
             or roles_set.intersection(
                 {"hr_manager", "hr_director", "payroll_admin", "payroll_approver"}
             )
@@ -1766,6 +1767,28 @@ def require_hr_access(
             status_code=403,
             detail="HR module access required",
         )
+    return auth
+
+
+def require_scheduler_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require People access or explicit shift scheduling permissions."""
+    if not (
+        auth.has_module_access("people")
+        or auth.has_any_permission(
+            [
+                "hr:schedule:*",
+                "hr:schedule:read",
+                "hr:schedule:create",
+                "hr:schedule:update",
+                "hr:schedule:submit",
+                "hr:schedule:approve",
+                "hr:schedule:publish",
+            ]
+        )
+    ):
+        raise HTTPException(status_code=403, detail="Shift scheduling access required")
     return auth
 
 
