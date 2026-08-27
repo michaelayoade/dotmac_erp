@@ -18,6 +18,9 @@
     <form method="get" action="/people/payroll/slips/export">
         <input type="hidden" name="search" value="{{ search | default('', true) }}">
         <input aria-label="Status" type="hidden" name="status" value="{{ status | default('', true) }}">
+        <input type="hidden" name="status_group" value="{{ status_group if status_group else '' }}">
+        <input type="hidden" name="start_date" value="{{ start_date if start_date else '' }}">
+        <input type="hidden" name="end_date" value="{{ end_date if end_date else '' }}">
         <button type="submit" class="btn btn-secondary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M5 20h14a2 2 0 002-2v-4M3 14v4a2 2 0 002 2h2"/>
@@ -91,8 +94,14 @@
         active_filters=active_filters | default([]),
         show_search=true,
         search=search,
-        search_placeholder="Search by slip number or employee..."
+        search_placeholder="Search by slip number or employee...",
+        date_range=true,
+        start_date=start_date,
+        end_date=end_date
     ) %}
+        {% if status_group %}
+        <input type="hidden" name="status_group" value="{{ status_group }}">
+        {% endif %}
         <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Statuses</option>
             {% for s in statuses %}
@@ -196,7 +205,7 @@
         total_count=total_count,
         limit=limit,
         search=search,
-        filters={"status": status}
+        filters={"status": status, "status_group": status_group, "start_date": start_date, "end_date": end_date}
     ) }}
 
     {% else %}
