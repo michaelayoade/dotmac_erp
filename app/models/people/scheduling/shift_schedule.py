@@ -4,10 +4,12 @@ Shift Schedule Model - Scheduling Schema.
 Generated monthly schedules for employees showing their assigned shifts per day.
 """
 
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -186,27 +188,27 @@ class ShiftSchedule(Base, AuditMixin):
     )
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(
+    organization: Mapped[Organization] = relationship(
         "Organization",
         foreign_keys=[organization_id],
     )
-    employee: Mapped["Employee"] = relationship(
+    employee: Mapped[Employee] = relationship(
         "Employee",
         foreign_keys=[employee_id],
     )
-    department: Mapped["Department"] = relationship(
+    department: Mapped[Department] = relationship(
         "Department",
         foreign_keys=[department_id],
     )
-    shift_type: Mapped["ShiftType"] = relationship(
+    shift_type: Mapped[ShiftType] = relationship(
         "ShiftType",
         foreign_keys=[shift_type_id],
     )
-    created_by: Mapped[Optional["Employee"]] = relationship(
+    created_by: Mapped[Employee | None] = relationship(
         "Employee",
         foreign_keys=[created_by_id],
     )
-    published_by: Mapped[Optional["Employee"]] = relationship(
+    published_by: Mapped[Employee | None] = relationship(
         "Employee",
         foreign_keys=[published_by_id],
     )

@@ -61,7 +61,10 @@ from app.services.people.scheduling import (
     SwapService,
 )
 from app.services.people.scheduling.schedule_generator import ScheduleGeneratorError
-from app.services.people.scheduling.access import SchedulerAccessError, SchedulerAccessService
+from app.services.people.scheduling.access import (
+    SchedulerAccessError,
+    SchedulerAccessService,
+)
 from app.services.people.scheduling.rules import ScheduleRuleResult
 from app.services.people.scheduling.scheduling_service import (
     PatternAssignmentNotFoundError,
@@ -101,7 +104,9 @@ def _auth_can_approve_schedules(auth: dict) -> bool:
     return bool(
         "admin" in roles
         or roles.intersection({"hr_manager", "hr_director"})
-        or scopes.intersection({"hr:schedule:*", "hr:schedule:approve", "hr:schedule:publish"})
+        or scopes.intersection(
+            {"hr:schedule:*", "hr:schedule:approve", "hr:schedule:publish"}
+        )
     )
 
 
@@ -148,7 +153,13 @@ def handle_scheduling_error(e: Exception) -> None:
     elif isinstance(e, SchedulerAccessError):
         raise HTTPException(status_code=403, detail=str(e))
     elif isinstance(
-        e, (SchedulingServiceError, ScheduleGeneratorError, SwapServiceError, ScheduleWorkflowError)
+        e,
+        (
+            SchedulingServiceError,
+            ScheduleGeneratorError,
+            SwapServiceError,
+            ScheduleWorkflowError,
+        ),
     ):
         raise HTTPException(status_code=400, detail=str(e))
     raise
@@ -524,8 +535,6 @@ def delete_schedule(
     svc.delete_schedule(organization_id, schedule_id)
 
 
-
-
 # =============================================================================
 # Weekly Scheduler Workspace
 # =============================================================================
@@ -576,7 +585,9 @@ def get_work_schedule(
         handle_scheduling_error(e)
 
 
-@router.get("/work-schedules/{schedule_id}/assignments", response_model=list[ShiftScheduleRead])
+@router.get(
+    "/work-schedules/{schedule_id}/assignments", response_model=list[ShiftScheduleRead]
+)
 def list_work_schedule_assignments(
     schedule_id: UUID,
     auth: dict = Depends(require_tenant_auth),
@@ -603,7 +614,10 @@ def list_work_schedule_assignments(
         handle_scheduling_error(e)
 
 
-@router.get("/departments/{department_id}/scheduler-employees", response_model=list[SchedulerEmployeeRead])
+@router.get(
+    "/departments/{department_id}/scheduler-employees",
+    response_model=list[SchedulerEmployeeRead],
+)
 def scheduler_employees(
     department_id: UUID,
     auth: dict = Depends(require_tenant_auth),
@@ -632,7 +646,10 @@ def scheduler_employees(
         handle_scheduling_error(e)
 
 
-@router.post("/work-schedules/{schedule_id}/assignments", response_model=ScheduleAssignmentResponse)
+@router.post(
+    "/work-schedules/{schedule_id}/assignments",
+    response_model=ScheduleAssignmentResponse,
+)
 def assign_work_schedule_shift(
     schedule_id: UUID,
     payload: ScheduleAssignmentRequest,
@@ -670,7 +687,10 @@ def assign_work_schedule_shift(
         handle_scheduling_error(e)
 
 
-@router.delete("/work-schedules/{schedule_id}/assignments/{assignment_id}", response_model=RuleEvaluationRead)
+@router.delete(
+    "/work-schedules/{schedule_id}/assignments/{assignment_id}",
+    response_model=RuleEvaluationRead,
+)
 def remove_work_schedule_assignment(
     schedule_id: UUID,
     assignment_id: UUID,
@@ -696,7 +716,9 @@ def remove_work_schedule_assignment(
         handle_scheduling_error(e)
 
 
-@router.get("/work-schedules/{schedule_id}/evaluation", response_model=RuleEvaluationRead)
+@router.get(
+    "/work-schedules/{schedule_id}/evaluation", response_model=RuleEvaluationRead
+)
 def evaluate_work_schedule(
     schedule_id: UUID,
     auth: dict = Depends(require_tenant_auth),
@@ -769,7 +791,10 @@ def amend_work_schedule(
     except Exception as e:
         handle_scheduling_error(e)
 
-@router.post("/work-schedules/{schedule_id}/approve", status_code=status.HTTP_204_NO_CONTENT)
+
+@router.post(
+    "/work-schedules/{schedule_id}/approve", status_code=status.HTTP_204_NO_CONTENT
+)
 def approve_work_schedule(
     schedule_id: UUID,
     auth: dict = Depends(require_tenant_auth),
@@ -778,7 +803,9 @@ def approve_work_schedule(
 ):
     """Approve a submitted schedule with explicit HR schedule authority."""
     if not _auth_can_approve_schedules(auth):
-        raise HTTPException(status_code=403, detail="Schedule approval permission required")
+        raise HTTPException(
+            status_code=403, detail="Schedule approval permission required"
+        )
     try:
         ScheduleWorkspaceService(db).approve(
             organization_id, schedule_id, _auth_person_id(auth)
@@ -787,7 +814,9 @@ def approve_work_schedule(
         handle_scheduling_error(e)
 
 
-@router.post("/work-schedules/{schedule_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/work-schedules/{schedule_id}/reject", status_code=status.HTTP_204_NO_CONTENT
+)
 def reject_work_schedule(
     schedule_id: UUID,
     payload: ScheduleRejectRequest,
@@ -797,7 +826,9 @@ def reject_work_schedule(
 ):
     """Reject a submitted schedule with explicit HR schedule authority."""
     if not _auth_can_approve_schedules(auth):
-        raise HTTPException(status_code=403, detail="Schedule approval permission required")
+        raise HTTPException(
+            status_code=403, detail="Schedule approval permission required"
+        )
     try:
         ScheduleWorkspaceService(db).reject(
             organization_id, schedule_id, _auth_person_id(auth), payload.reason
@@ -806,7 +837,9 @@ def reject_work_schedule(
         handle_scheduling_error(e)
 
 
-@router.post("/work-schedules/{schedule_id}/publish", response_model=SchedulePublishResponse)
+@router.post(
+    "/work-schedules/{schedule_id}/publish", response_model=SchedulePublishResponse
+)
 def publish_work_schedule(
     schedule_id: UUID,
     auth: dict = Depends(require_tenant_auth),
@@ -815,7 +848,9 @@ def publish_work_schedule(
 ):
     """Publish an approved schedule and notify affected employees once."""
     if not _auth_can_approve_schedules(auth):
-        raise HTTPException(status_code=403, detail="Schedule publish permission required")
+        raise HTTPException(
+            status_code=403, detail="Schedule publish permission required"
+        )
     try:
         count = ScheduleWorkspaceService(db).publish(
             organization_id, schedule_id, _auth_person_id(auth)

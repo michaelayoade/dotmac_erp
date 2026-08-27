@@ -407,10 +407,14 @@ rpt	report_definition	direct	true	true	app_admin	4	true	--	--
 rpt	report_instance	direct	true	true	app_admin	4	true	--	--
 rpt	report_schedule	direct	true	true	app_admin	4	true	--	--
 rpt	saved_analysis	direct	false	false	app_admin	0	false	--	--
+scheduling	schedule_audit_event	direct	true	true	app_admin	1	false	--	--
+scheduling	schedule_notification_log	direct	true	true	app_admin	1	false	--	--
+scheduling	scheduling_policy	direct	true	true	app_admin	1	false	--	--
 scheduling	shift_pattern	direct	false	false	app_admin	0	false	--	--
 scheduling	shift_pattern_assignment	direct	false	false	app_admin	0	false	--	--
 scheduling	shift_schedule	direct	false	false	app_admin	0	false	--	--
 scheduling	shift_swap_request	direct	false	false	app_admin	0	false	--	--
+scheduling	work_schedule	direct	true	true	app_admin	1	false	--	--
 settings	org_bank_directory	direct	false	false	app_admin	0	false	--	--
 support	support_team	direct	false	false	app_admin	0	false	--	--
 support	support_team_member	inherited	false	false	app_admin	0	false	--	--

@@ -1776,18 +1776,21 @@ def require_scheduler_access(
     """Require People access or explicit shift scheduling permissions."""
     if not (
         auth.has_module_access("people")
-        or auth.has_any_permission([
-            "hr:schedule:*",
-            "hr:schedule:read",
-            "hr:schedule:create",
-            "hr:schedule:update",
-            "hr:schedule:submit",
-            "hr:schedule:approve",
-            "hr:schedule:publish",
-        ])
+        or auth.has_any_permission(
+            [
+                "hr:schedule:*",
+                "hr:schedule:read",
+                "hr:schedule:create",
+                "hr:schedule:update",
+                "hr:schedule:submit",
+                "hr:schedule:approve",
+                "hr:schedule:publish",
+            ]
+        )
     ):
         raise HTTPException(status_code=403, detail="Shift scheduling access required")
     return auth
+
 
 def require_private_performance_mode(
     request: Request,

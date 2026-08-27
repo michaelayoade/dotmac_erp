@@ -26,7 +26,7 @@
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Scheduler</h1>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ week_start }} to {{ week_end }} · Revision <span x-text="schedule.revision"></span> · <span x-text="schedule.status"></span></p>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ week_start }} to {{ week_end }} - Revision <span x-text="schedule.revision"></span> - <span x-text="schedule.status"></span></p>
         </div>
         <form method="get" action="/people/scheduling/workspace" class="flex flex-wrap items-end gap-3">
             <label class="block min-w-60 text-sm">
@@ -141,7 +141,7 @@
                                 draggable="true"
                                 @dragstart="dragShift(shift)">
                             <span class="block font-medium text-slate-900 dark:text-white" x-text="shift.shift_name"></span>
-                            <span class="text-xs text-slate-500" x-text="shift.start_time + ' - ' + shift.end_time + ' · ' + shift.working_hours + 'h'"></span>
+                            <span class="text-xs text-slate-500" x-text="shift.start_time + ' - ' + shift.end_time + ' - ' + shift.working_hours + 'h'"></span>
                         </button>
                     </template>
                 </div>

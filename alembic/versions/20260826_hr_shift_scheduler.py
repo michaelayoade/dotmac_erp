@@ -36,48 +36,12 @@ def _uuid() -> postgresql.UUID:
 
 def _add_enum_value(enum_name: str, value: str) -> None:
     op.execute(
-        sa.text(
-            f"""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM pg_enum e
-                    JOIN pg_type t ON t.oid = e.enumtypid
-                    JOIN pg_namespace n ON n.oid = t.typnamespace
-                    WHERE n.nspname = :schema
-                      AND t.typname = :enum_name
-                      AND e.enumlabel = :value
-                ) THEN
-                    EXECUTE format('ALTER TYPE %I.%I ADD VALUE %L', :schema, :enum_name, :value);
-                END IF;
-            END $$;
-            """
-        ).bindparams(schema=SCHEDULE_SCHEMA, enum_name=enum_name, value=value)
+        f"ALTER TYPE {SCHEDULE_SCHEMA}.{enum_name} ADD VALUE IF NOT EXISTS '{value}'"
     )
 
 
 def _drop_constraint_if_exists(table: str, constraint: str, schema: str) -> None:
-    op.execute(
-        sa.text(
-            """
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1
-                    FROM pg_constraint c
-                    JOIN pg_class rel ON rel.oid = c.conrelid
-                    JOIN pg_namespace n ON n.oid = rel.relnamespace
-                    WHERE n.nspname = :schema
-                      AND rel.relname = :table
-                      AND c.conname = :constraint
-                ) THEN
-                    EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', :schema, :table, :constraint);
-                END IF;
-            END $$;
-            """
-        ).bindparams(schema=schema, table=table, constraint=constraint)
-    )
+    op.execute(f"ALTER TABLE {schema}.{table} DROP CONSTRAINT IF EXISTS {constraint}")
 
 
 def _create_tenant_policy(table: str) -> None:
@@ -124,15 +88,28 @@ def upgrade() -> None:
     )
 
     schedule_status = postgresql.ENUM(
-        "DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "PUBLISHED", "COMPLETED",
+        "DRAFT",
+        "SUBMITTED",
+        "APPROVED",
+        "REJECTED",
+        "PUBLISHED",
+        "COMPLETED",
         name="schedule_status",
         schema=SCHEDULE_SCHEMA,
         create_type=False,
     )
     audit_action = postgresql.ENUM(
-        "CREATED", "ASSIGNED", "MOVED", "REMOVED", "SUBMITTED",
-        "APPROVED", "REJECTED", "PUBLISHED", "AMENDED",
-        "POLICY_CHANGED", "OVERRIDE_RECORDED",
+        "CREATED",
+        "ASSIGNED",
+        "MOVED",
+        "REMOVED",
+        "SUBMITTED",
+        "APPROVED",
+        "REJECTED",
+        "PUBLISHED",
+        "AMENDED",
+        "POLICY_CHANGED",
+        "OVERRIDE_RECORDED",
         name="schedule_audit_action",
         schema=SCHEDULE_SCHEMA,
         create_type=False,
@@ -140,7 +117,12 @@ def upgrade() -> None:
 
     op.create_table(
         "work_schedule",
-        sa.Column("work_schedule_id", _uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "work_schedule_id",
+            _uuid(),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("organization_id", _uuid(), nullable=False),
         sa.Column("department_id", _uuid(), nullable=False),
         sa.Column("period_start", sa.Date(), nullable=False),
@@ -162,49 +144,104 @@ def upgrade() -> None:
         sa.Column("updated_by", sa.String(100), nullable=True),
         sa.Column("created_by_id", _uuid(), nullable=True),
         sa.Column("updated_by_id", _uuid(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
         sa.ForeignKeyConstraint(["department_id"], ["hr.department.department_id"]),
-        sa.ForeignKeyConstraint(["parent_schedule_id"], ["scheduling.work_schedule.work_schedule_id"]),
+        sa.ForeignKeyConstraint(
+            ["parent_schedule_id"], ["scheduling.work_schedule.work_schedule_id"]
+        ),
         sa.ForeignKeyConstraint(["submitted_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["approved_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["published_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["rejected_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["created_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["updated_by_id"], ["people.id"]),
-        sa.UniqueConstraint("organization_id", "department_id", "period_start", "period_end", "revision", name="uq_work_schedule_org_dept_period_revision"),
+        sa.UniqueConstraint(
+            "organization_id",
+            "department_id",
+            "period_start",
+            "period_end",
+            "revision",
+            name="uq_work_schedule_org_dept_period_revision",
+        ),
         schema=SCHEDULE_SCHEMA,
     )
-    op.create_index("idx_work_schedule_org_dept_period", "work_schedule", ["organization_id", "department_id", "period_start", "period_end"], schema=SCHEDULE_SCHEMA)
-    op.create_index("idx_work_schedule_org_status", "work_schedule", ["organization_id", "status"], schema=SCHEDULE_SCHEMA)
+    op.create_index(
+        "idx_work_schedule_org_dept_period",
+        "work_schedule",
+        ["organization_id", "department_id", "period_start", "period_end"],
+        schema=SCHEDULE_SCHEMA,
+    )
+    op.create_index(
+        "idx_work_schedule_org_status",
+        "work_schedule",
+        ["organization_id", "status"],
+        schema=SCHEDULE_SCHEMA,
+    )
 
     op.create_table(
         "scheduling_policy",
-        sa.Column("scheduling_policy_id", _uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "scheduling_policy_id",
+            _uuid(),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("organization_id", _uuid(), nullable=False),
         sa.Column("department_id", _uuid(), nullable=True),
         sa.Column("rule_key", sa.String(80), nullable=False),
-        sa.Column("configuration", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "configuration",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
+        sa.Column(
+            "enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
         sa.Column("severity", sa.String(20), nullable=False, server_default="warning"),
         sa.Column("created_by", sa.String(100), nullable=True),
         sa.Column("updated_by", sa.String(100), nullable=True),
         sa.Column("created_by_id", _uuid(), nullable=True),
         sa.Column("updated_by_id", _uuid(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
         sa.ForeignKeyConstraint(["department_id"], ["hr.department.department_id"]),
         sa.ForeignKeyConstraint(["created_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["updated_by_id"], ["people.id"]),
         schema=SCHEDULE_SCHEMA,
     )
-    op.create_index("idx_scheduling_policy_org_rule", "scheduling_policy", ["organization_id", "rule_key"], schema=SCHEDULE_SCHEMA)
+    op.create_index(
+        "idx_scheduling_policy_org_rule",
+        "scheduling_policy",
+        ["organization_id", "rule_key"],
+        schema=SCHEDULE_SCHEMA,
+    )
 
     op.create_table(
         "schedule_audit_event",
-        sa.Column("schedule_audit_event_id", _uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "schedule_audit_event_id",
+            _uuid(),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("organization_id", _uuid(), nullable=False),
         sa.Column("work_schedule_id", _uuid(), nullable=False),
         sa.Column("actor_id", _uuid(), nullable=True),
@@ -212,47 +249,153 @@ def upgrade() -> None:
         sa.Column("previous_status", sa.String(30), nullable=True),
         sa.Column("new_status", sa.String(30), nullable=True),
         sa.Column("reason", sa.Text(), nullable=True),
-        sa.Column("event_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
-        sa.ForeignKeyConstraint(["work_schedule_id"], ["scheduling.work_schedule.work_schedule_id"]),
+        sa.Column(
+            "event_metadata",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
+        sa.ForeignKeyConstraint(
+            ["work_schedule_id"], ["scheduling.work_schedule.work_schedule_id"]
+        ),
         sa.ForeignKeyConstraint(["actor_id"], ["people.id"]),
         schema=SCHEDULE_SCHEMA,
     )
-    op.create_index("idx_schedule_audit_schedule", "schedule_audit_event", ["work_schedule_id", "created_at"], schema=SCHEDULE_SCHEMA)
+    op.create_index(
+        "idx_schedule_audit_schedule",
+        "schedule_audit_event",
+        ["work_schedule_id", "created_at"],
+        schema=SCHEDULE_SCHEMA,
+    )
 
     op.create_table(
         "schedule_notification_log",
-        sa.Column("schedule_notification_log_id", _uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "schedule_notification_log_id",
+            _uuid(),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("organization_id", _uuid(), nullable=False),
         sa.Column("work_schedule_id", _uuid(), nullable=False),
         sa.Column("revision", sa.Integer(), nullable=False),
         sa.Column("employee_id", _uuid(), nullable=False),
         sa.Column("notification_id", _uuid(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
-        sa.ForeignKeyConstraint(["work_schedule_id"], ["scheduling.work_schedule.work_schedule_id"]),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
+        sa.ForeignKeyConstraint(
+            ["work_schedule_id"], ["scheduling.work_schedule.work_schedule_id"]
+        ),
         sa.ForeignKeyConstraint(["employee_id"], ["hr.employee.employee_id"]),
         schema=SCHEDULE_SCHEMA,
     )
-    op.create_index("uq_schedule_notification_revision_employee", "schedule_notification_log", ["organization_id", "work_schedule_id", "revision", "employee_id"], unique=True, schema=SCHEDULE_SCHEMA)
+    op.create_index(
+        "uq_schedule_notification_revision_employee",
+        "schedule_notification_log",
+        ["organization_id", "work_schedule_id", "revision", "employee_id"],
+        unique=True,
+        schema=SCHEDULE_SCHEMA,
+    )
 
-    for table in ("work_schedule", "scheduling_policy", "schedule_audit_event", "schedule_notification_log"):
+    for table in (
+        "work_schedule",
+        "scheduling_policy",
+        "schedule_audit_event",
+        "schedule_notification_log",
+    ):
         _create_tenant_policy(table)
 
-    op.add_column("shift_schedule", sa.Column("work_schedule_id", _uuid(), nullable=True), schema=SCHEDULE_SCHEMA)
-    op.add_column("shift_schedule", sa.Column("revision", sa.Integer(), nullable=False, server_default="1"), schema=SCHEDULE_SCHEMA)
-    op.create_foreign_key("fk_shift_schedule_work_schedule", "shift_schedule", "work_schedule", ["work_schedule_id"], ["work_schedule_id"], source_schema=SCHEDULE_SCHEMA, referent_schema=SCHEDULE_SCHEMA)
-    op.create_index("ix_scheduling_shift_schedule_work_schedule_id", "shift_schedule", ["work_schedule_id"], schema=SCHEDULE_SCHEMA)
-    _drop_constraint_if_exists("shift_schedule", "uq_shift_schedule_emp_date", SCHEDULE_SCHEMA)
-    op.create_unique_constraint("uq_shift_schedule_emp_date_revision", "shift_schedule", ["organization_id", "employee_id", "shift_date", "revision"], schema=SCHEDULE_SCHEMA)
+    op.add_column(
+        "shift_schedule",
+        sa.Column("work_schedule_id", _uuid(), nullable=True),
+        schema=SCHEDULE_SCHEMA,
+    )
+    op.add_column(
+        "shift_schedule",
+        sa.Column("revision", sa.Integer(), nullable=False, server_default="1"),
+        schema=SCHEDULE_SCHEMA,
+    )
+    op.create_foreign_key(
+        "fk_shift_schedule_work_schedule",
+        "shift_schedule",
+        "work_schedule",
+        ["work_schedule_id"],
+        ["work_schedule_id"],
+        source_schema=SCHEDULE_SCHEMA,
+        referent_schema=SCHEDULE_SCHEMA,
+    )
+    op.create_index(
+        "ix_scheduling_shift_schedule_work_schedule_id",
+        "shift_schedule",
+        ["work_schedule_id"],
+        schema=SCHEDULE_SCHEMA,
+    )
+    _drop_constraint_if_exists(
+        "shift_schedule", "uq_shift_schedule_emp_date", SCHEDULE_SCHEMA
+    )
+    op.create_unique_constraint(
+        "uq_shift_schedule_emp_date_revision",
+        "shift_schedule",
+        ["organization_id", "employee_id", "shift_date", "revision"],
+        schema=SCHEDULE_SCHEMA,
+    )
 
-    op.add_column("attendance", sa.Column("shift_schedule_id", _uuid(), nullable=True), schema=ATTENDANCE_SCHEMA)
-    op.add_column("attendance", sa.Column("work_schedule_id", _uuid(), nullable=True), schema=ATTENDANCE_SCHEMA)
-    op.create_foreign_key("fk_attendance_shift_schedule", "attendance", "shift_schedule", ["shift_schedule_id"], ["shift_schedule_id"], source_schema=ATTENDANCE_SCHEMA, referent_schema=SCHEDULE_SCHEMA)
-    op.create_foreign_key("fk_attendance_work_schedule", "attendance", "work_schedule", ["work_schedule_id"], ["work_schedule_id"], source_schema=ATTENDANCE_SCHEMA, referent_schema=SCHEDULE_SCHEMA)
-    op.create_index("ix_attendance_attendance_shift_schedule_id", "attendance", ["shift_schedule_id"], schema=ATTENDANCE_SCHEMA)
-    op.create_index("ix_attendance_attendance_work_schedule_id", "attendance", ["work_schedule_id"], schema=ATTENDANCE_SCHEMA)
+    op.add_column(
+        "attendance",
+        sa.Column("shift_schedule_id", _uuid(), nullable=True),
+        schema=ATTENDANCE_SCHEMA,
+    )
+    op.add_column(
+        "attendance",
+        sa.Column("work_schedule_id", _uuid(), nullable=True),
+        schema=ATTENDANCE_SCHEMA,
+    )
+    op.create_foreign_key(
+        "fk_attendance_shift_schedule",
+        "attendance",
+        "shift_schedule",
+        ["shift_schedule_id"],
+        ["shift_schedule_id"],
+        source_schema=ATTENDANCE_SCHEMA,
+        referent_schema=SCHEDULE_SCHEMA,
+    )
+    op.create_foreign_key(
+        "fk_attendance_work_schedule",
+        "attendance",
+        "work_schedule",
+        ["work_schedule_id"],
+        ["work_schedule_id"],
+        source_schema=ATTENDANCE_SCHEMA,
+        referent_schema=SCHEDULE_SCHEMA,
+    )
+    op.create_index(
+        "ix_attendance_attendance_shift_schedule_id",
+        "attendance",
+        ["shift_schedule_id"],
+        schema=ATTENDANCE_SCHEMA,
+    )
+    op.create_index(
+        "ix_attendance_attendance_work_schedule_id",
+        "attendance",
+        ["work_schedule_id"],
+        schema=ATTENDANCE_SCHEMA,
+    )
 
     for key, description in SCHEDULE_PERMISSIONS.items():
         op.execute(
@@ -291,24 +434,70 @@ def downgrade() -> None:
         """
     )
     for key in SCHEDULE_PERMISSIONS:
-        op.execute(sa.text("DELETE FROM permissions WHERE key = :key").bindparams(key=key))
+        op.execute(
+            sa.text("DELETE FROM permissions WHERE key = :key").bindparams(key=key)
+        )
 
-    op.drop_index("ix_attendance_attendance_work_schedule_id", table_name="attendance", schema=ATTENDANCE_SCHEMA)
-    op.drop_index("ix_attendance_attendance_shift_schedule_id", table_name="attendance", schema=ATTENDANCE_SCHEMA)
-    op.drop_constraint("fk_attendance_work_schedule", "attendance", schema=ATTENDANCE_SCHEMA, type_="foreignkey")
-    op.drop_constraint("fk_attendance_shift_schedule", "attendance", schema=ATTENDANCE_SCHEMA, type_="foreignkey")
+    op.drop_index(
+        "ix_attendance_attendance_work_schedule_id",
+        table_name="attendance",
+        schema=ATTENDANCE_SCHEMA,
+    )
+    op.drop_index(
+        "ix_attendance_attendance_shift_schedule_id",
+        table_name="attendance",
+        schema=ATTENDANCE_SCHEMA,
+    )
+    op.drop_constraint(
+        "fk_attendance_work_schedule",
+        "attendance",
+        schema=ATTENDANCE_SCHEMA,
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        "fk_attendance_shift_schedule",
+        "attendance",
+        schema=ATTENDANCE_SCHEMA,
+        type_="foreignkey",
+    )
     op.drop_column("attendance", "work_schedule_id", schema=ATTENDANCE_SCHEMA)
     op.drop_column("attendance", "shift_schedule_id", schema=ATTENDANCE_SCHEMA)
 
-    op.drop_constraint("uq_shift_schedule_emp_date_revision", "shift_schedule", schema=SCHEDULE_SCHEMA, type_="unique")
-    op.create_unique_constraint("uq_shift_schedule_emp_date", "shift_schedule", ["organization_id", "employee_id", "shift_date"], schema=SCHEDULE_SCHEMA)
-    op.drop_index("ix_scheduling_shift_schedule_work_schedule_id", table_name="shift_schedule", schema=SCHEDULE_SCHEMA)
-    op.drop_constraint("fk_shift_schedule_work_schedule", "shift_schedule", schema=SCHEDULE_SCHEMA, type_="foreignkey")
+    op.drop_constraint(
+        "uq_shift_schedule_emp_date_revision",
+        "shift_schedule",
+        schema=SCHEDULE_SCHEMA,
+        type_="unique",
+    )
+    op.create_unique_constraint(
+        "uq_shift_schedule_emp_date",
+        "shift_schedule",
+        ["organization_id", "employee_id", "shift_date"],
+        schema=SCHEDULE_SCHEMA,
+    )
+    op.drop_index(
+        "ix_scheduling_shift_schedule_work_schedule_id",
+        table_name="shift_schedule",
+        schema=SCHEDULE_SCHEMA,
+    )
+    op.drop_constraint(
+        "fk_shift_schedule_work_schedule",
+        "shift_schedule",
+        schema=SCHEDULE_SCHEMA,
+        type_="foreignkey",
+    )
     op.drop_column("shift_schedule", "revision", schema=SCHEDULE_SCHEMA)
     op.drop_column("shift_schedule", "work_schedule_id", schema=SCHEDULE_SCHEMA)
 
-    for table in ("schedule_notification_log", "schedule_audit_event", "scheduling_policy", "work_schedule"):
-        op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation ON {SCHEDULE_SCHEMA}.{table}")
+    for table in (
+        "schedule_notification_log",
+        "schedule_audit_event",
+        "scheduling_policy",
+        "work_schedule",
+    ):
+        op.execute(
+            f"DROP POLICY IF EXISTS {table}_tenant_isolation ON {SCHEDULE_SCHEMA}.{table}"
+        )
         op.execute(f"ALTER TABLE {SCHEDULE_SCHEMA}.{table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {SCHEDULE_SCHEMA}.{table} DISABLE ROW LEVEL SECURITY")
         op.drop_table(table, schema=SCHEDULE_SCHEMA)

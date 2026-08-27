@@ -36,7 +36,10 @@ class ScheduleResolver:
         candidates = list(
             self.db.scalars(
                 select(ShiftSchedule)
-                .join(WorkSchedule, WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id)
+                .join(
+                    WorkSchedule,
+                    WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
+                )
                 .options(
                     joinedload(ShiftSchedule.shift_type),
                     joinedload(ShiftSchedule.department),
@@ -44,13 +47,17 @@ class ScheduleResolver:
                 .where(
                     ShiftSchedule.organization_id == organization_id,
                     ShiftSchedule.employee_id == employee_id,
-                    ShiftSchedule.shift_date.in_([local_date, local_date - timedelta(days=1)]),
+                    ShiftSchedule.shift_date.in_(
+                        [local_date, local_date - timedelta(days=1)]
+                    ),
                     ShiftSchedule.status == ScheduleStatus.PUBLISHED,
                     WorkSchedule.organization_id == organization_id,
                     WorkSchedule.status == ScheduleStatus.PUBLISHED,
                 )
                 .order_by(WorkSchedule.revision.desc(), ShiftSchedule.revision.desc())
-            ).unique().all()
+            )
+            .unique()
+            .all()
         )
         for assignment in candidates:
             shift = assignment.shift_type
@@ -61,7 +68,11 @@ class ScheduleResolver:
                 scheduled_end = scheduled_end.replace(tzinfo=timestamp.tzinfo)
             if shift.end_time <= shift.start_time:
                 scheduled_end += timedelta(days=1)
-            if scheduled_start - timedelta(hours=6) <= timestamp <= scheduled_end + timedelta(hours=6):
+            if (
+                scheduled_start - timedelta(hours=6)
+                <= timestamp
+                <= scheduled_end + timedelta(hours=6)
+            ):
                 schedule = self.db.get(WorkSchedule, assignment.work_schedule_id)
                 if schedule is None:
                     continue

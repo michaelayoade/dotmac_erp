@@ -10,7 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.services.people.scheduling.web import scheduling_web_service
 from app.templates import templates
-from app.web.deps import get_db_for_org, WebAuthContext, base_context, require_hr_access, require_scheduler_access
+from app.web.deps import (
+    get_db_for_org,
+    WebAuthContext,
+    base_context,
+    require_hr_access,
+    require_scheduler_access,
+)
 
 router = APIRouter(prefix="/scheduling", tags=["people-scheduling-web"])
 
@@ -31,6 +37,7 @@ def scheduler_workspace(
         department_id=department_id,
         week_start=week_start,
     )
+
 
 # =============================================================================
 # Shift Patterns

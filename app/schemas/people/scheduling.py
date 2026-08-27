@@ -579,6 +579,7 @@ class ScheduleAmendmentRequest(BaseModel):
 
     reason: str | None = None
 
+
 class SchedulePublishResponse(BaseModel):
     """Publish response."""
 

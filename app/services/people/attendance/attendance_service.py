@@ -758,12 +758,14 @@ class AttendanceService:
         remarks: str | None = None,
         marked_by: str = "MANUAL",
         leave_application_id: UUID | None = None,
+        _duplicate_checked: bool = False,
     ) -> Attendance:
         """Create an attendance record."""
         # Check for duplicate
-        existing = self.get_attendance_by_date(org_id, employee_id, attendance_date)
-        if existing:
-            raise DuplicateAttendanceError(employee_id, attendance_date)
+        if not _duplicate_checked:
+            existing = self.get_attendance_by_date(org_id, employee_id, attendance_date)
+            if existing:
+                raise DuplicateAttendanceError(employee_id, attendance_date)
 
         # Manual/web inputs often arrive as timezone-naive local values.
         # Normalize them to the organization's timezone so display round-trips
@@ -850,9 +852,15 @@ class AttendanceService:
         # Resolve the shift here so every check-in adapter applies the same
         # lateness policy. Published scheduler assignments take precedence;
         # otherwise preserve the existing dated assignment/default fallback.
-        resolved_shift_id = shift_type_id or (
-            resolved_schedule.assignment.shift_type_id if resolved_schedule else None
-        ) or (existing.shift_type_id if existing else None)
+        resolved_shift_id = (
+            shift_type_id
+            or (
+                resolved_schedule.assignment.shift_type_id
+                if resolved_schedule
+                else None
+            )
+            or (existing.shift_type_id if existing else None)
+        )
         if shift is None:
             shift = (
                 self.get_shift_type(org_id, resolved_shift_id)
@@ -869,7 +877,9 @@ class AttendanceService:
             )
 
         shift_schedule_id = (
-            resolved_schedule.assignment.shift_schedule_id if resolved_schedule else None
+            resolved_schedule.assignment.shift_schedule_id
+            if resolved_schedule
+            else None
         )
         work_schedule_id = (
             resolved_schedule.schedule.work_schedule_id if resolved_schedule else None
@@ -902,6 +912,7 @@ class AttendanceService:
             late_entry_minutes=late_entry_minutes,
             remarks=notes,
             marked_by=marked_by,
+            _duplicate_checked=True,
         )
 
     def check_out(

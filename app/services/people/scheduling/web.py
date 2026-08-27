@@ -154,7 +154,9 @@ class SchedulingWebService:
         return bool(
             auth.is_admin
             or roles.intersection({"hr_manager", "hr_director"})
-            or auth.has_any_permission(["hr:access", "hr:schedule:*", "hr:schedule:read"])
+            or auth.has_any_permission(
+                ["hr:access", "hr:schedule:*", "hr:schedule:read"]
+            )
         )
 
     @staticmethod
@@ -163,7 +165,9 @@ class SchedulingWebService:
         return bool(
             auth.is_admin
             or roles.intersection({"hr_manager", "hr_director"})
-            or auth.has_any_permission(["hr:schedule:*", "hr:schedule:approve", "hr:schedule:publish"])
+            or auth.has_any_permission(
+                ["hr:schedule:*", "hr:schedule:approve", "hr:schedule:publish"]
+            )
         )
 
     @staticmethod
@@ -185,7 +189,11 @@ class SchedulingWebService:
                 actor_employee_id=auth.employee_id,
                 can_view_all=False,
             )
-            departments = [department for department in departments if department.department_id in allowed]
+            departments = [
+                department
+                for department in departments
+                if department.department_id in allowed
+            ]
 
         selected_department = SchedulingWebService._parse_uuid(department_id)
         if selected_department is None and departments:
@@ -220,7 +228,9 @@ class SchedulingWebService:
                     can_view_all=can_view_all,
                 )
                 workspace = ScheduleWorkspaceService(db)
-                assignments = workspace.list_assignments(org_id, schedule.work_schedule_id)
+                assignments = workspace.list_assignments(
+                    org_id, schedule.work_schedule_id
+                )
                 evaluation = workspace.evaluation(org_id, schedule.work_schedule_id)
             except Exception as exc:
                 logger.warning("Unable to load scheduler workspace: %s", exc)
@@ -246,7 +256,9 @@ class SchedulingWebService:
         ctx.update(
             {
                 "departments": departments,
-                "selected_department_id": str(selected_department) if selected_department else "",
+                "selected_department_id": str(selected_department)
+                if selected_department
+                else "",
                 "week_start": selected_week.isoformat(),
                 "week_end": selected_week_end.isoformat(),
                 "previous_week_start": (selected_week - timedelta(days=7)).isoformat(),
@@ -255,7 +267,9 @@ class SchedulingWebService:
                 "schedule": schedule,
                 "schedule_json": {
                     "id": str(schedule.work_schedule_id) if schedule else "",
-                    "status": schedule.status.value if schedule else ScheduleStatus.DRAFT.value,
+                    "status": schedule.status.value
+                    if schedule
+                    else ScheduleStatus.DRAFT.value,
                     "version": schedule.version if schedule else 1,
                     "revision": schedule.revision if schedule else 1,
                 },
@@ -264,7 +278,9 @@ class SchedulingWebService:
                         "employee_id": str(employee.employee_id),
                         "employee_code": employee.employee_code or "",
                         "full_name": employee.full_name,
-                        "department_id": str(employee.department_id) if employee.department_id else "",
+                        "department_id": str(employee.department_id)
+                        if employee.department_id
+                        else "",
                     }
                     for employee in employees
                 ],
@@ -283,13 +299,22 @@ class SchedulingWebService:
                 "assignments_json": assignment_items,
                 "evaluation_json": {
                     "valid": evaluation.valid if evaluation else True,
-                    "errors": [issue.__dict__ for issue in evaluation.errors] if evaluation else [],
-                    "warnings": [issue.__dict__ for issue in evaluation.warnings] if evaluation else [],
+                    "errors": [issue.__dict__ for issue in evaluation.errors]
+                    if evaluation
+                    else [],
+                    "warnings": [issue.__dict__ for issue in evaluation.warnings]
+                    if evaluation
+                    else [],
                 },
-                "can_approve_schedule": SchedulingWebService._can_approve_schedules(auth),
+                "can_approve_schedule": SchedulingWebService._can_approve_schedules(
+                    auth
+                ),
             }
         )
-        return templates.TemplateResponse(request, "people/scheduling/workspace.html", ctx)
+        return templates.TemplateResponse(
+            request, "people/scheduling/workspace.html", ctx
+        )
+
     # =========================================================================
     # Shift Patterns
     # =========================================================================
