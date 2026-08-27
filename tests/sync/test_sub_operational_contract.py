@@ -1,17 +1,17 @@
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from app.api.sync import dotmac_crm
+from app.api.sync import dotmac_sub
 from app.models.pm.task import TaskStatus
-from app.schemas.sync.dotmac_crm import BulkSyncRequest, CRMProjectTaskPayload
-from app.services.sync.crm_mappings import TASK_STATUS_MAP
+from app.schemas.sync.sub_operational import BulkSyncRequest, SubProjectTaskPayload
+from app.services.sync.sub_mappings import TASK_STATUS_MAP
 
 
 def test_bulk_contract_accepts_project_tasks_without_breaking_older_payloads() -> None:
     assert BulkSyncRequest().project_tasks == []
     payload = BulkSyncRequest(
         project_tasks=[
-            CRMProjectTaskPayload(
+            SubProjectTaskPayload(
                 source_id="task-1",
                 project_source_id="project-1",
                 title="Survey route",
@@ -51,10 +51,10 @@ def test_bulk_sync_processes_dependencies_before_project_tasks(monkeypatch) -> N
         def sync_work_order(self, _org_id, _payload) -> None:
             calls.append("work_order")
 
-    monkeypatch.setattr(dotmac_crm, "DotMacCRMSyncService", Service)
+    monkeypatch.setattr(dotmac_sub, "DotMacSubSyncService", Service)
     db = MagicMock()
     db.begin_nested.return_value = MagicMock()
-    payload = dotmac_crm.BulkSyncRequest.model_validate(
+    payload = dotmac_sub.BulkSyncRequest.model_validate(
         {
             "projects": [{"source_id": "p1", "name": "Build"}],
             "tickets": [{"source_id": "t1", "subject": "Install"}],
@@ -70,7 +70,7 @@ def test_bulk_sync_processes_dependencies_before_project_tasks(monkeypatch) -> N
         }
     )
 
-    result = dotmac_crm.bulk_sync(
+    result = dotmac_sub.sync_sub_operational_domains(
         payload,
         auth={"organization_id": "00000000-0000-0000-0000-000000000001"},
         db=db,
@@ -79,3 +79,55 @@ def test_bulk_sync_processes_dependencies_before_project_tasks(monkeypatch) -> N
     assert calls == ["project", "ticket", "project_task", "work_order"]
     assert result.project_tasks_synced == 1
     assert result.errors == []
+
+
+def test_bulk_sync_keeps_ticket_item_errors_before_commit_failure(
+    monkeypatch,
+) -> None:
+    class Service:
+        def __init__(self, _db) -> None:
+            pass
+
+        def sync_project(self, _org_id, _payload) -> None:
+            pass
+
+        def sync_ticket(self, _org_id, _payload, item_errors: list[str]) -> None:
+            item_errors.extend(["comment failed", "activity failed"])
+
+        def sync_project_task(self, _org_id, _payload) -> None:
+            pass
+
+        def sync_work_order(self, _org_id, _payload) -> None:
+            pass
+
+    monkeypatch.setattr(dotmac_sub, "DotMacSubSyncService", Service)
+    monkeypatch.setattr(dotmac_sub.logger, "exception", MagicMock())
+    savepoint = MagicMock()
+    savepoint.commit.side_effect = RuntimeError("commit failed")
+    db = MagicMock()
+    db.begin_nested.return_value = savepoint
+    payload = dotmac_sub.BulkSyncRequest.model_validate(
+        {"tickets": [{"source_id": "t1", "subject": "Install"}]}
+    )
+
+    result = dotmac_sub.sync_sub_operational_domains(
+        payload,
+        auth={"organization_id": "00000000-0000-0000-0000-000000000001"},
+        db=db,
+    )
+
+    assert result.tickets_synced == 0
+    assert [error.entity_type for error in result.errors] == [
+        "ticket_item",
+        "ticket_item",
+        "ticket",
+    ]
+    assert [error.error for error in result.errors] == [
+        "comment failed",
+        "activity failed",
+        "commit failed",
+    ]
+    savepoint.rollback.assert_called_once_with()
+    dotmac_sub.logger.exception.assert_called_once_with(
+        "Failed to accept Sub %s %s", "ticket", "t1"
+    )

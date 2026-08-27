@@ -89,6 +89,20 @@ class Attendance(Base, AuditMixin, ERPNextSyncMixin):
         ForeignKey("attendance.shift_type.shift_type_id"),
         nullable=True,
     )
+    shift_schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scheduling.shift_schedule.shift_schedule_id"),
+        nullable=True,
+        index=True,
+        comment="Published scheduler assignment resolved at check-in time",
+    )
+    work_schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scheduling.work_schedule.work_schedule_id"),
+        nullable=True,
+        index=True,
+        comment="Published schedule revision resolved at check-in time",
+    )
 
     # Date
     attendance_date: Mapped[date] = mapped_column(

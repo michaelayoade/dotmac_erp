@@ -4,10 +4,12 @@ Shift Schedule Model - Scheduling Schema.
 Generated monthly schedules for employees showing their assigned shifts per day.
 """
 
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -38,6 +40,9 @@ class ScheduleStatus(str, enum.Enum):
     """Schedule lifecycle status."""
 
     DRAFT = "DRAFT"  # Generated but not yet published
+    SUBMITTED = "SUBMITTED"  # Submitted for approval
+    APPROVED = "APPROVED"  # Approved and ready to publish
+    REJECTED = "REJECTED"  # Rejected back to draft
     PUBLISHED = "PUBLISHED"  # Published and visible to employees
     COMPLETED = "COMPLETED"  # Past schedule, marked complete
 
@@ -57,7 +62,8 @@ class ShiftSchedule(Base, AuditMixin):
             "organization_id",
             "employee_id",
             "shift_date",
-            name="uq_shift_schedule_emp_date",
+            "revision",
+            name="uq_shift_schedule_emp_date_revision",
         ),
         Index(
             "idx_shift_schedule_org_month",
@@ -118,6 +124,19 @@ class ShiftSchedule(Base, AuditMixin):
         nullable=False,
         comment="The assigned shift type for this date",
     )
+    work_schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("scheduling.work_schedule.work_schedule_id"),
+        nullable=True,
+        index=True,
+        comment="Weekly schedule workspace/revision that owns this assignment",
+    )
+    revision: Mapped[int] = mapped_column(
+        nullable=False,
+        default=1,
+        server_default="1",
+        comment="Schedule revision snapshot for historical attendance traceability",
+    )
 
     # Grouping field for monthly views
     schedule_month: Mapped[str] = mapped_column(
@@ -169,27 +188,27 @@ class ShiftSchedule(Base, AuditMixin):
     )
 
     # Relationships
-    organization: Mapped["Organization"] = relationship(
+    organization: Mapped[Organization] = relationship(
         "Organization",
         foreign_keys=[organization_id],
     )
-    employee: Mapped["Employee"] = relationship(
+    employee: Mapped[Employee] = relationship(
         "Employee",
         foreign_keys=[employee_id],
     )
-    department: Mapped["Department"] = relationship(
+    department: Mapped[Department] = relationship(
         "Department",
         foreign_keys=[department_id],
     )
-    shift_type: Mapped["ShiftType"] = relationship(
+    shift_type: Mapped[ShiftType] = relationship(
         "ShiftType",
         foreign_keys=[shift_type_id],
     )
-    created_by: Mapped[Optional["Employee"]] = relationship(
+    created_by: Mapped[Employee | None] = relationship(
         "Employee",
         foreign_keys=[created_by_id],
     )
-    published_by: Mapped[Optional["Employee"]] = relationship(
+    published_by: Mapped[Employee | None] = relationship(
         "Employee",
         foreign_keys=[published_by_id],
     )

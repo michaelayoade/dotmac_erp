@@ -157,12 +157,27 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 module="app.services.rbac",
                 owns=(
                     "role/permission/grant CRUD",
-                    "permission-code catalogue (seeded)",
+                    "persisted permission catalogue and role grants",
                 ),
+                depends_on=("auth.rbac_declarations",),
                 notes=(
                     "Tables are GLOBAL, not org-scoped; safety rests on the "
                     "one-person-one-org invariant (ledger finding 2). The "
                     "scope decision is explicit kernel-adoption work."
+                ),
+            ),
+            SOTService(
+                name="auth.rbac_declarations",
+                module="app.authz.profile",
+                owns=(
+                    "product role definitions",
+                    "assembly-owned baseline role-permission bundles",
+                ),
+                notes=(
+                    "Modules own permission definitions. The full seed imports "
+                    "these product declarations; startup validates their internal "
+                    "references, and deployments materialize approved bundles "
+                    "through scoped additive migrations."
                 ),
             ),
         ),
@@ -285,6 +300,51 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         ),
     ),
     DomainSOT(
+        domain="payment_execution",
+        services=(
+            SOTService(
+                name="payments.intent_lifecycle",
+                module="app.services.finance.payments.payment_service",
+                owns=(
+                    "PaymentIntent.status - every transition, from every trigger",
+                    "transfer initiation, completion, failure and reversal",
+                    "scheduled reconciliation of in-flight transfers",
+                ),
+                notes=(
+                    "Sole writer of payments.payment_intent.status. The webhook "
+                    "receiver, the API routes and the scheduled poller are all "
+                    "adapters over this service; none of them decides a status "
+                    "itself. Enforced by tests/architecture/"
+                    "test_payment_intent_status_single_owner.py. Implemented and "
+                    "tested; production enablement unconfirmed."
+                ),
+            ),
+            SOTService(
+                name="payments.webhook_intake",
+                module="app.services.finance.payments.webhook_service",
+                owns=(
+                    "Paystack webhook signature verification and replay refusal",
+                    "webhook event to payment-intent dispatch",
+                ),
+                depends_on=("payments.intent_lifecycle",),
+                notes=(
+                    "Transport only: it validates and dispatches, and never "
+                    "writes an intent status of its own."
+                ),
+            ),
+        ),
+        entrypoints=(
+            "app.api.finance.payments",
+            "app.tasks.expense",
+        ),
+        rule=(
+            "One service decides what a payment intent's status is. Webhooks, "
+            "routes and schedulers validate, authorize and delegate; a second "
+            "writer is how a settled transfer gets reopened or an in-flight "
+            "payout gets stamped expired."
+        ),
+    ),
+    DomainSOT(
         domain="platform_events",
         services=(
             SOTService(
@@ -367,7 +427,7 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             ),
             SOTService(
                 name="sync.sub_operational_context",
-                module="app.services.sync.crm.projects",
+                module="app.services.sync.sub.projects",
                 owns=(
                     "version-2 Sub operational-context intake",
                     "ERP project, ticket, project-task, and work-order projections",
@@ -376,8 +436,8 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 notes=(
                     "Sub owns operational lifecycle decisions. ERP projections are "
                     "rebuildable context for finance and employee-expense links; "
-                    "the neutral /sync/sub/bulk route reuses the established "
-                    "idempotent projection service during compatibility migration."
+                    "the /sync/sub/bulk route delegates to the source-neutral "
+                    "idempotent projection service."
                 ),
             ),
             SOTService(
@@ -388,28 +448,28 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "ERP material-support outcome lookup",
                     "routing accepted support needs through ERP inventory policy",
                 ),
-                depends_on=("sync.crm_procurement",),
+                depends_on=("sync.sub_procurement",),
                 notes=(
                     "Sub owns the service work order and material need; ERP owns "
                     "warehouse, stock, serial, fiscal-period, and issue decisions. "
-                    "The crm_id/omni_id names are temporary compatibility storage "
-                    "for the immutable Sub request UUID, not CRM authority. See "
+                    "The source-qualified opaque reference stores the immutable "
+                    "Sub request UUID, not an external lifecycle. See "
                     "docs/dotmac_sub_material_support_contract.md."
                 ),
             ),
             SOTService(
-                name="sync.crm_procurement",
-                module="app.services.sync.crm.procurement",
+                name="sync.sub_procurement",
+                module="app.services.sync.sub.procurement",
                 owns=(
-                    "legacy CRM material/PO/purchase-invoice sync mappings",
-                    "compatibility material-request inventory policy engine",
+                    "Sub material, PO, and purchase-invoice intake mappings",
+                    "material-request inventory policy adapter",
                 ),
                 notes=(
                     "REPAIR-FIRST (ledger finding 9): the #118 money-bug "
                     "class lives on this edge; no extraction or convergence "
-                    "until closed. New Sub material requests enter through "
-                    "inventory.material_support; this service remains its "
-                    "compatibility engine until the CRM path is retired."
+                    "until closed. Sub material requests enter through "
+                    "inventory.material_support; external delivery belongs to "
+                    "Integrator, not this service."
                 ),
             ),
         ),

@@ -33,6 +33,15 @@ from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.authz.expense import EXPENSE_PERMISSION_DEFINITIONS
+from app.authz.payment_execution import (
+    EXPENSE_PAYOUT_PERMISSION_DEFINITIONS,
+)
+from app.authz.profile import (
+    EXPENSE_BASELINE_ROLES,
+    EXPENSE_PAYOUT_ROLE_GRANTS,
+    EXPENSE_ROLE_GRANTS,
+)
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
@@ -392,6 +401,17 @@ FINANCE_PERMISSIONS = [
     ("payments:intents:create", "Create payment intents"),
     ("payments:webhooks:manage", "Manage payment webhooks"),
     ("payments:settings:manage", "Manage payment gateway settings"),
+    # Expense reimbursement payouts. These three are TIERED and are graded by
+    # what the holder can cause, not by which screen they sit behind:
+    #   read       - provider lookups (bank list, account-name resolution)
+    #   initialize - prepares a payout: creates the Paystack transfer
+    #                recipient and the local PaymentIntent. No money moves.
+    #   initiate   - EXECUTES the outbound transfer. Money leaves the account.
+    # Keep them separately grantable. `payments:transfer:initiate` is the
+    # disbursement authority and is the ONLY thing that satisfies
+    # `require_expense_payout_execute_access`; see the guard tiers in
+    # app/api/finance/payments.py.
+    *EXPENSE_PAYOUT_PERMISSION_DEFINITIONS,
     # -------------------------------------------------------------------------
     # Automation
     # -------------------------------------------------------------------------
@@ -626,58 +646,9 @@ HR_PERMISSIONS = [
 # =============================================================================
 # Expense Module Permissions
 # =============================================================================
-EXPENSE_PERMISSIONS = [
-    # -------------------------------------------------------------------------
-    # Module Access Gate
-    # -------------------------------------------------------------------------
-    ("expense:access", "Access expense module"),
-    ("expense:dashboard", "View expense dashboard"),
-    # -------------------------------------------------------------------------
-    # Expense Claims
-    # -------------------------------------------------------------------------
-    ("expense:claims:read", "View all expense claims"),
-    ("expense:claims:read_team", "View team expense claims"),
-    ("expense:claims:read_own", "View own expense claims"),
-    ("expense:claims:create", "Submit expense claims"),
-    ("expense:claims:update", "Modify draft claims"),
-    ("expense:claims:delete", "Delete draft claims"),
-    ("expense:claims:submit", "Submit claims for approval"),
-    ("expense:claims:approve:tier1", "Approve expenses (Tier 1 limit)"),
-    ("expense:claims:approve:tier2", "Approve expenses (Tier 2 limit)"),
-    ("expense:claims:approve:tier3", "Approve expenses (unlimited)"),
-    ("expense:claims:reject", "Reject expense claims"),
-    ("expense:claims:reimburse", "Process reimbursements"),
-    ("expense:claims:post", "Post expenses to GL"),
-    ("expense:categories:read", "View expense categories"),
-    ("expense:categories:manage", "Manage expense categories"),
-    ("expense:policies:read", "View expense policies"),
-    ("expense:policies:manage", "Manage expense policies"),
-    ("expense:limits:review", "Review approver decisions and reset weekly budgets"),
-    # -------------------------------------------------------------------------
-    # Cash Advances
-    # -------------------------------------------------------------------------
-    ("expense:advances:read", "View all cash advances"),
-    ("expense:advances:read_own", "View own cash advances"),
-    ("expense:advances:create", "Request cash advances"),
-    ("expense:advances:approve:tier1", "Approve advances (Tier 1)"),
-    ("expense:advances:approve:tier2", "Approve advances (Tier 2)"),
-    ("expense:advances:approve:tier3", "Approve advances (unlimited)"),
-    ("expense:advances:disburse", "Disburse cash advances"),
-    ("expense:advances:settle", "Settle cash advances"),
-    # -------------------------------------------------------------------------
-    # Corporate Cards
-    # -------------------------------------------------------------------------
-    ("expense:cards:read", "View corporate cards"),
-    ("expense:cards:manage", "Manage corporate cards"),
-    ("expense:cards:assign", "Assign cards to employees"),
-    ("expense:cards:transactions:read", "View card transactions"),
-    ("expense:cards:transactions:reconcile", "Reconcile card transactions"),
-    # -------------------------------------------------------------------------
-    # Reports
-    # -------------------------------------------------------------------------
-    ("expense:reports:read", "View expense reports"),
-    ("expense:reports:export", "Export expense data"),
-]
+# Compatibility re-export. The module declaration is the one authored source;
+# this script remains a bootstrap writer, not the catalogue owner.
+EXPENSE_PERMISSIONS = list(EXPENSE_PERMISSION_DEFINITIONS)
 
 # =============================================================================
 # Operational Module Permissions
@@ -791,8 +762,8 @@ DEFAULT_ROLES = [
     # -------------------------------------------------------------------------
     # Platform Roles
     # -------------------------------------------------------------------------
-    ("admin", "Full system administrator"),
-    ("auditor", "Read-only audit access"),
+    ("admin", EXPENSE_BASELINE_ROLES["admin"]),
+    ("auditor", EXPENSE_BASELINE_ROLES["auditor"]),
     ("operator", "System operations and settings"),
     # -------------------------------------------------------------------------
     # Finance Roles
@@ -826,11 +797,11 @@ DEFAULT_ROLES = [
     # -------------------------------------------------------------------------
     # Expense Roles
     # -------------------------------------------------------------------------
-    ("expense_admin", "Expense module administrator"),
-    ("expense_approver", "Expense approval authority"),
-    ("expense_processor", "Expense processing and reimbursement"),
-    ("expense_reviewer", "Expense reviewer with manual weekly reset authority"),
-    ("expense_reimburser", "Reimbursement-only processing"),
+    ("expense_admin", EXPENSE_BASELINE_ROLES["expense_admin"]),
+    ("expense_approver", EXPENSE_BASELINE_ROLES["expense_approver"]),
+    ("expense_processor", EXPENSE_BASELINE_ROLES["expense_processor"]),
+    ("expense_reviewer", EXPENSE_BASELINE_ROLES["expense_reviewer"]),
+    ("expense_reimburser", EXPENSE_BASELINE_ROLES["expense_reimburser"]),
     # -------------------------------------------------------------------------
     # Operations Roles
     # -------------------------------------------------------------------------
@@ -843,8 +814,8 @@ DEFAULT_ROLES = [
     # -------------------------------------------------------------------------
     # Cross-Functional Roles
     # -------------------------------------------------------------------------
-    ("department_manager", "Department head with team approvals"),
-    ("employee", "Standard employee self-service"),
+    ("department_manager", EXPENSE_BASELINE_ROLES["department_manager"]),
+    ("employee", EXPENSE_BASELINE_ROLES["employee"]),
 ]
 
 
@@ -931,8 +902,7 @@ ROLE_PERMISSIONS = {
         "hr:departments:read",
         "payroll:entries:read",
         "payroll:slips:read",
-        "expense:access",
-        "expense:claims:read",
+        *EXPENSE_ROLE_GRANTS["auditor"],
     ],
     "operator": [
         "scheduler:read",
@@ -2415,87 +2385,42 @@ ROLE_PERMISSIONS = {
     # Expense Roles
     # -------------------------------------------------------------------------
     "expense_admin": [
-        "expense:access",
-        "expense:dashboard",
+        *EXPENSE_ROLE_GRANTS["expense_admin"],
         # Coach
         "coach:insights:read",
         "coach:insights:feedback",
         "coach:reports:read",
         "coach:chat:access",
         "coach:admin:manage",
-        "expense:claims:read",
-        "expense:claims:create",
-        "expense:claims:update",
-        "expense:claims:delete",
-        "expense:claims:submit",
-        "expense:claims:approve:tier1",
-        "expense:claims:approve:tier2",
-        "expense:claims:approve:tier3",
-        "expense:claims:reject",
-        "expense:claims:reimburse",
-        "expense:claims:post",
-        "expense:categories:read",
-        "expense:categories:manage",
-        "expense:policies:read",
-        "expense:policies:manage",
-        "expense:advances:read",
-        "expense:advances:create",
-        "expense:advances:approve:tier1",
-        "expense:advances:approve:tier2",
-        "expense:advances:approve:tier3",
-        "expense:advances:disburse",
-        "expense:advances:settle",
-        "expense:cards:read",
-        "expense:cards:manage",
-        "expense:cards:assign",
-        "expense:cards:transactions:read",
-        "expense:cards:transactions:reconcile",
-        "expense:reports:read",
-        "expense:reports:export",
+        # Payout tiers. Granted here because these roles could already reach
+        # the transfer through the old shared reimburse guard; splitting that
+        # guard must not take the capability away from its intended holders.
+        *EXPENSE_PAYOUT_ROLE_GRANTS["expense_admin"],
     ],
     "expense_approver": [
-        "expense:access",
-        "expense:dashboard",
+        *EXPENSE_ROLE_GRANTS["expense_approver"],
         # Coach
         "coach:insights:read",
         "coach:insights:feedback",
         "coach:reports:read",
         "coach:chat:access",
-        "expense:claims:read",
-        "expense:claims:read_team",
-        "expense:claims:approve:tier2",
-        "expense:claims:reject",
-        "expense:advances:read",
-        "expense:advances:approve:tier2",
-        "expense:reports:read",
     ],
     "expense_processor": [
-        "expense:access",
-        "expense:dashboard",
-        "expense:claims:read",
-        "expense:claims:reimburse",
-        "expense:claims:post",
-        "expense:advances:read",
-        "expense:advances:disburse",
-        "expense:advances:settle",
-        "expense:cards:transactions:read",
-        "expense:cards:transactions:reconcile",
-        "expense:reports:read",
+        *EXPENSE_ROLE_GRANTS["expense_processor"],
+        # Payout tiers. Granted here because these roles could already reach
+        # the transfer through the old shared reimburse guard; splitting that
+        # guard must not take the capability away from its intended holders.
+        *EXPENSE_PAYOUT_ROLE_GRANTS["expense_processor"],
     ],
     "expense_reviewer": [
-        "expense:access",
-        "expense:dashboard",
-        "expense:claims:read",
-        "expense:policies:read",
-        "expense:limits:review",
-        "expense:reports:read",
+        *EXPENSE_ROLE_GRANTS["expense_reviewer"],
     ],
     "expense_reimburser": [
-        "expense:access",
-        "expense:dashboard",
-        "expense:claims:read",
-        "expense:claims:reimburse",
-        "expense:reports:read",
+        *EXPENSE_ROLE_GRANTS["expense_reimburser"],
+        # Payout tiers. Granted here because these roles could already reach
+        # the transfer through the old shared reimburse guard; splitting that
+        # guard must not take the capability away from its intended holders.
+        *EXPENSE_PAYOUT_ROLE_GRANTS["expense_reimburser"],
     ],
     # -------------------------------------------------------------------------
     # Operations Roles
@@ -2602,10 +2527,7 @@ ROLE_PERMISSIONS = {
         "perf:goals:read",
         "perf:goals:create",
         "perf:goals:update",
-        "expense:access",
-        "expense:claims:read_team",
-        "expense:claims:approve:tier1",
-        "expense:claims:reject",
+        *EXPENSE_ROLE_GRANTS["department_manager"],
         "projects:access",
         "tasks:read",
         "tasks:create",
@@ -2633,14 +2555,7 @@ ROLE_PERMISSIONS = {
         "perf:appraisals:self_review",
         "perf:goals:read",
         "perf:goals:update",
-        "expense:access",
-        "expense:claims:read_own",
-        "expense:claims:create",
-        "expense:claims:update",
-        "expense:claims:delete",
-        "expense:claims:submit",
-        "expense:advances:read_own",
-        "expense:advances:create",
+        *EXPENSE_ROLE_GRANTS["employee"],
         "payroll:slips:read_own",
         "training:events:read",
         "training:enrollments:self_enroll",

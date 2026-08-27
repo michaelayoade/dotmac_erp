@@ -310,8 +310,6 @@ class MockSettings:
     # App URL
     app_url = "http://localhost:8000"
     app_version = "test"
-    # CRM webhook secret
-    crm_webhook_secret = None
     # dotmac_academy inbound webhook
     dotmac_academy_webhook_secret = None
     dotmac_academy_webhook_prefix = "/dotmac-academy"

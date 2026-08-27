@@ -262,7 +262,7 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
     ),
     SelectedModule(
         distribution="dotmac-tax",
-        state="selected",
+        state="composed",
         release_state="released",
         capabilities=("tax-determination", "tax-filing-evidence"),
         rationale=(
@@ -370,12 +370,13 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
     ),
     SelectedModule(
         distribution="dotmac-numbering",
-        state="selected",
+        state="composed",
         release_state="released",
         capabilities=("document-numbering",),
         rationale=(
-            "ERP is cutover 1, one series family at a time. Every caller must "
-            "first thread an explicit business date."
+            "Tenant-plane storage is composed without a runtime caller. ERP is "
+            "cutover 1, one series family at a time; every caller must first "
+            "thread an explicit business date."
         ),
     ),
     SelectedModule(
@@ -518,7 +519,7 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
         release_state="unreleased",
         capabilities=("cross-application-sync",),
         rationale=(
-            "Transport, authentication and atomic deduplication for the Sub, CRM "
+            "Transport, authentication and atomic deduplication for Sub "
             "and Academy seams. What a synchronised row MEANS stays retained."
         ),
     ),
@@ -804,7 +805,7 @@ EXCLUDED: Final[tuple[ExcludedModule, ...]] = (
         owner="dotmac_sub",
         rationale=(
             "Installed only where Dotmac ERP is the named writer, and it is not: "
-            "ERP's sales surface is the Sub/CRM synchronisation projection."
+            "ERP's sales surface is the Sub synchronisation projection."
         ),
     ),
     ExcludedModule(
@@ -1099,7 +1100,7 @@ RETAINED: Final[tuple[RetainedCapability, ...]] = (
     RetainedCapability(
         capability="external-system-projections",
         rationale=(
-            "What a synchronised Sub, CRM or Academy row MEANS in ERP. "
+            "What a synchronised Sub or Academy row MEANS in ERP. "
             "dotmac-app-sync carries only the transport and deduplication."
         ),
     ),
@@ -1249,6 +1250,15 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
         lineage_head="ac_0001_accounting",
         requires_effects=(_TENANT, _ROLES, _IDEMPOTENCY),
     ),
+    CompositionStep(
+        distribution="dotmac-tax",
+        tranche=0,
+        kernel_floor="0.1.0a85",
+        schema="mod_tax",
+        lineage_branch="tax",
+        lineage_head="tx_0003_result_fingerprint",
+        requires_effects=(_TENANT, _ROLES),
+    ),
     # -- tranche 1: released, allowlisted, every effect already supplied -----
     CompositionStep(
         distribution="dotmac-payables",
@@ -1266,15 +1276,6 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
         schema="mod_banking",
         lineage_branch="banking",
         lineage_head="bk_0001_banking",
-        requires_effects=(_TENANT, _ROLES),
-    ),
-    CompositionStep(
-        distribution="dotmac-tax",
-        tranche=1,
-        kernel_floor="0.1.0a85",
-        schema="mod_tax",
-        lineage_branch="tax",
-        lineage_head="tx_0001_tax",
         requires_effects=(_TENANT, _ROLES),
     ),
     CompositionStep(
@@ -1342,7 +1343,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     ),
     CompositionStep(
         distribution="dotmac-numbering",
-        tranche=1,
+        tranche=0,
         kernel_floor="0.1.0a66",
         schema="mod_numbering",
         lineage_branch="numbering",

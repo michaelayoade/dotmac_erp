@@ -782,7 +782,7 @@ class PaymentSyncMixin:
     ) -> dict[str, Any]:
         """Post CLEARED dotmac_sub payments to the GL — standard AR behaviour.
 
-        The reseller→subscriber link is a CRM/grouping dimension only (the main
+        The reseller→subscriber link is a customer-grouping dimension only (the main
         company "dotmac" is itself a reseller), so the sync applies NO special
         wholesale suppression: every CLEARED synced payment posts to the GL
         exactly like the rest of the ERP's AR payments. ``parent_customer_id``

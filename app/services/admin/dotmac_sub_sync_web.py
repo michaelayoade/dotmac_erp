@@ -3,7 +3,7 @@ dotmac_sub Sync Admin web service.
 
 UI for managing the dotmac_sub integration: credentials (via the encrypted
 IntegrationConfig store), connection test, manual sync triggers, and sync-run
-history (from SyncHistory). Mirrors the CRM sync admin web service.
+history (from SyncHistory).
 """
 
 from __future__ import annotations

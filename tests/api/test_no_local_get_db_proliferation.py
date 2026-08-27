@@ -52,7 +52,6 @@ _CANONICAL = {
 # consistency, not just risk mitigation.
 _PRE_MIGRATION_BASELINE = {
     # ── Partial migrations (local get_db for the unauth webhook only) ──
-    "app/api/crm.py",  # webhook_router stays on local get_db
     "app/api/dotmac_sub.py",  # HMAC-verified webhook; org from default config, not auth
     "app/api/dotmac_academy.py",  # HMAC-verified webhook; org from default config, not auth
     # ── Public/slug-resolved (RLS handled inside service) ──
@@ -70,7 +69,7 @@ _PRE_MIGRATION_BASELINE = {
 
 # Match both ``def get_db`` and ``def _get_db`` — the original regex
 # missed the underscored variant, which hid two real RLS holes
-# (app/api/sync/dotmac_crm.py::_get_db, app/api/finance/fx.py::_get_db)
+# (app/api/finance/fx.py::_get_db)
 # until the 2026-05-16 route-layer audit. Both route modules are now migrated;
 # service-principal bootstrap is owned by the canonical shared dependency.
 _DEF_GET_DB = re.compile(r"^def _?get_db\b", re.MULTILINE)

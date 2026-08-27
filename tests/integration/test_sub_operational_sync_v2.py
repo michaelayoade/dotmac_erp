@@ -10,13 +10,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.sync.dotmac_crm import get_db_with_service_org, require_service_auth
+from app.api.service_principal import get_db_with_service_org, require_service_auth
 from app.api.sync.dotmac_sub import router
 from app.models.finance.core_org.project import Project
 from app.models.finance.exp.expense_entry import PaymentMethod
 from app.models.pm.task import Task
 from app.models.support.ticket import Ticket
-from app.models.sync.dotmac_crm_sync import CRMEntityType, CRMSyncMapping
+from app.models.sync.source_correlation import SourceEntityType, SourceCorrelation
 from app.models.sync.sync_entity import SyncEntity
 from app.services.finance.exp.expense import ExpenseService
 from app.services.finance.exp.web import ExpenseWebService
@@ -93,11 +93,11 @@ def test_real_erp_v2_response_creates_entities_and_expense_options(
     }
 
     mappings = {
-        mapping.crm_entity_type: mapping
+        mapping.source_entity_type: mapping
         for mapping in db.scalars(
-            select(CRMSyncMapping).where(
-                CRMSyncMapping.organization_id == org_id,
-                CRMSyncMapping.crm_id.in_(
+            select(SourceCorrelation).where(
+                SourceCorrelation.organization_id == org_id,
+                SourceCorrelation.source_reference.in_(
                     [
                         str(project_source_id),
                         str(ticket_source_id),
@@ -114,8 +114,8 @@ def test_real_erp_v2_response_creates_entities_and_expense_options(
             SyncEntity.source_name == str(task_source_id),
         )
     )
-    project = db.get(Project, mappings[CRMEntityType.PROJECT].local_entity_id)
-    ticket = db.get(Ticket, mappings[CRMEntityType.TICKET].local_entity_id)
+    project = db.get(Project, mappings[SourceEntityType.PROJECT].local_entity_id)
+    ticket = db.get(Ticket, mappings[SourceEntityType.TICKET].local_entity_id)
     assert task_mapping is not None
     task = db.get(Task, task_mapping.target_id)
     assert project is not None
@@ -190,10 +190,10 @@ def test_real_erp_v2_response_creates_entities_and_expense_options(
     assert (
         db.scalar(
             select(func.count())
-            .select_from(CRMSyncMapping)
+            .select_from(SourceCorrelation)
             .where(
-                CRMSyncMapping.organization_id == org_id,
-                CRMSyncMapping.crm_id.in_(
+                SourceCorrelation.organization_id == org_id,
+                SourceCorrelation.source_reference.in_(
                     [
                         str(project_source_id),
                         str(ticket_source_id),

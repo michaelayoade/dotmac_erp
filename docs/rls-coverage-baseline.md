@@ -14,7 +14,11 @@ inherited                   6   (no scope column; policy joins to a scoped paren
 global                     99
 ```
 
-224 entries: the 158 unprotected plus the 66 unforced.
+The current ratchet state, after the CRM retirement protected
+`sync.source_correlation`, is 223 entries: 157 unprotected plus 66 unforced.
+Among the same 309 organization-scoped tables, 86 are now fully protected
+(27.8%). The dated block above remains the creation snapshot; current
+enforcement reads the JSON baseline rather than copying that snapshot.
 
 ## What the file is for
 
@@ -23,7 +27,7 @@ It is a **ratchet, not a target**. `scripts/architecture/rls_coverage_audit.py
 is *not* in this file. So:
 
 - a **new** organization-scoped table without RLS fails immediately;
-- the 224 already here do not fail, because failing 224 times on day one would
+- the 223 already here do not fail, because failing 223 times on day one would
   get the gate switched off rather than the tables fixed;
 - a table that gets fixed must be **removed** from this file, and the audit
   prints which entries are now protected so it cannot silently return.
@@ -35,7 +39,7 @@ should be a conscious act with a reason in the pull request.
 
 ERP isolates in two independent layers (`app/db/session_context.py`): a
 SQLAlchemy ORM listener and PostgreSQL RLS. Every table in this file is still
-filtered by the ORM layer, so this is not 224 open doors. What it measures is
+filtered by the ORM layer, so this is not 223 open doors. What it measures is
 where the *second* layer — the one that holds when something reaches the
 database by another path, such as a raw query, a task that primed only one
 layer, or an export — is absent.

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from decimal import Decimal
 from datetime import date
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from starlette.datastructures import FormData
 from starlette.datastructures import UploadFile
 
@@ -1215,6 +1218,330 @@ async def test_bulk_record_count_lines_response_uses_checked_lines_only(
     assert len(inputs) == 2
     assert inputs[0].counted_quantity == Decimal("12.5")
     assert inputs[1].counted_quantity == Decimal("8")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("counted_quantity", ["not-a-number", ""])
+async def test_record_count_line_rejects_invalid_quantity_before_service_call(
+    monkeypatch,
+    counted_quantity: str,
+) -> None:
+    service = OperationsInventoryWebService()
+    count_id = uuid.uuid4()
+    line_id = uuid.uuid4()
+    request = MagicMock()
+    request.form = AsyncMock(
+        return_value=FormData([("counted_quantity", counted_quantity)])
+    )
+    auth = MagicMock(organization_id=uuid.uuid4(), user_id=uuid.uuid4())
+    db = MagicMock()
+    record_count = MagicMock()
+    monkeypatch.setattr(
+        "app.services.inventory.count.InventoryCountService.record_count",
+        record_count,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await service.record_count_line_response(
+            request=request,
+            count_id=str(count_id),
+            line_id=str(line_id),
+            auth=auth,
+            db=db,
+        )
+
+    assert exc.value.status_code == 400
+    record_count.assert_not_called()
+    db.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_record_count_line_rejects_invalid_line_id_before_service_call(
+    monkeypatch,
+) -> None:
+    service = OperationsInventoryWebService()
+    request = MagicMock()
+    request.form = AsyncMock(return_value=FormData([("counted_quantity", "4")]))
+    auth = MagicMock(organization_id=uuid.uuid4(), user_id=uuid.uuid4())
+    db = MagicMock()
+    record_count = MagicMock()
+    monkeypatch.setattr(
+        "app.services.inventory.count.InventoryCountService.record_count",
+        record_count,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await service.record_count_line_response(
+            request=request,
+            count_id=str(uuid.uuid4()),
+            line_id="not-a-uuid",
+            auth=auth,
+            db=db,
+        )
+
+    assert exc.value.status_code == 400
+    record_count.assert_not_called()
+    db.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("bad_line_id", "bad_quantity"),
+    [
+        ("not-a-uuid", "7"),
+        ("22222222-2222-2222-2222-222222222222", "not-a-number"),
+        ("22222222-2222-2222-2222-222222222222", ""),
+    ],
+)
+async def test_bulk_count_rejects_one_invalid_selected_line_before_service_call(
+    monkeypatch,
+    bad_line_id: str,
+    bad_quantity: str,
+) -> None:
+    service = OperationsInventoryWebService()
+    count_id = uuid.uuid4()
+    valid_line_id = "11111111-1111-1111-1111-111111111111"
+    request = MagicMock()
+    request.form = AsyncMock(
+        return_value=FormData(
+            [
+                ("selected_line_ids", valid_line_id),
+                ("selected_line_ids", bad_line_id),
+                (f"counted_quantity_{valid_line_id}", "5"),
+                (f"counted_quantity_{bad_line_id}", bad_quantity),
+            ]
+        )
+    )
+    auth = MagicMock(organization_id=uuid.uuid4(), user_id=uuid.uuid4())
+    db = MagicMock()
+    record_bulk = MagicMock()
+    monkeypatch.setattr(
+        "app.services.inventory.count.InventoryCountService.record_count_bulk",
+        record_bulk,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await service.bulk_record_count_lines_response(
+            request=request,
+            count_id=str(count_id),
+            auth=auth,
+            db=db,
+        )
+
+    assert exc.value.status_code == 400
+    record_bulk.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("response_method", "service_method"),
+    [
+        ("start_count_response", "start_count"),
+        ("complete_count_response", "complete_count"),
+        ("post_count_response", "post_count"),
+    ],
+)
+def test_count_transition_failure_escapes_the_web_adapter(
+    monkeypatch,
+    response_method: str,
+    service_method: str,
+) -> None:
+    service = OperationsInventoryWebService()
+    auth = MagicMock(organization_id=uuid.uuid4(), user_id=uuid.uuid4())
+    failure = RuntimeError("count mutation failed")
+    monkeypatch.setattr(
+        f"app.services.inventory.count.InventoryCountService.{service_method}",
+        MagicMock(side_effect=failure),
+    )
+
+    with pytest.raises(RuntimeError, match="count mutation failed"):
+        getattr(service, response_method)(
+            count_id=str(uuid.uuid4()),
+            auth=auth,
+            db=MagicMock(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_record_count_failure_escapes_the_web_adapter(monkeypatch) -> None:
+    service = OperationsInventoryWebService()
+    count_id = uuid.uuid4()
+    line_id = uuid.uuid4()
+    line = SimpleNamespace(
+        count_id=count_id,
+        item_id=uuid.uuid4(),
+        warehouse_id=uuid.uuid4(),
+        lot_id=None,
+    )
+    request = MagicMock()
+    request.form = AsyncMock(return_value=FormData([("counted_quantity", "3")]))
+    auth = MagicMock(organization_id=uuid.uuid4(), user_id=uuid.uuid4())
+    db = MagicMock()
+    db.get.return_value = line
+    monkeypatch.setattr(
+        "app.services.inventory.count.InventoryCountService.record_count",
+        MagicMock(side_effect=RuntimeError("record failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="record failed"):
+        await service.record_count_line_response(
+            request=request,
+            count_id=str(count_id),
+            line_id=str(line_id),
+            auth=auth,
+            db=db,
+        )
+
+
+@pytest.mark.asyncio
+async def test_bulk_count_failure_escapes_the_web_adapter(monkeypatch) -> None:
+    service = OperationsInventoryWebService()
+    line_id = uuid.uuid4()
+    request = MagicMock()
+    request.form = AsyncMock(
+        return_value=FormData(
+            [
+                ("selected_line_ids", str(line_id)),
+                (f"counted_quantity_{line_id}", "2"),
+            ]
+        )
+    )
+    auth = MagicMock(organization_id=uuid.uuid4(), user_id=uuid.uuid4())
+    monkeypatch.setattr(
+        "app.services.inventory.count.InventoryCountService.record_count_bulk",
+        MagicMock(side_effect=RuntimeError("bulk failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="bulk failed"):
+        await service.bulk_record_count_lines_response(
+            request=request,
+            count_id=str(uuid.uuid4()),
+            auth=auth,
+            db=MagicMock(),
+        )
+
+
+def test_second_count_adjustment_failure_reaches_request_rollback(monkeypatch) -> None:
+    from app.models.inventory.inventory_count import CountStatus, InventoryCount
+    from app.models.inventory.item import Item
+    from app.services.inventory.transaction import inventory_transaction_service
+    from app.web import deps as web_deps
+
+    org_id = uuid.uuid4()
+    count_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    first_item_id = uuid.uuid4()
+    second_item_id = uuid.uuid4()
+    count = SimpleNamespace(
+        count_id=count_id,
+        organization_id=org_id,
+        status=CountStatus.COMPLETED,
+        count_date=date(2026, 8, 25),
+        fiscal_period_id=uuid.uuid4(),
+        count_number="CNT-ROLLBACK",
+        posted_by_user_id=None,
+        posted_at=None,
+    )
+    lines = [
+        SimpleNamespace(
+            line_id=uuid.uuid4(),
+            count_id=count_id,
+            item_id=item_id,
+            warehouse_id=uuid.uuid4(),
+            variance_quantity=Decimal("1"),
+            unit_cost=Decimal("10"),
+            uom="EACH",
+            location_id=None,
+            lot_id=None,
+            reason_code="COUNT",
+        )
+        for item_id in (first_item_id, second_item_id)
+    ]
+    items = {
+        first_item_id: SimpleNamespace(currency_code="NGN"),
+        second_item_id: SimpleNamespace(currency_code="NGN"),
+    }
+
+    class _ScalarResult:
+        def all(self):
+            return lines
+
+    class _TransactionalSession:
+        def __init__(self):
+            self.info = {}
+            self.pending_adjustments: list[object] = []
+            self.commit_calls = 0
+            self.rollback_calls = 0
+            self.closed = False
+
+        def get(self, model, key):
+            if model is InventoryCount and key == count_id:
+                return count
+            if model is Item:
+                return items.get(key)
+            return None
+
+        def scalars(self, _statement):
+            return _ScalarResult()
+
+        def flush(self):
+            return None
+
+        def commit(self):
+            self.commit_calls += 1
+
+        def rollback(self):
+            self.rollback_calls += 1
+            self.pending_adjustments.clear()
+
+        def close(self):
+            self.closed = True
+
+    db = _TransactionalSession()
+
+    @contextmanager
+    def _tenant_scope(_db, _org_id):
+        yield
+
+    monkeypatch.setattr(web_deps, "SessionLocal", lambda: db)
+    monkeypatch.setattr(web_deps, "tenant_scope_for_session", _tenant_scope)
+    adjustment_calls = 0
+
+    def _create_adjustment(**kwargs):
+        nonlocal adjustment_calls
+        adjustment_calls += 1
+        kwargs["db"].pending_adjustments.append(kwargs["input"])
+        if adjustment_calls == 2:
+            raise RuntimeError("second adjustment failed")
+
+    auth = MagicMock(organization_id=org_id, user_id=user_id)
+    dependency = web_deps.get_db_for_org(auth=auth)
+    request_db = next(dependency)
+
+    with patch.object(
+        inventory_transaction_service,
+        "create_adjustment",
+        _create_adjustment,
+    ):
+        try:
+            OperationsInventoryWebService().post_count_response(
+                count_id=str(count_id),
+                auth=auth,
+                db=request_db,
+            )
+        except RuntimeError as exc:
+            with pytest.raises(RuntimeError, match="second adjustment failed"):
+                dependency.throw(exc)
+        else:  # pragma: no cover - the canary must observe the planted failure
+            pytest.fail("second adjustment failure was swallowed")
+
+    assert adjustment_calls == 2
+    assert db.rollback_calls == 1
+    assert db.commit_calls == 0
+    assert db.pending_adjustments == []
+    assert count.status == CountStatus.COMPLETED
+    assert count.posted_by_user_id is None
+    assert count.posted_at is None
+    assert db.closed is True
 
 
 def test_export_count_csv_response_returns_csv_for_posted_count() -> None:

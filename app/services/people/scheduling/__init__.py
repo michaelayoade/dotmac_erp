@@ -24,15 +24,41 @@ from app.services.people.scheduling.swap_service import (
 )
 
 __all__ = [
+    "InvalidSwapTransitionError",
+    "PatternAssignmentNotFoundError",
+    "ResolvedShift",
+    "ScheduleConcurrencyError",
+    "ScheduleGenerator",
+    "ScheduleGeneratorError",
+    "ScheduleResolver",
+    "ScheduleRuleEvaluator",
+    "ScheduleRuleIssue",
+    "ScheduleRuleResult",
+    "ScheduleWorkflowError",
+    "ScheduleWorkspaceService",
+    "SchedulerAccessError",
+    "SchedulerAccessService",
     "SchedulingService",
     "SchedulingServiceError",
     "ShiftPatternNotFoundError",
-    "PatternAssignmentNotFoundError",
     "ShiftScheduleNotFoundError",
-    "ScheduleGenerator",
-    "ScheduleGeneratorError",
+    "SwapRequestNotFoundError",
     "SwapService",
     "SwapServiceError",
-    "SwapRequestNotFoundError",
-    "InvalidSwapTransitionError",
 ]
+
+from app.services.people.scheduling.access import (
+    SchedulerAccessError,
+    SchedulerAccessService,
+)
+from app.services.people.scheduling.resolver import ResolvedShift, ScheduleResolver
+from app.services.people.scheduling.rules import (
+    ScheduleRuleEvaluator,
+    ScheduleRuleIssue,
+    ScheduleRuleResult,
+)
+from app.services.people.scheduling.workspace_service import (
+    ScheduleConcurrencyError,
+    ScheduleWorkflowError,
+    ScheduleWorkspaceService,
+)
