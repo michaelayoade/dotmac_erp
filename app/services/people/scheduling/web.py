@@ -981,6 +981,14 @@ class SchedulingWebService:
             if dept_uuid
             else None
         )
+        department_options = {
+            str(dept.department_id): dept.department_name for dept in departments
+        }
+        active_filters = build_active_filters(
+            params={"department_id": department_id, "year_month": year_month},
+            labels={"department_id": "Department", "year_month": "Month"},
+            options={"department_id": department_options},
+        )
 
         ctx = base_context(request, auth, "Schedules", "people", db=db)
         ctx.update(
@@ -994,6 +1002,7 @@ class SchedulingWebService:
                 "total_pages": result.total_pages,
                 "total_count": result.total,
                 "limit": result.limit,
+                "active_filters": active_filters,
             }
         )
 

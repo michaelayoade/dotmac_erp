@@ -10,7 +10,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
+from app.config import settings
 from app.api.deps import (
     get_db_with_org,
     require_organization_id,
@@ -942,12 +944,47 @@ async def paystack_webhook(
         intent = PaymentService.get_intent_by_reference(db, reference)
 
     if not intent:
-        # Log but don't fail - might be test webhook or unknown reference
-        logger.warning(f"Webhook for unknown reference: {reference}")
-        return WebhookResponse(
-            status="ignored",
-            message=f"Unknown reference: {reference}",
-        )
+        # Selfcare references are not ERP payment intents. Verify the provider
+        # signature before forwarding only the reference; Selfcare performs its
+        # own gateway verification before deciding any financial consequence.
+        from app.services.dotmac_sub import DotmacSubClient, DotmacSubConfig
+        from app.services.finance.payments.paystack_client import PaystackClient
+
+        try:
+            if not settings.default_organization_id:
+                raise RuntimeError("default organization is not configured")
+            default_org_id = UUID(settings.default_organization_id)
+            prime_session(db, default_org_id)
+            set_payment_tenant_context(db, default_org_id)
+            config = get_paystack_config(db, default_org_id)
+            if not PaystackClient(config).verify_webhook_signature(
+                raw_body, x_paystack_signature
+            ):
+                raise HTTPException(status_code=401, detail="Invalid webhook signature")
+            if event_type != "charge.success" or not reference:
+                return WebhookResponse(status="ignored", message="Unsupported event")
+            if not reference.startswith("DMAC-"):
+                return WebhookResponse(status="ignored", message="Unknown reference")
+            sub_config = DotmacSubConfig.for_org(db, default_org_id)
+            if not sub_config.is_configured():
+                raise RuntimeError("dotmac_sub integration is not configured")
+            await run_in_threadpool(
+                DotmacSubClient(sub_config).relay_paystack_webhook,
+                raw_payload=raw_body,
+                signature=x_paystack_signature,
+            )
+            return WebhookResponse(status="forwarded")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception(
+                "Failed to forward verified Paystack reference to dotmac_sub"
+            )
+            # A non-2xx response asks Paystack to retry delivery.
+            raise HTTPException(
+                status_code=503,
+                detail="Payment notification delivery is temporarily unavailable",
+            )
 
     # Prime both the Python-side ORM listener marker AND the PostgreSQL GUC
     # so subsequent queries in this handler see the resolved tenant.
