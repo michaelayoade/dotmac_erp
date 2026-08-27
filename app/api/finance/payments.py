@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.api.deps import (
@@ -782,11 +783,7 @@ async def paystack_webhook(
         # Selfcare references are not ERP payment intents. Verify the provider
         # signature before forwarding only the reference; Selfcare performs its
         # own gateway verification before deciding any financial consequence.
-        from app.services.dotmac_sub import (
-            DotmacSubClient,
-            DotmacSubConfig,
-            DotmacSubNotFoundError,
-        )
+        from app.services.dotmac_sub import DotmacSubClient, DotmacSubConfig
         from app.services.finance.payments.paystack_client import PaystackClient
 
         try:
@@ -802,14 +799,17 @@ async def paystack_webhook(
                 raise HTTPException(status_code=401, detail="Invalid webhook signature")
             if event_type != "charge.success" or not reference:
                 return WebhookResponse(status="ignored", message="Unsupported event")
+            if not reference.startswith("DMAC-"):
+                return WebhookResponse(status="ignored", message="Unknown reference")
             sub_config = DotmacSubConfig.for_org(db, default_org_id)
             if not sub_config.is_configured():
                 raise RuntimeError("dotmac_sub integration is not configured")
-            DotmacSubClient(sub_config).reconcile_paystack_reference(reference)
+            await run_in_threadpool(
+                DotmacSubClient(sub_config).relay_paystack_webhook,
+                raw_payload=raw_body,
+                signature=x_paystack_signature,
+            )
             return WebhookResponse(status="forwarded")
-        except DotmacSubNotFoundError:
-            logger.info("Verified Paystack reference is not owned by ERP or Selfcare")
-            return WebhookResponse(status="ignored", message="Unknown reference")
         except HTTPException:
             raise
         except Exception:

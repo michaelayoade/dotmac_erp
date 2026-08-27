@@ -1132,19 +1132,28 @@ class DotmacSubClient:
                     max(time.perf_counter() - started_at, 0.0),
                 )
 
-    def reconcile_paystack_reference(self, reference: str) -> dict[str, Any]:
-        """Notify Sub to independently verify and reconcile one Paystack reference."""
+    def relay_paystack_webhook(
+        self,
+        *,
+        raw_payload: bytes,
+        signature: str,
+    ) -> dict[str, Any]:
+        """Relay the exact Paystack-signed bytes to Sub's existing ingress."""
 
-        normalized = reference.strip()
-        if not normalized:
-            raise ValueError("Paystack reference is required")
-        result = self._request(
-            "POST",
-            "/payment-events/reconcile-reference",
-            json={"provider_type": "paystack", "reference": normalized},
-        )
+        if not raw_payload or not signature.strip():
+            raise ValueError("Paystack payload and signature are required")
+        try:
+            response = self.client.post(
+                "/payment-events/paystack",
+                content=raw_payload,
+                headers={"X-Paystack-Signature": signature.strip()},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise DotmacSubError("Selfcare rejected the Paystack relay") from exc
+        result = response.json()
         if not isinstance(result, dict):
-            raise DotmacSubError("dotmac_sub returned an invalid reconciliation result")
+            raise DotmacSubError("Selfcare returned an invalid Paystack relay result")
         return result
 
     def _paginate(
