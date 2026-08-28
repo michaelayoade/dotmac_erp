@@ -17,6 +17,7 @@ from dotmac_files.manifest import module as files_module
 from dotmac_imports.manifest import module as imports_module
 from dotmac_kernel.assembly import ProductAssemblySpec
 from dotmac_numbering.manifest import module as numbering_module
+from dotmac_people.manifest import module as people_module
 from dotmac_tax.manifest import module as tax_module
 
 from app.migration_planes import ASSEMBLY_MODULE_PLANES
@@ -34,6 +35,7 @@ COMPOSED_MODULE_MANIFESTS: Final = (
     files_module,
     imports_module,
     numbering_module,
+    people_module,
     tax_module,
 )
 
@@ -46,6 +48,7 @@ COMPOSED_MODULE_DISTRIBUTIONS: Final[Mapping[str, str]] = MappingProxyType(
         "files": "dotmac-files",
         "imports": "dotmac-imports",
         "numbering": "dotmac-numbering",
+        "people": "dotmac-people",
         "tax": "dotmac-tax",
     }
 )

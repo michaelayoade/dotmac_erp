@@ -32,7 +32,7 @@ from scripts.write_image_release import (
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / "deploy" / "product-manifest.json"
 EXPECTED_MANIFEST_DIGEST = (
-    "sha256:3e0a97cdb646efb60ff1c7cbd6823f277198dcaa2a3cc68848916bad24d990c2"
+    "sha256:82e5c01c713e4facfa6745e0aab98f6e52fb9ee125d4c4228cac0237ee9719b8"
 )
 
 
@@ -69,6 +69,12 @@ def test_committed_product_manifest_is_canonical_and_digest_bound() -> None:
     assert numbering["declared_planes"] == ["platform", "tenant"]
     assert numbering["explicit_planes"] == ["tenant"]
     assert numbering["effective_planes"] == ["tenant"]
+    people = next(row for row in payload["modules"] if row["code"] == "people")
+    assert people["distribution"] == "dotmac-people"
+    assert people["version"] == "0.1.0a1"
+    assert people["declared_planes"] == ["tenant"]
+    assert people["explicit_planes"] is None
+    assert people["effective_planes"] == ["tenant"]
 
 
 def test_manifest_checker_refuses_noncanonical_bytes(tmp_path: Path) -> None:

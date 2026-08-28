@@ -34,7 +34,9 @@ For atomic modules, `effective_planes` is the manifest's declared plane set and
 `explicit_planes` is null. For selectable modules, the assembly's
 `ModulePlaneSelection` is required and becomes the effective set. Numbering
 therefore records declared `[platform, tenant]`, explicit `[tenant]`, and
-effective `[tenant]`; no missing selection is inferred from installed tables.
+effective `[tenant]`. People is atomic and tenant-only, so it records declared
+and effective `[tenant]` with a null explicit selection. No missing selection
+is inferred from installed tables.
 
 ## Why `deploy/` is outside the image
 

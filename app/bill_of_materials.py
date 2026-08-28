@@ -322,10 +322,13 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
     ),
     SelectedModule(
         distribution="dotmac-people",
-        state="selected",
+        state="composed",
         release_state="released",
         capabilities=("employment-directory",),
         rationale=(
+            "The six-table tenant storage lineage is composed with no runtime "
+            "caller or authority transfer. Legacy People writers remain the "
+            "only authority until a domain-by-domain cutover. "
             "Six tables of employment identity. The legacy employee hub's exact "
             "ORM dependency intents are ledgered by FK identity in "
             "docs/inventories/people-dependent-references.tsv; "
@@ -1454,7 +1457,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     #    would silently rewrite what an earlier review approved.
     CompositionStep(
         distribution="dotmac-people",
-        tranche=1,
+        tranche=0,
         kernel_floor="0.1.0a71",
         schema="mod_people",
         lineage_branch="people",
