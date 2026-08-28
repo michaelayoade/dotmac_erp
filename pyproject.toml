@@ -35,6 +35,10 @@ pyotp = "2.9.0"
 cryptography = ">=44.0.1"
 gunicorn = "^23.0.0"
 weasyprint = "^62.0"
+# WeasyPrint 62 calls pydyf.Stream.transform, which was removed in pydyf 0.12.
+# Keep the compatibility decision in the lock instead of mutating the runtime
+# environment with a second, untracked pip install.
+pydyf = "0.11.0"
 python-dateutil = "^2.9.0"
 shapely = "^2.0.0"
 msoffcrypto-tool = "^6.0.0"

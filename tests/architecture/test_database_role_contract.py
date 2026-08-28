@@ -143,9 +143,9 @@ def test_operator_migration_entrypoints_do_not_reuse_the_running_app() -> None:
     makefile = MAKEFILE.read_text(encoding="utf-8")
 
     assert "-e MIGRATION_DATABASE_URL app" in deploy
-    assert 'docker compose run --rm --entrypoint "" -e MIGRATION_DATABASE_URL app' in (
-        makefile
-    )
+    assert "docker compose run --rm -e MIGRATION_DATABASE_URL app" in makefile
+    assert "--entrypoint" not in deploy
+    assert "--entrypoint" not in makefile
     assert "docker exec dotmac_erp_app alembic" not in makefile
 
 

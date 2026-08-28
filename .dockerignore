@@ -22,3 +22,13 @@ docker-compose*.yml
 # two immutable facts with image-release.json after the registry returns the
 # pushed image digest.
 deploy/
+# Runtime images receive only named files via explicit COPY instructions. Keep
+# operator material and report/export artefacts out of the build context too.
+license/*
+!license/.gitkeep
+reports/
+proposals/
+asset_import_cleaned.csv
+stock_tracked_items.csv
+go-live-checklist.html
+ui-audit-report.html

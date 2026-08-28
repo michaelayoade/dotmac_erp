@@ -1,7 +1,22 @@
 # Deployment foundation prerequisites
 
-Status: **release identity implemented; deployment adapter and host cutover are
-not part of this slice**.
+Status: **release identity and audited runtime-image preparation implemented;
+deployment adapter and host cutover remain a separate slice**.
+
+The later runtime-image preparation replaces the monolithic build with a
+numeric-non-root, builder-only toolchain, tests app/worker/Beat/migrations from
+one image under a read-only CI envelope, audits that exact image with the
+published Deployment Foundation collector, and only then exports it to the H3
+publication handoff. Minimal Compose/deploy compatibility changes remove the
+retired boot-time installer and invoke the image's direct runtime tools.
+
+That preparation is deliberately not a claim that the live Compose path is
+already hardened. Digest-only image selection, removal of mutable host
+static/template/Gunicorn overlays, production `read_only`/tmpfs/capability
+settings, signed-license material and the actual Compose execution proof move
+together in the deployment-adapter cutover after a real protected-main image
+coordinate exists. Until then, CI proves the release candidate's properties;
+it does not reinterpret the legacy host as conformant.
 
 ERP now has two immutable release facts that a later deployment descriptor can
 join without a digest cycle:
@@ -98,5 +113,8 @@ poetry run python -m scripts.product_manifest generate \
 poetry run python -m scripts.product_manifest check --path deploy/product-manifest.json
 ```
 
-This slice creates no deployment descriptor, changes no live deploy script,
-names no host, moves no data, and performs no production action.
+The release-identity prerequisite itself created no descriptor or deploy
+change. The subsequent image-preparation slice makes only the compatibility
+changes described above; it names no host, moves no data, and performs no
+production action. The deployment-adapter cutover remains the sole owner of
+live digest consumption and hardened Compose truth.
