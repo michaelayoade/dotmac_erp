@@ -23,7 +23,8 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc  # type: ignore[assignment]
 
 from celery import shared_task
-from sqlalchemy import select
+from billiard.exceptions import SoftTimeLimitExceeded
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -42,6 +43,9 @@ from app.services.dotmac_sub import (
 logger = logging.getLogger(__name__)
 
 _SOURCE = "dotmac_sub"
+_INCREMENTAL_SYNC_LOCK_NAMESPACE = "dotmac_sub:incremental"
+_INCREMENTAL_SYNC_SOFT_TIME_LIMIT_SECONDS = 25 * 60
+_INCREMENTAL_SYNC_TIME_LIMIT_SECONDS = 28 * 60
 
 
 def _resolve_org_id(explicit_org_id: str | None) -> UUID | None:
@@ -52,6 +56,16 @@ def _resolve_org_id(explicit_org_id: str | None) -> UUID | None:
         return UUID(org_id_str)
     except ValueError:
         return None
+
+
+def _try_acquire_incremental_sync_lock(db: Session, organization_id: UUID) -> bool:
+    """Acquire the transaction-scoped single-flight lock for one organization."""
+    lock_identity = f"{_INCREMENTAL_SYNC_LOCK_NAMESPACE}:{organization_id}"
+    acquired = db.scalar(
+        text("SELECT pg_try_advisory_xact_lock(hashtextextended(:lock_identity, 0))"),
+        {"lock_identity": lock_identity},
+    )
+    return bool(acquired)
 
 
 def _resolve_ar_control_account(db: Session, organization_id: UUID) -> UUID | None:
@@ -367,7 +381,13 @@ def cleanup_stale_dotmac_sub_sync_history(
 # ---------------------------------------------------------------------------
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=300,
+    soft_time_limit=_INCREMENTAL_SYNC_SOFT_TIME_LIMIT_SECONDS,
+    time_limit=_INCREMENTAL_SYNC_TIME_LIMIT_SECONDS,
+)
 def run_dotmac_sub_incremental_sync(
     self: Any,
     organization_id: str | None = None,
@@ -386,6 +406,18 @@ def run_dotmac_sub_incremental_sync(
         return {"success": False, "error": "No valid organization ID configured"}
 
     with session_for_org(org_id) as db:
+        if not _try_acquire_incremental_sync_lock(db, org_id):
+            logger.info(
+                "Skipping overlapping dotmac_sub incremental sync for org %s",
+                org_id,
+            )
+            return {
+                "success": True,
+                "organization_id": str(org_id),
+                "skipped": True,
+                "reason": "already_running",
+            }
+
         ctx = _build_sync_context(db, str(org_id), SyncType.INCREMENTAL, entity_types)
         if isinstance(ctx, dict):
             return ctx
@@ -418,6 +450,15 @@ def run_dotmac_sub_incremental_sync(
                 [resellers, subscribers, invoices, payments, credit_notes],
                 org_id=org_id,
             )
+        except SoftTimeLimitExceeded as exc:
+            db.rollback()
+            _handle_sync_failure(history_id, org_id, exc, "Incremental")
+            return {
+                "success": False,
+                "history_id": str(history_id),
+                "organization_id": str(org_id),
+                "error": "Incremental sync exceeded its execution time limit",
+            }
         except Exception as exc:
             db.rollback()
             _handle_sync_failure(history_id, org_id, exc, "Incremental")
