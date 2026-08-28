@@ -1873,7 +1873,7 @@ class LeaveService:
 
         Returns a list of employees with their leave balances across all leave types.
         """
-        from app.models.people.hr import Department, Employee
+        from app.models.people.hr import Department, Employee, EmployeeStatus
         from app.models.person import Person
 
         target_year = year or date.today().year
@@ -1906,6 +1906,12 @@ class LeaveService:
             .where(
                 Employee.organization_id == org_id,
                 Person.organization_id == org_id,
+                Employee.status.in_(
+                    [
+                        EmployeeStatus.ACTIVE,
+                        EmployeeStatus.ON_LEAVE,
+                    ]
+                ),
                 func.extract("year", LeaveAllocation.from_date) == target_year,
             )
         )
