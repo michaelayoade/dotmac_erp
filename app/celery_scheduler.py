@@ -54,8 +54,8 @@ class DbScheduler(Scheduler):
             ) as handle:
                 temporary = Path(handle.name)
                 handle.write(f"{time.time_ns()}\n")
-            if temporary is None:
-                raise RuntimeError("Failed to create scheduler heartbeat file")
+            if temporary is None:  # pragma: no cover - assigned by the context manager
+                raise RuntimeError("heartbeat temporary file was not created")
             os.replace(temporary, path)
         finally:
             if temporary is not None:
