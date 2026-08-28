@@ -4,6 +4,8 @@ This is the static half of the composition proof.  The PostgreSQL rehearsal in
 `tests/integration/test_accounting_lineage_composition.py` proves the migration
 and live catalog; these tests prove the exact artifact, revision location,
 assembly-selected plane and absence of a runtime dependency under `app/`.
+The release-only product assembly may import exactly
+`dotmac_numbering.manifest`; that declarative seam is not a runtime caller.
 """
 
 from __future__ import annotations
@@ -54,6 +56,13 @@ def _imported_modules(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             modules.add(node.module)
     return modules
+
+
+def _is_numbering_runtime_import(module: str) -> bool:
+    """The manifest is release metadata; every other package import is runtime."""
+    return (module == IMPORT_PACKAGE or module.startswith(f"{IMPORT_PACKAGE}.")) and (
+        module != f"{IMPORT_PACKAGE}.manifest"
+    )
 
 
 def test_the_distribution_is_pinned_exactly_from_the_private_source() -> None:
@@ -111,13 +120,24 @@ def test_alembic_installs_the_plane_selection_before_revision_loading() -> None:
 
 
 def test_nothing_under_app_imports_the_numbering_runtime() -> None:
-    """Storage composition must not silently repoint a business caller."""
+    """Storage composition must not silently repoint a business caller.
+
+    `app.product_assembly` may import the declarative package manifest to bind
+    release identity. Any model, service or manifest submodule remains a
+    runtime import and is rejected by the same scan.
+    """
     offenders = sorted(
         path.relative_to(REPO_ROOT).as_posix()
         for path in APP_ROOT.rglob("*.py")
         if any(
-            module == IMPORT_PACKAGE or module.startswith(f"{IMPORT_PACKAGE}.")
-            for module in _imported_modules(path)
+            _is_numbering_runtime_import(module) for module in _imported_modules(path)
         )
     )
     assert not offenders, f"app/ imports {IMPORT_PACKAGE}: {offenders}"
+
+
+def test_numbering_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
+    assert not _is_numbering_runtime_import("dotmac_numbering.manifest")
+    assert _is_numbering_runtime_import("dotmac_numbering")
+    assert _is_numbering_runtime_import("dotmac_numbering.service")
+    assert _is_numbering_runtime_import("dotmac_numbering.manifest.private")
