@@ -1,0 +1,64 @@
+source_entity	source_field	current_authority	target_disposition	intended_owner	decision_status	notes
+hr.employee	employee_id	dotmac_erp/hr.Employee	preserve UUID as employment record identity	asm-dotmac-erp/dotmac-people	resolved	Projected as source_id and preserved by the future idempotent bootstrap.
+hr.employee	organization_id	dotmac_erp/hr.Employee	map organization scope to tenant scope	asm-dotmac-erp/dotmac-people	resolved	The composed module owns tenant-scoped employment rows.
+hr.employee	person_id	dotmac_erp/hr.Employee	map to the employment record's Party reference	asm-dotmac-erp/dotmac-people	resolved	dotmac-people owns the employment-to-Party reference; kernel Party and PartyPerson separately own the referenced person record.
+hr.employee	employee_code	dotmac_erp/hr.Employee	carry as employment-directory code	asm-dotmac-erp/dotmac-people	resolved	In the released employment-directory contract.
+hr.employee	gender	dotmac_erp/hr.Employee	retain until typed personal-profile owner is approved	UNRESOLVED	unresolved	Not owned by dotmac-people; do not hide it in Party.custom_fields.
+hr.employee	nationality	dotmac_erp/hr.Employee	retain until typed personal-profile owner is approved	UNRESOLVED	unresolved	Regulatory reporting use makes silent retirement unsafe.
+hr.employee	date_of_birth	dotmac_erp/hr.Employee	retain until typed personal-profile owner is approved	UNRESOLVED	unresolved	Sensitive personal identity data; not owned by dotmac-people.
+hr.employee	final_payroll_cutoff_date	dotmac_erp/hr.Employee	move to an explicitly named final-payroll policy record	UNRESOLVED	unresolved	Payroll is outside dotmac-people; the exact payroll owner/table is not approved.
+hr.employee	personal_email	dotmac_erp/hr.Employee	retain until typed personal contact/profile owner is approved	UNRESOLVED	unresolved	Must not be conflated with the work email on Party.
+hr.employee	dotmac_sub_account_id	dotmac_erp/hr.Employee	replace with a rebuildable integration correlation/projection	UNRESOLVED	unresolved	Sub identity is external application state; product integration owner and observation contract remain unnamed.
+hr.employee	dotmac_sub_staff_synced_at	dotmac_erp/hr.Employee	replace with integration delivery/observation evidence	UNRESOLVED	unresolved	A sync timestamp is evidence, not employment-directory authority.
+hr.employee	dotmac_sub_access_enabled	dotmac_erp/hr.Employee	move the access decision to a named entitlement/provisioning owner	UNRESOLVED	unresolved	A module flag must not become an authorization decision.
+hr.employee	dotmac_sub_roles	dotmac_erp/hr.Employee	move role intent to a named authorization/provisioning owner	UNRESOLVED	unresolved	Roles and permissions are explicitly outside dotmac-people.
+hr.employee	personal_phone	dotmac_erp/hr.Employee	retain until typed personal contact/profile owner is approved	UNRESOLVED	unresolved	Not owned by dotmac-people.
+hr.employee	emergency_contact_name	dotmac_erp/hr.Employee	consolidate under an approved emergency-contact/dependant owner	UNRESOLVED	unresolved	Potential overlap with employee_dependants must be resolved before migration.
+hr.employee	emergency_contact_phone	dotmac_erp/hr.Employee	consolidate under an approved emergency-contact/dependant owner	UNRESOLVED	unresolved	Potential overlap with employee_dependants must be resolved before migration.
+hr.employee	marital_status	dotmac_erp/hr.Employee	retain until typed personal-profile/benefits owner is approved	UNRESOLVED	unresolved	Sensitive personal data outside dotmac-people.
+hr.employee	blood_group	dotmac_erp/hr.Employee	retain until typed personal-profile/medical owner is approved	UNRESOLVED	unresolved	Sensitive personal data outside dotmac-people.
+hr.employee	current_address	dotmac_erp/hr.Employee	retain until typed personal-contact/profile owner is approved	UNRESOLVED	unresolved	Do not migrate the JSON shape without a typed contract.
+hr.employee	permanent_address	dotmac_erp/hr.Employee	retain until typed personal-contact/profile owner is approved	UNRESOLVED	unresolved	Do not migrate the JSON shape without a typed contract.
+hr.employee	passport_number	dotmac_erp/hr.Employee	retain until typed identity-document owner is approved	UNRESOLVED	unresolved	Sensitive credential data; not owned by dotmac-people.
+hr.employee	passport_valid_upto	dotmac_erp/hr.Employee	retain until typed identity-document owner is approved	UNRESOLVED	unresolved	Must move with passport identity and renewal policy.
+hr.employee	current_accommodation_type	dotmac_erp/hr.Employee	retain until typed HR benefits/profile owner is approved	UNRESOLVED	unresolved	Not part of the employment-directory contract.
+hr.employee	department_id	dotmac_erp/hr.Employee	carry as directory reference	asm-dotmac-erp/dotmac-people	resolved	Department catalogue is owned by dotmac-people after cutover.
+hr.employee	designation_id	dotmac_erp/hr.Employee	carry as directory reference	asm-dotmac-erp/dotmac-people	resolved	Designation catalogue is owned by dotmac-people after cutover.
+hr.employee	employment_type_id	dotmac_erp/hr.Employee	carry as directory reference	asm-dotmac-erp/dotmac-people	resolved	Employment-type catalogue is owned by dotmac-people after cutover.
+hr.employee	grade_id	dotmac_erp/hr.Employee	retain until grade/compensation policy owner is named	UNRESOLVED	unresolved	Employee grade is excluded from dotmac-people and has consumers outside payroll.
+hr.employee	reports_to_id	dotmac_erp/hr.Employee	retire stored manager edge; derive hierarchy from positions and temporal assignments	asm-dotmac-erp/dotmac-people	resolved_retire	Must not become a second hierarchy writer.
+hr.employee	expense_approver_id	dotmac_erp/hr.Employee	move to a named expense-approval policy contract	UNRESOLVED	unresolved	dotmac-expenses is a candidate capability owner, but no accepted ownership contract is cited here.
+hr.employee	assigned_location_id	dotmac_erp/hr.Employee	move to a named workforce/attendance work-default owner	UNRESOLVED	unresolved	Locations and attendance are outside dotmac-people.
+hr.employee	default_shift_type_id	dotmac_erp/hr.Employee	move to a named workforce scheduling owner	UNRESOLVED	unresolved	dotmac-workforce is unreleased and cannot own this field today.
+hr.employee	date_of_joining	dotmac_erp/hr.Employee	carry as employment lifecycle date	asm-dotmac-erp/dotmac-people	resolved	In the released employment-directory contract.
+hr.employee	date_of_leaving	dotmac_erp/hr.Employee	carry as employment lifecycle date	asm-dotmac-erp/dotmac-people	resolved	In the released employment-directory contract.
+hr.employee	probation_end_date	dotmac_erp/hr.Employee	carry as employment lifecycle date	asm-dotmac-erp/dotmac-people	resolved	In the released employment-directory contract.
+hr.employee	confirmation_date	dotmac_erp/hr.Employee	carry as employment lifecycle date	asm-dotmac-erp/dotmac-people	resolved	In the released employment-directory contract.
+hr.employee	nysc_start_date	dotmac_erp/hr.Employee	retain until NYSC placement/lifecycle owner is named	UNRESOLVED	unresolved	Not part of the released employment-directory contract.
+hr.employee	nysc_end_date	dotmac_erp/hr.Employee	retain until NYSC placement/lifecycle owner is named	UNRESOLVED	unresolved	Must move with nysc_start_date under one owner.
+hr.employee	status	dotmac_erp/hr.Employee	carry as employment lifecycle state	asm-dotmac-erp/dotmac-people	resolved	In the released employment-directory contract; lifecycle decisions must use its service.
+hr.employee	cost_center_id	dotmac_erp/hr.Employee	move to a named payroll/accounting employment-dimension owner	UNRESOLVED	unresolved	Accounting owns the catalogue, but the employee default decision is not assigned.
+hr.employee	default_payroll_payable_account_id	dotmac_erp/hr.Employee	move to a named payroll posting-policy owner	UNRESOLVED	unresolved	The GL account catalogue does not own an employee payroll default.
+hr.employee	bank_name	dotmac_erp/hr.Employee	move to a typed payroll payment-instrument record	UNRESOLVED	unresolved	Bank data is outside dotmac-people and needs an approved sensitive-data owner.
+hr.employee	bank_account_number	dotmac_erp/hr.Employee	move to a typed payroll payment-instrument record	UNRESOLVED	unresolved	Sensitive payment data; exact owner and protection contract are absent.
+hr.employee	bank_account_name	dotmac_erp/hr.Employee	move to a typed payroll payment-instrument record	UNRESOLVED	unresolved	Must move atomically with the rest of the payment instrument.
+hr.employee	bank_branch_code	dotmac_erp/hr.Employee	move to a typed payroll payment-instrument record	UNRESOLVED	unresolved	Must move atomically with the rest of the payment instrument.
+hr.employee	ctc	dotmac_erp/hr.Employee	move to a named compensation owner	UNRESOLVED	unresolved	Compensation is explicitly outside dotmac-people.
+hr.employee	salary_mode	dotmac_erp/hr.Employee	move to a named payroll disbursement-policy owner	UNRESOLVED	unresolved	Must be resolved with the employee payment instrument.
+hr.employee	notes	dotmac_erp/hr.Employee	classify and move to a typed domain record or retire with evidence	UNRESOLVED	unresolved	An untyped notes field has no approved destination.
+hr.employee	eligible_for_final_payroll	dotmac_erp/hr.Employee	move to the final-payroll policy owner	UNRESOLVED	unresolved	A payroll eligibility decision cannot be owned by the employment directory.
+hr.employee	final_payroll_processed_at	dotmac_erp/hr.Employee	move to final-payroll execution evidence	UNRESOLVED	unresolved	Must be owned with the final-payroll decision and execution ledger.
+hr.employee	batch_operation_id	dotmac_erp/hr.Employee	preserve only if a named import/audit contract requires it	UNRESOLVED	unresolved	dotmac-imports is a candidate infrastructure seam, not an inferred business owner.
+hr.employee	created_at	dotmac_erp/hr.Employee	preserve source timestamp during bootstrap; thereafter target operational metadata	asm-dotmac-erp/dotmac-people	resolved	Source projection already exports the source timestamp where available.
+hr.employee	updated_at	dotmac_erp/hr.Employee	preserve source comparison evidence; thereafter target operational metadata	asm-dotmac-erp/dotmac-people	resolved	Fingerprint is comparison authority because legacy writers do not reliably advance this field.
+hr.employee	created_by_id	dotmac_erp/hr.Employee	retain actor evidence only under an approved audit contract	UNRESOLVED	unresolved	Inherited from AuditMixin and excluded from the current projection.
+hr.employee	updated_by_id	dotmac_erp/hr.Employee	retain actor evidence only under an approved audit contract	UNRESOLVED	unresolved	Inherited from AuditMixin and excluded from the current projection.
+hr.employee	erpnext_id	dotmac_erp/hr.Employee	retire after source reconciliation and archival	none	resolved_retire	Legacy migration correlation must not become an ongoing synchronization path.
+hr.employee	last_synced_at	dotmac_erp/hr.Employee	retire after source reconciliation and archival	none	resolved_retire	There is no post-switch reverse feed or ongoing ERPNext authority.
+hr.employee	version	dotmac_erp/hr.Employee	replace only through the target command concurrency contract	UNRESOLVED	unresolved	Inherited optimistic-lock behavior is not present in the source projection contract.
+hr.employee_document	*	dotmac_erp/hr.EmployeeDocument	retain until document business-record owner and file-reference contract are named	UNRESOLVED	unresolved	Includes metadata, verification, expiry and lifecycle; dotmac-files may store bytes but does not thereby own these decisions.
+hr.employee_qualification	*	dotmac_erp/hr.EmployeeQualification	retain until qualification and verification owner is named	UNRESOLVED	unresolved	Do not infer training-development ownership without an accepted contract.
+hr.employee_certification	*	dotmac_erp/hr.EmployeeCertification	retain until certification, verification and renewal owner is named	UNRESOLVED	unresolved	Expiry/reminder decisions require one explicit owner.
+hr.employee_dependent	*	dotmac_erp/hr.EmployeeDependent	retain until dependant, emergency-contact and beneficiary owner is named	UNRESOLVED	unresolved	Contains sensitive family, insurance and allocation data outside dotmac-people.
+hr.skill	*	dotmac_erp/hr.Skill	migrate only through the released workforce-skills contract	asm-dotmac-erp/dotmac-workforce	blocked_unreleased	The BOM selects workforce-skills, but the distribution is unreleased and cannot be composed yet.
+hr.employee_skill	*	dotmac_erp/hr.EmployeeSkill	migrate only through the released workforce-skills contract	asm-dotmac-erp/dotmac-workforce	blocked_unreleased	Includes proficiency and assessor decisions; no local fallback owner is implied.

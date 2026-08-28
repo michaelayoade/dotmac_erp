@@ -1,0 +1,403 @@
+source_schema	source_table	source_column	target_schema	target_table	target_column	declaration_kind	declaration_paths
+attendance	attendance	created_by_id	public	people	id	mixin_expansion	app/models/people/attendance/attendance.py:50 via app/models/people/base.py:61
+attendance	attendance	employee_id	hr	employee	employee_id	explicit	app/models/people/attendance/attendance.py:84
+attendance	attendance	updated_by_id	public	people	id	mixin_expansion	app/models/people/attendance/attendance.py:50 via app/models/people/base.py:66
+attendance	attendance_request	created_by_id	public	people	id	mixin_expansion	app/models/people/attendance/attendance_request.py:32 via app/models/people/base.py:61
+attendance	attendance_request	employee_id	hr	employee	employee_id	explicit	app/models/people/attendance/attendance_request.py:63
+attendance	attendance_request	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/attendance/attendance_request.py:32 via app/models/people/base.py:85
+attendance	attendance_request	updated_by_id	public	people	id	mixin_expansion	app/models/people/attendance/attendance_request.py:32 via app/models/people/base.py:66
+attendance	shift_assignment	created_by_id	public	people	id	mixin_expansion	app/models/people/attendance/shift_assignment.py:23 via app/models/people/base.py:61
+attendance	shift_assignment	employee_id	hr	employee	employee_id	explicit	app/models/people/attendance/shift_assignment.py:51
+attendance	shift_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/people/attendance/shift_assignment.py:23 via app/models/people/base.py:66
+attendance	shift_type	created_by_id	public	people	id	mixin_expansion	app/models/people/attendance/shift_type.py:30 via app/models/people/base.py:61
+attendance	shift_type	updated_by_id	public	people	id	mixin_expansion	app/models/people/attendance/shift_type.py:30 via app/models/people/base.py:66
+core_org	organization_branding	created_by_id	public	people	id	explicit	app/models/finance/core_org/organization_branding.py:261
+expense	card_transaction	created_by_id	public	people	id	mixin_expansion	app/models/expense/corporate_card.py:169 via app/models/mixins.py:100|app/models/people/exp/corporate_card.py:169 via app/models/people/base.py:61
+expense	card_transaction	updated_by_id	public	people	id	mixin_expansion	app/models/expense/corporate_card.py:169 via app/models/mixins.py:106|app/models/people/exp/corporate_card.py:169 via app/models/people/base.py:66
+expense	cash_advance	approver_id	hr	employee	employee_id	explicit	app/models/expense/cash_advance.py:171|app/models/people/exp/cash_advance.py:171
+expense	cash_advance	created_by_id	public	people	id	mixin_expansion	app/models/expense/cash_advance.py:50 via app/models/mixins.py:100|app/models/people/exp/cash_advance.py:50 via app/models/people/base.py:61
+expense	cash_advance	employee_id	hr	employee	employee_id	explicit	app/models/expense/cash_advance.py:87|app/models/people/exp/cash_advance.py:87
+expense	cash_advance	status_changed_by_id	public	people	id	mixin_expansion	app/models/expense/cash_advance.py:50 via app/models/mixins.py:156|app/models/people/exp/cash_advance.py:50 via app/models/people/base.py:85
+expense	cash_advance	updated_by_id	public	people	id	mixin_expansion	app/models/expense/cash_advance.py:50 via app/models/mixins.py:106|app/models/people/exp/cash_advance.py:50 via app/models/people/base.py:66
+expense	corporate_card	created_by_id	public	people	id	mixin_expansion	app/models/expense/corporate_card.py:47 via app/models/mixins.py:100|app/models/people/exp/corporate_card.py:47 via app/models/people/base.py:61
+expense	corporate_card	employee_id	hr	employee	employee_id	explicit	app/models/expense/corporate_card.py:97|app/models/people/exp/corporate_card.py:97
+expense	corporate_card	updated_by_id	public	people	id	mixin_expansion	app/models/expense/corporate_card.py:47 via app/models/mixins.py:106|app/models/people/exp/corporate_card.py:47 via app/models/people/base.py:66
+expense	expense_approver_budget_adjustment	adjusted_by_id	public	people	id	explicit	app/models/expense/limit_rule.py:495
+expense	expense_approver_limit	created_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:315 via app/models/mixins.py:100
+expense	expense_approver_limit	escalate_to_employee_id	hr	employee	employee_id	explicit	app/models/expense/limit_rule.py:389
+expense	expense_approver_limit	updated_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:315 via app/models/mixins.py:106
+expense	expense_approver_limit_reset	approver_id	hr	employee	employee_id	explicit	app/models/expense/limit_rule.py:548
+expense	expense_approver_limit_reset	reviewed_by_id	public	people	id	explicit	app/models/expense/limit_rule.py:563
+expense	expense_category	created_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:75 via app/models/mixins.py:100|app/models/people/exp/expense_claim.py:52 via app/models/people/base.py:61
+expense	expense_category	updated_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:75 via app/models/mixins.py:106|app/models/people/exp/expense_claim.py:52 via app/models/people/base.py:66
+expense	expense_claim	approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:325|app/models/people/exp/expense_claim.py:270
+expense	expense_claim	created_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:151 via app/models/mixins.py:100|app/models/people/exp/expense_claim.py:128 via app/models/people/base.py:61
+expense	expense_claim	employee_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:204|app/models/people/exp/expense_claim.py:172
+expense	expense_claim	requested_approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:330|app/models/people/exp/expense_claim.py:275
+expense	expense_claim	status_changed_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:151 via app/models/mixins.py:156|app/models/people/exp/expense_claim.py:128 via app/models/people/base.py:85
+expense	expense_claim	updated_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:151 via app/models/mixins.py:106|app/models/people/exp/expense_claim.py:128 via app/models/people/base.py:66
+expense	expense_claim_approval_step	approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim_approval_step.py:83
+expense	expense_limit_evaluation	evaluated_by_id	public	people	id	explicit	app/models/expense/limit_rule.py:677
+expense	expense_limit_rule	created_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:103 via app/models/mixins.py:100
+expense	expense_limit_rule	updated_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:103 via app/models/mixins.py:106
+expense	expense_period_usage	employee_id	hr	employee	employee_id	explicit	app/models/expense/limit_rule.py:750
+fa	asset	custodian_employee_id	hr	employee	employee_id	explicit	app/models/fixed_assets/asset.py:89
+fleet	fuel_log_entry	created_by_id	public	people	id	mixin_expansion	app/models/fleet/fuel_log.py:26 via app/models/people/base.py:61
+fleet	fuel_log_entry	employee_id	hr	employee	employee_id	explicit	app/models/fleet/fuel_log.py:60
+fleet	fuel_log_entry	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/fuel_log.py:26 via app/models/people/base.py:66
+fleet	maintenance_record	created_by_id	public	people	id	mixin_expansion	app/models/fleet/maintenance.py:26 via app/models/people/base.py:61
+fleet	maintenance_record	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/maintenance.py:26 via app/models/people/base.py:66
+fleet	vehicle	assigned_employee_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle.py:224
+fleet	vehicle	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle.py:51 via app/models/people/base.py:61
+fleet	vehicle	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle.py:51 via app/models/people/base.py:66
+fleet	vehicle_assignment	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_assignment.py:25 via app/models/people/base.py:61
+fleet	vehicle_assignment	employee_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle_assignment.py:64
+fleet	vehicle_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_assignment.py:25 via app/models/people/base.py:66
+fleet	vehicle_document	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_document.py:25 via app/models/people/base.py:61
+fleet	vehicle_document	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_document.py:25 via app/models/people/base.py:66
+fleet	vehicle_incident	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_incident.py:26 via app/models/people/base.py:61
+fleet	vehicle_incident	driver_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle_incident.py:69
+fleet	vehicle_incident	reported_by_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle_incident.py:63
+fleet	vehicle_incident	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_incident.py:26 via app/models/people/base.py:66
+fleet	vehicle_reservation	approved_by_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle_reservation.py:118
+fleet	vehicle_reservation	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_reservation.py:25 via app/models/people/base.py:61
+fleet	vehicle_reservation	employee_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle_reservation.py:71
+fleet	vehicle_reservation	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_reservation.py:25 via app/models/people/base.py:66
+hr	asset_assignment	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/assignment.py:48 via app/models/people/base.py:61
+hr	asset_assignment	employee_id	hr	employee	employee_id	explicit	app/models/people/assets/assignment.py:79
+hr	asset_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/assignment.py:48 via app/models/people/base.py:66
+hr	asset_assignment_movement	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/assignment.py:119 via app/models/people/base.py:61
+hr	asset_assignment_movement	from_employee_id	hr	employee	employee_id	explicit	app/models/people/assets/assignment.py:163
+hr	asset_assignment_movement	to_employee_id	hr	employee	employee_id	explicit	app/models/people/assets/assignment.py:168
+hr	asset_assignment_movement	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/assignment.py:119 via app/models/people/base.py:66
+hr	asset_audit_adjustment	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:154 via app/models/people/base.py:61
+hr	asset_audit_adjustment	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:154 via app/models/people/base.py:66
+hr	asset_audit_discrepancy	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:207 via app/models/people/base.py:61
+hr	asset_audit_discrepancy	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:207 via app/models/people/base.py:66
+hr	asset_audit_line	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:99 via app/models/people/base.py:61
+hr	asset_audit_line	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:99 via app/models/people/base.py:66
+hr	asset_audit_plan	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:50 via app/models/people/base.py:61
+hr	asset_audit_plan	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:50 via app/models/people/base.py:66
+hr	asset_lifecycle_event	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:274 via app/models/people/base.py:61
+hr	asset_lifecycle_event	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/audit.py:274 via app/models/people/base.py:66
+hr	asset_tracking_event	created_by_id	public	people	id	mixin_expansion	app/models/people/assets/tracking.py:35 via app/models/people/base.py:61
+hr	asset_tracking_event	updated_by_id	public	people	id	mixin_expansion	app/models/people/assets/tracking.py:35 via app/models/people/base.py:66
+hr	case_action	issued_by_id	hr	employee	employee_id	explicit	app/models/people/discipline/case_action.py:122
+hr	case_document	uploaded_by_id	hr	employee	employee_id	explicit	app/models/people/discipline/case_document.py:106
+hr	case_witness	employee_id	hr	employee	employee_id	explicit	app/models/people/discipline/case_witness.py:51
+hr	checklist_template	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/checklist_template.py:63 via app/models/people/base.py:61
+hr	checklist_template	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/checklist_template.py:63 via app/models/people/base.py:66
+hr	clearance_item	assigned_to_id	hr	employee	employee_id	explicit	app/models/people/hr/clearance_checklist.py:93
+hr	competency	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/job_description.py:55 via app/models/people/base.py:61
+hr	competency	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/job_description.py:55 via app/models/people/base.py:66
+hr	department	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/department.py:24 via app/models/people/base.py:61
+hr	department	head_id	hr	employee	employee_id	explicit	app/models/people/hr/department.py:73
+hr	department	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/department.py:24 via app/models/people/base.py:66
+hr	designation	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/designation.py:33 via app/models/people/base.py:61
+hr	designation	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/designation.py:33 via app/models/people/base.py:66
+hr	disciplinary_case	created_by_id	public	people	id	mixin_expansion	app/models/people/discipline/case.py:79 via app/models/people/base.py:61
+hr	disciplinary_case	employee_id	hr	employee	employee_id	explicit	app/models/people/discipline/case.py:120
+hr	disciplinary_case	investigating_officer_id	hr	employee	employee_id	explicit	app/models/people/discipline/case.py:244
+hr	disciplinary_case	panel_chair_id	hr	employee	employee_id	explicit	app/models/people/discipline/case.py:252
+hr	disciplinary_case	reported_by_id	hr	employee	employee_id	explicit	app/models/people/discipline/case.py:236
+hr	disciplinary_case	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/discipline/case.py:79 via app/models/people/base.py:85
+hr	disciplinary_case	updated_by_id	public	people	id	mixin_expansion	app/models/people/discipline/case.py:79 via app/models/people/base.py:66
+hr	employee	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee.py:124 via app/models/people/base.py:61
+hr	employee	expense_approver_id	hr	employee	employee_id	explicit	app/models/people/hr/employee.py:303
+hr	employee	person_id	public	people	id	explicit	app/models/people/hr/employee.py:163
+hr	employee	reports_to_id	hr	employee	employee_id	explicit	app/models/people/hr/employee.py:298
+hr	employee	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee.py:124 via app/models/people/base.py:66
+hr	employee_certification	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:394 via app/models/people/base.py:61
+hr	employee_certification	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:423
+hr	employee_certification	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:394 via app/models/people/base.py:66
+hr	employee_dependent	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:537 via app/models/people/base.py:61
+hr	employee_dependent	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:566
+hr	employee_dependent	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:537 via app/models/people/base.py:66
+hr	employee_document	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:117 via app/models/people/base.py:61
+hr	employee_document	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:147
+hr	employee_document	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:117 via app/models/people/base.py:66
+hr	employee_document	verified_by_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:212
+hr	employee_grade	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_grade.py:24 via app/models/people/base.py:61
+hr	employee_grade	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_grade.py:24 via app/models/people/base.py:66
+hr	employee_info_change_batch	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/info_change_request.py:91
+hr	employee_info_change_request	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/info_change_request.py:190
+hr	employee_info_change_request	reviewer_id	public	people	id	explicit	app/models/people/hr/info_change_request.py:271
+hr	employee_onboarding	buddy_employee_id	hr	employee	employee_id	explicit	app/models/people/hr/lifecycle.py:196
+hr	employee_onboarding	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:79 via app/models/people/base.py:61
+hr	employee_onboarding	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/lifecycle.py:112
+hr	employee_onboarding	manager_id	hr	employee	employee_id	explicit	app/models/people/hr/lifecycle.py:204
+hr	employee_onboarding	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:79 via app/models/people/base.py:66
+hr	employee_onboarding_activity	assignee_id	public	people	id	explicit	app/models/people/hr/lifecycle.py:299
+hr	employee_onboarding_activity	completed_by	public	people	id	explicit	app/models/people/hr/lifecycle.py:324
+hr	employee_promotion	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:447 via app/models/people/base.py:61
+hr	employee_promotion	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/lifecycle.py:470
+hr	employee_promotion	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:447 via app/models/people/base.py:66
+hr	employee_qualification	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:265 via app/models/people/base.py:61
+hr	employee_qualification	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:293
+hr	employee_qualification	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:265 via app/models/people/base.py:66
+hr	employee_separation	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:349 via app/models/people/base.py:61
+hr	employee_separation	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/lifecycle.py:373
+hr	employee_separation	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:349 via app/models/people/base.py:66
+hr	employee_skill	assessed_by_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:797
+hr	employee_skill	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:738 via app/models/people/base.py:61
+hr	employee_skill	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:766
+hr	employee_skill	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:738 via app/models/people/base.py:66
+hr	employee_transfer	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:521 via app/models/people/base.py:61
+hr	employee_transfer	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/lifecycle.py:544
+hr	employee_transfer	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/lifecycle.py:521 via app/models/people/base.py:66
+hr	employment_contract	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/employment_contract.py:98
+hr	employment_type	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employment_type.py:23 via app/models/people/base.py:61
+hr	employment_type	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employment_type.py:23 via app/models/people/base.py:66
+hr	exit_interview	conducted_by_id	hr	employee	employee_id	explicit	app/models/people/hr/exit_interview.py:112
+hr	exit_interview	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/exit_interview.py:107
+hr	grievance	assigned_to_id	hr	employee	employee_id	explicit	app/models/people/hr/grievance.py:161
+hr	grievance	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/grievance.py:71 via app/models/people/base.py:61
+hr	grievance	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/grievance.py:109
+hr	grievance	escalated_to_id	hr	employee	employee_id	explicit	app/models/people/hr/grievance.py:193
+hr	grievance	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/hr/grievance.py:71 via app/models/people/base.py:85
+hr	grievance	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/grievance.py:71 via app/models/people/base.py:66
+hr	hr_document_acknowledgment	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/handbook.py:312
+hr	job_description	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/job_description.py:160 via app/models/people/base.py:61
+hr	job_description	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/job_description.py:160 via app/models/people/base.py:66
+hr	job_description_competency	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/job_description.py:360 via app/models/people/base.py:61
+hr	job_description_competency	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/job_description.py:360 via app/models/people/base.py:66
+hr	position	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/position.py:45 via app/models/people/base.py:61
+hr	position	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/position.py:45 via app/models/people/base.py:66
+hr	position_assignment	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/position_assignment.py:35 via app/models/people/base.py:61
+hr	position_assignment	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/position_assignment.py:89
+hr	position_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/position_assignment.py:35 via app/models/people/base.py:66
+hr	salary_review	approved_by_id	public	people	id	explicit	app/models/people/hr/salary_review.py:181
+hr	salary_review	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/salary_review.py:60 via app/models/people/base.py:61
+hr	salary_review	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/salary_review.py:98
+hr	salary_review	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/hr/salary_review.py:60 via app/models/people/base.py:85
+hr	salary_review	submitted_by_id	public	people	id	explicit	app/models/people/hr/salary_review.py:174
+hr	salary_review	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/salary_review.py:60 via app/models/people/base.py:66
+hr	skill	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:678 via app/models/people/base.py:61
+hr	skill	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:678 via app/models/people/base.py:66
+hr	succession_candidate	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/succession.py:190
+hr	succession_plan	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/succession.py:77 via app/models/people/base.py:61
+hr	succession_plan	incumbent_id	hr	employee	employee_id	explicit	app/models/people/hr/succession.py:116
+hr	succession_plan	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/succession.py:77 via app/models/people/base.py:66
+hr	survey	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/survey.py:82 via app/models/people/base.py:61
+hr	survey	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/survey.py:82 via app/models/people/base.py:66
+hr	survey_response	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/survey.py:239
+inv	material_request	requested_by_id	hr	employee	employee_id	explicit	app/models/inventory/material_request.py:122
+leave	holiday_list	created_by_id	public	people	id	mixin_expansion	app/models/people/leave/holiday_list.py:32 via app/models/people/base.py:61
+leave	holiday_list	updated_by_id	public	people	id	mixin_expansion	app/models/people/leave/holiday_list.py:32 via app/models/people/base.py:66
+leave	leave_allocation	created_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_allocation.py:34 via app/models/people/base.py:61
+leave	leave_allocation	employee_id	hr	employee	employee_id	explicit	app/models/people/leave/leave_allocation.py:70
+leave	leave_allocation	updated_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_allocation.py:34 via app/models/people/base.py:66
+leave	leave_application	approved_by_id	public	people	id	explicit	app/models/people/leave/leave_application.py:149
+leave	leave_application	created_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_application.py:46 via app/models/people/base.py:61
+leave	leave_application	employee_id	hr	employee	employee_id	explicit	app/models/people/leave/leave_application.py:84
+leave	leave_application	leave_approver_id	hr	employee	employee_id	explicit	app/models/people/leave/leave_application.py:143
+leave	leave_application	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_application.py:46 via app/models/people/base.py:85
+leave	leave_application	updated_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_application.py:46 via app/models/people/base.py:66
+leave	leave_type	created_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_type.py:44 via app/models/people/base.py:61
+leave	leave_type	updated_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_type.py:44 via app/models/people/base.py:66
+payments	remita_rrr	created_by_id	public	people	id	explicit	app/models/finance/remita/rrr.py:177
+payroll	employee_loan	approved_by_id	public	people	id	explicit	app/models/people/payroll/employee_loan.py:196
+payroll	employee_loan	created_by_id	public	people	id	explicit	app/models/people/payroll/employee_loan.py:240
+payroll	employee_loan	disbursed_by_id	public	people	id	explicit	app/models/people/payroll/employee_loan.py:212
+payroll	employee_loan	employee_id	hr	employee	employee_id	explicit	app/models/people/payroll/employee_loan.py:95
+payroll	employee_tax_profile	created_by_id	public	people	id	mixin_expansion	app/models/people/payroll/employee_tax_profile.py:39 via app/models/people/base.py:61
+payroll	employee_tax_profile	employee_id	hr	employee	employee_id	explicit	app/models/people/payroll/employee_tax_profile.py:74
+payroll	employee_tax_profile	updated_by_id	public	people	id	mixin_expansion	app/models/people/payroll/employee_tax_profile.py:39 via app/models/people/base.py:66
+payroll	loan_repayment	created_by_id	public	people	id	explicit	app/models/people/payroll/loan_repayment.py:142
+payroll	loan_type	created_by_id	public	people	id	explicit	app/models/people/payroll/loan_type.py:190
+payroll	payroll_entry	created_by_id	public	people	id	mixin_expansion	app/models/people/payroll/payroll_entry.py:64 via app/models/people/base.py:61
+payroll	payroll_entry	payslips_email_queued_by_id	public	people	id	explicit	app/models/people/payroll/payroll_entry.py:215
+payroll	payroll_entry	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/payroll/payroll_entry.py:64 via app/models/people/base.py:85
+payroll	payroll_entry	updated_by_id	public	people	id	mixin_expansion	app/models/people/payroll/payroll_entry.py:64 via app/models/people/base.py:66
+payroll	salary_component	created_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_component.py:40 via app/models/people/base.py:61
+payroll	salary_component	updated_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_component.py:40 via app/models/people/base.py:66
+payroll	salary_slip	created_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_slip.py:70 via app/models/people/base.py:61
+payroll	salary_slip	employee_id	hr	employee	employee_id	explicit	app/models/people/payroll/salary_slip.py:124
+payroll	salary_slip	paid_by_id	public	people	id	explicit	app/models/people/payroll/salary_slip.py:271
+payroll	salary_slip	posted_by_id	public	people	id	explicit	app/models/people/payroll/salary_slip.py:261
+payroll	salary_slip	reviewed_by_id	public	people	id	explicit	app/models/people/payroll/salary_slip.py:332
+payroll	salary_slip	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_slip.py:70 via app/models/people/base.py:85
+payroll	salary_slip	updated_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_slip.py:70 via app/models/people/base.py:66
+payroll	salary_structure	created_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_structure.py:46 via app/models/people/base.py:61
+payroll	salary_structure	updated_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_structure.py:46 via app/models/people/base.py:66
+payroll	salary_structure_assignment	created_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_assignment.py:32 via app/models/people/base.py:61
+payroll	salary_structure_assignment	employee_id	hr	employee	employee_id	explicit	app/models/people/payroll/salary_assignment.py:70
+payroll	salary_structure_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/people/payroll/salary_assignment.py:32 via app/models/people/base.py:66
+payroll	tax_band	created_by_id	public	people	id	mixin_expansion	app/models/people/payroll/tax_band.py:42 via app/models/people/base.py:61
+payroll	tax_band	updated_by_id	public	people	id	mixin_expansion	app/models/people/payroll/tax_band.py:42 via app/models/people/base.py:66
+perf	appraisal	counter_signer_id	hr	employee	employee_id	explicit	app/models/people/perf/appraisal.py:210
+perf	appraisal	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal.py:59 via app/models/people/base.py:61
+perf	appraisal	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/appraisal.py:91
+perf	appraisal	manager_id	hr	employee	employee_id	explicit	app/models/people/perf/appraisal.py:110
+perf	appraisal	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal.py:59 via app/models/people/base.py:85
+perf	appraisal	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal.py:59 via app/models/people/base.py:66
+perf	appraisal_appeal	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_appeal.py:25 via app/models/people/base.py:61
+perf	appraisal_appeal	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/appraisal_appeal.py:64
+perf	appraisal_appeal	mediator_id	hr	employee	employee_id	explicit	app/models/people/perf/appraisal_appeal.py:90
+perf	appraisal_appeal	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_appeal.py:25 via app/models/people/base.py:66
+perf	appraisal_cycle	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_cycle.py:45 via app/models/people/base.py:61
+perf	appraisal_cycle	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_cycle.py:45 via app/models/people/base.py:66
+perf	appraisal_feedback	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal.py:441 via app/models/people/base.py:61
+perf	appraisal_feedback	feedback_from_id	hr	employee	employee_id	explicit	app/models/people/perf/appraisal.py:474
+perf	appraisal_feedback	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal.py:441 via app/models/people/base.py:66
+perf	appraisal_outcome_action	actioned_by_id	hr	employee	employee_id	explicit	app/models/people/perf/appraisal_outcome_action.py:83
+perf	appraisal_outcome_action	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_outcome_action.py:34 via app/models/people/base.py:61
+perf	appraisal_outcome_action	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_outcome_action.py:34 via app/models/people/base.py:66
+perf	appraisal_template	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_template.py:44 via app/models/people/base.py:61
+perf	appraisal_template	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/appraisal_template.py:44 via app/models/people/base.py:66
+perf	contract_amendment_workflow	appraisee_id	hr	employee	employee_id	explicit	app/models/people/perf/contract_amendment.py:66
+perf	contract_amendment_workflow	appraiser_id	hr	employee	employee_id	explicit	app/models/people/perf/contract_amendment.py:71
+perf	contract_amendment_workflow	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/contract_amendment.py:24 via app/models/people/base.py:61
+perf	contract_amendment_workflow	hod_id	hr	employee	employee_id	explicit	app/models/people/perf/contract_amendment.py:76
+perf	contract_amendment_workflow	hr_head_id	hr	employee	employee_id	explicit	app/models/people/perf/contract_amendment.py:81
+perf	contract_amendment_workflow	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/contract_amendment.py:24 via app/models/people/base.py:66
+perf	department_performance_template	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/department_template.py:30 via app/models/people/base.py:61
+perf	department_performance_template	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/department_template.py:30 via app/models/people/base.py:66
+perf	institutional_governance_action	actor_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/pms_governance.py:64
+perf	institutional_governance_action	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:36 via app/models/people/base.py:61
+perf	institutional_governance_action	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:36 via app/models/people/base.py:66
+perf	institutional_performance	approver_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:143
+perf	institutional_performance	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/institutional_performance.py:43 via app/models/people/base.py:61
+perf	institutional_performance	owner_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:133
+perf	institutional_performance	reconciled_by_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:184
+perf	institutional_performance	reviewed_by_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:112
+perf	institutional_performance	reviewer_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:138
+perf	institutional_performance	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/institutional_performance.py:43 via app/models/people/base.py:66
+perf	kpi	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:50 via app/models/people/base.py:61
+perf	kpi	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/kpi.py:82
+perf	kpi	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:50 via app/models/people/base.py:66
+perf	kra	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kra.py:32 via app/models/people/base.py:61
+perf	kra	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kra.py:32 via app/models/people/base.py:66
+perf	monthly_review	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/monthly_review.py:36 via app/models/people/base.py:61
+perf	monthly_review	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/monthly_review.py:72
+perf	monthly_review	reviewer_id	hr	employee	employee_id	explicit	app/models/people/perf/monthly_review.py:77
+perf	monthly_review	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/monthly_review.py:36 via app/models/people/base.py:66
+perf	performance_contract	countersigner_id	hr	employee	employee_id	explicit	app/models/people/perf/performance_contract.py:129
+perf	performance_contract	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/performance_contract.py:38 via app/models/people/base.py:61
+perf	performance_contract	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/performance_contract.py:78
+perf	performance_contract	supervisor_id	hr	employee	employee_id	explicit	app/models/people/perf/performance_contract.py:83
+perf	performance_contract	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/performance_contract.py:38 via app/models/people/base.py:66
+perf	performance_improvement_plan	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/pip.py:39 via app/models/people/base.py:61
+perf	performance_improvement_plan	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/pip.py:72
+perf	performance_improvement_plan	hr_officer_id	hr	employee	employee_id	explicit	app/models/people/perf/pip.py:82
+perf	performance_improvement_plan	supervisor_id	hr	employee	employee_id	explicit	app/models/people/perf/pip.py:77
+perf	performance_improvement_plan	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/pip.py:39 via app/models/people/base.py:66
+perf	pms_governance_grievance	assigned_to_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/pms_governance.py:129
+perf	pms_governance_grievance	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:91 via app/models/people/base.py:61
+perf	pms_governance_grievance	raised_by_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/pms_governance.py:124
+perf	pms_governance_grievance	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:91 via app/models/people/base.py:66
+perf	pms_stakeholder_feedback	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:171 via app/models/people/base.py:61
+perf	pms_stakeholder_feedback	owner_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/pms_governance.py:209
+perf	pms_stakeholder_feedback	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:171 via app/models/people/base.py:66
+perf	scorecard	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/scorecard.py:33 via app/models/people/base.py:61
+perf	scorecard	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/scorecard.py:63
+perf	scorecard	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/scorecard.py:33 via app/models/people/base.py:66
+perf	strategic_objective	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/strategic_objective.py:34 via app/models/people/base.py:61
+perf	strategic_objective	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/strategic_objective.py:34 via app/models/people/base.py:66
+perf	weekly_meeting_action_item	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/weekly_meeting_report.py:313 via app/models/people/base.py:61
+perf	weekly_meeting_action_item	owner_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/weekly_meeting_report.py:344
+perf	weekly_meeting_action_item	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/weekly_meeting_report.py:313 via app/models/people/base.py:66
+perf	weekly_meeting_participant	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/weekly_meeting_report.py:235 via app/models/people/base.py:61
+perf	weekly_meeting_participant	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/weekly_meeting_report.py:270
+perf	weekly_meeting_participant	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/weekly_meeting_report.py:235 via app/models/people/base.py:66
+perf	weekly_meeting_report	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/weekly_meeting_report.py:81 via app/models/people/base.py:61
+perf	weekly_meeting_report	division_head_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/weekly_meeting_report.py:126
+perf	weekly_meeting_report	prepared_by_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/weekly_meeting_report.py:137
+perf	weekly_meeting_report	prepared_by_person_id	public	people	id	explicit	app/models/people/perf/weekly_meeting_report.py:142
+perf	weekly_meeting_report	submitted_by_id	public	people	id	explicit	app/models/people/perf/weekly_meeting_report.py:171
+perf	weekly_meeting_report	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/weekly_meeting_report.py:81 via app/models/people/base.py:66
+pm	milestone	created_by_id	public	people	id	mixin_expansion	app/models/pm/milestone.py:43 via app/models/people/base.py:61
+pm	milestone	updated_by_id	public	people	id	mixin_expansion	app/models/pm/milestone.py:43 via app/models/people/base.py:66
+pm	pm_comment	author_id	public	people	id	explicit	app/models/pm/comment.py:104
+pm	resource_allocation	created_by_id	public	people	id	mixin_expansion	app/models/pm/resource_allocation.py:34 via app/models/people/base.py:61
+pm	resource_allocation	employee_id	hr	employee	employee_id	explicit	app/models/pm/resource_allocation.py:74
+pm	resource_allocation	updated_by_id	public	people	id	mixin_expansion	app/models/pm/resource_allocation.py:34 via app/models/people/base.py:66
+pm	task	assigned_to_id	hr	employee	employee_id	explicit	app/models/pm/task.py:140
+pm	task	created_by_id	public	people	id	mixin_expansion	app/models/pm/task.py:64 via app/models/people/base.py:61
+pm	task	updated_by_id	public	people	id	mixin_expansion	app/models/pm/task.py:64 via app/models/people/base.py:66
+pm	time_entry	created_by_id	public	people	id	mixin_expansion	app/models/pm/time_entry.py:45 via app/models/people/base.py:61
+pm	time_entry	employee_id	hr	employee	employee_id	explicit	app/models/pm/time_entry.py:88
+pm	time_entry	updated_by_id	public	people	id	mixin_expansion	app/models/pm/time_entry.py:45 via app/models/people/base.py:66
+public	api_keys	person_id	public	people	id	explicit	app/models/auth.py:236
+public	audit_events	actor_person_id	public	people	id	explicit	app/models/audit.py:42
+public	batch_operations	started_by_id	public	people	id	explicit	app/models/batch_operation.py:104
+public	device_token	person_id	public	people	id	explicit	app/models/notification.py:259
+public	domain_setting_history	changed_by_id	public	people	id	explicit	app/models/domain_settings.py:315
+public	email_profile	created_by_id	public	people	id	explicit	app/models/email_profile.py:182
+public	feature_flag_registry	created_by_id	public	people	id	explicit	app/models/feature_flag.py:115
+public	federated_identities	person_id	public	people	id	explicit	app/models/auth.py:133
+public	help_article_feedback	person_id	public	people	id	explicit	app/models/help/models.py:180
+public	help_article_override	owner_id	public	people	id	explicit	app/models/help/models.py:97
+public	help_search_event	person_id	public	people	id	explicit	app/models/help/models.py:220
+public	help_user_progress	person_id	public	people	id	explicit	app/models/help/models.py:144
+public	mfa_methods	person_id	public	people	id	explicit	app/models/auth.py:171
+public	notification	actor_id	public	people	id	explicit	app/models/notification.py:194
+public	notification	recipient_id	public	people	id	explicit	app/models/notification.py:122
+public	person_roles	person_id	public	people	id	explicit	app/models/rbac.py:95
+public	sessions	person_id	public	people	id	explicit	app/models/auth.py:209
+public	user_credentials	person_id	public	people	id	explicit	app/models/auth.py:69
+public	workflow_task	assignee_employee_id	hr	employee	employee_id	explicit	app/models/workflow_task.py:65
+recruit	interview	created_by_id	public	people	id	mixin_expansion	app/models/people/recruit/interview.py:57 via app/models/people/base.py:61
+recruit	interview	interviewer_id	hr	employee	employee_id	explicit	app/models/people/recruit/interview.py:135
+recruit	interview	updated_by_id	public	people	id	mixin_expansion	app/models/people/recruit/interview.py:57 via app/models/people/base.py:66
+recruit	job_applicant	created_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_applicant.py:54 via app/models/people/base.py:61
+recruit	job_applicant	referral_employee_id	hr	employee	employee_id	explicit	app/models/people/recruit/job_applicant.py:173
+recruit	job_applicant	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_applicant.py:54 via app/models/people/base.py:85
+recruit	job_applicant	updated_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_applicant.py:54 via app/models/people/base.py:66
+recruit	job_offer	converted_to_employee_id	hr	employee	employee_id	explicit	app/models/people/recruit/job_offer.py:203
+recruit	job_offer	created_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_offer.py:53 via app/models/people/base.py:61
+recruit	job_offer	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_offer.py:53 via app/models/people/base.py:85
+recruit	job_offer	updated_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_offer.py:53 via app/models/people/base.py:66
+recruit	job_opening	created_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_opening.py:53 via app/models/people/base.py:61
+recruit	job_opening	reports_to_id	hr	employee	employee_id	explicit	app/models/people/recruit/job_opening.py:120
+recruit	job_opening	updated_by_id	public	people	id	mixin_expansion	app/models/people/recruit/job_opening.py:53 via app/models/people/base.py:66
+scheduling	schedule_audit_event	actor_id	public	people	id	explicit	app/models/people/scheduling/work_schedule.py:217
+scheduling	schedule_notification_log	employee_id	hr	employee	employee_id	explicit	app/models/people/scheduling/work_schedule.py:269
+scheduling	scheduling_policy	created_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/work_schedule.py:148 via app/models/people/base.py:61
+scheduling	scheduling_policy	updated_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/work_schedule.py:148 via app/models/people/base.py:66
+scheduling	shift_pattern	created_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/shift_pattern.py:44 via app/models/people/base.py:61
+scheduling	shift_pattern	updated_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/shift_pattern.py:44 via app/models/people/base.py:66
+scheduling	shift_pattern_assignment	created_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/pattern_assignment.py:33 via app/models/people/base.py:61
+scheduling	shift_pattern_assignment	employee_id	hr	employee	employee_id	explicit	app/models/people/scheduling/pattern_assignment.py:77
+scheduling	shift_pattern_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/pattern_assignment.py:33 via app/models/people/base.py:66
+scheduling	shift_schedule	created_by_id	hr	employee	employee_id	explicit	app/models/people/scheduling/shift_schedule.py:158
+scheduling	shift_schedule	employee_id	hr	employee	employee_id	explicit	app/models/people/scheduling/shift_schedule.py:106
+scheduling	shift_schedule	published_by_id	hr	employee	employee_id	explicit	app/models/people/scheduling/shift_schedule.py:169
+scheduling	shift_schedule	updated_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/shift_schedule.py:50 via app/models/people/base.py:66
+scheduling	shift_swap_request	created_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/swap_request.py:43 via app/models/people/base.py:61
+scheduling	shift_swap_request	requester_id	hr	employee	employee_id	explicit	app/models/people/scheduling/swap_request.py:104
+scheduling	shift_swap_request	reviewed_by_id	hr	employee	employee_id	explicit	app/models/people/scheduling/swap_request.py:139
+scheduling	shift_swap_request	target_employee_id	hr	employee	employee_id	explicit	app/models/people/scheduling/swap_request.py:110
+scheduling	shift_swap_request	updated_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/swap_request.py:43 via app/models/people/base.py:66
+scheduling	work_schedule	approved_by_id	public	people	id	explicit	app/models/people/scheduling/work_schedule.py:115
+scheduling	work_schedule	created_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/work_schedule.py:52 via app/models/people/base.py:61
+scheduling	work_schedule	published_by_id	public	people	id	explicit	app/models/people/scheduling/work_schedule.py:121
+scheduling	work_schedule	rejected_by_id	public	people	id	explicit	app/models/people/scheduling/work_schedule.py:127
+scheduling	work_schedule	submitted_by_id	public	people	id	explicit	app/models/people/scheduling/work_schedule.py:109
+scheduling	work_schedule	updated_by_id	public	people	id	mixin_expansion	app/models/people/scheduling/work_schedule.py:52 via app/models/people/base.py:66
+support	support_team	lead_id	hr	employee	employee_id	explicit	app/models/support/team.py:85
+support	support_team_member	employee_id	hr	employee	employee_id	explicit	app/models/support/team.py:182
+support	ticket	assigned_to_id	hr	employee	employee_id	explicit	app/models/support/ticket.py:157
+support	ticket	created_by_id	public	people	id	mixin_expansion	app/models/support/ticket.py:78 via app/models/people/base.py:61
+support	ticket	raised_by_id	hr	employee	employee_id	explicit	app/models/support/ticket.py:146
+support	ticket	updated_by_id	public	people	id	mixin_expansion	app/models/support/ticket.py:78 via app/models/people/base.py:66
+support	ticket_attachment	uploaded_by_id	public	people	id	explicit	app/models/support/attachment.py:97
+support	ticket_comment	author_id	public	people	id	explicit	app/models/support/comment.py:106
+training	academy_learning_progress	employee_id	hr	employee	employee_id	explicit	app/models/people/training/academy.py:159
+training	academy_learning_requirement	created_by	public	people	id	explicit	app/models/people/training/academy.py:110
+training	training_attendee	created_by_id	public	people	id	mixin_expansion	app/models/people/training/training_event.py:226 via app/models/people/base.py:61
+training	training_attendee	employee_id	hr	employee	employee_id	explicit	app/models/people/training/training_event.py:261
+training	training_attendee	updated_by_id	public	people	id	mixin_expansion	app/models/people/training/training_event.py:226 via app/models/people/base.py:66
+training	training_course	created_by	public	people	id	explicit	app/models/people/training/learning_assessment.py:179
+training	training_course_assignment	assigned_by	public	people	id	explicit	app/models/people/training/learning_assessment.py:915
+training	training_course_assignment	employee_id	hr	employee	employee_id	explicit	app/models/people/training/learning_assessment.py:910
+training	training_course_progress	employee_id	hr	employee	employee_id	explicit	app/models/people/training/learning_assessment.py:1006
+training	training_event	created_by_id	public	people	id	mixin_expansion	app/models/people/training/training_event.py:58 via app/models/people/base.py:61
+training	training_event	trainer_employee_id	hr	employee	employee_id	explicit	app/models/people/training/training_event.py:147
+training	training_event	updated_by_id	public	people	id	mixin_expansion	app/models/people/training/training_event.py:58 via app/models/people/base.py:66
+training	training_exam_answer	graded_by	public	people	id	explicit	app/models/people/training/learning_assessment.py:1258
+training	training_exam_attempt	employee_id	hr	employee	employee_id	explicit	app/models/people/training/learning_assessment.py:1152
+training	training_lesson_progress	employee_id	hr	employee	employee_id	explicit	app/models/people/training/learning_assessment.py:1091
+training	training_program	created_by_id	public	people	id	mixin_expansion	app/models/people/training/training_program.py:45 via app/models/people/base.py:61
+training	training_program	updated_by_id	public	people	id	mixin_expansion	app/models/people/training/training_program.py:45 via app/models/people/base.py:66
+training	training_question_bank	created_by	public	people	id	explicit	app/models/people/training/learning_assessment.py:473

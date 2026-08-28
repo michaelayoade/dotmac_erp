@@ -1,6 +1,7 @@
 # People replacement boundary
 
-Status: **backfill contract installed; authority remains in ERP**.
+Status: **legacy source read projection installed; target bootstrap/reconciler
+absent; authority remains in ERP**.
 
 > **Destination naming.** The replacement target is the commercial **Dotmac
 > ERP** product assembly, not an internally framed `dotmac_backoffice`
@@ -38,12 +39,25 @@ Status: **backfill contract installed; authority remains in ERP**.
 | Employment directory, positions and assignments | Dotmac ERP HR services and `hr.*` tables | released `dotmac-people`, composed by the Dotmac ERP product |
 | Credentials, sessions, roles and permissions | Dotmac ERP | Not part of this slice |
 | Payroll, bank, compensation, attendance and location data | Their existing ERP domains | Not part of `dotmac-people` |
+| Personal profile data that supplements `public.people` | `hr.employee` | **Unresolved**; it is neither a `dotmac-people` field nor approved kernel `PartyPerson` data |
+| Employee documents, qualifications, certifications and dependants | `hr.employee_*` tables | **Unresolved**; file storage alone is not business ownership |
+| Skill catalogue and employee proficiency | `hr.skill` and `hr.employee_skill` | selected `dotmac-workforce` capability, but blocked until that distribution is released and its contract is accepted |
 
 This change does not move any writer. ERP remains the sole authority until a
 separately authorized cutover has completed backfill, shadow comparison and
 reconciliation and has disabled the corresponding ERP writer paths.
 
-## Versioned source projection
+The complete disposition of the legacy `hr.employee` columns and its extended
+tables is recorded in
+`docs/inventories/people-employee-field-ownership.tsv`. An `unresolved` row is
+a cutover blocker, not permission to place the field in a JSON escape hatch or
+to copy it into `dotmac-people`.
+`tests/integration/test_people_employee_ownership_catalog.py` proves that the
+ledger covers every migrated `hr.employee` column and that every classified
+extended entity exists after `alembic upgrade heads`; the architecture test
+separately keeps the ledger synchronized with mapped model intent.
+
+## Versioned legacy source read projection
 
 The composed product may read one tenant at a time through:
 
@@ -75,6 +89,20 @@ across HTTP requests: the backfill/reconciler must repeat an entity scan until
 the source-ID/fingerprint set reaches a fixed point. Absence is meaningful only
 after a complete scan; this contract makes no incremental tombstone claim.
 
+This endpoint is a one-way extraction seam from the historical `dotmac_erp`
+source into the clean Dotmac ERP assembly before the authorized switch. It is
+not the target bootstrap itself: no target-side importer, fingerprint ledger or
+reconciler is installed yet. After the single product switch, the historical
+source is fenced and archived; the new authority never reverse-feeds it.
+
+The shipped v1 projection is also **not deterministic enough for cutover**:
+position fingerprints include `is_department_head`, which is evaluated against
+the process date rather than an explicit `as_of`. A scan crossing an assignment
+date boundary can therefore change without a source write. A successor
+versioned projection must accept an explicit effective date before bootstrap or
+fixed-point reconciliation is admissible; the published v1 contract must not be
+redefined in place.
+
 ## Field boundary
 
 The projection is shaped to the released kernel and `dotmac-people` storage
@@ -99,6 +127,37 @@ Bank details, compensation, payroll state, cost centres, locations, shifts,
 credentials, roles, permissions, Sub account metadata and all other wide ERP
 employee fields are outside this contract.
 
+## Dependency evidence
+
+`docs/inventories/people-dependent-references.tsv` is the canonical static
+**model-intent** ledger. One row is one unique intended-FK identity
+`(source_schema, source_table, source_column, target_schema, target_table,
+target_column)`. Repeated model declarations collapse into that identity;
+`declaration_kind` and `declaration_paths` preserve whether it was explicit or
+expanded from a reusable mixin and where it came from. Consequently, a count
+of source declarations and a count of ledger rows answer different questions
+and must never be presented as the same number. A model-intent row is evidence
+that checked-in ORM code declares a dependency; it is not evidence that a
+migration installed the corresponding PostgreSQL constraint.
+
+`tests/integration/people_hub_fk_catalog.tsv` is the separately checked-in
+baseline of constraints observed in the fully migrated PostgreSQL catalogue.
+Each row records the six-column identity plus update/delete actions, match type
+and deferrability. That is the migrated FK contract truth for this boundary.
+`tests/integration/test_people_hub_fk_catalog.py` queries PostgreSQL and compares
+it with the physical baseline without inferring the expected answer from
+whatever ORM models happen to import during the test.
+
+The current differences between model intent and migrated constraints are
+explicit **model-only FK drift** and **physical-only FK drift**. They are
+control debt under separate baselines in one two-directional ratchet, not an
+assertion that either evidence source is a subset of the other. A change to
+model intent must update the static ledger deliberately; a change to migrated
+constraints must update the physical baseline deliberately; and the drift
+ratchet prevents either gap changing silently in either direction. The tests
+own all numeric baselines. Neither evidence source nor the debt baselines may
+be replaced by copied prose counts in this document or the BOM.
+
 ## Writer retirement evidence
 
 `docs/inventories/people-authority-writers.tsv` is the exact current census of
@@ -119,11 +178,17 @@ artifacts and the irreversible switch is explicitly authorized:
 1. The composed product pins the released kernel and `dotmac-people`
    distributions and migrates their lineages successfully.
 2. Backfill preserves source IDs and records source fingerprints.
-3. Shadow reads and a repeatable reconciler show no unexplained row or field
+3. A successor projection with an explicit effective date removes v1's
+   process-date-dependent fingerprint, and the target pins that date for each
+   complete reconciliation pass.
+4. Shadow reads and a repeatable reconciler show no unexplained row or field
    differences for every entity and tenant.
-4. Every runtime row in the writer ledger is replaced by a composed-product
+5. Every runtime row in the writer ledger is replaced by a composed-product
    command path or explicitly retired; every operator-script row is disabled.
-5. The composed product becomes the sole writer in one cutover and ERP
-   compatibility is read-only.
-6. ERP tables remain until downstream foreign-key consumers have moved; table
+6. The composed product becomes the sole writer in one cutover. Any transitional
+   `hr.employee` compatibility surface is a **local, rebuildable, read-only
+   projection inside the clean assembly**, written only by its reconciler from
+   kernel Party and `dotmac-people` authority. It is not the historical ERP
+   table and creates no reverse feed to the fenced source.
+7. ERP tables remain until downstream foreign-key consumers have moved; table
    deletion is a later, separately authorized production operation.

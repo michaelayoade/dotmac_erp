@@ -1,6 +1,6 @@
 # ADR-0004 — The ERP bill of materials is frozen before composition starts
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-24
 - **Decider:** Michael
 - **Scope:** ERP module selection, capability ownership, composition order
@@ -129,6 +129,27 @@ a later product decision. Treasury and cash positioning, consolidation and
 intercompany, budgeting, lease accounting and financial-statement presentation
 are retained on the same reasoning and are listed individually in `RETAINED`.
 
+## Acceptance — 2026-08-28
+
+Michael accepted this decision while authorizing completion of the first thin
+People cutover. The two proposals above are therefore settled for the frozen
+membership and ownership set:
+
+- `dotmac-content`, `dotmac-publishing`, `dotmac-sites` and
+  `dotmac-web-analytics` remain excluded from Dotmac ERP. Their capabilities
+  belong in a separately owned marketing assembly; their extraction dossiers
+  must not be read as ERP composition authority.
+- Statutory trade accounts receivable, treasury and cash positioning,
+  consolidation and intercompany, budgeting, lease accounting and
+  financial-statement presentation remain named ERP-owned capabilities for
+  this cutover. A later extraction requires its own accepted ownership change;
+  it is not implicit in this acceptance.
+
+This acceptance freezes membership and ownership, not version pins, and does
+not authorize a production deployment. The first implementation that relies on
+it remains the separately reviewed People containment, storage-composition and
+Employment Type authority sequence.
+
 ## What composition then costs (measured, step 2)
 
 `COMPOSITION_PLAN` in the same module records, per selected module, the kernel
@@ -217,3 +238,18 @@ all.
 - **Keep the list in a document instead of code.** Rejected: a prose list cannot
   be compared to `pyproject.toml`, and the failure this file exists to prevent is
   drift between what the product claims to install and what it installs.
+
+## Amendment — 2026-08-27: foundational releases precede module movement
+
+Michael directed ERP to complete the latest Starter/kernel, shared deployment
+foundation and UI cutovers before moving another domain module. The kernel pin
+therefore advances from `0.1.0a94` to the latest published release,
+`0.1.0a98`, as a pin-only prerequisite: it adopts no runtime facility and moves
+no authority. `dotmac-ui==0.1.0a7` remains unchanged because it is already the
+latest published UI release.
+
+The shared deployment foundation stays outside the pin-only change until its
+protected release workflow publishes and install-verifies an immutable
+artifact. A source version or local render is not a pinnable release. Domain
+module composition remains frozen behind these foundational slices and their
+separate validation evidence.
