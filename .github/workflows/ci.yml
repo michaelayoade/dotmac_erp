@@ -492,7 +492,7 @@ jobs:
               docker logs ci-worker
               exit 1
             fi
-            if docker exec ci-worker celery -A app.celery_app inspect ping --timeout 3 2>/dev/null | grep -q pong; then
+            if docker exec ci-worker celery -A app.celery_app inspect ping --timeout 10 2>/dev/null | grep -q pong; then
               break
             fi
             if [ "$i" = "30" ]; then
