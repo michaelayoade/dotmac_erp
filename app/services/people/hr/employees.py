@@ -1015,6 +1015,7 @@ class EmployeeService:
             employee.status,
             employee.dotmac_sub_access_enabled,
             tuple(employee.dotmac_sub_roles or []),
+            employee.department_id,
         )
         prior_department_id = employee.department_id
 
@@ -1233,6 +1234,7 @@ class EmployeeService:
             employee.status,
             employee.dotmac_sub_access_enabled,
             tuple(employee.dotmac_sub_roles or []),
+            employee.department_id,
         )
         if current_staff_access != prior_staff_access:
             self._enqueue_staff_sync(employee)

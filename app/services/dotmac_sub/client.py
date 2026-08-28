@@ -1267,6 +1267,28 @@ class DotmacSubClient:
         )
         return dict(result) if isinstance(result, dict) else {}
 
+    def sync_staff_account_erp_department(
+        self,
+        account_id: str,
+        *,
+        erp_employee_id: str,
+        employee_code: str | None,
+        erp_organization_id: str,
+        department: dict[str, str | None] | None,
+    ) -> dict[str, Any]:
+        """Replace the ERP-managed service-team membership in dotmac_sub."""
+        result = self._request(
+            "PUT",
+            f"/staff-accounts/{account_id}/erp-department",
+            json={
+                "erp_employee_id": erp_employee_id,
+                "employee_code": employee_code,
+                "erp_organization_id": erp_organization_id,
+                "department": department,
+            },
+        )
+        return dict(result) if isinstance(result, dict) else {}
+
     def _parse_reseller(self, item: dict[str, Any]) -> ResellerRecord:
         record = f"Sub reseller {item.get('id', '?')}"
         return ResellerRecord(
