@@ -60,9 +60,7 @@ def test_list_slips_filters_by_employment_type_within_organization():
             "app.services.people.payroll.web.slip_web.paginate",
             return_value=page_result,
         ) as mock_paginate,
-        patch(
-            "app.services.people.payroll.web.slip_web.base_context", return_value={}
-        ),
+        patch("app.services.people.payroll.web.slip_web.base_context", return_value={}),
         patch("app.services.people.payroll.web.slip_web.templates.TemplateResponse"),
     ):
         SlipWebService().list_slips_response(

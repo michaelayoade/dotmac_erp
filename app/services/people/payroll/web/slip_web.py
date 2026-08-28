@@ -224,9 +224,7 @@ class SlipWebService:
                 "start_date": start_date.isoformat() if start_date else "",
                 "end_date": end_date.isoformat() if end_date else "",
                 "employment_type_id": (
-                    str(parsed_employment_type_id)
-                    if parsed_employment_type_id
-                    else ""
+                    str(parsed_employment_type_id) if parsed_employment_type_id else ""
                 ),
                 "employment_types": employment_types,
                 "page": page,
