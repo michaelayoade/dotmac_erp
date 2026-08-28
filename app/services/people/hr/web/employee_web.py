@@ -2082,7 +2082,7 @@ class HRWebService:
         """Update final payroll settings for an exited employee."""
         org_id = coerce_uuid(auth.organization_id)
         svc = EmployeeService(db, org_id)
-        employee = svc.get_employee(employee_id)
+        employee = svc.get_employee(employee_id, include_deleted=True)
 
         if not self._can_manage_final_payroll(auth):
             context = self._employee_detail_context(request, auth, db, employee)
@@ -2122,17 +2122,13 @@ class HRWebService:
 
         if eligible_for_final_payroll and cutoff_date is None:
             cutoff_date = employee.date_of_leaving
+        elif not eligible_for_final_payroll:
+            cutoff_date = None
 
-        svc.update_employee(
+        svc.update_final_payroll_settings(
             employee_id,
-            EmployeeUpdateData(
-                eligible_for_final_payroll=eligible_for_final_payroll,
-                final_payroll_cutoff_date=cutoff_date,
-                provided_fields={
-                    "eligible_for_final_payroll",
-                    "final_payroll_cutoff_date",
-                },
-            ),
+            eligible_for_final_payroll=eligible_for_final_payroll,
+            final_payroll_cutoff_date=cutoff_date,
         )
         db.commit()
         return RedirectResponse(
@@ -2402,6 +2398,10 @@ class HRWebService:
         return {
             **base_context(request, auth, "Employee Details", "employees"),
             "employee": employee,
+            "final_payroll_pending": bool(
+                employee.eligible_for_final_payroll
+                and employee.final_payroll_processed_at is None
+            ),
             "recent_activity": get_recent_activity_for_record(
                 db,
                 org_id,

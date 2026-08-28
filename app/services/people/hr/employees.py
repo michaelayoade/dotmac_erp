@@ -1239,6 +1239,40 @@ class EmployeeService:
 
         return employee
 
+    def update_final_payroll_settings(
+        self,
+        employee_id: uuid.UUID,
+        *,
+        eligible_for_final_payroll: bool,
+        final_payroll_cutoff_date: date | None = None,
+    ) -> Employee:
+        """Update final payroll eligibility for an exited employee."""
+        employee = self.get_employee(employee_id, include_deleted=True)
+        if employee.status not in {
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RETIRED,
+        }:
+            raise EmployeeStatusError(
+                employee.status.value,
+                "Final payroll can only be managed for exited employees",
+            )
+
+        employee.eligible_for_final_payroll = eligible_for_final_payroll
+        if eligible_for_final_payroll:
+            employee.final_payroll_cutoff_date = (
+                final_payroll_cutoff_date or employee.date_of_leaving
+            )
+            employee.final_payroll_processed_at = None
+        else:
+            employee.final_payroll_cutoff_date = None
+
+        employee.updated_at = datetime.now(UTC)
+        employee.updated_by_id = self.principal.id if self.principal else None
+        employee.version += 1
+        self.db.flush()
+        return employee
+
     def _sync_scheduling_department(self, employee: Employee) -> None:
         """Mirror HR department changes into active scheduling assignments."""
         from app.services.people.scheduling import SchedulingService
