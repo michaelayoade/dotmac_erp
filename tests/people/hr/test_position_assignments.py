@@ -17,7 +17,6 @@ from app.models.people.hr import (
     PositionVacancyRoutingPolicy,
 )
 from app.models.person import Person
-from app.models.people.scheduling import ShiftPatternAssignment
 from app.services.common import ConflictError, PaginationParams
 from app.services.people.hr import EmployeeFilters, EmployeeService, EmployeeUpdateData
 from app.services.people.hr.errors import InvalidManagerError
@@ -41,7 +40,6 @@ def _ensure_hr_position_tables(engine) -> None:
         Employee.__table__,
         Position.__table__,
         PositionAssignment.__table__,
-        ShiftPatternAssignment.__table__,
     )
     for table in tables:
         for column in table.columns:
@@ -627,7 +625,9 @@ def test_employee_reports_to_update_syncs_position_parent(db_session):
     assert resolved is not None and resolved.employee_id == manager.employee_id
 
 
-def test_employee_department_update_syncs_active_primary_position(db_session):
+def test_employee_department_update_syncs_active_primary_position(
+    db_session, monkeypatch
+):
     _ensure_hr_position_tables(db_session.bind)
     org_id = uuid.uuid4()
     previous_department = Department(
@@ -652,6 +652,10 @@ def test_employee_department_update_syncs_active_primary_position(db_session):
     )
     db_session.add_all([previous_department, new_department])
     db_session.flush()
+    monkeypatch.setattr(
+        "app.services.people.scheduling.SchedulingService.sync_employee_department",
+        lambda self, **kwargs: {"assignments_updated": 0, "assignments_ended": 0},
+    )
     PositionService(db_session, org_id).create_assignment(
         position.position_id,
         _assignment_data(employee),
