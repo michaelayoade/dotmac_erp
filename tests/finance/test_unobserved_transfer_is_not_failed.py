@@ -68,10 +68,11 @@ def _payments_settings():
     is not a settings store, so answer the one key that matters and let every
     other lookup come back None (which is what an unconfigured deployment
     looks like anyway)."""
-    values = {"paystack_transfer_unresolved_alert_hours": 6}
 
     def _resolve(_db, _domain, key, *args, **kwargs):
-        return values.get(key)
+        if key == "paystack_transfer_unresolved_alert_hours":
+            return 6
+        return None
 
     with patch(
         "app.services.finance.payments.payment_service.resolve_value",
@@ -175,6 +176,9 @@ def _unreachable_transport():
 
 def _provider_says(payload: dict[str, Any]):
     """Paystack answered. Whatever it says is a real answer about the money."""
+    reason = None
+    if "reason" in payload:
+        reason = payload["reason"]
     response = httpx.Response(
         200,
         json={
@@ -187,7 +191,7 @@ def _provider_says(payload: dict[str, Any]):
                 "amount": 5000000,
                 "currency": "NGN",
                 "recipient": {"recipient_code": "RCP_test"},
-                "reason": payload.get("reason"),
+                "reason": reason,
                 "failures": None,
                 "fee_charged": 5000,
                 "created_at": "2026-08-25T10:00:00.000Z",
