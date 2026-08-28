@@ -133,6 +133,25 @@ Apply is unavailable until the durable dry run is complete and error-free.
 Provider reads occur between the claim transaction and the settlement
 transaction, so storage latency never extends a partition lease transaction.
 
+## Persistent byte outputs
+
+`app.services.storage.S3StorageService` is ERP's one concrete MinIO/S3 writer.
+`app.services.file_upload.FileUploadService` supplies typed admission and opaque
+object references to legacy domain owners; `DotmacFilesS3Provider` wraps that
+same concrete owner where the composed `dotmac-files` lifecycle has been
+adopted. Neither path authorizes a second provider, a container-filesystem
+writer or a named-volume fallback.
+
+The H2 repair routes the remaining confirmed durable local writers through that
+owner: People HR handbook bytes (`hr_documents/`), finance report-instance JSON
+(`generated_reports/`) and automation-generated PDFs (`generated_docs/`). The
+domain rows continue to own document/report meaning and store only an opaque S3
+key (or `s3://` reference where the established report contract uses a URL-like
+locator). Object upload must succeed before a domain row is completed; a
+provider failure is unavailable, never "missing", and never triggers a local
+write. This physical-storage repair does not transfer handbook lifecycle to
+`dotmac-documents` or claim a new `dotmac-files` domain-lifecycle cutover.
+
 ## Clean-instance cutover and legacy history
 
 ADR-0003 makes the new composable ERP and the historical ERP two systems with
