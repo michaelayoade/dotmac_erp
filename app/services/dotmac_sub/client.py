@@ -744,6 +744,12 @@ def _defaulted_money(
     value = item.get(key)
     if value is None or value == "":
         return Decimal(default)
+    # Older Sub deployments serialize zero-default facts as ``"0"`` even
+    # when the currency contract requires fixed minor units. Normalize only
+    # that exact compatibility token here; required, optional and nonzero
+    # money facts still pass through the strict parser unchanged.
+    if value == "0" and minor_units is not None and minor_units > 0:
+        value = f"0.{('0' * minor_units)}"
     return _parse_money_value(
         value, record=record, field=key, updated_at=updated_at, minor_units=minor_units
     )
