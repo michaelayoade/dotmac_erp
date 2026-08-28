@@ -42,6 +42,17 @@ INTEGRATION_REQUEST_DURATION = Histogram(
     ["integration", "operation", "status"],
 )
 
+PAYSTACK_SELFCARE_RELAY = Counter(
+    "paystack_selfcare_relay_total",
+    "Verified Paystack webhook relay outcomes from ERP to Selfcare",
+    ["outcome"],
+)
+PAYSTACK_SELFCARE_RELAY_DURATION = Histogram(
+    "paystack_selfcare_relay_duration_seconds",
+    "Duration of verified Paystack webhook relay attempts from ERP to Selfcare",
+    ["outcome"],
+)
+
 # ── Finance event outbox (claim/deliver/settle relay) ──────────────────
 # Outcome labels: published, no_consequence, retried, dead, unsupported,
 # stale_claim, commit_failed, partial_failure_rolled_back, missing_org.
@@ -150,6 +161,14 @@ def observe_integration_request(
         operation=operation,
         status=normalized_status,
     ).observe(duration)
+
+
+def observe_paystack_selfcare_relay(outcome: str, duration: float) -> None:
+    normalized_outcome = normalize_metric_label(outcome)
+    PAYSTACK_SELFCARE_RELAY.labels(outcome=normalized_outcome).inc()
+    PAYSTACK_SELFCARE_RELAY_DURATION.labels(outcome=normalized_outcome).observe(
+        max(duration, 0.0)
+    )
 
 
 def categorize_http_status(status_code: int) -> str:

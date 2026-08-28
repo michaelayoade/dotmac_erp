@@ -1015,6 +1015,7 @@ class EmployeeService:
             employee.status,
             employee.dotmac_sub_access_enabled,
             tuple(employee.dotmac_sub_roles or []),
+            employee.department_id,
         )
         prior_department_id = employee.department_id
 
@@ -1064,9 +1065,20 @@ class EmployeeService:
         # Update department
         if data.department_id is not None:
             self._validate_org_reference(Department, data.department_id, "Department")
+            department_changed = employee.department_id != data.department_id
             employee.department_id = data.department_id
+            if department_changed:
+                self._sync_active_primary_position_department(
+                    employee.employee_id,
+                    data.department_id,
+                )
         elif use_provided_fields and "department_id" in provided_fields:
+            department_changed = employee.department_id is not None
             employee.department_id = None
+            if department_changed:
+                self._sync_active_primary_position_department(
+                    employee.employee_id, None
+                )
 
         if employee.department_id != prior_department_id:
             self._sync_scheduling_department(employee)
@@ -1233,6 +1245,7 @@ class EmployeeService:
             employee.status,
             employee.dotmac_sub_access_enabled,
             tuple(employee.dotmac_sub_roles or []),
+            employee.department_id,
         )
         if current_staff_access != prior_staff_access:
             self._enqueue_staff_sync(employee)
@@ -1287,6 +1300,33 @@ class EmployeeService:
                 "Employee %s department change synced to scheduling assignments: %s",
                 employee.employee_id,
                 result,
+            )
+
+    def _sync_active_primary_position_department(
+        self,
+        employee_id: uuid.UUID,
+        department_id: uuid.UUID | None,
+    ) -> None:
+        """Keep an employee's active primary position aligned with their department."""
+        position = self.db.scalar(
+            select(Position)
+            .join(
+                PositionAssignment,
+                PositionAssignment.position_id == Position.position_id,
+            )
+            .where(
+                Position.organization_id == self.organization_id,
+                PositionAssignment.organization_id == self.organization_id,
+                PositionAssignment.employee_id == employee_id,
+                PositionAssignment.assignment_type == PositionAssignmentType.PRIMARY,
+                PositionAssignment.end_date.is_(None),
+            )
+        )
+        if position and position.department_id != department_id:
+            position.department_id = department_id
+            logger.info(
+                "Synced primary position department for employee %s",
+                employee_id,
             )
 
     # =========================================================================

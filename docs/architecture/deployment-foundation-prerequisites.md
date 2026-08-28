@@ -1,10 +1,10 @@
 # Deployment foundation prerequisites
 
-Status: **release identity implemented; deployment adapter and host cutover are
-not part of this slice**.
+Status: **release identity and the checked reference adapter are implemented;
+host execution and production cutover are not**.
 
-ERP now has two immutable release facts that a later deployment descriptor can
-join without a digest cycle:
+ERP has two immutable release facts that `deploy/product.toml` joins without a
+digest cycle:
 
 1. `deploy/product-manifest.json` is the canonical, checked representation of
    `ERP_PRODUCT_ASSEMBLY` under the product identity `dotmac-erp`. The
@@ -54,9 +54,21 @@ the image is tested. The post-push release artifact then records that label
 beside the immutable image and source revision.
 
 The exclusion also means none of these files is an in-container runtime input.
-A later deployment-foundation adoption must download verified release evidence
-and explicitly assemble a deployment plan; it may not read an accidental copy
-from `/app/deploy`.
+The deployment-foundation adapter downloads verified release evidence and
+explicitly assembles a deployment plan; it may not read an accidental copy from
+`/app/deploy`.
+
+## Persistent-file runtime invariant
+
+Application and worker containers do not own durable file volumes. People HR
+handbooks, generated finance report JSON and automation-generated PDFs use the
+existing `FileUploadService -> S3StorageService` path and persist opaque object
+references in their domain rows. An object-store failure fails the operation;
+there is no container-path or named-volume fallback. Consequently a deployment
+descriptor must bind working S3 configuration for every application/worker
+process and may keep the application root filesystem ephemeral/read-only with
+respect to business files. Logs, temporary spools and generated response bytes
+are not durable business-file stores.
 
 ## Persistent-file runtime invariant
 
@@ -98,5 +110,8 @@ poetry run python -m scripts.product_manifest generate \
 poetry run python -m scripts.product_manifest check --path deploy/product-manifest.json
 ```
 
-This slice creates no deployment descriptor, changes no live deploy script,
-names no host, moves no data, and performs no production action.
+The checked reference descriptor and rendered assets are documented in
+`deploy/README.md`. They change no live deploy script, move no data, and perform
+no production action. The descriptor's module-manifest digest is real; its
+image digest remains a fail-visible sentinel until protected-main CI publishes
+the tested image.

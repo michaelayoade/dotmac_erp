@@ -1430,8 +1430,12 @@ class PayrollService:
             )
             .where(
                 SalarySlip.organization_id == org_id,
+                SalarySlip.status.in_(
+                    [SalarySlipStatus.APPROVED, SalarySlipStatus.POSTED]
+                ),
                 SalarySlip.start_date >= start_date,
                 SalarySlip.end_date <= end_date,
+                SalarySlipDeduction.do_not_include_in_total.is_(False),
             )
             .group_by(
                 SalaryComponent.component_id,

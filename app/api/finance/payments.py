@@ -988,7 +988,11 @@ async def paystack_webhook(
         # Selfcare references are not ERP payment intents. Verify the provider
         # signature before forwarding only the reference; Selfcare performs its
         # own gateway verification before deciding any financial consequence.
-        from app.services.dotmac_sub import DotmacSubClient, DotmacSubConfig
+        from app.services.dotmac_sub import (
+            DotmacSubClient,
+            DotmacSubConfig,
+            DotmacSubRateLimitError,
+        )
         from app.services.finance.payments.paystack_client import PaystackClient
 
         try:
@@ -1014,12 +1018,41 @@ async def paystack_webhook(
                 raw_payload=raw_body,
                 signature=x_paystack_signature,
             )
+            logger.info(
+                "Relayed verified Paystack webhook to dotmac_sub",
+                extra={
+                    "event_type": event_type,
+                    "payment_reference": reference,
+                    "relay_outcome": "forwarded",
+                },
+            )
             return WebhookResponse(status="forwarded")
+        except DotmacSubRateLimitError as exc:
+            retry_after = int(exc.retry_after or 1)
+            logger.warning(
+                "dotmac_sub rate-limited verified Paystack webhook relay",
+                extra={
+                    "event_type": event_type,
+                    "payment_reference": reference,
+                    "relay_outcome": "rate_limited",
+                    "retry_after_seconds": retry_after,
+                },
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Payment notification delivery is temporarily unavailable",
+                headers={"Retry-After": str(retry_after)},
+            )
         except HTTPException:
             raise
         except Exception:
             logger.exception(
-                "Failed to forward verified Paystack reference to dotmac_sub"
+                "Failed to forward verified Paystack reference to dotmac_sub",
+                extra={
+                    "event_type": event_type,
+                    "payment_reference": reference,
+                    "relay_outcome": "failed",
+                },
             )
             # A non-2xx response asks Paystack to retry delivery.
             raise HTTPException(
