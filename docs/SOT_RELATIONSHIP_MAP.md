@@ -39,6 +39,13 @@ semantics.
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
+The database-backed `ScheduledTask` row is the sole schedule owner for
+`app.tasks.dotmac_sub.run_dotmac_sub_incremental_sync`; the builtin Celery beat
+schedule must not dispatch the same task in parallel. The task also owns a
+per-organization PostgreSQL advisory single-flight lock and bounded execution
+time, so connector latency or authentication failure cannot consume the shared
+worker pool. Celery remains the transport and does not decide sync state.
+
 Service API keys authenticate an identity but receive no authority unless an
 operator assigns at least one explicit leaf scope. NULL or empty scope lists are
 legacy audit findings, not a full-access compatibility mode; every service
