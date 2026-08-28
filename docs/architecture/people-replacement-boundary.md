@@ -1,7 +1,7 @@
 # People replacement boundary
 
-Status: **legacy source read projection installed; target bootstrap/reconciler
-absent; authority remains in ERP**.
+Status: **target storage and legacy source read projection installed;
+bootstrap/reconciler absent; authority remains in ERP**.
 
 > **Destination naming.** The replacement target is the commercial **Dotmac
 > ERP** product assembly, not an internally framed `dotmac_backoffice`
@@ -43,9 +43,13 @@ absent; authority remains in ERP**.
 | Employee documents, qualifications, certifications and dependants | `hr.employee_*` tables | **Unresolved**; file storage alone is not business ownership |
 | Skill catalogue and employee proficiency | `hr.skill` and `hr.employee_skill` | selected `dotmac-workforce` capability, but blocked until that distribution is released and its contract is accepted |
 
-This change does not move any writer. ERP remains the sole authority until a
-separately authorized cutover has completed backfill, shadow comparison and
-reconciliation and has disabled the corresponding ERP writer paths.
+ERP now pins `dotmac-people==0.1.0a1` and composes its independent `people`
+lineage at `pe_0001_people_directory`. This installs the six tenant tables in
+`mod_people`; it does not import the module runtime under `app/`, bootstrap any
+row, project compatibility state, or move a writer. ERP remains the sole
+authority until a separately authorized domain cutover has completed backfill,
+shadow comparison and reconciliation and has disabled the corresponding ERP
+writer paths.
 
 The complete disposition of the legacy `hr.employee` columns and its extended
 tables is recorded in
@@ -176,7 +180,8 @@ Authority may move only when all of these are evidenced in checked-in cutover
 artifacts and the irreversible switch is explicitly authorized:
 
 1. The composed product pins the released kernel and `dotmac-people`
-   distributions and migrates their lineages successfully.
+   distributions and migrates their lineages successfully. **Satisfied for
+   storage only** by `dotmac-people==0.1.0a1`; this is not runtime adoption.
 2. Backfill preserves source IDs and records source fingerprints.
 3. A successor projection with an explicit effective date removes v1's
    process-date-dependent fingerprint, and the target pins that date for each

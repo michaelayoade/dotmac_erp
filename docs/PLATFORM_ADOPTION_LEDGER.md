@@ -215,9 +215,9 @@ tenancy, permissions, settings, database schema or migration lineage.
 
 **2026-08-28 — Deployment release identity prerequisites.** ERP declares one
 release-time `ProductAssemblySpec` for the canonical `dotmac-erp` product over
-the five module manifests already
-present in `COMPOSED_MODULE_LINEAGES`: Accounting, Files, Imports, Numbering
-and Tax. Its canonical `deploy/product-manifest.json` preserves exact module
+the six module manifests already
+present in `COMPOSED_MODULE_LINEAGES`: Accounting, Files, Imports, Numbering,
+People and Tax. Its canonical `deploy/product-manifest.json` preserves exact module
 codes, distribution versions and explicit/effective persistence planes; it
 does not use the capability-only `ProductManifestSnapshot` as a substitute.
 
@@ -232,6 +232,21 @@ This is release evidence only: no deployment descriptor, host
 execution, runtime factory adoption, module authority movement or production
 cutover occurs in this slice. The detailed contract is
 `docs/architecture/deployment-foundation-prerequisites.md`.
+
+**2026-08-28 — People composition: tenant storage only.** ERP pins
+`dotmac-people==0.1.0a1` and composes its independent `people` lineage at
+`pe_0001_people_directory`. The six manifest-declared tenant tables are
+created in `mod_people` with non-null tenant scope and ENABLEd/FORCEd RLS. ERP
+supplies and re-verifies `tenant_scope_catalog.v1`,
+`module_database_roles.v1` and `party_person_catalog.v1` from its own lineage;
+it does not run or stamp the kernel lineage.
+
+**This is storage, not People authority.** Nothing under `app/` imports the
+module runtime, no bootstrap or fingerprint ledger exists, no compatibility
+table is projected, and no web, API, importer, job or script writer is
+repointed. Employment Type is the first planned vertical authority slice, but
+it requires a separately released typed module contract and the atomic
+retirement of every legacy Employment Type decision writer.
 
 **2026-08-25 — Numbering composition: tenant storage only.** ERP pins
 `dotmac-numbering==0.1.0a2` and composes its independent `numbering` lineage at
