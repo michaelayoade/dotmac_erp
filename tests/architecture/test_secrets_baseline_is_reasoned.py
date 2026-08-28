@@ -83,6 +83,16 @@ REASONS = {
         "Documentation of the DATABASE_URL FORMAT, with the local dev "
         "credentials as the example. Nothing here reaches a real host."
     ),
+    "deploy/product.toml": (
+        "The required source_revision is the public Git commit whose reviewed "
+        "source bytes this reference descriptor identifies. It grants no "
+        "access, and test_deployment_descriptor.py pins its exact projection."
+    ),
+    "deploy/rendered/otel-collector.yaml": (
+        "The renderer projects that same public Git commit into telemetry. "
+        "Rendered bytes are checked against the released facility and the "
+        "deployment descriptor test proves both fields stay identical."
+    ),
     "docs/paystack_chargebacks_investigation.md": (
         "Paystack transaction references from a written-up investigation. "
         "They identify transactions, not an actor — a reference authorises "
@@ -145,15 +155,16 @@ def test_python_is_not_suppressed_here() -> None:
 def test_the_suppression_count_only_shrinks() -> None:
     """A ceiling, not a target.
 
-    The prior floor was 18. Schema-9 conservation adds seven public integrity
-    fingerprints to the already-listed profile; its replaced Governance pin
-    remains one finding. Every entry above the new 25 would be unexplained,
-    and the reason check above only fires per FILE — a new finding in an
+    The prior floor was 18. Schema-9 conservation added seven public integrity
+    fingerprints to the already-listed profile; ERP's required public source
+    revision adds one descriptor finding and one deterministic telemetry
+    projection. Every entry above the reviewed 27 would be unexplained, and
+    the reason check above only fires per FILE — a new finding in an
     already-listed file would otherwise slip in silently.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total <= 25, (
-        f"{total} suppressed findings, up from 25. Fix the finding, or lower "
+    assert total <= 27, (
+        f"{total} suppressed findings, up from 27. Fix the finding, or lower "
         "this number in the same change that explains the new entry."
     )
 

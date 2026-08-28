@@ -23,6 +23,17 @@ from dotmac_deployment_foundation import __version__ as foundation_version
 from dotmac_deployment_foundation.conformance import check_all
 from dotmac_deployment_foundation.errors import DeploymentFoundationError
 from dotmac_deployment_foundation.spec import ProductDeploymentSpec
+from dotmac_kernel.planes import (
+    install_module_plane_selections,
+    installed_module_plane_selections,
+)
+from dotmac_kernel.prerequisites import (
+    install_prerequisite_bindings,
+    installed_bindings,
+)
+
+from app.migration_bindings import ASSEMBLY_PREREQUISITE_BINDINGS
+from app.migration_planes import ASSEMBLY_MODULE_PLANES
 from scripts.product_manifest import product_manifest_digest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +41,7 @@ DESCRIPTOR_PATH = REPO_ROOT / "deploy" / "product.toml"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "deployment-conformance.yml"
 DEPLOYMENT_README_PATH = REPO_ROOT / "deploy" / "README.md"
+RENDERED_OTEL_PATH = REPO_ROOT / "deploy" / "rendered" / "otel-collector.yaml"
 FOUNDATION_VERSION = "0.2.0a1"
 FOUNDATION_RELEASE_SHA = "ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844"
 FOUNDATION_WORKFLOW_SHA = "6a8fdb03d4e7594d3c943b338de0872a6f8c2457"
@@ -93,10 +105,25 @@ def test_descriptor_binds_the_canonical_product_manifest() -> None:
 
 
 def test_descriptor_heads_match_the_composed_alembic_graph() -> None:
-    config = Config(str(REPO_ROOT / "alembic.ini"))
-    actual = set(ScriptDirectory.from_config(config).get_heads())
+    previous_bindings = installed_bindings()
+    previous_planes = installed_module_plane_selections()
+    install_prerequisite_bindings(ASSEMBLY_PREREQUISITE_BINDINGS)
+    install_module_plane_selections(ASSEMBLY_MODULE_PLANES)
+    try:
+        config = Config(str(REPO_ROOT / "alembic.ini"))
+        actual = set(ScriptDirectory.from_config(config).get_heads())
+    finally:
+        install_module_plane_selections(previous_planes)
+        install_prerequisite_bindings(previous_bindings)
     declared = set(_load().migration.expected_heads)
     assert declared == actual
+
+
+def test_public_source_revision_is_projected_into_telemetry() -> None:
+    source_revision = _load().source_revision
+    assert source_revision == "713c072c82b0a135945e33c3fca6c2d7bf19c7fe"
+    rendered = RENDERED_OTEL_PATH.read_text(encoding="utf-8")
+    assert f"value: {source_revision}" in rendered
 
 
 def test_no_role_holds_the_migration_owner_material() -> None:
