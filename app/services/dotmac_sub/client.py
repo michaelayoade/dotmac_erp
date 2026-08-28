@@ -74,6 +74,20 @@ def _request_id_provider() -> str | None:
     return request_id or None
 
 
+def _response_detail(response: httpx.Response) -> str:
+    try:
+        data = response.json()
+    except ValueError:
+        return response.text.strip()
+    if isinstance(data, dict):
+        detail = data.get("detail") or data.get("message") or data.get("error")
+        if isinstance(detail, str):
+            return detail.strip()
+        if detail is not None:
+            return str(detail)
+    return ""
+
+
 class DotmacSubError(Exception):
     """dotmac_sub API error."""
 
@@ -107,6 +121,10 @@ class DotmacSubRateLimitError(DotmacSubError):
     ) -> None:
         super().__init__(message, status_code)
         self.retry_after = retry_after
+
+
+class DotmacSubPermanentSyncError(DotmacSubError):
+    """A dotmac_sub rejection that needs data/configuration to be fixed."""
 
 
 class _TransientServerError(DotmacSubError):
@@ -1042,6 +1060,23 @@ class DotmacSubClient:
                     response.headers.get("Retry-After")
                 ),
             )
+        if status in (409, 422):
+            detail = _response_detail(response)
+            if endpoint.endswith("/erp-department") and status == 422:
+                message = (
+                    "Department is not mapped in Self-Care. Map this ERP "
+                    "department first."
+                )
+            elif endpoint.endswith("/erp-department") and status == 409:
+                message = (
+                    "ERP employee is already linked to a different Self-Care "
+                    "user. Resolve the duplicate account link."
+                )
+            else:
+                message = "Self-Care rejected the request."
+            if detail:
+                message = f"{message} Self-Care detail: {detail}"
+            raise DotmacSubPermanentSyncError(message, status_code=status)
         if status >= 500:
             raise _TransientServerError(f"Server error: {status}", status_code=status)
         response.raise_for_status()
@@ -1112,6 +1147,9 @@ class DotmacSubClient:
             raise
         except DotmacSubRateLimitError:
             metric_status = "rate_limited"
+            raise
+        except DotmacSubPermanentSyncError:
+            metric_status = "client_error"
             raise
         except httpx.TimeoutException as e:
             metric_status = "timeout"
