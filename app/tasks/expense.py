@@ -32,7 +32,7 @@ from app.models.expense import (
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.notification import NotificationService
-from app.tenant_catalog import active_organization_ids
+from app.tenant_catalog import active_organization_ids, organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -771,6 +771,11 @@ def poll_stuck_expense_transfers() -> dict:
         "failed": 0,
         "still_pending": 0,
         "abandoned": 0,
+        # Distinct from `abandoned` on purpose: abandoned means Paystack
+        # answered and refused, indeterminate means nobody ever answered.
+        # Collapsing the two here would make the job's own report repeat the
+        # conflation ADR-0007 removes from the column.
+        "indeterminate": 0,
         "errors": [],
     }
 
@@ -832,11 +837,133 @@ def poll_stuck_expense_transfers() -> dict:
             db.commit()
 
     logger.info(
-        "Transfer polling complete: %d checked, %d completed, %d failed, %d abandoned",
+        "Transfer polling complete: %d checked, %d completed, %d failed, "
+        "%d abandoned, %d unresolved",
         results["intents_checked"],
         results["completed"],
         results["failed"],
         results["abandoned"],
+        results["indeterminate"],
+    )
+
+    return results
+
+
+@shared_task
+def reconcile_unresolved_expense_transfers() -> dict:
+    """Keep asking Paystack about payouts whose outcome was never observed.
+
+    The slow lane behind `poll_stuck_expense_transfers`. That job runs every two
+    minutes because a webhook is merely late; this one runs hourly because its
+    subjects have already exhausted the fast loop, and re-asking at two-minute
+    intervals would be load without information.
+
+    The narrow tenant catalogue discovers identifiers, then every payout read
+    and decision runs inside that tenant's own RLS session. The adapter hands
+    each intent to `PaymentService`; it decides nothing.
+    `resolve_indeterminate_transfer` is the only writer permitted to move an
+    intent out of INDETERMINATE, and it may only move it to a status Paystack
+    itself justified.
+
+    There is deliberately no give-up path here. A transfer nobody can account
+    for stays unresolved until someone learns what happened to it; the job's
+    job is to keep asking and to make the age of the oldest one visible
+    (ADR-0007, adopting `dotmac_starter_mt` ADR-0032).
+    """
+    from app.metrics import set_transfer_unresolved_oldest_age
+    from app.services.finance.payments.payment_service import (
+        PaymentService,
+        TransferPollOutcome,
+    )
+
+    logger.info("Reconciling transfers with unobserved outcomes")
+
+    results: dict[str, Any] = {
+        "intents_checked": 0,
+        "completed": 0,
+        "failed": 0,
+        "reversed": 0,
+        "still_unresolved": 0,
+        "errors": [],
+    }
+
+    now = datetime.now(UTC)
+
+    unresolved_by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
+    oldest_unresolved_seconds = 0.0
+
+    # Settlement work includes inactive tenants: disabling an organization
+    # cannot make a possibly-paid transfer safe to forget. Discovery exposes
+    # identifiers only; protected payout rows remain tenant-scoped.
+    for org_id in organization_ids(include_inactive=True):
+        with session_for_org(org_id) as db:
+            intent_ids = PaymentService.find_indeterminate_transfer_intents(
+                db,
+                organization_id=org_id,
+            )
+            if intent_ids:
+                unresolved_by_org[org_id] = intent_ids
+            oldest_unresolved_seconds = max(
+                oldest_unresolved_seconds,
+                PaymentService.oldest_unresolved_transfer_age(
+                    db,
+                    organization_id=org_id,
+                    now=now,
+                ).total_seconds(),
+            )
+
+    # Publish the pre-resolution backlog age before any provider I/O. A tenant
+    # with missing credentials therefore remains visible instead of vanishing
+    # from the metric merely because it cannot be reconciled.
+    set_transfer_unresolved_oldest_age(oldest_unresolved_seconds)
+
+    if not unresolved_by_org:
+        logger.info("No unresolved transfers found")
+        return results
+
+    for org_id, intent_ids in unresolved_by_org.items():
+        with session_for_org(org_id) as db:
+            svc = PaymentService(db, org_id)
+            config = svc.resolve_transfer_polling_config()
+            if config is None:
+                # No keys means no verdict is obtainable, so nothing is written.
+                # The intents stay unresolved and stay in the gauge, which is
+                # the correct signal: a tenant that cannot be reconciled is a
+                # tenant somebody has to configure.
+                logger.warning(
+                    "No Paystack keys for org %s - %d unresolved transfer(s) "
+                    "cannot be reconciled",
+                    org_id,
+                    len(intent_ids),
+                )
+                continue
+
+            for intent_id in intent_ids:
+                results["intents_checked"] += 1
+                outcome = svc.resolve_indeterminate_transfer(intent_id, config, now=now)
+
+                if outcome.outcome is TransferPollOutcome.STILL_UNRESOLVED:
+                    results["still_unresolved"] += 1
+                    results["errors"].append(
+                        {
+                            "intent_id": str(outcome.intent_id),
+                            "error": outcome.error,
+                            "poll_count": outcome.poll_count,
+                        }
+                    )
+                    continue
+
+                counter = outcome.outcome.value
+                results[counter] = results.get(counter, 0) + 1
+
+            db.commit()
+
+    logger.info(
+        "Unresolved transfer reconciliation complete: %d checked, %d resolved, "
+        "%d still unknown",
+        results["intents_checked"],
+        results["completed"] + results["failed"] + results["reversed"],
+        results["still_unresolved"],
     )
 
     return results
