@@ -1,97 +1,99 @@
-# ERP deployment descriptor — adapter, not cutover
+# ERP deployment descriptor — released adapter, not cutover
 
-`deploy/product.toml` is ERP's `ProductDeploymentSpec.v1` — the typed
-deployment descriptor defined by `dotmac-deployment-foundation`
-(`dotmac_starter_mt:packages/dotmac-deployment-foundation`, ADR-0070
-"Deployment is a stateless versioned foundation, not a module"). ERP is the
-first full adopter because the source inventory
-(`dotmac_starter_mt:docs/inventories/deployment-foundation-sources.md` § 5-6)
-found it carries the most defects of the four Dotmac repositories audited.
+`deploy/product.toml` is ERP's `ProductDeploymentSpec.v1`, implemented by the
+published `dotmac-deployment-foundation==0.1.0a1` facility (Starter ADR-0070).
+The package is exact-pinned as a dev dependency from Dotmac's private Forgejo
+index. Its annotated release tag peels to Starter commit
+`c072e1f51548dca04ab182d653d032bb481f4b79`; ERP's reusable conformance workflow
+is pinned to that same immutable source revision.
 
-## What this is
+The descriptor and `app/product_assembly.py` share the product identity
+`dotmac-erp`. The canonical `deploy/product-manifest.json` binds the exact
+composed module versions and persistence-plane selections, and the descriptor
+pins the digest of those bytes. The published CLI deterministically renders:
 
-A single, typed statement of ERP's process roles, migration contract,
-runtime materials, ingress, backup, telemetry and domain alerts — the input a
-future renderer turns into a Compose file, an Nginx site and a deployment
-plan, with no second, hand-maintained copy to drift from the descriptor.
+- `deploy/rendered/docker-compose.yml`;
+- `deploy/rendered/nginx/erp.dotmac.io.conf`;
+- `deploy/rendered/otel-collector.yaml`;
+- `deploy/rendered/alerts.rules.yml`.
 
-## What this is NOT (yet)
+## What CI proves
 
-- **Not rendered.** `dotmac-deployment-foundation` ships a `spec` module (the
-  typed descriptor and its parser) and a `conformance` module (checks a
-  product runs in its own CI) in this generation. It does not yet ship a
-  Compose/Nginx renderer or a deployment engine. Nothing in this repository
-  consumes `deploy/product.toml` at build or deploy time.
-- **Not the live deployment path.** `scripts/deploy.sh`, `docker-compose.yml`,
-  `Dockerfile`, `scripts/backup_erp_db.sh` and
-  `scripts/bootstrap_database_roles.py` are all UNCHANGED by this adapter and
-  remain exactly what runs in production. This adapter does not touch any of
-  them.
-- **Not exact-pinned.** `pyproject.toml`/`poetry.lock` do not depend on
-  `dotmac-deployment-foundation` — it has not been published as a distribution
-  yet. `tests/architecture/test_deployment_descriptor.py` guards on
-  `pytest.importorskip("dotmac_deployment_foundation")` and skips rather than
-  fails the build until that pin exists (per AGENTS.md rule 30: a
-  release/adoption claim needs an authoritative external oracle, not a file
-  present on `main`).
+The normal CI workflow checks the canonical product manifest, builds the image
+once, runs migrations and health checks against that image, and only on a
+successful protected-main push transfers those same bytes to the publication
+job. The publisher records a non-secret `image-release.json` containing the
+source SHA and registry digest; it has no rebuild step.
 
-Retirement of the scripts above happens only after PROVEN parity — a separate,
-later change, gated on the renderer existing and `render --check` passing in
-ERP's own CI, per ADR-0070's "Consequences" section. This change adds the
-descriptor alongside the existing path; it deletes nothing.
+`.github/workflows/deployment-conformance.yml` installs the exact facility
+release with the repository's read-only `FORGEJO_READ_TOKEN`. It validates the
+descriptor, runs the conformance kit, checks rendered bytes, and asks a real
+Docker Compose engine to parse the rendered project. The architecture tests
+also refuse a wrong package pin, mutable workflow coordinate, product identity
+drift, product-manifest drift, Alembic-head drift, migration-owner material in
+a runtime role, or an unrecorded conformance finding.
 
-## Defects this descriptor's existence makes checkable
+Run the same adapter checks with:
 
-Referencing `dotmac_starter_mt:docs/inventories/deployment-foundation-sources.md`
-§ 6's defect table (D1-D18):
-
-| Defect | Status here |
-|---|---|
-| D2 — `/health` used as both the healthcheck and the deploy gate, and can never fail | **Fixed in the descriptor.** `[roles.health.live]` (`/health/live`) and `[roles.health.ready]` (`/health/ready`) are declared separately; `spec.py` refuses a role that points both at the same path. Not yet fixed in the RUNNING system — `docker-compose.yml`'s healthcheck and `scripts/deploy.sh`'s `HEALTH_URL` still hit plain `/health` until a renderer and a cutover exist. |
-| D3 — a runtime role could hold the migration owner (superuser-shaped) credential | **Structurally prevented in the descriptor.** A role naming `MIGRATION_DATABASE_URL` is a parse-time refusal (`spec.py`'s `_validate_cross_field`), checked a second time by this repo's own architecture test. |
-| D5 — floating `:latest` tag | **Structurally prevented.** `[image].reference` must be `...@sha256:<64 hex>`; a tag does not parse. |
-| D1 — production bind-mounts of `static/`/`templates/` | **Declared as a target, not yet true.** `[ingress.static]` declares `static = "image"`; `docker-compose.yml` still bind-mounts today. |
-| D4 — dev-unsafe `CSP_ALLOW_UNSAFE`/`OPENBAO_ALLOW_INSECURE` literals baked into the production Compose block | **Not addressed by this descriptor.** These are plain booleans, not secret-shaped materials, and `ProductDeploymentSpec.v1` has no general "never bake this literal" field outside `runtime_materials.names`. See the report for this being flagged as a possible spec.py gap rather than something fixed here. |
-| D6 — root containers, boot-time `pip install` in `scripts/entrypoint-monitoring.sh` | **Not fixed; flagged loudly in `product.toml`'s comments.** The descriptor keeps the foundation's hardened security defaults (`read_only_root = true`, non-root UID) rather than quietly declaring a permissive exception to match today's actual container. |
-| D7 — fixed `container_name` prevents blue/green | Not addressed — no renderer exists yet to omit it. |
-| D8 — backup verification is a size check only (or, for ERP, no check at all) | **Declared as a target.** `[[backup.datasets]]` requires `verify = ["schema", "row_counts", "migration_heads"]`; `scripts/backup_erp_db.sh` performs neither today. |
-| D18 — image retention is the one fail-open step | Unchanged; noted in a comment, not claimed as fixed by a field that doesn't exist for it. |
-
-Two additional, ERP-specific findings surfaced while writing this descriptor
-(not in the original inventory, both flagged in `product.toml`'s comments and
-in the task report rather than fixed here):
-
-- `worker`/`beat` run no HTTP server at all, yet `spec.py`'s cross-field rule
-  requires every non-zero-replica background role to declare
-  `[roles.health.live]` (a path+port, i.e. an HTTP probe). The declared ports
-  (9100/9101) are placeholders nothing currently listens on.
-- `scripts/entrypoint-monitoring.sh`'s boot-time `pip install` is incompatible
-  with the hardened `read_only_root = true` default this descriptor keeps.
-
-## How to render (once the renderer exists)
-
-```
-dotmac-deploy render deploy/product.toml
-dotmac-deploy render --check deploy/product.toml   # CI: rendered assets == committed assets
+```bash
+poetry run dotmac-deploy -f deploy/product.toml validate
+poetry run dotmac-deploy -f deploy/product.toml render --check -o deploy/rendered
+poetry run dotmac-deploy -f deploy/product.toml plan
+poetry run dotmac-deploy -f deploy/product.toml preflight
+poetry run dotmac-deploy -f deploy/product.toml backup
+poetry run pytest tests/architecture/test_deployment_descriptor.py -q
 ```
 
-Neither command exists in this repository or in `dotmac-deployment-foundation`
-yet. Today, the only thing to run against this file is the parser and the
-conformance kit:
+Regenerate only with the exact pinned release:
 
-```
-PYTHONPATH=<path-to>/dotmac-deployment-foundation/src python3 -c "
-from dotmac_deployment_foundation.spec import ProductDeploymentSpec as S
-from dotmac_deployment_foundation.conformance import check_all
-s = S.load('deploy/product.toml')
-print('OK', s.startup_order)
-print(check_all(s) or 'conformance clean')
-"
+```bash
+poetry run dotmac-deploy -f deploy/product.toml render \
+  --thresholds deploy/alerts/thresholds.json \
+  -o deploy/rendered
 ```
 
-## `scripts/deploy.sh` is still the live path
+Never hand-edit a rendered file.
 
-Until a renderer exists, this descriptor is validated but unrendered and
-unadopted. Every real ERP deployment goes through `scripts/deploy.sh` exactly
-as before. Do not point any host, CI job, or operator runbook at
-`deploy/product.toml` as an executable artifact — it is not one yet.
+## Current boundary
+
+This slice adopts and continuously checks the shared contract; it does not
+change a production host. ERP's existing `scripts/deploy.sh`, root
+`docker-compose.yml`, `Dockerfile` and backup scripts remain the live path.
+The product-manifest digest is real. The image reference remains an explicit
+all-zero sentinel until protected-main CI publishes the tested image and
+records its registry digest. The PR gate therefore sets
+`require-real-digests: false`; any candidate or production cutover must
+substitute the real image digest and turn that refusal on.
+
+The descriptor makes several legacy defects executable rather than silently
+accepted:
+
+- app liveness is `/health/live`; dependency-aware readiness is
+  `/health/ready`, never legacy always-200 `/health`;
+- no runtime role may receive `MIGRATION_DATABASE_URL`;
+- images are digest-shaped, never tags;
+- worker liveness uses a Celery ping and Beat freshness uses a declared tick
+  command instead of invented HTTP probes;
+- migration ordering, dependency waits, resource limits, immutable static
+  delivery, verified backup policy and telemetry identity are rendered from
+  one descriptor;
+- unbacked alert definitions are omitted rather than emitted as rules that no
+  producer can satisfy.
+
+## Gates before production execution
+
+1. Use protected-main's `image-release.json` to replace the image sentinel.
+2. Run the hardened image audit in strict mode against that exact image.
+3. Census the production Docker/Compose versions and prove the rendered project
+   on that supported engine.
+4. Connect and prove the metrics/OTLP evaluator, alert routing, firing and
+   recovery chain.
+5. Prove migration-owner separation, backup restore, readiness, worker and
+   scheduler health, warm ingress handoff, rollback and drift refusal on an ERP
+   candidate.
+6. Compare the shared executor with the current production path, switch only
+   after parity, then retire the displaced local engine.
+
+Until those gates pass, operators continue to use `scripts/deploy.sh`; the
+committed descriptor and rendered assets are conformance evidence, not a second
+production command path.

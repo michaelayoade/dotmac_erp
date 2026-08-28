@@ -6,11 +6,11 @@
 # repositories that were inventoried (dotmac_starter_mt:
 # docs/inventories/deployment-foundation-sources.md § 5-6).
 #
-# This descriptor is an ADAPTER, not a cutover. `scripts/deploy.sh`,
-# `docker-compose.yml`, `Dockerfile` and the backup scripts are UNCHANGED and
-# remain the live deployment path. Nothing here is rendered into a running
-# asset yet — the foundation's renderer does not exist in this repository.
-# See deploy/README.md for what this file does and does not replace.
+# This descriptor is an ADAPTER, not a cutover. The exact-pinned published
+# foundation renders the committed assets under `deploy/rendered`, but
+# `scripts/deploy.sh`, `docker-compose.yml`, `Dockerfile` and the backup scripts
+# remain the live deployment path. See deploy/README.md for the remaining
+# parity, observability and host-engine gates.
 #
 # Every non-obvious value below is grounded in a real ERP source location; the
 # citation is in the comment immediately above the value. Where no such
@@ -20,29 +20,25 @@
 # dotmac_starter_mt:docs/inventories/deployment-foundation-sources.md § 7).
 
 schema = "ProductDeploymentSpec.v1"
-product = "dotmac_erp"
+product = "dotmac-erp"
 environment = "reference"
 
 [assembly]
-# ERP has no ProductAssemblySpec/manifest generator yet (that is Starter-side
-# tooling that does not exist in this repository). Placeholder path + digest,
-# matching the shape dotmac_starter_mt:deploy/product.toml uses for the same
-# reason. Checked for SHAPE only until `dotmac-deploy` exists here.
+# Generated from ERP_PRODUCT_ASSEMBLY and checked byte-for-byte in CI. Product
+# identity, module versions and persistence-plane selections are one release
+# fact; the digest below is the SHA-256 of the committed canonical bytes.
 manifest_path = "deploy/product-manifest.json"
-manifest_digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+manifest_digest = "sha256:3e0a97cdb646efb60ff1c7cbd6823f277198dcaa2a3cc68848916bad24d990c2"
 
 [image]
-# A digest, never a tag. ERP's OWN docker-compose.yml today reads
-# `${ERP_IMAGE_TAG:-latest}` (docker-compose.yml:3) — a floating default this
-# descriptor refuses to express. No CI pipeline in this repository publishes a
-# digest yet, so this is a placeholder pending that pipeline; `image_digest`
-# below is checked for shape only, exactly as dotmac_starter_mt's own
-# reference descriptor does for the identical reason.
+# A digest, never a tag. ERP's legacy docker-compose.yml still accepts
+# `${ERP_IMAGE_TAG:-latest}`; this descriptor refuses that shape. The all-zero
+# digest is an explicit reference-adapter sentinel, not a deployable image.
+# Protected-main CI must replace it with the digest of the tested image.
 reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-# The real HEAD commit of this worktree at authoring time (`git rev-parse
-# HEAD`), which also matches the audit coordinate recorded for dotmac_erp in
-# dotmac_starter_mt:docs/inventories/deployment-foundation-sources.md.
-source_revision = "7b62974b366eead1b32bead380e47d9cf10ec4c7"
+# Current protected-main baseline this reference adapter was refreshed against.
+# A release descriptor replaces it with the exact image source revision.
+source_revision = "713c072c82b0a135945e33c3fca6c2d7bf19c7fe"
 
 # ─────────────────────────────────────────────────────────────────────────
 # Runtime materials — the exact env var NAMES ERP's app/worker/beat services
@@ -353,64 +349,17 @@ command = ["poetry", "run", "alembic", "upgrade", "heads"]
 heads_command = ["poetry", "run", "alembic", "current"]
 owner_material = "MIGRATION_DATABASE_URL"
 
-# ─────────────────────────────────────────────────────────────────────────
-# expected_heads — MACHINE-DERIVED BY STATIC SCAN, 2026-08-26. NOT a real
-# `alembic heads` run (forbidden by this task's rules — no alembic, no
-# poetry). MUST BE CONFIRMED AGAINST A REAL `alembic heads` RUN IN CI BEFORE
-# THIS ADAPTER MERGES.
-#
-# Method: an AST-based parser (not a text/regex scan) read every
-# `alembic/versions/*.py` file's `revision`/`down_revision` module-level
-# assignments via `ast.literal_eval`, correctly handling `down_revision` as a
-# bare string, a tuple/list (merge revisions), or `None` (root), then computed
-# heads as "every revision id never named as a parent by any other revision."
-# 395 files parsed, 395 revisions found, 0 parse errors, 0 duplicate revision
-# ids, 0 dangling parent references. Result: exactly ONE head in
-# `alembic/versions/` — `20260825_weekly_meeting_reports`.
-#
-# A cruder single-line regex scan over the same directory (the kind of scan
-# that does not handle a multi-line `down_revision = (\n    "a",\n    "b",\n)`
-# tuple — and this repository has many of those, from its many
-# `merge_*_heads` revisions) reproduces the false-positive shape described in
-# the task: it finds 117 "heads" here, because every revision whose ONLY
-# reference is as one element of a multi-line tuple looks unreferenced to a
-# scanner that only matches `down_revision = "single-line-string"`. The task
-# prompt's "~82" figure is almost certainly the same class of defect from a
-# differently-shaped naive scanner, not a real graph problem — but this is
-# reasoning from reproducing the FAILURE MODE, not from the same script, so
-# it is reported as informed reasoning rather than an exact reconciliation.
-#
-# ERP's alembic.ini declares FOUR additional `version_locations` beside the
-# local directory (alembic.ini:16): `dotmac_files.migrations:versions`,
-# `dotmac_accounting.migrations:versions`, `dotmac_imports.migrations:versions`,
-# `dotmac_numbering.migrations:versions`. These are separate, independently
-# published packages (pyproject.toml:72-105) with their OWN revision graphs —
-# per ADR-0006 D1's amendment (app/migration_bindings.py's module docstring),
-# ERP links to them through LOGICAL prerequisites checked against the live
-# catalog, never a physical `down_revision`/`depends_on` edge, so each is
-# genuinely a separate root+head, by design, not a defect. Their heads were
-# derived the same way (AST scan) against the exact `poetry.lock`-pinned
-# version of each package's own `migrations/versions/` directory:
-#   - dotmac-files    0.1.0a2 (poetry.lock:1077-1079) -> fi_0001_stored_files
-#   - dotmac-imports  0.1.0a2 (poetry.lock:1098-1101) -> im_0001_import_runs
-#   - dotmac-accounting 0.1.0a1 (poetry.lock:1056-1059) -> ac_0001_accounting
-#   - dotmac-numbering  0.1.0a2 (poetry.lock:1168-1171) -> nu_0001_numbering
-# Each of those packages ships exactly one migration file today (a single
-# root revision that is also its own head), read from cached build artifacts
-# on this machine matching the EXACT locked versions above (three from
-# `~/Library/Caches/pypoetry/artifacts/...`, `dotmac-numbering` from
-# dotmac_starter_mt's own `packages/dotmac-numbering` source tree, version
-# string-matched against poetry.lock). This is OPPORTUNISTIC, off-repository
-# evidence, not a real `pip install` inside this ERP checkout (forbidden by
-# this task) — it MUST also be confirmed by CI's real `alembic heads`.
-#
-# TOTAL: 5 expected heads.
+# `poetry run alembic heads` against the exact locked environment must equal
+# these six heads: ERP's lineage plus Files, Accounting, Imports, Numbering and
+# Tax. The architecture gate queries Alembic's composed graph directly; this is
+# not a source-text approximation.
 expected_heads = [
-    "20260825_weekly_meeting_reports",
+    "20260825_pi_indeterminate",
     "fi_0001_stored_files",
     "im_0001_import_runs",
     "ac_0001_accounting",
     "nu_0001_numbering",
+    "tx_0003_result_fingerprint",
 ]
 # INFERRED, not an explicit ERP declaration: scripts/deploy.sh's real step
 # order runs migrations (Step 3b) BEFORE recreating the app container (Step

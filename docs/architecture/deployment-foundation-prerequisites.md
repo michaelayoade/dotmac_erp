@@ -1,10 +1,10 @@
 # Deployment foundation prerequisites
 
-Status: **release identity implemented; deployment adapter and host cutover are
-not part of this slice**.
+Status: **release identity and the checked reference adapter are implemented;
+host execution and production cutover are not**.
 
-ERP now has two immutable release facts that a later deployment descriptor can
-join without a digest cycle:
+ERP has two immutable release facts that `deploy/product.toml` joins without a
+digest cycle:
 
 1. `deploy/product-manifest.json` is the canonical, checked representation of
    `ERP_PRODUCT_ASSEMBLY` under the product identity `dotmac-erp`. The
@@ -47,9 +47,9 @@ artifact then binds that immutable image to the same Git commit whose canonical
 product manifest is checked in CI.
 
 The exclusion also means none of these files is an in-container runtime input.
-A later deployment-foundation adoption must download verified release evidence
-and explicitly assemble a deployment plan; it may not read an accidental copy
-from `/app/deploy`.
+The deployment-foundation adapter downloads verified release evidence and
+explicitly assembles a deployment plan; it may not read an accidental copy from
+`/app/deploy`.
 
 ## CI contract
 
@@ -78,5 +78,8 @@ poetry run python -m scripts.product_manifest generate \
 poetry run python -m scripts.product_manifest check --path deploy/product-manifest.json
 ```
 
-This slice creates no deployment descriptor, changes no live deploy script,
-names no host, moves no data, and performs no production action.
+The checked reference descriptor and rendered assets are documented in
+`deploy/README.md`. They change no live deploy script, move no data, and perform
+no production action. The descriptor's module-manifest digest is real; its
+image digest remains a fail-visible sentinel until protected-main CI publishes
+the tested image.

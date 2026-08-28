@@ -1,15 +1,8 @@
 """ERP's `deploy/product.toml` is a real, conformant `ProductDeploymentSpec.v1`.
 
-`dotmac-deployment-foundation` (ADR-0070 in dotmac_starter_mt) is not yet a
-published, exact-pinned distribution this repository's `pyproject.toml`/
-`poetry.lock` install — it is still being built in the Starter repository.
-This test therefore skips when the package is not importable — but only while
-`DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED` is unset. The conformance job sets it,
-so a missing package there is a failure rather than a silent skip.
-Once ERP exact-pins the released distribution (AGENTS.md rule 30's
-authoritative-oracle standard — a published version, not merely a file present
-on `main`), this import stops skipping and the assertions below start being
-enforced for real, with no other change needed here.
+The published `dotmac-deployment-foundation==0.1.0a1` distribution is an exact
+dev dependency. A missing package is therefore an installation failure, never
+a reason to skip this architecture gate.
 
 `deploy/product.toml` is an ADAPTER, not a cutover: `scripts/deploy.sh`,
 `docker-compose.yml` and `Dockerfile` remain the live, unmodified deployment
@@ -20,41 +13,24 @@ well-formed and internally consistent — it does not run a deployment.
 from __future__ import annotations
 
 from pathlib import Path
-
-import os
+import tomllib
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
-# A skip is not a gate — so the skip is CONDITIONAL and the condition is
-# explicit. Setting `DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED=1` turns a missing
-# package from a quiet skip into a hard failure, and the conformance job sets
-# it. Before the distribution is published the skip is honest: the package
-# genuinely is not installable, and failing every build over that would teach
-# people to ignore red. After it is published, a silent skip would mean the
-# descriptor stopped being checked and nothing said so — which is the shape of
-# every defect in this branch's own review.
-_REQUIRED = os.environ.get("DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED") == "1"
-try:
-    import dotmac_deployment_foundation  # noqa: F401
-except ImportError as exc:  # pragma: no cover - exercised by the env var
-    if _REQUIRED:
-        raise AssertionError(
-            "DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED=1 but the package is not "
-            f"importable: {exc}. Either the pin is wrong or the install step "
-            "did not run — both are failures, not skips."
-        ) from exc
-    pytest.skip(
-        "dotmac-deployment-foundation is not published yet; set "
-        "DOTMAC_DEPLOYMENT_FOUNDATION_REQUIRED=1 to make this a failure",
-        allow_module_level=True,
-    )
-
-from dotmac_deployment_foundation.conformance import check_all  # noqa: E402
-from dotmac_deployment_foundation.errors import DeploymentFoundationError  # noqa: E402
-from dotmac_deployment_foundation.spec import ProductDeploymentSpec  # noqa: E402
+from dotmac_deployment_foundation import __version__ as foundation_version
+from dotmac_deployment_foundation.conformance import check_all
+from dotmac_deployment_foundation.errors import DeploymentFoundationError
+from dotmac_deployment_foundation.spec import ProductDeploymentSpec
+from scripts.product_manifest import product_manifest_digest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DESCRIPTOR_PATH = REPO_ROOT / "deploy" / "product.toml"
+PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
+WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "deployment-conformance.yml"
+FOUNDATION_VERSION = "0.1.0a1"
+FOUNDATION_RELEASE_SHA = "c072e1f51548dca04ab182d653d032bb481f4b79"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
@@ -77,18 +53,47 @@ def _load() -> ProductDeploymentSpec:
 # fails here too. That is the two-directional ratchet `AGENTS.md` rule 25
 # requires of a temporary deviation.
 #
-# Every entry must be gone before this adapter merges. They are placeholders
-# because no image has been built for this descriptor to pin.
-KNOWN_UNRESOLVED = (
-    "image.reference is pinned to the placeholder",
-    "assembly.manifest_digest is the placeholder",
-)
+# Protected-main CI must publish the tested image before the remaining sentinel
+# can be replaced with a registry digest. The assembly manifest is already real.
+KNOWN_UNRESOLVED = ("image.reference is pinned to the placeholder",)
+
+
+def test_published_foundation_is_exact_pinned_at_both_install_seams() -> None:
+    pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
+    dependency = pyproject["tool"]["poetry"]["group"]["dev"]["dependencies"][
+        "dotmac-deployment-foundation"
+    ]
+    assert dependency == {"version": FOUNDATION_VERSION, "source": "forgejo"}
+    assert foundation_version == FOUNDATION_VERSION
+
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    immutable_call = (
+        "michaelayoade/dotmac_starter_mt/"
+        ".github/workflows/deployment-conformance.yml@"
+        f"{FOUNDATION_RELEASE_SHA}"
+    )
+    assert immutable_call in workflow
+    assert f'foundation-version: "{FOUNDATION_VERSION}"' in workflow
+    assert "FORGEJO_READ_TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}" in workflow
 
 
 def test_descriptor_parses() -> None:
     spec = _load()
-    assert spec.product == "dotmac_erp"
+    assert spec.product == "dotmac-erp"
     assert len(spec.roles) >= 1
+
+
+def test_descriptor_binds_the_canonical_product_manifest() -> None:
+    spec = _load()
+    assert spec.manifest_path == "deploy/product-manifest.json"
+    assert spec.manifest_digest == product_manifest_digest()
+
+
+def test_descriptor_heads_match_the_composed_alembic_graph() -> None:
+    config = Config(str(REPO_ROOT / "alembic.ini"))
+    actual = set(ScriptDirectory.from_config(config).get_heads())
+    declared = set(_load().migration.expected_heads)
+    assert declared == actual
 
 
 def test_no_role_holds_the_migration_owner_material() -> None:
@@ -165,7 +170,7 @@ def test_negative_control_the_real_descriptor_text_loads_cleanly() -> None:
     """Must pass, or the positive case below proves nothing."""
     text = _descriptor_text()
     spec = ProductDeploymentSpec.loads(text, source="<negative-control>")
-    assert spec.product == "dotmac_erp"
+    assert spec.product == "dotmac-erp"
 
 
 def test_a_role_given_the_owner_material_is_refused() -> None:
