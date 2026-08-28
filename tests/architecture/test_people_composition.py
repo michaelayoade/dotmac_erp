@@ -2,7 +2,9 @@
 
 PostgreSQL rehearsal covers the live schema.  This static half pins the exact
 artifact and lineage, proves that the module is an atomic tenant-only store,
-and refuses any runtime import under ``app/`` in this composition slice.
+and refuses any runtime import under ``app/`` in this composition slice. The
+release assembly may import the package's declarative manifest and nothing
+else from the package.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from app.migration_planes import ASSEMBLY_MODULE_PLANES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPO_ROOT / "app"
+PRODUCT_ASSEMBLY = APP_ROOT / "product_assembly.py"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 LOCK = REPO_ROOT / "poetry.lock"
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -56,6 +59,17 @@ def _imported_modules(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             modules.add(node.module)
     return modules
+
+
+def _is_people_runtime_import(path: Path, module: str) -> bool:
+    """Only the product assembly may bind the exact declarative manifest."""
+    imports_package = module == IMPORT_PACKAGE or module.startswith(
+        f"{IMPORT_PACKAGE}."
+    )
+    release_manifest_seam = (
+        path == PRODUCT_ASSEMBLY and module == f"{IMPORT_PACKAGE}.manifest"
+    )
+    return imports_package and not release_manifest_seam
 
 
 def test_the_distribution_is_pinned_exactly_from_the_private_source() -> None:
@@ -105,13 +119,27 @@ def test_people_is_an_atomic_tenant_only_store() -> None:
 
 
 def test_nothing_under_app_imports_the_people_runtime() -> None:
-    """Storage composition must not silently repoint a business caller."""
+    """Storage composition must not silently repoint a business caller.
+
+    `app.product_assembly` may bind the declarative manifest to immutable
+    release identity. Model, service and manifest-submodule imports remain
+    runtime dependencies and are rejected by the same scan.
+    """
     offenders = sorted(
         path.relative_to(REPO_ROOT).as_posix()
         for path in APP_ROOT.rglob("*.py")
         if any(
-            module == IMPORT_PACKAGE or module.startswith(f"{IMPORT_PACKAGE}.")
+            _is_people_runtime_import(path, module)
             for module in _imported_modules(path)
         )
     )
     assert not offenders, f"app/ imports {IMPORT_PACKAGE}: {offenders}"
+
+
+def test_people_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
+    other_app_file = APP_ROOT / "other.py"
+    assert not _is_people_runtime_import(PRODUCT_ASSEMBLY, "dotmac_people.manifest")
+    assert _is_people_runtime_import(other_app_file, "dotmac_people.manifest")
+    assert _is_people_runtime_import(PRODUCT_ASSEMBLY, "dotmac_people")
+    assert _is_people_runtime_import(PRODUCT_ASSEMBLY, "dotmac_people.service")
+    assert _is_people_runtime_import(PRODUCT_ASSEMBLY, "dotmac_people.manifest.private")
