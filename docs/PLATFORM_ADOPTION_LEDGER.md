@@ -11,9 +11,9 @@ deployment.
 **Evidence pins:**
 
 - This composition slice starts from `dotmac_erp` `origin/main` at
-  `61e0bf3e4c6a2d3e19706d251c3811bd4362d5c7`; its final evidence is the
+  `325e422a3ef22634c513b50c2820b74d37e09491`; its final evidence is the
   reviewed commit and CI result, not this prose.
-- Current declared pin: `dotmac-kernel==0.1.0a94` (source of record:
+- Current declared pin: `dotmac-kernel==0.1.0a98` (source of record:
   `dotmac_starter_mt/packages/dotmac-kernel`, import name `dotmac_kernel`).
   The lock must resolve this exact published artifact; dependency, installed
   wheel, prerequisite vocabulary and verifier are checked dynamically.

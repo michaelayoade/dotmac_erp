@@ -238,3 +238,18 @@ all.
 - **Keep the list in a document instead of code.** Rejected: a prose list cannot
   be compared to `pyproject.toml`, and the failure this file exists to prevent is
   drift between what the product claims to install and what it installs.
+
+## Amendment — 2026-08-27: foundational releases precede module movement
+
+Michael directed ERP to complete the latest Starter/kernel, shared deployment
+foundation and UI cutovers before moving another domain module. The kernel pin
+therefore advances from `0.1.0a94` to the latest published release,
+`0.1.0a98`, as a pin-only prerequisite: it adopts no runtime facility and moves
+no authority. `dotmac-ui==0.1.0a7` remains unchanged because it is already the
+latest published UI release.
+
+The shared deployment foundation stays outside the pin-only change until its
+protected release workflow publishes and install-verifies an immutable
+artifact. A source version or local render is not a pinnable release. Domain
+module composition remains frozen behind these foundational slices and their
+separate validation evidence.
