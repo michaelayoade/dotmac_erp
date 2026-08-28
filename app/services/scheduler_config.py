@@ -322,10 +322,9 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.inventory.send_low_stock_notifications",
             "schedule": crontab(hour=7, minute=15),  # Daily at 7:15 AM
         },
-        "dotmac-sub-incremental-sync": {
-            "task": "app.tasks.dotmac_sub.run_dotmac_sub_incremental_sync",
-            "schedule": crontab(minute="*/30"),  # Every 30 minutes
-        },
+        # dotmac_sub incremental sync is DB-owned through ScheduledTask.  Keeping
+        # a builtin entry here as well dispatches two overlapping runs every 30
+        # minutes and can exhaust the worker pool when the connector is slow.
         "recurring-templates": {
             "task": "app.tasks.automation.process_recurring_templates",
             "schedule": crontab(hour="*/6", minute=5),  # Every 6 hours at :05
