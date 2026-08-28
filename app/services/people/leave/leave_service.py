@@ -1906,7 +1906,12 @@ class LeaveService:
             .where(
                 Employee.organization_id == org_id,
                 Person.organization_id == org_id,
-                Employee.status == EmployeeStatus.ACTIVE,
+                Employee.status.in_(
+                    [
+                        EmployeeStatus.ACTIVE,
+                        EmployeeStatus.ON_LEAVE,
+                    ]
+                ),
                 func.extract("year", LeaveAllocation.from_date) == target_year,
             )
         )
