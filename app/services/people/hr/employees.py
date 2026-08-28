@@ -1076,7 +1076,9 @@ class EmployeeService:
             department_changed = employee.department_id is not None
             employee.department_id = None
             if department_changed:
-                self._sync_active_primary_position_department(employee.employee_id, None)
+                self._sync_active_primary_position_department(
+                    employee.employee_id, None
+                )
 
         if employee.department_id != prior_department_id:
             self._sync_scheduling_department(employee)

@@ -21,7 +21,9 @@ def _auth() -> WebAuthContext:
 def test_employee_export_uses_allowlisted_fields_and_csv_safe_cells(monkeypatch):
     employee = SimpleNamespace(
         employee_code="=SUM(A1:A2)",
-        person=SimpleNamespace(name="Ada Lovelace", email="ada@example.com", phone=None),
+        person=SimpleNamespace(
+            name="Ada Lovelace", email="ada@example.com", phone=None
+        ),
         department=SimpleNamespace(department_name="Engineering"),
         designation=None,
         employment_type=None,
@@ -53,7 +55,10 @@ def test_employee_export_uses_allowlisted_fields_and_csv_safe_cells(monkeypatch)
         status="active",
     )
 
-    assert response.body.decode() == "Employee Code,Full Name\r\n'=SUM(A1:A2),Ada Lovelace\r\n"
+    assert (
+        response.body.decode()
+        == "Employee Code,Full Name\r\n'=SUM(A1:A2),Ada Lovelace\r\n"
+    )
     assert captured["filters"].status == EmployeeStatus.ACTIVE
     assert captured["eager_load"] is True
     assert captured["pagination"].limit == 100_000

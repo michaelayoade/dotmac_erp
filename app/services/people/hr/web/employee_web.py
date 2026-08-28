@@ -144,17 +144,35 @@ class HRWebService:
     EMPLOYEE_EXPORT_FIELDS = {
         "employee_code": ("Employee Code", lambda emp: emp.employee_code),
         "full_name": ("Full Name", lambda emp: emp.person.name if emp.person else ""),
-        "work_email": ("Work Email", lambda emp: emp.person.email if emp.person else ""),
-        "work_phone": ("Work Phone", lambda emp: emp.person.phone if emp.person else ""),
+        "work_email": (
+            "Work Email",
+            lambda emp: emp.person.email if emp.person else "",
+        ),
+        "work_phone": (
+            "Work Phone",
+            lambda emp: emp.person.phone if emp.person else "",
+        ),
         "personal_email": ("Personal Email", lambda emp: emp.personal_email),
         "personal_phone": ("Personal Phone", lambda emp: emp.personal_phone),
-        "department": ("Department", lambda emp: emp.department.department_name if emp.department else ""),
-        "designation": ("Designation", lambda emp: emp.designation.designation_name if emp.designation else ""),
-        "employment_type": ("Employment Type", lambda emp: emp.employment_type.type_name if emp.employment_type else ""),
+        "department": (
+            "Department",
+            lambda emp: emp.department.department_name if emp.department else "",
+        ),
+        "designation": (
+            "Designation",
+            lambda emp: emp.designation.designation_name if emp.designation else "",
+        ),
+        "employment_type": (
+            "Employment Type",
+            lambda emp: emp.employment_type.type_name if emp.employment_type else "",
+        ),
         "status": ("Status", lambda emp: emp.status.value if emp.status else ""),
         "date_of_joining": ("Date of Joining", lambda emp: emp.date_of_joining),
         "date_of_leaving": ("Date of Leaving", lambda emp: emp.date_of_leaving),
-        "probation_end_date": ("Probation End Date", lambda emp: emp.probation_end_date),
+        "probation_end_date": (
+            "Probation End Date",
+            lambda emp: emp.probation_end_date,
+        ),
         "confirmation_date": ("Confirmation Date", lambda emp: emp.confirmation_date),
     }
     DEFAULT_EMPLOYEE_EXPORT_FIELDS = (
@@ -593,10 +611,7 @@ class HRWebService:
             search=search,
             status=status_filter,
             statuses=status_filters,
-            include_archived=(
-                include_exit_history
-                or status_filters is not None
-            ),
+            include_archived=(include_exit_history or status_filters is not None),
             archive_only=archive_only,
             include_deleted=(
                 include_exit_history
@@ -799,9 +814,13 @@ class HRWebService:
         include_archived: bool = False,
     ) -> Response:
         """Build a CSV from explicitly selected, allowlisted employee fields."""
-        selected_fields = [field for field in fields if field in self.EMPLOYEE_EXPORT_FIELDS]
+        selected_fields = [
+            field for field in fields if field in self.EMPLOYEE_EXPORT_FIELDS
+        ]
         if not selected_fields:
-            raise HTTPException(status_code=422, detail="Select at least one export field")
+            raise HTTPException(
+                status_code=422, detail="Select at least one export field"
+            )
 
         status_filter = None
         status_filters = None
@@ -817,7 +836,9 @@ class HRWebService:
                 try:
                     status_filter = EmployeeStatus(status.upper())
                 except ValueError as exc:
-                    raise HTTPException(status_code=422, detail="Invalid employee status") from exc
+                    raise HTTPException(
+                        status_code=422, detail="Invalid employee status"
+                    ) from exc
 
         org_id = coerce_uuid(auth.organization_id)
         filters = EmployeeFilters(
@@ -838,15 +859,21 @@ class HRWebService:
             date_of_joining_from=self._parse_date(date_of_joining_from or ""),
             date_of_joining_to=self._parse_date(date_of_joining_to or ""),
         )
-        employees = EmployeeService(db, org_id).list_employees(
-            filters,
-            PaginationParams(limit=100_000),
-            eager_load=True,
-        ).items
+        employees = (
+            EmployeeService(db, org_id)
+            .list_employees(
+                filters,
+                PaginationParams(limit=100_000),
+                eager_load=True,
+            )
+            .items
+        )
 
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow([self.EMPLOYEE_EXPORT_FIELDS[field][0] for field in selected_fields])
+        writer.writerow(
+            [self.EMPLOYEE_EXPORT_FIELDS[field][0] for field in selected_fields]
+        )
         for employee in employees:
             writer.writerow(
                 [
