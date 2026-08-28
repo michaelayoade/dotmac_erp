@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from starlette.requests import Request
 
+from app.models.people.hr import EmployeeStatus
 from app.models.person import Person
 from app.services.common import ValidationError
 from app.services.people.hr.web.employee_web import HRWebService
@@ -95,6 +96,65 @@ def _stub_new_employee_form_dependencies(monkeypatch, db_session) -> None:
     )
     monkeypatch.setattr(
         db_session, "execute", lambda stmt: SimpleNamespace(all=lambda: [])
+    )
+
+
+def _stub_employee_list_dependencies(monkeypatch) -> None:
+    empty_result = SimpleNamespace(items=[])
+    paginated_empty_result = SimpleNamespace(
+        items=[], total=0, total_pages=0, has_prev=False, has_next=False
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_departments",
+        lambda self, filters, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_designations",
+        lambda self, filters, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_employment_types",
+        lambda self, filters, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_locations",
+        lambda self, is_active, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.get_employee_stats",
+        lambda self: {
+            "total": 0,
+            "current": 0,
+            "active": 0,
+            "on_leave": 0,
+            "terminated": 0,
+            "resigned": 0,
+            "exit_archive": 0,
+            "suspended": 0,
+            "retired": 0,
+            "inactive": 0,
+        },
+    )
+
+    def _list_empty(
+        self,
+        filters,
+        pagination,
+        eager_load=False,
+        advanced_filter_expression=None,
+    ):
+        return paginated_empty_result
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.list_employees",
+        _list_empty,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.base_context",
+        lambda request, auth, title, active, db=None: {
+            "title": title,
+            "active_page": active,
+        },
     )
 
 
