@@ -1,6 +1,6 @@
 # ADR-0004 — The ERP bill of materials is frozen before composition starts
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-24
 - **Decider:** Michael
 - **Scope:** ERP module selection, capability ownership, composition order
@@ -128,6 +128,27 @@ subsequent step, so the proposal is that ERP keeps it and a shared owner becomes
 a later product decision. Treasury and cash positioning, consolidation and
 intercompany, budgeting, lease accounting and financial-statement presentation
 are retained on the same reasoning and are listed individually in `RETAINED`.
+
+## Acceptance — 2026-08-28
+
+Michael accepted this decision while authorizing completion of the first thin
+People cutover. The two proposals above are therefore settled for the frozen
+membership and ownership set:
+
+- `dotmac-content`, `dotmac-publishing`, `dotmac-sites` and
+  `dotmac-web-analytics` remain excluded from Dotmac ERP. Their capabilities
+  belong in a separately owned marketing assembly; their extraction dossiers
+  must not be read as ERP composition authority.
+- Statutory trade accounts receivable, treasury and cash positioning,
+  consolidation and intercompany, budgeting, lease accounting and
+  financial-statement presentation remain named ERP-owned capabilities for
+  this cutover. A later extraction requires its own accepted ownership change;
+  it is not implicit in this acceptance.
+
+This acceptance freezes membership and ownership, not version pins, and does
+not authorize a production deployment. The first implementation that relies on
+it remains the separately reviewed People containment, storage-composition and
+Employment Type authority sequence.
 
 ## What composition then costs (measured, step 2)
 

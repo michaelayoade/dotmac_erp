@@ -326,8 +326,16 @@ SELECTED: Final[tuple[SelectedModule, ...]] = (
         release_state="released",
         capabilities=("employment-directory",),
         rationale=(
-            "Six tables of employment identity. The 131 ERP foreign keys to the "
-            "employee hub become a rebuildable compatibility projection."
+            "Six tables of employment identity. The legacy employee hub's exact "
+            "ORM dependency intents are ledgered by FK identity in "
+            "docs/inventories/people-dependent-references.tsv; "
+            "tests/integration/people_hub_fk_catalog.tsv records the migrated FK "
+            "identities and action semantics. Existing model-only and physical-only FK "
+            "drift is separately ratcheted control debt, not a claim that either "
+            "ledger is a subset of the other. "
+            "During cutover, remaining compatibility is a local, rebuildable, "
+            "read-only projection inside the clean assembly, never a reverse feed "
+            "to the historical source."
         ),
     ),
     SelectedModule(
