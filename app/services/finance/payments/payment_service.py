@@ -2135,7 +2135,9 @@ class PaymentService:
     @staticmethod
     def find_indeterminate_transfer_intents(
         db: Session,
-    ) -> dict[UUID, list[UUID]]:
+        *,
+        organization_id: UUID,
+    ) -> list[UUID]:
         """Outbound expense transfers whose outcome was never observed.
 
         The slow lane. `find_stuck_transfer_intents` deliberately does not see
@@ -2147,37 +2149,40 @@ class PaymentService:
         quantity of elapsed time converts "we do not know" into a verdict.
 
         Selection only; every decision is re-taken and re-proved under a lock in
-        :meth:`resolve_indeterminate_transfer`.
-
-        Returns organization id -> intent ids.
+        :meth:`resolve_indeterminate_transfer`. The organization is mandatory:
+        the scheduler discovers tenant identifiers through the narrow tenant
+        catalogue and performs this read inside that tenant's own RLS session.
         """
-        rows = db.execute(
-            select(PaymentIntent.intent_id, PaymentIntent.organization_id)
-            .where(
-                PaymentIntent.direction == PaymentDirection.OUTBOUND,
-                PaymentIntent.status == PaymentIntentStatus.INDETERMINATE,
-                PaymentIntent.source_type == "EXPENSE_CLAIM",
-            )
-            .order_by(PaymentIntent.unresolved_since.asc())
-        ).all()
-        return PaymentService._group_by_organization(rows)
+        return list(
+            db.scalars(
+                select(PaymentIntent.intent_id)
+                .where(
+                    PaymentIntent.organization_id == organization_id,
+                    PaymentIntent.direction == PaymentDirection.OUTBOUND,
+                    PaymentIntent.status == PaymentIntentStatus.INDETERMINATE,
+                    PaymentIntent.source_type == "EXPENSE_CLAIM",
+                )
+                .order_by(PaymentIntent.unresolved_since.asc())
+            ).all()
+        )
 
     @staticmethod
     def oldest_unresolved_transfer_age(
         db: Session,
         *,
+        organization_id: UUID,
         now: datetime | None = None,
     ) -> timedelta:
-        """How long the longest-unresolved payout has been unresolved.
+        """Age of this tenant's longest-unresolved payout, or zero.
 
-        Zero when there are none. This is the number worth alerting on: the
-        COUNT of unresolved payouts is noisy during a provider incident and
-        drops to zero on its own, while the AGE only ever grows until somebody
-        does something about it.
+        The caller aggregates the maximum across tenant-scoped reads. Keeping
+        the organization argument mandatory prevents this metric helper from
+        becoming a new cross-tenant read path.
         """
         moment = now or datetime.now(UTC)
         oldest = db.scalar(
             select(func.min(PaymentIntent.unresolved_since)).where(
+                PaymentIntent.organization_id == organization_id,
                 PaymentIntent.direction == PaymentDirection.OUTBOUND,
                 PaymentIntent.status == PaymentIntentStatus.INDETERMINATE,
                 PaymentIntent.unresolved_since.isnot(None),

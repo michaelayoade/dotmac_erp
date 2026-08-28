@@ -56,6 +56,7 @@ from app.services.finance.payments.paystack_client import (
 from app.tasks import expense as expense_tasks
 
 ORG_A = uuid.UUID("00000000-0000-0000-0000-0000000000a1")
+ORG_B = uuid.UUID("00000000-0000-0000-0000-0000000000b2")
 
 
 # ---------------------------------------------------------------------------
@@ -552,3 +553,64 @@ class TestStaleWorkerReplay:
         assert intent.poll_count == 0
         assert results["completed"] == 0
         assert results["failed"] == 0
+
+
+# ===========================================================================
+# 3. Unresolved money is discovered without a cross-tenant data session
+# ===========================================================================
+
+
+def test_unresolved_reconciler_fans_out_through_tenant_sessions(monkeypatch) -> None:
+    """The hourly slow lane must remain usable under the canonical app role.
+
+    Tenant identifiers come from the narrow catalogue, including inactive
+    organizations whose money still needs a verdict. Protected payout rows and
+    their age metric are then read only through per-tenant RLS sessions.
+    """
+    sessions = {ORG_A: MagicMock(name="db:org-a"), ORG_B: MagicMock(name="db:org-b")}
+    opened: list[uuid.UUID] = []
+
+    @contextmanager
+    def _tenant_session(org_id: uuid.UUID):
+        opened.append(org_id)
+        yield sessions[org_id]
+
+    discover = MagicMock(return_value=[ORG_A, ORG_B])
+    monkeypatch.setattr(expense_tasks, "organization_ids", discover)
+    monkeypatch.setattr(expense_tasks, "session_for_org", _tenant_session)
+    monkeypatch.setattr(
+        expense_tasks,
+        "cross_org_session",
+        MagicMock(side_effect=AssertionError("cross-tenant payout read")),
+    )
+
+    unresolved_id = uuid.uuid4()
+    with (
+        patch(
+            "app.services.finance.payments.payment_service.PaymentService"
+        ) as service_cls,
+        patch("app.metrics.set_transfer_unresolved_oldest_age") as set_oldest,
+    ):
+        service_cls.find_indeterminate_transfer_intents.side_effect = [
+            [],
+            [unresolved_id],
+        ]
+        service_cls.oldest_unresolved_transfer_age.side_effect = [
+            timedelta(hours=2),
+            timedelta(hours=5),
+        ]
+        service_cls.return_value.resolve_transfer_polling_config.return_value = None
+
+        result = expense_tasks.reconcile_unresolved_expense_transfers()
+
+    discover.assert_called_once_with(include_inactive=True)
+    assert opened == [ORG_A, ORG_B, ORG_B]
+    service_cls.find_indeterminate_transfer_intents.assert_any_call(
+        sessions[ORG_A], organization_id=ORG_A
+    )
+    service_cls.find_indeterminate_transfer_intents.assert_any_call(
+        sessions[ORG_B], organization_id=ORG_B
+    )
+    set_oldest.assert_called_once_with(timedelta(hours=5).total_seconds())
+    assert result["intents_checked"] == 0
+    assert result["still_unresolved"] == 0

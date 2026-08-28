@@ -32,7 +32,7 @@ from app.models.expense import (
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.notification import NotificationService
-from app.tenant_catalog import active_organization_ids
+from app.tenant_catalog import active_organization_ids, organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -858,9 +858,9 @@ def reconcile_unresolved_expense_transfers() -> dict:
     subjects have already exhausted the fast loop, and re-asking at two-minute
     intervals would be load without information.
 
-    Same adapter shape and the same reason (ADR-0005): it discovers which
-    tenants have unresolved payouts, opens one session per tenant, and hands
-    each intent to `PaymentService`. It decides nothing.
+    The narrow tenant catalogue discovers identifiers, then every payout read
+    and decision runs inside that tenant's own RLS session. The adapter hands
+    each intent to `PaymentService`; it decides nothing.
     `resolve_indeterminate_transfer` is the only writer permitted to move an
     intent out of INDETERMINATE, and it may only move it to a status Paystack
     itself justified.
@@ -889,15 +889,33 @@ def reconcile_unresolved_expense_transfers() -> dict:
 
     now = datetime.now(UTC)
 
-    with cross_org_session() as cross_db:
-        unresolved_by_org = PaymentService.find_indeterminate_transfer_intents(cross_db)
-        # Published before any resolution work, so the gauge reflects the real
-        # backlog even if every tenant below turns out to be unconfigured.
-        set_transfer_unresolved_oldest_age(
-            PaymentService.oldest_unresolved_transfer_age(
-                cross_db, now=now
-            ).total_seconds()
-        )
+    unresolved_by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
+    oldest_unresolved_seconds = 0.0
+
+    # Settlement work includes inactive tenants: disabling an organization
+    # cannot make a possibly-paid transfer safe to forget. Discovery exposes
+    # identifiers only; protected payout rows remain tenant-scoped.
+    for org_id in organization_ids(include_inactive=True):
+        with session_for_org(org_id) as db:
+            intent_ids = PaymentService.find_indeterminate_transfer_intents(
+                db,
+                organization_id=org_id,
+            )
+            if intent_ids:
+                unresolved_by_org[org_id] = intent_ids
+            oldest_unresolved_seconds = max(
+                oldest_unresolved_seconds,
+                PaymentService.oldest_unresolved_transfer_age(
+                    db,
+                    organization_id=org_id,
+                    now=now,
+                ).total_seconds(),
+            )
+
+    # Publish the pre-resolution backlog age before any provider I/O. A tenant
+    # with missing credentials therefore remains visible instead of vanishing
+    # from the metric merely because it cannot be reconciled.
+    set_transfer_unresolved_oldest_age(oldest_unresolved_seconds)
 
     if not unresolved_by_org:
         logger.info("No unresolved transfers found")

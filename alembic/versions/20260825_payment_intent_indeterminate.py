@@ -6,7 +6,7 @@ produces. INDETERMINATE is the vocabulary for "we do not know", and
 ``unresolved_since`` is when we stopped knowing (ADR-0007).
 
 Revision ID: 20260825_pi_indeterminate
-Revises: 20260825_weekly_meeting_reports
+Revises: 20260826_hr_shift_scheduler
 Create Date: 2026-08-25
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20260825_pi_indeterminate"
-down_revision = "20260825_weekly_meeting_reports"
+down_revision = "20260826_hr_shift_scheduler"
 branch_labels = None
 depends_on = None
 
