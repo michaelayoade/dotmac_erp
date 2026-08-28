@@ -546,18 +546,26 @@ class HRWebService:
                 except ValueError:
                     pass
 
+        leaving_from = self._parse_date(date_of_leaving_from or "")
+        leaving_to = self._parse_date(date_of_leaving_to or "")
+        has_exit_date_filter = bool(leaving_from or leaving_to)
+        show_exit_date = status_filter == EmployeeStatus.RESIGNED
+        include_exit_history = archive_only or show_exit_date or has_exit_date_filter
+
         employee_filters = EmployeeFilters(
             search=search,
             status=status_filter,
-            include_archived=archive_only or status_filter == EmployeeStatus.RESIGNED,
+            include_archived=include_exit_history,
             archive_only=archive_only,
-            include_deleted=archive_only or status_filter == EmployeeStatus.TERMINATED,
+            include_deleted=(
+                include_exit_history or status_filter == EmployeeStatus.TERMINATED
+            ),
             department_id=coerce_uuid(department_id) if department_id else None,
             designation_id=coerce_uuid(designation_id) if designation_id else None,
             date_of_joining_from=self._parse_date(date_of_joining_from or ""),
             date_of_joining_to=self._parse_date(date_of_joining_to or ""),
-            date_of_leaving_from=self._parse_date(date_of_leaving_from or ""),
-            date_of_leaving_to=self._parse_date(date_of_leaving_to or ""),
+            date_of_leaving_from=leaving_from,
+            date_of_leaving_to=leaving_to,
         )
         pagination = PaginationParams.from_page(page, page_size)
         try:
@@ -633,6 +641,7 @@ class HRWebService:
                     "department_name": dept.department_name if dept else "",
                     "designation_name": desig.designation_name if desig else "",
                     "date_of_joining": emp.date_of_joining,
+                    "date_of_leaving": emp.date_of_leaving,
                     "status": status_value,
                     "status_class": self._status_class(emp.status),
                 }
@@ -700,6 +709,7 @@ class HRWebService:
             "date_of_joining_to": date_of_joining_to or "",
             "date_of_leaving_from": date_of_leaving_from or "",
             "date_of_leaving_to": date_of_leaving_to or "",
+            "show_exit_date": show_exit_date,
             "filters_json": filters_json or "",
             "page": page,
             "total_pages": result.total_pages,
