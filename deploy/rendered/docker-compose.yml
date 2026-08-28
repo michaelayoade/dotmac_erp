@@ -7,7 +7,7 @@
 # image:            ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000
 # descriptor image: ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000
 # source revision:  713c072c82b0a135945e33c3fca6c2d7bf19c7fe
-# manifest digest:  sha256:3e0a97cdb646efb60ff1c7cbd6823f277198dcaa2a3cc68848916bad24d990c2
+# manifest digest:  sha256:82e5c01c713e4facfa6745e0aab98f6e52fb9ee125d4c4228cac0237ee9719b8
 # ============================================================================
 
 services:
