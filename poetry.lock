@@ -1204,18 +1204,18 @@ reference = "forgejo"
 
 [[package]]
 name = "dotmac-people"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "Tenant employment directory, positions, and temporal reporting resolution"
 optional = false
 python-versions = ">=3.11,<3.14"
 groups = ["main"]
 files = [
-    {file = "dotmac_people-0.1.0a1-py3-none-any.whl", hash = "sha256:329e2d41a2bdc8ceb578663193aa41c2d148cf54531e5e734b43dbbfd06049c5"},
-    {file = "dotmac_people-0.1.0a1.tar.gz", hash = "sha256:c136a3acfa5f40a283115ca47e5ec66c35b258aa7065c7ac302b569ce762f498"},
+    {file = "dotmac_people-0.1.0a2-py3-none-any.whl", hash = "sha256:1c239fe814d82c4e478f0c117816f69a8907a1502b4a9f720d8006643ae1a366"},
+    {file = "dotmac_people-0.1.0a2.tar.gz", hash = "sha256:b62a121aae7fbfa8488431bda8fd462f34480de89e58bfc0b9894bbb881221e6"},
 ]
 
 [package.dependencies]
-dotmac-kernel = ">=0.1.0a71"
+dotmac-kernel = ">=0.1.0a98"
 sqlalchemy = ">=2.0,<3.0"
 
 [package.source]
@@ -5196,4 +5196,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "e59ac38e2f784866975da9a30b7fb621f35c7987ced39719accaba7736080b0a"
+content-hash = "4945a0c9e87d02178538ca98ff8dcf11ee2d7c99bd994cfc12ccec1cd3662b92"

@@ -63,7 +63,12 @@ def _json_default(value: object) -> str:
     raise TypeError(f"unsupported projection value: {type(value).__name__}")
 
 
-def _fingerprint(payload: dict[str, object]) -> str:
+def people_projection_fingerprint(payload: dict[str, object]) -> str:
+    """Return the canonical legacy-source projection fingerprint.
+
+    Bootstrap adapters use this public helper so evidence produced outside the
+    HTTP projection cannot drift to a second serialization algorithm.
+    """
     encoded = json.dumps(
         payload,
         default=_json_default,
@@ -71,6 +76,9 @@ def _fingerprint(payload: dict[str, object]) -> str:
         sort_keys=True,
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+_fingerprint = people_projection_fingerprint
 
 
 def _updated_at(row: _ProjectionSource) -> datetime | None:
@@ -435,4 +443,8 @@ class BackofficePeopleProjectionService:
         )
 
 
-__all__ = ["BackofficePeopleProjectionService", "PeopleProjectionEntity"]
+__all__ = [
+    "BackofficePeopleProjectionService",
+    "PeopleProjectionEntity",
+    "people_projection_fingerprint",
+]
