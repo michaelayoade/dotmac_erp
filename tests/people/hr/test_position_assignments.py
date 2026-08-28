@@ -79,6 +79,7 @@ def _make_position(
     *,
     position_code: str | None = None,
     position_name: str | None = None,
+    department_id: uuid.UUID | None = None,
     parent_position_id: uuid.UUID | None = None,
     is_vacant: bool = True,
     vacancy_routing_policy: PositionVacancyRoutingPolicy = (
@@ -91,6 +92,7 @@ def _make_position(
         organization_id=org_id,
         position_code=position_code or f"POS-{short_id}",
         position_name=position_name or f"Position {short_id}",
+        department_id=department_id,
         parent_position_id=parent_position_id,
         vacancy_routing_policy=vacancy_routing_policy,
         is_vacant=is_vacant,
@@ -621,6 +623,51 @@ def test_employee_reports_to_update_syncs_position_parent(db_session):
     assert employee_position.parent_position_id == manager_position.position_id
     resolved = OrgResolver(db_session).get_manager(employee.employee_id, org_id)
     assert resolved is not None and resolved.employee_id == manager.employee_id
+
+
+def test_employee_department_update_syncs_active_primary_position(
+    db_session, monkeypatch
+):
+    _ensure_hr_position_tables(db_session.bind)
+    org_id = uuid.uuid4()
+    previous_department = Department(
+        department_id=uuid.uuid4(),
+        organization_id=org_id,
+        department_code="OLD",
+        department_name="Old Department",
+    )
+    new_department = Department(
+        department_id=uuid.uuid4(),
+        organization_id=org_id,
+        department_code="NEW",
+        department_name="New Department",
+    )
+    employee = _make_employee(db_session, org_id, "EMP-001")
+    employee.department_id = previous_department.department_id
+    position = _make_position(
+        db_session,
+        org_id,
+        department_id=previous_department.department_id,
+        is_vacant=False,
+    )
+    db_session.add_all([previous_department, new_department])
+    db_session.flush()
+    monkeypatch.setattr(
+        "app.services.people.scheduling.SchedulingService.sync_employee_department",
+        lambda self, **kwargs: {"assignments_updated": 0, "assignments_ended": 0},
+    )
+    PositionService(db_session, org_id).create_assignment(
+        position.position_id,
+        _assignment_data(employee),
+    )
+
+    EmployeeService(db_session, org_id).update_employee(
+        employee.employee_id,
+        EmployeeUpdateData(department_id=new_department.department_id),
+    )
+
+    assert employee.department_id == new_department.department_id
+    assert position.department_id == new_department.department_id
 
 
 def test_employee_manager_clear_syncs_position_parent_and_legacy_cache(db_session):
