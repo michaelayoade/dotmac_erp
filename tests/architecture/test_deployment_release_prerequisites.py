@@ -32,7 +32,7 @@ from scripts.write_image_release import (
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / "deploy" / "product-manifest.json"
 EXPECTED_MANIFEST_DIGEST = (
-    "sha256:3e0a97cdb646efb60ff1c7cbd6823f277198dcaa2a3cc68848916bad24d990c2"
+    "sha256:82e5c01c713e4facfa6745e0aab98f6e52fb9ee125d4c4228cac0237ee9719b8"
 )
 
 
@@ -69,6 +69,12 @@ def test_committed_product_manifest_is_canonical_and_digest_bound() -> None:
     assert numbering["declared_planes"] == ["platform", "tenant"]
     assert numbering["explicit_planes"] == ["tenant"]
     assert numbering["effective_planes"] == ["tenant"]
+    people = next(row for row in payload["modules"] if row["code"] == "people")
+    assert people["distribution"] == "dotmac-people"
+    assert people["version"] == "0.1.0a1"
+    assert people["declared_planes"] == ["tenant"]
+    assert people["explicit_planes"] is None
+    assert people["effective_planes"] == ["tenant"]
 
 
 def test_manifest_checker_refuses_noncanonical_bytes(tmp_path: Path) -> None:
@@ -139,6 +145,9 @@ def test_publish_job_waits_for_every_ci_gate_and_uploads_exact_evidence() -> Non
     assert "id: registry" in publish_job
     assert "steps.registry.outputs.digest" in publish_job
     assert '--git-sha "${GITHUB_SHA}"' in publish_job
+    assert '--manifest-digest "${{ steps.product-manifest.outputs.digest }}"' in (
+        publish_job
+    )
     assert "path: image-release.json" in publish_job
     assert "actions/upload-artifact@v4" in publish_job
 
@@ -156,7 +165,9 @@ def test_publish_consumes_the_tested_image_and_cannot_rebuild_it() -> None:
     )
     assert docker_job.count(main_push) == 2
     assert workflow.count("docker/build-push-action") == 1
-    assert "labels: ${{ steps.tested-meta.outputs.labels }}" in docker_job
+    assert "${{ steps.tested-meta.outputs.labels }}" in docker_job
+    assert docker_job.count("io.dotmac.product-manifest.digest") == 2
+    assert "steps.product-manifest.outputs.digest" in docker_job
     assert "docker image save dotmac-erp:ci" in docker_job
     assert "name: tested-image-${{ github.sha }}" in docker_job
     assert "actions/upload-artifact@v4" in docker_job
@@ -170,6 +181,8 @@ def test_publish_consumes_the_tested_image_and_cannot_rebuild_it() -> None:
     assert "actions/download-artifact@v4" in publish_job
     assert "name: tested-image-${{ github.sha }}" in publish_job
     assert "docker image load" in publish_job
+    assert publish_job.count("io.dotmac.product-manifest.digest") == 1
+    assert "deploy/product-manifest.json" in publish_job
     assert "docker image tag dotmac-erp:ci" in publish_job
     assert "docker image push" in publish_job
     assert "type=sha,prefix=sha-,format=short" in publish_job
@@ -197,35 +210,60 @@ def test_release_standards_gate_uses_the_profile_pinned_revision() -> None:
 def test_image_release_evidence_is_minimal_exact_and_non_secret() -> None:
     digest = f"sha256:{'a' * 64}"
     git_sha = "b" * 40
+    manifest_digest = f"sha256:{'c' * 64}"
     payload = json.loads(
         canonical_image_release_bytes(
             repository="ghcr.io/michaelayoade/dotmac_erp",
             digest=digest,
             git_sha=git_sha,
+            manifest_digest=manifest_digest,
         )
     )
     assert payload == {
         "digest": digest,
         "git_sha": git_sha,
+        "manifest_digest": manifest_digest,
         "reference": f"ghcr.io/michaelayoade/dotmac_erp@{digest}",
-        "schema": "dotmac.image-release.v1",
+        "schema": "dotmac.image-release.v2",
     }
 
 
 @pytest.mark.parametrize(
-    ("repository", "digest", "git_sha"),
+    ("repository", "digest", "git_sha", "manifest_digest"),
     (
-        ("ghcr.io/example/app:latest", f"sha256:{'a' * 64}", "b" * 40),
-        ("ghcr.io/example/app", "sha256:short", "b" * 40),
-        ("ghcr.io/example/app", f"sha256:{'a' * 64}", "not-a-sha"),
+        (
+            "ghcr.io/example/app:latest",
+            f"sha256:{'a' * 64}",
+            "b" * 40,
+            f"sha256:{'c' * 64}",
+        ),
+        (
+            "ghcr.io/example/app",
+            "sha256:short",
+            "b" * 40,
+            f"sha256:{'c' * 64}",
+        ),
+        (
+            "ghcr.io/example/app",
+            f"sha256:{'a' * 64}",
+            "not-a-sha",
+            f"sha256:{'c' * 64}",
+        ),
+        (
+            "ghcr.io/example/app",
+            f"sha256:{'a' * 64}",
+            "b" * 40,
+            "sha256:short",
+        ),
     ),
 )
 def test_image_release_evidence_refuses_mutable_or_malformed_identity(
-    repository: str, digest: str, git_sha: str
+    repository: str, digest: str, git_sha: str, manifest_digest: str
 ) -> None:
     with pytest.raises(ImageReleaseError):
         canonical_image_release_bytes(
             repository=repository,
             digest=digest,
             git_sha=git_sha,
+            manifest_digest=manifest_digest,
         )
