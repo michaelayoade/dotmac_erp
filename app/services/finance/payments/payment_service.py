@@ -2066,6 +2066,11 @@ class PaymentService:
     # FAILED itself — a second writer of `PaymentIntent.status` with no tests
     # around it. The decisions live here now; the worker only supplies the
     # sessions and aggregates what it is told.
+    #
+    # Those sessions are TENANT sessions. The selections below first ran under
+    # `cross_org_session`, which lifts only the SQLAlchemy listener and never
+    # PostgreSQL RLS — so under `app_user` they matched nothing and the poller
+    # reported a clean run forever. See ADR-0005's 2026-08-28 amendment.
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -2076,12 +2081,20 @@ class PaymentService:
     ) -> dict[UUID, list[UUID]]:
         """Outbound expense intents that expired before a transfer was started.
 
-        Selection only — the caller runs this under a cross-organization
-        session to learn WHICH tenants have work, and every decision about a
-        selected row is re-taken (and re-proved) inside that tenant's own
-        session by :meth:`expire_stale_pending_transfer`.
+        Selection only — the caller runs this inside each tenant's own session
+        (``app.tasks.expense.poll_stuck_expense_transfers`` fans out over
+        ``for_each_organization``), and every decision about a selected row is
+        re-taken, and re-proved under a lock, by
+        :meth:`expire_stale_pending_transfer`. The re-proof is not redundant
+        just because the selection now shares the session: a transfer initiated
+        between the two has already moved the row.
 
-        Returns organization id -> intent ids.
+        There is deliberately no ``organization_id`` predicate: the session is
+        the organization, and adding one here would make this method look
+        usable on an unscoped session. Returns organization id -> intent ids —
+        at most one key inside a tenant session, which is what lets the caller
+        read the mapping back by the organization it is holding and treat
+        anything else as not its to touch.
         """
         moment = now or datetime.now(UTC)
         rows = db.execute(
@@ -2110,7 +2123,8 @@ class PaymentService:
         may have left even though the row never reached PROCESSING, so they are
         reconciled rather than assumed dead.
 
-        Selection only; see :meth:`find_stale_pending_transfer_intents`.
+        Selection only, run inside the tenant's own session; see
+        :meth:`find_stale_pending_transfer_intents`.
 
         Returns organization id -> intent ids.
         """

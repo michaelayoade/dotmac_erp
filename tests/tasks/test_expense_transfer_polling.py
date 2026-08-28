@@ -12,10 +12,11 @@ about a scheduled reconciler of money movements:
    failed one, and never leave it in limbo.
 
 2. **A stale worker does not corrupt state that has moved.** The worker selects
-   rows in one session and acts on them in another, minutes and one network
-   call later. Anything it decided from the first read must be re-proved before
-   it is written, or it will stamp EXPIRED over an in-flight payout and reopen
-   transfers a webhook already settled.
+   rows, then acts on them minutes and one network call later. Anything it
+   decided from the first read must be re-proved before it is written, or it
+   will stamp EXPIRED over an in-flight payout and reopen transfers a webhook
+   already settled. The selection used to run in a whole other session; it now
+   runs in the tenant's, which narrows the window without closing it.
 
 Written against both shapes deliberately: the per-organization session mock
 answers ``.all()`` (how the pre-fix worker loaded intents) as well as
@@ -53,6 +54,8 @@ from app.services.finance.payments.paystack_client import (
     PaystackError,
     PaystackUnreachable,
 )
+from app.db import session_context
+from app import tenant_catalog
 from app.tasks import expense as expense_tasks
 
 ORG_A = uuid.UUID("00000000-0000-0000-0000-0000000000a1")
@@ -140,7 +143,15 @@ def _verify_result(
 
 
 class _Harness:
-    """Wires the job's two session kinds to mocks and records what happened."""
+    """Wires the job's tenant sessions to one mock and records what happened.
+
+    Both of ``PaymentService``'s selections now run inside the tenant session
+    rather than a cross-organization one, so ``stale_rows`` and ``stuck_rows``
+    are answered by the SAME session mock, in pass order: the expiry pass reads
+    first, the poll pass second. Each is a list of ``(intent_id,
+    organization_id)`` — the id-only shape ``_group_by_organization`` folds into
+    ``{org: [ids]}``.
+    """
 
     def __init__(self, *, stale_rows, stuck_rows, intent, claim) -> None:
         self.stale_rows = stale_rows
@@ -148,7 +159,7 @@ class _Harness:
         self.intent = intent
         self.claim = claim
         self.orgs_opened: list[uuid.UUID] = []
-        self._cross_results = [stale_rows, stuck_rows]
+        self._selections = [stale_rows, stuck_rows]
 
         self.db = MagicMock(name="db:org-a")
         # `.one_or_none()` is how PaymentService locks a single intent;
@@ -156,18 +167,18 @@ class _Harness:
         # answered so these tests mean something against either shape.
         self.db.scalars.return_value.one_or_none.return_value = intent
         self.db.scalars.return_value.all.return_value = [intent]
+        # The two selections, in pass order. A third read gets nothing rather
+        # than raising, so an extra pass shows up as an assertion failure about
+        # behaviour instead of a StopIteration about the fake.
+        self.db.execute.return_value.all.side_effect = self._next_selection
         # process_successful_transfer's FOR UPDATE re-fetch.
         self.db.execute.return_value.scalar_one_or_none.return_value = intent
         # _update_batch_item_status: this intent is not part of a batch.
         self.db.scalar.return_value = None
         self.db.get.return_value = claim
 
-    @contextmanager
-    def cross_org_session(self):
-        cross_db = MagicMock(name="db:cross-org")
-        rows = self._cross_results.pop(0) if self._cross_results else []
-        cross_db.execute.return_value.all.return_value = rows
-        yield cross_db
+    def _next_selection(self):
+        return self._selections.pop(0) if self._selections else []
 
     @contextmanager
     def session_for_org(self, organization_id: uuid.UUID):
@@ -242,8 +253,14 @@ def _expense_mark_paid(harness: _Harness):
 
 
 def _run(harness: _Harness, monkeypatch) -> dict:
-    monkeypatch.setattr(expense_tasks, "cross_org_session", harness.cross_org_session)
-    monkeypatch.setattr(expense_tasks, "session_for_org", harness.session_for_org)
+    """Drive the job with a one-tenant fleet.
+
+    ``for_each_organization``'s own seam is patched — the catalogue definer and
+    ``session_for_org`` where they live — because the job no longer binds either
+    name itself.
+    """
+    monkeypatch.setattr(session_context, "session_for_org", harness.session_for_org)
+    monkeypatch.setattr(tenant_catalog, "organization_ids", lambda **_: [ORG_A])
     return expense_tasks.poll_stuck_expense_transfers()
 
 
@@ -421,8 +438,10 @@ class TestAmbiguousAttemptConverges:
 
 
 class TestStaleWorkerReplay:
-    """Both passes of this job read in one session and write in another. What
-    they decided from the first read has to be re-proved before it is written."""
+    """Both passes select rows, then act on them a lock and a network call
+    later. What the selection decided has to be re-proved before it is written —
+    that is true whether the select ran in another session (it used to) or in
+    this one (it does now); only the size of the window changed."""
 
     def test_expiry_does_not_stamp_over_a_transfer_that_has_since_started(
         self, monkeypatch, paystack_configured
@@ -456,7 +475,8 @@ class TestStaleWorkerReplay:
         assert moved.status == PaymentIntentStatus.PROCESSING
         assert moved.transfer_code == "TRF_started_in_the_gap"
         assert results.get("expired", 0) == 0
-        assert harness.orgs_opened == [ORG_A]
+        # One session for the expiry pass, one for the poll pass.
+        assert harness.orgs_opened == [ORG_A, ORG_A]
 
     def test_expiry_still_expires_an_intent_that_really_did_stall(
         self, monkeypatch, paystack_configured
@@ -578,8 +598,14 @@ def test_unresolved_reconciler_fans_out_through_tenant_sessions(monkeypatch) -> 
     discover = MagicMock(return_value=[ORG_A, ORG_B])
     monkeypatch.setattr(expense_tasks, "organization_ids", discover)
     monkeypatch.setattr(expense_tasks, "session_for_org", _tenant_session)
+    # The fan-out retired the module-local `cross_org_session` name, so the
+    # sentinel moves to where the function is DEFINED: any layer under this
+    # task that still reaches for a cross-tenant session trips it. The absent
+    # name is asserted too, so the sentinel cannot quietly become a no-op
+    # patch of an attribute nothing looks up.
+    assert not hasattr(expense_tasks, "cross_org_session")
     monkeypatch.setattr(
-        expense_tasks,
+        session_context,
         "cross_org_session",
         MagicMock(side_effect=AssertionError("cross-tenant payout read")),
     )
