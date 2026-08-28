@@ -54,7 +54,7 @@
                     <legend class="form-label col-span-full">Filters</legend>
                     <div>
                         <label class="form-label" for="export-status">Status</label>
-                        <select id="export-status" name="status" class="form-select w-full"><option value="">Current employees</option><option value="active">Active</option><option value="draft">Draft</option><option value="on_leave">On Leave</option><option value="suspended">Suspended</option><option value="resigned">Resigned</option><option value="terminated">Terminated</option></select>
+                        <select id="export-status" name="status" class="form-select w-full"><option value="">Current employees</option><option value="active">Active</option><option value="draft">Draft</option><option value="on_leave">On Leave</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option><option value="resigned">Resigned</option><option value="terminated">Terminated</option></select>
                     </div>
                     <div>
                         <label class="form-label" for="export-department">Department</label>
@@ -173,10 +173,10 @@
                 <span>Suspended</span>
                 <span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-mono tabular-nums text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">{{ stats.suspended | default(0) }}</span>
             </a>
-            <a href="/people/hr/employees?status=archive&view=archive"
-               class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors {{ 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300' if saved_view == 'archive' else 'border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:text-sky-300' }}">
-                <span>Exit Archive</span>
-                <span class="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-mono tabular-nums text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">{{ stats.exit_archive | default(0) }}</span>
+            <a href="/people/hr/employees?status=inactive&view=inactive"
+               class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors {{ 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200' if saved_view == 'inactive' else 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-200' }}">
+                <span>Inactive</span>
+                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-mono tabular-nums text-slate-700 dark:bg-slate-700 dark:text-slate-200">{{ stats.inactive | default(0) }}</span>
             </a>
         </div>
     </div>
@@ -207,6 +207,7 @@
             {"value": "active", "label": "Active"},
             {"value": "draft", "label": "Draft"},
             {"value": "on_leave", "label": "On Leave"},
+            {"value": "inactive", "label": "Inactive"},
             {"value": "suspended", "label": "Suspended"},
             {"value": "resigned", "label": "Resigned"},
             {"value": "terminated", "label": "Terminated"}

@@ -66,3 +66,34 @@ def test_employee_export_requires_a_selected_allowlisted_field():
             db=object(),
             fields=["bank_account_number"],
         )
+
+
+def test_employee_export_inactive_filter_includes_all_inactive_lifecycle_statuses(
+    monkeypatch,
+):
+    captured = {}
+
+    def _list(self, filters, pagination, *, eager_load=False):
+        captured["filters"] = filters
+        return SimpleNamespace(items=[])
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.list_employees",
+        _list,
+    )
+
+    HRWebService().export_employees_csv_response(
+        auth=_auth(),
+        db=object(),
+        fields=["employee_code"],
+        status="inactive",
+    )
+
+    assert captured["filters"].statuses == [
+        EmployeeStatus.SUSPENDED,
+        EmployeeStatus.RESIGNED,
+        EmployeeStatus.TERMINATED,
+        EmployeeStatus.RETIRED,
+    ]
+    assert captured["filters"].include_archived is True
+    assert captured["filters"].include_deleted is True

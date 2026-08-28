@@ -564,11 +564,19 @@ class HRWebService:
 
         # Parse status filter
         status_filter = None
+        status_filters = None
         archive_only = False
         if status:
             status_value = status.strip().lower()
             if status_value in {"archive", "exit_archive"}:
                 archive_only = True
+            elif status_value == "inactive":
+                status_filters = [
+                    EmployeeStatus.SUSPENDED,
+                    EmployeeStatus.RESIGNED,
+                    EmployeeStatus.TERMINATED,
+                    EmployeeStatus.RETIRED,
+                ]
             else:
                 try:
                     status_filter = EmployeeStatus(status.upper())
@@ -578,9 +586,18 @@ class HRWebService:
         employee_filters = EmployeeFilters(
             search=search,
             status=status_filter,
-            include_archived=archive_only or status_filter == EmployeeStatus.RESIGNED,
+            statuses=status_filters,
+            include_archived=(
+                archive_only
+                or status_filters is not None
+                or status_filter == EmployeeStatus.RESIGNED
+            ),
             archive_only=archive_only,
-            include_deleted=archive_only or status_filter == EmployeeStatus.TERMINATED,
+            include_deleted=(
+                archive_only
+                or status_filters is not None
+                or status_filter == EmployeeStatus.TERMINATED
+            ),
             department_id=coerce_uuid(department_id) if department_id else None,
             designation_id=coerce_uuid(designation_id) if designation_id else None,
             date_of_joining_from=self._parse_date(date_of_joining_from or ""),
@@ -780,17 +797,35 @@ class HRWebService:
             raise HTTPException(status_code=422, detail="Select at least one export field")
 
         status_filter = None
+        status_filters = None
         if status:
-            try:
-                status_filter = EmployeeStatus(status.upper())
-            except ValueError as exc:
-                raise HTTPException(status_code=422, detail="Invalid employee status") from exc
+            if status.strip().lower() == "inactive":
+                status_filters = [
+                    EmployeeStatus.SUSPENDED,
+                    EmployeeStatus.RESIGNED,
+                    EmployeeStatus.TERMINATED,
+                    EmployeeStatus.RETIRED,
+                ]
+            else:
+                try:
+                    status_filter = EmployeeStatus(status.upper())
+                except ValueError as exc:
+                    raise HTTPException(status_code=422, detail="Invalid employee status") from exc
 
         org_id = coerce_uuid(auth.organization_id)
         filters = EmployeeFilters(
             status=status_filter,
-            include_archived=include_archived or status_filter == EmployeeStatus.RESIGNED,
-            include_deleted=include_archived or status_filter == EmployeeStatus.TERMINATED,
+            statuses=status_filters,
+            include_archived=(
+                include_archived
+                or status_filters is not None
+                or status_filter == EmployeeStatus.RESIGNED
+            ),
+            include_deleted=(
+                include_archived
+                or status_filters is not None
+                or status_filter == EmployeeStatus.TERMINATED
+            ),
             department_id=coerce_uuid(department_id) if department_id else None,
             designation_id=coerce_uuid(designation_id) if designation_id else None,
             date_of_joining_from=self._parse_date(date_of_joining_from or ""),

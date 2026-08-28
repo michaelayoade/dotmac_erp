@@ -394,6 +394,9 @@ class EmployeeService:
         if filters.status:
             stmt = stmt.where(Employee.status == filters.status)
 
+        if filters.statuses:
+            stmt = stmt.where(Employee.status.in_(filters.statuses))
+
         if filters.department_id:
             stmt = stmt.where(Employee.department_id == filters.department_id)
 
