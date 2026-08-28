@@ -21,6 +21,7 @@ def _make_request(form: dict[str, str]) -> Request:
             "method": "POST",
             "path": "/people/hr/employees/test/edit",
             "headers": [],
+            "query_string": b"",
         }
     )
     request.state.csrf_form = form
@@ -34,6 +35,7 @@ def _make_new_employee_request(form: dict[str, str]) -> Request:
             "method": "POST",
             "path": "/people/hr/employees/new",
             "headers": [],
+            "query_string": b"",
         }
     )
     request.state.csrf_form = form
