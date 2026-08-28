@@ -10,6 +10,7 @@ from scripts.bootstrap_instance import generate_docker_compose, generate_setup_s
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
+HARDENED_DOCKERFILE = REPO_ROOT / "Dockerfile.hardened"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 COMPOSE = REPO_ROOT / "docker-compose.yml"
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "deploy.sh"
@@ -105,6 +106,7 @@ def test_runtime_stage_contains_only_named_runtime_surfaces() -> None:
         "COPY static ./static",
         "COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py",
         "COPY scripts/verify_runtime_admission.py ./scripts/verify_runtime_admission.py",
+        "COPY scripts/probe_people_employment_type_activation.py ./scripts/probe_people_employment_type_activation.py",
     ):
         assert required_copy in runtime
 
@@ -115,6 +117,16 @@ def test_runtime_stage_contains_only_named_runtime_surfaces() -> None:
     assert runtime.count("USER 10001:10001") == 1
     assert "EXPOSE 8002" in runtime
     assert 'CMD ["gunicorn", "-c", "gunicorn.conf.py", "app.main:app"]' in runtime
+
+
+def test_both_runtime_images_carry_the_read_only_activation_probe() -> None:
+    named_copy = (
+        "COPY scripts/probe_people_employment_type_activation.py "
+        "./scripts/probe_people_employment_type_activation.py"
+    )
+
+    assert named_copy in DOCKERFILE.read_text(encoding="utf-8")
+    assert named_copy in HARDENED_DOCKERFILE.read_text(encoding="utf-8")
 
 
 def test_runtime_compatibility_pin_is_part_of_the_lock_input() -> None:

@@ -1,10 +1,12 @@
 #!/bin/bash
 # Deploy DotMac ERP — hardened: backup -> pull -> migrate -> recreate ->
-# health gate -> auto-rollback on failure.
+# health gate -> ordinary auto-rollback or cutover forward repair.
 #
 # Usage:
 #   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh
 #   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh --quick
+#   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh \
+#       --people-employment-type-activation
 #   SKIP_BACKUP=1 ./scripts/deploy.sh   # skip the pre-migration DB backup (NOT recommended)
 #
 # `MIGRATION_DATABASE_URL` comes from the approved secret source and is passed
@@ -22,18 +24,45 @@
 # tag (published by CI) so the running artifact is reproducible and rollback is
 # exact — instead of the mutable `:latest`. --quick keeps the current tag.
 #
-# On a failed health gate the code is reset to the previous commit AND the image
-# tag is restored to the previously-running one, then the containers are
-# recreated. Migrations are NOT auto-reverted — new revisions must be
-# backward-compatible with the previous release, and the pre-migration backup is
-# the recovery path if they are not.
+# On an ordinary failed health gate the code is reset to the previous commit AND
+# the image tag is restored to the previously-running one, then the containers
+# are recreated. Migrations are NOT auto-reverted, so ordinary revisions must be
+# backward-compatible with the previous release.
+#
+# Employment Type authority activation is deliberately different. Its explicit
+# mode drains every old application writer before the forward-only migration.
+# Once that migration commits the previous image is no longer a valid rollback
+# target, so failures stop for an operator-led forward fix instead of restoring
+# split ownership.
 
 set -euo pipefail
+
+quick_deploy=0
+people_employment_type_activation=0
+for argument in "$@"; do
+    case "$argument" in
+        --quick)
+            quick_deploy=1
+            ;;
+        --people-employment-type-activation)
+            people_employment_type_activation=1
+            ;;
+        *)
+            echo "ERROR: unknown deploy argument: $argument" >&2
+            exit 2
+            ;;
+    esac
+done
+if [[ "$quick_deploy" == "1" && "$people_employment_type_activation" == "1" ]]; then
+    echo "ERROR: Employment Type activation cannot use --quick; the new image is required." >&2
+    exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-150}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8003/health/ready}"
+RUNTIME_ADMISSION_TIMEOUT="${RUNTIME_ADMISSION_TIMEOUT:-90}"
 DEPLOY_COMPOSE_PROJECT_NAME="dotmac"
 
 # Production uses fixed container names (dotmac_erp_app, dotmac_erp_redis, etc.).
@@ -47,6 +76,14 @@ if [[ -n "${COMPOSE_PROJECT_NAME:-}" && \
     exit 2
 fi
 export COMPOSE_PROJECT_NAME="$DEPLOY_COMPOSE_PROJECT_NAME"
+
+running_compose_service_containers() {
+    local service="$1"
+    docker ps \
+        --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+        --filter "label=com.docker.compose.service=${service}" \
+        --format '{{.Names}}'
+}
 
 cd "$PROJECT_DIR"
 PREV_SHA="$(git rev-parse HEAD)"
@@ -106,6 +143,21 @@ echo "=== DotMac ERP Deploy ==="
 echo "Project: $PROJECT_DIR   (compose: ${COMPOSE_PROJECT_NAME}, current: ${PREV_SHA:0:12}, image: ${PREV_IMAGE_TAG})"
 echo ""
 
+# `app-dev` is excluded from the production topology only by a Compose profile.
+# Turn that stated premise into a live check before backup, pull, or any runtime
+# drain: its bind-mounted old application can write the same database.
+if [[ "$people_employment_type_activation" == "1" ]]; then
+    if ! running_app_dev="$(running_compose_service_containers app-dev)"; then
+        echo "ERROR: could not verify the app-dev cutover exclusion." >&2
+        exit 2
+    fi
+    if [[ -n "$running_app_dev" ]]; then
+        echo "ERROR: Employment Type activation refuses while app-dev is running:" >&2
+        echo "$running_app_dev" >&2
+        exit 2
+    fi
+fi
+
 rollback() {
     echo "!! Rolling back code to ${PREV_SHA:0:12} and image to ${PREV_IMAGE_TAG}..."
     git reset --hard "$PREV_SHA" || true
@@ -124,6 +176,83 @@ rollback() {
     echo "!! pre-migration backup if the new revisions are not backward-compatible."
 }
 
+forward_fix_only=0
+handle_deploy_failure() {
+    if [[ "$forward_fix_only" == "1" ]]; then
+        echo "!! FORWARD-FIX-ONLY: Employment Type activation committed or its outcome is ambiguous." >&2
+        echo "!! The previous image remains stopped because it contains legacy writers." >&2
+        echo "!! Repair the new release and resume it; do not restore the old image." >&2
+        return
+    fi
+    rollback
+}
+
+resolve_ambiguous_activation_failure() {
+    local probe_status
+
+    # Alembic process failure is not proof that its transaction rolled back: a
+    # container/transport failure may be reported after PostgreSQL committed.
+    # Default to the safe direction. Rollback is permitted only when a fresh
+    # read positively finds the pre-activation fence and no activation revision.
+    forward_fix_only=1
+    if docker compose run --rm -e MIGRATION_DATABASE_URL app \
+        python scripts/probe_people_employment_type_activation.py
+    then
+        echo "!! Activation committed despite the migration process failure." >&2
+        return
+    else
+        probe_status=$?
+    fi
+
+    if [[ "$probe_status" == "3" ]]; then
+        forward_fix_only=0
+        echo "!! Activation is positively absent; the previous image is rollback-safe." >&2
+    else
+        echo "!! Activation outcome is ambiguous; legacy writers remain stopped." >&2
+    fi
+}
+
+wait_for_worker_admission() {
+    local attempt=0 deadline=$((SECONDS + RUNTIME_ADMISSION_TIMEOUT))
+    while (( SECONDS < deadline )); do
+        attempt=$((attempt + 1))
+        if [[ "$(docker inspect --format '{{.State.Running}}' dotmac_erp_worker 2>/dev/null || true)" == "true" ]] && \
+           docker compose exec -T worker sh -c \
+               'celery -A app.celery_app inspect ping --timeout=5 --destination "celery@$(hostname)"' \
+               >/dev/null 2>&1
+        then
+            echo "  Worker admitted after ${attempt}s"
+            return 0
+        fi
+        sleep 1
+    done
+    echo "  ERROR: Worker did not remain operational within ${RUNTIME_ADMISSION_TIMEOUT}s." >&2
+    return 1
+}
+
+wait_for_beat_admission() {
+    local attempt=0 deadline=$((SECONDS + RUNTIME_ADMISSION_TIMEOUT))
+    while (( SECONDS < deadline )); do
+        attempt=$((attempt + 1))
+        if [[ "$(docker inspect --format '{{.State.Running}}' dotmac_erp_beat 2>/dev/null || true)" == "true" ]] && \
+           docker compose exec -T beat sh -c '
+               heartbeat=/tmp/dotmac-erp-beat-heartbeat
+               test -f "$heartbeat" || exit 1
+               now=$(date +%s)
+               updated=$(stat -c %Y "$heartbeat")
+               age=$((now - updated))
+               test "$age" -ge 0 && test "$age" -le 120
+           ' >/dev/null 2>&1
+        then
+            echo "  Beat admitted after ${attempt}s"
+            return 0
+        fi
+        sleep 1
+    done
+    echo "  ERROR: Beat did not publish a fresh heartbeat within ${RUNTIME_ADMISSION_TIMEOUT}s." >&2
+    return 1
+}
+
 # Step 1: pre-migration DB backup (SKIP_BACKUP=1 to skip)
 if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
     echo "→ Backing up database (SKIP_BACKUP=1 to skip)..."
@@ -133,7 +262,7 @@ fi
 
 # Step 2: pull the deployment checkout + the image carrying app, migrations and
 # dependencies, then pin it to the new commit's immutable sha-<short> tag.
-if [[ "${1:-}" != "--quick" ]]; then
+if [[ "$quick_deploy" != "1" ]]; then
     echo "→ Pulling latest code + image..."
     git pull --rebase
     NEW_IMAGE_TAG="sha-$(git rev-parse --short=7 HEAD)"
@@ -161,7 +290,7 @@ if [[ "${1:-}" != "--quick" ]]; then
 fi
 
 # From here a failure triggers an automatic rollback.
-trap 'echo "Deploy FAILED"; rollback; exit 1' ERR
+trap 'echo "Deploy FAILED"; handle_deploy_failure; exit 1' ERR
 
 # Step 3a: PREFLIGHT migration identity, role posture and ownership before DDL.
 #
@@ -197,9 +326,45 @@ echo ""
 
 # Step 3b: apply migrations on the freshly-pulled image (multi-head safe — erp has
 # hit multi-head states, so `heads` (plural), never `head`).
+migration_env=(-e MIGRATION_DATABASE_URL)
+if [[ "$people_employment_type_activation" == "1" ]]; then
+    echo "→ Draining old Employment Type writers before authority activation..."
+    docker compose stop app worker beat
+    remaining_legacy_runtimes=""
+    for service in app app-dev worker beat; do
+        if ! running_service="$(running_compose_service_containers "$service")"; then
+            echo "ERROR: could not prove the ${service} runtime drain." >&2
+            false
+        fi
+        if [[ -n "$running_service" ]]; then
+            remaining_legacy_runtimes+="${service}: ${running_service}"$'\n'
+        fi
+    done
+    if [[ -n "$remaining_legacy_runtimes" ]]; then
+        echo "ERROR: legacy-capable Compose containers remain after the drain:" >&2
+        echo "$remaining_legacy_runtimes" >&2
+        false
+    fi
+    migration_env+=(-e PEOPLE_EMPLOYMENT_TYPE_ACTIVATION=1)
+    echo "  old app, worker and beat stopped"
+    echo ""
+fi
 echo "→ Applying migrations (alembic upgrade heads)..."
-docker compose run --rm -e MIGRATION_DATABASE_URL app \
-    alembic upgrade heads
+if docker compose run --rm "${migration_env[@]}" app alembic upgrade heads; then
+    if [[ "$people_employment_type_activation" == "1" ]]; then
+        # From this instant the previous image's legacy writers are incompatible
+        # with the database authority boundary. Every later failure is repaired
+        # forward; automatic code/image rollback would recreate split ownership.
+        forward_fix_only=1
+    fi
+else
+    if [[ "$people_employment_type_activation" == "1" ]]; then
+        resolve_ambiguous_activation_failure
+    fi
+    trap - ERR
+    handle_deploy_failure
+    exit 1
+fi
 echo ""
 
 # Step 3c: ADMIT the RUNTIME connection, after the DDL and before the app runs.
@@ -282,10 +447,9 @@ if [[ "$healthy" != "1" ]]; then
     trap - ERR
     echo "  ERROR: App not healthy after ${HEALTH_TIMEOUT}s!"
     docker logs dotmac_erp_app --tail 20 || true
-    rollback
+    handle_deploy_failure
     exit 1
 fi
-trap - ERR
 
 # Step 6: sync static files + restart worker/beat (only on a healthy deploy)
 if [[ "${SKIP_STATIC_SYNC:-0}" == "1" ]]; then
@@ -297,6 +461,13 @@ fi
 # Recreate (not just restart) so worker/beat pick up the newly-pinned image.
 echo "→ Recreating worker and beat on the pinned image..."
 docker compose up -d worker beat
+echo "→ Admitting worker and Beat..."
+wait_for_worker_admission
+wait_for_beat_admission
+# The complete new runtime is now admitted. Until this point any failure after
+# an activation commit must remain forward-fix-only; a healthy HTTP process is
+# not sufficient while its workers are still drained.
+trap - ERR
 echo "→ Enforcing Docker image retention (keep last ${DOCKER_IMAGE_KEEP_LAST:-5})..."
 if ! KEEP_LAST="${DOCKER_IMAGE_KEEP_LAST:-5}" \
   IMAGE_REPOSITORY="${DOCKER_IMAGE_REPOSITORY:-ghcr.io/michaelayoade/dotmac_erp}" \

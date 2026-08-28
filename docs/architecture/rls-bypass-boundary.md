@@ -273,12 +273,14 @@ does.
 
 The original measurement was almost entirely `denied-no-grant`. At the current
 design head, composed modules and hosted prerequisite surfaces already give
-`app_user` `SELECT` on 47 of the 474 catalogued relations. The sealed Employment
-Type bootstrap adds one deliberately reviewed legacy read, so the checked
-design inventory now records 48 of 474, including `hr.employment_type`; its
-separate lock helper grants only `EXECUTE`, not table DML. None of the
-cross-organization ledger targets changes reachability in this slice. That
-produces four honest limits the measurement module's docstring carries:
+`app_user` `SELECT` on 48 of the 474 catalogued relations, including the forced-
+RLS `hr.employment_type` compatibility projection. Employment Type activation
+replaces the predecessor's read-and-lock bootstrap surface: the lock helper is
+dropped, and the same role gains `INSERT`/`UPDATE` only for the one synchronous
+projector while `DELETE`, `TRUNCATE`, table/column `REFERENCES`, and `TRIGGER`
+stay absent. The separate activation privilege test checks that write boundary;
+the cross-organization read ledger remains unchanged. That produces four honest
+limits the measurement module's docstring carries:
 
 - **An unprotected row is not proved reachable.** Every one has an unreachable
   target, recorded as a two-directional ratchet beside its own assertion rather

@@ -62,7 +62,11 @@ def test_list_slips_filters_by_employment_type_within_organization():
         ) as mock_paginate,
         patch("app.services.people.payroll.web.slip_web.base_context", return_value={}),
         patch("app.services.people.payroll.web.slip_web.templates.TemplateResponse"),
+        patch(
+            "app.services.people.payroll.web.slip_web.EmploymentTypeService"
+        ) as employment_type_service,
     ):
+        employment_type_service.return_value.iter_all.return_value = ()
         SlipWebService().list_slips_response(
             request,
             auth,
@@ -75,3 +79,5 @@ def test_list_slips_filters_by_employment_type_within_organization():
     assert "hr.employee.employment_type_id" in compiled
     assert str(employment_type_id) in compiled
     assert str(org_id) in compiled
+    employment_type_service.assert_called_once_with(db, org_id)
+    employment_type_service.return_value.iter_all.assert_called_once_with(active=True)

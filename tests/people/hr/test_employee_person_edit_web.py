@@ -54,6 +54,16 @@ def _make_auth(person_id, organization_id, scopes: list[str]) -> WebAuthContext:
 
 def _stub_new_employee_form_dependencies(monkeypatch, db_session) -> None:
     empty_result = SimpleNamespace(items=[])
+
+    class _EmploymentTypeOwner:
+        def __init__(self, db, organization_id):
+            assert db is db_session
+            assert organization_id is not None
+
+        def iter_all(self, active=None):
+            assert active is True
+            return ()
+
     monkeypatch.setattr(
         "app.services.people.hr.web.employee_web.OrganizationService.list_departments",
         lambda self, filters, pagination: empty_result,
@@ -63,8 +73,8 @@ def _stub_new_employee_form_dependencies(monkeypatch, db_session) -> None:
         lambda self, filters, pagination: empty_result,
     )
     monkeypatch.setattr(
-        "app.services.people.hr.web.employee_web.OrganizationService.list_employment_types",
-        lambda self, filters, pagination: empty_result,
+        "app.services.people.hr.web.employee_web.EmploymentTypeService",
+        _EmploymentTypeOwner,
     )
     monkeypatch.setattr(
         "app.services.people.hr.web.employee_web.OrganizationService.list_employee_grades",
@@ -114,9 +124,18 @@ def _stub_employee_list_dependencies(monkeypatch) -> None:
         "app.services.people.hr.web.employee_web.OrganizationService.list_designations",
         lambda self, filters, pagination: empty_result,
     )
+
+    class _EmploymentTypes:
+        def __init__(self, db, organization_id):
+            pass
+
+        def iter_all(self, active=None):
+            assert active is True
+            return ()
+
     monkeypatch.setattr(
-        "app.services.people.hr.web.employee_web.OrganizationService.list_employment_types",
-        lambda self, filters, pagination: empty_result,
+        "app.services.people.hr.web.employee_web.EmploymentTypeService",
+        _EmploymentTypes,
     )
     monkeypatch.setattr(
         "app.services.people.hr.web.employee_web.OrganizationService.list_locations",
@@ -378,6 +397,88 @@ async def test_update_employee_response_does_not_clear_manager_when_field_omitte
     assert response.status_code == 303
     assert captured["reports_to_id"] is None
     assert "reports_to_id" not in captured["provided_fields"]
+
+
+@pytest.mark.asyncio
+async def test_update_employee_response_preserves_employment_type_when_field_omitted(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    employee_id = uuid4()
+    employee = SimpleNamespace(employee_id=employee_id, person_id=person.id)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.get_employee",
+        lambda self, _employee_id: employee,
+    )
+
+    def _capture_update(self, _employee_id, data):
+        captured["employment_type_id"] = data.employment_type_id
+        captured["provided_fields"] = data.provided_fields
+        return employee
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.update_employee",
+        _capture_update,
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_update_tax_profile",
+        lambda self, *, auth, db, employee, form: None,
+    )
+
+    response = await service.update_employee_response(
+        request=_make_request({}),
+        employee_id=employee_id,
+        auth=_make_auth(person.id, person.organization_id, []),
+        db=db_session,
+    )
+
+    assert response.status_code == 303
+    assert captured["employment_type_id"] is None
+    assert "employment_type_id" not in captured["provided_fields"]
+
+
+@pytest.mark.asyncio
+async def test_update_employee_response_passes_blank_employment_type_as_explicit_clear(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    employee_id = uuid4()
+    employee = SimpleNamespace(employee_id=employee_id, person_id=person.id)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.get_employee",
+        lambda self, _employee_id: employee,
+    )
+
+    def _capture_update(self, _employee_id, data):
+        captured["employment_type_id"] = data.employment_type_id
+        captured["provided_fields"] = data.provided_fields
+        return employee
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.update_employee",
+        _capture_update,
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_update_tax_profile",
+        lambda self, *, auth, db, employee, form: None,
+    )
+
+    response = await service.update_employee_response(
+        request=_make_request({"employment_type_id": ""}),
+        employee_id=employee_id,
+        auth=_make_auth(person.id, person.organization_id, []),
+        db=db_session,
+    )
+
+    assert response.status_code == 303
+    assert captured["employment_type_id"] is None
+    assert "employment_type_id" in captured["provided_fields"]
 
 
 @pytest.mark.asyncio

@@ -1,16 +1,10 @@
-"""`dotmac-people` bootstrap is composed without moving runtime authority.
-
-PostgreSQL rehearsal covers the live schema.  This static half pins the exact
-artifact and lineage, proves that the module is an atomic tenant-only store,
-and refuses runtime imports under ``app/`` except the named, operator-only
-bootstrap service. The release assembly may import the package's declarative
-manifest; the bootstrap service may import only the reviewed public package.
-"""
+"""The People module is composed behind one Employment Type assembly owner."""
 
 from __future__ import annotations
 
 import ast
 import configparser
+import re
 import tomllib
 from pathlib import Path
 
@@ -24,11 +18,8 @@ RUNTIME_ENTRY_POINT_ROOTS = tuple(
     REPO_ROOT / root for root in ("app", "scripts", "tools")
 )
 PRODUCT_ASSEMBLY = APP_ROOT / "product_assembly.py"
-BOOTSTRAP_SERVICE = (
-    APP_ROOT / "services" / "people" / "hr" / "employment_type_bootstrap.py"
-)
-BOOTSTRAP_CLI = REPO_ROOT / "scripts" / "bootstrap_people_employment_types.py"
-BOOTSTRAP_MODULE = "app.services.people.hr.employment_type_bootstrap"
+EMPLOYMENT_TYPE_OWNER = APP_ROOT / "services" / "people" / "hr" / "employment_types.py"
+REPAIR_CLI = REPO_ROOT / "scripts" / "repair_people_employment_types.py"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 LOCK = REPO_ROOT / "poetry.lock"
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -89,35 +80,16 @@ def _runtime_python_sources() -> tuple[Path, ...]:
     return tuple(paths)
 
 
-def _imports_module(source: str, *, target: str) -> bool:
-    """Recognize direct, submodule and ``from parent import child`` imports."""
-    tree = ast.parse(source)
-    parent, _, child = target.rpartition(".")
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import) and any(
-            alias.name == target or alias.name.startswith(f"{target}.")
-            for alias in node.names
-        ):
-            return True
-        if not isinstance(node, ast.ImportFrom) or not node.module:
-            continue
-        if node.module == target or node.module.startswith(f"{target}."):
-            return True
-        if node.module == parent and any(alias.name == child for alias in node.names):
-            return True
-    return False
-
-
 def _is_people_runtime_import(path: Path, module: str) -> bool:
-    """Allow only declarative composition and the quarantined public a2 seam."""
+    """Allow only declarative composition and the one public owner seam."""
     imports_package = module == IMPORT_PACKAGE or module.startswith(
         f"{IMPORT_PACKAGE}."
     )
     release_manifest_seam = (
         path == PRODUCT_ASSEMBLY and module == f"{IMPORT_PACKAGE}.manifest"
     )
-    bootstrap_seam = path == BOOTSTRAP_SERVICE and module == IMPORT_PACKAGE
-    return imports_package and not release_manifest_seam and not bootstrap_seam
+    owner_seam = path == EMPLOYMENT_TYPE_OWNER and module == IMPORT_PACKAGE
+    return imports_package and not release_manifest_seam and not owner_seam
 
 
 def test_the_distribution_is_pinned_exactly_from_the_private_source() -> None:
@@ -183,12 +155,7 @@ def test_people_is_an_atomic_tenant_only_store() -> None:
     assert all(selection.module != "people" for selection in ASSEMBLY_MODULE_PLANES)
 
 
-def test_only_the_quarantined_service_imports_the_people_runtime() -> None:
-    """Bootstrap composition must not silently repoint a business caller.
-
-    `app.product_assembly` binds the manifest and the named bootstrap service
-    binds the reviewed public a2 API. Every other import remains forbidden.
-    """
+def test_only_the_employment_type_owner_imports_the_people_runtime() -> None:
     offenders = sorted(
         path.relative_to(REPO_ROOT).as_posix()
         for path in _runtime_python_sources()
@@ -200,36 +167,48 @@ def test_only_the_quarantined_service_imports_the_people_runtime() -> None:
     assert not offenders, f"runtime imports {IMPORT_PACKAGE}: {offenders}"
 
 
-def test_only_the_explicit_operator_cli_imports_the_bootstrap_service() -> None:
-    offenders = sorted(
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in _runtime_python_sources()
-        if path != BOOTSTRAP_CLI
-        and _imports_module(path.read_text(encoding="utf-8"), target=BOOTSTRAP_MODULE)
-    )
-    assert not offenders, f"runtime imports the operator bootstrap: {offenders}"
-    assert _imports_module(
-        BOOTSTRAP_CLI.read_text(encoding="utf-8"), target=BOOTSTRAP_MODULE
-    )
-
-
-def test_bootstrap_entry_point_guard_detects_every_import_shape_and_family() -> None:
-    probes = (
-        f"import {BOOTSTRAP_MODULE}\n",
-        f"import {BOOTSTRAP_MODULE}.private\n",
-        f"from {BOOTSTRAP_MODULE} import BootstrapMode\n",
-        "from app.services.people.hr import employment_type_bootstrap\n",
-    )
-    assert all(_imports_module(source, target=BOOTSTRAP_MODULE) for source in probes)
-    assert not _imports_module(
-        "from app.services.people.hr import replacement_projection\n",
-        target=BOOTSTRAP_MODULE,
-    )
+def test_the_operator_entry_point_is_repair_only() -> None:
+    source = REPAIR_CLI.read_text(encoding="utf-8")
+    assert "repair_compatibility_projection" in source
+    assert "--dry-run" in source
+    assert "bootstrap" not in source.casefold()
+    assert "reconcile" not in source.casefold()
     assert {root.name for root in RUNTIME_ENTRY_POINT_ROOTS} == {
         "app",
         "scripts",
         "tools",
     }
+
+
+def test_no_reverse_employment_type_path_remains_in_runtime_sources() -> None:
+    forbidden = (
+        "ReconcileEmploymentType",
+        "reconcile_employment_type",
+        "employment_type_bootstrap",
+        "bootstrap_people_employment_types",
+    )
+    offenders = {
+        path.relative_to(REPO_ROOT).as_posix(): [
+            token for token in forbidden if token in path.read_text(encoding="utf-8")
+        ]
+        for path in _runtime_python_sources()
+        if any(token in path.read_text(encoding="utf-8") for token in forbidden)
+    }
+    assert not offenders
+
+
+def test_runtime_consumers_never_read_the_legacy_employment_type_model() -> None:
+    legacy_relationship_deref = re.compile(r"\b(?:employee|emp)\.employment_type\.")
+    offenders = {
+        path.relative_to(REPO_ROOT).as_posix(): "legacy Employment Type model read"
+        for path in _runtime_python_sources()
+        if path != EMPLOYMENT_TYPE_OWNER
+        and (
+            "select(EmploymentType)" in path.read_text(encoding="utf-8")
+            or legacy_relationship_deref.search(path.read_text(encoding="utf-8"))
+        )
+    }
+    assert not offenders
 
 
 def test_people_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
@@ -239,6 +218,6 @@ def test_people_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
     assert _is_people_runtime_import(PRODUCT_ASSEMBLY, "dotmac_people")
     assert _is_people_runtime_import(PRODUCT_ASSEMBLY, "dotmac_people.service")
     assert _is_people_runtime_import(PRODUCT_ASSEMBLY, "dotmac_people.manifest.private")
-    assert not _is_people_runtime_import(BOOTSTRAP_SERVICE, "dotmac_people")
-    assert _is_people_runtime_import(BOOTSTRAP_SERVICE, "dotmac_people.service")
+    assert not _is_people_runtime_import(EMPLOYMENT_TYPE_OWNER, "dotmac_people")
+    assert _is_people_runtime_import(EMPLOYMENT_TYPE_OWNER, "dotmac_people.service")
     assert _is_people_runtime_import(other_app_file, "dotmac_people")

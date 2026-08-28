@@ -17,7 +17,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr.employee import Employee
-from app.models.people.hr.employment_type import EmploymentType
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import (
     SalarySlip,
@@ -32,12 +31,16 @@ from app.services.common import (
     coerce_uuid,
     paginate,
 )
+from app.services.people.hr.employment_types import EmploymentTypeService
 from app.services.people.payroll import (
     PayrollGLAdapter,
     SalarySlipInput,
     salary_slip_service,
 )
 from app.services.people.payroll.eligibility import payroll_employee_eligibility_clause
+from app.services.people.payroll.employment_type_classification import (
+    classify_payroll_employment_type,
+)
 from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.services.people.payroll_reporting import REPORTABLE_SLIP_STATUSES
 from app.templates import templates
@@ -149,16 +152,7 @@ class SlipWebService:
             )
             status_counts[s.value] = count
 
-        employment_types = list(
-            db.scalars(
-                select(EmploymentType)
-                .where(
-                    EmploymentType.organization_id == org_id,
-                    EmploymentType.is_active.is_(True),
-                )
-                .order_by(EmploymentType.type_name)
-            ).all()
-        )
+        employment_types = list(EmploymentTypeService(db, org_id).iter_all(active=True))
 
         active_filters = []
         if status_enum:
@@ -844,25 +838,14 @@ class SlipWebService:
             db.get(SalaryStructure, slip.structure_id) if slip.structure_id else None
         )
         if employee and structure:
-            employment_type = employee.employment_type
-            if employment_type is None and employee.employment_type_id:
-                employment_type = db.get(EmploymentType, employee.employment_type_id)
-
-            type_code = (
-                (employment_type.type_code or "").strip().lower()
-                if employment_type
-                else ""
+            classification = classify_payroll_employment_type(
+                db,
+                organization_id=org_id,
+                employment_type_id=employee.employment_type_id,
             )
-            type_name = (
-                (employment_type.type_name or "").strip().lower()
-                if employment_type
-                else ""
+            skip_deductions = classification.is_contract_staff(
+                structure_name=structure.structure_name
             )
-            is_contract = type_code == "contract" or type_name == "contract"
-            is_contract_structure = (
-                structure.structure_name or ""
-            ).strip().lower() == "contract staff"
-            skip_deductions = is_contract or is_contract_structure
 
         if slip.employee_id:
             tax_profile = db.scalar(

@@ -403,6 +403,7 @@ jobs:
             --security-opt no-new-privileges:true \
             -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
             -e MIGRATION_DATABASE_URL=postgresql+psycopg://app_admin@ci-db:5432/dotmac_erp_ci \
+            -e PEOPLE_EMPLOYMENT_TYPE_ACTIVATION=1 \
             -e SECRET_KEY=ci-test-secret-key-not-for-production \
             -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
             -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
@@ -620,6 +621,10 @@ jobs:
     env:
       DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp_test"
       MIGRATION_DATABASE_URL: "postgresql+psycopg://app_admin@localhost:5432/dotmac_erp_test"
+      # CI has no previous serving image, so the activation drain premise is
+      # true for its disposable database. Production sets this only through
+      # scripts/deploy.sh --people-employment-type-activation.
+      PEOPLE_EMPLOYMENT_TYPE_ACTIVATION: "1"
       TEST_DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp_test"
       JWT_SECRET: "ci-integration-test-secret-key-minimum-32-bytes"  # pragma: allowlist secret
       TOTP_ENCRYPTION_KEY: "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="  # pragma: allowlist secret
