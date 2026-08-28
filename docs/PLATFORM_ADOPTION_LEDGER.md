@@ -213,7 +213,7 @@ tenancy, permissions, settings, database schema or migration lineage.
 
 ## Adoption slices
 
-**2026-08-28 — Deployment release identity prerequisites.** ERP declares one
+**2026-08-28 — Deployment release identity and reference adapter.** ERP declares one
 release-time `ProductAssemblySpec` for the canonical `dotmac-erp` product over
 the six module manifests already
 present in `COMPOSED_MODULE_LINEAGES`: Accounting, Files, Imports, Numbering,
@@ -228,10 +228,22 @@ rebuilding it. Only after every gate in the CI workflow succeeds — including a
 exact pinned re-run of the independently required Engineering standards check
 — does the registry push return an immutable image digest; CI uploads a
 non-secret `image-release.json` binding that exact reference to `GITHUB_SHA`.
-This is release evidence only: no deployment descriptor, host
-execution, runtime factory adoption, module authority movement or production
-cutover occurs in this slice. The detailed contract is
-`docs/architecture/deployment-foundation-prerequisites.md`.
+ERP exact-pins the published `dotmac-deployment-foundation==0.2.0a1` build-time
+facility released from commit
+`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`; its reusable conformance workflow
+is independently pinned to immutable commit
+`6a8fdb03d4e7594d3c943b338de0872a6f8c2457`, whose workflow-only fix does not
+change the released package. `deploy/product.toml` uses the same
+`dotmac-erp` product identity and binds the real canonical manifest digest. Its
+four deterministic rendered assets are checked byte-for-byte and parsed by a
+real Compose engine. Only the image digest remains an explicit sentinel until
+protected-main CI publishes the already-tested image.
+
+This is a checked reference adapter, not host execution: no live deploy script,
+runtime factory, module authority, data or production environment moves in this
+slice. The detailed contracts are
+`docs/architecture/deployment-foundation-prerequisites.md` and
+`deploy/README.md`.
 
 **2026-08-28 — Audited ERP runtime-image preparation.** The protected-main
 candidate is built as a numeric-non-root runtime image with Poetry and Node

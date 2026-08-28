@@ -934,6 +934,22 @@ def test_parse_payment_happy_path_is_exact() -> None:
     assert from_money(money.amount) == (Decimal("107.50"), "NGN")
 
 
+def test_parse_payment_normalizes_legacy_zero_on_documented_default_fields() -> None:
+    pay = _client()._parse_payment(_raw_payment(refunded_amount="0", wht_amount="0"))
+
+    assert pay.refunded_amount == Decimal("0.00")
+    assert pay.wht_amount == Decimal("0.00")
+    assert pay.refunded_amount.as_tuple().exponent == -2
+    assert pay.wht_amount.as_tuple().exponent == -2
+
+
+def test_parse_payment_keeps_required_and_nonzero_money_strict() -> None:
+    with pytest.raises(DotmacSubParseError, match="fractional digits"):
+        _client()._parse_payment(_raw_payment(amount="0"))
+    with pytest.raises(DotmacSubParseError, match="fractional digits"):
+        _client()._parse_payment(_raw_payment(wht_amount="7"))
+
+
 def test_parse_payment_rejects_missing_currency() -> None:
     payload = _raw_payment()
     del payload["currency"]

@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from starlette.requests import Request
 
+from app.models.people.hr import EmployeeStatus
 from app.models.person import Person
 from app.services.common import ValidationError
 from app.services.people.hr.web.employee_web import HRWebService
@@ -20,6 +21,7 @@ def _make_request(form: dict[str, str]) -> Request:
             "method": "POST",
             "path": "/people/hr/employees/test/edit",
             "headers": [],
+            "query_string": b"",
         }
     )
     request.state.csrf_form = form
@@ -33,6 +35,7 @@ def _make_new_employee_request(form: dict[str, str]) -> Request:
             "method": "POST",
             "path": "/people/hr/employees/new",
             "headers": [],
+            "query_string": b"",
         }
     )
     request.state.csrf_form = form
@@ -95,6 +98,66 @@ def _stub_new_employee_form_dependencies(monkeypatch, db_session) -> None:
     )
     monkeypatch.setattr(
         db_session, "execute", lambda stmt: SimpleNamespace(all=lambda: [])
+    )
+
+
+def _stub_employee_list_dependencies(monkeypatch) -> None:
+    empty_result = SimpleNamespace(items=[])
+    paginated_empty_result = SimpleNamespace(
+        items=[], total=0, total_pages=0, has_prev=False, has_next=False
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_departments",
+        lambda self, filters, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_designations",
+        lambda self, filters, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_employment_types",
+        lambda self, filters, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_locations",
+        lambda self, is_active, pagination: empty_result,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.get_employee_stats",
+        lambda self: {
+            "total": 0,
+            "current": 0,
+            "active": 0,
+            "on_leave": 0,
+            "terminated": 0,
+            "resigned": 0,
+            "exit_archive": 0,
+            "suspended": 0,
+            "retired": 0,
+            "inactive": 0,
+        },
+    )
+
+    def _list_empty(
+        self,
+        filters,
+        pagination,
+        eager_load=False,
+        advanced_filter_expression=None,
+    ):
+        return paginated_empty_result
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.list_employees",
+        _list_empty,
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.base_context",
+        lambda request, auth, title, active, db=None: {
+            "title": title,
+            "active_page": active,
+            "user": None,
+        },
     )
 
 
@@ -758,6 +821,252 @@ def test_employee_new_form_does_not_load_position_options_initially(
 
     assert response.status_code == 200
     assert response.context["position_options"] == []
+
+
+def test_employee_new_form_exposes_siwes_intern_designation(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    _stub_new_employee_form_dependencies(monkeypatch, db_session)
+    designation_id = uuid4()
+    siwes_designation = SimpleNamespace(
+        designation_id=designation_id,
+        designation_code="SIWES-INTERN",
+        designation_name="SIWES Intern",
+    )
+    designation_result = SimpleNamespace(items=[siwes_designation])
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.OrganizationService.list_designations",
+        lambda self, filters, pagination: designation_result,
+    )
+
+    request = _make_new_employee_request({})
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = service.employee_new_form_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 200
+    assert response.context["designations"] == [siwes_designation]
+
+
+@pytest.mark.asyncio
+async def test_create_employee_response_passes_siwes_intern_designation_id(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    employee_id = uuid4()
+    structure_id = uuid4()
+    designation_id = uuid4()
+    captured: dict[str, object] = {}
+    _stub_salary_structure_lookup(
+        db_session, monkeypatch, person.organization_id, structure_id
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_designation_requires_nysc_dates",
+        lambda self, db, organization_id, designation_id: False,
+    )
+
+    def _capture_create(self, person_id, data):
+        captured["person_id"] = person_id
+        captured["designation_id"] = data.designation_id
+        return SimpleNamespace(employee_id=employee_id, person_id=person_id)
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.create_employee",
+        _capture_create,
+    )
+    invite_path = (
+        "app.services.people.hr.web.employee_web."
+        "EmployeeService.send_employee_access_invite"
+    )
+    monkeypatch.setattr(
+        invite_path,
+        lambda self, employee_id, app_url, attachments=None: SimpleNamespace(
+            sent=True,
+            recipient_kind="work",
+            recipient_email="user@example.com",
+        ),
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_update_tax_profile",
+        lambda self, *, auth, db, employee, form: None,
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_create_initial_salary_assignment",
+        staticmethod(lambda **kwargs: None),
+    )
+
+    request = _make_new_employee_request(
+        {
+            "linked_person_id": str(person.id),
+            "date_of_joining": "2026-01-01",
+            "designation_id": str(designation_id),
+            "employment_type_id": str(uuid4()),
+            "salary_mode": "BANK",
+            "salary_structure_id": str(structure_id),
+        }
+    )
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = await service.create_employee_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+    )
+
+    assert response.status_code == 303
+    assert captured["person_id"] == person.id
+    assert captured["designation_id"] == designation_id
+
+
+def test_employee_list_exit_date_filters_include_exit_history(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    _stub_employee_list_dependencies(monkeypatch)
+    captured = []
+    paginated_empty_result = SimpleNamespace(
+        items=[],
+        total=0,
+        total_pages=0,
+        has_prev=False,
+        has_next=False,
+    )
+
+    def _capture_list(
+        self,
+        filters,
+        pagination,
+        eager_load=False,
+        advanced_filter_expression=None,
+    ):
+        captured.append(filters)
+        return paginated_empty_result
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.list_employees",
+        _capture_list,
+    )
+
+    request = _make_new_employee_request({})
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = service.list_employees_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+        date_of_leaving_from="2026-04-01",
+        date_of_leaving_to="2026-04-30",
+    )
+
+    assert response.status_code == 200
+    employee_filters = captured[0]
+    assert employee_filters.date_of_leaving_from == date(2026, 4, 1)
+    assert employee_filters.date_of_leaving_to == date(2026, 4, 30)
+    assert employee_filters.include_archived is True
+    assert employee_filters.include_deleted is True
+
+
+def test_employee_list_resigned_filter_exposes_exit_date(
+    db_session, person, monkeypatch
+):
+    service = HRWebService()
+    _stub_employee_list_dependencies(monkeypatch)
+    employee_id = uuid4()
+    missing_exit_date_employee_id = uuid4()
+    resigned_employee = SimpleNamespace(
+        employee_id=employee_id,
+        employee_code="EMP-EXIT-001",
+        person=SimpleNamespace(name="Resigned Person", email="exit@example.com"),
+        department=None,
+        designation=None,
+        date_of_joining=date(2025, 1, 10),
+        date_of_leaving=date(2026, 4, 15),
+        status=EmployeeStatus.RESIGNED,
+    )
+    resigned_without_exit_date = SimpleNamespace(
+        employee_id=missing_exit_date_employee_id,
+        employee_code="EMP-EXIT-002",
+        person=SimpleNamespace(name="Missing Exit Date", email="missing@example.com"),
+        department=None,
+        designation=None,
+        date_of_joining=date(2025, 2, 10),
+        date_of_leaving=None,
+        status=EmployeeStatus.RESIGNED,
+    )
+    list_result = SimpleNamespace(
+        items=[resigned_employee, resigned_without_exit_date],
+        total=2,
+        total_pages=1,
+        has_prev=False,
+        has_next=False,
+    )
+    manager_result = SimpleNamespace(
+        items=[], total=0, total_pages=0, has_prev=False, has_next=False
+    )
+
+    def _list_employees(
+        self,
+        filters,
+        pagination,
+        eager_load=False,
+        advanced_filter_expression=None,
+    ):
+        if filters.status == EmployeeStatus.RESIGNED:
+            return list_result
+        return manager_result
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.list_employees",
+        _list_employees,
+    )
+
+    request = _make_new_employee_request({})
+    auth = _make_auth(person.id, person.organization_id, ["people:write"])
+
+    response = service.list_employees_response(
+        request=request,
+        auth=auth,
+        db=db_session,
+        status="resigned",
+    )
+
+    assert response.status_code == 200
+    assert response.context["show_exit_date"] is True
+    assert response.context["employees"] == [
+        {
+            "employee_id": employee_id,
+            "employee_code": "EMP-EXIT-001",
+            "person_name": "Resigned Person",
+            "email": "exit@example.com",
+            "department_name": "",
+            "designation_name": "",
+            "date_of_joining": date(2025, 1, 10),
+            "date_of_leaving": date(2026, 4, 15),
+            "status": "RESIGNED",
+            "status_class": service._status_class(EmployeeStatus.RESIGNED),
+        },
+        {
+            "employee_id": missing_exit_date_employee_id,
+            "employee_code": "EMP-EXIT-002",
+            "person_name": "Missing Exit Date",
+            "email": "missing@example.com",
+            "department_name": "",
+            "designation_name": "",
+            "date_of_joining": date(2025, 2, 10),
+            "date_of_leaving": None,
+            "status": "RESIGNED",
+            "status_class": service._status_class(EmployeeStatus.RESIGNED),
+        },
+    ]
 
 
 @pytest.mark.asyncio

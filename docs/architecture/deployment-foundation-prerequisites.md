@@ -1,9 +1,10 @@
 # Deployment foundation prerequisites
 
-Status: **release identity and audited runtime-image preparation implemented;
-deployment adapter and host cutover remain a separate slice**.
+Status: **release identity, the checked reference adapter, and audited
+runtime-image preparation are implemented; host execution and production cutover
+remain a separate slice**.
 
-The later runtime-image preparation replaces the monolithic build with a
+The runtime-image preparation replaces the monolithic build with a
 numeric-non-root, builder-only toolchain, tests app/worker/Beat/migrations from
 one image under a read-only CI envelope, audits that exact image with the
 published Deployment Foundation collector, and only then exports it to the H3
@@ -18,8 +19,8 @@ together in the deployment-adapter cutover after a real protected-main image
 coordinate exists. Until then, CI proves the release candidate's properties;
 it does not reinterpret the legacy host as conformant.
 
-ERP now has two immutable release facts that a later deployment descriptor can
-join without a digest cycle:
+ERP has two immutable release facts that `deploy/product.toml` joins without a
+digest cycle:
 
 1. `deploy/product-manifest.json` is the canonical, checked representation of
    `ERP_PRODUCT_ASSEMBLY` under the product identity `dotmac-erp`. The
@@ -69,9 +70,21 @@ the image is tested. The post-push release artifact then records that label
 beside the immutable image and source revision.
 
 The exclusion also means none of these files is an in-container runtime input.
-A later deployment-foundation adoption must download verified release evidence
-and explicitly assemble a deployment plan; it may not read an accidental copy
-from `/app/deploy`.
+The deployment-foundation adapter downloads verified release evidence and
+explicitly assembles a deployment plan; it may not read an accidental copy from
+`/app/deploy`.
+
+## Persistent-file runtime invariant
+
+Application and worker containers do not own durable file volumes. People HR
+handbooks, generated finance report JSON and automation-generated PDFs use the
+existing `FileUploadService -> S3StorageService` path and persist opaque object
+references in their domain rows. An object-store failure fails the operation;
+there is no container-path or named-volume fallback. Consequently a deployment
+descriptor must bind working S3 configuration for every application/worker
+process and may keep the application root filesystem ephemeral/read-only with
+respect to business files. Logs, temporary spools and generated response bytes
+are not durable business-file stores.
 
 ## Persistent-file runtime invariant
 
@@ -113,8 +126,11 @@ poetry run python -m scripts.product_manifest generate \
 poetry run python -m scripts.product_manifest check --path deploy/product-manifest.json
 ```
 
-The release-identity prerequisite itself created no descriptor or deploy
-change. The subsequent image-preparation slice makes only the compatibility
+The checked reference descriptor and rendered assets are documented in
+`deploy/README.md`. They change no live deploy script, move no data, and perform
+no production action. The descriptor's module-manifest digest is real; its
+image digest remains a fail-visible sentinel until protected-main CI publishes
+the tested image. The image-preparation slice makes only the compatibility
 changes described above; it names no host, moves no data, and performs no
 production action. The deployment-adapter cutover remains the sole owner of
 live digest consumption and hardened Compose truth.

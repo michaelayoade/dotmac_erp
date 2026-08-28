@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session_context import prime_tenant_context
+from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
 
@@ -47,6 +48,53 @@ def _staff_roles(employee: Employee) -> list[str]:
         dict.fromkeys(str(role).strip() for role in configured if str(role).strip())
     )
     return normalized or [settings.dotmac_sub_staff_default_role]
+
+
+def _department_payload(
+    db: Session | None, employee: Employee
+) -> dict[str, str | None] | None:
+    department_id = getattr(employee, "department_id", None)
+    if department_id is None:
+        return None
+
+    department = getattr(employee, "department", None)
+    if department is None and db is not None:
+        department = db.get(Department, department_id)
+    if department is None:
+        return None
+    if (
+        getattr(department, "organization_id", employee.organization_id)
+        != employee.organization_id
+    ):
+        return None
+
+    return {
+        "department_id": str(department.department_id),
+        "department_code": department.department_code,
+        "department_name": department.department_name,
+    }
+
+
+def _sync_erp_department_membership(
+    db: Session | None,
+    employee: Employee,
+    account_id: str,
+    client: DotmacSubClient,
+    *,
+    remove: bool = False,
+) -> None:
+    department = None
+    if not remove:
+        department = _department_payload(db, employee)
+        if department is None and getattr(employee, "department_id", None) is not None:
+            raise ValueError("employee department could not be resolved for staff sync")
+    client.sync_staff_account_erp_department(
+        account_id,
+        erp_employee_id=str(employee.employee_id),
+        employee_code=getattr(employee, "employee_code", None),
+        erp_organization_id=str(employee.organization_id),
+        department=department,
+    )
 
 
 def sync_employee(
@@ -103,6 +151,9 @@ def sync_employee(
                     send_invite=True,
                 )
                 employee.dotmac_sub_account_id = str(created.get("id"))
+                _sync_erp_department_membership(
+                    db, employee, employee.dotmac_sub_account_id, client
+                )
                 _mark_synced(employee)
                 return {
                     "action": "created",
@@ -114,8 +165,10 @@ def sync_employee(
             client.set_staff_account_roles(account_id, roles=roles)
             if account and not account.get("is_active", True):
                 client.set_staff_account_active(account_id, is_active=True)
+                _sync_erp_department_membership(db, employee, account_id, client)
                 _mark_synced(employee)
                 return {"action": "enabled", "account_id": account_id}
+            _sync_erp_department_membership(db, employee, account_id, client)
             _mark_synced(employee)
             return {"action": "noop", "account_id": account_id}
 
@@ -131,8 +184,12 @@ def sync_employee(
         if account is None and email:
             account = client.get_staff_account(email)
         if account and not account.get("is_active", True):
+            _sync_erp_department_membership(
+                db, employee, account_id, client, remove=True
+            )
             _mark_synced(employee)
             return {"action": "noop", "account_id": account_id}
+        _sync_erp_department_membership(db, employee, account_id, client, remove=True)
         client.set_staff_account_active(account_id, is_active=False)
         _mark_synced(employee)
         return {"action": "disabled", "account_id": account_id}

@@ -1074,6 +1074,23 @@ url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
 reference = "forgejo"
 
 [[package]]
+name = "dotmac-deployment-foundation"
+version = "0.2.0a1"
+description = "Stateless build- and deploy-time facility for Dotmac product assemblies"
+optional = false
+python-versions = ">=3.11,<3.14"
+groups = ["dev"]
+files = [
+    {file = "dotmac_deployment_foundation-0.2.0a1-py3-none-any.whl", hash = "sha256:0e89ed1f59e1d0565ac3008b3431742a09f21003411a182590b539cef94c7207"},
+    {file = "dotmac_deployment_foundation-0.2.0a1.tar.gz", hash = "sha256:0bcd4ca018096048e7be8d2ee5568587ce0f379506dcf6430972de889f84a1ea"},
+]
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+
+[[package]]
 name = "dotmac-files"
 version = "0.1.0a2"
 description = "DotMac dual-plane stored-object lifecycle and validation"
@@ -5179,4 +5196,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "f594513b79bf7b03016a58a4e25921782b1f494a15edeb4cecd637cb1a9b0b38"
+content-hash = "e59ac38e2f784866975da9a30b7fb621f35c7987ced39719accaba7736080b0a"
