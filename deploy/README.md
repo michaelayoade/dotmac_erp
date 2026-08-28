@@ -1,10 +1,10 @@
 # ERP deployment descriptor — released adapter, not cutover
 
 `deploy/product.toml` is ERP's `ProductDeploymentSpec.v1`, implemented by the
-published `dotmac-deployment-foundation==0.1.0a1` facility (Starter ADR-0070).
+published `dotmac-deployment-foundation==0.2.0a1` facility (Starter ADR-0070).
 The package is exact-pinned as a dev dependency from Dotmac's private Forgejo
 index. Its annotated release tag peels to Starter commit
-`c072e1f51548dca04ab182d653d032bb481f4b79`; ERP's reusable conformance workflow
+`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`; ERP's reusable conformance workflow
 is pinned to that same immutable source revision.
 
 The descriptor and `app/product_assembly.py` share the product identity

@@ -1,7 +1,7 @@
 name: Deployment conformance
 
 # Calls the Starter-owned reusable gate at the immutable source revision for
-# the published `dotmac-deployment-foundation==0.1.0a1` release. The annotated
+# the published `dotmac-deployment-foundation==0.2.0a1` release. The annotated
 # tag peels to this exact SHA; a branch or tag is not an admissible workflow pin.
 
 on:
@@ -15,12 +15,12 @@ permissions:
 
 jobs:
   deployment:
-    uses: michaelayoade/dotmac_starter_mt/.github/workflows/deployment-conformance.yml@c072e1f51548dca04ab182d653d032bb481f4b79
+    uses: michaelayoade/dotmac_starter_mt/.github/workflows/deployment-conformance.yml@ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844
     with:
       descriptor: deploy/product.toml
       rendered-dir: deploy/rendered
       thresholds: deploy/alerts/thresholds.json
-      foundation-version: "0.1.0a1"
+      foundation-version: "0.2.0a1"
       # The assembly manifest is real. The image remains an explicit sentinel
       # until protected-main CI publishes the tested image and records its
       # registry digest; candidate/production cutover must turn this on.

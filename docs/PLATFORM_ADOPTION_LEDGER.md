@@ -228,9 +228,9 @@ rebuilding it. Only after every gate in the CI workflow succeeds — including a
 exact pinned re-run of the independently required Engineering standards check
 — does the registry push return an immutable image digest; CI uploads a
 non-secret `image-release.json` binding that exact reference to `GITHUB_SHA`.
-ERP exact-pins the published `dotmac-deployment-foundation==0.1.0a1` build-time
+ERP exact-pins the published `dotmac-deployment-foundation==0.2.0a1` build-time
 facility and its reusable conformance workflow at the release commit
-`c072e1f51548dca04ab182d653d032bb481f4b79`. `deploy/product.toml` uses the same
+`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`. `deploy/product.toml` uses the same
 `dotmac-erp` product identity and binds the real canonical manifest digest. Its
 four deterministic rendered assets are checked byte-for-byte and parsed by a
 real Compose engine. Only the image digest remains an explicit sentinel until

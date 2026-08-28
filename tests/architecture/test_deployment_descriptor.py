@@ -1,6 +1,6 @@
 """ERP's `deploy/product.toml` is a real, conformant `ProductDeploymentSpec.v1`.
 
-The published `dotmac-deployment-foundation==0.1.0a1` distribution is an exact
+The published `dotmac-deployment-foundation==0.2.0a1` distribution is an exact
 dev dependency. A missing package is therefore an installation failure, never
 a reason to skip this architecture gate.
 
@@ -29,8 +29,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DESCRIPTOR_PATH = REPO_ROOT / "deploy" / "product.toml"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "deployment-conformance.yml"
-FOUNDATION_VERSION = "0.1.0a1"
-FOUNDATION_RELEASE_SHA = "c072e1f51548dca04ab182d653d032bb481f4b79"
+FOUNDATION_VERSION = "0.2.0a1"
+FOUNDATION_RELEASE_SHA = "ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's

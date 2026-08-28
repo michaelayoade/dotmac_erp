@@ -1075,14 +1075,14 @@ reference = "forgejo"
 
 [[package]]
 name = "dotmac-deployment-foundation"
-version = "0.1.0a1"
+version = "0.2.0a1"
 description = "Stateless build- and deploy-time facility for Dotmac product assemblies"
 optional = false
 python-versions = ">=3.11,<3.14"
 groups = ["dev"]
 files = [
-    {file = "dotmac_deployment_foundation-0.1.0a1-py3-none-any.whl", hash = "sha256:03cecdff26cb3b7612b6fdc70c524aada141a054bb3edada3209d0e9e7ccd9ec"},
-    {file = "dotmac_deployment_foundation-0.1.0a1.tar.gz", hash = "sha256:7dda1ec565989268c56fd24e00f4b28abb82cbc314fb938b11967c006bde4efc"},
+    {file = "dotmac_deployment_foundation-0.2.0a1-py3-none-any.whl", hash = "sha256:0e89ed1f59e1d0565ac3008b3431742a09f21003411a182590b539cef94c7207"},
+    {file = "dotmac_deployment_foundation-0.2.0a1.tar.gz", hash = "sha256:0bcd4ca018096048e7be8d2ee5568587ce0f379506dcf6430972de889f84a1ea"},
 ]
 
 [package.source]
@@ -5175,4 +5175,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "88635f8a4f3e53127bb5a05089cfb50bd33ad4eb29824479c44b9e28fd8f4ea6"
+content-hash = "c04270ec398bdd8d7ceff4436c4f8b55e46258aa0bfa1dca2603785521adccb4"
