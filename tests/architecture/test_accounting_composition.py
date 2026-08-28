@@ -52,6 +52,7 @@ from app import accounting_adoption
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPO_ROOT / "app"
+PRODUCT_ASSEMBLY = APP_ROOT / "product_assembly.py"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
@@ -74,12 +75,12 @@ def _imported_modules(path: Path) -> set[str]:
     return modules
 
 
-def _is_accounting_runtime_import(module: str) -> bool:
-    """The manifest is release metadata; every other package import is runtime."""
+def _is_accounting_runtime_import(path: Path, module: str) -> bool:
+    """Only the product assembly may consume the declarative manifest."""
     package = accounting_adoption.IMPORT_PACKAGE
-    return (module == package or module.startswith(f"{package}.")) and module != (
-        f"{package}.manifest"
-    )
+    if module != package and not module.startswith(f"{package}."):
+        return False
+    return path != PRODUCT_ASSEMBLY or module != f"{package}.manifest"
 
 
 def test_the_distribution_is_pinned_exactly_from_the_private_source() -> None:
@@ -121,7 +122,8 @@ def test_nothing_under_app_imports_the_module() -> None:
         path.relative_to(REPO_ROOT).as_posix()
         for path in APP_ROOT.rglob("*.py")
         if any(
-            _is_accounting_runtime_import(module) for module in _imported_modules(path)
+            _is_accounting_runtime_import(path, module)
+            for module in _imported_modules(path)
         )
     )
     assert not offenders, (
@@ -130,10 +132,16 @@ def test_nothing_under_app_imports_the_module() -> None:
 
 
 def test_accounting_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
-    assert not _is_accounting_runtime_import("dotmac_accounting.manifest")
-    assert _is_accounting_runtime_import("dotmac_accounting")
-    assert _is_accounting_runtime_import("dotmac_accounting.service")
-    assert _is_accounting_runtime_import("dotmac_accounting.manifest.private")
+    other_path = APP_ROOT / "services" / "example.py"
+    assert not _is_accounting_runtime_import(
+        PRODUCT_ASSEMBLY, "dotmac_accounting.manifest"
+    )
+    assert _is_accounting_runtime_import(other_path, "dotmac_accounting.manifest")
+    assert _is_accounting_runtime_import(PRODUCT_ASSEMBLY, "dotmac_accounting")
+    assert _is_accounting_runtime_import(PRODUCT_ASSEMBLY, "dotmac_accounting.service")
+    assert _is_accounting_runtime_import(
+        PRODUCT_ASSEMBLY, "dotmac_accounting.manifest.private"
+    )
 
 
 def test_alembic_composes_the_accounting_lineage() -> None:

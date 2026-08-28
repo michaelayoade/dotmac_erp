@@ -26,6 +26,7 @@ from app.migration_planes import ASSEMBLY_MODULE_PLANES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPO_ROOT / "app"
+PRODUCT_ASSEMBLY = APP_ROOT / "product_assembly.py"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 LOCK = REPO_ROOT / "poetry.lock"
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -58,11 +59,11 @@ def _imported_modules(path: Path) -> set[str]:
     return modules
 
 
-def _is_numbering_runtime_import(module: str) -> bool:
-    """The manifest is release metadata; every other package import is runtime."""
-    return (module == IMPORT_PACKAGE or module.startswith(f"{IMPORT_PACKAGE}.")) and (
-        module != f"{IMPORT_PACKAGE}.manifest"
-    )
+def _is_numbering_runtime_import(path: Path, module: str) -> bool:
+    """Only the product assembly may consume the declarative manifest."""
+    if module != IMPORT_PACKAGE and not module.startswith(f"{IMPORT_PACKAGE}."):
+        return False
+    return path != PRODUCT_ASSEMBLY or module != f"{IMPORT_PACKAGE}.manifest"
 
 
 def test_the_distribution_is_pinned_exactly_from_the_private_source() -> None:
@@ -130,14 +131,21 @@ def test_nothing_under_app_imports_the_numbering_runtime() -> None:
         path.relative_to(REPO_ROOT).as_posix()
         for path in APP_ROOT.rglob("*.py")
         if any(
-            _is_numbering_runtime_import(module) for module in _imported_modules(path)
+            _is_numbering_runtime_import(path, module)
+            for module in _imported_modules(path)
         )
     )
     assert not offenders, f"app/ imports {IMPORT_PACKAGE}: {offenders}"
 
 
 def test_numbering_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
-    assert not _is_numbering_runtime_import("dotmac_numbering.manifest")
-    assert _is_numbering_runtime_import("dotmac_numbering")
-    assert _is_numbering_runtime_import("dotmac_numbering.service")
-    assert _is_numbering_runtime_import("dotmac_numbering.manifest.private")
+    other_path = APP_ROOT / "services" / "example.py"
+    assert not _is_numbering_runtime_import(
+        PRODUCT_ASSEMBLY, "dotmac_numbering.manifest"
+    )
+    assert _is_numbering_runtime_import(other_path, "dotmac_numbering.manifest")
+    assert _is_numbering_runtime_import(PRODUCT_ASSEMBLY, "dotmac_numbering")
+    assert _is_numbering_runtime_import(PRODUCT_ASSEMBLY, "dotmac_numbering.service")
+    assert _is_numbering_runtime_import(
+        PRODUCT_ASSEMBLY, "dotmac_numbering.manifest.private"
+    )
