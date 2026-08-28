@@ -2399,8 +2399,8 @@ class HRWebService:
             **base_context(request, auth, "Employee Details", "employees"),
             "employee": employee,
             "final_payroll_pending": bool(
-                employee.eligible_for_final_payroll
-                and employee.final_payroll_processed_at is None
+                getattr(employee, "eligible_for_final_payroll", False)
+                and getattr(employee, "final_payroll_processed_at", None) is None
             ),
             "recent_activity": get_recent_activity_for_record(
                 db,
