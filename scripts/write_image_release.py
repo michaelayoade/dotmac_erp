@@ -12,7 +12,7 @@ IMAGE_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 IMAGE_COMPONENT = r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?"
 IMAGE_REPOSITORY_RE = re.compile(rf"^ghcr\.io/{IMAGE_COMPONENT}/{IMAGE_COMPONENT}$")
-SCHEMA = "dotmac.image-release.v1"
+SCHEMA = "dotmac.image-release.v2"
 
 
 class ImageReleaseError(RuntimeError):
@@ -20,7 +20,7 @@ class ImageReleaseError(RuntimeError):
 
 
 def canonical_image_release_bytes(
-    *, repository: str, digest: str, git_sha: str
+    *, repository: str, digest: str, git_sha: str, manifest_digest: str
 ) -> bytes:
     """Return the minimal release record; it contains no credentials or tags."""
 
@@ -30,9 +30,14 @@ def canonical_image_release_bytes(
         raise ImageReleaseError(f"invalid image digest: {digest!r}")
     if not GIT_SHA_RE.fullmatch(git_sha):
         raise ImageReleaseError(f"invalid GITHUB_SHA: {git_sha!r}")
+    if not IMAGE_DIGEST_RE.fullmatch(manifest_digest):
+        raise ImageReleaseError(
+            f"invalid canonical product manifest digest: {manifest_digest!r}"
+        )
     payload = {
         "digest": digest,
         "git_sha": git_sha,
+        "manifest_digest": manifest_digest,
         "reference": f"{repository}@{digest}",
         "schema": SCHEMA,
     }
@@ -40,7 +45,12 @@ def canonical_image_release_bytes(
 
 
 def write_image_release(
-    *, output: Path, repository: str, digest: str, git_sha: str
+    *,
+    output: Path,
+    repository: str,
+    digest: str,
+    git_sha: str,
+    manifest_digest: str,
 ) -> None:
     if not output.parent.is_dir():
         raise ImageReleaseError(
@@ -52,6 +62,7 @@ def write_image_release(
                 repository=repository,
                 digest=digest,
                 git_sha=git_sha,
+                manifest_digest=manifest_digest,
             )
         )
     except OSError as exc:
@@ -63,6 +74,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repository", required=True)
     parser.add_argument("--digest", required=True)
     parser.add_argument("--git-sha", required=True)
+    parser.add_argument("--manifest-digest", required=True)
     parser.add_argument("--output", required=True, type=Path)
     return parser
 
@@ -74,6 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         repository=args.repository,
         digest=args.digest,
         git_sha=args.git_sha,
+        manifest_digest=args.manifest_digest,
     )
     return 0
 

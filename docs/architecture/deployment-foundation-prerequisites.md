@@ -13,9 +13,14 @@ join without a digest cycle:
    currently composed module's code,
    exact distribution version, declared persistence planes, any explicit ERP
    plane selection, and the resulting effective planes.
-2. A successful `main` image publication uploads `image-release.json`, binding
-   `GITHUB_SHA`, the registry-returned `sha256` digest and the exact
-   `ghcr.io/...@sha256:...` reference. It contains no tag and no credential.
+2. A successful `main` image publication uploads the
+   `dotmac.image-release.v2` `image-release.json`, binding `GITHUB_SHA`, the
+   registry-returned `sha256` digest, the exact `ghcr.io/...@sha256:...`
+   reference, and the canonical product-manifest digest. The manifest digest
+   is also embedded in the tested image as
+   `io.dotmac.product-manifest.digest`, so the artifact joins facts the image
+   already carries rather than asserting an unverified association. It
+   contains no tag and no credential.
 
 ## Ownership boundary
 
@@ -41,12 +46,12 @@ is inferred from installed tables.
 ## Why `deploy/` is outside the image
 
 The Docker build context excludes the whole `deploy/` control-plane directory.
-If the product manifest or a descriptor containing its digest were copied into
-the image, inserting the final image digest into that descriptor would change
-the image and therefore change the digest again. Exclusion makes image bytes a
-function of application source and dependencies only. The post-push release
-artifact then binds that immutable image to the same Git commit whose canonical
-product manifest is checked in CI.
+If the product manifest or a descriptor containing the final image digest were
+copied into the image, inserting that image digest would change the image and
+therefore change the digest again. Exclusion keeps the control-plane document
+out of the filesystem while its stable SHA-256 is added as OCI metadata before
+the image is tested. The post-push release artifact then records that label
+beside the immutable image and source revision.
 
 The exclusion also means none of these files is an in-container runtime input.
 A later deployment-foundation adoption must download verified release evidence
@@ -68,9 +73,10 @@ build step. GitHub cannot
 express a cross-workflow `needs`, so CI re-runs the exact pinned Governance
 action as a release gate while retaining the separate Engineering standards
 workflow and its stable branch-protection check context. Only the registry
-lookup's returned digest is admitted to `image-release.json`. The artifact is
-uploaded for review and promotion; its existence does not authorize a
-deployment.
+lookup's returned image digest is admitted to `image-release.json`; the
+manifest digest is recomputed from the checked-out canonical bytes and must
+match the tested image label before publication. The artifact is uploaded for
+review and promotion; its existence does not authorize a deployment.
 
 Regenerate or verify the committed manifest with the pinned environment:
 
