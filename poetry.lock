@@ -3479,14 +3479,14 @@ yaml = ["pyyaml (>=6.0.1)"]
 
 [[package]]
 name = "pydyf"
-version = "0.12.1"
+version = "0.11.0"
 description = "A low-level PDF generator."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "pydyf-0.12.1-py3-none-any.whl", hash = "sha256:ea25b4e1fe7911195cb57067560daaa266639184e8335365cc3ee5214e7eaadc"},
-    {file = "pydyf-0.12.1.tar.gz", hash = "sha256:fbd7e759541ac725c29c506612003de393249b94310ea78ae44cb1d04b220095"},
+    {file = "pydyf-0.11.0-py3-none-any.whl", hash = "sha256:0aaf9e2ebbe786ec7a78ec3fbffa4cdcecde53fd6f563221d53c6bc1328848a3"},
+    {file = "pydyf-0.11.0.tar.gz", hash = "sha256:394dddf619cca9d0c55715e3c55ea121a9bf9cbc780cdc1201a2427917b86b64"},
 ]
 
 [package.extras]
@@ -5196,4 +5196,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "1e6ebed5af00f7a536248557d1e23392fbcfcf5bfa6ddf176735a9acb83ecdd6"
+content-hash = "e59ac38e2f784866975da9a30b7fb621f35c7987ced39719accaba7736080b0a"

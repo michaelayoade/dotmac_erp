@@ -1,7 +1,23 @@
 # Deployment foundation prerequisites
 
-Status: **release identity and the checked reference adapter are implemented;
-host execution and production cutover are not**.
+Status: **release identity, the checked reference adapter, and audited
+runtime-image preparation are implemented; host execution and production cutover
+remain a separate slice**.
+
+The runtime-image preparation replaces the monolithic build with a
+numeric-non-root, builder-only toolchain, tests app/worker/Beat/migrations from
+one image under a read-only CI envelope, audits that exact image with the
+published Deployment Foundation collector, and only then exports it to the H3
+publication handoff. Minimal Compose/deploy compatibility changes remove the
+retired boot-time installer and invoke the image's direct runtime tools.
+
+That preparation is deliberately not a claim that the live Compose path is
+already hardened. Digest-only image selection, removal of mutable host
+static/template/Gunicorn overlays, production `read_only`/tmpfs/capability
+settings, signed-license material and the actual Compose execution proof move
+together in the deployment-adapter cutover after a real protected-main image
+coordinate exists. Until then, CI proves the release candidate's properties;
+it does not reinterpret the legacy host as conformant.
 
 ERP has two immutable release facts that `deploy/product.toml` joins without a
 digest cycle:
@@ -114,4 +130,7 @@ The checked reference descriptor and rendered assets are documented in
 `deploy/README.md`. They change no live deploy script, move no data, and perform
 no production action. The descriptor's module-manifest digest is real; its
 image digest remains a fail-visible sentinel until protected-main CI publishes
-the tested image.
+the tested image. The image-preparation slice makes only the compatibility
+changes described above; it names no host, moves no data, and performs no
+production action. The deployment-adapter cutover remains the sole owner of
+live digest consumption and hardened Compose truth.

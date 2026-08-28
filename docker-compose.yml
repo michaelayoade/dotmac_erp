@@ -39,26 +39,26 @@ services:
     - ./templates:/app/templates:ro
     - ./license:/app/license:ro
     - ./gunicorn.conf.py:/app/gunicorn.conf.py:ro
-    - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
     healthcheck:
       test:
       - CMD
       - python
       - -c
-      - import urllib.request; urllib.request.urlopen('http://localhost:8002/health')
+      - import urllib.request; urllib.request.urlopen('http://localhost:8002/health/ready')
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    entrypoint:
-    - /app/entrypoint-monitoring.sh
     command:
     - gunicorn
     - -c
     - gunicorn.conf.py
     - app.main:app
   app-dev:
-    build: .
+    build:
+      context: .
+      secrets:
+      - forgejo_token
     platform: linux/amd64
     container_name: dotmac_erp_app_dev
     restart: unless-stopped
@@ -118,10 +118,6 @@ services:
     depends_on:
       redis:
         condition: service_started
-    volumes:
-    - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
-    entrypoint:
-    - /app/entrypoint-monitoring.sh
     command:
     - celery
     - -A
@@ -152,10 +148,6 @@ services:
     depends_on:
       redis:
         condition: service_started
-    volumes:
-    - ./scripts/entrypoint-monitoring.sh:/app/entrypoint-monitoring.sh:ro
-    entrypoint:
-    - /app/entrypoint-monitoring.sh
     command:
     - celery
     - -A
@@ -239,6 +231,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+secrets:
+  # Build-only private-package credential held outside the checkout. Override
+  # the pointer without placing the token in Compose or any synchronized file.
+  forgejo_token:
+    file: ${FORGEJO_TOKEN_FILE:-/run/secrets/dotmac/forgejo-read-token}
 
 volumes:
   dotmac_erp_db_data: null
