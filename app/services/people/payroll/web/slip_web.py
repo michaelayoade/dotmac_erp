@@ -81,6 +81,7 @@ class SlipWebService:
         db: Session,
         search: str | None = None,
         status: str | None = None,
+        employment_type_id: str | None = None,
         page: int = 1,
     ) -> HTMLResponse | RedirectResponse:
         """Render salary slips list page."""
@@ -102,6 +103,15 @@ class SlipWebService:
         status_enum = parse_slip_status(status)
         if status_enum:
             query = query.where(SalarySlip.status == status_enum)
+
+        parsed_employment_type_id = parse_uuid(employment_type_id)
+        if parsed_employment_type_id:
+            query = query.join(
+                Employee, SalarySlip.employee_id == Employee.employee_id
+            ).where(
+                Employee.organization_id == org_id,
+                Employee.employment_type_id == parsed_employment_type_id,
+            )
 
         query = query.order_by(SalarySlip.created_at.desc())
         result = paginate(db, query, PaginationParams.from_page(page, per_page))
@@ -128,6 +138,17 @@ class SlipWebService:
             )
             status_counts[s.value] = count
 
+        employment_types = list(
+            db.scalars(
+                select(EmploymentType)
+                .where(
+                    EmploymentType.organization_id == org_id,
+                    EmploymentType.is_active.is_(True),
+                )
+                .order_by(EmploymentType.type_name)
+            ).all()
+        )
+
         context = base_context(request, auth, "Salary Slips", "payroll", db=db)
         context["request"] = request
         context.update(
@@ -135,6 +156,12 @@ class SlipWebService:
                 "slips": slips,
                 "search": search or "",
                 "status": status or "",
+                "employment_type_id": (
+                    str(parsed_employment_type_id)
+                    if parsed_employment_type_id
+                    else ""
+                ),
+                "employment_types": employment_types,
                 "page": page,
                 "total_pages": total_pages,
                 "total_count": total,
@@ -155,6 +182,7 @@ class SlipWebService:
         db: Session,
         search: str | None = None,
         status: str | None = None,
+        employment_type_id: str | None = None,
     ) -> Response:
         """Export salary slips to CSV."""
         org_id = coerce_uuid(auth.organization_id)
@@ -181,6 +209,15 @@ class SlipWebService:
         status_enum = parse_slip_status(status)
         if status_enum:
             query = query.where(SalarySlip.status == status_enum)
+
+        parsed_employment_type_id = parse_uuid(employment_type_id)
+        if parsed_employment_type_id:
+            query = query.join(
+                Employee, SalarySlip.employee_id == Employee.employee_id
+            ).where(
+                Employee.organization_id == org_id,
+                Employee.employment_type_id == parsed_employment_type_id,
+            )
 
         slips = db.scalars(query.order_by(SalarySlip.created_at.desc())).all()
 
