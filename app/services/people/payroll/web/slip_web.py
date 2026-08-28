@@ -82,6 +82,7 @@ class SlipWebService:
         db: Session,
         search: str | None = None,
         status: str | None = None,
+        employment_type_id: str | None = None,
         page: int = 1,
     ) -> HTMLResponse | RedirectResponse:
         """Render salary slips list page."""
@@ -114,6 +115,15 @@ class SlipWebService:
         if end_date:
             query = query.where(SalarySlip.start_date <= end_date)
 
+        parsed_employment_type_id = parse_uuid(employment_type_id)
+        if parsed_employment_type_id:
+            query = query.join(
+                Employee, SalarySlip.employee_id == Employee.employee_id
+            ).where(
+                Employee.organization_id == org_id,
+                Employee.employment_type_id == parsed_employment_type_id,
+            )
+
         query = query.order_by(SalarySlip.created_at.desc())
         result = paginate(db, query, PaginationParams.from_page(page, per_page))
         if page > result.total_pages:
@@ -138,6 +148,17 @@ class SlipWebService:
                 or 0
             )
             status_counts[s.value] = count
+
+        employment_types = list(
+            db.scalars(
+                select(EmploymentType)
+                .where(
+                    EmploymentType.organization_id == org_id,
+                    EmploymentType.is_active.is_(True),
+                )
+                .order_by(EmploymentType.type_name)
+            ).all()
+        )
 
         active_filters = []
         if status_enum:
@@ -172,6 +193,25 @@ class SlipWebService:
                     "display_value": f"To: {end_date.strftime('%d %b %Y')}",
                 }
             )
+        if parsed_employment_type_id:
+            selected_employment_type = next(
+                (
+                    employment_type
+                    for employment_type in employment_types
+                    if employment_type.employment_type_id == parsed_employment_type_id
+                ),
+                None,
+            )
+            if selected_employment_type:
+                active_filters.append(
+                    {
+                        "name": "employment_type_id",
+                        "value": str(parsed_employment_type_id),
+                        "display_value": (
+                            f"Employment type: {selected_employment_type.type_name}"
+                        ),
+                    }
+                )
 
         context = base_context(request, auth, "Salary Slips", "payroll", db=db)
         context["request"] = request
@@ -183,6 +223,12 @@ class SlipWebService:
                 "status_group": status_group,
                 "start_date": start_date.isoformat() if start_date else "",
                 "end_date": end_date.isoformat() if end_date else "",
+                "employment_type_id": (
+                    str(parsed_employment_type_id)
+                    if parsed_employment_type_id
+                    else ""
+                ),
+                "employment_types": employment_types,
                 "page": page,
                 "total_pages": total_pages,
                 "total_count": total,
@@ -204,6 +250,7 @@ class SlipWebService:
         db: Session,
         search: str | None = None,
         status: str | None = None,
+        employment_type_id: str | None = None,
     ) -> Response:
         """Export salary slips to CSV."""
         org_id = coerce_uuid(auth.organization_id)
@@ -240,6 +287,15 @@ class SlipWebService:
             query = query.where(SalarySlip.start_date >= start_date)
         if end_date:
             query = query.where(SalarySlip.start_date <= end_date)
+
+        parsed_employment_type_id = parse_uuid(employment_type_id)
+        if parsed_employment_type_id:
+            query = query.join(
+                Employee, SalarySlip.employee_id == Employee.employee_id
+            ).where(
+                Employee.organization_id == org_id,
+                Employee.employment_type_id == parsed_employment_type_id,
+            )
 
         slips = db.scalars(query.order_by(SalarySlip.created_at.desc())).all()
 
