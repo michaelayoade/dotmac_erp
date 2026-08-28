@@ -11,10 +11,11 @@
 # only to one-off preflight/migration containers. Runtime services keep only
 # `DATABASE_URL`; Alembic never falls back to it.
 #
-# Notes on erp's deploy model: the container runs app code from the mounted
-# ./app volume, but alembic/ is NOT mounted — migrations ship inside the image.
-# So a real deploy must pull the image (refresh the baked alembic + deps) before
-# running migrations, not just `git pull`.
+# Notes on erp's deploy model: application code, migrations and dependencies all
+# ship inside the tested image. The checkout supplies Compose configuration,
+# operator scripts and the existing static/template/Gunicorn read-only overlays;
+# it does not replace application Python or migrations. A real deploy therefore
+# pulls the immutable image before running its migrations.
 #
 # Image pinning: app/worker/beat run ghcr.io/.../dotmac_erp:${ERP_IMAGE_TAG}.
 # This deploy pins ERP_IMAGE_TAG to the deployed commit's immutable `sha-<short>`
@@ -32,7 +33,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-150}"
-HEALTH_URL="${HEALTH_URL:-http://localhost:8003/health}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:8003/health/ready}"
 DEPLOY_COMPOSE_PROJECT_NAME="dotmac"
 
 # Production uses fixed container names (dotmac_erp_app, dotmac_erp_redis, etc.).
@@ -130,8 +131,8 @@ if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
     echo ""
 fi
 
-# Step 2: pull latest code (mounted ./app) + image (baked alembic + deps), and
-# pin the image tag to the newly-deployed commit's immutable sha-<short> tag.
+# Step 2: pull the deployment checkout + the image carrying app, migrations and
+# dependencies, then pin it to the new commit's immutable sha-<short> tag.
 if [[ "${1:-}" != "--quick" ]]; then
     echo "→ Pulling latest code + image..."
     git pull --rebase
@@ -171,9 +172,9 @@ trap 'echo "Deploy FAILED"; rollback; exit 1' ERR
 # or CREATEROLE, and the deploy path must never hold those. Run the explicitly
 # privileged bootstrap once, as an operator, then re-run the deploy.
 echo "→ Preflight: migration executor contract..."
-if ! docker compose run --rm --entrypoint "" \
+if ! docker compose run --rm \
     -e MIGRATION_DATABASE_URL app \
-    poetry run python scripts/bootstrap_database_roles.py --verify-only
+    python scripts/bootstrap_database_roles.py --verify-only
 then
     echo ""
     echo "DEPLOY STOPPED: the migration identity, role posture, or database" >&2
@@ -197,8 +198,8 @@ echo ""
 # Step 3b: apply migrations on the freshly-pulled image (multi-head safe — erp has
 # hit multi-head states, so `heads` (plural), never `head`).
 echo "→ Applying migrations (alembic upgrade heads)..."
-docker compose run --rm --entrypoint "" -e MIGRATION_DATABASE_URL app \
-    poetry run alembic upgrade heads
+docker compose run --rm -e MIGRATION_DATABASE_URL app \
+    alembic upgrade heads
 echo ""
 
 # Step 4: recreate the app container on the new image + code
@@ -245,4 +246,4 @@ fi
 
 echo ""
 echo "=== Deploy complete ==="
-echo "Verify: https://erp.dotmac.io/health"
+echo "Verify: https://erp.dotmac.io/health/ready"

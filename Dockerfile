@@ -1,4 +1,6 @@
-# Stage 1: Build CSS with Node.js
+# syntax=docker/dockerfile:1.7
+
+# Compile the committed stylesheet without carrying Node into the runtime image.
 FROM node:20-alpine AS css-builder
 
 WORKDIR /build
@@ -12,8 +14,46 @@ COPY templates ./templates
 
 RUN npm run build:css
 
-# Stage 2: Python application
-FROM python:3.12-slim
+
+# Resolve the exact production lock into an isolated application virtualenv.
+# Poetry is builder tooling: it never enters the final image.
+FROM python:3.12-slim AS dependency-builder
+
+ARG POETRY_VERSION=2.4.1
+
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=0 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:$PATH
+
+WORKDIR /build
+
+RUN python -m venv /opt/venv \
+    && /usr/local/bin/python -m pip install --no-cache-dir "poetry==${POETRY_VERSION}"
+
+COPY pyproject.toml poetry.lock ./
+
+# Dotmac packages resolve from the private Forgejo index. The read token is a
+# BuildKit secret, so neither its value nor an authenticated URL enters a layer.
+RUN --mount=type=secret,id=forgejo_token,required=true \
+    POETRY_HTTP_BASIC_FORGEJO_USERNAME=ci-reader \
+    POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)" \
+    poetry install --only main --no-root --no-ansi
+
+
+# The production image contains runtime libraries, the locked application
+# virtualenv and named runtime surfaces only. Source metadata, tests, Poetry,
+# Node and the rest of the repository never enter this stage.
+FROM python:3.12-slim AS runtime
+
+ENV HOME=/home/dotmac \
+    PATH=/opt/venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPYCACHEPREFIX=/tmp/pycache \
+    PYTHONUNBUFFERED=1 \
+    TMPDIR=/tmp \
+    VIRTUAL_ENV=/opt/venv \
+    XDG_CACHE_HOME=/tmp/.cache
 
 WORKDIR /app
 
@@ -26,27 +66,34 @@ RUN apt-get update \
         libpangocairo-1.0-0 \
         libffi8 \
         fonts-dejavu-core \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 dotmac \
+    && useradd \
+        --uid 10001 \
+        --gid 10001 \
+        --create-home \
+        --home-dir /home/dotmac \
+        --shell /usr/sbin/nologin \
+        dotmac \
+    && mkdir -p /app/license
 
-RUN pip install poetry && poetry config virtualenvs.create false
+COPY --from=dependency-builder /opt/venv /opt/venv
 
-COPY pyproject.toml poetry.lock ./
-# Dotmac packages resolve from the private Forgejo index; the read token is a
-# BuildKit secret (id=forgejo_token) so it never lands in a layer. Build with:
-#   docker build --secret id=forgejo_token,src=<file-with-token> .
-RUN --mount=type=secret,id=forgejo_token \
-    POETRY_HTTP_BASIC_FORGEJO_USERNAME=ci-reader \
-    POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)" \
-    poetry install --only main --no-interaction --no-ansi
-# WeasyPrint 62.x expects pydyf.Stream.transform; pin a compatible pydyf.
-RUN pip install --no-cache-dir "pydyf==0.11.0"
-RUN pip install --no-cache-dir python-multipart
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+COPY gunicorn.conf.py ./gunicorn.conf.py
+COPY locales ./locales
+COPY templates ./templates
+COPY static ./static
+COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py
 
-COPY . .
-
-# Copy compiled CSS from builder stage
+# Compiled CSS is copied last so a stale source-tree stylesheet cannot replace
+# the builder output.
 COPY --from=css-builder /build/static/css/app.css ./static/css/app.css
 
-EXPOSE 8001
+EXPOSE 8002
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+USER 10001:10001
+
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app.main:app"]

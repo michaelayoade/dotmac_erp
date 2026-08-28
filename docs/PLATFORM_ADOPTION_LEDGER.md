@@ -245,6 +245,21 @@ slice. The detailed contracts are
 `docs/architecture/deployment-foundation-prerequisites.md` and
 `deploy/README.md`.
 
+**2026-08-28 — Audited ERP runtime-image preparation.** The protected-main
+candidate is built as a numeric-non-root runtime image with Poetry and Node
+confined to builders. CI runs the web process, worker, Beat, role preflight and
+migrations from the same local image under a read-only/capability-dropped
+envelope, then the exact-pinned Deployment Foundation `0.2.0a2` collector
+audits those same bytes before H3 export. The live Compose/deployer changes in
+this slice are compatibility-only: they retire the boot-time installer and use
+direct runtime executables now that Poetry is absent from the image.
+
+This is not the host cutover. Production read-only settings, digest-only H3
+evidence consumption, mutable-overlay retirement, signed-license material and
+resolved-Compose execution evidence remain one subsequent deployment-adapter
+slice. Keeping that boundary explicit prevents a CI-only hardening envelope
+from being reported as live runtime truth.
+
 **2026-08-28 — People composition: tenant storage only.** ERP pins
 `dotmac-people==0.1.0a1` and composes its independent `people` lineage at
 `pe_0001_people_directory`. The six manifest-declared tenant tables are

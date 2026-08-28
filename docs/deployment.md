@@ -10,16 +10,25 @@ Use `.env.example` as a starting point. Required values include:
 
 ## Docker Compose
 
-For local containerized setup:
+For local containerized setup using the published runtime image:
 
 ```bash
-docker compose up --build
+docker compose up -d app worker beat redis
+```
+
+To build the source-backed development profile, point Compose at an existing
+local file containing the approved Forgejo read token. The file is a BuildKit
+secret and its value never belongs in `.env`, Compose, or Git:
+
+```bash
+FORGEJO_TOKEN_FILE=/absolute/path/to/forgejo-read-token \
+  docker compose --profile dev up -d --build app-dev redis
 ```
 
 Apply migrations after containers are up:
 
 ```bash
-docker compose exec app poetry run alembic upgrade heads
+docker compose exec app alembic upgrade heads
 ```
 
 ## Workers

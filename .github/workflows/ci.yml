@@ -20,6 +20,9 @@ env:
   # produced by 2.2.0; 2.4.1 is the accepted exact generator for its next
   # dependency update, and every CI reader is pinned to it now.
   POETRY_VERSION: "2.4.1"
+  # Exact published facility release. Keep this immutable in Git; a repository
+  # variable would make the accepted image contract mutable outside review.
+  FOUNDATION_IMAGE_AUDIT_VERSION: "0.2.0a2"
   DATABASE_URL: "sqlite:///./test.db"
   SECRET_KEY: "ci-test-secret-key-not-for-production"  # pragma: allowlist secret
   REDIS_URL: "redis://localhost:6379/0"
@@ -245,6 +248,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install the declared audit Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -289,6 +297,34 @@ jobs:
           set -euo pipefail
           test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' dotmac-erp:ci)" = "${GITHUB_SHA}"
           test "$(docker image inspect --format '{{index .Config.Labels "io.dotmac.product-manifest.digest"}}' dotmac-erp:ci)" = "${EXPECTED_MANIFEST_DIGEST}"
+
+      - name: Verify runtime filesystem and identity
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect --format '{{.Config.User}}' dotmac-erp:ci)" = "10001:10001"
+          test "$(docker image inspect --format '{{range $port, $_ := .Config.ExposedPorts}}{{$port}}{{end}}' dotmac-erp:ci)" = "8002/tcp"
+          docker run --rm \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --entrypoint sh \
+            dotmac-erp:ci \
+            -ec '
+              test "$(id -u):$(id -g)" = "10001:10001"
+              test ! -e /app/pyproject.toml
+              test ! -e /app/poetry.lock
+              test ! -e /app/tests
+              ! command -v poetry
+              test -r /app/locales/en.json
+              test -r /app/templates/base.html
+              test -r /app/static/css/app.css
+              test -r /app/scripts/bootstrap_database_roles.py
+              python -c "import alembic, celery, logging_loki, sentry_sdk, weasyprint"
+              test -w /tmp
+              test ! -w /app
+            '
 
       - name: Create CI network
         run: docker network create ci-net
@@ -341,6 +377,11 @@ jobs:
           PGPASSWORD: postgres  # pragma: allowlist secret
         run: |
           docker run --rm --name ci-role-bootstrap --network ci-net \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
             -e BOOTSTRAP_DATABASE_URL=postgresql://postgres@ci-db:5432/dotmac_erp_ci \
             -e PGPASSWORD \
             dotmac-erp:ci \
@@ -354,6 +395,11 @@ jobs:
       - name: Run database migrations
         run: |  # pragma: allowlist secret
           docker run --rm --name ci-migrate --network ci-net \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
             -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
             -e MIGRATION_DATABASE_URL=postgresql+psycopg://app_admin@ci-db:5432/dotmac_erp_ci \
             -e SECRET_KEY=ci-test-secret-key-not-for-production \
@@ -366,6 +412,11 @@ jobs:
       - name: Start application  # pragma: allowlist secret
         run: |  # pragma: allowlist secret
           docker run -d --name ci-app --network ci-net \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
             -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
             -e SECRET_KEY=ci-test-secret-key-not-for-production \
             -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
@@ -374,8 +425,7 @@ jobs:
             -e CELERY_BROKER_URL=redis://ci-redis:6379/0 \
             -e DOTMAC_DEV_MODE=true \
             -e GUNICORN_WORKERS=1 \
-            dotmac-erp:ci \
-            gunicorn -c gunicorn.conf.py app.main:app
+            dotmac-erp:ci
 
       - name: Wait for health check
         run: |
@@ -386,9 +436,9 @@ jobs:
               docker logs ci-app
               exit 1
             fi
-            HEALTH=$(docker exec ci-app python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8002/health').read().decode())" 2>/dev/null || echo "")
-            if echo "$HEALTH" | grep -q '"ok"'; then
-              echo "Health check passed: $HEALTH"
+            HEALTH=$(docker exec ci-app python -c "import json,urllib.request; payload=json.load(urllib.request.urlopen('http://localhost:8002/health/ready')); assert str(payload['status']).startswith('ready'); print(payload['status'])" 2>/dev/null || echo "")
+            if [[ "$HEALTH" == ready* ]]; then
+              echo "Readiness check passed: $HEALTH"
               exit 0
             fi
             echo "Waiting for app to be healthy... ($i/60)"
@@ -398,10 +448,120 @@ jobs:
           docker logs ci-app
           exit 1
 
+      - name: Start Celery worker and scheduler  # pragma: allowlist secret
+        run: |  # pragma: allowlist secret
+          set -euo pipefail
+          docker run -d --name ci-worker --network ci-net \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
+            -e SECRET_KEY=ci-test-secret-key-not-for-production \
+            -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
+            -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
+            -e REDIS_URL=redis://ci-redis:6379/0 \
+            -e CELERY_BROKER_URL=redis://ci-redis:6379/0 \
+            -e CELERY_RESULT_BACKEND=redis://ci-redis:6379/1 \
+            -e DOTMAC_DEV_MODE=true \
+            dotmac-erp:ci \
+            celery -A app.celery_app worker -l info
+          docker run -d --name ci-beat --network ci-net \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
+            -e SECRET_KEY=ci-test-secret-key-not-for-production \
+            -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
+            -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
+            -e REDIS_URL=redis://ci-redis:6379/0 \
+            -e CELERY_BROKER_URL=redis://ci-redis:6379/0 \
+            -e CELERY_RESULT_BACKEND=redis://ci-redis:6379/1 \
+            -e DOTMAC_DEV_MODE=true \
+            dotmac-erp:ci \
+            celery -A app.celery_app beat -l info
+
+      - name: Verify Celery worker and scheduler stay operational
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if [ "$(docker inspect --format='{{.State.Status}}' ci-worker 2>/dev/null || true)" = "exited" ]; then
+              docker logs ci-worker
+              exit 1
+            fi
+            if docker logs ci-worker 2>&1 | grep -q "ready"; then
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              docker logs ci-worker
+              exit 1
+            fi
+            sleep 2
+          done
+          sleep 5
+          if [ "$(docker inspect --format='{{.State.Running}}' ci-beat 2>/dev/null || true)" != "true" ]; then
+            docker logs ci-beat
+            exit 1
+          fi
+          heartbeat=""
+          for i in $(seq 1 30); do
+            heartbeat=$(docker exec ci-beat stat -c %Y /tmp/dotmac-erp-beat-heartbeat 2>/dev/null || true)
+            if [[ "$heartbeat" =~ ^[0-9]+$ ]]; then
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              docker logs ci-beat
+              exit 1
+            fi
+            sleep 2
+          done
+          age=$(( $(date +%s) - heartbeat ))
+          if (( age < 0 || age > 120 )); then
+            echo "Beat heartbeat is stale or future-dated: ${age}s" >&2
+            docker logs ci-beat
+            exit 1
+          fi
+
+      # Audit the same local image that the job exercised and later exports.
+      # The released foundation owns this contract; ERP does not maintain a
+      # second list of forbidden tools, paths, labels or runtime identities.
+      - name: Audit tested runtime image
+        env:
+          FORGEJO_READ_TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${FOUNDATION_IMAGE_AUDIT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+[a-z0-9.]*$ ]]; then
+            echo "Foundation image-audit release is unresolved: ${FOUNDATION_IMAGE_AUDIT_VERSION}" >&2
+            exit 1
+          fi
+          python -m venv /tmp/dotmac-image-audit
+          /tmp/dotmac-image-audit/bin/python -m pip install \
+            --disable-pip-version-check \
+            --index-url "https://ci-reader:${FORGEJO_READ_TOKEN}@registry.dotmac.io/api/packages/dotmac/pypi/simple" \
+            "dotmac-deployment-foundation==${FOUNDATION_IMAGE_AUDIT_VERSION}"
+          docker image inspect dotmac-erp:ci > /tmp/inspect.json
+          docker history --no-trunc --format '{{.CreatedBy}}' dotmac-erp:ci \
+            | /tmp/dotmac-image-audit/bin/python -c \
+              'import json,sys; print(json.dumps(sys.stdin.read().splitlines()))' \
+            > /tmp/history.json
+          # Inspection runs as root so unreadable system directories cannot
+          # truncate the filesystem inventory. The audit independently verifies
+          # Config.User is the fixed non-root runtime identity.
+          docker run --rm --user 0:0 --entrypoint sh dotmac-erp:ci \
+            -c 'find / -xdev -type f' > /tmp/layers.txt
+          /tmp/dotmac-image-audit/bin/dotmac-deploy image-audit \
+            dotmac-erp:ci \
+            --inspect /tmp/inspect.json \
+            --history /tmp/history.json \
+            --layers /tmp/layers.txt
+
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f ci-app ci-db ci-redis 2>/dev/null || true
+          docker rm -f ci-app ci-worker ci-beat ci-db ci-redis 2>/dev/null || true
           docker network rm ci-net 2>/dev/null || true
 
       # GitHub job filesystems are isolated. Only a protected-main push needs
