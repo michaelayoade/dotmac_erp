@@ -54,7 +54,8 @@ class DbScheduler(Scheduler):
             ) as handle:
                 temporary = Path(handle.name)
                 handle.write(f"{time.time_ns()}\n")
-            assert temporary is not None
+            if temporary is None:
+                raise RuntimeError("Failed to create scheduler heartbeat file")
             os.replace(temporary, path)
         finally:
             if temporary is not None:

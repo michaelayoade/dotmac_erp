@@ -154,6 +154,7 @@ def _stub_employee_list_dependencies(monkeypatch) -> None:
         lambda request, auth, title, active, db=None: {
             "title": title,
             "active_page": active,
+            "user": None,
         },
     )
 
@@ -862,6 +863,11 @@ async def test_create_employee_response_passes_siwes_intern_designation_id(
     captured: dict[str, object] = {}
     _stub_salary_structure_lookup(
         db_session, monkeypatch, person.organization_id, structure_id
+    )
+    monkeypatch.setattr(
+        HRWebService,
+        "_designation_requires_nysc_dates",
+        lambda self, db, organization_id, designation_id: False,
     )
 
     def _capture_create(self, person_id, data):

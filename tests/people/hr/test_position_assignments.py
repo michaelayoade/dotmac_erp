@@ -17,6 +17,7 @@ from app.models.people.hr import (
     PositionVacancyRoutingPolicy,
 )
 from app.models.person import Person
+from app.models.people.scheduling import ShiftPatternAssignment
 from app.services.common import ConflictError, PaginationParams
 from app.services.people.hr import EmployeeFilters, EmployeeService, EmployeeUpdateData
 from app.services.people.hr.errors import InvalidManagerError
@@ -40,6 +41,7 @@ def _ensure_hr_position_tables(engine) -> None:
         Employee.__table__,
         Position.__table__,
         PositionAssignment.__table__,
+        ShiftPatternAssignment.__table__,
     )
     for table in tables:
         for column in table.columns:
