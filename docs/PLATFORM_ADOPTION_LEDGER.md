@@ -213,6 +213,26 @@ tenancy, permissions, settings, database schema or migration lineage.
 
 ## Adoption slices
 
+**2026-08-28 — Deployment release identity prerequisites.** ERP declares one
+release-time `ProductAssemblySpec` for the canonical `dotmac-erp` product over
+the five module manifests already
+present in `COMPOSED_MODULE_LINEAGES`: Accounting, Files, Imports, Numbering
+and Tax. Its canonical `deploy/product-manifest.json` preserves exact module
+codes, distribution versions and explicit/effective persistence planes; it
+does not use the capability-only `ProductManifestSnapshot` as a substitute.
+
+The Docker context excludes `deploy/`, breaking the product-manifest/image
+digest self-reference. CI builds and tests one image, then transfers that exact
+image between jobs; the publication job is structurally forbidden from
+rebuilding it. Only after every gate in the CI workflow succeeds — including an
+exact pinned re-run of the independently required Engineering standards check
+— does the registry push return an immutable image digest; CI uploads a
+non-secret `image-release.json` binding that exact reference to `GITHUB_SHA`.
+This is release evidence only: no deployment descriptor, host
+execution, runtime factory adoption, module authority movement or production
+cutover occurs in this slice. The detailed contract is
+`docs/architecture/deployment-foundation-prerequisites.md`.
+
 **2026-08-25 — Numbering composition: tenant storage only.** ERP pins
 `dotmac-numbering==0.1.0a2` and composes its independent `numbering` lineage at
 `nu_0001_numbering`. The assembly explicitly selects only
