@@ -58,6 +58,18 @@ The deployment-foundation adapter downloads verified release evidence and
 explicitly assembles a deployment plan; it may not read an accidental copy from
 `/app/deploy`.
 
+## Persistent-file runtime invariant
+
+Application and worker containers do not own durable file volumes. People HR
+handbooks, generated finance report JSON and automation-generated PDFs use the
+existing `FileUploadService -> S3StorageService` path and persist opaque object
+references in their domain rows. An object-store failure fails the operation;
+there is no container-path or named-volume fallback. Consequently a deployment
+descriptor must bind working S3 configuration for every application/worker
+process and may keep the application root filesystem ephemeral/read-only with
+respect to business files. Logs, temporary spools and generated response bytes
+are not durable business-file stores.
+
 ## CI contract
 
 `publish-image` waits for every gate in the CI workflow, including security,
