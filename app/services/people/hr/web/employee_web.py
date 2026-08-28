@@ -5,9 +5,11 @@ Provides view-focused data and operations for HR web routes.
 
 from __future__ import annotations
 
+import csv
 import logging
 from datetime import date, datetime, timezone
 from html import escape
+from io import StringIO
 from urllib.parse import urlencode
 
 try:
@@ -20,7 +22,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -138,6 +140,33 @@ class HRWebService:
     """Service for HR web views."""
 
     FINAL_PAYROLL_EDITOR_ROLES = frozenset({"admin", "hr_director", "hr_manager"})
+
+    EMPLOYEE_EXPORT_FIELDS = {
+        "employee_code": ("Employee Code", lambda emp: emp.employee_code),
+        "full_name": ("Full Name", lambda emp: emp.person.name if emp.person else ""),
+        "work_email": ("Work Email", lambda emp: emp.person.email if emp.person else ""),
+        "work_phone": ("Work Phone", lambda emp: emp.person.phone if emp.person else ""),
+        "personal_email": ("Personal Email", lambda emp: emp.personal_email),
+        "personal_phone": ("Personal Phone", lambda emp: emp.personal_phone),
+        "department": ("Department", lambda emp: emp.department.department_name if emp.department else ""),
+        "designation": ("Designation", lambda emp: emp.designation.designation_name if emp.designation else ""),
+        "employment_type": ("Employment Type", lambda emp: emp.employment_type.type_name if emp.employment_type else ""),
+        "status": ("Status", lambda emp: emp.status.value if emp.status else ""),
+        "date_of_joining": ("Date of Joining", lambda emp: emp.date_of_joining),
+        "date_of_leaving": ("Date of Leaving", lambda emp: emp.date_of_leaving),
+        "probation_end_date": ("Probation End Date", lambda emp: emp.probation_end_date),
+        "confirmation_date": ("Confirmation Date", lambda emp: emp.confirmation_date),
+    }
+    DEFAULT_EMPLOYEE_EXPORT_FIELDS = (
+        "employee_code",
+        "full_name",
+        "work_email",
+        "department",
+        "designation",
+        "employment_type",
+        "status",
+        "date_of_joining",
+    )
 
     # =========================================================================
     # Employees
@@ -535,11 +564,19 @@ class HRWebService:
 
         # Parse status filter
         status_filter = None
+        status_filters = None
         archive_only = False
         if status:
             status_value = status.strip().lower()
             if status_value in {"archive", "exit_archive"}:
                 archive_only = True
+            elif status_value == "inactive":
+                status_filters = [
+                    EmployeeStatus.SUSPENDED,
+                    EmployeeStatus.RESIGNED,
+                    EmployeeStatus.TERMINATED,
+                    EmployeeStatus.RETIRED,
+                ]
             else:
                 try:
                     status_filter = EmployeeStatus(status.upper())
@@ -555,10 +592,16 @@ class HRWebService:
         employee_filters = EmployeeFilters(
             search=search,
             status=status_filter,
-            include_archived=include_exit_history,
+            statuses=status_filters,
+            include_archived=(
+                include_exit_history
+                or status_filters is not None
+            ),
             archive_only=archive_only,
             include_deleted=(
-                include_exit_history or status_filter == EmployeeStatus.TERMINATED
+                include_exit_history
+                or status_filters is not None
+                or status_filter == EmployeeStatus.TERMINATED
             ),
             department_id=coerce_uuid(department_id) if department_id else None,
             designation_id=coerce_uuid(designation_id) if designation_id else None,
@@ -721,12 +764,102 @@ class HRWebService:
             "success": success,
             "error": error,
             "active_filters": active_filters,
+            "employee_export_fields": [
+                {"key": key, "label": label}
+                for key, (label, _) in self.EMPLOYEE_EXPORT_FIELDS.items()
+            ],
+            "default_employee_export_fields": self.DEFAULT_EMPLOYEE_EXPORT_FIELDS,
         }
 
         return templates.TemplateResponse(
             request,
             "people/hr/employees.html",
             context,
+        )
+
+    @staticmethod
+    def _csv_safe_cell(value: object) -> str:
+        """Prevent spreadsheet applications from evaluating exported values."""
+        if value is None:
+            return ""
+        text = str(value)
+        return f"'{text}" if text.startswith(("=", "+", "-", "@")) else text
+
+    def export_employees_csv_response(
+        self,
+        *,
+        auth: WebAuthContext,
+        db: Session,
+        fields: list[str],
+        status: str | None = None,
+        department_id: str | None = None,
+        designation_id: str | None = None,
+        date_of_joining_from: str | None = None,
+        date_of_joining_to: str | None = None,
+        include_archived: bool = False,
+    ) -> Response:
+        """Build a CSV from explicitly selected, allowlisted employee fields."""
+        selected_fields = [field for field in fields if field in self.EMPLOYEE_EXPORT_FIELDS]
+        if not selected_fields:
+            raise HTTPException(status_code=422, detail="Select at least one export field")
+
+        status_filter = None
+        status_filters = None
+        if status:
+            if status.strip().lower() == "inactive":
+                status_filters = [
+                    EmployeeStatus.SUSPENDED,
+                    EmployeeStatus.RESIGNED,
+                    EmployeeStatus.TERMINATED,
+                    EmployeeStatus.RETIRED,
+                ]
+            else:
+                try:
+                    status_filter = EmployeeStatus(status.upper())
+                except ValueError as exc:
+                    raise HTTPException(status_code=422, detail="Invalid employee status") from exc
+
+        org_id = coerce_uuid(auth.organization_id)
+        filters = EmployeeFilters(
+            status=status_filter,
+            statuses=status_filters,
+            include_archived=(
+                include_archived
+                or status_filters is not None
+                or status_filter == EmployeeStatus.RESIGNED
+            ),
+            include_deleted=(
+                include_archived
+                or status_filters is not None
+                or status_filter == EmployeeStatus.TERMINATED
+            ),
+            department_id=coerce_uuid(department_id) if department_id else None,
+            designation_id=coerce_uuid(designation_id) if designation_id else None,
+            date_of_joining_from=self._parse_date(date_of_joining_from or ""),
+            date_of_joining_to=self._parse_date(date_of_joining_to or ""),
+        )
+        employees = EmployeeService(db, org_id).list_employees(
+            filters,
+            PaginationParams(limit=100_000),
+            eager_load=True,
+        ).items
+
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow([self.EMPLOYEE_EXPORT_FIELDS[field][0] for field in selected_fields])
+        for employee in employees:
+            writer.writerow(
+                [
+                    self._csv_safe_cell(self.EMPLOYEE_EXPORT_FIELDS[field][1](employee))
+                    for field in selected_fields
+                ]
+            )
+
+        filename = f"employees_{date.today():%Y%m%d}.csv"
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
     def employee_stats_response(
