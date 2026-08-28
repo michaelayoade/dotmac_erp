@@ -172,6 +172,7 @@ def test_publish_consumes_the_tested_image_and_cannot_rebuild_it() -> None:
     assert "docker image load" in publish_job
     assert "docker image tag dotmac-erp:ci" in publish_job
     assert "docker image push" in publish_job
+    assert "type=sha,prefix=sha-,format=short" in publish_job
     assert "type=sha,prefix=sha-,format=long" in publish_job
     assert "docker buildx imagetools inspect --raw" in publish_job
     assert "sha256sum" in publish_job

@@ -523,7 +523,8 @@ jobs:
   # ---------------------------------------------------------------------------
   # Publish Docker Image to GHCR
   # Only runs on main branch after all checks pass.
-  # Tags: latest, sha-<full revision>, date (YYYY-MM-DD)
+  # Tags: latest, sha-<short revision> (deploy compatibility),
+  # sha-<full revision> (release evidence), date (YYYY-MM-DD)
   # ---------------------------------------------------------------------------
   publish-image:
     name: Publish Docker Image
@@ -574,6 +575,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest
+            type=sha,prefix=sha-,format=short
             type=sha,prefix=sha-,format=long
             type=raw,value={{date 'YYYY-MM-DD'}}
 

@@ -58,8 +58,11 @@ pre-commit and the independent private-key scan. The Docker job builds one
 image, applies its OCI metadata before testing, runs migrations and the health
 probe against it, and exports that exact image only for a protected-main push.
 The publication job downloads and loads the tested image, applies registry tags
-without changing its bytes, pushes it and resolves the registry's digest for
-the immutable full-revision tag. It contains no image build step. GitHub cannot
+without changing its bytes, and pushes it. The existing production deployer
+continues to consume the immutable seven-character revision tag, while release
+evidence resolves the same image through the unambiguous full-revision tag.
+Both tags point at the exact tested bytes. The publication job contains no image
+build step. GitHub cannot
 express a cross-workflow `needs`, so CI re-runs the exact pinned Governance
 action as a release gate while retaining the separate Engineering standards
 workflow and its stable branch-protection check context. Only the registry
