@@ -29,8 +29,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DESCRIPTOR_PATH = REPO_ROOT / "deploy" / "product.toml"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "deployment-conformance.yml"
+DEPLOYMENT_README_PATH = REPO_ROOT / "deploy" / "README.md"
 FOUNDATION_VERSION = "0.2.0a1"
 FOUNDATION_RELEASE_SHA = "ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844"
+FOUNDATION_WORKFLOW_SHA = "6a8fdb03d4e7594d3c943b338de0872a6f8c2457"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
@@ -70,11 +72,12 @@ def test_published_foundation_is_exact_pinned_at_both_install_seams() -> None:
     immutable_call = (
         "michaelayoade/dotmac_starter_mt/"
         ".github/workflows/deployment-conformance.yml@"
-        f"{FOUNDATION_RELEASE_SHA}"
+        f"{FOUNDATION_WORKFLOW_SHA}"
     )
     assert immutable_call in workflow
     assert f'foundation-version: "{FOUNDATION_VERSION}"' in workflow
     assert "FORGEJO_READ_TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}" in workflow
+    assert FOUNDATION_RELEASE_SHA in DEPLOYMENT_README_PATH.read_text(encoding="utf-8")
 
 
 def test_descriptor_parses() -> None:

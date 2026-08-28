@@ -1,8 +1,9 @@
 name: Deployment conformance
 
-# Calls the Starter-owned reusable gate at the immutable source revision for
-# the published `dotmac-deployment-foundation==0.2.0a1` release. The annotated
-# tag peels to this exact SHA; a branch or tag is not an admissible workflow pin.
+# Calls the Starter-owned reusable gate at an immutable source revision. The
+# published `dotmac-deployment-foundation==0.2.0a1` tag peels to ac21c9ae; this
+# later workflow-only revision fixes non-strict digest conformance without
+# changing the released package bytes. A branch or tag is not admissible here.
 
 on:
   push:
@@ -15,7 +16,7 @@ permissions:
 
 jobs:
   deployment:
-    uses: michaelayoade/dotmac_starter_mt/.github/workflows/deployment-conformance.yml@ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844
+    uses: michaelayoade/dotmac_starter_mt/.github/workflows/deployment-conformance.yml@6a8fdb03d4e7594d3c943b338de0872a6f8c2457
     with:
       descriptor: deploy/product.toml
       rendered-dir: deploy/rendered

@@ -229,8 +229,11 @@ exact pinned re-run of the independently required Engineering standards check
 — does the registry push return an immutable image digest; CI uploads a
 non-secret `image-release.json` binding that exact reference to `GITHUB_SHA`.
 ERP exact-pins the published `dotmac-deployment-foundation==0.2.0a1` build-time
-facility and its reusable conformance workflow at the release commit
-`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`. `deploy/product.toml` uses the same
+facility released from commit
+`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`; its reusable conformance workflow
+is independently pinned to immutable commit
+`6a8fdb03d4e7594d3c943b338de0872a6f8c2457`, whose workflow-only fix does not
+change the released package. `deploy/product.toml` uses the same
 `dotmac-erp` product identity and binds the real canonical manifest digest. Its
 four deterministic rendered assets are checked byte-for-byte and parsed by a
 real Compose engine. Only the image digest remains an explicit sentinel until

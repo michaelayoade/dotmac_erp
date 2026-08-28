@@ -4,8 +4,10 @@
 published `dotmac-deployment-foundation==0.2.0a1` facility (Starter ADR-0070).
 The package is exact-pinned as a dev dependency from Dotmac's private Forgejo
 index. Its annotated release tag peels to Starter commit
-`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`; ERP's reusable conformance workflow
-is pinned to that same immutable source revision.
+`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`. ERP's reusable conformance workflow
+is pinned separately to immutable Starter commit
+`6a8fdb03d4e7594d3c943b338de0872a6f8c2457`, which fixes the workflow's
+non-strict digest gate without changing the released package bytes.
 
 The descriptor and `app/product_assembly.py` share the product identity
 `dotmac-erp`. The canonical `deploy/product-manifest.json` binds the exact
@@ -37,7 +39,8 @@ Run the same adapter checks with:
 
 ```bash
 poetry run dotmac-deploy -f deploy/product.toml validate
-poetry run dotmac-deploy -f deploy/product.toml render --check -o deploy/rendered
+poetry run dotmac-deploy -f deploy/product.toml render \
+  --thresholds deploy/alerts/thresholds.json --check -o deploy/rendered
 poetry run dotmac-deploy -f deploy/product.toml plan
 poetry run dotmac-deploy -f deploy/product.toml preflight
 poetry run dotmac-deploy -f deploy/product.toml backup
