@@ -937,6 +937,26 @@ def admin_settings_hub(
     return templates.TemplateResponse(request, "admin/settings/index.html", context)
 
 
+@router.get("/settings/integrations", response_class=HTMLResponse)
+def admin_settings_integrations(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Unified integration control-plane hub."""
+    if not auth or not auth.is_authenticated or not auth.organization_id:
+        return RedirectResponse(
+            url="/login?next=/admin/settings/integrations", status_code=303
+        )
+    context = _admin_base_context(request, auth, "Integrations", db)
+    context.update(
+        admin_settings_web_service.get_integrations_context(db, auth.organization_id)
+    )
+    return templates.TemplateResponse(
+        request, "admin/settings/integrations.html", context
+    )
+
+
 @router.get("/settings/organization", response_class=HTMLResponse)
 def admin_settings_organization(
     request: Request,
@@ -1703,6 +1723,9 @@ def admin_settings_paystack(
         context.update(
             admin_settings_web_service.get_paystack_context(db, auth.organization_id)
         )
+    base_url = str(request.base_url).rstrip("/")
+    context["paystack_webhook_url"] = f"{base_url}/api/v1/payments/webhook/paystack"
+    context["paystack_relay_path"] = "/api/v1/payment-events/paystack"
     return templates.TemplateResponse(request, "admin/settings/paystack.html", context)
 
 
