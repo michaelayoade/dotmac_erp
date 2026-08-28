@@ -129,6 +129,11 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction
 
+      - name: Verify canonical product assembly manifest
+        run: >-
+          poetry run python -m scripts.product_manifest check
+          --path deploy/product-manifest.json
+
       - name: Run tests with coverage
         run: poetry run pytest tests/ --ignore=tests/integration --ignore=tests/e2e --cov=app --cov-report=xml --cov-report=term-missing -q --timeout=60
 
@@ -209,6 +214,25 @@ jobs:
       - name: Scan tracked files for private key material
         run: bash scripts/ci/scan_private_keys.sh
 
+  # GitHub `needs` cannot cross workflow boundaries. Keep the independently
+  # required Engineering standards workflow (and its stable branch-protection
+  # context), while re-running the exact pinned gate here so an image cannot be
+  # published before this revision has passed the accepted governance source.
+  release-engineering-standards:
+    name: Release engineering standards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the evaluated product revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Enforce the accepted Dotmac engineering standards
+        uses: michaelayoade/dotmac_governance/.github/actions/standards-check@a19259b10568d29dc0a9617347498fea7f1e7a97
+        with:
+          default-branch: ${{ github.event.repository.default_branch }}
+
   # ---------------------------------------------------------------------------
   # Docker Build & Health Check
   # Builds the multi-stage image (Node CSS + Python) and verifies the container
@@ -224,12 +248,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Labels are image bytes, so they must be present before the image is
+      # tested. The publish job may add registry tags, but it must never rebuild
+      # or otherwise mutate this image after the health and migration gates.
+      - name: Extract immutable image metadata
+        id: tested-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+
       - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           load: true
           tags: dotmac-erp:ci
+          labels: ${{ steps.tested-meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           secrets: |
@@ -348,6 +382,26 @@ jobs:
         run: |
           docker rm -f ci-app ci-db ci-redis 2>/dev/null || true
           docker network rm ci-net 2>/dev/null || true
+
+      # GitHub job filesystems are isolated. Only a protected-main push needs
+      # the handoff: PRs still build and exercise the same image but never
+      # create a publication artifact. Saving after every runtime check passes
+      # makes the artifact, rather than a later rebuild, the release candidate.
+      - name: Export the tested image
+        if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          docker image save dotmac-erp:ci | gzip -1 > tested-image.tar.gz
+
+      - name: Upload the tested image for publication
+        if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tested-image-${{ github.sha }}
+          path: tested-image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
   # ---------------------------------------------------------------------------
   # Integration Tests — PostgreSQL
@@ -469,13 +523,22 @@ jobs:
   # ---------------------------------------------------------------------------
   # Publish Docker Image to GHCR
   # Only runs on main branch after all checks pass.
-  # Tags: latest, sha-<short>, date (YYYY-MM-DD)
+  # Tags: latest, sha-<full revision>, date (YYYY-MM-DD)
   # ---------------------------------------------------------------------------
   publish-image:
     name: Publish Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [lint, type-check, test, docker-build, integration-test]
+    needs:
+      - lint
+      - type-check
+      - test
+      - security
+      - pre-commit
+      - secret-scan
+      - release-engineering-standards
+      - docker-build
+      - integration-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read
@@ -485,6 +548,17 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Download the tested image
+        uses: actions/download-artifact@v4
+        with:
+          name: tested-image-${{ github.sha }}
+
+      - name: Load the tested image
+        run: |
+          set -euo pipefail
+          gzip -dc tested-image.tar.gz | docker image load
+          docker image inspect dotmac-erp:ci > /dev/null
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -500,17 +574,54 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest
-            type=sha,prefix=sha-,format=short
+            type=sha,prefix=sha-,format=long
             type=raw,value={{date 'YYYY-MM-DD'}}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+      - name: Tag and push the tested image
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r image_tag; do
+            if [ -n "${image_tag}" ]; then
+              docker image tag dotmac-erp:ci "${image_tag}"
+              docker image push "${image_tag}"
+            fi
+          done <<< "${IMAGE_TAGS}"
+
+      - name: Resolve the registry digest of the tested image
+        id: registry
+        env:
+          IMMUTABLE_IMAGE_TAG: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The OCI digest is the SHA-256 of the exact raw registry-manifest
+          # bytes. Buildx's human display is not a machine-readable contract,
+          # while `--raw` returns those bytes unchanged.
+          manifest_sha="$(docker buildx imagetools inspect --raw \
+            "${IMMUTABLE_IMAGE_TAG}" | sha256sum | cut -d ' ' -f 1)"
+          image_digest="sha256:${manifest_sha}"
+          if [[ ! "${image_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "registry returned an invalid image digest" >&2
+            exit 1
+          fi
+          echo "digest=${image_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Persist immutable image release evidence
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
+          IMAGE_DIGEST: ${{ steps.registry.outputs.digest }}
+        run: >-
+          python3 scripts/write_image_release.py
+          --repository "${IMAGE_REPOSITORY}"
+          --digest "${IMAGE_DIGEST}"
+          --git-sha "${GITHUB_SHA}"
+          --output image-release.json
+
+      - name: Upload immutable image release evidence
+        uses: actions/upload-artifact@v4
         with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          secrets: |
-            forgejo_token=${{ secrets.FORGEJO_READ_TOKEN }}
+          name: image-release-${{ github.sha }}
+          path: image-release.json
+          if-no-files-found: error
+          retention-days: 90
