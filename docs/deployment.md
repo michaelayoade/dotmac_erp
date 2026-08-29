@@ -59,8 +59,12 @@ This script will:
   instead of the mutable `:latest`
 - Run database migrations (`alembic upgrade heads`) on the pulled image
 - Recreate the containers on the pinned image
-- Health-gate the app, and on failure **auto-roll back** — code reset to the
-  previous commit and the image tag restored to the previously-running one
+- Health-gate the app and admit the worker ping plus Beat heartbeat. Ordinary
+  compatible deployments auto-roll back on failure — code resets to the
+  previous commit and the image tag returns to the previously-running one.
+  The explicit Employment Type authority activation is the exception: after
+  its migration commits, every later failure is forward-fix-only because the
+  previous image contains retired legacy writers. See `deploy/README.md`.
 - Sync static files to nginx
 
 The pinned tag is controlled by `ERP_IMAGE_TAG` (see `.env.example`); the deploy

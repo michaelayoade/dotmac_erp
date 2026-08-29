@@ -699,6 +699,137 @@ def test_employee_manager_clear_syncs_position_parent_and_legacy_cache(db_sessio
     assert OrgResolver(db_session).get_manager(employee.employee_id, org_id) is None
 
 
+def test_employee_update_retains_unchanged_inactive_employment_type(
+    db_session, monkeypatch
+):
+    _ensure_hr_position_tables(db_session.bind)
+    org_id = uuid.uuid4()
+    employee = _make_employee(db_session, org_id, "EMP-001")
+    current_employment_type_id = uuid.uuid4()
+    employee.employment_type_id = current_employment_type_id
+    service = EmployeeService(db_session, org_id)
+    monkeypatch.setattr(
+        service,
+        "get_employee",
+        lambda _employee_id: employee,
+    )
+
+    class _UnexpectedOwner:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("unchanged current assignment must not be revalidated")
+
+    monkeypatch.setattr(
+        "app.services.people.hr.employees.EmploymentTypeService",
+        _UnexpectedOwner,
+    )
+
+    data = EmployeeUpdateData(
+        employment_type_id=current_employment_type_id,
+        provided_fields={"employment_type_id"},
+    )
+    updated = service.update_employee(employee.employee_id, data)
+
+    assert updated.employment_type_id == current_employment_type_id
+
+
+def test_employee_update_requires_active_when_employment_type_changes(
+    db_session, monkeypatch
+):
+    _ensure_hr_position_tables(db_session.bind)
+    org_id = uuid.uuid4()
+    employee = _make_employee(db_session, org_id, "EMP-001")
+    employee.employment_type_id = uuid.uuid4()
+    requested_employment_type_id = uuid.uuid4()
+    required: list[uuid.UUID] = []
+    service = EmployeeService(db_session, org_id)
+    monkeypatch.setattr(
+        service,
+        "get_employee",
+        lambda _employee_id: employee,
+    )
+
+    class _Owner:
+        def __init__(self, db, organization_id):
+            assert db is db_session
+            assert organization_id == org_id
+
+        def require_active(self, employment_type_id):
+            required.append(employment_type_id)
+
+    monkeypatch.setattr(
+        "app.services.people.hr.employees.EmploymentTypeService",
+        _Owner,
+    )
+
+    data = EmployeeUpdateData(
+        employment_type_id=requested_employment_type_id,
+        provided_fields={"employment_type_id"},
+    )
+    updated = service.update_employee(employee.employee_id, data)
+
+    assert required == [requested_employment_type_id]
+    assert updated.employment_type_id == requested_employment_type_id
+
+
+def test_employee_update_omitted_employment_type_preserves_current_assignment(
+    db_session, monkeypatch
+):
+    _ensure_hr_position_tables(db_session.bind)
+    org_id = uuid.uuid4()
+    employee = _make_employee(db_session, org_id, "EMP-001")
+    current_employment_type_id = uuid.uuid4()
+    employee.employment_type_id = current_employment_type_id
+    service = EmployeeService(db_session, org_id)
+    monkeypatch.setattr(
+        service,
+        "get_employee",
+        lambda _employee_id: employee,
+    )
+
+    class _UnexpectedOwner:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("an omitted assignment must not validate a type")
+
+    monkeypatch.setattr(
+        "app.services.people.hr.employees.EmploymentTypeService",
+        _UnexpectedOwner,
+    )
+
+    updated = service.update_employee(employee.employee_id, EmployeeUpdateData())
+
+    assert updated.employment_type_id == current_employment_type_id
+
+
+def test_employee_update_explicit_blank_clears_employment_type(db_session, monkeypatch):
+    _ensure_hr_position_tables(db_session.bind)
+    org_id = uuid.uuid4()
+    employee = _make_employee(db_session, org_id, "EMP-001")
+    employee.employment_type_id = uuid.uuid4()
+    service = EmployeeService(db_session, org_id)
+    monkeypatch.setattr(
+        service,
+        "get_employee",
+        lambda _employee_id: employee,
+    )
+
+    class _UnexpectedOwner:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("clearing an assignment must not validate a type")
+
+    monkeypatch.setattr(
+        "app.services.people.hr.employees.EmploymentTypeService",
+        _UnexpectedOwner,
+    )
+
+    data = EmployeeUpdateData(
+        employment_type_id=None,
+        provided_fields={"employment_type_id"},
+    )
+    updated = service.update_employee(employee.employee_id, data)
+
+    assert updated.employment_type_id is None
+
+
 def test_primary_assignment_syncs_existing_legacy_manager_to_position_parent(
     db_session,
 ):

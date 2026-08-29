@@ -92,6 +92,7 @@ COPY static ./static
 # /app, so an entrypoint missing here is unreachable at deploy time.
 COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py
 COPY scripts/verify_runtime_admission.py ./scripts/verify_runtime_admission.py
+COPY scripts/probe_people_employment_type_activation.py ./scripts/probe_people_employment_type_activation.py
 
 # Compiled CSS is copied last so a stale source-tree stylesheet cannot replace
 # the builder output.

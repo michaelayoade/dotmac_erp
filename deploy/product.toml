@@ -366,7 +366,7 @@ owner_material = "MIGRATION_DATABASE_URL"
 # Tax. The architecture gate queries Alembic's composed graph directly; this is
 # not a source-text approximation.
 expected_heads = [
-    "20260828_route_permissions",
+    "20260828_people_et_activation",
     "fi_0001_stored_files",
     "im_0001_import_runs",
     "ac_0001_accounting",
@@ -374,16 +374,14 @@ expected_heads = [
     "tx_0003_result_fingerprint",
     "pe_0001_people_directory",
 ]
-# INFERRED, not an explicit ERP declaration: scripts/deploy.sh's real step
-# order runs migrations (Step 3b) BEFORE recreating the app container (Step
-# 4) — the OLD app container keeps serving while the schema changes under
-# neath it, then the new image is swapped in. That is the "online" shape
-# (previous image must tolerate the new schema), but ERP does not explicitly
-# assert backward-compatibility discipline anywhere, and this repository has
-# hit multi-head states before. FLAGGED FOR REVIEW: whoever owns ERP's
-# migration-review discipline should confirm "online" is actually true rather
-# than accepting this as inferred from step ORDER alone.
-compatibility = "online"
+# `20260828_people_et_activation` changes the writer/authority boundary. The
+# previous image contains legacy writers and is therefore neither allowed to
+# serve during DDL nor a valid rollback target afterward. The only supported
+# activation path is `scripts/deploy.sh --people-employment-type-activation`,
+# which drains app/worker/beat before migration and becomes forward-fix-only as
+# soon as the migration commits. This safe-direction declaration also makes the
+# shared Foundation plan refuse a warm/rollback path while it remains shadowed.
+compatibility = "maintenance_required"
 # NOT sourced from ERP: scripts/deploy.sh's migration step is a bare
 # `alembic upgrade heads` with no lock/retry loop at all (unlike dotmac_sub's
 # `MIGRATION_MAX_ATTEMPTS`/`MIGRATION_RETRY_SECONDS`, inventory § 3 row 18).

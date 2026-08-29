@@ -73,6 +73,49 @@ def test_employee_export_requires_a_selected_allowlisted_field():
         )
 
 
+def test_employee_export_resolves_employment_type_from_complete_owner_catalogue(
+    monkeypatch,
+):
+    organization_id = uuid4()
+    employment_type_id = uuid4()
+    employee = SimpleNamespace(employment_type_id=employment_type_id)
+    employment_type = SimpleNamespace(
+        employment_type_id=employment_type_id,
+        type_name="Fixed Term",
+    )
+    auth = _auth()
+    auth.organization_id = organization_id
+    db = object()
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmployeeService.list_employees",
+        lambda self, filters, pagination, *, eager_load=False: SimpleNamespace(
+            items=[employee]
+        ),
+    )
+
+    class _Owner:
+        def __init__(self, session, requested_organization_id):
+            assert session is db
+            assert requested_organization_id == organization_id
+
+        def iter_all(self, active=None):
+            assert active is None
+            return (employment_type,)
+
+    monkeypatch.setattr(
+        "app.services.people.hr.web.employee_web.EmploymentTypeService", _Owner
+    )
+
+    response = HRWebService().export_employees_csv_response(
+        auth=auth,
+        db=db,
+        fields=["employment_type"],
+    )
+
+    assert response.body.decode() == "Employment Type\r\nFixed Term\r\n"
+
+
 def test_employee_export_inactive_filter_includes_all_inactive_lifecycle_statuses(
     monkeypatch,
 ):
