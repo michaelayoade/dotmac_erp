@@ -87,7 +87,9 @@ known app/worker/Beat Compose container (including one-offs), passes the
 one-revision activation opt-in, and never restores the previous legacy-writing
 image after the migration commits. If the migration container fails after an
 ambiguous transport boundary, rollback is allowed only when a fresh database
-probe positively finds the bootstrap fence and no activation revision. The new
+probe sees the module-owned authority relation `mod_people.employment_types`
+(its positive control) and finds neither the activation revision nor the
+activation's own `hr.enforce_employment_type_projection()` fence. The new
 app, worker ping, and Beat heartbeat must all be admitted before the deployment
 is complete. This path is independent of the Foundation executor: the
 descriptor and rendered assets remain reference evidence only.

@@ -127,8 +127,11 @@ fixed point and retained its non-secret evidence. That predecessor service and
 CLI are absent from the activated application, so no legacy-to-module decision
 path survives the switch.
 
-`20260828_people_et_activation` descends directly from that gate. It drops the
-bootstrap lock function and grants `app_user` only schema `USAGE` plus table
+`20260828_people_et_activation` descends from that gate through
+`20260828_route_permissions`, the revision that landed on `main` from the same
+predecessor while this branch was open. The ERP lineage therefore keeps exactly
+one head, which is the head `deploy/product.toml`'s `expected_heads` names. It
+drops the bootstrap lock function and grants `app_user` only schema `USAGE` plus table
 `SELECT`, `INSERT`, and `UPDATE` for the compatibility projector. `DELETE`,
 `TRUNCATE`, table/column `REFERENCES`, and `TRIGGER` are explicitly revoked.
 The same migration idempotently materializes the existing ERP-owned
@@ -167,9 +170,15 @@ For an existing deployment, that opt-in is installed only by
 `scripts/deploy.sh --people-employment-type-activation`. The mode refuses
 `--quick`, stops app, worker, and Beat before DDL, and holds the database proof
 and authority switch in the migration transaction. A migration failure may
-restore the drained previous image only when a fresh read positively finds the
-pre-activation bootstrap fence and no activation revision. A non-zero Alembic
-container exit alone is ambiguous and defaults to the safe direction. Once
+restore the drained previous image only when a fresh read of the CURRENT
+module-owned surface says so: the module-owned authority relation
+`mod_people.employment_types` must be visible (the probe's positive control,
+without which an absent revision proves nothing), and both the activation
+revision and the activation's own `hr.enforce_employment_type_projection()`
+fence must be absent. Those two share one transaction, so they cannot disagree
+unless the state is torn. The probe never reads the retired bootstrap fence,
+which this revision removes. A non-zero Alembic container exit alone is
+ambiguous and defaults to the safe direction. Once
 activation commits, the script becomes forward-fix-only: an app health, static
 sync, worker-ping, Beat-heartbeat, or later deploy failure never restarts the
 previous image's legacy writers. The deploy also refuses a running `app-dev`
