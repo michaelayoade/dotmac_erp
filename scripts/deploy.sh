@@ -326,7 +326,7 @@ echo ""
 
 # Step 3b: apply migrations on the freshly-pulled image (multi-head safe — erp has
 # hit multi-head states, so `heads` (plural), never `head`).
-migration_env=(-e MIGRATION_DATABASE_URL)
+activation_env=()
 if [[ "$people_employment_type_activation" == "1" ]]; then
     echo "→ Draining old Employment Type writers before authority activation..."
     docker compose stop app worker beat
@@ -345,12 +345,18 @@ if [[ "$people_employment_type_activation" == "1" ]]; then
         echo "$remaining_legacy_runtimes" >&2
         false
     fi
-    migration_env+=(-e PEOPLE_EMPLOYMENT_TYPE_ACTIVATION=1)
+    activation_env+=(-e PEOPLE_EMPLOYMENT_TYPE_ACTIVATION=1)
     echo "  old app, worker and beat stopped"
     echo ""
 fi
 echo "→ Applying migrations (alembic upgrade heads)..."
-if docker compose run --rm "${migration_env[@]}" app alembic upgrade heads; then
+# `alembic upgrade heads` stays on its own line: the credential-asymmetry
+# detector in tests/architecture/test_database_role_contract.py anchors on
+# the executed command and walks BACK to its `docker compose run`, so an
+# inlined command would make that check unable to find this step at all.
+if docker compose run --rm -e MIGRATION_DATABASE_URL "${activation_env[@]+"${activation_env[@]}"}" app \
+    alembic upgrade heads
+then
     if [[ "$people_employment_type_activation" == "1" ]]; then
         # From this instant the previous image's legacy writers are incompatible
         # with the database authority boundary. Every later failure is repaired
