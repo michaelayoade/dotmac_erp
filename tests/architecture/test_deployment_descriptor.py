@@ -45,6 +45,15 @@ RENDERED_OTEL_PATH = REPO_ROOT / "deploy" / "rendered" / "otel-collector.yaml"
 FOUNDATION_VERSION = "0.2.0a2"
 FOUNDATION_RELEASE_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
+# The published image this descriptor binds, and the protected-main revision it
+# was built from. Protected-main CI resolved the digest for exactly that commit
+# (`Publish Docker Image` -> "Resolve the registry digest of the tested image"),
+# whose `org.opencontainers.image.revision` annotation equals the revision
+# below. A tag is deliberately absent: the descriptor refuses mutable
+# references, and a `sha-<short>` tag is one.
+IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
+IMAGE_SOURCE_REVISION = "9b3fb250ac9b0a8ed47cf60060d0eae737f0d4fd"
+IMAGE_DIGEST = "sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
@@ -125,10 +134,20 @@ def test_descriptor_heads_match_the_composed_alembic_graph() -> None:
 
 
 def test_public_source_revision_is_projected_into_telemetry() -> None:
-    source_revision = _load().source_revision
-    assert source_revision == "713c072c82b0a135945e33c3fca6c2d7bf19c7fe"
+    """The descriptor's public identity reaches the rendered collector.
+
+    Both halves are pinned, because they are what makes a running container
+    identifiable: the source revision the image was built from, and the
+    registry digest of the image itself. They are one pairing — a revision
+    naming bytes that are not the deployed bytes identifies nothing — so the
+    literals move together or not at all.
+    """
+    spec = _load()
+    assert spec.source_revision == IMAGE_SOURCE_REVISION
+    assert spec.image == f"{IMAGE_REPOSITORY}@{IMAGE_DIGEST}"
+
     rendered = RENDERED_OTEL_PATH.read_text(encoding="utf-8")
-    assert f"value: {source_revision}" in rendered
+    assert f"value: {spec.source_revision}" in rendered
 
 
 def test_no_role_holds_the_migration_owner_material() -> None:

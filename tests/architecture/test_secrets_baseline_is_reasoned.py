@@ -164,13 +164,25 @@ def test_the_suppression_count_only_shrinks() -> None:
     The prior floor was 18. Schema-9 conservation added seven public integrity
     fingerprints to the already-listed profile; ERP's required public source
     revision adds one descriptor finding and one deterministic telemetry
-    projection. Every entry above the reviewed 27 would be unexplained, and
-    the reason check above only fires per FILE — a new finding in an
-    already-listed file would otherwise slip in silently.
+    projection, reaching 27.
+
+    28 admits exactly ONE more, and it is named rather than absorbed: the
+    published OCI image digest, projected into the rendered collector at
+    `deploy/rendered/otel-collector.yaml`. It appeared when the descriptor
+    stopped carrying an all-zero sentinel and began binding the digest
+    protected-main CI resolved for the image it built and tested. A digest is
+    the NAME of publicly published bytes and authorises nothing; it is long hex,
+    which is the whole reason the entropy heuristic fires on it. It is here
+    precisely BECAUSE the descriptor refuses a mutable tag, so suppressing it is
+    the cost of the stronger reference, not a concession.
+
+    Every entry above the reviewed 28 would be unexplained, and the reason check
+    above only fires per FILE — a new finding in an already-listed file would
+    otherwise slip in silently, which is exactly the shape this one had.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total <= 27, (
-        f"{total} suppressed findings, up from 27. Fix the finding, or lower "
+    assert total <= 28, (
+        f"{total} suppressed findings, up from 28. Fix the finding, or lower "
         "this number in the same change that explains the new entry."
     )
 

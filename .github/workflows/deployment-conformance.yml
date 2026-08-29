@@ -1,9 +1,15 @@
 name: Deployment conformance
 
 # Calls the Starter-owned reusable gate at an immutable source revision. The
-# published `dotmac-deployment-foundation==0.2.0a2` tag peels to ac21c9ae; this
-# later workflow-only revision fixes non-strict digest conformance without
-# changing the released package bytes. A branch or tag is not admissible here.
+# published `dotmac-deployment-foundation==0.2.0a2` tag peels to 55750e10, and
+# this workflow is pinned to that SAME revision on purpose. a2's only code
+# change (`image/audit.py`) and that revision's workflow change are two halves
+# of ONE fix: complete non-root image inspection. The package evaluates
+# `Config.User` from inspect evidence; the workflow produces that evidence by
+# running the filesystem collector as an inspection-only uid/gid 0 and refusing
+# the gate on a partial walk. Pinning a2 against the earlier revision would pair
+# a package expecting the new collector with a caller that does not supply it.
+# A branch or tag is not admissible here.
 
 on:
   push:
