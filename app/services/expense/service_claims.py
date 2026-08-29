@@ -37,6 +37,8 @@ from app.services.expense.service_common import (
 
 logger = logging.getLogger(__name__)
 
+EXPENSE_ITEM_DESCRIPTION_MAX_LENGTH = 500
+
 try:
     from datetime import UTC  # type: ignore
 except ImportError:  # pragma: no cover
@@ -44,6 +46,20 @@ except ImportError:  # pragma: no cover
 
 
 class ExpenseClaimMixin(ExpenseServiceBase):
+    @staticmethod
+    def _validate_item_description(value: object) -> str:
+        """Normalize an item description before it reaches ``VARCHAR(500)``."""
+        if not isinstance(value, str):
+            raise ValidationError("Expense item description is required.")
+        description = value.strip()
+        if not description:
+            raise ValidationError("Expense item description is required.")
+        if len(description) > EXPENSE_ITEM_DESCRIPTION_MAX_LENGTH:
+            raise ValidationError(
+                "Expense item description must be 500 characters or fewer."
+            )
+        return description
+
     @staticmethod
     def _stamp_created(claim: ExpenseClaim, actor_id: UUID | None) -> None:
         if actor_id is None:
@@ -198,6 +214,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         total_amount = Decimal("0")
         if items:
             for idx, item_data in enumerate(items):
+                description = self._validate_item_description(
+                    item_data.get("description")
+                )
                 category = self.db.scalar(
                     select(ExpenseCategory).where(
                         ExpenseCategory.organization_id == org_id,
@@ -221,7 +240,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     claim_id=claim.claim_id,
                     expense_date=item_data["expense_date"],
                     category_id=item_data["category_id"],
-                    description=item_data["description"],
+                    description=description,
                     claimed_amount=item_data["claimed_amount"],
                     expense_account_id=item_data.get("expense_account_id")
                     or category.expense_account_id,
@@ -265,6 +284,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         if claim.status != ExpenseClaimStatus.DRAFT:
             raise ExpenseClaimStatusError(claim.status.value, "add item")
 
+        description = self._validate_item_description(item_data.get("description"))
+
         category = self.get_category(org_id, item_data["category_id"])
         if item_data["claimed_amount"] is None or item_data["claimed_amount"] <= 0:
             raise ValidationError("Line amount must be greater than zero.")
@@ -284,7 +305,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             claim_id=claim_id,
             expense_date=item_data["expense_date"],
             category_id=item_data["category_id"],
-            description=item_data["description"],
+            description=description,
             claimed_amount=item_data["claimed_amount"],
             expense_account_id=item_data.get("expense_account_id")
             or category.expense_account_id,
@@ -388,6 +409,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         claim = self.get_claim(org_id, claim_id)
         if claim.status != ExpenseClaimStatus.DRAFT:
             raise ExpenseClaimStatusError(claim.status.value, "update item")
+
+        description = self._validate_item_description(description)
 
         item = self.db.scalar(
             select(ExpenseClaimItem).where(
@@ -782,8 +805,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                         changed = True
                     new_desc = correction_data.get("description")
                     if new_desc and new_desc.strip() != item.description:
+                        validated_description = self._validate_item_description(
+                            new_desc
+                        )
                         item.original_description = item.description
-                        item.description = new_desc.strip()
+                        item.description = validated_description
                         audit_entry["description_changed"] = "true"
                         changed = True
                     if changed:
@@ -1191,7 +1217,15 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         )
 
     def has_payment_in_flight(self, org_id: UUID, claim_id: UUID) -> bool:
-        """Whether a payment for this claim is pending or processing."""
+        """Whether this claim has a payout that may still move money.
+
+        INDETERMINATE belongs in this set even though nothing is actively "in
+        flight" for it: the question this method answers is whether withdrawing
+        the approval could strand a real payout, and a payout whose outcome
+        nobody observed is the strongest case for yes there is. Treating it as
+        settled would let an approval be withdrawn out from under money that
+        may already have left the account (ADR-0007).
+        """
         from app.models.finance.payments.payment_intent import (
             PaymentIntent,
             PaymentIntentStatus,
@@ -1204,7 +1238,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     PaymentIntent.source_type == "EXPENSE_CLAIM",
                     PaymentIntent.source_id == claim_id,
                     PaymentIntent.status.in_(
-                        [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+                        [
+                            PaymentIntentStatus.PENDING,
+                            PaymentIntentStatus.PROCESSING,
+                            PaymentIntentStatus.INDETERMINATE,
+                        ]
                     ),
                 )
             )

@@ -62,6 +62,7 @@ from app.tasks.expense import (
     calculate_expense_analytics,
     poll_stuck_expense_transfers,
     post_approved_expense,
+    reconcile_unresolved_expense_transfers,
     post_cash_advance_disbursement,
     process_expense_approval_reminders,
     refresh_period_usage_cache,
@@ -148,6 +149,7 @@ __all__ = [
     "settle_cash_advance_with_claim",
     "calculate_expense_analytics",
     "poll_stuck_expense_transfers",
+    "reconcile_unresolved_expense_transfers",
     # HR module tasks
     "process_probation_ending_notifications",
     "process_contract_expiry_notifications",

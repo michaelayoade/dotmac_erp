@@ -19,6 +19,7 @@ app/services/people/hr/employees.py	EmployeeService.link_employee_to_person	empl
 app/services/people/hr/employees.py	EmployeeService.rehire_employee	employee	attribute_assignment	retire_with_domain_cutover	people	asm-dotmac-erp/dotmac-people
 app/services/people/hr/employees.py	EmployeeService.resign_employee	employee	attribute_assignment	retire_with_domain_cutover	people	asm-dotmac-erp/dotmac-people
 app/services/people/hr/employees.py	EmployeeService.set_on_leave	employee	attribute_assignment	retire_with_domain_cutover	people	asm-dotmac-erp/dotmac-people
+app/services/people/hr/employees.py	EmployeeService._sync_active_primary_position_department	position	attribute_assignment	retire_with_domain_cutover	people	asm-dotmac-erp/dotmac-people
 app/services/people/hr/employees.py	EmployeeService.suspend_employee	employee	attribute_assignment	retire_with_domain_cutover	people	asm-dotmac-erp/dotmac-people
 app/services/people/hr/employees.py	EmployeeService.terminate_employee	employee	attribute_assignment	retire_with_domain_cutover	people	asm-dotmac-erp/dotmac-people
 app/services/people/hr/employees.py	EmployeeService.update_employee	employee	attribute_assignment	retire_with_domain_cutover	people	asm-dotmac-erp/dotmac-people

@@ -54,14 +54,21 @@ with log_path.open("a", encoding="utf-8") as log:
 if args[:2] == ["inspect", "--format"]:
     print("ghcr.io/michaelayoade/dotmac_erp:sha-old")
 
-# The deploy makes two `compose run` calls: the executor preflight and then the
-# migration. Fail only the operation named by each test flag.
+# The deploy makes three `compose run` calls: the executor preflight, the
+# migration, and the runtime admission check. Fail only the operation named by
+# each test flag.
 if os.environ.get("DEPLOY_TEST_FAIL_MIGRATION") == "1":
     if args[:2] == ["compose", "run"] and "alembic" in args and "upgrade" in args:
         raise SystemExit(1)
 
 if os.environ.get("DEPLOY_TEST_FAIL_ROLE_PREFLIGHT") == "1":
     if args[:2] == ["compose", "run"] and "--verify-only" in args:
+        raise SystemExit(1)
+
+if os.environ.get("DEPLOY_TEST_FAIL_ADMISSION") == "1":
+    if args[:2] == ["compose", "run"] and any(
+        "verify_runtime_admission.py" in arg for arg in args
+    ):
         raise SystemExit(1)
 """,
     )
@@ -112,7 +119,16 @@ def test_deploy_script_exports_stable_compose_project_name(tmp_path: Path) -> No
     one_off = [line for line in invocations if "|compose run " in line]
     runtime = [line for line in invocations if "|compose up " in line]
     assert one_off
-    assert all("-e MIGRATION_DATABASE_URL" in line for line in one_off)
+    # The runtime admission check is the ONE one-off that must NOT carry the
+    # migration credential: it verifies the connection the application serves
+    # on, and re-verifying `app_admin` there would prove nothing. Every other
+    # one-off is a migration-executor operation and still carries it.
+    admission = [line for line in one_off if "verify_runtime_admission.py" in line]
+    executor = [line for line in one_off if "verify_runtime_admission.py" not in line]
+    assert len(admission) == 1, admission
+    assert "-e MIGRATION_DATABASE_URL" not in admission[0]
+    assert executor
+    assert all("-e MIGRATION_DATABASE_URL" in line for line in executor)
     assert all("MIGRATION_DATABASE_URL" not in line for line in runtime)
     assert "compose: dotmac" in result.stdout
 
@@ -230,3 +246,82 @@ def test_a_failed_executor_preflight_stops_before_migrating(
     invocations = invocation_log.read_text(encoding="utf-8").splitlines()
     assert not any("alembic" in line and "upgrade" in line for line in invocations)
     assert "Rolling back code" not in result.stdout
+
+
+def test_the_runtime_admission_runs_after_migrations_and_before_the_app(
+    tmp_path: Path,
+) -> None:
+    """The seam this step must occupy, asserted as an ORDER, not a presence.
+
+    After the DDL, because it inspects grants and row-level security those
+    migrations have just (re)created. Before `up -d app`, because refusing a
+    runtime identity is only useful while the previous container is still
+    serving requests. A step that merely EXISTS somewhere in the script would
+    satisfy neither requirement.
+    """
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    migrations = [
+        index
+        for index, line in enumerate(invocations)
+        if "|compose run " in line and "alembic" in line and "upgrade" in line
+    ]
+    admissions = [
+        index
+        for index, line in enumerate(invocations)
+        if "|compose run " in line and "verify_runtime_admission.py" in line
+    ]
+    recreations = [
+        index
+        for index, line in enumerate(invocations)
+        if line.endswith("|compose up -d app")
+    ]
+    assert migrations, "the Alembic migration invocation was not recorded"
+    assert admissions, "the runtime admission check was not recorded"
+    assert recreations, "the app container was never recreated"
+    assert migrations[0] < admissions[0] < recreations[0]
+
+
+def test_a_failed_runtime_admission_stops_before_recreating_the_app(
+    tmp_path: Path,
+) -> None:
+    """A refused runtime identity must not reach the containers.
+
+    The rollback that follows reverts code and image only — the migrations from
+    step 3b stay applied — so the assertion that matters is the negative one:
+    `up -d app` never ran on the new image.
+    """
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+    env["DEPLOY_TEST_FAIL_ADMISSION"] = "1"
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "DEPLOY STOPPED" in result.stderr
+    assert "verify_runtime_admission.py" not in result.stderr
+    assert "not admissible" in result.stderr
+    # The operator is told, in the failure itself, that the DDL is still there.
+    assert "NOT rolled" in result.stderr
+
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.endswith("|compose up -d app") for line in invocations), (
+        "the app container was recreated despite an inadmissible runtime connection"
+    )

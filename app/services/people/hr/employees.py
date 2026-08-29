@@ -1065,9 +1065,20 @@ class EmployeeService:
         # Update department
         if data.department_id is not None:
             self._validate_org_reference(Department, data.department_id, "Department")
+            department_changed = employee.department_id != data.department_id
             employee.department_id = data.department_id
+            if department_changed:
+                self._sync_active_primary_position_department(
+                    employee.employee_id,
+                    data.department_id,
+                )
         elif use_provided_fields and "department_id" in provided_fields:
+            department_changed = employee.department_id is not None
             employee.department_id = None
+            if department_changed:
+                self._sync_active_primary_position_department(
+                    employee.employee_id, None
+                )
 
         if employee.department_id != prior_department_id:
             self._sync_scheduling_department(employee)
@@ -1241,6 +1252,40 @@ class EmployeeService:
 
         return employee
 
+    def update_final_payroll_settings(
+        self,
+        employee_id: uuid.UUID,
+        *,
+        eligible_for_final_payroll: bool,
+        final_payroll_cutoff_date: date | None = None,
+    ) -> Employee:
+        """Update final payroll eligibility for an exited employee."""
+        employee = self.get_employee(employee_id, include_deleted=True)
+        if employee.status not in {
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RETIRED,
+        }:
+            raise EmployeeStatusError(
+                employee.status.value,
+                "Final payroll can only be managed for exited employees",
+            )
+
+        employee.eligible_for_final_payroll = eligible_for_final_payroll
+        if eligible_for_final_payroll:
+            employee.final_payroll_cutoff_date = (
+                final_payroll_cutoff_date or employee.date_of_leaving
+            )
+            employee.final_payroll_processed_at = None
+        else:
+            employee.final_payroll_cutoff_date = None
+
+        employee.updated_at = datetime.now(UTC)
+        employee.updated_by_id = self.principal.id if self.principal else None
+        employee.version += 1
+        self.db.flush()
+        return employee
+
     def _sync_scheduling_department(self, employee: Employee) -> None:
         """Mirror HR department changes into active scheduling assignments."""
         from app.services.people.scheduling import SchedulingService
@@ -1255,6 +1300,33 @@ class EmployeeService:
                 "Employee %s department change synced to scheduling assignments: %s",
                 employee.employee_id,
                 result,
+            )
+
+    def _sync_active_primary_position_department(
+        self,
+        employee_id: uuid.UUID,
+        department_id: uuid.UUID | None,
+    ) -> None:
+        """Keep an employee's active primary position aligned with their department."""
+        position = self.db.scalar(
+            select(Position)
+            .join(
+                PositionAssignment,
+                PositionAssignment.position_id == Position.position_id,
+            )
+            .where(
+                Position.organization_id == self.organization_id,
+                PositionAssignment.organization_id == self.organization_id,
+                PositionAssignment.employee_id == employee_id,
+                PositionAssignment.assignment_type == PositionAssignmentType.PRIMARY,
+                PositionAssignment.end_date.is_(None),
+            )
+        )
+        if position and position.department_id != department_id:
+            position.department_id = department_id
+            logger.info(
+                "Synced primary position department for employee %s",
+                employee_id,
             )
 
     # =========================================================================

@@ -1,7 +1,7 @@
 # People replacement boundary
 
-Status: **legacy source read projection installed; target bootstrap/reconciler
-absent; authority remains in ERP**.
+Status: **target storage, legacy source read projection and sealed Employment
+Type bootstrap installed; runtime authority remains in ERP**.
 
 > **Destination naming.** The replacement target is the commercial **Dotmac
 > ERP** product assembly, not an internally framed `dotmac_backoffice`
@@ -43,9 +43,15 @@ absent; authority remains in ERP**.
 | Employee documents, qualifications, certifications and dependants | `hr.employee_*` tables | **Unresolved**; file storage alone is not business ownership |
 | Skill catalogue and employee proficiency | `hr.skill` and `hr.employee_skill` | selected `dotmac-workforce` capability, but blocked until that distribution is released and its contract is accepted |
 
-This change does not move any writer. ERP remains the sole authority until a
-separately authorized cutover has completed backfill, shadow comparison and
-reconciliation and has disabled the corresponding ERP writer paths.
+ERP pins the immutable `dotmac-people==0.1.0a2` release and composes its
+independent `people` lineage at `pe_0001_people_directory`. This installs the
+six tenant tables in `mod_people` and the reviewed Employment Type
+reconciliation contract. The only service import is the quarantined bootstrap
+adapter named below; no web, API, job, importer or runtime service imports it.
+No compatibility state is projected and no writer has moved. ERP remains the
+sole authority until a separately authorized domain cutover has completed
+backfill, shadow comparison and reconciliation and has disabled the
+corresponding ERP writer paths.
 
 The complete disposition of the legacy `hr.employee` columns and its extended
 tables is recorded in
@@ -91,9 +97,11 @@ after a complete scan; this contract makes no incremental tombstone claim.
 
 This endpoint is a one-way extraction seam from the historical `dotmac_erp`
 source into the clean Dotmac ERP assembly before the authorized switch. It is
-not the target bootstrap itself: no target-side importer, fingerprint ledger or
-reconciler is installed yet. After the single product switch, the historical
-source is fenced and archived; the new authority never reverse-feeds it.
+not the target bootstrap itself. Employment Type now has the separate local
+operator adapter below; the other entities still have no target-side importer,
+fingerprint ledger or reconciler. After the single product switch, the
+historical source is fenced and archived; the new authority never reverse-feeds
+it.
 
 The shipped v1 projection is also **not deterministic enough for cutover**:
 position fingerprints include `is_department_head`, which is evaluated against
@@ -102,6 +110,70 @@ date boundary can therefore change without a source write. A successor
 versioned projection must accept an explicit effective date before bootstrap or
 fixed-point reconciliation is admissible; the published v1 contract must not be
 redefined in place.
+
+## Employment Type pre-activation bootstrap
+
+`scripts/bootstrap_people_employment_types.py` is the only entry point to
+`app.services.people.hr.employment_type_bootstrap`. It operates on one required
+`--organization-id` in a fully primed tenant session. The current legacy
+`hr.employment_type` table is the source; `dotmac-people` is only the target of
+this explicit operator transaction. The migration grants `app_user` schema
+`USAGE` and table `SELECT` only. It grants no INSERT, UPDATE, DELETE, TRUNCATE,
+REFERENCES or TRIGGER privilege on the legacy table. Because PostgreSQL does not
+permit a SELECT-only role to acquire SHARE, the same migration installs one
+fixed-search-path `SECURITY DEFINER` function whose sole statement is
+`LOCK TABLE hr.employment_type IN SHARE MODE NOWAIT`; only `app_user` may
+execute it. The resulting lock prevents legacy DML from the first source page
+through the CLI-owned commit or rollback without granting a legacy write.
+
+The three modes are mutually exclusive and carry different intent:
+
+- `--dry-run` performs the complete reconciliation, emits evidence, and rolls
+  the transaction back. It may inspect an empty or established target.
+- `--commit` is the initial bootstrap. It fails unless the target is empty and
+  commits only after every invariant below succeeds.
+- `--replay` is the explicit repeat-write mode. It fails on an empty target
+  when the source is non-empty; otherwise it advances an established target
+  from legacy changes made before runtime activation. When both exact sets are
+  empty, the stored `--commit` evidence is the establishment record and replay
+  is a legitimate quiescent fixed-point check: no target row exists that could
+  encode establishment.
+
+Every execution first acquires the fail-fast SHARE source fence, then performs a
+complete UUID-keyset source scan, a complete target scan, reconciliation in
+stable UUID order, and a **second complete source rescan before commit**. The
+fence excludes concurrent INSERT, UPDATE and DELETE until commit or rollback;
+the two scans independently compare IDs, projected fields, source fingerprints
+and both source timestamps. Target-only IDs are refused; the final source and
+target ID sets must be equal; and every target fingerprint is recomputed and
+checked against the a2 reconciliation outcome.
+
+The CLI emits one canonical JSON evidence line with counts, action totals and
+domain-separated `sha256:` digests over the sorted source and target
+UUID/fingerprint sets. A successful replay is quiescent only when
+`created=0`, `updated=0`, every row is `unchanged`, and a later repeat produces
+the same source and target digests. This evidence is necessary for activation;
+it is not authority activation by itself.
+
+The exact post-a2 integration sequence is:
+
+1. Pin `dotmac-people==0.1.0a2` from the private Forgejo source, regenerate
+   `poetry.lock`, and verify the installed distribution and canonical product
+   manifest both report a2.
+2. Apply `poetry run alembic upgrade heads`; revision
+   `20260828_people_et_bootstrap` grants the read-and-fence legacy surface
+   without granting legacy DML.
+3. For each named organization, run
+   `poetry run python scripts/bootstrap_people_employment_types.py --organization-id UUID --dry-run`,
+   review the JSON evidence, then repeat with `--commit` for the empty target.
+4. While legacy writers remain enabled, use only `--replay`. Repeat until two
+   consecutive quiescent runs carry identical source and target digest pairs.
+   This includes organizations whose committed source and target sets are both
+   empty; retain their earlier `--commit` evidence alongside the empty replays.
+5. Store the non-secret evidence with the activation review and run the
+   separate shadow/read and writer-retirement gates. Only a later, explicitly
+   authorized activation PR may repoint runtime readers/writers. That PR must
+   also remove or permanently fence this reverse-direction bootstrap path.
 
 ## Field boundary
 
@@ -176,8 +248,12 @@ Authority may move only when all of these are evidenced in checked-in cutover
 artifacts and the irreversible switch is explicitly authorized:
 
 1. The composed product pins the released kernel and `dotmac-people`
-   distributions and migrates their lineages successfully.
-2. Backfill preserves source IDs and records source fingerprints.
+   distributions and migrates their lineages successfully. **Satisfied for
+   storage and the sealed bootstrap API** by `dotmac-people==0.1.0a2`; this is
+   not runtime adoption.
+2. Backfill preserves source IDs and records deterministic source and target
+   fingerprint-set evidence. **Implemented for Employment Type only; execution
+   evidence is still required per organization.**
 3. A successor projection with an explicit effective date removes v1's
    process-date-dependent fingerprint, and the target pins that date for each
    complete reconciliation pass.
