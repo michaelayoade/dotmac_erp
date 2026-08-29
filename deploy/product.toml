@@ -336,20 +336,25 @@ tick_command = ["sh", "-c", "stat -c %%Y /tmp/celerybeat-schedule"]
 
 [migration]
 # scripts/deploy.sh's real migration step (Step 3b, "Applying migrations
-# (alembic upgrade heads)"): `poetry run alembic upgrade heads` (plural —
-# ERP has hit multi-head states before, and structurally always will: see the
-# expected_heads comment below). `poetry run` is real, not decorative — the
-# image runs `poetry config virtualenvs.create false` (Dockerfile) so this is
-# effectively "run alembic via the installed poetry shim," matching the exact
-# invocation scripts/deploy.sh uses inside the migration container.
-command = ["poetry", "run", "alembic", "upgrade", "heads"]
-# `poetry run` is load-bearing here, not decorative — ERP's deploy step uses it
-# (scripts/deploy.sh:201), so the read command must carry it too or it resolves
-# a different alembic.
-heads_command = ["poetry", "run", "alembic", "current"]
+# (alembic upgrade heads)") — plural, because ERP has hit multi-head states
+# before and structurally always will: see the expected_heads comment below.
+#
+# The builder-stage runner prefix these three rows used to carry was REMOVED
+# when the runtime image became a hardened, toolchain-free stage with a
+# file-by-file `scripts/` allowlist. The comments that used to defend the
+# prefix as "load-bearing, not decorative" cited a deploy.sh line that no
+# longer spells it that way, so they were defending a spelling nothing ran.
+# `test_the_descriptor_command_arrays_name_no_builder_only_tooling` now makes
+# that class of drift fail instead of accumulating.
+command = ["alembic", "upgrade", "heads"]
+# The read counterpart. It has no scripts/deploy.sh line to match — nothing in
+# the deploy path reads current heads — so it is checked only for tooling
+# reachability, not argv equality. Saying so is the point: an unmatched row is
+# unmonitored, not verified.
+heads_command = ["alembic", "current"]
 owner_material = "MIGRATION_DATABASE_URL"
 
-# `poetry run alembic heads` against the exact locked environment must equal
+# `alembic heads` against the exact locked environment must equal
 # these six heads: ERP's lineage plus Files, Accounting, Imports, Numbering and
 # Tax. The architecture gate queries Alembic's composed graph directly; this is
 # not a source-text approximation.
@@ -379,11 +384,19 @@ compatibility = "online"
 lock_timeout_seconds = 300
 lock_retries = 3
 # scripts/deploy.sh Step 3a, run verbatim inside the migration container
-# before any DDL: `poetry run python scripts/bootstrap_database_roles.py
-# --verify-only` (scripts/deploy.sh's preflight block, "Preflight: migration
-# executor contract..."). Verify-only, never elevates — see
+# before any DDL: `python scripts/bootstrap_database_roles.py --verify-only`
+# (scripts/deploy.sh's preflight block, "Preflight: migration executor
+# contract..."). Verify-only, never elevates — see
 # scripts/bootstrap_database_roles.py's own module docstring.
-preflight_command = ["poetry", "run", "python", "scripts/bootstrap_database_roles.py", "--verify-only"]
+#
+# NOT `poetry run`, and no entrypoint override. The runtime image carries no
+# builder toolchain and its `scripts/` directory is a COPY allowlist, so the
+# only invocable form is the interpreter plus a script the image actually
+# holds. This row drifted once — it kept the retired `poetry run` spelling
+# after the image stopped containing Poetry — which is why
+# `test_the_descriptor_preflight_matches_the_deploy_path` now compares this
+# argv against the one `scripts/deploy.sh` really executes.
+preflight_command = ["python", "scripts/bootstrap_database_roles.py", "--verify-only"]
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Ingress
