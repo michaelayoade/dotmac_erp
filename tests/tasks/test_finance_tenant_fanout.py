@@ -54,6 +54,43 @@ def _function_source(module, name: str) -> str:
     raise AssertionError(f"{name} not found in {path}")
 
 
+def _function_node(module, name: str) -> ast.FunctionDef:
+    """The parsed function, by name, from its module file."""
+    path = (module.__file__ or "").replace(".pyc", ".py")
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{name} not found in {path}")
+
+
+def _referenced_names(node: ast.AST) -> frozenset[str]:
+    """Every name a function actually REFERENCES, from its AST.
+
+    Deliberately not a substring scan of the source text. The retired seam is
+    named in the explanatory comments of the very functions that retired it —
+    that comment is the reason the conversion is legible to the next reader —
+    and a text scan cannot tell an explanation from a call. It would force the
+    documentation out to keep the guard quiet, which is the wrong trade.
+
+    Catches every spelling that can actually reach the callable: a bare
+    ``cross_org_session()``, an attribute ``session_context.cross_org_session``,
+    and a ``from ... import cross_org_session`` binding, function-local imports
+    included.
+    """
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name):
+            names.add(child.id)
+        elif isinstance(child, ast.Attribute):
+            names.add(child.attr)
+        elif isinstance(child, ast.ImportFrom):
+            for alias in child.names:
+                names.add(alias.asname or alias.name)
+    return frozenset(names)
+
+
 @pytest.fixture
 def tenant_sessions(monkeypatch):
     """Two organizations, each with its own recorded session.
@@ -327,7 +364,37 @@ def test_the_converted_sweeps_no_longer_reach_across_tenants(task_name: str) -> 
     genuine org-less cube. Tenant resolution is not tenant enumeration, it has
     no contract yet, and forcing it into this one would be a guess.
     """
-    source = _function_source(finance, task_name)
+    referenced = _referenced_names(_function_node(finance, task_name))
 
-    assert "cross_org_session" not in source
-    assert "for_each_organization(" in source
+    assert "cross_org_session" not in referenced, (
+        f"{task_name} still references cross_org_session. Under app_user its "
+        "discovery query returns zero rows, so the sweep silently processes "
+        "nothing and exits 0."
+    )
+    assert "for_each_organization" in referenced, (
+        f"{task_name} does not reach for_each_organization, so it is not "
+        "enumerating tenants through the SECURITY DEFINER catalogue."
+    )
+
+
+@pytest.mark.parametrize(
+    "task_name",
+    ["sync_mono_account", "refresh_analysis_cubes", "_resolve_report_instance_org"],
+)
+def test_the_retired_seam_detector_still_fires(task_name: str) -> None:
+    """The sensitivity proof ADR-0018 asks for, using the real deliberate callers.
+
+    A guard that reports "no bypass here" is only worth reading if it would
+    have said otherwise. These three keep ``cross_org_session`` on purpose —
+    two resolve which tenant owns one given row, and ``refresh_analysis_cubes``
+    has a genuine org-less cube — so they are the honest oracle: if the
+    detector goes quiet on THEM, it has stopped working and the assertion above
+    is passing for the wrong reason.
+    """
+    referenced = _referenced_names(_function_node(finance, task_name))
+
+    assert "cross_org_session" in referenced, (
+        f"{task_name} no longer references cross_org_session. If that was "
+        "deliberate, move it into the converted list above; the detector must "
+        "never be left with nothing it fires on."
+    )
