@@ -86,7 +86,12 @@ COPY gunicorn.conf.py ./gunicorn.conf.py
 COPY locales ./locales
 COPY templates ./templates
 COPY static ./static
+# Named operator entrypoints only; the rest of scripts/ is not part of the
+# runtime surface. The deploy invokes both of these inside this image
+# (scripts/deploy.sh steps 3a and 3c) and nothing mounts the checkout over
+# /app, so an entrypoint missing here is unreachable at deploy time.
 COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py
+COPY scripts/verify_runtime_admission.py ./scripts/verify_runtime_admission.py
 
 # Compiled CSS is copied last so a stale source-tree stylesheet cannot replace
 # the builder output.

@@ -23,7 +23,7 @@ from typing import Any
 from celery import shared_task
 from sqlalchemy import select
 
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import for_each_organization, session_for_org
 from app.models.expense import (
     ExpenseClaim,
     ExpenseClaimStatus,
@@ -174,127 +174,120 @@ def process_expense_approval_reminders() -> dict:
     today = date.today()
     today_start = datetime.combine(today, datetime.min.time())
 
-    with cross_org_session() as cross_db:
-        # Find all pending claims. PENDING_APPROVAL is unused — all claims
-        # awaiting approval are in SUBMITTED status.
-        pending_claim_meta = list(
-            cross_db.execute(
-                select(ExpenseClaim.claim_id, ExpenseClaim.organization_id)
-                .where(ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED)
-                .order_by(ExpenseClaim.claim_date)
-            ).all()
-        )
+    # Fan out over tenants rather than scanning across them. The old shape read
+    # every tenant's submitted claims through `cross_org_session`, grouped the
+    # ids by organization, then re-fetched each group inside a tenant session.
+    # `cross_org_session` lifts only the SQLAlchemy listener, never PostgreSQL
+    # RLS, so that first read returns zero rows under `app_user` — and an
+    # approval-reminder job that finds no pending claims looks exactly like a
+    # fleet with none. The grouping dict and the id re-fetch are deleted rather
+    # than adapted: the same SELECT inside the tenant session already returns
+    # only this tenant's claims, so both existed solely to serve the cross-tenant
+    # read. `include_inactive=True` keeps the old reach — that scan had no
+    # `Organization` predicate.
+    for _org_id, db in for_each_organization(include_inactive=True):
+        # Find this tenant's pending claims. PENDING_APPROVAL is unused —
+        # all claims awaiting approval are in SUBMITTED status.
+        pending_claims = db.scalars(
+            select(ExpenseClaim)
+            .where(ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED)
+            .order_by(ExpenseClaim.claim_date)
+        ).all()
 
-    claims_by_org: dict[uuid.UUID, list[uuid.UUID]] = {}
-    for claim_id, org_id in pending_claim_meta:
-        claims_by_org.setdefault(org_id, []).append(claim_id)
+        notification_service = ExpenseNotificationService(db)
 
-    for org_id, claim_ids in claims_by_org.items():
-        with session_for_org(org_id) as db:
-            pending_claims = db.scalars(
-                select(ExpenseClaim)
-                .where(ExpenseClaim.claim_id.in_(claim_ids))
-                .order_by(ExpenseClaim.claim_date)
-            ).all()
+        for claim in pending_claims:
+            try:
+                # Use updated_at (set on status change to SUBMITTED) instead
+                # of claim_date (the expense incurrence date) for accuracy.
+                pending_since = (
+                    claim.updated_at.date() if claim.updated_at else claim.claim_date
+                )
+                days_pending = (today - pending_since).days
 
-            notification_service = ExpenseNotificationService(db)
+                # Determine reminder type
+                if days_pending >= ESCALATION_WARNING_DAYS:
+                    reminder_type = "escalation"
+                elif days_pending >= SECOND_REMINDER_DAYS:
+                    reminder_type = "second"
+                elif days_pending >= FIRST_REMINDER_DAYS:
+                    reminder_type = "first"
+                else:
+                    continue  # Too early for reminder
 
-            for claim in pending_claims:
-                try:
-                    # Use updated_at (set on status change to SUBMITTED) instead
-                    # of claim_date (the expense incurrence date) for accuracy.
-                    pending_since = (
-                        claim.updated_at.date()
-                        if claim.updated_at
-                        else claim.claim_date
-                    )
-                    days_pending = (today - pending_since).days
+                # Dedup: skip if reminder already sent today for this claim.
+                if NotificationService().was_sent_since(
+                    db,
+                    organization_id=claim.organization_id,
+                    entity_type=EntityType.EXPENSE,
+                    entity_id=claim.claim_id,
+                    notification_type=NotificationType.REMINDER,
+                    since=today_start,
+                ):
+                    continue
 
-                    # Determine reminder type
-                    if days_pending >= ESCALATION_WARNING_DAYS:
-                        reminder_type = "escalation"
-                    elif days_pending >= SECOND_REMINDER_DAYS:
-                        reminder_type = "second"
-                    elif days_pending >= FIRST_REMINDER_DAYS:
-                        reminder_type = "first"
-                    else:
-                        continue  # Too early for reminder
+                # Get approver
+                approver = None
+                if claim.approver_id:
+                    approver = db.get(Employee, claim.approver_id)
 
-                    # Dedup: skip if reminder already sent today for this claim.
-                    if NotificationService().was_sent_since(
+                # Fall back to employee's expense approver, then manager
+                if not approver and claim.employee:
+                    if claim.employee.expense_approver_id:
+                        approver = db.get(Employee, claim.employee.expense_approver_id)
+                    if not approver:
+                        approver = OrgResolver(db).get_manager(
+                            claim.employee.employee_id,
+                            claim.organization_id,
+                        )
+
+                if not approver:
+                    continue  # No approver to remind
+
+                # Send reminder
+                success = notification_service.send_pending_approval_reminder(
+                    claim,
+                    approver,
+                    days_pending=days_pending,
+                )
+
+                if success:
+                    # Record notification for dedup on subsequent runs.
+                    NotificationService().create_if_not_sent_since(
                         db,
                         organization_id=claim.organization_id,
+                        recipient_id=approver.person_id,
                         entity_type=EntityType.EXPENSE,
                         entity_id=claim.claim_id,
                         notification_type=NotificationType.REMINDER,
+                        title=f"Expense Approval Reminder: {claim.claim_number}",
+                        message="Claim "
+                        f"{claim.claim_number} pending {days_pending} days",
                         since=today_start,
-                    ):
-                        continue
-
-                    # Get approver
-                    approver = None
-                    if claim.approver_id:
-                        approver = db.get(Employee, claim.approver_id)
-
-                    # Fall back to employee's expense approver, then manager
-                    if not approver and claim.employee:
-                        if claim.employee.expense_approver_id:
-                            approver = db.get(
-                                Employee, claim.employee.expense_approver_id
-                            )
-                        if not approver:
-                            approver = OrgResolver(db).get_manager(
-                                claim.employee.employee_id,
-                                claim.organization_id,
-                            )
-
-                    if not approver:
-                        continue  # No approver to remind
-
-                    # Send reminder
-                    success = notification_service.send_pending_approval_reminder(
-                        claim,
-                        approver,
-                        days_pending=days_pending,
+                        dedup_by_recipient=False,
+                        channel=NotificationChannel.EMAIL,
                     )
+                    if reminder_type == "first":
+                        results["first_reminders_sent"] += 1
+                    elif reminder_type == "second":
+                        results["second_reminders_sent"] += 1
+                    else:
+                        results["escalation_warnings_sent"] += 1
 
-                    if success:
-                        # Record notification for dedup on subsequent runs.
-                        NotificationService().create_if_not_sent_since(
-                            db,
-                            organization_id=claim.organization_id,
-                            recipient_id=approver.person_id,
-                            entity_type=EntityType.EXPENSE,
-                            entity_id=claim.claim_id,
-                            notification_type=NotificationType.REMINDER,
-                            title=f"Expense Approval Reminder: {claim.claim_number}",
-                            message="Claim "
-                            f"{claim.claim_number} pending {days_pending} days",
-                            since=today_start,
-                            dedup_by_recipient=False,
-                            channel=NotificationChannel.EMAIL,
-                        )
-                        if reminder_type == "first":
-                            results["first_reminders_sent"] += 1
-                        elif reminder_type == "second":
-                            results["second_reminders_sent"] += 1
-                        else:
-                            results["escalation_warnings_sent"] += 1
+            except Exception as e:
+                logger.error(
+                    "Failed to process reminder for claim %s: %s",
+                    claim.claim_id,
+                    e,
+                )
+                results["errors"].append(
+                    {
+                        "claim_id": str(claim.claim_id),
+                        "error": str(e),
+                    }
+                )
 
-                except Exception as e:
-                    logger.error(
-                        "Failed to process reminder for claim %s: %s",
-                        claim.claim_id,
-                        e,
-                    )
-                    results["errors"].append(
-                        {
-                            "claim_id": str(claim.claim_id),
-                            "error": str(e),
-                        }
-                    )
-
-            db.commit()
+        db.commit()
 
     total_sent = (
         results["first_reminders_sent"]
@@ -783,58 +776,80 @@ def poll_stuck_expense_transfers() -> dict:
     # pass and fresh by the next within a single run.
     now = datetime.now(UTC)
 
+    # Both sweeps below fan out over tenants instead of scanning across them.
+    # The cross-tenant SELECTs they replace bypassed only the SQLAlchemy
+    # listener — never PostgreSQL RLS — so under `app_user` they found no
+    # intents at all: stale transfers would never expire, stuck ones would never
+    # be polled, and the task would report a clean run every two minutes while
+    # doing nothing.
+    #
+    # The selections stay in `PaymentService`, which remains the sole writer of
+    # `PaymentIntent.status`; only the session they run on changes. Each returns
+    # organization -> intent ids, so inside a tenant session it has at most one
+    # key, and reading it back by `org_id` is the isolation assertion: a row
+    # grouped under any other tenant is not this session's to touch.
+    #
+    # `include_inactive=True` matches the old reach — neither SELECT had an
+    # `Organization` predicate, and a deactivated tenant's in-flight payout still
+    # has to settle.
+
     # Expire PENDING intents that never had a transfer initiated (step 2 was
     # never called) and are past their expires_at.
-    with cross_org_session() as cross_db:
-        stale_by_org = PaymentService.find_stale_pending_transfer_intents(
-            cross_db, now=now
-        )
-
-    for org_id, intent_ids in stale_by_org.items():
-        with session_for_org(org_id) as db:
-            svc = PaymentService(db, org_id)
-            for intent_id in intent_ids:
-                if svc.expire_stale_pending_transfer(intent_id, now=now):
-                    results["expired"] = results.get("expired", 0) + 1
-            db.commit()
+    for org_id, db in for_each_organization(include_inactive=True):
+        intent_ids = PaymentService.find_stale_pending_transfer_intents(
+            db, now=now
+        ).get(org_id, [])
+        if not intent_ids:
+            continue
+        svc = PaymentService(db, org_id)
+        for intent_id in intent_ids:
+            if svc.expire_stale_pending_transfer(intent_id, now=now):
+                results["expired"] = results.get("expired", 0) + 1
+        db.commit()
 
     # Fast fallback for transfers that are in flight but have no verdict.
-    with cross_org_session() as cross_db:
-        stuck_by_org = PaymentService.find_stuck_transfer_intents(cross_db, now=now)
+    stuck_found = False
+    for org_id, db in for_each_organization(include_inactive=True):
+        intent_ids = PaymentService.find_stuck_transfer_intents(db, now=now).get(
+            org_id, []
+        )
+        if not intent_ids:
+            # Nothing stuck here. Skipping before the config read keeps the
+            # "No Paystack keys" warning to tenants that actually have a
+            # transfer waiting on those keys, as the old grouping did.
+            continue
+        stuck_found = True
 
-    if not stuck_by_org:
-        logger.info("No stuck transfers found")
-        return results
+        svc = PaymentService(db, org_id)
+        config = svc.resolve_transfer_polling_config()
+        if config is None:
+            logger.warning("No Paystack keys for org %s", org_id)
+            continue
 
-    for org_id, intent_ids in stuck_by_org.items():
-        with session_for_org(org_id) as db:
-            svc = PaymentService(db, org_id)
-            config = svc.resolve_transfer_polling_config()
-            if config is None:
-                logger.warning("No Paystack keys for org %s", org_id)
+        for intent_id in intent_ids:
+            results["intents_checked"] += 1
+            outcome = svc.reconcile_stuck_transfer(intent_id, config)
+
+            if outcome.outcome is TransferPollOutcome.ERRORED:
+                results["errors"].append(
+                    {
+                        "intent_id": str(outcome.intent_id),
+                        "error": outcome.error,
+                        "poll_count": outcome.poll_count,
+                    }
+                )
                 continue
 
-            for intent_id in intent_ids:
-                results["intents_checked"] += 1
-                outcome = svc.reconcile_stuck_transfer(intent_id, config)
+            # TransferPollOutcome values ARE the result keys; SKIPPED is
+            # the only one not pre-seeded, so it appears only when a
+            # tenant actually had an intent that moved under the worker.
+            counter = outcome.outcome.value
+            results[counter] = results.get(counter, 0) + 1
 
-                if outcome.outcome is TransferPollOutcome.ERRORED:
-                    results["errors"].append(
-                        {
-                            "intent_id": str(outcome.intent_id),
-                            "error": outcome.error,
-                            "poll_count": outcome.poll_count,
-                        }
-                    )
-                    continue
+        db.commit()
 
-                # TransferPollOutcome values ARE the result keys; SKIPPED is
-                # the only one not pre-seeded, so it appears only when a
-                # tenant actually had an intent that moved under the worker.
-                counter = outcome.outcome.value
-                results[counter] = results.get(counter, 0) + 1
-
-            db.commit()
+    if not stuck_found:
+        logger.info("No stuck transfers found")
 
     logger.info(
         "Transfer polling complete: %d checked, %d completed, %d failed, "

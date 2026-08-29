@@ -321,6 +321,7 @@ jobs:
               test -r /app/templates/base.html
               test -r /app/static/css/app.css
               test -r /app/scripts/bootstrap_database_roles.py
+              test -r /app/scripts/verify_runtime_admission.py
               python -c "import alembic, celery, logging_loki, sentry_sdk, weasyprint"
               test -w /tmp
               test ! -w /app

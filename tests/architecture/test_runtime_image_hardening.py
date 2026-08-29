@@ -104,6 +104,7 @@ def test_runtime_stage_contains_only_named_runtime_surfaces() -> None:
         "COPY templates ./templates",
         "COPY static ./static",
         "COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py",
+        "COPY scripts/verify_runtime_admission.py ./scripts/verify_runtime_admission.py",
     ):
         assert required_copy in runtime
 
@@ -192,6 +193,7 @@ def test_deploy_containers_do_not_depend_on_builder_poetry() -> None:
     assert "--entrypoint" not in script
     assert "--entrypoint" not in makefile
     assert "python scripts/bootstrap_database_roles.py --verify-only" in script
+    assert "python scripts/verify_runtime_admission.py" in script
     assert "alembic upgrade heads" in script
     assert "http://localhost:8003/health/ready" in script
 

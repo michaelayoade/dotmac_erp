@@ -256,3 +256,218 @@ def test_conformance_findings_are_exactly_the_known_unresolved_ones() -> None:
         "observed — a fixed finding must be removed from KNOWN_UNRESOLVED in "
         "the same change that fixes it"
     )
+
+
+# ---------------------------------------------------------------------------
+# The descriptor's invocations are the deploy path's invocations, and the
+# runtime image can actually run them
+# ---------------------------------------------------------------------------
+#
+# Every command row in `[migration]` drifted at once and nothing noticed. They
+# all carried a builder-stage runner prefix that `scripts/deploy.sh` stopped
+# using when the runtime image became a hardened, toolchain-free stage; two of
+# the three even carried comments defending the prefix as "load-bearing, not
+# decorative" and citing a deploy.sh line that no longer spelled it that way.
+# The descriptor is this product's Foundation-facing statement of how it
+# deploys, so a stale row is a statement that would fail if anything executed
+# it.
+#
+# Three facts have to agree, and checking any one alone is what let the drift
+# survive: the argv the descriptor declares, the argv `deploy.sh` really runs,
+# and whether the runtime image contains the target at all. The third is not
+# hypothetical — the image's `scripts/` directory is a file-by-file `COPY`
+# allowlist, so a script merely present in the repository is NOT present at
+# runtime.
+
+DOCKERFILE_PATH = REPO_ROOT / "Dockerfile"
+DEPLOY_SCRIPT_PATH = REPO_ROOT / "scripts" / "deploy.sh"
+
+# Tooling that exists only in the builder stage. A command row naming any of
+# these describes a container that cannot run it.
+#
+# This is checked against PARSED command arrays, never against the file's raw
+# text, so a comment may name the retired spelling in order to explain why it
+# is retired. A substring scan over prose would forbid the documentation that
+# stops the drift recurring.
+BUILDER_ONLY_TOOLING = frozenset({"poetry", "--entrypoint"})
+
+# Command rows that have a `scripts/deploy.sh` counterpart to be compared
+# against, mapped to nothing else — `heads_command` is deliberately absent
+# because the deploy path never reads current heads. An unmatched row is
+# unmonitored, not verified, and ADR-0018 asks for that to be said out loud.
+DEPLOY_MATCHED_COMMANDS = ("preflight_command", "command")
+DEPLOY_UNMATCHED_COMMANDS = ("heads_command",)
+
+
+def _deploy_text() -> str:
+    return DEPLOY_SCRIPT_PATH.read_text(encoding="utf-8")
+
+
+def _dockerfile_text() -> str:
+    return DOCKERFILE_PATH.read_text(encoding="utf-8")
+
+
+def _descriptor_data() -> dict:
+    return tomllib.loads(_descriptor_text())
+
+
+def _command_arrays(data: dict, path: str = "") -> list[tuple[str, list[str]]]:
+    """Every `*command*` row in the descriptor, as (dotted path, argv)."""
+    found: list[tuple[str, list[str]]] = []
+    for key, value in data.items():
+        here = f"{path}.{key}" if path else key
+        if isinstance(value, dict):
+            found.extend(_command_arrays(value, here))
+        elif (
+            "command" in key
+            and isinstance(value, list)
+            and all(isinstance(item, str) for item in value)
+        ):
+            found.append((here, list(value)))
+    return found
+
+
+def _scripts_copied_into_the_runtime_image(dockerfile: str) -> frozenset[str]:
+    """Every `scripts/*.py` path the runtime stage COPYs, verbatim."""
+    return frozenset(
+        line.split()[1]
+        for line in dockerfile.splitlines()
+        if line.startswith("COPY scripts/") and len(line.split()) >= 2
+    )
+
+
+def _one_off_script_invocations(deploy: str) -> frozenset[str]:
+    """Every `scripts/*.py` that `deploy.sh` runs in a one-off container.
+
+    Keyed on the executed path rather than on the surrounding `docker compose
+    run`, because the flags between the two drift (`-e MIGRATION_DATABASE_URL`
+    is present for the executor preflight and deliberately absent for the
+    runtime admission gate) while the executed path does not.
+    """
+    return frozenset(
+        token
+        for line in deploy.splitlines()
+        for token in line.split()
+        if token.startswith("scripts/") and token.endswith(".py")
+    )
+
+
+def test_the_descriptor_command_arrays_name_no_builder_only_tooling() -> None:
+    """The runtime image ships no builder toolchain and needs no entrypoint
+    override, so either token in a command row describes a container that does
+    not exist. `scripts/deploy.sh` is held to the same rule by
+    `tests/architecture/test_runtime_image_hardening.py`; this is that rule
+    applied to the descriptor, which that test does not read.
+    """
+    rows = _command_arrays(_descriptor_data())
+    assert rows, "no command rows were found, so this test asserts nothing"
+
+    offenders = [
+        f"{where} names {sorted(BUILDER_ONLY_TOOLING.intersection(argv))}"
+        for where, argv in rows
+        if BUILDER_ONLY_TOOLING.intersection(argv)
+    ]
+    assert not offenders, (
+        "deploy/product.toml command rows name builder-only tooling:\n"
+        + "\n".join(offenders)
+        + "\n\nThe runtime image carries neither; see the Dockerfile's runtime stage."
+    )
+
+
+def test_matched_descriptor_commands_are_the_argv_the_deploy_path_runs() -> None:
+    """A spelling only the descriptor uses is one nothing can execute."""
+    migration = _descriptor_data()["migration"]
+    deploy = _deploy_text()
+
+    for key in DEPLOY_MATCHED_COMMANDS:
+        argv = migration[key]
+        joined = " ".join(argv)
+        assert joined in deploy, (
+            f"deploy/product.toml [migration].{key} declares {argv!r}, but "
+            f"scripts/deploy.sh never runs {joined!r}."
+        )
+
+
+def test_unmatched_descriptor_commands_are_declared_unmonitored() -> None:
+    """`heads_command` has no deploy-path counterpart, and that is recorded
+    rather than quietly skipped — the two lists must partition the rows, so a
+    new command row cannot land in neither and escape both checks.
+    """
+    migration = _descriptor_data()["migration"]
+    declared = set(DEPLOY_MATCHED_COMMANDS) | set(DEPLOY_UNMATCHED_COMMANDS)
+    actual = {key for key, _ in _command_arrays({"migration": migration})}
+    actual = {key.split(".", 1)[1] for key in actual}
+    assert actual == declared, (
+        f"[migration] command rows {sorted(actual)} do not match the declared "
+        f"partition {sorted(declared)}. A new command row must be added to "
+        "DEPLOY_MATCHED_COMMANDS or explicitly to DEPLOY_UNMATCHED_COMMANDS."
+    )
+    for key in DEPLOY_UNMATCHED_COMMANDS:
+        assert " ".join(migration[key]) not in _deploy_text(), (
+            f"[migration].{key} is declared unmatched but scripts/deploy.sh "
+            "does run it — move it to DEPLOY_MATCHED_COMMANDS."
+        )
+
+
+def test_every_script_the_deploy_path_runs_is_in_the_runtime_image() -> None:
+    """A one-off container can only run a script the image actually holds.
+
+    The runtime stage COPYs `scripts/` file by file, so adding a deploy step
+    that calls a new script is two edits, not one. Missing the second produces
+    a step that fails file-not-found on every deploy and passes every
+    repository-only check — which is exactly what happened when the runtime
+    admission gate was first written.
+    """
+    invoked = _one_off_script_invocations(_deploy_text())
+    copied = _scripts_copied_into_the_runtime_image(_dockerfile_text())
+
+    assert invoked, (
+        "no scripts/*.py invocation was found in scripts/deploy.sh, so this "
+        "test is asserting nothing. The parser and the script have diverged."
+    )
+    missing = sorted(invoked - copied)
+    assert not missing, (
+        f"scripts/deploy.sh runs {missing!r} in a one-off container, but the "
+        "Dockerfile's runtime stage does not COPY them. Every one of those "
+        "steps would fail file-not-found on a real deploy."
+    )
+
+
+# --- sensitivity proofs (ADR-0018): each detector must actually fire --------
+
+
+def test_the_builder_tooling_detector_fires_on_a_planted_row() -> None:
+    planted = {"migration": {"command": ["poetry", "run", "alembic", "upgrade"]}}
+    rows = _command_arrays(planted)
+    assert rows == [("migration.command", ["poetry", "run", "alembic", "upgrade"])]
+    assert BUILDER_ONLY_TOOLING.intersection(rows[0][1]) == {"poetry"}
+
+    override = {"roles": {"app": {"run_command": ["--entrypoint", "", "sh"]}}}
+    assert BUILDER_ONLY_TOOLING.intersection(_command_arrays(override)[0][1])
+
+
+def test_the_builder_tooling_detector_does_not_fire_on_the_real_descriptor() -> None:
+    for _, argv in _command_arrays(_descriptor_data()):
+        assert not BUILDER_ONLY_TOOLING.intersection(argv)
+
+
+def test_the_image_reachability_detector_fires_on_an_uncopied_script() -> None:
+    invoked = _one_off_script_invocations(
+        "docker compose run --rm app python scripts/not_copied_anywhere.py\n"
+    )
+    copied = _scripts_copied_into_the_runtime_image(_dockerfile_text())
+    assert invoked == {"scripts/not_copied_anywhere.py"}
+    assert invoked - copied == {"scripts/not_copied_anywhere.py"}
+
+
+def test_the_image_reachability_detector_does_not_fire_on_a_copied_script() -> None:
+    copied = _scripts_copied_into_the_runtime_image(_dockerfile_text())
+    assert "scripts/bootstrap_database_roles.py" in copied
+    assert "scripts/verify_runtime_admission.py" in copied, (
+        "the runtime admission gate's script must be image-reachable; it and "
+        "the executor preflight are one contract."
+    )
+    invoked = _one_off_script_invocations(
+        "docker compose run --rm app python scripts/bootstrap_database_roles.py\n"
+    )
+    assert not invoked - copied

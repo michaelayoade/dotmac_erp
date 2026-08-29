@@ -67,8 +67,9 @@ writer** of `payments.payment_intent.status`. It had three writers until
 read taken in a different session), and the dead `BatchTransferService`, which
 was deleted.
 
-The job is now an adapter: cross-tenant discovery, one `session_for_org` per
-tenant, and aggregation. Selection predicates, credential resolution, the
+The job is now an adapter: tenant enumeration through `for_each_organization`,
+one `session_for_org` per tenant with the selections running inside it, and
+aggregation. Selection predicates, credential resolution, the
 PENDING-to-PROCESSING promotion, attempt counting and the circuit breaker are
 `PaymentService`'s. Both scheduled entry points
 (`expire_stale_pending_transfer`, `reconcile_stuck_transfer`) take an intent
