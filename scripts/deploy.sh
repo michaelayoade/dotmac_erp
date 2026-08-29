@@ -202,6 +202,66 @@ docker compose run --rm -e MIGRATION_DATABASE_URL app \
     alembic upgrade heads
 echo ""
 
+# Step 3c: ADMIT the RUNTIME connection, after the DDL and before the app runs.
+#
+# This is the one one-off in this script that is deliberately NOT given
+# `-e MIGRATION_DATABASE_URL`, and the omission is the entire point. Every
+# other step here verifies the migration executor; this one verifies the
+# credential the APPLICATION will serve requests on, which the one-off inherits
+# from the `app` service's own `environment:` block (`DATABASE_URL:
+# ${DATABASE_URL}`, itself read from `env_file: - .env`). Passing the migration
+# URL would re-verify `app_admin` — a role that is BYPASSRLS by contract — and
+# prove nothing about the connection that reads tenant rows.
+#
+# Invoked in exactly the shape steps 3a and 3b use: the runtime image carries
+# its own virtualenv on PATH and its own default command, so no builder tool
+# and no command override belongs in this script.
+# `scripts/verify_runtime_admission.py` is a NAMED runtime surface of that
+# image (see the Dockerfile's explicit COPY) — the checkout is not mounted over
+# /app, so a script absent from the image is not reachable from this step.
+#
+# It runs AFTER migrations because it inspects grants and row-level security
+# those migrations have just (re)created, and BEFORE `up -d app` because
+# refusing a runtime identity is only useful while the old container still
+# serves.
+#
+# Read-only, and scoped to the modules a deployment has DECLARED active. With
+# no module active it asserts nothing and says so loudly rather than passing in
+# silence — see app/runtime_admission.py.
+#
+# NOTE FOR THE OPERATOR — what a failure here does and does not undo. The `if
+# !` guard is the same shape step 3a uses, and a command in an `if` condition
+# does NOT fire the ERR trap set above, so this step exits WITHOUT the
+# automatic rollback. Nothing is reverted: the migrations applied by step 3b
+# stay applied (that trap's rollback would not have reverted them either — see
+# the rollback function's closing message), the working tree stays at the
+# freshly pulled commit with the new .env pins, and the PREVIOUS app container
+# keeps serving on the previous image because step 4 never ran. Repair the
+# runtime credential or unset the module flag and re-run deploy; if the new
+# revisions are not backward-compatible with the running release, restore the
+# step-1 backup.
+echo "→ Admission: runtime database identity (runtime credential, read-only)..."
+if ! docker compose run --rm app \
+    python scripts/verify_runtime_admission.py
+then
+    echo ""
+    echo "DEPLOY STOPPED: the runtime database connection is not admissible" >&2
+    echo "for at least one ACTIVE module. The app container was NOT recreated." >&2
+    echo "" >&2
+    echo "The refusal lines above name each failure. The usual causes are:" >&2
+    echo "  - DATABASE_URL still connects as a legacy login rather than" >&2
+    echo "    app_user, whose name the module GRANTs and RLS policies carry;" >&2
+    echo "  - a module was activated before its app_user grants were applied;" >&2
+    echo "  - RUNTIME_ADMISSION_TENANT_ID / RUNTIME_ADMISSION_OTHER_TENANT_ID" >&2
+    echo "    are unset, so tenant isolation could not be proved." >&2
+    echo "" >&2
+    echo "Migrations from step 3b have ALREADY been applied and are NOT rolled" >&2
+    echo "back. Repair the runtime credential, or unset the module's" >&2
+    echo "activation flag, then re-run deploy." >&2
+    exit 1
+fi
+echo ""
+
 # Step 4: recreate the app container on the new image + code
 echo "→ Recreating app container..."
 docker compose up -d app
