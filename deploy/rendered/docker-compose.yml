@@ -53,8 +53,6 @@ services:
   migrate:
     image: "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     command:
-      - poetry
-      - run
       - alembic
       - upgrade
       - heads
