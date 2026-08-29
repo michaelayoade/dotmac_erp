@@ -181,7 +181,7 @@ hr	employee_skill	direct	false	false	app_admin	0	false	--	--
 hr	employee_transfer	direct	false	false	app_admin	0	false	--	--
 hr	employee_transfer_detail	inherited	false	false	app_admin	0	false	--	--
 hr	employment_contract	direct	false	false	app_admin	0	false	--	--
-hr	employment_type	direct	true	true	app_admin	4	true	--	--
+hr	employment_type	direct	true	true	app_admin	4	true	r-	--
 hr	exit_interview	direct	false	false	app_admin	0	false	--	--
 hr	grievance	direct	false	false	app_admin	0	false	--	--
 hr	hr_document	direct	false	false	app_admin	0	false	--	--

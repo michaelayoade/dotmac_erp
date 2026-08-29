@@ -271,10 +271,14 @@ direct login where a deployment provides one, and refuses a URL carrying a
 password: credentials go in `PGPASSWORD`, as the CI bootstrap step already
 does.
 
-Today's measurement is almost entirely `denied-no-grant`: no migration issues a
-table-level `GRANT … TO app_user`, only `EXECUTE` on two functions, so
-`app_user` holds `SELECT` on 1 of 420 relations. That produces four honest
-limits the module's own docstring carries:
+The original measurement was almost entirely `denied-no-grant`. At the current
+design head, composed modules and hosted prerequisite surfaces already give
+`app_user` `SELECT` on 47 of the 474 catalogued relations. The sealed Employment
+Type bootstrap adds one deliberately reviewed legacy read, so the checked
+design inventory now records 48 of 474, including `hr.employment_type`; its
+separate lock helper grants only `EXECUTE`, not table DML. None of the
+cross-organization ledger targets changes reachability in this slice. That
+produces four honest limits the measurement module's docstring carries:
 
 - **An unprotected row is not proved reachable.** Every one has an unreachable
   target, recorded as a two-directional ratchet beside its own assertion rather
