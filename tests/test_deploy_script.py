@@ -291,6 +291,7 @@ def test_a_failed_executor_preflight_stops_before_migrating(
     assert not any("alembic" in line and "upgrade" in line for line in invocations)
     assert "Rolling back code" not in result.stdout
 
+
 def test_the_runtime_admission_runs_after_migrations_and_before_the_app(
     tmp_path: Path,
 ) -> None:

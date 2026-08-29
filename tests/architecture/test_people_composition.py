@@ -180,21 +180,57 @@ def test_the_operator_entry_point_is_repair_only() -> None:
     }
 
 
-def test_no_reverse_employment_type_path_remains_in_runtime_sources() -> None:
-    forbidden = (
-        "ReconcileEmploymentType",
-        "reconcile_employment_type",
-        "employment_type_bootstrap",
-        "bootstrap_people_employment_types",
-    )
-    offenders = {
-        path.relative_to(REPO_ROOT).as_posix(): [
-            token for token in forbidden if token in path.read_text(encoding="utf-8")
+REVERSE_EMPLOYMENT_TYPE_TOKENS = (
+    "ReconcileEmploymentType",
+    "reconcile_employment_type",
+    "employment_type_bootstrap",
+    "bootstrap_people_employment_types",
+)
+
+
+def _reverse_path_offenders(
+    paths: tuple[Path, ...], root: Path
+) -> dict[str, list[str]]:
+    return {
+        path.relative_to(root).as_posix(): [
+            token
+            for token in REVERSE_EMPLOYMENT_TYPE_TOKENS
+            if token in path.read_text(encoding="utf-8")
         ]
-        for path in _runtime_python_sources()
-        if any(token in path.read_text(encoding="utf-8") for token in forbidden)
+        for path in paths
+        if any(
+            token in path.read_text(encoding="utf-8")
+            for token in REVERSE_EMPLOYMENT_TYPE_TOKENS
+        )
     }
-    assert not offenders
+
+
+def test_the_reverse_employment_type_detector_still_bites(tmp_path: Path) -> None:
+    """Sensitivity proof for the emptiness the next test asserts.
+
+    A scan that returns nothing is evidence of absence only once the same scan
+    has been shown to find a planted occurrence. Without this, a renamed helper
+    or a broken source walk would read as a clean repository.
+    """
+    planted = tmp_path / "reverse_path.py"
+    planted.write_text(
+        "from app import employment_type_bootstrap\n",
+        encoding="utf-8",
+    )
+    clean = tmp_path / "owner.py"
+    clean.write_text("from app import employment_types\n", encoding="utf-8")
+
+    assert _reverse_path_offenders((planted, clean), tmp_path) == {
+        "reverse_path.py": ["employment_type_bootstrap"]
+    }
+
+
+def test_no_reverse_employment_type_path_remains_in_runtime_sources() -> None:
+    sources = _runtime_python_sources()
+    # The walk itself is load-bearing; an empty one would make the assertion
+    # below vacuous.
+    assert len(sources) > 100, len(sources)
+    assert not _reverse_path_offenders(sources, REPO_ROOT)
 
 
 def test_runtime_consumers_never_read_the_legacy_employment_type_model() -> None:

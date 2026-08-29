@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import ast
 import importlib.util
-import re
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -95,52 +95,76 @@ def _seed_role_grants() -> dict[str, tuple[str, ...]]:
     }
 
 
-def _revision_chain() -> dict[str, str | None]:
-    """Map every ERP-lineage revision id to its ``down_revision``.
+def _revision_parents() -> dict[str, tuple[str, ...]]:
+    """Map every ERP-lineage revision id to its ``down_revision`` parents.
 
-    Read from the migration sources rather than from a single module, so the
-    ancestry assertion below survives a rebase that inserts a revision between
-    the bootstrap gate and this activation.
+    Read from the migration sources with the AST rather than a text search, so
+    a merge revision's tuple of parents is followed too, and the ancestry
+    assertion below survives a rebase that inserts a revision between the
+    bootstrap gate and this activation.
     """
-    chain: dict[str, str | None] = {}
-    versions = PROJECT_ROOT / "alembic" / "versions"
-    revision_re = re.compile(r"^revision(?::\s*str)?\s*=\s*[\"'](?P<id>[^\"']+)")
-    down_re = re.compile(
-        r"^down_revision(?::[^=]+)?\s*=\s*(?:[\"'](?P<id>[^\"']+)[\"']|None)"
-    )
-    for path in versions.glob("*.py"):
-        text = path.read_text(encoding="utf-8")
+    parents: dict[str, tuple[str, ...]] = {}
+    for path in (PROJECT_ROOT / "alembic" / "versions").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         revision: str | None = None
-        down: str | None = None
-        for line in text.splitlines():
-            match = revision_re.match(line)
-            if match:
-                revision = match.group("id")
+        down: tuple[str, ...] = ()
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+                value = node.value
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                names = [node.target.id]
+                value = node.value
+            else:
                 continue
-            match = down_re.match(line)
-            if match:
-                down = match.group("id")
+            if value is None:
+                continue
+            try:
+                literal = ast.literal_eval(value)
+            except ValueError:
+                continue
+            if "revision" in names and revision is None and isinstance(literal, str):
+                revision = literal
+            if "down_revision" in names:
+                if isinstance(literal, str):
+                    down = (literal,)
+                elif isinstance(literal, (tuple, list)):
+                    down = tuple(str(item) for item in literal)
+                else:
+                    down = ()
         if revision is not None:
-            chain[revision] = down
-    return chain
+            parents[revision] = down
+    return parents
 
 
 def test_activation_descends_the_bootstrap_gate() -> None:
     module = _load()
     assert module.revision == "20260828_people_et_activation"
 
-    chain = _revision_chain()
-    # Positive control: the parser really does see this lineage, so an empty
-    # ancestor walk below would be a real absence rather than a parse miss.
-    assert "20260828_people_et_bootstrap" in chain
-    assert chain["20260828_people_et_activation"] == module.down_revision
+    parents = _revision_parents()
+    # Positive control: the parser really does see both endpoints of the walk,
+    # so an ancestry miss below would be a real absence and not a parse miss.
+    assert "20260828_people_et_bootstrap" in parents
+    assert parents["20260828_people_et_activation"] == (module.down_revision,)
 
-    ancestors: list[str] = []
-    cursor: str | None = module.down_revision
-    while cursor is not None and cursor not in ancestors:
-        ancestors.append(cursor)
-        cursor = chain.get(cursor)
-    assert "20260828_people_et_bootstrap" in ancestors, ancestors
+    seen: set[str] = set()
+    frontier = [module.down_revision]
+    while frontier:
+        current = frontier.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        frontier.extend(parents.get(current, ()))
+    assert "20260828_people_et_bootstrap" in seen
+
+
+def test_the_erp_lineage_stays_single_headed_at_this_activation() -> None:
+    """One head, and it is this revision -- the state deploy/product.toml pins."""
+    parents = _revision_parents()
+    assert len(parents) > 100, len(parents)
+    referenced = {parent for values in parents.values() for parent in values}
+    heads = sorted(revision for revision in parents if revision not in referenced)
+    assert heads == ["20260828_people_et_activation"], heads
 
 
 def test_rbac_contract_is_a_frozen_exact_copy_of_the_authored_seed() -> None:
