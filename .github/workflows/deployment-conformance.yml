@@ -1,9 +1,15 @@
 name: Deployment conformance
 
 # Calls the Starter-owned reusable gate at an immutable source revision. The
-# published `dotmac-deployment-foundation==0.2.0a1` tag peels to ac21c9ae; this
-# later workflow-only revision fixes non-strict digest conformance without
-# changing the released package bytes. A branch or tag is not admissible here.
+# published `dotmac-deployment-foundation==0.2.0a2` tag peels to 55750e10, and
+# this workflow is pinned to that SAME revision on purpose. a2's only code
+# change (`image/audit.py`) and that revision's workflow change are two halves
+# of ONE fix: complete non-root image inspection. The package evaluates
+# `Config.User` from inspect evidence; the workflow produces that evidence by
+# running the filesystem collector as an inspection-only uid/gid 0 and refusing
+# the gate on a partial walk. Pinning a2 against the earlier revision would pair
+# a package expecting the new collector with a caller that does not supply it.
+# A branch or tag is not admissible here.
 
 on:
   push:
@@ -16,12 +22,12 @@ permissions:
 
 jobs:
   deployment:
-    uses: michaelayoade/dotmac_starter_mt/.github/workflows/deployment-conformance.yml@6a8fdb03d4e7594d3c943b338de0872a6f8c2457
+    uses: michaelayoade/dotmac_starter_mt/.github/workflows/deployment-conformance.yml@55750e104df3dd94b6f9f70bf8c8db53986394c7
     with:
       descriptor: deploy/product.toml
       rendered-dir: deploy/rendered
       thresholds: deploy/alerts/thresholds.json
-      foundation-version: "0.2.0a1"
+      foundation-version: "0.2.0a2"
       # The assembly manifest is real. The image remains an explicit sentinel
       # until protected-main CI publishes the tested image and records its
       # registry digest; candidate/production cutover must turn this on.

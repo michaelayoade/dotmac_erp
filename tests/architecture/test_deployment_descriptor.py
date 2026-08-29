@@ -1,6 +1,6 @@
 """ERP's `deploy/product.toml` is a real, conformant `ProductDeploymentSpec.v1`.
 
-The published `dotmac-deployment-foundation==0.2.0a1` distribution is an exact
+The published `dotmac-deployment-foundation==0.2.0a2` distribution is an exact
 dev dependency. A missing package is therefore an installation failure, never
 a reason to skip this architecture gate.
 
@@ -42,9 +42,18 @@ PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "deployment-conformance.yml"
 DEPLOYMENT_README_PATH = REPO_ROOT / "deploy" / "README.md"
 RENDERED_OTEL_PATH = REPO_ROOT / "deploy" / "rendered" / "otel-collector.yaml"
-FOUNDATION_VERSION = "0.2.0a1"
-FOUNDATION_RELEASE_SHA = "ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844"
-FOUNDATION_WORKFLOW_SHA = "6a8fdb03d4e7594d3c943b338de0872a6f8c2457"
+FOUNDATION_VERSION = "0.2.0a2"
+FOUNDATION_RELEASE_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
+FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
+# The published image this descriptor binds, and the protected-main revision it
+# was built from. Protected-main CI resolved the digest for exactly that commit
+# (`Publish Docker Image` -> "Resolve the registry digest of the tested image"),
+# whose `org.opencontainers.image.revision` annotation equals the revision
+# below. A tag is deliberately absent: the descriptor refuses mutable
+# references, and a `sha-<short>` tag is one.
+IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
+IMAGE_SOURCE_REVISION = "9b3fb250ac9b0a8ed47cf60060d0eae737f0d4fd"
+IMAGE_DIGEST = "sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
@@ -67,9 +76,14 @@ def _load() -> ProductDeploymentSpec:
 # fails here too. That is the two-directional ratchet `AGENTS.md` rule 25
 # requires of a temporary deviation.
 #
-# Protected-main CI must publish the tested image before the remaining sentinel
-# can be replaced with a registry digest. The assembly manifest is already real.
-KNOWN_UNRESOLVED = ("image.reference is pinned to the placeholder",)
+# EMPTY, and that is the ratchet arriving at its destination rather than the
+# check being switched off. The last entry was the all-zero image sentinel;
+# protected-main CI has now published the tested image and `deploy/product.toml`
+# binds its real registry digest, so the finding is gone and the line describing
+# it had to go with it. The assertion below is unchanged and still exact in both
+# directions: a NEW finding fails, and re-adding an entry that no longer fires
+# also fails.
+KNOWN_UNRESOLVED: tuple[str, ...] = ()
 
 
 def test_published_foundation_is_exact_pinned_at_both_install_seams() -> None:
@@ -120,10 +134,20 @@ def test_descriptor_heads_match_the_composed_alembic_graph() -> None:
 
 
 def test_public_source_revision_is_projected_into_telemetry() -> None:
-    source_revision = _load().source_revision
-    assert source_revision == "713c072c82b0a135945e33c3fca6c2d7bf19c7fe"
+    """The descriptor's public identity reaches the rendered collector.
+
+    Both halves are pinned, because they are what makes a running container
+    identifiable: the source revision the image was built from, and the
+    registry digest of the image itself. They are one pairing — a revision
+    naming bytes that are not the deployed bytes identifies nothing — so the
+    literals move together or not at all.
+    """
+    spec = _load()
+    assert spec.source_revision == IMAGE_SOURCE_REVISION
+    assert spec.image == f"{IMAGE_REPOSITORY}@{IMAGE_DIGEST}"
+
     rendered = RENDERED_OTEL_PATH.read_text(encoding="utf-8")
-    assert f"value: {source_revision}" in rendered
+    assert f"value: {spec.source_revision}" in rendered
 
 
 def test_no_role_holds_the_migration_owner_material() -> None:

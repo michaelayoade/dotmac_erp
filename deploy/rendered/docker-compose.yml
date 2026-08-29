@@ -4,9 +4,9 @@
 #
 # product:          dotmac-erp
 # schema:           ProductDeploymentSpec.v1
-# image:            ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000
-# descriptor image: ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000
-# source revision:  713c072c82b0a135945e33c3fca6c2d7bf19c7fe
+# image:            ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c
+# descriptor image: ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c
+# source revision:  9b3fb250ac9b0a8ed47cf60060d0eae737f0d4fd
 # manifest digest:  sha256:9c3547745e453ffbd9339ce0d662af64a5071067087f16008f4630aae8b469b9
 # ============================================================================
 
@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
     command:
       - alembic
       - upgrade
@@ -87,7 +87,7 @@ services:
     restart: "no"
 
   app:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
     command:
       - /app/entrypoint-monitoring.sh
       - gunicorn
@@ -153,7 +153,7 @@ services:
       io.dotmac.health.live.path: /health/live
 
   beat:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
     command:
       - /app/entrypoint-monitoring.sh
       - celery
@@ -208,7 +208,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
     command:
       - /app/entrypoint-monitoring.sh
       - celery

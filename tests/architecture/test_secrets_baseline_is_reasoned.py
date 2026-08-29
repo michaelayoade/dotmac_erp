@@ -84,14 +84,20 @@ REASONS = {
         "credentials as the example. Nothing here reaches a real host."
     ),
     "deploy/product.toml": (
-        "The required source_revision is the public Git commit whose reviewed "
-        "source bytes this reference descriptor identifies. It grants no "
-        "access, and test_deployment_descriptor.py pins its exact projection."
+        "Two public content addresses, neither of which grants access. The "
+        "source_revision is the Git commit whose reviewed source bytes this "
+        "descriptor identifies; the image reference is the registry digest "
+        "protected-main CI resolved for the image it built from that same "
+        "commit. A digest is the NAME of publicly published bytes, and it is "
+        "here precisely because the descriptor refuses a mutable tag. Both are "
+        "hex and long, which is why the entropy heuristic fires. "
+        "test_deployment_descriptor.py pins their exact projection."
     ),
     "deploy/rendered/otel-collector.yaml": (
-        "The renderer projects that same public Git commit into telemetry. "
-        "Rendered bytes are checked against the released facility and the "
-        "deployment descriptor test proves both fields stay identical."
+        "The renderer projects that same public Git commit AND image digest "
+        "into telemetry resource attributes. Rendered bytes are checked against "
+        "the released facility and the deployment descriptor test proves the "
+        "fields stay identical to the descriptor they came from."
     ),
     "docs/paystack_chargebacks_investigation.md": (
         "Paystack transaction references from a written-up investigation. "
@@ -158,13 +164,25 @@ def test_the_suppression_count_only_shrinks() -> None:
     The prior floor was 18. Schema-9 conservation added seven public integrity
     fingerprints to the already-listed profile; ERP's required public source
     revision adds one descriptor finding and one deterministic telemetry
-    projection. Every entry above the reviewed 27 would be unexplained, and
-    the reason check above only fires per FILE — a new finding in an
-    already-listed file would otherwise slip in silently.
+    projection, reaching 27.
+
+    28 admits exactly ONE more, and it is named rather than absorbed: the
+    published OCI image digest, projected into the rendered collector at
+    `deploy/rendered/otel-collector.yaml`. It appeared when the descriptor
+    stopped carrying an all-zero sentinel and began binding the digest
+    protected-main CI resolved for the image it built and tested. A digest is
+    the NAME of publicly published bytes and authorises nothing; it is long hex,
+    which is the whole reason the entropy heuristic fires on it. It is here
+    precisely BECAUSE the descriptor refuses a mutable tag, so suppressing it is
+    the cost of the stronger reference, not a concession.
+
+    Every entry above the reviewed 28 would be unexplained, and the reason check
+    above only fires per FILE — a new finding in an already-listed file would
+    otherwise slip in silently, which is exactly the shape this one had.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total <= 27, (
-        f"{total} suppressed findings, up from 27. Fix the finding, or lower "
+    assert total <= 28, (
+        f"{total} suppressed findings, up from 28. Fix the finding, or lower "
         "this number in the same change that explains the new entry."
     )
 

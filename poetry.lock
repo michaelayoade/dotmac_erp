@@ -1075,14 +1075,14 @@ reference = "forgejo"
 
 [[package]]
 name = "dotmac-deployment-foundation"
-version = "0.2.0a1"
+version = "0.2.0a2"
 description = "Stateless build- and deploy-time facility for Dotmac product assemblies"
 optional = false
 python-versions = ">=3.11,<3.14"
 groups = ["dev"]
 files = [
-    {file = "dotmac_deployment_foundation-0.2.0a1-py3-none-any.whl", hash = "sha256:0e89ed1f59e1d0565ac3008b3431742a09f21003411a182590b539cef94c7207"},
-    {file = "dotmac_deployment_foundation-0.2.0a1.tar.gz", hash = "sha256:0bcd4ca018096048e7be8d2ee5568587ce0f379506dcf6430972de889f84a1ea"},
+    {file = "dotmac_deployment_foundation-0.2.0a2-py3-none-any.whl", hash = "sha256:ff41ca5816a40c1e1c4030f2af71b8f355d12092f9af371550a214e3fd83826f"},
+    {file = "dotmac_deployment_foundation-0.2.0a2.tar.gz", hash = "sha256:e4d70f4bdd846176ca3b27d9bb6698aed2a1300a47ef6aae78b03b0f5b44f9a3"},
 ]
 
 [package.source]
@@ -3482,7 +3482,7 @@ name = "pydyf"
 version = "0.11.0"
 description = "A low-level PDF generator."
 optional = false
-python-versions = ">=3.10"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
     {file = "pydyf-0.11.0-py3-none-any.whl", hash = "sha256:0aaf9e2ebbe786ec7a78ec3fbffa4cdcecde53fd6f563221d53c6bc1328848a3"},
@@ -3490,7 +3490,7 @@ files = [
 ]
 
 [package.extras]
-doc = ["furo", "sphinx"]
+doc = ["sphinx", "sphinx_rtd_theme"]
 test = ["pillow", "pytest", "ruff"]
 
 [[package]]
@@ -5196,4 +5196,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "4945a0c9e87d02178538ca98ff8dcf11ee2d7c99bd994cfc12ccec1cd3662b92"
+content-hash = "518be0f528ffa11ca9214541d8a07bd1b53bd007212218d62ebac02255435477"
