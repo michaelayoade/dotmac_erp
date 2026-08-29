@@ -4,8 +4,37 @@ services:
     platform: linux/amd64
     container_name: dotmac_erp_app
     restart: unless-stopped
+    # LOOPBACK ONLY, one entry per address family, long syntax.
+    #
+    # `- "8003:8002"` published on 0.0.0.0 AND [::] simultaneously: Docker
+    # spawns one docker-proxy per family for a short-form publish. That put
+    # plaintext HTTP for this app on a routable address in both families,
+    # bypassing the nginx TLS vhost in front of it — and it was actively
+    # scanned (Shodan, Censys). The only legitimate consumer is nginx on this
+    # host, via `upstream dotmac_erp { server 127.0.0.1:8003; }`; a 24h access
+    # log sample found zero non-loopback client IPs across 21,587 requests.
+    #
+    # Naming a host_ip is what fixes it. The IPv6 half CANNOT be fixed with a
+    # firewall rule: with an IPv4-only docker network there is no IPv6 DNAT, so
+    # an inbound v6 connection is accepted by docker-proxy as a local process
+    # and traverses INPUT, while DOCKER-USER is only ever jumped from FORWARD.
+    # Every `ip6tables DOCKER-USER` rule against a published port sits at zero
+    # packets forever. Binding the listener is the fix, not filtering it.
+    #
+    # Both families are named explicitly rather than left implicit, so the
+    # binding is reviewable and a future short form is an obvious regression.
+    # Changing this requires `docker compose up -d app` to RECREATE the
+    # container; `docker compose restart` re-runs the existing container object
+    # with its existing HostConfig.PortBindings and has no effect.
     ports:
-    - "8003:8002"
+    - target: 8002
+      published: "8003"
+      host_ip: "127.0.0.1"
+      protocol: tcp
+    - target: 8002
+      published: "8003"
+      host_ip: "::1"
+      protocol: tcp
     env_file:
     - .env
     environment:

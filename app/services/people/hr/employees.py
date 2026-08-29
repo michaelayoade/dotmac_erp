@@ -38,7 +38,6 @@ from app.models.people.hr import (
     Employee,
     EmployeeGrade,
     EmployeeStatus,
-    EmploymentType,
     Position,
     PositionAssignment,
     PositionAssignmentType,
@@ -49,6 +48,7 @@ from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password, request_password_reset
 from app.services.common import PaginatedResult, PaginationParams, paginate
 from app.services.email import send_password_reset_email
+from app.services.people.hr.employment_types import EmploymentTypeService
 from app.services.people.hr.invite_email import (
     EMPLOYEE_INVITE_NEXT_URL,
     get_employee_invite_email_template,
@@ -447,7 +447,6 @@ class EmployeeService:
                 selectinload(Employee.person),
                 selectinload(Employee.department),
                 selectinload(Employee.designation),
-                selectinload(Employee.employment_type),
                 selectinload(Employee.default_shift_type),
             )
 
@@ -532,7 +531,6 @@ class EmployeeService:
                 joinedload(Employee.person),
                 joinedload(Employee.department),
                 joinedload(Employee.designation),
-                joinedload(Employee.employment_type),
                 joinedload(Employee.default_shift_type),
             )
 
@@ -721,9 +719,10 @@ class EmployeeService:
 
         self._validate_org_reference(Department, data.department_id, "Department")
         self._validate_org_reference(Designation, data.designation_id, "Designation")
-        self._validate_org_reference(
-            EmploymentType, data.employment_type_id, "Employment type"
-        )
+        if data.employment_type_id is not None:
+            EmploymentTypeService(
+                db=self.db, organization_id=self.organization_id
+            ).require_active(data.employment_type_id)
         self._validate_org_reference(EmployeeGrade, data.grade_id, "Employee grade")
         self._validate_org_reference(CostCenter, data.cost_center_id, "Cost center")
         self._validate_org_reference(Location, data.assigned_location_id, "Location")
@@ -1093,9 +1092,10 @@ class EmployeeService:
             employee.designation_id = None
 
         if data.employment_type_id is not None:
-            self._validate_org_reference(
-                EmploymentType, data.employment_type_id, "Employment type"
-            )
+            if data.employment_type_id != employee.employment_type_id:
+                EmploymentTypeService(
+                    db=self.db, organization_id=self.organization_id
+                ).require_active(data.employment_type_id)
             employee.employment_type_id = data.employment_type_id
         elif use_provided_fields and "employment_type_id" in provided_fields:
             employee.employment_type_id = None
