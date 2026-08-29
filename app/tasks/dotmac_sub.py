@@ -59,13 +59,23 @@ def _resolve_org_id(explicit_org_id: str | None) -> UUID | None:
 
 
 def _try_acquire_incremental_sync_lock(db: Session, organization_id: UUID) -> bool:
-    """Acquire the transaction-scoped single-flight lock for one organization."""
+    """Acquire the session-scoped single-flight lock for one organization."""
     lock_identity = f"{_INCREMENTAL_SYNC_LOCK_NAMESPACE}:{organization_id}"
     acquired = db.scalar(
-        text("SELECT pg_try_advisory_xact_lock(hashtextextended(:lock_identity, 0))"),
+        text("SELECT pg_try_advisory_lock(hashtextextended(:lock_identity, 0))"),
         {"lock_identity": lock_identity},
     )
     return bool(acquired)
+
+
+def _release_incremental_sync_lock(db: Session, organization_id: UUID) -> bool:
+    """Release the session-scoped single-flight lock for one organization."""
+    lock_identity = f"{_INCREMENTAL_SYNC_LOCK_NAMESPACE}:{organization_id}"
+    released = db.scalar(
+        text("SELECT pg_advisory_unlock(hashtextextended(:lock_identity, 0))"),
+        {"lock_identity": lock_identity},
+    )
+    return bool(released)
 
 
 def _resolve_ar_control_account(db: Session, organization_id: UUID) -> UUID | None:
@@ -406,7 +416,8 @@ def run_dotmac_sub_incremental_sync(
         return {"success": False, "error": "No valid organization ID configured"}
 
     with session_for_org(org_id) as db:
-        if not _try_acquire_incremental_sync_lock(db, org_id):
+        lock_acquired = _try_acquire_incremental_sync_lock(db, org_id)
+        if not lock_acquired:
             logger.info(
                 "Skipping overlapping dotmac_sub incremental sync for org %s",
                 org_id,
@@ -418,11 +429,15 @@ def run_dotmac_sub_incremental_sync(
                 "reason": "already_running",
             }
 
-        ctx = _build_sync_context(db, str(org_id), SyncType.INCREMENTAL, entity_types)
-        if isinstance(ctx, dict):
-            return ctx
-        service, history_id, org_id = ctx
+        service: DotmacSubSyncService | None = None
+        history_id: UUID | None = None
         try:
+            ctx = _build_sync_context(
+                db, str(org_id), SyncType.INCREMENTAL, entity_types
+            )
+            if isinstance(ctx, dict):
+                return ctx
+            service, history_id, org_id = ctx
             resellers = service.sync_resellers(created_by_user_id=SYSTEM_USER_ID)
             subscribers = service.sync_subscribers(
                 created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
@@ -452,19 +467,29 @@ def run_dotmac_sub_incremental_sync(
             )
         except SoftTimeLimitExceeded as exc:
             db.rollback()
-            _handle_sync_failure(history_id, org_id, exc, "Incremental")
+            if history_id is not None:
+                _handle_sync_failure(history_id, org_id, exc, "Incremental")
             return {
                 "success": False,
-                "history_id": str(history_id),
+                "history_id": str(history_id) if history_id is not None else None,
                 "organization_id": str(org_id),
                 "error": "Incremental sync exceeded its execution time limit",
             }
         except Exception as exc:
             db.rollback()
-            _handle_sync_failure(history_id, org_id, exc, "Incremental")
+            if history_id is not None:
+                _handle_sync_failure(history_id, org_id, exc, "Incremental")
             raise self.retry(exc=exc)
         finally:
-            service.close()
+            if service is not None:
+                service.close()
+            try:
+                _release_incremental_sync_lock(db, org_id)
+            except Exception:
+                logger.exception(
+                    "Failed to release dotmac_sub incremental sync lock for org %s",
+                    org_id,
+                )
 
 
 # ---------------------------------------------------------------------------

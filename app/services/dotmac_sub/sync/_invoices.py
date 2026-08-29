@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc  # type: ignore[assignment]
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import OperationalError
 
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceType
@@ -125,6 +126,7 @@ class InvoiceSyncMixin:
                     result.message = f"Batch limit ({batch_size}) reached"
                     break
                 row_updated_at = inv.updated_at
+                savepoint = None
                 try:
                     savepoint = self.db.begin_nested()
                     self._sync_single_invoice(
@@ -138,9 +140,25 @@ class InvoiceSyncMixin:
                         self._reprime_tenant_context()
                         self.db.expunge_all()
                         logger.info("Progress: %d invoices processed", processed)
+                except OperationalError:
+                    if savepoint is not None:
+                        try:
+                            savepoint.rollback()
+                        except Exception:  # noqa: BLE001
+                            self.db.rollback()
+                    else:
+                        self.db.rollback()
+                    logger.exception(
+                        "Database error syncing invoice %s; aborting dotmac_sub run",
+                        inv.id,
+                    )
+                    raise
                 except Exception as e:  # noqa: BLE001
                     try:
-                        savepoint.rollback()
+                        if savepoint is not None:
+                            savepoint.rollback()
+                        else:
+                            self.db.rollback()
                     except Exception:  # noqa: BLE001
                         self.db.rollback()
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
