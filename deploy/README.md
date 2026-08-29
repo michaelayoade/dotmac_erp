@@ -1,13 +1,18 @@
 # ERP deployment descriptor — released adapter, not cutover
 
 `deploy/product.toml` is ERP's `ProductDeploymentSpec.v1`, implemented by the
-published `dotmac-deployment-foundation==0.2.0a1` facility (Starter ADR-0070).
+published `dotmac-deployment-foundation==0.2.0a2` facility (Starter ADR-0070).
 The package is exact-pinned as a dev dependency from Dotmac's private Forgejo
 index. Its annotated release tag peels to Starter commit
-`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`. ERP's reusable conformance workflow
-is pinned separately to immutable Starter commit
-`6a8fdb03d4e7594d3c943b338de0872a6f8c2457`, which fixes the workflow's
-non-strict digest gate without changing the released package bytes.
+`55750e104df3dd94b6f9f70bf8c8db53986394c7`. ERP's reusable conformance workflow
+is pinned to that SAME immutable Starter commit, and deliberately so: 0.2.0a2's
+only code change and that revision's workflow change are two halves of one fix
+(complete non-root image inspection). The package's `image/audit.py` evaluates
+`Config.User` from inspect evidence, and the workflow supplies that evidence by
+running the filesystem collector as an inspection-only uid/gid 0 and refusing
+the gate on a partial walk. Pinning a2 against the previous workflow revision
+would pair a package expecting the new collector with a caller that does not
+provide it, so these two pins move together.
 
 The descriptor and `app/product_assembly.py` share the product identity
 `dotmac-erp`. The canonical `deploy/product-manifest.json` binds the exact

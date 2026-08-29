@@ -228,16 +228,23 @@ rebuilding it. Only after every gate in the CI workflow succeeds — including a
 exact pinned re-run of the independently required Engineering standards check
 — does the registry push return an immutable image digest; CI uploads a
 non-secret `image-release.json` binding that exact reference to `GITHUB_SHA`.
-ERP exact-pins the published `dotmac-deployment-foundation==0.2.0a1` build-time
+ERP exact-pins the published `dotmac-deployment-foundation==0.2.0a2` build-time
 facility released from commit
-`ac21c9ae382ac866ec8f2ab21e5970e1ac8cc844`; its reusable conformance workflow
-is independently pinned to immutable commit
-`6a8fdb03d4e7594d3c943b338de0872a6f8c2457`, whose workflow-only fix does not
-change the released package. `deploy/product.toml` uses the same
-`dotmac-erp` product identity and binds the real canonical manifest digest. Its
-four deterministic rendered assets are checked byte-for-byte and parsed by a
-real Compose engine. Only the image digest remains an explicit sentinel until
-protected-main CI publishes the already-tested image.
+`55750e104df3dd94b6f9f70bf8c8db53986394c7`; its reusable conformance workflow
+is pinned to that SAME immutable commit, because a2's `image/audit.py` change
+and that revision's workflow change are two halves of one non-root
+image-inspection fix and are not independently pinnable. `deploy/product.toml`
+uses the same `dotmac-erp` product identity and binds the real canonical
+manifest digest. Its four deterministic rendered assets are checked
+byte-for-byte and parsed by a real Compose engine.
+
+The image digest is no longer a sentinel. Protected-main CI published the
+tested image for `9b3fb250ac9b0a8ed47cf60060d0eae737f0d4fd`, and the descriptor
+binds the digest that run resolved for it,
+`sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c`, whose
+`org.opencontainers.image.revision` annotation equals that same revision. With
+the sentinel gone, `check_all` returns zero findings and the architecture
+test's `KNOWN_UNRESOLVED` ratchet is empty.
 
 This is a checked reference adapter, not host execution: no live deploy script,
 runtime factory, module authority, data or production environment moves in this

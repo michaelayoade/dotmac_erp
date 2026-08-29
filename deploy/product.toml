@@ -32,13 +32,20 @@ manifest_digest = "sha256:9c3547745e453ffbd9339ce0d662af64a5071067087f16008f4630
 
 [image]
 # A digest, never a tag. ERP's legacy docker-compose.yml still accepts
-# `${ERP_IMAGE_TAG:-latest}`; this descriptor refuses that shape. The all-zero
-# digest is an explicit reference-adapter sentinel, not a deployable image.
-# Protected-main CI must replace it with the digest of the tested image.
-reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-# Current protected-main baseline this reference adapter was refreshed against.
-# A release descriptor replaces it with the exact image source revision.
-source_revision = "713c072c82b0a135945e33c3fca6c2d7bf19c7fe"
+# `${ERP_IMAGE_TAG:-latest}`; this descriptor refuses that shape.
+#
+# BOUND, no longer the all-zero sentinel. This is the digest protected-main CI
+# resolved for the image it actually built and tested from the revision below —
+# the `Publish Docker Image` job's "Resolve the registry digest of the tested
+# image" step, whose `org.opencontainers.image.revision` annotation equals
+# `source_revision`. Deliberately NOT a resolution of `:latest` or of a
+# `sha-<short>` tag: those are mutable references, which is the exact shape the
+# first line refuses.
+reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
+# The exact protected-main revision the bound image was built from. Changing
+# either this or the digest without the other breaks the pairing that makes the
+# image identifiable, so they move together or not at all.
+source_revision = "9b3fb250ac9b0a8ed47cf60060d0eae737f0d4fd"
 
 # ─────────────────────────────────────────────────────────────────────────
 # Runtime materials — the exact env var NAMES ERP's app/worker/beat services

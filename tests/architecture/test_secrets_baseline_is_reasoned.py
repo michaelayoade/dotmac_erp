@@ -84,14 +84,20 @@ REASONS = {
         "credentials as the example. Nothing here reaches a real host."
     ),
     "deploy/product.toml": (
-        "The required source_revision is the public Git commit whose reviewed "
-        "source bytes this reference descriptor identifies. It grants no "
-        "access, and test_deployment_descriptor.py pins its exact projection."
+        "Two public content addresses, neither of which grants access. The "
+        "source_revision is the Git commit whose reviewed source bytes this "
+        "descriptor identifies; the image reference is the registry digest "
+        "protected-main CI resolved for the image it built from that same "
+        "commit. A digest is the NAME of publicly published bytes, and it is "
+        "here precisely because the descriptor refuses a mutable tag. Both are "
+        "hex and long, which is why the entropy heuristic fires. "
+        "test_deployment_descriptor.py pins their exact projection."
     ),
     "deploy/rendered/otel-collector.yaml": (
-        "The renderer projects that same public Git commit into telemetry. "
-        "Rendered bytes are checked against the released facility and the "
-        "deployment descriptor test proves both fields stay identical."
+        "The renderer projects that same public Git commit AND image digest "
+        "into telemetry resource attributes. Rendered bytes are checked against "
+        "the released facility and the deployment descriptor test proves the "
+        "fields stay identical to the descriptor they came from."
     ),
     "docs/paystack_chargebacks_investigation.md": (
         "Paystack transaction references from a written-up investigation. "
