@@ -42,7 +42,7 @@ def test_incremental_sync_skips_when_single_flight_lock_is_held(monkeypatch) -> 
     build_context.assert_not_called()
 
 
-def test_incremental_sync_lock_is_transaction_scoped() -> None:
+def test_incremental_sync_lock_is_session_scoped() -> None:
     organization_id = uuid4()
     db = MagicMock()
     db.scalar.return_value = True
@@ -50,7 +50,23 @@ def test_incremental_sync_lock_is_transaction_scoped() -> None:
     assert dotmac_sub._try_acquire_incremental_sync_lock(db, organization_id) is True
 
     statement = str(db.scalar.call_args.args[0])
-    assert "pg_try_advisory_xact_lock" in statement
+    assert "pg_try_advisory_lock" in statement
+    assert "pg_try_advisory_xact_lock" not in statement
+    assert "hashtextextended" in statement
+    assert db.scalar.call_args.args[1] == {
+        "lock_identity": f"dotmac_sub:incremental:{organization_id}"
+    }
+
+
+def test_incremental_sync_lock_release_uses_same_identity() -> None:
+    organization_id = uuid4()
+    db = MagicMock()
+    db.scalar.return_value = True
+
+    assert dotmac_sub._release_incremental_sync_lock(db, organization_id) is True
+
+    statement = str(db.scalar.call_args.args[0])
+    assert "pg_advisory_unlock" in statement
     assert "hashtextextended" in statement
     assert db.scalar.call_args.args[1] == {
         "lock_identity": f"dotmac_sub:incremental:{organization_id}"

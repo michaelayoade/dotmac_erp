@@ -1074,6 +1074,16 @@ class DotmacSubClient:
         transient subclass; auth/404 raise immediately.
         """
         status = response.status_code
+        if status == 403 and endpoint.endswith("/erp-department"):
+            detail = _response_detail(response)
+            message = (
+                "Self-Care API key is missing the "
+                "operations:service_team:membership scope required for ERP "
+                "department membership sync."
+            )
+            if detail:
+                message = f"{message} Self-Care detail: {detail}"
+            raise DotmacSubPermanentSyncError(message, status_code=status)
         if status in (401, 403):
             raise DotmacSubAuthenticationError(
                 "Authentication failed for dotmac_sub.", status_code=status
@@ -1101,6 +1111,12 @@ class DotmacSubClient:
                 message = (
                     "ERP employee is already linked to a different Self-Care "
                     "user. Resolve the duplicate account link."
+                )
+            elif endpoint.endswith("/roles") and status == 422:
+                message = (
+                    "Self-Care rejected one or more ERP staff roles. Ensure "
+                    "the employee dotmac_sub_roles exist and are active in "
+                    "Self-Care."
                 )
             else:
                 message = "Self-Care rejected the request."
