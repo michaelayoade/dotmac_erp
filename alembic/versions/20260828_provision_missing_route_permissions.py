@@ -94,7 +94,7 @@ preserved.  An inactive desired role or permission is a CONFLICT: the
 migration refuses to silently reactivate an operator-disabled record.
 
 Revision ID: 20260828_route_permissions
-Revises: 20260828_merge_consolidated_heads
+Revises: 20260828_people_et_bootstrap
 Create Date: 2026-08-28
 """
 
@@ -106,7 +106,7 @@ from typing import Any
 from alembic import op
 
 revision: str = "20260828_route_permissions"
-down_revision: str | None = "20260828_merge_consolidated_heads"
+down_revision: str | None = "20260828_people_et_bootstrap"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
