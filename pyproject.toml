@@ -108,10 +108,10 @@ dotmac-accounting = {version = "0.1.0a1", source = "forgejo"}
 # time with a caller-supplied business date.
 dotmac-numbering = {version = "0.1.0a2", source = "forgejo"}
 
-# Tenant employment-directory storage only. The independent `people` lineage
-# is composed and catalog-proven here, but no ERP runtime caller imports the
-# module and no legacy People writer or authority moves in this slice.
-dotmac-people = {version = "0.1.0a1", source = "forgejo"}
+# Tenant employment-directory storage plus the reviewed, operator-only
+# Employment Type bootstrap API. No web/API/job caller imports the module, no
+# legacy People writer is repointed, and runtime authority remains in ERP.
+dotmac-people = {version = "0.1.0a2", source = "forgejo"}
 
 # Generic tax policy, determination and statutory evidence. C2 composes the
 # released `tx` lineage and public read contract only. ERP's legacy calculator

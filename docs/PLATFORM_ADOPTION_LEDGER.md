@@ -260,20 +260,25 @@ resolved-Compose execution evidence remain one subsequent deployment-adapter
 slice. Keeping that boundary explicit prevents a CI-only hardening envelope
 from being reported as live runtime truth.
 
-**2026-08-28 — People composition: tenant storage only.** ERP pins
-`dotmac-people==0.1.0a1` and composes its independent `people` lineage at
+**2026-08-28 — People composition: tenant storage plus sealed Employment Type
+bootstrap.** ERP pins `dotmac-people==0.1.0a2` and composes its independent
+`people` lineage at
 `pe_0001_people_directory`. The six manifest-declared tenant tables are
 created in `mod_people` with non-null tenant scope and ENABLEd/FORCEd RLS. ERP
 supplies and re-verifies `tenant_scope_catalog.v1`,
 `module_database_roles.v1` and `party_person_catalog.v1` from its own lineage;
 it does not run or stamp the kernel lineage.
 
-**This is storage, not People authority.** Nothing under `app/` imports the
-module runtime, no bootstrap or fingerprint ledger exists, no compatibility
-table is projected, and no web, API, importer, job or script writer is
-repointed. Employment Type is the first planned vertical authority slice, but
-it requires a separately released typed module contract and the atomic
-retirement of every legacy Employment Type decision writer.
+**This is bootstrap readiness, not People authority.** One quarantined service
+imports the reviewed public a2 reconciliation API and is reachable only from
+the explicit per-organization operator CLI. No web, API, importer, job or
+runtime service imports it; no compatibility table is projected; and every
+legacy reader and writer remains unchanged. The CLI produces deterministic
+source/target fingerprint-set evidence and repeats the complete legacy scan
+before commit while a fail-fast SHARE fence blocks legacy DML. Employment Type
+activation still requires per-organization
+bootstrap/replay evidence, shadow comparison and the atomic retirement of every
+legacy Employment Type decision writer in a separate authorized change.
 
 **2026-08-25 — Numbering composition: tenant storage only.** ERP pins
 `dotmac-numbering==0.1.0a2` and composes its independent `numbering` lineage at

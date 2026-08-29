@@ -32,7 +32,7 @@ from scripts.write_image_release import (
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / "deploy" / "product-manifest.json"
 EXPECTED_MANIFEST_DIGEST = (
-    "sha256:82e5c01c713e4facfa6745e0aab98f6e52fb9ee125d4c4228cac0237ee9719b8"
+    "sha256:9c3547745e453ffbd9339ce0d662af64a5071067087f16008f4630aae8b469b9"
 )
 
 
@@ -71,7 +71,7 @@ def test_committed_product_manifest_is_canonical_and_digest_bound() -> None:
     assert numbering["effective_planes"] == ["tenant"]
     people = next(row for row in payload["modules"] if row["code"] == "people")
     assert people["distribution"] == "dotmac-people"
-    assert people["version"] == "0.1.0a1"
+    assert people["version"] == "0.1.0a2"
     assert people["declared_planes"] == ["tenant"]
     assert people["explicit_planes"] is None
     assert people["effective_planes"] == ["tenant"]

@@ -28,7 +28,7 @@ environment = "reference"
 # identity, module versions and persistence-plane selections are one release
 # fact; the digest below is the SHA-256 of the committed canonical bytes.
 manifest_path = "deploy/product-manifest.json"
-manifest_digest = "sha256:82e5c01c713e4facfa6745e0aab98f6e52fb9ee125d4c4228cac0237ee9719b8"
+manifest_digest = "sha256:9c3547745e453ffbd9339ce0d662af64a5071067087f16008f4630aae8b469b9"
 
 [image]
 # A digest, never a tag. ERP's legacy docker-compose.yml still accepts
@@ -359,7 +359,7 @@ owner_material = "MIGRATION_DATABASE_URL"
 # Tax. The architecture gate queries Alembic's composed graph directly; this is
 # not a source-text approximation.
 expected_heads = [
-    "20260828_merge_consolidated_heads",
+    "20260828_people_et_bootstrap",
     "fi_0001_stored_files",
     "im_0001_import_runs",
     "ac_0001_accounting",
