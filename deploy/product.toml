@@ -447,6 +447,21 @@ sse = false
 # is declared here as the CORRECTED TARGET the eventual renderer emits, not
 # as a claim that today's docker-compose.yml already matches it.
 static = "image"
+# As of 2026-08-30 this is TRUE, not aspirational. The compose bind mounts of
+# ./static, ./templates, ./license and ./gunicorn.conf.py are removed, and
+# scripts/sync-static.sh -- which rsynced the checkout into the nginx web root
+# that nginx serves AHEAD of the application -- is retired. nginx proxies
+# /static/ to the app, which serves it from the image.
+#
+# The expected digest of that served tree is recorded in
+# deploy/static-tree-digest.json, NOT here: ProductDeploymentSpec.v1 as
+# implemented by the pinned dotmac-deployment-foundation==0.2.0a2 has no field
+# for a served-asset digest and refuses unknown keys at parse time (the same
+# strictness that refuses static = "volume"). A first-class field belongs in the
+# shared facility; when it exists, that file collapses into this descriptor.
+# CI compares the recorded digest against what the running container actually
+# serves over HTTP -- an internal check of the image would have passed
+# throughout the period a stale stylesheet was being served.
 # User-uploaded files (avatars, attachments, ...) go through
 # app/services/file_upload.py to S3 (S3_BUCKET_NAME etc.), never a local
 # volume, so "none" (the product serves them itself, out of an external

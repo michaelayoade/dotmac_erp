@@ -543,6 +543,110 @@ jobs:
           docker logs ci-app
           exit 1
 
+      # =====================================================================
+      # Served static identity.
+      #
+      # ERP served a stylesheet 198 insertions behind its own image for an
+      # unknown period, missing dark-mode and accent utilities. Two paths
+      # carried the checkout to the browser: a compose bind mount over
+      # /app/static, and sync-static.sh rsyncing the checkout into the nginx web
+      # root, which nginx served AHEAD of the application. Both are retired.
+      #
+      # Note what would NOT have caught it: an internal check of the image. The
+      # image was correct the whole time. Only comparing what is ACTUALLY SERVED
+      # against a recorded digest detects this, which is what these steps do.
+      # =====================================================================
+
+      - name: Served static tree must match the recorded digest
+        run: |
+          set -euo pipefail
+          expected=$(python -c "import json;print(json.load(open('deploy/static-tree-digest.json'))['tree_digest'])")
+          echo "descriptor records: $expected"
+          # Emit BOTH manifests before asserting. A bare digest mismatch says
+          # only "different", which costs a whole CI round-trip to diagnose;
+          # the per-file diff names the offending path immediately.
+          python scripts/static_tree_digest.py --manifest static > /tmp/checkout.manifest
+          python scripts/static_tree_digest.py --manifest --container ci-app /app/static > /tmp/image.manifest
+          echo "--- checkout vs image (left = checkout, right = image) ---"
+          diff -u /tmp/checkout.manifest /tmp/image.manifest || true
+          echo "--- end diff ---"
+          python scripts/static_tree_digest.py --container ci-app /app/static --expect "$expected"
+
+      - name: The externally served stylesheet must match, and carry the utilities that went missing
+        run: |
+          set -euo pipefail
+          # Fetched over HTTP from a SEPARATE container, so this exercises the
+          # real serving path rather than reading the filesystem. No heredoc:
+          # an indented terminator inside a YAML block scalar never closes.
+          docker run --rm --network ci-net dotmac-erp:ci python -c "
+          import sys, urllib.request
+          r = urllib.request.urlopen('http://ci-app:8002/static/css/app.css', timeout=15)
+          assert r.status == 200, r.status
+          sys.stdout.buffer.write(r.read())
+          " > /tmp/served.css
+          served_sha=$(sha256sum /tmp/served.css | cut -d" " -f1)
+          image_sha=$(docker exec ci-app sha256sum /app/static/css/app.css | cut -d" " -f1)
+          echo "served=$served_sha"
+          echo "image =$image_sha"
+          if [ "$served_sha" != "$image_sha" ]; then
+            echo "::error::the served stylesheet is not the image's stylesheet"
+            exit 1
+          fi
+          # The specific utilities the stale artifact was missing. A digest match
+          # alone would also be satisfied by two identically-wrong trees, so name
+          # the classes whose absence was the actual user-visible defect.
+          #
+          # Each of these is VERIFIED ABSENT from the pre-fix stylesheet at
+          # eb909214f and present after, so each is a real regression marker. An
+          # earlier draft included hover\:bg-accent-100, which was already
+          # present in the stale tree and would therefore have passed against
+          # the very artifact this check exists to reject.
+          missing=0
+          for needle in 'dark\:bg-blue-950' 'dark\:text-accent-300' 'border-accent-200' 'dark\:border-accent-800'; do
+            if ! grep -qF "$needle" /tmp/served.css; then
+              echo "::error::served stylesheet is missing $needle"
+              missing=1
+            fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "served stylesheet matches the image and carries the dark-mode/accent utilities."
+
+      - name: A planted checkout mutation must not change served bytes
+        run: |
+          set -euo pipefail
+          # The whole point of removing the mounts and the rsync. Corrupt the
+          # CHECKOUT copy and prove the running application is unmoved. Before
+          # this change, this mutation WOULD have reached browsers.
+          before=$(docker run --rm --network ci-net dotmac-erp:ci python -c "
+          import hashlib, urllib.request
+          print(hashlib.sha256(urllib.request.urlopen('http://ci-app:8002/static/css/app.css', timeout=15).read()).hexdigest())
+          ")
+          cp static/css/app.css /tmp/app.css.orig
+          echo '/* PLANTED BY CI: this must never reach a browser */' >> static/css/app.css
+          after=$(docker run --rm --network ci-net dotmac-erp:ci python -c "
+          import hashlib, urllib.request
+          print(hashlib.sha256(urllib.request.urlopen('http://ci-app:8002/static/css/app.css', timeout=15).read()).hexdigest())
+          ")
+          cp /tmp/app.css.orig static/css/app.css
+          echo "before=$before"
+          echo "after =$after"
+          if [ "$before" != "$after" ]; then
+            echo "::error::a checkout mutation changed the served stylesheet -- a mutable path back to production still exists"
+            exit 1
+          fi
+          # Sensitivity: the probe must be capable of noticing a change at all,
+          # or the equality above proves nothing. Verify it detects a genuinely
+          # different document.
+          other=$(docker run --rm --network ci-net dotmac-erp:ci python -c "
+          import hashlib, urllib.request
+          print(hashlib.sha256(urllib.request.urlopen('http://ci-app:8002/health/ready', timeout=15).read()).hexdigest())
+          ")
+          if [ "$other" = "$before" ]; then
+            echo "::error::the probe returns the same hash for different documents; it detects nothing"
+            exit 1
+          fi
+          echo "checkout mutation had no effect on served bytes, and the probe demonstrably discriminates."
+
       - name: Start Celery worker and scheduler  # pragma: allowlist secret
         run: |  # pragma: allowlist secret
           set -euo pipefail
@@ -917,3 +1021,51 @@ jobs:
           path: image-release.json
           if-no-files-found: error
           retention-days: 90
+
+  # ===========================================================================
+  # The committed stylesheet must equal a fresh build.
+  #
+  # docker-compose.yml used to bind-mount ./static over /app/static, so the
+  # CHECKOUT's committed static/css/app.css shadowed the one the image's
+  # css-builder stage compiles from src/css. Production therefore served the
+  # committed artifact, and the image's freshly built one was never used.
+  #
+  # That mount is gone, so the image's compiled stylesheet is now what ships.
+  # This job is what makes that swap provably behaviour-preserving instead of a
+  # silent visual change: if the committed artifact has drifted from a fresh
+  # build, the diff below fails and the artifact must be regenerated in the same
+  # change. The previous image check only ran `test -r .../app.css` -- existence,
+  # not content, which would not have caught drift at all.
+  # ===========================================================================
+  css-drift:
+    name: Compiled stylesheet is in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # `npm ci`, not `install`: fails loudly on lockfile drift instead of
+      # silently rewriting it. Same command the image's css-builder stage runs.
+      - name: Install CSS toolchain
+        run: npm ci --silent
+
+      - name: Rebuild the stylesheet
+        run: npm run build:css
+
+      - name: The committed stylesheet must match the rebuild
+        run: |
+          if ! git diff --quiet -- static/css/app.css; then
+            echo "::error::static/css/app.css differs from a fresh build."
+            echo "The image compiles this file, and the compose bind mount that"
+            echo "used to shadow it with the committed copy has been removed --"
+            echo "so this drift would change what production serves."
+            echo "Run 'npm run build:css' and commit the result."
+            git diff --stat -- static/css/app.css
+            exit 1
+          fi
+          echo "Committed stylesheet matches a fresh build."
