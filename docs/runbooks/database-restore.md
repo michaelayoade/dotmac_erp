@@ -79,6 +79,22 @@ Restoring onto the live cluster is an outage, and a rehearsal script is exactly
 where that mistake gets made. A genuine disaster recovery onto the real name
 requires setting `ALLOW_PRODUCTION_NAME=1` deliberately.
 
+## Role capture carries no password material
+
+`pg_dumpall --globals-only` alone emits
+`CREATE ROLE … PASSWORD 'SCRAM-SHA-256$…'` for every login role, and this
+artifact is uploaded offsite. The capture therefore passes
+**`--no-role-passwords`**, and the script additionally **refuses to upload** a
+globals dump in which a verifier appears — the flag is one edit away from being
+dropped, so the content is checked as well as the argument.
+
+Login material is not part of the bundle. It is reinstalled after a restore from
+the approved secret source — for the cluster superuser that is
+`secret/dotmac/postgres/erp-shared-primary/postgres`.
+
+This corrects the procedure as first written, which omitted the flag. Production
+never ran that version, so no verifier left the host.
+
 ## What this procedure does NOT yet prove
 
 Stated here, in the receipt itself, because this document is what a future
@@ -106,8 +122,17 @@ data — into a **fresh isolated instance**, proving schema/data/catalog
 equivalence, application readiness, migration operation, tenant/platform role
 separation, documented rollback, and no dependence on undocumented cluster state.
 
-**The shared `PostgresRecoveryBundleV1` facility, extending
-`dotmac_deployment_foundation.backup`, supersedes this procedure.** ERP rebuilds
+**The shared `PostgresRecoveryBundle.v1` facility
+(`dotmac_deployment_foundation.recovery`) supersedes this procedure.** It defines
+thirteen required components — database dump, role closure, role attributes,
+memberships, object ownership, default privileges, schema privileges, object
+privileges, fine-grained ACLs, row security, extensions, tablespaces and
+migration heads — and is what makes the `PROVED` assurance level reachable. This
+script produces **two** of the thirteen, so in that vocabulary its output is a
+`DATA_EXPORT` plus a partial role capture, and it can never be a
+`RECOVERY_BUNDLE`. ERP cannot adopt it yet: the module ships in Foundation
+**0.3.0a1 source** while the newest **published** tag is 0.2.0a2, and a source
+version is not a pinnable release. ERP rebuilds
 against it when it lands. Until then, treat a green rehearsal here as evidence
 that the mechanism is sound — not as evidence that ERP holds a proved recovery
 bundle. **No ERP deployment may proceed on the strength of this document alone.**
