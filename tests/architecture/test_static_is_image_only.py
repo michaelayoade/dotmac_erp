@@ -23,11 +23,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DOCKERFILE = REPO_ROOT / "Dockerfile"
+TAILWIND_CONFIG = REPO_ROOT / "tailwind.config.js"
 COMPOSE = REPO_ROOT / "docker-compose.yml"
 DIGEST_RECORD = REPO_ROOT / "deploy" / "static-tree-digest.json"
 STATIC_ROOT = REPO_ROOT / "static"
@@ -206,3 +209,68 @@ def test_planting_a_stale_digest_is_detected() -> None:
     actual = "sha256:" + hashlib.sha256(manifest.encode("utf-8")).hexdigest()
     assert actual != tampered, "the digest computation cannot distinguish trees"
     assert actual == record["tree_digest"]
+
+
+# ---------------------------------------------------------------------------
+# The stylesheet the image compiles must be built from the FULL content set.
+# ---------------------------------------------------------------------------
+
+
+def _tailwind_content_globs() -> list[str]:
+    text = TAILWIND_CONFIG.read_text(encoding="utf-8")
+    body = text.split("content:", 1)[1].split("]", 1)[0]
+    return re.findall(r'"([^"]+)"', body)
+
+
+def _css_builder_stage() -> str:
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    stage = text.split("AS css-builder", 1)[1]
+    # Up to the next stage boundary.
+    return stage.split("\nFROM ", 1)[0]
+
+
+def test_the_css_builder_receives_every_tailwind_content_path() -> None:
+    """Tailwind fails SILENTLY on content it cannot see.
+
+    `static/js` was in tailwind.config.js `content` but was never COPYed into
+    the css-builder stage, so the image's app.css omitted every class used only
+    from JavaScript. Production never noticed because the compose bind mount of
+    ./static shadowed the image's stylesheet with the checkout's fully-built
+    one -- the mount was masking the defect. Removing the mount without fixing
+    the Dockerfile would have swapped one stale-stylesheet defect for another.
+
+    There is no error to catch here: Tailwind emits a smaller file and exits 0.
+    Only holding the two lists in step prevents it.
+    """
+    stage = _css_builder_stage()
+    missing = []
+    for glob in _tailwind_content_globs():
+        # "./static/js/**/*.js" -> the "static/js" prefix that must be COPYed.
+        parts = glob.lstrip("./").split("/")
+        root_parts = [p for p in parts if "*" not in p]
+        if not root_parts:
+            continue
+        root = "/".join(root_parts)
+        if not re.search(rf"^COPY\s+{re.escape(root)}\b", stage, re.MULTILINE):
+            missing.append((glob, root))
+    assert not missing, (
+        "tailwind.config.js scans path(s) the css-builder stage never receives: "
+        f"{missing}. Tailwind will silently omit every class found only there. "
+        "Add a matching COPY to the css-builder stage in the Dockerfile."
+    )
+
+
+def test_the_content_path_guard_detects_an_unscanned_glob() -> None:
+    """Sensitivity: the guard must notice a content path with no COPY."""
+    stage = "COPY templates ./templates\n"
+    globs = ["./templates/**/*.html", "./static/js/**/*.js"]
+    missing = [
+        g
+        for g in globs
+        if not re.search(
+            rf"^COPY\s+{re.escape('/'.join(p for p in g.lstrip('./').split('/') if '*' not in p))}\b",
+            stage,
+            re.MULTILINE,
+        )
+    ]
+    assert missing == ["./static/js/**/*.js"], missing
