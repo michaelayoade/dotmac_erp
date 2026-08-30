@@ -2,30 +2,49 @@
 # Sync product and packaged UI static files to the Nginx serving directory.
 # Run this after every deploy: ./scripts/sync-static.sh
 #
-# Why: Nginx serves /static/ from /var/www/dotmac/static/ (as www-data).
-# The project source is in /root/dotmac/static/ (owned by root), while the
-# released dotmac-ui assets live inside the application image. Nginx cannot
-# read either location directly, so both are staged before the final rsync.
+# Why: Nginx serves /static/ from /var/www/dotmac/static/ (as www-data) and
+# cannot read the application image directly, so assets are staged then synced.
+#
+# BOTH sources are now the running container, i.e. the IMAGE. This previously
+# copied the product assets straight out of the /root/dotmac/static/ CHECKOUT,
+# which meant the mutable git worktree -- not the deployed image -- decided what
+# browsers actually received: nginx intercepts /static/ before FastAPI, so a
+# `git checkout <ref>` changed the served stylesheet with no image change and no
+# new digest. That is the same digest-identity defect as the compose bind mounts
+# removed alongside this change, and removing only those mounts would have left
+# it standing, because this path bypasses the container filesystem entirely.
+# See docs/inventories/2026-08-30-erp-production-infrastructure-preflight.md D2.
 
 set -euo pipefail
 
-SRC="/root/dotmac/static/"
 DEST="/var/www/dotmac/static/"
 APP_CONTAINER="dotmac_erp_app"
+# Product static as baked into the image, including the stylesheet compiled by
+# the css-builder stage. The CI css-drift job proves the committed artifact
+# equals a fresh build, so this and the checkout agree by construction.
+APP_STATIC_SOURCE="/app/static"
 
 # Serialize concurrent runs (e.g. the periodic timer racing a manual deploy).
 # Wait up to 60s for an in-flight sync rather than skipping — rsync is sub-second.
 exec 9>"/var/lock/dotmac-static-sync.lock"
 flock -w 60 9
 
-echo "Syncing static files: $SRC → $DEST"
+echo "Syncing static files: ${APP_CONTAINER}:${APP_STATIC_SOURCE} → $DEST"
 STAGING_DIR="$(mktemp -d)"
 cleanup() {
     rm -rf -- "$STAGING_DIR"
 }
 trap cleanup EXIT
 
-rsync -a "$SRC" "$STAGING_DIR/"
+docker cp "$APP_CONTAINER:$APP_STATIC_SOURCE/." "$STAGING_DIR/"
+
+# The final sync uses --delete. An empty staging tree would therefore empty the
+# live web root and take every stylesheet and image offline, so refuse instead.
+# The packaged-UI copy below already guards itself the same way.
+if [[ -z "$(find "$STAGING_DIR" -type f -print -quit)" ]]; then
+    echo "ERROR: No product static assets were copied from $APP_CONTAINER." >&2
+    exit 1
+fi
 
 # Nginx intercepts /static/ before FastAPI, so package-owned assets must be in
 # the same web root. Resolve the source and namespace through ERP's public UI

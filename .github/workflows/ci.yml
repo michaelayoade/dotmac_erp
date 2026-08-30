@@ -917,3 +917,52 @@ jobs:
           path: image-release.json
           if-no-files-found: error
           retention-days: 90
+
+  # ===========================================================================
+  # The committed stylesheet must equal a fresh build.
+  #
+  # docker-compose.yml used to bind-mount ./static over /app/static, so the
+  # CHECKOUT's committed static/css/app.css shadowed the one the image's
+  # css-builder stage compiles from src/css. Production therefore served the
+  # committed artifact, and the image's freshly built one was never used.
+  #
+  # That mount is gone, so the image's compiled stylesheet is now what ships.
+  # This job is what makes that swap provably behaviour-preserving instead of a
+  # silent visual change: if the committed artifact has drifted from a fresh
+  # build, the diff below fails and the artifact must be regenerated in the same
+  # change. The previous image check only ran `test -r .../app.css` -- existence,
+  # not content, which would not have caught drift at all.
+  # ===========================================================================
+  css-drift:
+    name: Compiled stylesheet is in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # `npm ci`, not `install`: fails loudly on lockfile drift instead of
+      # silently rewriting it. Same command the image's css-builder stage runs.
+      - name: Install CSS toolchain
+        run: npm ci --silent
+
+      - name: Rebuild the stylesheet
+        run: npm run build:css
+
+      - name: The committed stylesheet must match the rebuild
+        run: |
+          if ! git diff --quiet -- static/css/app.css; then
+            echo "::error::static/css/app.css differs from a fresh build."
+            echo "The image compiles this file, and the compose bind mount that"
+            echo "used to shadow it with the committed copy has been removed --"
+            echo "so this drift would change what production serves."
+            echo "Run 'npm run build:css' and commit the result."
+            git diff --stat -- static/css/app.css
+            exit 1
+          fi
+          echo "Committed stylesheet matches a fresh build."
+

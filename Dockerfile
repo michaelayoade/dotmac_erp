@@ -86,6 +86,13 @@ COPY gunicorn.conf.py ./gunicorn.conf.py
 COPY locales ./locales
 COPY templates ./templates
 COPY static ./static
+# The licence directory was previously supplied ONLY by a bind mount of the
+# source checkout, so removing that mount would have removed /app/license
+# entirely -- and LICENSE_FILE_PATH defaults to /app/license/dotmac.lic
+# (app/config.py, app/licensing/enforcement.py). The image now owns the
+# directory. A real licence is deployment material and must arrive as a
+# declared material path, never from the source tree.
+COPY license ./license
 # Named operator entrypoints only; the rest of scripts/ is not part of the
 # runtime surface. The deploy invokes both of these inside this image
 # (scripts/deploy.sh steps 3a and 3c) and nothing mounts the checkout over
