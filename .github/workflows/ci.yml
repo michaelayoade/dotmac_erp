@@ -562,6 +562,14 @@ jobs:
           set -euo pipefail
           expected=$(python -c "import json;print(json.load(open('deploy/static-tree-digest.json'))['tree_digest'])")
           echo "descriptor records: $expected"
+          # Emit BOTH manifests before asserting. A bare digest mismatch says
+          # only "different", which costs a whole CI round-trip to diagnose;
+          # the per-file diff names the offending path immediately.
+          python scripts/static_tree_digest.py --manifest static > /tmp/checkout.manifest
+          python scripts/static_tree_digest.py --manifest --container ci-app /app/static > /tmp/image.manifest
+          echo "--- checkout vs image (left = checkout, right = image) ---"
+          diff -u /tmp/checkout.manifest /tmp/image.manifest || true
+          echo "--- end diff ---"
           python scripts/static_tree_digest.py --container ci-app /app/static --expect "$expected"
 
       - name: The externally served stylesheet must match, and carry the utilities that went missing
