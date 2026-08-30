@@ -43,6 +43,7 @@ def _db(customers):
 
 def _patched(client):
     """Patch the settings resolver and the Paystack client together."""
+
     def _resolve_value(db, domain, key, *, organization_id):
         assert organization_id == ORG
         return "sk_test"
