@@ -145,9 +145,14 @@ class NextcloudTalkClient:
         }
 
     @classmethod
-    def from_db(cls, db: Session) -> "NextcloudTalkClient":
+    def from_db(
+        cls,
+        db: Session,
+        *,
+        organization_id: "UUID | None | _Ambient" = AMBIENT,
+    ) -> "NextcloudTalkClient":
         """Create a client using settings from the database."""
-        return cls(NextcloudConfig.from_db(db))
+        return cls(NextcloudConfig.from_db(db, organization_id=organization_id))
 
     def _request(
         self,
