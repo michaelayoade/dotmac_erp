@@ -188,7 +188,9 @@ def test_source_builds_receive_the_private_index_token_as_a_file_secret() -> Non
     # compose where `app-dev` used to be mentions `build:`, and a naive string
     # check would be satisfied or defeated by prose rather than by configuration.
     services = yaml.safe_load(compose).get("services", {})
-    building = sorted(name for name, spec in services.items() if "build" in (spec or {}))
+    building = sorted(
+        name for name, spec in services.items() if "build" in (spec or {})
+    )
     assert not building, (
         f"docker-compose.yml must not build from source, but {building} do: "
         "an in-place host build bypasses CI, the registry and every provenance "
@@ -198,9 +200,9 @@ def test_source_builds_receive_the_private_index_token_as_a_file_secret() -> Non
     # The Dockerfile is now the only place a source build consumes the private
     # index token, and it must do so as a BuildKit file secret so that neither
     # the value nor an authenticated URL is captured in an image layer.
-    assert (
-        "RUN --mount=type=secret,id=forgejo_token,required=true" in dockerfile
-    ), "the private index token must be a required BuildKit file secret"
+    assert "RUN --mount=type=secret,id=forgejo_token,required=true" in dockerfile, (
+        "the private index token must be a required BuildKit file secret"
+    )
     assert (
         'POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)"'
         in dockerfile
