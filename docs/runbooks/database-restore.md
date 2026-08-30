@@ -170,3 +170,57 @@ than passing quietly.
 5. Only then point the application at it.
 
 Step 3 is the one that was impossible before this change.
+
+---
+
+## Measured: ERP's role closure is 8, and the declarations name 5
+
+Taken read-only from the live `dotmac_erp` catalog on 2026-08-30, using the
+reference-site model `PostgresRecoveryBundle.v1` defines — ownership, table
+ACLs, schema ACLs, default privileges, policies, and role memberships.
+
+| role | referenced by |
+|---|---|
+| `app_admin` | ownership, schema_acl, table_acl |
+| `app_user` | schema_acl, table_acl |
+| `dotmac_erp_app` | default_privilege, membership, schema_acl, table_acl |
+| `outbox_dispatcher` | schema_acl |
+| `platform_api` | schema_acl, table_acl |
+| `platform_outbox_dispatcher` | schema_acl |
+| `postgres` | ownership, schema_acl |
+| `prom_exporter` | membership |
+
+ERP's checked-in declarations total **five**: `ROLE_CONTRACT` names `app_admin`,
+`app_user`, `platform_api`; `RELAY_DISPATCHER_CONTRACT` names
+`outbox_dispatcher`, `platform_outbox_dispatcher`. The descriptor's `[[roles]]`
+are *service* roles (app, worker, beat) and declare no database role at all.
+
+**The closure is short by three**, and the omissions are the instructive part:
+
+- **`dotmac_erp_app`** — the production runtime login, the role the application
+  actually connects as. No contract names it. A restore rebuilt from the
+  declarations would come back with every table present and **no role for the
+  application to log in as**.
+- **`prom_exporter`** — reachable only through `membership`. Any closure derived
+  from table privileges misses it outright. This is the direct-grant trap the
+  facility calls out: `information_schema.table_privileges` sees direct grants
+  only, not membership, not `PUBLIC`, not column-level.
+- **`postgres`** — owns objects in this database.
+
+And note `outbox_dispatcher` and `platform_outbox_dispatcher` are referenced
+**only via `schema_acl`** — they reach their tables through `SECURITY DEFINER`
+routines and hold no table privilege a naive walk would see. ERP happens to
+declare them, in a *separate* contract; a closure derived from table ACLs would
+have missed both regardless.
+
+This is the same shape as the measurement that motivated the facility: a
+Vendor CP restore failing with 114 missing-role errors naming five roles, when
+everything documented declared three.
+
+**Consequence for adoption.** The role closure must be **derived from the
+catalog**, never assembled from the declarations. The facility enforces exactly
+that — `restore_plan` refuses a bundle with no `ROLE_CLOSURE` component *even
+when the descriptor names every role*, and no function in the package emits role
+DDL, so a validator can never manufacture the role it is checking for. These
+eight names are recorded here as measured evidence, **not** as a declaration to
+restore from.
