@@ -264,7 +264,19 @@ def test_backup_defaults_to_the_production_container_as_the_postgres_os_user(
 ) -> None:
     expectation = """
 if "pg_dumpall" in argv:
-    expected = ["exec", "-u", "postgres", "-i", "dotmac_pg_local", "pg_dumpall", "--globals-only"]
+    # Exact argv, including --no-role-passwords. This assertion caught the flag
+    # being added, which is the behaviour wanted: the role-capture command line
+    # is security-relevant, so it is pinned rather than pattern-matched.
+    expected = [
+        "exec",
+        "-u",
+        "postgres",
+        "-i",
+        "dotmac_pg_local",
+        "pg_dumpall",
+        "--globals-only",
+        "--no-role-passwords",
+    ]
     if argv != expected:
         raise SystemExit(f"unexpected docker invocation: {argv}")
 """
