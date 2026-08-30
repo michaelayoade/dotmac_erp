@@ -36,6 +36,15 @@ GLOBALS_WITH_ROLES = (
 )
 GLOBALS_WITHOUT_ROLES = "--\n-- Roles\n--\nALTER ROLE postgres WITH SUPERUSER;\n"
 
+# What plain `pg_dumpall --globals-only` emits: a verifier per login role. This
+# artifact is uploaded offsite, so this is credential material leaving the host.
+GLOBALS_WITH_VERIFIERS = (
+    "--\n-- Roles\n--\n"
+    "CREATE ROLE app_admin;\n"
+    "ALTER ROLE app_admin WITH LOGIN PASSWORD "
+    "'SCRAM-SHA-256$4096:c2FsdA==$c3RvcmVk:c2VydmVy';\n"
+)
+
 # `pg_restore --list` output: comment lines start with ';', entries do not.
 TOC_WITH_ENTRIES = (
     "; Archive created at 2026-01-01\n215; 1259 16385 TABLE public people\n"
@@ -255,7 +264,19 @@ def test_backup_defaults_to_the_production_container_as_the_postgres_os_user(
 ) -> None:
     expectation = """
 if "pg_dumpall" in argv:
-    expected = ["exec", "-u", "postgres", "-i", "dotmac_pg_local", "pg_dumpall", "--globals-only"]
+    # Exact argv, including --no-role-passwords. This assertion caught the flag
+    # being added, which is the behaviour wanted: the role-capture command line
+    # is security-relevant, so it is pinned rather than pattern-matched.
+    expected = [
+        "exec",
+        "-u",
+        "postgres",
+        "-i",
+        "dotmac_pg_local",
+        "pg_dumpall",
+        "--globals-only",
+        "--no-role-passwords",
+    ]
     if argv != expected:
         raise SystemExit(f"unexpected docker invocation: {argv}")
 """
@@ -302,3 +323,53 @@ def test_skip_upload_leaves_the_remote_untouched(tmp_path) -> None:
     assert result.returncode == 0, result.stderr
     assert "not uploading" in result.stdout
     assert not (remote_root / "db.backup").exists()
+
+
+# --------------------------------------------------------------------------
+# Role capture must never carry password material offsite.
+# --------------------------------------------------------------------------
+
+
+def test_role_capture_passes_no_role_passwords(tmp_path) -> None:
+    """`--no-role-passwords` is what keeps SCRAM verifiers out of the bucket.
+
+    dotmac_deployment_foundation.recovery pins this as REQUIRED_ROLE_CAPTURE_ARG
+    for exactly this reason: the bundle carries roles WITHOUT password material,
+    and login material is reinstalled from the approved secret source as a
+    separate restore step.
+    """
+    expectation = """
+if "pg_dumpall" in argv:
+    if "--no-role-passwords" not in argv:
+        raise SystemExit(f"role capture omits --no-role-passwords: {argv}")
+"""
+    result = _run(tmp_path, _docker_stub(argv_expectation=expectation))
+    assert result.returncode == 0, result.stderr
+
+
+def test_backup_refuses_to_upload_globals_containing_a_verifier(tmp_path) -> None:
+    """Sensitivity for the guard above.
+
+    The flag is one edit away from being dropped, so the content is checked too.
+    A verifier in the globals dump must stop the run BEFORE the upload, and the
+    partial artifact must not be left on disk.
+    """
+    remote_root = tmp_path / "remote"
+    result = _run(
+        tmp_path,
+        _docker_stub(globals_output=GLOBALS_WITH_VERIFIERS),
+        remote_root=remote_root,
+    )
+    assert result.returncode != 0
+    assert "password verifiers" in result.stderr
+    # Nothing uploaded, and no verifier-bearing file left behind.
+    assert not (remote_root / "db.backup").exists()
+    leftovers = list((tmp_path / "local").glob("*.globals.sql.gz"))
+    assert leftovers == [], leftovers
+
+
+def test_the_verifier_guard_accepts_a_password_free_capture(tmp_path) -> None:
+    """The converse: a clean capture must not be flagged."""
+    result = _run(tmp_path, _docker_stub())
+    assert result.returncode == 0, result.stderr
+    assert "password verifiers" not in result.stderr
