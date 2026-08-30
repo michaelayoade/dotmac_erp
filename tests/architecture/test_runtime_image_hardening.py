@@ -5,6 +5,8 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+import yaml
+
 from scripts.bootstrap_instance import generate_docker_compose, generate_setup_script
 
 
@@ -170,14 +172,41 @@ def test_boot_time_installer_is_retired_from_all_compose_roles() -> None:
 
 def test_source_builds_receive_the_private_index_token_as_a_file_secret() -> None:
     compose = COMPOSE.read_text(encoding="utf-8")
-    app_dev = compose.split("  app-dev:\n", 1)[1].split("\n  worker:\n", 1)[0]
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
     generated = generate_docker_compose("ACME")
     setup = generate_setup_script("ACME")
 
-    assert "build:\n      context: .\n      secrets:\n      - forgejo_token" in app_dev
-    assert (
-        "file: ${FORGEJO_TOKEN_FILE:-/run/secrets/dotmac/forgejo-read-token}" in compose
+    # The reference compose no longer builds anything. Its `app-dev` service was
+    # a latent parallel writer -- production DATABASE_URL, the whole checkout
+    # mounted over the app, a short-syntax 8002 publish on both address families
+    # with no DOCKER-USER rule -- and removing it removed the only `build:`
+    # stanza, which is what closed the in-place host image build path. The
+    # premise this test checks has MOVED to the Dockerfile rather than
+    # disappeared, so it is asserted against its new owner below rather than
+    # dropped, and compose is held to the stronger claim that it builds nothing.
+    # Asserted STRUCTURALLY, not as a substring: the explanatory comment left in
+    # compose where `app-dev` used to be mentions `build:`, and a naive string
+    # check would be satisfied or defeated by prose rather than by configuration.
+    services = yaml.safe_load(compose).get("services", {})
+    building = sorted(
+        name for name, spec in services.items() if "build" in (spec or {})
     )
+    assert not building, (
+        f"docker-compose.yml must not build from source, but {building} do: "
+        "an in-place host build bypasses CI, the registry and every provenance "
+        "check, and produces an image no digest can identify."
+    )
+
+    # The Dockerfile is now the only place a source build consumes the private
+    # index token, and it must do so as a BuildKit file secret so that neither
+    # the value nor an authenticated URL is captured in an image layer.
+    assert "RUN --mount=type=secret,id=forgejo_token,required=true" in dockerfile, (
+        "the private index token must be a required BuildKit file secret"
+    )
+    assert (
+        'POETRY_HTTP_BASIC_FORGEJO_PASSWORD="$(cat /run/secrets/forgejo_token)"'
+        in dockerfile
+    ), "the token must be read from the mounted secret, never from an ARG or ENV"
 
     assert generated.count("secrets:\n        - forgejo_token") == 3
     assert "build: ${APP_BUILD_CONTEXT" not in generated

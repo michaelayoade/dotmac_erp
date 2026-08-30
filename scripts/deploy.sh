@@ -253,6 +253,37 @@ wait_for_beat_admission() {
     return 1
 }
 
+# Preflight: nginx must PROXY /static/, not serve it from disk.
+#
+# The static-asset sync is GONE, deliberately. It rsynced /root/dotmac/static/
+# into the nginx web root, and nginx serves /static/ ahead of the application --
+# so the CHECKOUT, not the image, decided what browsers received. Production ran
+# for an unknown period on a stylesheet 198 insertions behind its own image,
+# missing dark-mode and accent utilities, while the image compiled the correct
+# one that was never used. The retired unit's own README predicted the shape:
+# "a missed sync can serve stale JS/CSS for up to 30 days" under immutable cache
+# headers. The fix is to stop copying, not to copy more reliably.
+#
+# With the sync retired, a filesystem-served /static/ is now FROZEN and would go
+# stale silently under those same 30-day immutable headers. Refuse here, before
+# the backup, the pull or any container change, so a refusal costs nothing and
+# leaves nothing half-done.
+NGINX_SITE="${NGINX_SITE:-/etc/nginx/sites-enabled/erp.dotmac.io}"
+if [[ -r "$NGINX_SITE" ]]; then
+    if grep -qE '^[[:space:]]*(alias|root)[[:space:]]+/var/www/dotmac/static' "$NGINX_SITE"; then
+        echo "ERROR: $NGINX_SITE still serves /static/ from the filesystem." >&2
+        echo "       The sync that kept that directory fresh has been retired, so" >&2
+        echo "       it would now serve a frozen tree under 30-day immutable" >&2
+        echo "       headers. Switch the /static/ location to proxy_pass to the" >&2
+        echo "       app (see deploy/rendered/nginx/erp.dotmac.io.conf), reload" >&2
+        echo "       nginx, then redeploy." >&2
+        exit 2
+    fi
+    echo "-> nginx /static/ is proxied, not filesystem-served."
+else
+    echo "-> nginx site not readable at $NGINX_SITE; skipping the static check."
+fi
+
 # Step 1: pre-migration DB backup (SKIP_BACKUP=1 to skip)
 if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
     echo "→ Backing up database (SKIP_BACKUP=1 to skip)..."
@@ -457,13 +488,7 @@ if [[ "$healthy" != "1" ]]; then
     exit 1
 fi
 
-# Step 6: sync static files + restart worker/beat (only on a healthy deploy)
-if [[ "${SKIP_STATIC_SYNC:-0}" == "1" ]]; then
-    echo "-> Skipping static file sync (SKIP_STATIC_SYNC=1)."
-else
-    echo "→ Syncing static files to Nginx..."
-    "$SCRIPT_DIR/sync-static.sh"
-fi
+# Step 6: restart worker/beat (only on a healthy deploy)
 # Recreate (not just restart) so worker/beat pick up the newly-pinned image.
 echo "→ Recreating worker and beat on the pinned image..."
 docker compose up -d worker beat
