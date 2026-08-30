@@ -79,6 +79,39 @@ Restoring onto the live cluster is an outage, and a rehearsal script is exactly
 where that mistake gets made. A genuine disaster recovery onto the real name
 requires setting `ALLOW_PRODUCTION_NAME=1` deliberately.
 
+## What this procedure does NOT yet prove
+
+Stated here, in the receipt itself, because this document is what a future
+reader will treat as the claim — not the pull request that introduced it.
+
+This is a **first increment**, not a met standard. The CI rehearsal proves
+globals, role memberships, ownership, grants, schema, data and Alembic heads
+survive a dump/restore cycle. It does **not** prove any of:
+
+- **tablespaces** — not exercised; the cluster uses the default today, so a
+  restore onto a host with different tablespace layout is unproven;
+- **extensions** — production runs PostGIS (`postgis/postgis:16-3.4-alpine`),
+  and extension presence/version equivalence after restore is not asserted;
+- **default privileges** (`ALTER DEFAULT PRIVILEGES`) — not compared, so objects
+  created after a restore may not inherit the grants they do today;
+- **row and column ACLs** — not compared;
+- **production bytes** — the target is an ephemeral CI container, not a fresh
+  isolated instance holding a real ~8 GB artifact.
+
+Michael's standard is wider than what this meets: *"a `pg_dump` data file alone
+is not a restore proof."* A restore must reproduce globals, role memberships,
+credential bindings, tablespaces, extensions, schemas and migration heads,
+ownership, grants and default privileges, row and column ACLs, and application
+data — into a **fresh isolated instance**, proving schema/data/catalog
+equivalence, application readiness, migration operation, tenant/platform role
+separation, documented rollback, and no dependence on undocumented cluster state.
+
+**The shared `PostgresRecoveryBundleV1` facility, extending
+`dotmac_deployment_foundation.backup`, supersedes this procedure.** ERP rebuilds
+against it when it lands. Until then, treat a green rehearsal here as evidence
+that the mechanism is sound — not as evidence that ERP holds a proved recovery
+bundle. **No ERP deployment may proceed on the strength of this document alone.**
+
 ## Rehearsal status — read this before claiming the backup works
 
 | rehearsal | status |
