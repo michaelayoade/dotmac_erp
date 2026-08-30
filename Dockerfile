@@ -10,7 +10,16 @@ RUN npm ci --silent
 
 COPY tailwind.config.js postcss.config.js ./
 COPY src/css ./src/css
+# EVERY path in tailwind.config.js `content` must be present here, or Tailwind
+# silently emits a stylesheet missing the classes it could not see. `static/js`
+# was absent, so the image's app.css omitted every class used only from
+# JavaScript -- status badges, toasts, dynamic highlighting. That defect was
+# MASKED in production by the compose bind mount of ./static, which shadowed the
+# image's stylesheet with the checkout's fully-built one. Removing that mount
+# without this line would have traded one stale-stylesheet defect for a new one.
+# tests/architecture/test_static_is_image_only.py holds the two in step.
 COPY templates ./templates
+COPY static/js ./static/js
 
 RUN npm run build:css
 
@@ -86,6 +95,13 @@ COPY gunicorn.conf.py ./gunicorn.conf.py
 COPY locales ./locales
 COPY templates ./templates
 COPY static ./static
+# The licence directory was previously supplied ONLY by a bind mount of the
+# source checkout, so removing that mount would have removed /app/license
+# entirely -- and LICENSE_FILE_PATH defaults to /app/license/dotmac.lic
+# (app/config.py, app/licensing/enforcement.py). The image now owns the
+# directory. A real licence is deployment material and must arrive as a
+# declared material path, never from the source tree.
+COPY license ./license
 # Named operator entrypoints only; the rest of scripts/ is not part of the
 # runtime surface. The deploy invokes both of these inside this image
 # (scripts/deploy.sh steps 3a and 3c) and nothing mounts the checkout over

@@ -117,16 +117,15 @@ if os.environ.get("DEPLOY_TEST_FAIL_HEALTH") == "1":
 raise SystemExit(0)
 """,
     )
-    for script_name in ("sync-static.sh", "prune_docker_images.sh"):
-        _write_executable(
-            scripts_dir / script_name,
-            """#!/usr/bin/env bash
+    # sync-static.sh is GONE: it copied the checkout into the nginx web root,
+    # which is how a stylesheet 198 insertions behind the image reached
+    # browsers. Only the image serves static now.
+    _write_executable(
+        scripts_dir / "prune_docker_images.sh",
+        """#!/usr/bin/env bash
 set -euo pipefail
-if [[ "${DEPLOY_TEST_FAIL_STATIC:-0}" == "1" && "$(basename "$0")" == "sync-static.sh" ]]; then
-    exit 1
-fi
 """,
-        )
+    )
 
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
@@ -484,14 +483,37 @@ def test_activation_health_failure_never_restores_legacy_writers(
     assert not any("|compose up -d app worker beat" in line for line in invocations)
 
 
-def test_activation_post_health_failure_remains_forward_fix_only(
+# `test_activation_post_health_failure_remains_forward_fix_only` lived here. Its
+# only trigger was making sync-static.sh fail, and that script is retired. The
+# property it asserted -- a POST-HEALTH failure must stay forward-fix-only
+# rather than roll back -- is not dropped: it is covered by
+# `test_activation_runtime_admission_failure_remains_forward_fix_only` below,
+# parameterised over both worker and beat admission, which fail at the same
+# point in the deploy for the same reason.
+
+
+def test_deploy_refuses_while_nginx_still_serves_static_from_disk(
     tmp_path: Path,
 ) -> None:
+    """The sync that kept /var/www/dotmac/static fresh is retired.
+
+    A filesystem-served /static/ is therefore FROZEN, and nginx sets 30-day
+    immutable cache headers on it -- so the staleness would be invisible and
+    long-lived. That is the exact shape of the defect being closed, so the
+    deploy must refuse rather than quietly deploy into it.
+    """
     deploy_script, env, invocation_log = _deployment_harness(tmp_path)
-    env["DEPLOY_TEST_FAIL_STATIC"] = "1"
+    site = tmp_path / "erp.dotmac.io"
+    site.write_text(
+        "server {\n    location /static/ {\n"
+        "        alias /var/www/dotmac/static/;\n"
+        "        expires 30d;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    env["NGINX_SITE"] = str(site)
 
     result = subprocess.run(  # noqa: S603
-        [str(deploy_script), "--people-employment-type-activation"],
+        [str(deploy_script)],
         cwd=deploy_script.parent.parent,
         env=env,
         check=False,
@@ -499,12 +521,40 @@ def test_activation_post_health_failure_remains_forward_fix_only(
         text=True,
     )
 
-    assert result.returncode == 1
-    assert "Rolling back code" not in result.stdout
-    assert "FORWARD-FIX-ONLY" in result.stderr
+    assert result.returncode == 2
+    assert "still serves /static/ from the filesystem" in result.stderr
+    # Refused in PREFLIGHT: nothing may have been mutated. No backup, no pull,
+    # no container change -- a refusal that leaves work half-done is worse than
+    # no guard, because the operator then has to reason about partial state.
     invocations = invocation_log.read_text(encoding="utf-8").splitlines()
-    assert any("|compose stop app worker beat" in line for line in invocations)
-    assert not any("|compose up -d app worker beat" in line for line in invocations)
+    assert not any("compose pull" in line for line in invocations), invocations
+    assert not any("compose up" in line for line in invocations), invocations
+    assert not any("compose run" in line for line in invocations), invocations
+
+
+def test_deploy_proceeds_when_nginx_proxies_static(tmp_path: Path) -> None:
+    """The converse. A guard that fires on a correct configuration is noise and
+    gets disabled by the first person it inconveniences."""
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+    site = tmp_path / "erp.dotmac.io"
+    site.write_text(
+        "server {\n    location /static/ {\n"
+        "        proxy_pass http://dotmac_erp;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    env["NGINX_SITE"] = str(site)
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "proxied, not filesystem-served" in result.stdout
 
 
 def test_activation_refuses_a_running_app_dev_before_mutation(tmp_path: Path) -> None:

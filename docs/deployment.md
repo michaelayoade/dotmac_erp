@@ -79,7 +79,19 @@ Rebuild CSS when templates or Tailwind config change:
 npm run build:css
 ```
 
-Static files are served by nginx from `/var/www/dotmac/static/` for better performance.
+Static files are served **from the application image**. nginx proxies `/static/`
+to the app rather than serving a filesystem copy.
+
+This changed on 2026-08-30. nginx previously served `/var/www/dotmac/static/`,
+populated by `scripts/sync-static.sh` from the checkout — so the working tree,
+not the image, decided what browsers received. Production ran for an unknown
+period on a stylesheet 198 insertions behind its own image, missing dark-mode
+and accent utilities. The sync and its systemd timer are retired; `deploy.sh`
+refuses to deploy while nginx still serves `/static/` from disk, because that
+copy is now frozen and nginx sets 30-day `immutable` cache headers on it.
+
+The expected digest of the served tree is `deploy/static-tree-digest.json`,
+checked in CI against what the running container actually serves over HTTP.
 To manually sync static files:
 
 ```bash

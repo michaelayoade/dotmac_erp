@@ -62,12 +62,32 @@ services:
     depends_on:
       redis:
         condition: service_started
+    # ONLY the named log volume. The four checkout bind mounts that used to sit
+    # here (./static, ./templates, ./license, ./gunicorn.conf.py) meant the
+    # image digest did NOT identify the runtime: the host side is a mutable git
+    # worktree, so `git checkout <ref>` changed what production served with no
+    # image change, no new digest, and for static assets no container recreate.
+    # A digest-bound deployment record would have been precise and wrong, which
+    # is worse than an obviously loose one because it invites trust it has not
+    # earned. Measured in
+    # docs/inventories/2026-08-30-erp-production-infrastructure-preflight.md D2.
+    #
+    # All four now come from the image, which is built from the same commit:
+    #   static/            Dockerfile `COPY static ./static`, then the compiled
+    #                      stylesheet from the css-builder stage overwrites
+    #                      static/css/app.css. The CI css-drift job proves the
+    #                      committed artifact equals a fresh build, which is
+    #                      what makes dropping this mount behaviour-preserving
+    #                      rather than merely tidy.
+    #   templates/         Dockerfile `COPY templates ./templates`
+    #   gunicorn.conf.py   Dockerfile `COPY gunicorn.conf.py`
+    #   license/           Dockerfile `COPY license ./license` (added with this
+    #                      change; the directory was previously supplied ONLY by
+    #                      the mount). A real licence is deployment material and
+    #                      must arrive as a declared material path, never from
+    #                      the source checkout.
     volumes:
     - dotmac_logs:/var/log/dotmac
-    - ./static:/app/static:ro
-    - ./templates:/app/templates:ro
-    - ./license:/app/license:ro
-    - ./gunicorn.conf.py:/app/gunicorn.conf.py:ro
     healthcheck:
       test:
       - CMD
@@ -83,47 +103,22 @@ services:
     - -c
     - gunicorn.conf.py
     - app.main:app
-  app-dev:
-    build:
-      context: .
-      secrets:
-      - forgejo_token
-    platform: linux/amd64
-    container_name: dotmac_erp_app_dev
-    restart: unless-stopped
-    profiles:
-    - dev
-    ports:
-    - 8002:8002
-    env_file:
-    - .env
-    environment:
-      APP_URL: https://erp.dotmac.io
-      DOTMAC_DEV_MODE: 'true'
-      BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
-      OPENBAO_ADDR: ${OPENBAO_ADDR}
-      OPENBAO_TOKEN: ${OPENBAO_TOKEN:-devtoken}
-      OPENBAO_ALLOW_INSECURE: 'true'
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-dotmac-erp}
-    depends_on:
-      redis:
-        condition: service_started
-    volumes:
-    - .:/app
-    command:
-    - uvicorn
-    - app.main:app
-    - --host
-    - 0.0.0.0
-    - --port
-    - '8002'
+  # `app-dev` REMOVED. It was a latent parallel writer that a compose profile
+  # was the only thing holding back:
+  #   - env_file .env and DATABASE_URL: ${DATABASE_URL} -- the PRODUCTION database;
+  #   - volumes `- .:/app` -- the whole checkout mounted over the application;
+  #   - ports `8002:8002` in SHORT syntax, so Docker publishes on 0.0.0.0 AND
+  #     [::], and DOCKER-USER has no rule for 8002 (it drops 8003 and 8010);
+  #   - build: context: . -- an in-place host image build, bypassing CI, the
+  #     registry and every provenance check;
+  #   - restart: unless-stopped, and DOTMAC_DEV_MODE=true.
+  # `scripts/deploy.sh` guarded against it running, but ONLY in
+  # --people-employment-type-activation mode; an ordinary deploy did not.
+  # Removing the service also removes the only remaining `build:` stanza, which
+  # closes the in-place host-build path outright.
+  #
+  # Local development uses the same image the tests and production use.
+
   worker:
     image: ghcr.io/michaelayoade/dotmac_erp:${ERP_IMAGE_TAG:-latest}
     platform: linux/amd64
@@ -261,11 +256,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
-secrets:
-  # Build-only private-package credential held outside the checkout. Override
-  # the pointer without placing the token in Compose or any synchronized file.
-  forgejo_token:
-    file: ${FORGEJO_TOKEN_FILE:-/run/secrets/dotmac/forgejo-read-token}
+# The top-level `secrets:` block is gone with `app-dev`. Its only consumer was
+# that service's `build:`, and the image is built by CI with an explicit
+# `--secret id=forgejo_token`, never through Compose. The Dockerfile still
+# declares the BuildKit secret it needs; nothing here has to.
 
 volumes:
   dotmac_erp_db_data: null
