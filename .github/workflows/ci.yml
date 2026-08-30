@@ -965,4 +965,3 @@ jobs:
             exit 1
           fi
           echo "Committed stylesheet matches a fresh build."
-
