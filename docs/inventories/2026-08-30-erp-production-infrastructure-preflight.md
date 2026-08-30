@@ -316,3 +316,95 @@ plan has to account for it.
 | The producer of the `DOCKER-USER` and UFW 8888/6443 rules | Absent from shell history entirely. |
 | Any mutation performed between 2026-08-10 and now via an unflushed shell | `/root/.bash_history` was last written 2026-08-10. |
 | Worker/beat runtime failure rates during this window | Would require log collection beyond read-only inspection scope; the prior audit's findings are cited rather than re-measured. |
+
+---
+
+## 6. Backup and restore mechanism
+
+### 6.1 Backup producer — `scripts/backup_erp_db.sh`
+
+Invoked by `/etc/cron.d/dotmac_erp_db_backup` daily at 18:00 as root, and by
+`scripts/deploy.sh` before every migration.
+
+```
+docker exec [-e PGPASSWORD] dotmac_pg_local pg_dump -U <user> -d dotmac_erp \
+  | gzip -9 > /var/backups/db/dotmac_erp_<UTC timestamp>.sql.gz
+rclone copy <local_path> Backup:db.backup/dotmac_erp
+# retention: keep the last 5 remote files, rclone deletefile the rest
+```
+
+Four properties matter for the cutover:
+
+1. **It is `pg_dump`, not `pg_dumpall`.** Roles and globals are **never
+   captured**. The least-privilege `dotmac_erp_app` login, `app_admin`, every
+   `GRANT`, and the ownership that RLS policies depend on exist nowhere in any
+   backup. A restore into a fresh cluster would produce a database no ERP role
+   can log into.
+2. **Plain format, not `--format=custom`.** No selective restore, no parallel
+   restore, no `pg_restore --list` manifest to verify against.
+3. **`PGPASSWORD` is passed via `docker exec -e`**, so it is visible in the host
+   process table for the duration of every dump.
+4. It reads `POSTGRES_*` from `.env` with `sed … | head -n 1` — the **first**
+   match. Same first-versus-last hazard as `deploy.sh`'s `set_env_var` (§ 3.4).
+   With duplicate keys present in `.env` today, the backup script and Compose
+   can disagree about which value is authoritative.
+
+There is no verification step: no checksum comparison, no manifest listing, no
+test restore.
+
+### 6.2 There is no restore procedure
+
+`scripts/restore_from_backup.py` is **not a restore tool**, despite its name.
+Its own docstring describes it accurately: it extracts only `COPY` data blocks
+and `setval()` calls from a plain dump, writing them out with
+`session_replication_role = 'replica'` to suppress foreign-key triggers, and it
+**explicitly skips `CREATE`, `ALTER`, `DROP`, `COMMENT`, `GRANT` and
+`REVOKE`**. It is a data-reload helper for an *already existing, already
+migrated* database. It cannot rebuild one.
+
+A repository-wide search found **no restore runbook, no `pg_restore`
+invocation, no `psql < dump` procedure, and no `pg_dumpall` anywhere** in
+`docs/` or `scripts/`.
+
+**Finding: ERP has a backup producer and a data-reload helper, but no restore
+procedure.** There is no documented, tested path from
+`dotmac_erp_<ts>.sql.gz` back to a working ERP database. Prior audits
+established that a backup was created and uploaded byte-identically; that is
+evidence of *creation and transfer*, and it has never been evidence of
+*restorability*.
+
+This is a **hard prerequisite**, not a nice-to-have: a cutover step that says
+"verify the backup and the restore command" cannot be satisfied, because the
+restore command does not exist. Authoring and rehearsing one — on a disposable
+target, never production — is human-gated work outside this read-only lane.
+
+## 7. The exact legacy executor retirement target
+
+Named precisely, so that "retired" is a checkable claim rather than a feeling.
+
+**Primary target: `/root/dotmac/scripts/deploy.sh` on `149.102.158.167`** — 486
+lines, invoked as `MIGRATION_DATABASE_URL=<value from the root-only host file>
+./scripts/deploy.sh`. It is today the *only* sanctioned production migration
+path. Retirement means it ceases to be the executor; it is not deleted while it
+remains rollback evidence.
+
+`/root/dotmac/docker-compose.yml` is **retained as rollback evidence** and is
+explicitly *not* part of the retirement.
+
+**Retirement gate:** two successful controller-owned deployments, per the
+production sequence. One is not enough — a single success cannot distinguish a
+working controller from a lucky one.
+
+**Secondary executors that must retire in the same movement**, or the
+retirement is nominal only — each is an independent path to mutate production
+state without the controller:
+
+| executor | why it must go with it |
+|---|---|
+| `/etc/cron.d/dotmac_erp_db_backup` | executes a script from the mutable checkout on a root cron |
+| `dotmac-books.service` | can start a second uncontainerised ERP writer (§ 4 B1) |
+| the `app-dev` compose service and its container object | production `DATABASE_URL`, host build, wide publish (§ 4 B2) |
+| the checkout's 166 `scripts/` entries | every backfill, cutover and bulk-SQL script is one command from production (§ 4 D1) |
+| the four checkout bind mounts | while they exist, the controller's digest binding does not identify the runtime (§ 4 D2) |
+
+A retirement that removes only `deploy.sh` leaves all five standing.
