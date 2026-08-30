@@ -56,6 +56,7 @@ from app.tasks.dotmac_sub import (
     run_dotmac_sub_daily_reconciliation,
     run_dotmac_sub_full_reconciliation,
     run_dotmac_sub_incremental_sync,
+    run_dotmac_sub_incremental_sync_phase,
 )
 from app.tasks.email import send_email_async
 from app.tasks.expense import (
@@ -187,6 +188,7 @@ __all__ = [
     "run_staff_sync_reconcile",
     "process_dotmac_sub_webhook",
     "run_dotmac_sub_incremental_sync",
+    "run_dotmac_sub_incremental_sync_phase",
     "run_dotmac_sub_daily_reconciliation",
     "run_dotmac_sub_full_reconciliation",
     "cleanup_stale_dotmac_sub_sync_history",

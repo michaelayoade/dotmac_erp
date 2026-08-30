@@ -22,7 +22,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc  # type: ignore[assignment]
 
-from celery import shared_task
+from celery import chain, shared_task
 from billiard.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -46,6 +46,25 @@ _SOURCE = "dotmac_sub"
 _INCREMENTAL_SYNC_LOCK_NAMESPACE = "dotmac_sub:incremental"
 _INCREMENTAL_SYNC_SOFT_TIME_LIMIT_SECONDS = 25 * 60
 _INCREMENTAL_SYNC_TIME_LIMIT_SECONDS = 28 * 60
+_INCREMENTAL_PHASE_SOFT_TIME_LIMIT_SECONDS = 8 * 60
+_INCREMENTAL_PHASE_TIME_LIMIT_SECONDS = 10 * 60
+_INCREMENTAL_POST_BATCH_SIZE = 250
+_INCREMENTAL_SYNC_PHASES = (
+    "resellers",
+    "subscribers",
+    "invoices",
+    "payments",
+    "credit_notes",
+    "post_invoices",
+    "post_payments",
+)
+_INCREMENTAL_ENTITY_TYPES = [
+    "resellers",
+    "subscribers",
+    "invoices",
+    "payments",
+    "credit_notes",
+]
 
 
 def _resolve_org_id(explicit_org_id: str | None) -> UUID | None:
@@ -155,13 +174,11 @@ def _collect_errors(results: list[Any]) -> list[str]:
     return errors
 
 
-def _build_sync_context(
+def _build_sync_service_context(
     db: Session,
     organization_id: str | None,
-    sync_type: SyncType,
-    entity_types: list[str],
-) -> tuple[DotmacSubSyncService, UUID, UUID] | dict[str, Any]:
-    """Shared setup: resolve org + accounts, create SyncHistory."""
+) -> tuple[DotmacSubSyncService, UUID] | dict[str, Any]:
+    """Shared setup: resolve org/accounts and construct the Sub sync service."""
     org_id = _resolve_org_id(organization_id)
     if not org_id:
         return {"success": False, "error": "No valid organization ID configured"}
@@ -184,6 +201,27 @@ def _build_sync_context(
             "error": "Default revenue account could not be resolved",
         }
 
+    service = DotmacSubSyncService(
+        db=db,
+        organization_id=org_id,
+        ar_control_account_id=ar_control_account_id,
+        default_revenue_account_id=revenue_account_id,
+    )
+    return service, org_id
+
+
+def _build_sync_context(
+    db: Session,
+    organization_id: str | None,
+    sync_type: SyncType,
+    entity_types: list[str],
+) -> tuple[DotmacSubSyncService, UUID, UUID] | dict[str, Any]:
+    """Shared setup: resolve org/accounts, create SyncHistory."""
+    ctx = _build_sync_service_context(db, organization_id)
+    if isinstance(ctx, dict):
+        return ctx
+    service, org_id = ctx
+
     history = SyncHistory(
         organization_id=org_id,
         source_system=_SOURCE,
@@ -197,13 +235,71 @@ def _build_sync_context(
     db.flush()
     history_id = history.history_id
 
-    service = DotmacSubSyncService(
-        db=db,
-        organization_id=org_id,
-        ar_control_account_id=ar_control_account_id,
-        default_revenue_account_id=revenue_account_id,
-    )
     return service, history_id, org_id
+
+
+def _running_incremental_history_id(db: Session, org_id: UUID) -> UUID | None:
+    """Return the newest running incremental sync, if one is already active."""
+    stmt = (
+        select(SyncHistory.history_id)
+        .where(
+            SyncHistory.organization_id == org_id,
+            SyncHistory.source_system == _SOURCE,
+            SyncHistory.sync_type == SyncType.INCREMENTAL,
+            SyncHistory.status == SyncJobStatus.RUNNING,
+        )
+        .order_by(SyncHistory.started_at.desc().nullslast())
+        .limit(1)
+    )
+    return db.scalar(stmt)
+
+
+def _record_incremental_phase_result(
+    db: Session,
+    history_id: UUID,
+    result: Any,
+    *,
+    complete: bool = False,
+) -> dict[str, Any]:
+    """Accumulate one bounded incremental phase into the shared SyncHistory."""
+    history = db.get(SyncHistory, history_id)
+    if not history:
+        logger.error("SyncHistory %s disappeared during incremental phase", history_id)
+        return {"success": False, "error": "SyncHistory record lost"}
+
+    phase_total = result.created + result.updated + result.skipped
+    phase_synced = result.created + result.updated
+    history.total_records = (history.total_records or 0) + phase_total
+    history.synced_count = (history.synced_count or 0) + phase_synced
+    history.skipped_count = (history.skipped_count or 0) + result.skipped
+    for error in result.errors[:100]:
+        history.add_error(_SOURCE, result.entity_type, error)
+    if complete:
+        history.complete()
+
+    summary = {
+        "success": history.error_count == 0,
+        "history_id": str(history_id),
+        "phase": result.entity_type,
+        "synced_count": phase_synced,
+        "skipped_count": result.skipped,
+        "error_count": len(result.errors),
+        "complete": complete,
+    }
+    db.commit()
+    return summary
+
+
+def _posting_result(entity_type: str, stats: dict[str, Any]) -> Any:
+    from app.services.dotmac_sub.sync._types import SyncResult
+
+    return SyncResult(
+        success=not stats["errors"],
+        entity_type=entity_type,
+        updated=stats["posted"],
+        errors=list(stats["errors"]),
+        message=f"Posted {stats['posted']} {entity_type.replace('_', ' ')}",
+    )
 
 
 def _finalize_sync(
@@ -404,17 +500,23 @@ def run_dotmac_sub_incremental_sync(
     batch_size: int = 2000,
 ) -> dict[str, Any]:
     """Incremental sync — all entities, hash-skip unchanged."""
-    entity_types = [
-        "resellers",
-        "subscribers",
-        "invoices",
-        "payments",
-        "credit_notes",
-    ]
     org_id = _resolve_org_id(organization_id)
     if org_id is None:
         return {"success": False, "error": "No valid organization ID configured"}
+    return _enqueue_incremental_sync_workflow(self, org_id, batch_size)
 
+
+# ---------------------------------------------------------------------------
+# Tier 2 — Daily reconciliation (1 AM)
+# ---------------------------------------------------------------------------
+
+
+def _enqueue_incremental_sync_workflow(
+    task: Any,
+    org_id: UUID,
+    batch_size: int,
+) -> dict[str, Any]:
+    """Create one SyncHistory row and enqueue short incremental sync phases."""
     with session_for_org(org_id) as db:
         lock_acquired = _try_acquire_incremental_sync_lock(db, org_id)
         if not lock_acquired:
@@ -432,53 +534,173 @@ def run_dotmac_sub_incremental_sync(
         service: DotmacSubSyncService | None = None
         history_id: UUID | None = None
         try:
+            running_history_id = _running_incremental_history_id(db, org_id)
+            if running_history_id is not None:
+                logger.info(
+                    "Skipping dotmac_sub incremental sync for org %s; "
+                    "history %s is still running",
+                    org_id,
+                    running_history_id,
+                )
+                return {
+                    "success": True,
+                    "organization_id": str(org_id),
+                    "history_id": str(running_history_id),
+                    "skipped": True,
+                    "reason": "history_running",
+                }
+
             ctx = _build_sync_context(
-                db, str(org_id), SyncType.INCREMENTAL, entity_types
+                db, str(org_id), SyncType.INCREMENTAL, list(_INCREMENTAL_ENTITY_TYPES)
             )
             if isinstance(ctx, dict):
                 return ctx
             service, history_id, org_id = ctx
-            resellers = service.sync_resellers(created_by_user_id=SYSTEM_USER_ID)
-            subscribers = service.sync_subscribers(
-                created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
+            db.commit()
+
+            workflow = chain(
+                *(
+                    run_dotmac_sub_incremental_sync_phase.si(
+                        str(org_id),
+                        str(history_id),
+                        phase,
+                        batch_size=batch_size,
+                    )
+                    for phase in _INCREMENTAL_SYNC_PHASES
+                )
             )
-            invoices = service.sync_invoices(
-                created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
-            )
-            payments = service.sync_payments(
-                created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
-            )
-            credit_notes = service.sync_credit_notes(
-                created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
-            )
-            invoice_post = service.post_unposted_invoices(
-                created_by_user_id=SYSTEM_USER_ID
-            )
-            if invoice_post["errors"]:
-                invoices.errors.extend(invoice_post["errors"][:100])
-            post = service.post_unposted_payments(created_by_user_id=SYSTEM_USER_ID)
-            if post["errors"]:
-                payments.errors.extend(post["errors"][:100])
-            return _finalize_sync(
-                db,
-                history_id,
-                [resellers, subscribers, invoices, payments, credit_notes],
-                org_id=org_id,
-            )
-        except SoftTimeLimitExceeded as exc:
-            db.rollback()
-            if history_id is not None:
-                _handle_sync_failure(history_id, org_id, exc, "Incremental")
+            async_result = workflow.apply_async()
             return {
-                "success": False,
-                "history_id": str(history_id) if history_id is not None else None,
+                "success": True,
                 "organization_id": str(org_id),
-                "error": "Incremental sync exceeded its execution time limit",
+                "history_id": str(history_id),
+                "accepted": True,
+                "workflow_id": str(async_result.id),
+                "phases": list(_INCREMENTAL_SYNC_PHASES),
             }
         except Exception as exc:
             db.rollback()
             if history_id is not None:
                 _handle_sync_failure(history_id, org_id, exc, "Incremental")
+            raise task.retry(exc=exc)
+        finally:
+            if service is not None:
+                service.close()
+            try:
+                _release_incremental_sync_lock(db, org_id)
+            except Exception:
+                logger.exception(
+                    "Failed to release dotmac_sub incremental sync lock for org %s",
+                    org_id,
+                )
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=300,
+    soft_time_limit=_INCREMENTAL_PHASE_SOFT_TIME_LIMIT_SECONDS,
+    time_limit=_INCREMENTAL_PHASE_TIME_LIMIT_SECONDS,
+)
+def run_dotmac_sub_incremental_sync_phase(
+    self: Any,
+    organization_id: str,
+    history_id: str,
+    phase: str,
+    batch_size: int = 2000,
+) -> dict[str, Any]:
+    """Run one bounded phase of the dotmac_sub incremental sync."""
+    org_id = _resolve_org_id(organization_id)
+    if org_id is None:
+        return {"success": False, "error": "No valid organization ID configured"}
+    if phase not in _INCREMENTAL_SYNC_PHASES:
+        return {"success": False, "error": f"Unknown incremental sync phase: {phase}"}
+
+    try:
+        history_uuid = UUID(history_id)
+    except ValueError:
+        return {"success": False, "error": "Invalid SyncHistory ID"}
+
+    with session_for_org(org_id) as db:
+        lock_acquired = _try_acquire_incremental_sync_lock(db, org_id)
+        if not lock_acquired:
+            raise self.retry(
+                exc=RuntimeError(
+                    f"dotmac_sub incremental phase lock is held for org {org_id}"
+                ),
+                countdown=60,
+            )
+
+        service: DotmacSubSyncService | None = None
+        try:
+            history = db.get(SyncHistory, history_uuid)
+            if not history:
+                return {"success": False, "error": "SyncHistory record lost"}
+            if history.status != SyncJobStatus.RUNNING:
+                return {
+                    "success": False,
+                    "history_id": str(history_uuid),
+                    "phase": phase,
+                    "error": f"SyncHistory is {history.status.value}",
+                }
+
+            ctx = _build_sync_service_context(db, str(org_id))
+            if isinstance(ctx, dict):
+                history.fail(ctx["error"])
+                db.commit()
+                return ctx
+            service, org_id = ctx
+
+            if phase == "resellers":
+                result = service.sync_resellers(created_by_user_id=SYSTEM_USER_ID)
+            elif phase == "subscribers":
+                result = service.sync_subscribers(
+                    created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
+                )
+            elif phase == "invoices":
+                result = service.sync_invoices(
+                    created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
+                )
+            elif phase == "payments":
+                result = service.sync_payments(
+                    created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
+                )
+            elif phase == "credit_notes":
+                result = service.sync_credit_notes(
+                    created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
+                )
+            elif phase == "post_invoices":
+                stats = service.post_unposted_invoices(
+                    created_by_user_id=SYSTEM_USER_ID,
+                    limit=_INCREMENTAL_POST_BATCH_SIZE,
+                )
+                result = _posting_result("invoice_posting", stats)
+            else:
+                stats = service.post_unposted_payments(
+                    created_by_user_id=SYSTEM_USER_ID,
+                    limit=_INCREMENTAL_POST_BATCH_SIZE,
+                )
+                result = _posting_result("payment_posting", stats)
+
+            return _record_incremental_phase_result(
+                db,
+                history_uuid,
+                result,
+                complete=phase == _INCREMENTAL_SYNC_PHASES[-1],
+            )
+        except SoftTimeLimitExceeded as exc:
+            db.rollback()
+            _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
+            return {
+                "success": False,
+                "history_id": str(history_uuid),
+                "organization_id": str(org_id),
+                "phase": phase,
+                "error": "Incremental sync phase exceeded its execution time limit",
+            }
+        except Exception as exc:
+            db.rollback()
+            _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
             raise self.retry(exc=exc)
         finally:
             if service is not None:
@@ -493,7 +715,7 @@ def run_dotmac_sub_incremental_sync(
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — Daily reconciliation (1 AM)
+# Tier 2: Daily reconciliation (1 AM)
 # ---------------------------------------------------------------------------
 
 
