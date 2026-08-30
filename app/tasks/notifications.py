@@ -9,6 +9,7 @@ Handles:
 import html
 import logging
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 try:
     from datetime import UTC  # type: ignore
@@ -364,7 +365,7 @@ def process_pending_nextcloud_notifications(
             if not notifications:
                 return results
 
-            notifications_by_org = {}
+            notifications_by_org: dict[UUID, list[Notification]] = {}
             for notification in notifications:
                 notifications_by_org.setdefault(
                     notification.organization_id, []

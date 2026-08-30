@@ -94,7 +94,7 @@ def _settings_organization_id(db: Session) -> UUID | None:
     org_id = db.info.get("organization_id")
     if org_id is None:
         return None
-    return coerce_uuid(org_id)
+    return cast(UUID, coerce_uuid(org_id))
 
 
 def _setting_value(db: Session | None, key: str) -> str | None:
