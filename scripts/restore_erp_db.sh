@@ -83,7 +83,7 @@ echo ""
 
 # --- 1. Verify the archive before touching the target -----------------------
 echo "-> verifying archive integrity..."
-entries="$(docker exec -i "${TARGET_CONTAINER}" pg_restore --list /dev/stdin < "${DUMP}" | grep -cvE '^;|^$' || true)"
+entries="$(docker exec -i "${TARGET_CONTAINER}" pg_restore --list < "${DUMP}" | grep -cvE '^;|^$' || true)"
 if (( entries < 1 )); then
   echo "ERROR: archive has no readable table of contents; aborting before any change." >&2
   exit 1
@@ -109,7 +109,7 @@ psql_t -d postgres -c "CREATE DATABASE ${TARGET_DB}"
 echo "-> restoring database..."
 docker exec -i "${TARGET_CONTAINER}" \
   pg_restore --exit-on-error --no-owner --role="${TARGET_USER}" \
-             -U "${TARGET_USER}" -d "${TARGET_DB}" /dev/stdin < "${DUMP}"
+             -U "${TARGET_USER}" -d "${TARGET_DB}" < "${DUMP}"
 
 # --- 4. Prove the restore, do not assume it ---------------------------------
 #

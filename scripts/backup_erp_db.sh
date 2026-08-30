@@ -133,7 +133,11 @@ fi
 # empty or corrupt file — which a byte count cannot detect. This is the check
 # that separates "a file arrived" from "a restorable archive arrived".
 echo "[backup] verifying archive integrity (pg_restore --list)..."
-toc_entries="$(exec_db pg_restore --list /dev/stdin < "${dump_path}" | grep -cvE '^;|^$' || true)"
+# `pg_restore` reads the archive from STDIN when given no filename. Passing
+# /dev/stdin instead makes it open the path a second time, which for a piped
+# stream yields no bytes and the misleading "did not find magic string in file
+# header" -- an integrity error reported for a perfectly good archive.
+toc_entries="$(exec_db pg_restore --list < "${dump_path}" | grep -cvE '^;|^$' || true)"
 if (( toc_entries < 1 )); then
   echo "[backup] FATAL: archive has no readable table of contents." >&2
   exit 1
