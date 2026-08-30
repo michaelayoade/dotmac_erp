@@ -411,6 +411,99 @@ jobs:
             dotmac-erp:ci \
             alembic upgrade heads
 
+      # =====================================================================
+      # Backup and restore rehearsal.
+      #
+      # ERP's backup was `pg_dump` of one database and nothing else: roles,
+      # `app_admin` and every GRANT the RLS policies depend on were in no
+      # backup, and `scripts/restore_from_backup.py` only reloads COPY blocks.
+      # There was no restore procedure at all. Measured in
+      # docs/inventories/2026-08-30-erp-production-infrastructure-preflight.md.
+      #
+      # This rehearses the MECHANISM end to end against the cluster the job has
+      # just migrated -- real ERP schema, real bootstrapped roles -- and
+      # restores into a second, disposable PostgreSQL container. It does NOT
+      # rehearse production bytes; that needs a disposable host with capacity
+      # for the real ~8 GB artifact and clearance to hold production data.
+      # =====================================================================
+
+      - name: Seed a row the restore must carry across
+        run: >-
+          docker exec ci-db psql -X -v ON_ERROR_STOP=1 -U postgres -d dotmac_erp_ci
+          -c "CREATE TABLE restore_rehearsal_canary (id int primary key, note text);
+              INSERT INTO restore_rehearsal_canary VALUES (1, 'survives the restore');
+              GRANT SELECT ON restore_rehearsal_canary TO app_user;"
+
+      - name: Back up the migrated cluster (globals + verified archive)
+        run: |
+          sudo mkdir -p /var/backups/db && sudo chown "$(id -u)" /var/backups/db
+          DB_CONTAINER=ci-db DB_NAME=dotmac_erp_ci DB_USER=postgres \
+          ENV_FILE=/nonexistent SKIP_UPLOAD=1 \
+            bash scripts/backup_erp_db.sh
+
+      - name: Start a disposable restore target
+        run: |  # pragma: allowlist secret
+          docker run -d --name ci-db-restore --network ci-net \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_HOST_AUTH_METHOD=trust \
+            postgres:16
+          for i in $(seq 1 30); do
+            docker exec ci-db-restore pg_isready -U postgres > /dev/null 2>&1 && break
+            sleep 2
+          done
+          docker exec ci-db-restore pg_isready -U postgres
+
+      - name: Restore into the disposable target and verify roles survived
+        run: |
+          set -euo pipefail
+          globals=$(ls -1 /var/backups/db/*.globals.sql.gz | tail -n1)
+          dump=$(ls -1 /var/backups/db/*.dump | tail -n1)
+          bash scripts/restore_erp_db.sh \
+            --globals "$globals" \
+            --dump "$dump" \
+            --target-container ci-db-restore \
+            --target-db dotmac_erp_restored \
+            --require-roles app_admin,app_user
+
+      - name: The restored cluster must serve the seeded row
+        run: >-
+          docker exec ci-db-restore psql -X -v ON_ERROR_STOP=1 -U postgres
+          -d dotmac_erp_restored -Atc
+          "SELECT note FROM restore_rehearsal_canary WHERE id = 1"
+          | grep -qx 'survives the restore'
+
+      # A verification that cannot fail is not a verification. Strip the roles
+      # out of the globals artifact and re-restore: this reproduces EXACTLY the
+      # defect that was live in production, and the run must fail. If this step
+      # ever succeeds, the check above has stopped detecting anything.
+      - name: Sensitivity proof — a roleless backup must be rejected
+        run: |
+          set -euo pipefail
+          globals=$(ls -1 /var/backups/db/*.globals.sql.gz | tail -n1)
+          dump=$(ls -1 /var/backups/db/*.dump | tail -n1)
+          gzip -cd "$globals" | grep -vE '^CREATE ROLE |^ALTER ROLE ' \
+            | gzip -9 > /tmp/roleless.globals.sql.gz
+          docker rm -f ci-db-restore > /dev/null 2>&1 || true
+          docker run -d --name ci-db-roleless --network ci-net \
+            -e POSTGRES_USER=postgres -e POSTGRES_HOST_AUTH_METHOD=trust postgres:16
+          for i in $(seq 1 30); do
+            docker exec ci-db-roleless pg_isready -U postgres > /dev/null 2>&1 && break
+            sleep 2
+          done
+          if bash scripts/restore_erp_db.sh \
+               --globals /tmp/roleless.globals.sql.gz \
+               --dump "$dump" \
+               --target-container ci-db-roleless \
+               --target-db dotmac_erp_roleless \
+               --require-roles app_admin,app_user; then
+            echo "SENSITIVITY FAILURE: a roleless backup restored 'successfully'." >&2
+            echo "The role assertion has stopped detecting the production defect." >&2
+            exit 1
+          fi
+          echo "OK: the roleless backup was correctly rejected."
+          docker rm -f ci-db-roleless > /dev/null 2>&1 || true
+
       - name: Start application  # pragma: allowlist secret
         run: |  # pragma: allowlist secret
           docker run -d --name ci-app --network ci-net \
