@@ -632,7 +632,10 @@ class InvoiceSyncMixin:
             )
 
     def post_unposted_invoices(
-        self, created_by_user_id: UUID | None = None
+        self,
+        created_by_user_id: UUID | None = None,
+        *,
+        limit: int | None = None,
     ) -> dict[str, Any]:
         """Repair legacy Sub documents that reached ERP before GL posting."""
         stats: dict[str, Any] = {"posted": 0, "errors": []}
@@ -643,6 +646,8 @@ class InvoiceSyncMixin:
             ),
             Invoice.journal_entry_id.is_(None),
         )
+        if limit is not None:
+            stmt = stmt.limit(max(limit, 1))
         for invoice in self.db.scalars(stmt).all():
             savepoint = self.db.begin_nested()
             try:
