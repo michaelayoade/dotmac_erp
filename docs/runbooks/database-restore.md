@@ -79,6 +79,22 @@ Restoring onto the live cluster is an outage, and a rehearsal script is exactly
 where that mistake gets made. A genuine disaster recovery onto the real name
 requires setting `ALLOW_PRODUCTION_NAME=1` deliberately.
 
+## Role capture carries no password material
+
+`pg_dumpall --globals-only` alone emits
+`CREATE ROLE … PASSWORD 'SCRAM-SHA-256$…'` for every login role, and this
+artifact is uploaded offsite. The capture therefore passes
+**`--no-role-passwords`**, and the script additionally **refuses to upload** a
+globals dump in which a verifier appears — the flag is one edit away from being
+dropped, so the content is checked as well as the argument.
+
+Login material is not part of the bundle. It is reinstalled after a restore from
+the approved secret source — for the cluster superuser that is
+`secret/dotmac/postgres/erp-shared-primary/postgres`.
+
+This corrects the procedure as first written, which omitted the flag. Production
+never ran that version, so no verifier left the host.
+
 ## What this procedure does NOT yet prove
 
 Stated here, in the receipt itself, because this document is what a future
@@ -106,8 +122,17 @@ data — into a **fresh isolated instance**, proving schema/data/catalog
 equivalence, application readiness, migration operation, tenant/platform role
 separation, documented rollback, and no dependence on undocumented cluster state.
 
-**The shared `PostgresRecoveryBundleV1` facility, extending
-`dotmac_deployment_foundation.backup`, supersedes this procedure.** ERP rebuilds
+**The shared `PostgresRecoveryBundle.v1` facility
+(`dotmac_deployment_foundation.recovery`) supersedes this procedure.** It defines
+thirteen required components — database dump, role closure, role attributes,
+memberships, object ownership, default privileges, schema privileges, object
+privileges, fine-grained ACLs, row security, extensions, tablespaces and
+migration heads — and is what makes the `PROVED` assurance level reachable. This
+script produces **two** of the thirteen, so in that vocabulary its output is a
+`DATA_EXPORT` plus a partial role capture, and it can never be a
+`RECOVERY_BUNDLE`. ERP cannot adopt it yet: the module ships in Foundation
+**0.3.0a1 source** while the newest **published** tag is 0.2.0a2, and a source
+version is not a pinnable release. ERP rebuilds
 against it when it lands. Until then, treat a green rehearsal here as evidence
 that the mechanism is sound — not as evidence that ERP holds a proved recovery
 bundle. **No ERP deployment may proceed on the strength of this document alone.**
@@ -145,3 +170,57 @@ than passing quietly.
 5. Only then point the application at it.
 
 Step 3 is the one that was impossible before this change.
+
+---
+
+## Measured: ERP's role closure is 8, and the declarations name 5
+
+Taken read-only from the live `dotmac_erp` catalog on 2026-08-30, using the
+reference-site model `PostgresRecoveryBundle.v1` defines — ownership, table
+ACLs, schema ACLs, default privileges, policies, and role memberships.
+
+| role | referenced by |
+|---|---|
+| `app_admin` | ownership, schema_acl, table_acl |
+| `app_user` | schema_acl, table_acl |
+| `dotmac_erp_app` | default_privilege, membership, schema_acl, table_acl |
+| `outbox_dispatcher` | schema_acl |
+| `platform_api` | schema_acl, table_acl |
+| `platform_outbox_dispatcher` | schema_acl |
+| `postgres` | ownership, schema_acl |
+| `prom_exporter` | membership |
+
+ERP's checked-in declarations total **five**: `ROLE_CONTRACT` names `app_admin`,
+`app_user`, `platform_api`; `RELAY_DISPATCHER_CONTRACT` names
+`outbox_dispatcher`, `platform_outbox_dispatcher`. The descriptor's `[[roles]]`
+are *service* roles (app, worker, beat) and declare no database role at all.
+
+**The closure is short by three**, and the omissions are the instructive part:
+
+- **`dotmac_erp_app`** — the production runtime login, the role the application
+  actually connects as. No contract names it. A restore rebuilt from the
+  declarations would come back with every table present and **no role for the
+  application to log in as**.
+- **`prom_exporter`** — reachable only through `membership`. Any closure derived
+  from table privileges misses it outright. This is the direct-grant trap the
+  facility calls out: `information_schema.table_privileges` sees direct grants
+  only, not membership, not `PUBLIC`, not column-level.
+- **`postgres`** — owns objects in this database.
+
+And note `outbox_dispatcher` and `platform_outbox_dispatcher` are referenced
+**only via `schema_acl`** — they reach their tables through `SECURITY DEFINER`
+routines and hold no table privilege a naive walk would see. ERP happens to
+declare them, in a *separate* contract; a closure derived from table ACLs would
+have missed both regardless.
+
+This is the same shape as the measurement that motivated the facility: a
+Vendor CP restore failing with 114 missing-role errors naming five roles, when
+everything documented declared three.
+
+**Consequence for adoption.** The role closure must be **derived from the
+catalog**, never assembled from the declarations. The facility enforces exactly
+that — `restore_plan` refuses a bundle with no `ROLE_CLOSURE` component *even
+when the descriptor names every role*, and no function in the package emits role
+DDL, so a validator can never manufacture the role it is checking for. These
+eight names are recorded here as measured evidence, **not** as a declaration to
+restore from.

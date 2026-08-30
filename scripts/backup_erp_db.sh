@@ -22,6 +22,18 @@
 # is a materially stronger claim and is asserted below before anything is
 # uploaded.
 #
+# SUPERSEDED-IN-WAITING. dotmac-deployment-foundation ships
+# `PostgresRecoveryBundle.v1` (recovery.py), which defines thirteen required
+# components -- role closure and membership closure, ownership, default
+# privileges, fine-grained ACLs, row security, extensions, tablespaces,
+# migration heads -- and makes the PROVED assurance level reachable. This script
+# produces two of those components and therefore cannot reach PROVED; under that
+# facility's vocabulary its output is a DATA_EXPORT plus a partial role capture,
+# not a RECOVERY_BUNDLE. It is retained only until ERP can pin a PUBLISHED
+# Foundation carrying that module (0.3.0a1 is source-only; the newest published
+# tag is 0.2.0a2), because deleting it first would remove the only recovery
+# capability ERP has. Do not extend it; adopt the facility.
+#
 # Restore is scripts/restore_erp_db.sh. Neither script is a backup on its own:
 # a dump nobody has restored is an untested write path.
 set -euo pipefail
@@ -106,11 +118,23 @@ exec_db() {
 # multi-gigabyte dump has been written, and an operator reading the log sees
 # the roles artifact precede the data artifact in the same order the restore
 # will need them.
-echo "[backup] dumping cluster globals (roles, memberships, GRANTs)..."
+# `--no-role-passwords` is NOT optional. Plain `pg_dumpall --globals-only` emits
+# CREATE ROLE ... PASSWORD 'SCRAM-SHA-256$...' for every login role, and this
+# artifact is uploaded offsite by rclone below -- so omitting the flag ships the
+# password verifiers of all fourteen cluster roles to a backup bucket. This
+# script previously omitted it. Production never ran that version (the host
+# checkout predates it), so no verifier has left the host, but it would have at
+# the next deploy.
+#
+# dotmac_deployment_foundation.recovery names this exact mistake and pins the
+# remedy as REQUIRED_ROLE_CAPTURE_ARG = "--no-role-passwords": the bundle carries
+# roles WITHOUT password material, and login material is reinstalled afterwards
+# from the approved secret source as a separate restore step.
+echo "[backup] dumping cluster globals (roles, memberships, GRANTs; no passwords)..."
 if [[ -n "${PGPASSWORD}" ]]; then
-  exec_db pg_dumpall -U "${DB_USER}" --globals-only | gzip -9 > "${globals_path}"
+  exec_db pg_dumpall -U "${DB_USER}" --globals-only --no-role-passwords | gzip -9 > "${globals_path}"
 else
-  exec_db pg_dumpall --globals-only | gzip -9 > "${globals_path}"
+  exec_db pg_dumpall --globals-only --no-role-passwords | gzip -9 > "${globals_path}"
 fi
 
 # A globals dump that contains no CREATE ROLE captured nothing useful. Catching
@@ -118,6 +142,16 @@ fi
 if ! gzip -cd "${globals_path}" | grep -qE '^CREATE ROLE '; then
   echo "[backup] FATAL: globals dump contains no CREATE ROLE statement." >&2
   echo "[backup] Refusing to present a roleless backup as complete." >&2
+  exit 1
+fi
+
+# Belt and braces on the flag above. The guard is about the NEXT edit to this
+# capture, not this one: if a future change drops --no-role-passwords, the
+# upload must not proceed. Refuse before anything leaves the host.
+if gzip -cd "${globals_path}" | grep -qiE "PASSWORD '(SCRAM-SHA-256|md5)"; then
+  echo "[backup] FATAL: the globals dump contains password verifiers." >&2
+  echo "[backup] Refusing to upload credential material to the backup bucket." >&2
+  rm -f "${globals_path}"
   exit 1
 fi
 globals_roles="$(gzip -cd "${globals_path}" | grep -cE '^CREATE ROLE ' || true)"
