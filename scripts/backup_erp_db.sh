@@ -68,7 +68,12 @@ DB_CONTAINER="${DB_CONTAINER:-dotmac_pg_local}"
 DB_NAME="${DB_NAME:-${POSTGRES_DB:-dotmac_erp}}"
 DB_USER="${DB_USER:-${POSTGRES_USER:-postgres}}"
 DB_OS_USER="${DB_OS_USER:-postgres}"
-PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-}}"
+# EXPORTED deliberately. `docker exec -e PGPASSWORD` with no `=` forwards the
+# value from this process's ENVIRONMENT rather than restating it on the command
+# line, which is what keeps the credential out of the container's argv and out
+# of the host process table. A bare shell assignment is not in the environment,
+# so the flag would forward nothing and the dump would fail to authenticate.
+export PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-}}"
 LOCAL_DIR="${LOCAL_DIR:-/var/backups/db}"
 REMOTE_DIR="${REMOTE_DIR:-${REMOTE}/dotmac_erp}"
 # Retention counts RUNS, not files. Each run now writes two artifacts, so a
