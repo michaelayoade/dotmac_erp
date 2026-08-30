@@ -37,7 +37,9 @@ GLOBALS_WITH_ROLES = (
 GLOBALS_WITHOUT_ROLES = "--\n-- Roles\n--\nALTER ROLE postgres WITH SUPERUSER;\n"
 
 # `pg_restore --list` output: comment lines start with ';', entries do not.
-TOC_WITH_ENTRIES = "; Archive created at 2026-01-01\n215; 1259 16385 TABLE public people\n"
+TOC_WITH_ENTRIES = (
+    "; Archive created at 2026-01-01\n215; 1259 16385 TABLE public people\n"
+)
 TOC_EMPTY = "; Archive created at 2026-01-01\n"
 
 # Assembled at runtime so no credential-shaped literal sits in a tracked file
@@ -66,7 +68,7 @@ def _docker_stub(
     argv_expectation: str = "",
 ) -> str:
     """A `docker` that answers pg_dumpall, pg_dump and pg_restore --list."""
-    return f'''#!/usr/bin/env python3
+    return f"""#!/usr/bin/env python3
 import sys
 
 argv = sys.argv[1:]
@@ -82,11 +84,11 @@ elif "pg_dump" in argv:
     sys.stdout.write("PGDMP-fake-custom-format-archive\\n")
 else:
     raise SystemExit(f"unsupported docker invocation: {{argv}}")
-'''
+"""
 
 
 def _rclone_stub(remote_root: Path) -> str:
-    return f'''#!/usr/bin/env python3
+    return f"""#!/usr/bin/env python3
 import shutil
 import sys
 from pathlib import Path
@@ -116,10 +118,16 @@ elif command == "deletefile":
     resolve_remote(args[1]).unlink()
 else:
     raise SystemExit(f"unsupported rclone invocation: {{args}}")
-'''
+"""
 
 
-def _run(tmp_path: Path, docker: str, *, extra_env: dict | None = None, remote_root: Path | None = None):
+def _run(
+    tmp_path: Path,
+    docker: str,
+    *,
+    extra_env: dict | None = None,
+    remote_root: Path | None = None,
+):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir(exist_ok=True)
     remote_root = remote_root or (tmp_path / "remote")
@@ -133,7 +141,13 @@ def _run(tmp_path: Path, docker: str, *, extra_env: dict | None = None, remote_r
     env["REMOTE_DIR"] = "Backup:db.backup/dotmac_erp"
     env["KEEP_LAST"] = "5"
     env["ENV_FILE"] = str(tmp_path / "missing.env")
-    for key in ("PGPASSWORD", "POSTGRES_PASSWORD", "DB_CONTAINER", "DB_OS_USER", "SKIP_UPLOAD"):
+    for key in (
+        "PGPASSWORD",
+        "POSTGRES_PASSWORD",
+        "DB_CONTAINER",
+        "DB_OS_USER",
+        "SKIP_UPLOAD",
+    ):
         env.pop(key, None)
     env.update(extra_env or {})
 
@@ -161,7 +175,9 @@ def test_backup_writes_both_a_globals_dump_and_an_archive(tmp_path) -> None:
     assert any(n.endswith(".globals.sql.gz") for n in local), local
     assert any(n.endswith(".dump") for n in local), local
 
-    uploaded = sorted(p.name for p in (remote_root / "db.backup" / "dotmac_erp").iterdir())
+    uploaded = sorted(
+        p.name for p in (remote_root / "db.backup" / "dotmac_erp").iterdir()
+    )
     assert any(n.endswith(".globals.sql.gz") for n in uploaded), uploaded
     assert any(n.endswith(".dump") for n in uploaded), uploaded
 
@@ -214,7 +230,7 @@ def test_backup_refuses_a_duplicated_dotenv_key(tmp_path) -> None:
 def test_backup_passes_the_password_through_the_environment_not_argv(tmp_path) -> None:
     """`-e PGPASSWORD` with no `=` keeps the value out of the container argv,
     and therefore out of the host process table."""
-    expectation = '''
+    expectation = """
 if "-e" in argv:
     flag = argv[argv.index("-e") + 1]
     if flag != "PGPASSWORD":
@@ -222,12 +238,10 @@ if "-e" in argv:
     import os
     if os.environ.get("PGPASSWORD") != "FIXTURE_PASSWORD_PLACEHOLDER":
         raise SystemExit("PGPASSWORD not passed through the environment")
-'''.replace("FIXTURE_PASSWORD_PLACEHOLDER", FIXTURE_PASSWORD)
+""".replace("FIXTURE_PASSWORD_PLACEHOLDER", FIXTURE_PASSWORD)
     env_file = tmp_path / ".env"
     # Throwaway fixture written into tmp_path, never a real credential.
-    env_file.write_text(
-        f"POSTGRES_PASSWORD={FIXTURE_PASSWORD}\n", encoding="utf-8"
-    )
+    env_file.write_text(f"POSTGRES_PASSWORD={FIXTURE_PASSWORD}\n", encoding="utf-8")
     result = _run(
         tmp_path,
         _docker_stub(argv_expectation=expectation),
@@ -239,12 +253,12 @@ if "-e" in argv:
 def test_backup_defaults_to_the_production_container_as_the_postgres_os_user(
     tmp_path,
 ) -> None:
-    expectation = '''
+    expectation = """
 if "pg_dumpall" in argv:
     expected = ["exec", "-u", "postgres", "-i", "dotmac_pg_local", "pg_dumpall", "--globals-only"]
     if argv != expected:
         raise SystemExit(f"unexpected docker invocation: {argv}")
-'''
+"""
     result = _run(tmp_path, _docker_stub(argv_expectation=expectation))
     assert result.returncode == 0, result.stderr
 
@@ -256,10 +270,14 @@ def test_retention_keeps_whole_runs_not_individual_files(tmp_path) -> None:
     remote_dir.mkdir(parents=True)
     for idx in range(1, 7):
         stamp = f"2024010{idx}_010101"
-        (remote_dir / f"dotmac_erp_{stamp}.globals.sql.gz").write_text("g", encoding="utf-8")
+        (remote_dir / f"dotmac_erp_{stamp}.globals.sql.gz").write_text(
+            "g", encoding="utf-8"
+        )
         (remote_dir / f"dotmac_erp_{stamp}.dump").write_text("d", encoding="utf-8")
 
-    result = _run(tmp_path, _docker_stub(), remote_root=remote_root, extra_env={"KEEP_LAST": "5"})
+    result = _run(
+        tmp_path, _docker_stub(), remote_root=remote_root, extra_env={"KEEP_LAST": "5"}
+    )
     assert result.returncode == 0, result.stderr
 
     names = sorted(p.name for p in remote_dir.iterdir())
@@ -276,7 +294,10 @@ def test_retention_keeps_whole_runs_not_individual_files(tmp_path) -> None:
 def test_skip_upload_leaves_the_remote_untouched(tmp_path) -> None:
     remote_root = tmp_path / "remote"
     result = _run(
-        tmp_path, _docker_stub(), remote_root=remote_root, extra_env={"SKIP_UPLOAD": "1"}
+        tmp_path,
+        _docker_stub(),
+        remote_root=remote_root,
+        extra_env={"SKIP_UPLOAD": "1"},
     )
     assert result.returncode == 0, result.stderr
     assert "not uploading" in result.stdout
