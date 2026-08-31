@@ -120,6 +120,7 @@ def test_incremental_posting_phase_uses_bounded_batch(monkeypatch) -> None:
         error_count=0,
         add_error=MagicMock(),
         complete=MagicMock(),
+        touch=MagicMock(),
     )
     service = MagicMock()
     service.post_unposted_payments.return_value = {"posted": 7, "errors": []}
@@ -153,6 +154,33 @@ def test_incremental_posting_phase_uses_bounded_batch(monkeypatch) -> None:
     history.complete.assert_called_once()
     assert result["complete"] is True
     assert result["synced_count"] == 7
+    history.touch.assert_called_once()
+
+
+def test_interrupted_session_invalidates_connection_when_rollback_fails() -> None:
+    db = MagicMock()
+    db.rollback.side_effect = RuntimeError("connection is busy")
+
+    assert dotmac_sub._rollback_interrupted_session(db) is False
+
+    db.invalidate.assert_called_once_with()
+
+
+def test_stale_cleanup_uses_last_activity_heartbeat(monkeypatch) -> None:
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = []
+    monkeypatch.setattr(
+        dotmac_sub,
+        "cross_org_session",
+        lambda: nullcontext(db),
+    )
+
+    result = dotmac_sub.cleanup_stale_dotmac_sub_sync_history.run()
+
+    assert result == {"success": True, "checked": 0, "marked_failed": 0}
+    statement = str(db.scalars.call_args.args[0]).lower()
+    assert "coalesce(sync.sync_history.last_activity_at" in statement
+    assert "sync.sync_history.sync_type" in statement
 
 
 def test_incremental_sync_lock_is_session_scoped() -> None:
