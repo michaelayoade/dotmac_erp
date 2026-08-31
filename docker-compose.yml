@@ -1,6 +1,29 @@
 services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # APP_IMAGE — an immutable digest, and no default.
+  #
+  # These three services used to read
+  # `ghcr.io/michaelayoade/dotmac_erp:${ERP_IMAGE_TAG:-latest}`. Two defects
+  # sat in that one line. The `:-latest` fallback meant a bare
+  # `docker compose up -d` by anyone not using scripts/deploy.sh silently
+  # pulled a floating tag. And even on the deploy path, ERP_IMAGE_TAG was
+  # pinned to `sha-$(git rev-parse --short=7 HEAD)` — reproducible-LOOKING,
+  # but still a mutable registry pointer, and never compared against the bytes
+  # CI tested. ERP's publish lane had meanwhile been resolving the tested
+  # image's real OCI digest (`imagetools inspect --raw | sha256sum`) and
+  # recording it in image-release.json and deploy/product.toml. Production
+  # consumed the tag while the pipeline verified the digest.
+  #
+  # `${APP_IMAGE:?...}` has NO default on purpose. An unset value now refuses
+  # to start, loudly, instead of resolving to something mutable — the failure
+  # mode a default exists to avoid is exactly the failure mode a default
+  # caused here. scripts/deploy.sh resolves APP_IMAGE from
+  # deploy/rendered/docker-compose.yml through scripts/resolve_deploy_image.sh,
+  # which refuses anything that is not `sha256:<64 hex>`, and writes it into
+  # .env so a later bare `docker compose up -d` reuses the same pinned release.
+  # ─────────────────────────────────────────────────────────────────────────
   app:
-    image: ghcr.io/michaelayoade/dotmac_erp:${ERP_IMAGE_TAG:-latest}
+    image: ${APP_IMAGE:?APP_IMAGE must be set to an immutable ghcr.io/michaelayoade/dotmac_erp@sha256:<digest>; scripts/deploy.sh writes it}
     platform: linux/amd64
     container_name: dotmac_erp_app
     restart: unless-stopped
@@ -120,7 +143,7 @@ services:
   # Local development uses the same image the tests and production use.
 
   worker:
-    image: ghcr.io/michaelayoade/dotmac_erp:${ERP_IMAGE_TAG:-latest}
+    image: ${APP_IMAGE:?APP_IMAGE must be set to an immutable ghcr.io/michaelayoade/dotmac_erp@sha256:<digest>; scripts/deploy.sh writes it}
     platform: linux/amd64
     container_name: dotmac_erp_worker
     restart: unless-stopped
@@ -150,7 +173,7 @@ services:
     - -l
     - info
   beat:
-    image: ghcr.io/michaelayoade/dotmac_erp:${ERP_IMAGE_TAG:-latest}
+    image: ${APP_IMAGE:?APP_IMAGE must be set to an immutable ghcr.io/michaelayoade/dotmac_erp@sha256:<digest>; scripts/deploy.sh writes it}
     platform: linux/amd64
     container_name: dotmac_erp_beat
     restart: unless-stopped
