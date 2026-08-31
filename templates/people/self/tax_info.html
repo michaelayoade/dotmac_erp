@@ -1,7 +1,7 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg, status_badge %}
 
-{% block page_title %}My Tax & Bank Information{% endblock %}
+{% block page_title %}My Personal Info{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -17,8 +17,8 @@
 <div class="mx-auto max-w-4xl space-y-8" x-data="{ personalDetailsOpen: false }">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tax & Bank Information</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400">Update your statutory and payment information for payroll processing.</p>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Personal Info</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Review and edit personal, bank, and tax information.</p>
         </div>
         {% if has_pending %}
         <div class="inline-flex items-center gap-2 self-start rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
