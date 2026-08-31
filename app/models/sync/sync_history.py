@@ -6,7 +6,7 @@ Records each migration/sync execution for audit and monitoring.
 
 import enum
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, func, text
@@ -14,6 +14,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+
+try:
+    from datetime import UTC  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover
+    UTC = timezone.utc  # type: ignore[assignment]
 
 
 class SyncType(str, enum.Enum):

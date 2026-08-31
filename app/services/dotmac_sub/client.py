@@ -265,10 +265,7 @@ class DotmacSubConfig:
     @property
     def auth_headers(self) -> dict[str, str]:
         """Auth headers for a dotmac_sub request (scoped API key)."""
-        return {
-            "X-Api-Key": self.api_token,
-            _INTEGRATION_CLIENT_HEADER: _INTEGRATION_CLIENT_NAME,
-        }
+        return {"X-Api-Key": self.api_token}
 
 
 class TaxApplication(str, Enum):
