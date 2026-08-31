@@ -251,22 +251,26 @@ def process_expense_approval_reminders() -> dict:
                     days_pending=days_pending,
                 )
 
+                # Record the event regardless of the direct SMTP result. A
+                # failed direct send remains pending for the central worker;
+                # a successful send is marked delivered to prevent a duplicate.
+                notification = NotificationService().create_if_not_sent_since(
+                    db,
+                    organization_id=claim.organization_id,
+                    recipient_id=approver.person_id,
+                    entity_type=EntityType.EXPENSE,
+                    entity_id=claim.claim_id,
+                    notification_type=NotificationType.REMINDER,
+                    title=f"Expense Approval Reminder: {claim.claim_number}",
+                    message=f"Claim {claim.claim_number} pending {days_pending} days",
+                    since=today_start,
+                    dedup_by_recipient=False,
+                    channel=NotificationChannel.EMAIL,
+                )
                 if success:
-                    # Record notification for dedup on subsequent runs.
-                    NotificationService().create_if_not_sent_since(
-                        db,
-                        organization_id=claim.organization_id,
-                        recipient_id=approver.person_id,
-                        entity_type=EntityType.EXPENSE,
-                        entity_id=claim.claim_id,
-                        notification_type=NotificationType.REMINDER,
-                        title=f"Expense Approval Reminder: {claim.claim_number}",
-                        message="Claim "
-                        f"{claim.claim_number} pending {days_pending} days",
-                        since=today_start,
-                        dedup_by_recipient=False,
-                        channel=NotificationChannel.EMAIL,
-                    )
+                    if notification is not None:
+                        notification.email_sent = True
+                        notification.email_sent_at = datetime.now(UTC)
                     if reminder_type == "first":
                         results["first_reminders_sent"] += 1
                     elif reminder_type == "second":

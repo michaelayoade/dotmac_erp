@@ -9,6 +9,7 @@ Handles:
 import html
 import logging
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 from uuid import UUID
 
 try:
@@ -22,10 +23,11 @@ from celery import shared_task
 from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
-from app.db.session_context import cross_org_session
+from app.db.session_context import cross_org_session, session_for_org
 from app.models.email_profile import EmailModule
 from app.models.notification import EntityType, Notification, NotificationChannel
 from app.services.email import person_can_receive_email, send_email
+from app.tenant_catalog import active_organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +62,42 @@ class NotificationEmailDispatchResults(TypedDict):
 
 def _email_module_for_notification(notification: Notification) -> EmailModule:
     """Route notification emails through the appropriate email profile."""
-    if notification.entity_type in {EntityType.LEAVE, EntityType.EMPLOYEE}:
+    if notification.entity_type == EntityType.TICKET:
+        return EmailModule.SUPPORT
+    if notification.entity_type == EntityType.EXPENSE:
+        return EmailModule.EXPENSE
+    if notification.entity_type in {
+        EntityType.LEAVE,
+        EntityType.ATTENDANCE,
+        EntityType.PAYROLL,
+        EntityType.EMPLOYEE,
+        EntityType.DISCIPLINE,
+    }:
         return EmailModule.PEOPLE_PAYROLL
+    if notification.entity_type in {
+        EntityType.FISCAL_PERIOD,
+        EntityType.TAX_PERIOD,
+        EntityType.BANK_RECONCILIATION,
+        EntityType.INVOICE,
+        EntityType.SUBLEDGER,
+    }:
+        return EmailModule.FINANCE
+
+    # Several older producers use SYSTEM for module-owned notifications.
+    # Preserve their schema while still honoring module-specific SMTP routes.
+    path = urlparse(notification.action_url or "").path.lower()
+    path_routes = (
+        (("/people", "/payroll"), EmailModule.PEOPLE_PAYROLL),
+        (("/finance",), EmailModule.FINANCE),
+        (("/expense",), EmailModule.EXPENSE),
+        (("/support",), EmailModule.SUPPORT),
+        (("/inventory", "/fleet"), EmailModule.INVENTORY_FLEET),
+        (("/procurement",), EmailModule.PROCUREMENT),
+        (("/pm", "/projects"), EmailModule.OPERATIONS),
+    )
+    for prefixes, module in path_routes:
+        if path.startswith(prefixes):
+            return module
     return EmailModule.ADMIN
 
 
@@ -86,6 +122,150 @@ def _record_email_delivery_failure(notification: Notification, now: datetime) ->
     return False
 
 
+def _process_notification_email_batch(
+    db,
+    organization_id: UUID,
+    batch_size: int,
+    results: NotificationEmailDispatchResults,
+) -> None:
+    now = datetime.now(UTC)
+    cutoff = now - _DEAD_LETTER_AGE
+
+    dead_letter_result = db.execute(
+        update(Notification)
+        .where(Notification.organization_id == organization_id)
+        .where(Notification.email_sent == False)  # noqa: E712
+        .where(Notification.email_dead_lettered == False)  # noqa: E712
+        .where(
+            Notification.channel.in_(
+                [
+                    NotificationChannel.EMAIL,
+                    NotificationChannel.BOTH,
+                    NotificationChannel.ALL,
+                ]
+            )
+        )
+        .where(Notification.created_at < cutoff)
+        .values(email_dead_lettered=True, email_next_retry_at=None)
+    )
+    rowcount = dead_letter_result.rowcount
+    dead_letter_count = rowcount if isinstance(rowcount, int) else 0
+    results["dead_letter"] += dead_letter_count
+    if dead_letter_count:
+        logger.warning(
+            "Dead-letter: %d notification emails older than %s days will not "
+            "be retried for org %s",
+            dead_letter_count,
+            _DEAD_LETTER_AGE.days,
+            organization_id,
+        )
+
+    stmt = (
+        select(Notification)
+        .where(Notification.organization_id == organization_id)
+        .where(Notification.email_sent == False)  # noqa: E712
+        .where(Notification.email_dead_lettered == False)  # noqa: E712
+        .where(
+            (Notification.email_next_retry_at.is_(None))
+            | (Notification.email_next_retry_at <= now)
+        )
+        .where(
+            Notification.channel.in_(
+                [
+                    NotificationChannel.EMAIL,
+                    NotificationChannel.BOTH,
+                    NotificationChannel.ALL,
+                ]
+            )
+        )
+        .where(Notification.created_at >= cutoff)
+        .order_by(Notification.created_at.asc())
+        .limit(batch_size)
+        .with_for_update(of=Notification, skip_locked=True)
+    )
+    notifications = list(db.execute(stmt).scalars().all())
+
+    for notification in notifications:
+        results["processed"] += 1
+
+        if not person_can_receive_email(notification.recipient):
+            logger.info(
+                "Suppressing notification email %s: recipient is inactive",
+                notification.notification_id,
+            )
+            notification.email_sent = True
+            notification.email_sent_at = datetime.now(UTC)
+            results["skipped"] += 1
+            continue
+
+        recipient_email = None
+        if notification.recipient and notification.recipient.email:
+            recipient_email = notification.recipient.email.strip()
+
+        if not recipient_email:
+            logger.warning(
+                "Skipping notification %s: recipient email missing",
+                notification.notification_id,
+            )
+            results["skipped"] += 1
+            continue
+
+        try:
+            body_text = notification.message
+            safe_message = (
+                html.escape(notification.message) if notification.message else None
+            )
+            body_html = (
+                f"<p>{safe_message}</p>"
+                if safe_message
+                else "<p>You have a new notification in Dotmac ERP.</p>"
+            )
+            if notification.action_url:
+                url = notification.action_url
+                if url.startswith("/") or url.startswith("http"):
+                    safe_url = html.escape(url)
+                    action_label = _email_action_label_for_notification(notification)
+                    body_html += f'<p><a href="{safe_url}">{action_label}</a></p>'
+
+            ok = send_email(
+                db=db,
+                to_email=recipient_email,
+                subject=notification.title,
+                body_html=body_html,
+                body_text=body_text,
+                module=_email_module_for_notification(notification),
+                organization_id=notification.organization_id,
+            )
+            if ok:
+                notification.email_sent = True
+                notification.email_sent_at = datetime.now(UTC)
+                results["sent"] += 1
+            else:
+                results["failed"] += 1
+                if _record_email_delivery_failure(notification, now):
+                    results["dead_letter"] += 1
+                    logger.error(
+                        "Dead-lettered notification email %s after %d attempts",
+                        notification.notification_id,
+                        notification.email_retry_count,
+                    )
+        except Exception:
+            logger.exception(
+                "Failed sending notification email %s",
+                notification.notification_id,
+            )
+            results["failed"] += 1
+            if _record_email_delivery_failure(notification, now):
+                results["dead_letter"] += 1
+                logger.error(
+                    "Dead-lettered notification email %s after %d attempts",
+                    notification.notification_id,
+                    notification.email_retry_count,
+                )
+
+    db.commit()
+
+
 @shared_task(
     bind=True,
     max_retries=3,
@@ -97,13 +277,7 @@ def process_pending_notification_emails(
     self,
     batch_size: int = 100,
 ) -> NotificationEmailDispatchResults:
-    """
-    Send pending email notifications and mark delivery status.
-
-    Notes:
-    - Only notifications with channel EMAIL/BOTH and email_sent=False are selected.
-    - Uses FOR UPDATE SKIP LOCKED to prevent duplicate processing across workers.
-    """
+    """Send pending emails in fully tenant-scoped batches."""
     results: NotificationEmailDispatchResults = {
         "processed": 0,
         "sent": 0,
@@ -113,148 +287,14 @@ def process_pending_notification_emails(
     }
 
     try:
-        with _task_db_session() as db:
-            now = datetime.now(UTC)
-            cutoff = now - _DEAD_LETTER_AGE
-
-            # Move stale pending deliveries to a terminal state once. This
-            # prevents the scheduler from logging the same dead-letter backlog
-            # every minute while keeping the records available for review.
-            dead_letter_result = db.execute(
-                update(Notification)
-                .where(Notification.email_sent == False)  # noqa: E712
-                .where(Notification.email_dead_lettered == False)  # noqa: E712
-                .where(
-                    Notification.channel.in_(
-                        [
-                            NotificationChannel.EMAIL,
-                            NotificationChannel.BOTH,
-                            NotificationChannel.ALL,
-                        ]
-                    )
+        for organization_id in active_organization_ids():
+            with session_for_org(organization_id) as db:
+                _process_notification_email_batch(
+                    db,
+                    organization_id,
+                    batch_size,
+                    results,
                 )
-                .where(Notification.created_at < cutoff)
-                .values(email_dead_lettered=True, email_next_retry_at=None)
-            )
-            rowcount = dead_letter_result.rowcount
-            results["dead_letter"] = rowcount if isinstance(rowcount, int) else 0
-            if results["dead_letter"]:
-                logger.warning(
-                    "Dead-letter: %d notification emails older than %s days will not be retried",
-                    results["dead_letter"],
-                    _DEAD_LETTER_AGE.days,
-                )
-
-            stmt = (
-                select(Notification)
-                .where(Notification.email_sent == False)  # noqa: E712
-                .where(Notification.email_dead_lettered == False)  # noqa: E712
-                .where(
-                    (Notification.email_next_retry_at.is_(None))
-                    | (Notification.email_next_retry_at <= now)
-                )
-                .where(
-                    Notification.channel.in_(
-                        [
-                            NotificationChannel.EMAIL,
-                            NotificationChannel.BOTH,
-                            NotificationChannel.ALL,
-                        ]
-                    )
-                )
-                .where(Notification.created_at >= cutoff)
-                .order_by(Notification.created_at.asc())
-                .limit(batch_size)
-                .with_for_update(of=Notification, skip_locked=True)
-            )
-            notifications = list(db.execute(stmt).scalars().all())
-
-            for notification in notifications:
-                results["processed"] += 1
-
-                if not person_can_receive_email(notification.recipient):
-                    logger.info(
-                        "Suppressing notification email %s: recipient is inactive",
-                        notification.notification_id,
-                    )
-                    notification.email_sent = True
-                    notification.email_sent_at = datetime.now(UTC)
-                    results["skipped"] += 1
-                    continue
-
-                recipient_email = None
-                if notification.recipient and notification.recipient.email:
-                    recipient_email = notification.recipient.email.strip()
-
-                if not recipient_email:
-                    # No email address available; leave as unsent for operator visibility.
-                    logger.warning(
-                        "Skipping notification %s: recipient email missing",
-                        notification.notification_id,
-                    )
-                    results["skipped"] += 1
-                    continue
-
-                try:
-                    body_text = notification.message
-                    safe_message = (
-                        html.escape(notification.message)
-                        if notification.message
-                        else None
-                    )
-                    body_html = (
-                        f"<p>{safe_message}</p>"
-                        if safe_message
-                        else "<p>You have a new notification in Dotmac ERP.</p>"
-                    )
-                    if notification.action_url:
-                        url = notification.action_url
-                        if url.startswith("/") or url.startswith("http"):
-                            safe_url = html.escape(url)
-                            action_label = _email_action_label_for_notification(
-                                notification
-                            )
-                            body_html += (
-                                f'<p><a href="{safe_url}">{action_label}</a></p>'
-                            )
-
-                    ok = send_email(
-                        db=db,
-                        to_email=recipient_email,
-                        subject=notification.title,
-                        body_html=body_html,
-                        body_text=body_text,
-                        module=_email_module_for_notification(notification),
-                        organization_id=notification.organization_id,
-                    )
-                    if ok:
-                        notification.email_sent = True
-                        notification.email_sent_at = datetime.now(UTC)
-                        results["sent"] += 1
-                    else:
-                        results["failed"] += 1
-                        if _record_email_delivery_failure(notification, now):
-                            results["dead_letter"] += 1
-                            logger.error(
-                                "Dead-lettered notification email %s after %d attempts",
-                                notification.notification_id,
-                                notification.email_retry_count,
-                            )
-                except Exception:
-                    logger.exception(
-                        "Failed sending notification email %s",
-                        notification.notification_id,
-                    )
-                    results["failed"] += 1
-                    if _record_email_delivery_failure(notification, now):
-                        results["dead_letter"] += 1
-                        logger.error(
-                            "Dead-lettered notification email %s after %d attempts",
-                            notification.notification_id,
-                            notification.email_retry_count,
-                        )
-
-            db.commit()
     except _DB_RETRYABLE_ERRORS as exc:
         logger.exception(
             "Retrying notification email task after database error (attempt %d)",
@@ -264,7 +304,8 @@ def process_pending_notification_emails(
 
     if results["processed"] > 0 or results["dead_letter"] > 0:
         logger.info(
-            "Notification email dispatch: processed=%d sent=%d skipped=%d failed=%d dead_letter=%d",
+            "Notification email dispatch: processed=%d sent=%d skipped=%d "
+            "failed=%d dead_letter=%d",
             results["processed"],
             results["sent"],
             results["skipped"],

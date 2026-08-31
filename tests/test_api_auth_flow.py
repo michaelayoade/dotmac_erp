@@ -451,11 +451,18 @@ class TestPasswordAPI:
 
         reset = auth_flow_service.request_password_reset(db_session, person.email)
         assert reset is not None
+        assert (
+            auth_flow_service.password_reset_organization_hint(reset["token"])
+            == person.organization_id
+        )
 
         payload = {"token": reset["token"], "new_password": "newpassword456"}
         response = client.post("/auth/reset-password", json=payload)
         assert response.status_code == 200
 
+        # The public endpoint now performs the mutation in its own fully
+        # tenant-scoped session, so discard this fixture session's cache.
+        db_session.expire_all()
         sessions = (
             db_session.query(AuthSession)
             .filter(AuthSession.person_id == person.id)
