@@ -4,6 +4,7 @@ Admin web routes.
 Provides admin dashboard and management pages with admin role requirement.
 """
 
+from html import escape
 from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
@@ -902,6 +903,14 @@ def _admin_base_context(
     request: Request, auth: WebAuthContext, page_title: str, db: Session
 ) -> dict:
     """Build base context for admin settings pages."""
+    csrf_token = str(getattr(request.state, "csrf_token", "") or "")
+    if not isinstance(getattr(request.state, "csrf_form", None), str):
+        request.state.csrf_form = (
+            f'<input type="hidden" name="csrf_token" value="{escape(csrf_token)}">'
+            if csrf_token
+            else ""
+        )
+
     organization = None
     if auth and auth.is_authenticated and auth.organization_id:
         from app.models.finance.core_org.organization import Organization
