@@ -89,7 +89,6 @@ services:
   app:
     image: "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
     command:
-      - /app/entrypoint-monitoring.sh
       - gunicorn
       - -c
       - gunicorn.conf.py
@@ -155,7 +154,6 @@ services:
   beat:
     image: "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
     command:
-      - /app/entrypoint-monitoring.sh
       - celery
       - -A
       - app.celery_app
@@ -210,7 +208,6 @@ services:
   worker:
     image: "ghcr.io/michaelayoade/dotmac_erp@sha256:d33c172a6d93449e4815f04182f79fbf517e955f8efa1d61bd2a74f19bc9586c"
     command:
-      - /app/entrypoint-monitoring.sh
       - celery
       - -A
       - app.celery_app

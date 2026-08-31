@@ -7,6 +7,7 @@
 #   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh --quick
 #   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh \
 #       --people-employment-type-activation
+#   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh sha256:<64 hex>
 #   SKIP_BACKUP=1 ./scripts/deploy.sh   # skip the pre-migration DB backup (NOT recommended)
 #
 # `MIGRATION_DATABASE_URL` comes from the approved secret source and is passed
@@ -19,10 +20,25 @@
 # it does not replace application Python or migrations. A real deploy therefore
 # pulls the immutable image before running its migrations.
 #
-# Image pinning: app/worker/beat run ghcr.io/.../dotmac_erp:${ERP_IMAGE_TAG}.
-# This deploy pins ERP_IMAGE_TAG to the deployed commit's immutable `sha-<short>`
-# tag (published by CI) so the running artifact is reproducible and rollback is
-# exact — instead of the mutable `:latest`. --quick keeps the current tag.
+# Image pinning: app/worker/beat run ${APP_IMAGE}, which docker-compose.yml
+# declares with NO default, so an unset value refuses to start.
+#
+# APP_IMAGE is resolved from `deploy/rendered/docker-compose.yml` — the asset
+# the pinned dotmac-deployment-foundation renders from deploy/product.toml,
+# whose image digest is the one protected-main CI resolved for the image it
+# built and tested. `scripts/resolve_deploy_image.sh` reads it and REFUSES
+# anything that is not `sha256:<64 hex>`, so this deploy path structurally
+# cannot consume a mutable tag.
+#
+# This replaced ERP_IMAGE_TAG, which was pinned to `sha-<short 7>` of the
+# deployed commit. That looked reproducible and was not: a tag is a registry
+# pointer that can be repushed after it was verified, and nothing compared it
+# to the bytes CI tested. ERP's publish lane had been resolving and recording
+# the real OCI digest the whole time; production simply never consumed it.
+#
+# An explicit `sha256:<64 hex>` argument overrides the rendered file, for
+# redeploying an exact earlier release. It is held to the identical gate.
+# --quick keeps the image the app container is already running.
 #
 # On an ordinary failed health gate the code is reset to the previous commit AND
 # the image tag is restored to the previously-running one, then the containers
@@ -39,6 +55,7 @@ set -euo pipefail
 
 quick_deploy=0
 people_employment_type_activation=0
+requested_image_selector=""
 for argument in "$@"; do
     case "$argument" in
         --quick)
@@ -47,8 +64,17 @@ for argument in "$@"; do
         --people-employment-type-activation)
             people_employment_type_activation=1
             ;;
+        sha256:*)
+            # An exact digest, for redeploying a known earlier release without
+            # editing the descriptor. Deliberately the ONLY positional form
+            # accepted: `sha-abc1234` and `latest` fall through to the error
+            # below rather than being resolved as tags, because a selector this
+            # script accepts is a selector production can run.
+            requested_image_selector="$argument"
+            ;;
         *)
             echo "ERROR: unknown deploy argument: $argument" >&2
+            echo "       An explicit image selector must be sha256:<64 hex>." >&2
             exit 2
             ;;
     esac
@@ -64,6 +90,16 @@ HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-150}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8003/health/ready}"
 RUNTIME_ADMISSION_TIMEOUT="${RUNTIME_ADMISSION_TIMEOUT:-90}"
 DEPLOY_COMPOSE_PROJECT_NAME="dotmac"
+# One knob for the image repository, shared by the digest gate, the rollback
+# target resolution and the retention pass below, so a fork or a registry move
+# is a single edit rather than three that can disagree.
+IMAGE_REPOSITORY="${DOCKER_IMAGE_REPOSITORY:-ghcr.io/michaelayoade/dotmac_erp}"
+export DOCKER_IMAGE_REPOSITORY="$IMAGE_REPOSITORY"
+# The rendered Compose project is the authority for WHICH image this deploy
+# runs. It is rendered from deploy/product.toml by the exact-pinned
+# dotmac-deployment-foundation and byte-checked in CI, and it carries the
+# digest protected-main resolved for the image it built and tested.
+RENDERED_COMPOSE="${RENDERED_COMPOSE:-deploy/rendered/docker-compose.yml}"
 
 # Production uses fixed container names (dotmac_erp_app, dotmac_erp_redis, etc.).
 # Compose otherwise derives its project name from the current directory, which
@@ -95,19 +131,21 @@ if [[ -z "${MIGRATION_DATABASE_URL:-}" ]]; then
 fi
 
 # .env carries two values that merely RESTATE facts owned by the deployed
-# commit: ERP_IMAGE_TAG (the immutable image) and APP_VERSION (pyproject's
+# release: APP_IMAGE (the immutable image) and APP_VERSION (pyproject's
 # version, which docker-compose.yml already defaults to). Nothing kept them in
 # step, so both drifted — and .env wins over the compose default, so the drift
 # is what actually runs:
 #
-#   - ERP_IMAGE_TAG sat 5 weeks behind the running image, so a bare
-#     `docker compose up -d` by anyone not using this script would have
-#     silently DOWNGRADED production.
+#   - APP_IMAGE's predecessor, ERP_IMAGE_TAG, sat 5 weeks behind the running
+#     image, so a bare `docker compose up -d` by anyone not using this script
+#     would have silently DOWNGRADED production. Worse, it defaulted to
+#     `latest`, so an ABSENT key floated instead of failing. APP_IMAGE has no
+#     default: absence now refuses.
 #   - APP_VERSION sat two releases behind, so the app misreported its own
 #     version — which is how a deploy gap got mis-sized from a stale note.
 #
-# This script pins ERP_IMAGE_TAG for its own compose calls via `export`, which
-# is why the drift stayed invisible to the deploy path. Making the deploy the
+# This script pins APP_IMAGE for its own compose calls via `export`, which is
+# why the drift stayed invisible to the deploy path. Making the deploy the
 # single writer of both keys is what stops it recurring.
 ENV_FILE="$PROJECT_DIR/.env"
 ENV_BACKUP="${ENV_FILE}.deploy-bak"
@@ -133,14 +171,65 @@ set_env_var() {
     mv "$tmp" "$ENV_FILE"
 }
 
-# Image tag the app container is currently running — restored on rollback so a
-# failed deploy reverts to the exact previously-running image, not just :latest.
-PREV_IMAGE_TAG="$(docker inspect --format '{{.Config.Image}}' dotmac_erp_app 2>/dev/null | sed 's/.*://')"
-PREV_IMAGE_TAG="${PREV_IMAGE_TAG:-latest}"
-export ERP_IMAGE_TAG="$PREV_IMAGE_TAG"
+# Read one key back out of .env. The counterpart of set_env_var above, and the
+# fallback source for the rollback target when the app container is not running.
+env_value() {
+    local key="$1"
+    [[ -f "$ENV_FILE" ]] || return 0
+    awk -F= -v k="$key" '$1 == k { sub("^" k "=", ""); print; exit }' "$ENV_FILE"
+}
+
+# The IMMUTABLE name of the image the app container is currently running.
+#
+# Resolved from the container's image ID via RepoDigests, NOT from its
+# `Config.Image` string. That string is whatever reference started the
+# container — historically a mutable `sha-<short>` tag — and restoring it on
+# rollback would put production back on a tag, quietly reopening the hole this
+# script now closes. RepoDigests is the immutable name of the same bytes, so
+# rollback stays exact AND stays digest-only.
+running_app_image_digest() {
+    local image_id
+    image_id="$(docker inspect --format '{{.Image}}' dotmac_erp_app 2>/dev/null || true)"
+    [[ -n "$image_id" ]] || return 0
+    docker image inspect "$image_id" \
+        --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>/dev/null |
+        grep -E "^${IMAGE_REPOSITORY}@sha256:[0-9a-f]{64}$" |
+        head -n 1 || true
+}
+
+PREV_IMAGE="$(running_app_image_digest)"
+if [[ -z "$PREV_IMAGE" ]]; then
+    # No running container, or an image with no registry digest (a local
+    # build). Fall back to the pin this script itself wrote last time.
+    PREV_IMAGE="$(env_value APP_IMAGE)"
+fi
+if [[ -n "$PREV_IMAGE" ]] && \
+   ! "$SCRIPT_DIR/resolve_deploy_image.sh" --reference "$PREV_IMAGE" >/dev/null 2>&1
+then
+    # A rollback target that is not digest-shaped is not a rollback target.
+    # Said out loud and discarded, rather than carried silently to the point
+    # where a failed deploy would restore a mutable reference.
+    echo "NOTE: the previous image reference '${PREV_IMAGE}' is not an immutable" >&2
+    echo "      digest, so automatic IMAGE rollback is unavailable for this run." >&2
+    echo "      Code rollback is unaffected. This is expected exactly once, on" >&2
+    echo "      the first deploy after the ERP_IMAGE_TAG retirement." >&2
+    PREV_IMAGE=""
+fi
+if [[ -n "$PREV_IMAGE" ]]; then
+    export APP_IMAGE="$PREV_IMAGE"
+elif [[ "$quick_deploy" == "1" ]]; then
+    # --quick never resolves a new image, so with no previous one there is
+    # nothing to run. Refuse here rather than letting compose fail on
+    # ${APP_IMAGE:?} several irreversible steps later.
+    echo "ERROR: --quick has no image to keep: no running app container carries" >&2
+    echo "       a registry digest and .env has no immutable APP_IMAGE pin." >&2
+    echo "       Run a full deploy, or pass an explicit sha256:<64 hex>." >&2
+    exit 2
+fi
 
 echo "=== DotMac ERP Deploy ==="
-echo "Project: $PROJECT_DIR   (compose: ${COMPOSE_PROJECT_NAME}, current: ${PREV_SHA:0:12}, image: ${PREV_IMAGE_TAG})"
+echo "Project: $PROJECT_DIR   (compose: ${COMPOSE_PROJECT_NAME}, current: ${PREV_SHA:0:12})"
+echo "Running image: ${PREV_IMAGE:-<none pinned>}"
 echo ""
 
 # `app-dev` is excluded from the production topology only by a Compose profile.
@@ -159,17 +248,29 @@ if [[ "$people_employment_type_activation" == "1" ]]; then
 fi
 
 rollback() {
-    echo "!! Rolling back code to ${PREV_SHA:0:12} and image to ${PREV_IMAGE_TAG}..."
+    echo "!! Rolling back code to ${PREV_SHA:0:12} and image to ${PREV_IMAGE:-<unavailable>}..."
     git reset --hard "$PREV_SHA" || true
-    export ERP_IMAGE_TAG="$PREV_IMAGE_TAG"
-    # Undo the .env pins written for the failed deploy, then point
-    # ERP_IMAGE_TAG at the image actually being restored. Restoring the backup
-    # alone would reinstate whatever drift was there before, which is the very
-    # landmine this change exists to remove.
-    if [[ "$env_synced" == "1" && -f "$ENV_BACKUP" ]]; then
-        cp -a "$ENV_BACKUP" "$ENV_FILE"
-        set_env_var ERP_IMAGE_TAG "$PREV_IMAGE_TAG"
-        echo "!! Reverted .env pins to the restored image (${PREV_IMAGE_TAG})."
+    # Undo the .env pins written for the failed deploy, then point APP_IMAGE at
+    # the image actually being restored. Restoring the backup alone would
+    # reinstate whatever drift was there before, which is the very landmine
+    # this change exists to remove.
+    if [[ -n "$PREV_IMAGE" ]]; then
+        export APP_IMAGE="$PREV_IMAGE"
+        if [[ "$env_synced" == "1" && -f "$ENV_BACKUP" ]]; then
+            cp -a "$ENV_BACKUP" "$ENV_FILE"
+            set_env_var APP_IMAGE "$PREV_IMAGE"
+            echo "!! Reverted .env pins to the restored image (${PREV_IMAGE})."
+        fi
+    else
+        # No digest-shaped rollback target. The compose path below will refuse
+        # on ${APP_IMAGE:?} rather than guess, and the container-object restart
+        # fallback brings the previously-running container back untouched —
+        # which is the honest outcome, not a silent downgrade to a floating tag.
+        echo "!! No immutable previous image is known; the running container is" >&2
+        echo "!! restarted in place and the image pin is left alone." >&2
+        if [[ "$env_synced" == "1" && -f "$ENV_BACKUP" ]]; then
+            cp -a "$ENV_BACKUP" "$ENV_FILE"
+        fi
     fi
     docker compose up -d app worker beat || { docker stop dotmac_erp_app || true; docker start dotmac_erp_app || true; }
     echo "!! Rolled back. NOTE: DB migrations were NOT reverted — restore from the"
@@ -296,9 +397,27 @@ fi
 if [[ "$quick_deploy" != "1" ]]; then
     echo "→ Pulling latest code + image..."
     git pull --rebase
-    NEW_IMAGE_TAG="sha-$(git rev-parse --short=7 HEAD)"
-    export ERP_IMAGE_TAG="$NEW_IMAGE_TAG"
-    echo "  Pinning image tag: ${ERP_IMAGE_TAG} (rollback target: ${PREV_IMAGE_TAG})"
+
+    # WHICH image this deploy runs is decided here, and it is the only place.
+    #
+    # The rendered Compose project is read AFTER the pull, deliberately: it is
+    # a tracked file, so the freshly-pulled revision is what names the release
+    # being deployed. `resolve_deploy_image.sh` refuses anything that is not
+    # `sha256:<64 hex>`, so a regression that reintroduced a tag into the
+    # rendered file — or into an operator's argument — stops the deploy before
+    # the backup is even consulted for a pull.
+    if [[ -n "$requested_image_selector" ]]; then
+        NEW_IMAGE="$("$SCRIPT_DIR/resolve_deploy_image.sh" \
+            --reference "$requested_image_selector")"
+        echo "  Image selector: explicit operator digest"
+    else
+        NEW_IMAGE="$("$SCRIPT_DIR/resolve_deploy_image.sh" \
+            --compose "$PROJECT_DIR/$RENDERED_COMPOSE")"
+        echo "  Image selector: ${RENDERED_COMPOSE}"
+    fi
+    export APP_IMAGE="$NEW_IMAGE"
+    echo "  Pinning image: ${APP_IMAGE}"
+    echo "  Rollback target: ${PREV_IMAGE:-<none; image rollback unavailable>}"
 
     # Persist both pins into .env from the freshly-pulled commit. This runs
     # BEFORE migrate/recreate deliberately: APP_VERSION only reaches the app
@@ -309,14 +428,44 @@ if [[ "$quick_deploy" != "1" ]]; then
         cp -a "$ENV_FILE" "$ENV_BACKUP"
         env_synced=1
         NEW_APP_VERSION="$(awk -F'"' '/^version = "/ { print $2; exit }' pyproject.toml)"
-        set_env_var ERP_IMAGE_TAG "$NEW_IMAGE_TAG"
+        set_env_var APP_IMAGE "$NEW_IMAGE"
         if [[ -n "$NEW_APP_VERSION" ]]; then
             set_env_var APP_VERSION "$NEW_APP_VERSION"
         fi
-        echo "  .env synced: ERP_IMAGE_TAG=${NEW_IMAGE_TAG} APP_VERSION=${NEW_APP_VERSION:-<unchanged>}"
+        echo "  .env synced: APP_IMAGE=${NEW_IMAGE} APP_VERSION=${NEW_APP_VERSION:-<unchanged>}"
     fi
 
     docker compose pull app worker beat
+
+    # The digest names bytes; this proves those bytes are the release the
+    # descriptor says they are. The image carries
+    # `org.opencontainers.image.revision` as a real Config label, set at build
+    # time and asserted by ci.yml's "Verify tested image provenance labels", so
+    # comparing it with the descriptor's `source_revision` closes the pairing
+    # locally, on the host, against the artifact actually pulled — rather than
+    # trusting that two files in a checkout still describe each other.
+    DESCRIPTOR_REVISION="$(awk -F'"' '/^source_revision = "/ { print $2; exit }' \
+        deploy/product.toml)"
+    PULLED_REVISION="$(docker image inspect "$APP_IMAGE" \
+        --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
+        2>/dev/null || true)"
+    if [[ -z "$DESCRIPTOR_REVISION" || -z "$PULLED_REVISION" ]]; then
+        echo "ERROR: could not read the image revision pairing" >&2
+        echo "       (descriptor='${DESCRIPTOR_REVISION:-<empty>}'," >&2
+        echo "        image='${PULLED_REVISION:-<empty>}')." >&2
+        echo "       An unreadable pairing is an unverified one; refusing." >&2
+        exit 2
+    fi
+    if [[ "$PULLED_REVISION" != "$DESCRIPTOR_REVISION" ]]; then
+        echo "IMAGE INTEGRITY FAILURE: ${APP_IMAGE} was built from" >&2
+        echo "  ${PULLED_REVISION}" >&2
+        echo "but deploy/product.toml declares source_revision" >&2
+        echo "  ${DESCRIPTOR_REVISION}" >&2
+        echo "The digest and the revision are one pairing; a revision naming" >&2
+        echo "bytes that are not the deployed bytes identifies nothing." >&2
+        exit 2
+    fi
+    echo "  Image revision verified: ${PULLED_REVISION:0:12}"
     echo ""
 fi
 
@@ -501,7 +650,7 @@ wait_for_beat_admission
 trap - ERR
 echo "→ Enforcing Docker image retention (keep last ${DOCKER_IMAGE_KEEP_LAST:-5})..."
 if ! KEEP_LAST="${DOCKER_IMAGE_KEEP_LAST:-5}" \
-  IMAGE_REPOSITORY="${DOCKER_IMAGE_REPOSITORY:-ghcr.io/michaelayoade/dotmac_erp}" \
+  IMAGE_REPOSITORY="$IMAGE_REPOSITORY" \
   "$SCRIPT_DIR/prune_docker_images.sh" --execute; then
     echo "  WARNING: Docker image retention failed; deploy remains healthy."
 fi

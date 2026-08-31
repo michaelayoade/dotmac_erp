@@ -351,8 +351,8 @@ def _builtin_beat_schedule() -> dict[str, dict]:
         },
         "dotmac-sub-stale-history-cleanup": {
             "task": "app.tasks.dotmac_sub.cleanup_stale_dotmac_sub_sync_history",
-            "schedule": crontab(minute=17),  # Hourly at :17
-            "kwargs": {"stale_after_minutes": 180, "limit": 500},
+            "schedule": crontab(minute="*/5"),
+            "kwargs": {"stale_after_minutes": 15, "limit": 500},
         },
         # ── Outbox relay tasks ──────────────────────────────────
         "outbox-relay": {

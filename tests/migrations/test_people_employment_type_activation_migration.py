@@ -158,13 +158,13 @@ def test_activation_descends_the_bootstrap_gate() -> None:
     assert "20260828_people_et_bootstrap" in seen
 
 
-def test_the_erp_lineage_stays_single_headed_at_this_activation() -> None:
-    """One head, and it is this revision -- the state deploy/product.toml pins."""
+def test_the_erp_lineage_stays_single_headed_after_this_activation() -> None:
+    """The activation remains ancestral to the current descriptor-pinned head."""
     parents = _revision_parents()
     assert len(parents) > 100, len(parents)
     referenced = {parent for values in parents.values() for parent in values}
     heads = sorted(revision for revision in parents if revision not in referenced)
-    assert heads == ["20260828_people_et_activation"], heads
+    assert heads == ["20260831_sync_history_heartbeat"], heads
 
 
 def test_rbac_contract_is_a_frozen_exact_copy_of_the_authored_seed() -> None:
