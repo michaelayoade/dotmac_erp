@@ -4,10 +4,17 @@ The published `dotmac-deployment-foundation==0.2.0a2` distribution is an exact
 dev dependency. A missing package is therefore an installation failure, never
 a reason to skip this architecture gate.
 
-`deploy/product.toml` is an ADAPTER, not a cutover: `scripts/deploy.sh`,
-`docker-compose.yml` and `Dockerfile` remain the live, unmodified deployment
-path (see `deploy/README.md`). This test only proves the descriptor itself is
-well-formed and internally consistent — it does not run a deployment.
+`deploy/product.toml` is now the deploy path's IMAGE AUTHORITY, and no longer
+only an adapter. `scripts/deploy.sh` reads the image reference out of
+`deploy/rendered/docker-compose.yml` — rendered from this descriptor — through
+`scripts/resolve_deploy_image.sh`, which refuses anything that is not
+`sha256:<64 hex>`. The topology it deploys is still the root
+`docker-compose.yml` plus the `Dockerfile`; only the image identity has moved
+(the remaining rendered-topology gaps are enumerated in `deploy/README.md`).
+
+This test proves the descriptor is well-formed and internally consistent — it
+does not run a deployment. The gate that proves a tag cannot be deployed, in
+both directions, is `tests/architecture/test_deploy_image_gate.py`.
 """
 
 from __future__ import annotations
@@ -193,7 +200,13 @@ def test_app_liveness_and_readiness_are_different_paths() -> None:
 
 
 def test_image_is_pinned_by_digest_not_a_tag() -> None:
-    """A digest, never a tag (D5: docker-compose.yml floats `:latest`)."""
+    """A digest, never a tag.
+
+    D5 was `docker-compose.yml` floating `:latest` via `${ERP_IMAGE_TAG:-latest}`.
+    That variable is retired and compose now reads `${APP_IMAGE:?...}` with no
+    default, so this assertion has stopped describing an aspiration the live
+    path contradicted. `test_deploy_image_gate.py` holds the deploy path to it.
+    """
     spec = _load()
     assert "@sha256:" in spec.image
     digest = spec.image_digest

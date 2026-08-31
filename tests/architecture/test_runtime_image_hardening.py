@@ -22,6 +22,8 @@ LOCKFILE = REPO_ROOT / "poetry.lock"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 MAKEFILE = REPO_ROOT / "Makefile"
 DEPLOY_DOC = REPO_ROOT / "docs" / "deployment.md"
+DESCRIPTOR = REPO_ROOT / "deploy" / "product.toml"
+RENDERED_DIR = REPO_ROOT / "deploy" / "rendered"
 
 HARDENED_RUN_FLAGS = (
     "--read-only",
@@ -168,6 +170,83 @@ def test_boot_time_installer_is_retired_from_all_compose_roles() -> None:
     assert "entrypoint:" not in compose
     assert 'python -c "import logging_loki"' not in compose
     assert "http://localhost:8002/health/ready" in compose
+
+
+def test_boot_time_installer_is_retired_from_the_rendered_deploy_assets() -> None:
+    """The same premise, applied to the region the check above could not see.
+
+    `test_boot_time_installer_is_retired_from_all_compose_roles` is scoped to
+    the root `docker-compose.yml`, and its name says "all compose roles" — but
+    ERP has a SECOND compose project, `deploy/rendered/docker-compose.yml`,
+    rendered from `deploy/product.toml`. Both kept naming
+    `/app/entrypoint-monitoring.sh` as the first argv element of app, worker
+    and beat for the entire life of that guard, because neither file was in
+    its glob. The script had been deleted with the audited runtime image
+    (26753cde) and the Dockerfile's runtime stage COPYs `scripts/` as a
+    three-file allowlist that never contained it, so the rendered project
+    described three containers that could not exec.
+
+    That is an unmonitored region, not an exempt one (ADR-0018): the deletion
+    was real, the guard was real, and the two simply never met. Now that
+    `scripts/deploy.sh` takes the deployed image reference from the rendered
+    file, the rendered file is on the deploy path and has to be held to the
+    same premise.
+
+    The descriptor is checked against PARSED command arrays rather than raw
+    text, for the reason the descriptor's own test states: the comments that
+    stop this recurring necessarily name the retired spelling, and a substring
+    ban over prose would forbid the explanation instead of the behaviour.
+    """
+    descriptor = tomllib.loads(DESCRIPTOR.read_text(encoding="utf-8"))
+
+    roles = descriptor.get("roles", [])
+    assert roles, "no roles parsed from deploy/product.toml; this asserts nothing"
+    for role in roles:
+        command = role.get("command", [])
+        assert command, f"role {role.get('code')!r} declares no command"
+        offenders = [token for token in command if "entrypoint-monitoring" in token]
+        assert not offenders, (
+            f"deploy/product.toml role {role.get('code')!r} still invokes "
+            f"{offenders}, which the runtime image does not contain: the "
+            "Dockerfile COPYs scripts/ as a file-by-file allowlist and the "
+            "script was deleted with the audited image. That container cannot "
+            "start."
+        )
+
+    for rendered in sorted(RENDERED_DIR.rglob("*")):
+        if not rendered.is_file():
+            continue
+        text = rendered.read_text(encoding="utf-8")
+        assert "entrypoint-monitoring.sh" not in text, (
+            f"{rendered.relative_to(REPO_ROOT)} names the retired boot-time "
+            "installer. Rendered assets are generated -- fix deploy/product.toml "
+            "and re-render; never hand-edit a rendered file."
+        )
+
+
+def test_the_retired_installer_detector_fires_on_a_planted_command() -> None:
+    """Sensitivity proof: the detector above must actually bite.
+
+    A check that scans parsed command arrays passes trivially if the parse
+    yields nothing, or if the token match is wrong. Planting the exact shape
+    that shipped for months proves the assertion is load-bearing rather than
+    decorative.
+    """
+    planted = [
+        {"code": "app", "command": ["/app/entrypoint-monitoring.sh", "gunicorn"]},
+    ]
+    offenders = [
+        token
+        for role in planted
+        for token in role["command"]
+        if "entrypoint-monitoring" in token
+    ]
+    assert offenders == ["/app/entrypoint-monitoring.sh"]
+
+    # ... and does not fire on the real, corrected descriptor.
+    descriptor = tomllib.loads(DESCRIPTOR.read_text(encoding="utf-8"))
+    for role in descriptor["roles"]:
+        assert not [t for t in role["command"] if "entrypoint-monitoring" in t]
 
 
 def test_source_builds_receive_the_private_index_token_as_a_file_secret() -> None:

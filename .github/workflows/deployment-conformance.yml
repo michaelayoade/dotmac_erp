@@ -28,9 +28,15 @@ jobs:
       rendered-dir: deploy/rendered
       thresholds: deploy/alerts/thresholds.json
       foundation-version: "0.2.0a2"
-      # The assembly manifest is real. The image remains an explicit sentinel
-      # until protected-main CI publishes the tested image and records its
-      # registry digest; candidate/production cutover must turn this on.
-      require-real-digests: false
+      # ARMED. Both digests are real: the assembly manifest digest, and the
+      # image digest protected-main CI resolved for the image it built and
+      # tested (`Publish Docker Image` -> "Resolve the registry digest of the
+      # tested image"). This was left `false` for the sentinel period and
+      # should have been flipped the moment the sentinel was replaced — an
+      # all-zero digest PARSES, so with the gate off nothing at all prevented
+      # a silent regression back to a placeholder. It is on now, and ERP's
+      # production deploy path consumes exactly this digest, so turning it
+      # back off would be turning off the check on the image production runs.
+      require-real-digests: true
     secrets:
       FORGEJO_READ_TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}

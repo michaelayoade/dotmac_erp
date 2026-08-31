@@ -21,7 +21,15 @@
 
 schema = "ProductDeploymentSpec.v1"
 product = "dotmac-erp"
-environment = "reference"
+# ERP runs a LIVE PRODUCTION deployment at https://erp.dotmac.io. This said
+# "reference" while that was true, which is the same class of defect as a
+# production descriptor carrying a placeholder digest: the document was
+# accurate about its own bytes and wrong about the world. `environment` is
+# projected into telemetry identity (deploy/rendered/otel-collector.yaml's
+# `deployment.environment` resource attribute), so the mislabel also meant
+# every span and metric this descriptor governs would have been attributed to
+# a reference environment.
+environment = "production"
 
 [assembly]
 # Generated from ERP_PRODUCT_ASSEMBLY and checked byte-for-byte in CI. Product
@@ -31,8 +39,15 @@ manifest_path = "deploy/product-manifest.json"
 manifest_digest = "sha256:9c3547745e453ffbd9339ce0d662af64a5071067087f16008f4630aae8b469b9"
 
 [image]
-# A digest, never a tag. ERP's legacy docker-compose.yml still accepts
-# `${ERP_IMAGE_TAG:-latest}`; this descriptor refuses that shape.
+# A digest, never a tag — and as of this change that is true of the LIVE
+# deploy path too, not just of this descriptor. `docker-compose.yml` used to
+# read `ghcr.io/michaelayoade/dotmac_erp:${ERP_IMAGE_TAG:-latest}` and
+# `scripts/deploy.sh` pinned that variable to a mutable `sha-<short>` tag, so
+# production consumed a TAG while its own pipeline was resolving, verifying
+# and recording this digest. `ERP_IMAGE_TAG` is retired: compose now reads
+# `${APP_IMAGE:?...}` and deploy.sh resolves APP_IMAGE from
+# `deploy/rendered/docker-compose.yml` — rendered from the reference below —
+# refusing anything that is not `sha256:<64 hex>`.
 #
 # BOUND, no longer the all-zero sentinel. This is the digest protected-main CI
 # resolved for the image it actually built and tested from the revision below —
@@ -90,28 +105,35 @@ names = [
 
 [[roles]]
 code = "app"
-# The REAL effective invocation: docker-compose.yml:38-39 sets
-# `entrypoint: [/app/entrypoint-monitoring.sh]` and docker-compose.yml:50-54
-# sets `command: [gunicorn, -c, gunicorn.conf.py, app.main:app]`. Docker
-# concatenates entrypoint+command at run time and this schema has a single
-# `command` array (no separate entrypoint field), so the array below is the
-# full, real, effective process invocation — not a paraphrase.
+# The REAL effective invocation, and it must be one the IMAGE can actually
+# exec — the rendered Compose file is now the production deploy path's image
+# authority (scripts/deploy.sh), so a command naming a file the image does not
+# hold is not a paraphrase problem, it is a container that cannot start.
 #
-# KNOWN TENSION, reported and NOT fixed here: `scripts/entrypoint-monitoring.sh:2-3`
-# does `pip install -q python-logging-loki ... sentry-sdk[fastapi]` at
-# CONTAINER BOOT if those packages are missing (inventory D6: "a boot-time
-# `pip install`"). That is incompatible with `read_only_root = true` below (pip
-# cannot write site-packages on a read-only filesystem) and with running as a
-# fixed non-root UID unless that UID owns the site-packages directory. This
-# descriptor keeps the FOUNDATION's hardened default rather than quietly
-# encoding the defect as a permanent `writable_path` exception with an invented
-# justification. The real fix is baking `python-logging-loki` and
-# `sentry-sdk[fastapi]` into the image at build time (Dockerfile) so
-# entrypoint-monitoring.sh's install branch never executes — that is a
-# Dockerfile change, out of scope for this adapter, and is called out in the
-# task report.
+# RESOLVED, and the resolution is a deletion. Every role here used to be
+# prefixed with `/app/entrypoint-monitoring.sh` — a boot-time
+# `pip install python-logging-loki sentry-sdk[fastapi]` wrapper (inventory D6)
+# that this descriptor recorded as a KNOWN TENSION against `read_only_root`.
+# That wrapper is GONE: `scripts/entrypoint-monitoring.sh` was deleted with the
+# audited runtime image (26753cde, "build an audited ERP runtime image"), the
+# Dockerfile's runtime stage COPYs `scripts/` as a three-file allowlist that
+# never included it, and `tests/architecture/test_runtime_image_hardening.py`
+# ::test_boot_time_installer_is_retired_from_all_compose_roles asserts both
+# `not ENTRYPOINT.exists()` and its absence from the root compose.
+#
+# The descriptor and `deploy/rendered/` escaped that assertion, because it was
+# scoped to `docker-compose.yml` alone — an unmonitored region, not an exempt
+# one (ADR-0018). So all three roles kept naming a file that no longer exists
+# anywhere, and the rendered project would have failed to exec on the first
+# container start. That guard is extended to this file and to deploy/rendered
+# in the same change that fixes the rows.
+#
+# What remains is the Dockerfile's real `CMD`, which is the whole invocation:
+#   Dockerfile:121  CMD ["gunicorn", "-c", "gunicorn.conf.py", "app.main:app"]
+# Removing the wrapper also removes the tension with `read_only_root = true`
+# and with the fixed non-root UID below: nothing writes site-packages at boot
+# any more, because nothing installs at boot any more.
 command = [
-    "/app/entrypoint-monitoring.sh",
     "gunicorn",
     "-c",
     "gunicorn.conf.py",
@@ -177,9 +199,9 @@ port = 8002
 interval_seconds = 10
 timeout_seconds = 3
 retries = 3
-# Generous start_period to cover entrypoint-monitoring.sh's own boot-time
-# `pip install` path (scripts/entrypoint-monitoring.sh:2-3) before the process
-# is even exec'd.
+# 30s covers Gunicorn's own boot: four workers importing the application and
+# opening their first pool connections. It no longer has to cover a boot-time
+# `pip install` — that wrapper is retired; see the `command` row above.
 start_period_seconds = 30
 
 [roles.health.ready]
@@ -208,8 +230,9 @@ code = "worker"
 # file's `service_started` — which is satisfied the instant the container
 # exists, before Redis has loaded its dump.
 depends_on = ["redis"]
+# No `/app/entrypoint-monitoring.sh` prefix — see the `app` role above for
+# why the retired boot-time installer had to leave every role at once.
 command = [
-    "/app/entrypoint-monitoring.sh",
     "celery",
     "-A",
     "app.celery_app",
@@ -272,8 +295,9 @@ ping_command = ["celery", "-A", "app.celery_app", "inspect", "ping"]
 [[roles]]
 code = "beat"
 depends_on = ["redis"]
+# No `/app/entrypoint-monitoring.sh` prefix — see the `app` role above for
+# why the retired boot-time installer had to leave every role at once.
 command = [
-    "/app/entrypoint-monitoring.sh",
     "celery",
     "-A",
     "app.celery_app",

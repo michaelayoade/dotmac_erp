@@ -1,4 +1,4 @@
-# ERP deployment descriptor — released adapter, not cutover
+# ERP deployment descriptor — the deploy path's image authority
 
 `deploy/product.toml` is ERP's `ProductDeploymentSpec.v1`, implemented by the
 published `dotmac-deployment-foundation==0.2.0a2` facility (Starter ADR-0070).
@@ -64,14 +64,44 @@ Never hand-edit a rendered file.
 
 ## Current boundary
 
-This slice adopts and continuously checks the shared contract; it does not
-change a production host. ERP's existing `scripts/deploy.sh`, root
-`docker-compose.yml`, `Dockerfile` and backup scripts remain the live path.
-The product-manifest digest is real. The image reference remains an explicit
-all-zero sentinel until protected-main CI publishes the tested image and
-records its registry digest. The PR gate therefore sets
-`require-real-digests: false`; any candidate or production cutover must
-substitute the real image digest and turn that refusal on.
+Both digests are real, the regression gate is armed, and the production deploy
+path now consumes the image this descriptor declares.
+
+**What this descriptor now owns.** `deploy/rendered/docker-compose.yml` is the
+authority for WHICH image production runs. `scripts/deploy.sh` reads the image
+reference out of that rendered file through `scripts/resolve_deploy_image.sh`,
+which refuses anything that is not `sha256:<64 hex>`, exports it as
+`APP_IMAGE`, and writes it into `.env`. The root `docker-compose.yml` declares
+`${APP_IMAGE:?...}` with **no default**, so a bare `docker compose up -d` on a
+host with no pin refuses to start rather than floating onto a mutable tag.
+
+That closes a real gap rather than a theoretical one. ERP's publish lane has
+long been the strongest in the fleet — it tags and pushes the exact tested
+bytes, re-derives the OCI digest from `imagetools inspect --raw | sha256sum`
+instead of trusting buildx's display, and persists `image-release.json`
+binding digest to source SHA to manifest digest. None of it reached
+production: the root compose read
+`ghcr.io/michaelayoade/dotmac_erp:${ERP_IMAGE_TAG:-latest}` and the deploy
+script pinned that variable to `sha-$(git rev-parse --short=7 HEAD)`. A
+`sha-<short>` tag is reproducible-LOOKING and mutable in fact — a registry
+pointer that can be repushed after verification. `ERP_IMAGE_TAG` is retired.
+
+**What is still NOT the live path.** The rendered project is not yet the
+production runtime topology, and this is a measured refusal rather than an
+omission — see "Why the rendered topology is not yet the runtime" below.
+`scripts/deploy.sh`, the root `docker-compose.yml`, the `Dockerfile` and the
+backup scripts remain the executing deployment; only the image identity has
+moved. The shared Foundation executor is likewise not in the path.
+
+**The gate is armed.** `.github/workflows/deployment-conformance.yml` sets
+`require-real-digests: true`. It should have been flipped the moment the
+sentinel was replaced: an all-zero digest PARSES — it satisfies the
+sha256 shape — so with the gate off, nothing at all prevented a silent
+regression back to a placeholder. `deploy/product.toml` also declares
+`environment = "production"`, which is what ERP is; it previously said
+`reference` while serving live traffic at `https://erp.dotmac.io`, and that
+value is projected into `deployment.environment` in the rendered collector
+config, so the mislabel followed every span and metric.
 
 The Employment Type authority revision is declared
 `maintenance_required`, not online-compatible. An existing database may cross
@@ -100,7 +130,8 @@ accepted:
 - app liveness is `/health/live`; dependency-aware readiness is
   `/health/ready`, never legacy always-200 `/health`;
 - no runtime role may receive `MIGRATION_DATABASE_URL`;
-- images are digest-shaped, never tags;
+- images are digest-shaped, never tags — and as of this slice that is
+  enforced on the live deploy path, not only inside this descriptor;
 - worker liveness uses a Celery ping and Beat freshness uses a declared tick
   command instead of invented HTTP probes;
 - migration ordering, dependency waits, resource limits, immutable static
@@ -109,9 +140,44 @@ accepted:
 - unbacked alert definitions are omitted rather than emitted as rules that no
   producer can satisfy.
 
+## Why the rendered topology is not yet the runtime
+
+Moving the deploy path's IMAGE onto the rendered file is safe and done. Moving
+the whole production topology onto it is not, and the blockers are specific
+and checkable rather than a matter of caution:
+
+- **The rendered project could not start.** Every role's `command` began with
+  `/app/entrypoint-monitoring.sh`, a boot-time `pip install` wrapper that was
+  DELETED with the audited runtime image (26753cde). The Dockerfile's runtime
+  stage COPYs `scripts/` as a three-file allowlist that never included it, and
+  the file no longer exists in the repository at all, so all three services
+  would have failed to exec on first start. This has been fixed here — the
+  descriptor now declares the Dockerfile's real `CMD` — and it is why the
+  hardening guard was extended to cover the descriptor and `deploy/rendered`;
+  it had been scoped to the root `docker-compose.yml` alone, which is why this
+  survived. Removing the wrapper also dissolves the `read_only_root` tension
+  the descriptor used to carry as a KNOWN TENSION.
+- **No `env_file`.** The rendered services declare only the materials the
+  descriptor names. The running app also reads `APP_URL`, `DOTMAC_DEV_MODE`,
+  `DEFAULT_ORGANIZATION_ID`, `TRUSTED_PROXY_IPS`, `GUNICORN_WORKERS`,
+  `APP_VERSION` and everything else `env_file: - .env` supplies today.
+- **Port and vhost.** The rendered app publishes `127.0.0.1:8002`; production
+  publishes `8003` on both loopback families and the live nginx upstream is
+  `127.0.0.1:8003`. Switching the compose file without the vhost is an outage.
+- **No container names.** `scripts/deploy.sh` inspects `dotmac_erp_app`,
+  `dotmac_erp_worker` and `dotmac_erp_beat` by name; the rendered project
+  declares none.
+- **No observability agents.** `promtail` and `vmagent` exist only in the root
+  compose, so a swap would silently stop shipping logs and metrics.
+
+Each is a rendered-topology gap, not an image-identity gap, which is why the
+image moved now and the topology did not.
+
 ## Gates before production execution
 
-1. Use protected-main's `image-release.json` to replace the image sentinel.
+1. ~~Use protected-main's `image-release.json` to replace the image sentinel.~~
+   Done: the descriptor binds the real registry digest and the deploy path
+   consumes it.
 2. Run the hardened image audit in strict mode against that exact image.
 3. Census the production Docker/Compose versions and prove the rendered project
    on that supported engine.
@@ -123,6 +189,8 @@ accepted:
 6. Compare the shared executor with the current production path, switch only
    after parity, then retire the displaced local engine.
 
-Until those gates pass, operators continue to use `scripts/deploy.sh`; the
-committed descriptor and rendered assets are conformance evidence, not a second
-production command path.
+Until those gates pass, operators continue to use `scripts/deploy.sh`. The
+rendered assets remain conformance evidence and are not a second production
+command path — with one deliberate exception, which is the point of this
+slice: `deploy/rendered/docker-compose.yml` is the authority for the image
+reference `scripts/deploy.sh` deploys.
