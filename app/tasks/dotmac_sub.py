@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover
 
 from celery import chain, shared_task
 from billiard.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -49,6 +49,7 @@ _INCREMENTAL_SYNC_TIME_LIMIT_SECONDS = 28 * 60
 _INCREMENTAL_PHASE_SOFT_TIME_LIMIT_SECONDS = 8 * 60
 _INCREMENTAL_PHASE_TIME_LIMIT_SECONDS = 10 * 60
 _INCREMENTAL_POST_BATCH_SIZE = 250
+_INCREMENTAL_STALE_AFTER_MINUTES = 15
 _INCREMENTAL_SYNC_PHASES = (
     "resellers",
     "subscribers",
@@ -276,6 +277,8 @@ def _record_incremental_phase_result(
         history.add_error(_SOURCE, result.entity_type, error)
     if complete:
         history.complete()
+    else:
+        history.touch()
 
     summary = {
         "success": history.error_count == 0,
@@ -342,6 +345,23 @@ def _handle_sync_failure(
         if history2:
             history2.fail(str(exc))
             db2.commit()
+
+
+def _rollback_interrupted_session(db: Session) -> bool:
+    """Roll back interrupted work, invalidating a connection left unusable.
+
+    A Celery soft limit can interrupt PostgreSQL while a statement is active.
+    SQLAlchemy normally recovers via rollback; if even that fails, invalidating
+    the session prevents its connection from returning to the pool and releases
+    any session-scoped advisory lock when the connection is discarded.
+    """
+    try:
+        db.rollback()
+    except Exception:
+        logger.exception("Rollback failed after interrupted dotmac_sub sync")
+        db.invalidate()
+        return False
+    return True
 
 
 # Webhook events we subscribe to in dotmac_sub.
@@ -435,7 +455,7 @@ def bootstrap_dotmac_sub_webhooks(
 
 @shared_task
 def cleanup_stale_dotmac_sub_sync_history(
-    stale_after_minutes: int = 180,
+    stale_after_minutes: int = _INCREMENTAL_STALE_AFTER_MINUTES,
     limit: int = 500,
     dry_run: bool = False,
 ) -> dict[str, Any]:
@@ -450,9 +470,13 @@ def cleanup_stale_dotmac_sub_sync_history(
             select(SyncHistory)
             .where(
                 SyncHistory.source_system == _SOURCE,
+                SyncHistory.sync_type == SyncType.INCREMENTAL,
                 SyncHistory.status == SyncJobStatus.RUNNING,
-                SyncHistory.started_at.is_not(None),
-                SyncHistory.started_at < cutoff,
+                func.coalesce(
+                    SyncHistory.last_activity_at, SyncHistory.started_at
+                ).is_not(None),
+                func.coalesce(SyncHistory.last_activity_at, SyncHistory.started_at)
+                < cutoff,
             )
             .order_by(SyncHistory.started_at.asc())
             .limit(limit)
@@ -463,10 +487,11 @@ def cleanup_stale_dotmac_sub_sync_history(
 
         marked = 0
         for row in stale_rows:
-            started_at = row.started_at or now_utc
-            age = int((now_utc - started_at).total_seconds() // 60)
+            last_activity_at = row.last_activity_at or row.started_at or now_utc
+            age = int((now_utc - last_activity_at).total_seconds() // 60)
             row.fail(
-                f"Marked FAILED by maintenance: stale RUNNING row (age={age}m, "
+                "Marked FAILED by maintenance: stale RUNNING row "
+                f"(last activity age={age}m, "
                 f"threshold={stale_after_minutes}m)."
             )
             marked += 1
@@ -632,6 +657,7 @@ def run_dotmac_sub_incremental_sync_phase(
             )
 
         service: DotmacSubSyncService | None = None
+        session_usable = True
         try:
             history = db.get(SyncHistory, history_uuid)
             if not history:
@@ -643,6 +669,12 @@ def run_dotmac_sub_incremental_sync_phase(
                     "phase": phase,
                     "error": f"SyncHistory is {history.status.value}",
                 }
+
+            # Persist the phase boundary before making remote calls. A hard
+            # Celery kill cannot run local cleanup, so maintenance uses this
+            # heartbeat to reclaim only work that has stopped progressing.
+            history.touch()
+            db.commit()
 
             ctx = _build_sync_service_context(db, str(org_id))
             if isinstance(ctx, dict):
@@ -689,7 +721,7 @@ def run_dotmac_sub_incremental_sync_phase(
                 complete=phase == _INCREMENTAL_SYNC_PHASES[-1],
             )
         except SoftTimeLimitExceeded as exc:
-            db.rollback()
+            session_usable = _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
             return {
                 "success": False,
@@ -699,19 +731,20 @@ def run_dotmac_sub_incremental_sync_phase(
                 "error": "Incremental sync phase exceeded its execution time limit",
             }
         except Exception as exc:
-            db.rollback()
+            session_usable = _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
             raise self.retry(exc=exc)
         finally:
             if service is not None:
                 service.close()
-            try:
-                _release_incremental_sync_lock(db, org_id)
-            except Exception:
-                logger.exception(
-                    "Failed to release dotmac_sub incremental sync lock for org %s",
-                    org_id,
-                )
+            if session_usable:
+                try:
+                    _release_incremental_sync_lock(db, org_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to release dotmac_sub incremental sync lock for org %s",
+                        org_id,
+                    )
 
 
 # ---------------------------------------------------------------------------
