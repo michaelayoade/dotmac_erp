@@ -334,7 +334,12 @@ def _password_reset_ttl_minutes(db: Session | None) -> int:
     return 60
 
 
-def _issue_password_reset_token(db: Session | None, person_id: str, email: str) -> str:
+def _issue_password_reset_token(
+    db: Session | None,
+    person_id: str,
+    email: str,
+    organization_id: UUID | None = None,
+) -> str:
     now = _now()
     payload = {
         "sub": person_id,
@@ -345,11 +350,31 @@ def _issue_password_reset_token(db: Session | None, person_id: str, email: str) 
             (now + timedelta(minutes=_password_reset_ttl_minutes(db))).timestamp()
         ),
     }
+    if organization_id is not None:
+        payload["organization_id"] = str(organization_id)
     return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
 def _decode_password_reset_token(db: Session | None, token: str) -> dict[str, Any]:
     return _decode_jwt(db, token, "password_reset")
+
+
+def password_reset_organization_hint(token: str) -> UUID | None:
+    """Return the untrusted tenant hint carried by a reset token.
+
+    The hint is used only to choose the tenant-scoped session in which the
+    token is subsequently signature-verified.  It never authorizes a reset.
+    Tokens issued before the tenant claim was added return ``None`` and are
+    handled by the compatibility fan-out in the API service.
+    """
+    try:
+        payload = jwt.get_unverified_claims(token)
+        if payload.get("typ") != "password_reset":
+            return None
+        raw_org_id = payload.get("organization_id")
+        return coerce_uuid(raw_org_id, raise_http=False) if raw_org_id else None
+    except (JWTError, TypeError, ValueError):
+        return None
 
 
 def _decode_jwt(db: Session | None, token: str, expected_type: str) -> dict[str, Any]:
@@ -1195,7 +1220,12 @@ def request_password_reset(db: Session, email: str) -> dict | None:
     if not credential:
         return None
 
-    token = _issue_password_reset_token(db, str(person.id), email)
+    token = _issue_password_reset_token(
+        db,
+        str(person.id),
+        email,
+        person.organization_id,
+    )
     return {
         "token": token,
         "email": email,
