@@ -6076,11 +6076,6 @@ a.stat-hero-link:active { transform: scale(0.98); }
     border-color: rgb(252 211 77 / var(--tw-border-opacity, 1));
 }
 
-.border-amber-400 {
-    --tw-border-opacity: 1;
-    border-color: rgb(251 191 36 / var(--tw-border-opacity, 1));
-}
-
 .border-amber-500 {
     --tw-border-opacity: 1;
     border-color: rgb(245 158 11 / var(--tw-border-opacity, 1));
@@ -6358,6 +6353,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
 .border-violet-600 {
     --tw-border-opacity: 1;
     border-color: rgb(124 58 237 / var(--tw-border-opacity, 1));
+}
+
+.border-white {
+    --tw-border-opacity: 1;
+    border-color: rgb(255 255 255 / var(--tw-border-opacity, 1));
 }
 
 .border-white\/10 {
