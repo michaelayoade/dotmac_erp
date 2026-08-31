@@ -409,7 +409,12 @@ def get_paystack_config(db: Session, organization_id: UUID) -> PaystackConfig:
     Raises HTTPException if Paystack is not enabled or configured.
     """
     # Check if enabled
-    enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
+    enabled = resolve_value(
+        db,
+        SettingDomain.payments,
+        "paystack_enabled",
+        organization_id=organization_id,
+    )
     if not enabled:
         raise HTTPException(
             status_code=400,
@@ -417,8 +422,18 @@ def get_paystack_config(db: Session, organization_id: UUID) -> PaystackConfig:
         )
 
     # Get keys
-    secret_key = resolve_value(db, SettingDomain.payments, "paystack_secret_key")
-    public_key = resolve_value(db, SettingDomain.payments, "paystack_public_key")
+    secret_key = resolve_value(
+        db,
+        SettingDomain.payments,
+        "paystack_secret_key",
+        organization_id=organization_id,
+    )
+    public_key = resolve_value(
+        db,
+        SettingDomain.payments,
+        "paystack_public_key",
+        organization_id=organization_id,
+    )
 
     if not secret_key:
         raise HTTPException(
@@ -471,7 +486,10 @@ def initialize_invoice_payment(
     # Build callback URL
     # Check for configured base URL first, then fall back to request base
     callback_base = resolve_value(
-        db, SettingDomain.payments, "paystack_callback_base_url"
+        db,
+        SettingDomain.payments,
+        "paystack_callback_base_url",
+        organization_id=organization_id,
     )
     if callback_base:
         base_url = str(callback_base).rstrip("/")
@@ -703,7 +721,10 @@ def initialize_expense_payment(
 
     # Check if transfers are enabled
     transfers_enabled = resolve_value(
-        db, SettingDomain.payments, "paystack_transfers_enabled"
+        db,
+        SettingDomain.payments,
+        "paystack_transfers_enabled",
+        organization_id=organization_id,
     )
     if not transfers_enabled:
         raise HTTPException(
@@ -809,7 +830,10 @@ def initiate_transfer(
 
     # Check if transfers are enabled
     transfers_enabled = resolve_value(
-        db, SettingDomain.payments, "paystack_transfers_enabled"
+        db,
+        SettingDomain.payments,
+        "paystack_transfers_enabled",
+        organization_id=organization_id,
     )
     if not transfers_enabled:
         raise HTTPException(

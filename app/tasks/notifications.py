@@ -9,6 +9,7 @@ Handles:
 import html
 import logging
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 try:
     from datetime import UTC  # type: ignore
@@ -318,9 +319,6 @@ def process_pending_nextcloud_notifications(
 
     try:
         with _task_db_session() as db:
-            if not is_configured(db):
-                return results
-
             cutoff = datetime.now(UTC) - _DEAD_LETTER_AGE
 
             # Count dead-lettered Nextcloud notifications for observability.
@@ -367,44 +365,58 @@ def process_pending_nextcloud_notifications(
             if not notifications:
                 return results
 
-            client = NextcloudTalkClient.from_db(db)
-
+            notifications_by_org: dict[UUID, list[Notification]] = {}
             for notification in notifications:
-                results["processed"] += 1
+                notifications_by_org.setdefault(
+                    notification.organization_id, []
+                ).append(notification)
 
-                nc_user_id = None
-                if notification.recipient:
-                    nc_user_id = notification.recipient.nextcloud_user_id
-
-                if not nc_user_id:
-                    logger.warning(
-                        "Skipping notification %s: recipient nextcloud_user_id missing",
-                        notification.notification_id,
-                    )
-                    results["skipped"] += 1
+            for organization_id, org_notifications in notifications_by_org.items():
+                if not is_configured(db, organization_id=organization_id):
+                    results["processed"] += len(org_notifications)
+                    results["skipped"] += len(org_notifications)
                     continue
 
-                try:
-                    message = f"**{notification.title}**\n{notification.message}"
-                    if notification.action_url:
-                        message += f"\n\n{notification.action_url}"
+                client = NextcloudTalkClient.from_db(
+                    db, organization_id=organization_id
+                )
 
-                    client.send_to_user(nc_user_id, message)
-                    notification.nextcloud_sent = True
-                    notification.nextcloud_sent_at = datetime.now(UTC)
-                    results["sent"] += 1
-                except NextcloudError:
-                    logger.exception(
-                        "Failed sending Nextcloud notification %s",
-                        notification.notification_id,
-                    )
-                    results["failed"] += 1
-                except Exception:
-                    logger.exception(
-                        "Unexpected error sending Nextcloud notification %s",
-                        notification.notification_id,
-                    )
-                    results["failed"] += 1
+                for notification in org_notifications:
+                    results["processed"] += 1
+
+                    nc_user_id = None
+                    if notification.recipient:
+                        nc_user_id = notification.recipient.nextcloud_user_id
+
+                    if not nc_user_id:
+                        logger.warning(
+                            "Skipping notification %s: recipient nextcloud_user_id missing",
+                            notification.notification_id,
+                        )
+                        results["skipped"] += 1
+                        continue
+
+                    try:
+                        message = f"**{notification.title}**\n{notification.message}"
+                        if notification.action_url:
+                            message += f"\n\n{notification.action_url}"
+
+                        client.send_to_user(nc_user_id, message)
+                        notification.nextcloud_sent = True
+                        notification.nextcloud_sent_at = datetime.now(UTC)
+                        results["sent"] += 1
+                    except NextcloudError:
+                        logger.exception(
+                            "Failed sending Nextcloud notification %s",
+                            notification.notification_id,
+                        )
+                        results["failed"] += 1
+                    except Exception:
+                        logger.exception(
+                            "Unexpected error sending Nextcloud notification %s",
+                            notification.notification_id,
+                        )
+                        results["failed"] += 1
 
             db.commit()
     except _DB_RETRYABLE_ERRORS as exc:

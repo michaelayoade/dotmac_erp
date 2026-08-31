@@ -127,9 +127,17 @@ class PaymentWebService:
             db.get(Customer, invoice.customer_id) if invoice.customer_id else None
         )
 
-        paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
+        paystack_enabled = resolve_value(
+            db,
+            SettingDomain.payments,
+            "paystack_enabled",
+            organization_id=organization_id,
+        )
         paystack_public_key = resolve_value(
-            db, SettingDomain.payments, "paystack_public_key"
+            db,
+            SettingDomain.payments,
+            "paystack_public_key",
+            organization_id=organization_id,
         )
 
         contact_email = None
@@ -221,9 +229,17 @@ class PaymentWebService:
             else None
         )
 
-        paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
+        paystack_enabled = resolve_value(
+            db,
+            SettingDomain.payments,
+            "paystack_enabled",
+            organization_id=organization_id,
+        )
         transfers_enabled = resolve_value(
-            db, SettingDomain.payments, "paystack_transfers_enabled"
+            db,
+            SettingDomain.payments,
+            "paystack_transfers_enabled",
+            organization_id=organization_id,
         )
 
         # A PENDING intent with no transfer_code means step 2 (initiate)

@@ -320,7 +320,10 @@ class PaymentService:
 
         # Get collection bank account from settings
         collection_bank_account_id = resolve_value(
-            self.db, SettingDomain.payments, "paystack_collection_bank_account_id"
+            self.db,
+            SettingDomain.payments,
+            "paystack_collection_bank_account_id",
+            organization_id=self.organization_id,
         )
         bank_account_uuid = None
         if collection_bank_account_id:
@@ -984,7 +987,10 @@ class PaymentService:
 
         # Verify transfers are enabled
         transfers_enabled = resolve_value(
-            self.db, SettingDomain.payments, "paystack_transfers_enabled"
+            self.db,
+            SettingDomain.payments,
+            "paystack_transfers_enabled",
+            organization_id=self.organization_id,
         )
         if not transfers_enabled:
             raise HTTPException(
@@ -1046,7 +1052,10 @@ class PaymentService:
 
         # Get transfer bank account from settings (source of funds)
         transfer_bank_account_id = resolve_value(
-            self.db, SettingDomain.payments, "paystack_transfer_bank_account_id"
+            self.db,
+            SettingDomain.payments,
+            "paystack_transfer_bank_account_id",
+            organization_id=self.organization_id,
         )
         bank_account_uuid = None
         if transfer_bank_account_id:
@@ -2226,13 +2235,22 @@ class PaymentService:
         not belong in a single-writer fix.
         """
         secret_key = resolve_value(
-            self.db, SettingDomain.payments, "paystack_secret_key"
+            self.db,
+            SettingDomain.payments,
+            "paystack_secret_key",
+            organization_id=self.organization_id,
         )
         public_key = resolve_value(
-            self.db, SettingDomain.payments, "paystack_public_key"
+            self.db,
+            SettingDomain.payments,
+            "paystack_public_key",
+            organization_id=self.organization_id,
         )
         webhook_secret = resolve_value(
-            self.db, SettingDomain.payments, "paystack_webhook_secret"
+            self.db,
+            SettingDomain.payments,
+            "paystack_webhook_secret",
+            organization_id=self.organization_id,
         )
         if not secret_key or not public_key:
             return None
