@@ -64,7 +64,8 @@ def test_config_auth_headers() -> None:
     # dotmac_sub service auth is a scoped API key via X-Api-Key; its Bearer
     # path only accepts session-bound login JWTs (contract fix, audit A3).
     assert DotmacSubConfig(api_url="x", api_token="abc").auth_headers == {
-        "X-Api-Key": "abc"
+        "X-Api-Key": "abc",
+        "X-Dotmac-Integration-Client": "dotmac-erp",
     }
 
 
@@ -157,6 +158,11 @@ def test_parse_invoice_maps_fields_and_inline_allocations() -> None:
             "total": "107.50",
             "balance_due": "107.50",
             "issued_at": "2026-02-01",
+            "account": {
+                "id": "acc-1",
+                "display_name": "Example Subscriber",
+                "updated_at": "2026-02-01T12:00:00Z",
+            },
             "lines": [
                 {
                     "id": "l1",
@@ -182,6 +188,9 @@ def test_parse_invoice_maps_fields_and_inline_allocations() -> None:
     assert inv.lines[0].amount == Decimal("100.00")
     assert len(inv.allocations) == 1
     assert inv.allocations[0].amount == Decimal("50")
+    assert inv.account is not None
+    assert inv.account.id == "acc-1"
+    assert inv.account.display_name == "Example Subscriber"
 
 
 def test_parse_payment_effective_account_prefers_billing_account() -> None:
