@@ -48,6 +48,9 @@ from app.observability import get_request_id
 
 logger = logging.getLogger(__name__)
 
+_INTEGRATION_CLIENT_HEADER = "X-Dotmac-Integration-Client"
+_INTEGRATION_CLIENT_NAME = "dotmac-erp"
+
 # Reachability-circuit cooldown (seconds); <= 0 disables the breaker.
 _CIRCUIT_COOLDOWN_ENV = "DOTMAC_SUB_CIRCUIT_SECONDS"
 _CIRCUIT_COOLDOWN_DEFAULT = 30.0
@@ -460,6 +463,9 @@ class InvoiceRecord:
     # Drives the incremental sync watermark so we only pull the delta each
     # cycle; consumers needing the wire text format it back explicitly.
     updated_at: datetime | None = None
+    # Subscriber identity is embedded by the sync feed so bulk invoice pulls
+    # do not make a rate-limited detail request for every account.
+    account: SubscriberRecord | None = None
     lines: tuple[InvoiceLineRecord, ...] = ()
     allocations: tuple[AllocationRecord, ...] = ()
 
@@ -1002,7 +1008,10 @@ class DotmacSubClient:
             non_retryable_excs=(DotmacSubError,),
             loop_exhausted_factory=self._loop_exhausted_error,
             circuit=ReachabilityCircuit(cooldown_seconds=_circuit_cooldown_seconds()),
-            auth_headers=lambda: {"X-Api-Key": self._api_key()},
+            auth_headers=lambda: {
+                "X-Api-Key": self._api_key(),
+                _INTEGRATION_CLIENT_HEADER: _INTEGRATION_CLIENT_NAME,
+            },
             edge="dotmac_sub",
             request_id_provider=_request_id_provider,
         )
@@ -1637,6 +1646,11 @@ class DotmacSubClient:
             memo=item.get("memo"),
             is_proforma=bool(item.get("is_proforma", False)),
             updated_at=updated_at,
+            account=(
+                self._parse_subscriber(item["account"])
+                if isinstance(item.get("account"), dict)
+                else None
+            ),
             lines=lines,
             allocations=_allocations(
                 item.get("payment_allocations"),

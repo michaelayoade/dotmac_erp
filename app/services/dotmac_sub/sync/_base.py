@@ -30,6 +30,7 @@ from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.dotmac_sub.client import (
     DotmacSubClient,
     DotmacSubConfig,
+    SubscriberRecord,
     TaxRateRecord,
 )
 
@@ -439,7 +440,11 @@ class BaseSyncMixin:
             return InvoiceStatus.PARTIALLY_PAID
         return InvoiceStatus.POSTED
 
-    def _get_customer_for_account(self, account_id: str) -> UUID | None:
+    def _get_customer_for_account(
+        self,
+        account_id: str,
+        account: SubscriberRecord | None = None,
+    ) -> UUID | None:
         if account_id in self._account_cache:
             return self._account_cache[account_id]
         if account_id in self._unresolvable_accounts:
@@ -452,7 +457,7 @@ class BaseSyncMixin:
         if mapped:
             self._account_cache[account_id] = mapped
             return mapped
-        customer_id = self._resolve_account_owner(account_id)
+        customer_id = self._resolve_account_owner(account_id, account)
         if customer_id:
             self._account_cache[account_id] = customer_id
             self._record_sync(EntityType.BILLING_ACCOUNT, account_id, customer_id)
@@ -460,7 +465,11 @@ class BaseSyncMixin:
             self._unresolvable_accounts.add(account_id)
         return customer_id
 
-    def _resolve_account_owner(self, account_id: str) -> UUID | None:
+    def _resolve_account_owner(
+        self,
+        account_id: str,
+        account: SubscriberRecord | None = None,
+    ) -> UUID | None:
         """Resolve an invoice/payment ``account_id`` to its owning ERP customer.
 
         Verified against the live dotmac_sub API (2026-06-16): for invoices,
@@ -486,15 +495,16 @@ class BaseSyncMixin:
         # 2) Subscriber not yet synced this run → fetch + upsert on demand so the
         #    invoice/payment can attach (subscribers are normally synced first,
         #    but batch limits or webhooks can arrive out of order).
-        try:
-            sub = self.client.get_subscriber(account_id)
-        except DotmacSubRateLimitError:
-            # Throttled, not missing. Skip the billing-account fallback (it would
-            # be throttled too) and leave the account for the next run rather than
-            # treating a rate limit as "not found".
-            return None
-        except DotmacSubError:
-            sub = None
+        sub = account
+        if sub is None:
+            try:
+                sub = self.client.get_subscriber(account_id)
+            except DotmacSubRateLimitError:
+                # Throttled, not missing. Skip the billing-account fallback (it
+                # would be throttled too) and retry the account on the next run.
+                return None
+            except DotmacSubError:
+                sub = None
         if sub is not None:
             if sub.reseller_id:
                 self._cache_reseller(sub.reseller_id)

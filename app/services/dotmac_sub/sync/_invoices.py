@@ -225,7 +225,7 @@ class InvoiceSyncMixin:
                 )
             )
 
-        customer_id = self._get_customer_for_account(inv.account_id)
+        customer_id = self._get_customer_for_account(inv.account_id, inv.account)
         if not customer_id:
             result.skipped += 1
             result.errors.append(
