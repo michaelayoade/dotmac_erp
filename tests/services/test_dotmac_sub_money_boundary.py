@@ -32,6 +32,7 @@ from app.services.dotmac_sub.client import (
     TaxApplication,
 )
 from app.services.dotmac_sub.sync._credit_notes import CreditNoteSyncMixin
+from app.services.dotmac_sub.sync._base import SyncWatermarkPosition
 from app.services.dotmac_sub.sync._invoices import InvoiceSyncMixin
 from app.services.dotmac_sub.sync._payments import PaymentSyncMixin
 from app.services.dotmac_sub.sync._types import SyncResult
@@ -1128,6 +1129,10 @@ def _loop_harness(case: _EntityCase, client: DotmacSubClient) -> Any:
     harness.db = MagicMock()
     harness._get_sync_watermark = lambda entity_type: None
     harness._advance_sync_watermark = MagicMock()
+    harness._get_sync_watermark_position = MagicMock(
+        return_value=SyncWatermarkPosition(None, None)
+    )
+    harness._advance_sync_watermark_position = MagicMock()
     setattr(harness, case.single_attr, MagicMock())
     harness._reprime_tenant_context = MagicMock()
     harness._load_payment_channels = MagicMock()  # payments only; harmless
@@ -1147,9 +1152,15 @@ def test_positioned_parse_failure_parks_watermark_at_failed_row(
     assert result.success is True  # the RUN did not fail
     assert len(result.errors) == 1
     assert getattr(harness, case.single_attr).call_count == 1  # good row synced
-    # Watermark parks at the failed row (min_error), not advanced past it.
-    advanced_to = harness._advance_sync_watermark.call_args.args[1]
-    assert advanced_to == datetime.fromisoformat(bad["updated_at"])
+    if case.sync_method == "sync_invoices":
+        # Invoice compound cursors require updated_at + id. Parse errors do not
+        # expose a structured id, so the cursor freezes rather than advancing
+        # to a timestamp-only position that could skip a same-timestamp row.
+        harness._advance_sync_watermark_position.assert_not_called()
+    else:
+        # Watermark parks at the failed row (min_error), not advanced past it.
+        advanced_to = harness._advance_sync_watermark.call_args.args[1]
+        assert advanced_to == datetime.fromisoformat(bad["updated_at"])
 
 
 @pytest.mark.parametrize("case", _ENTITY_CASES)
@@ -1192,7 +1203,10 @@ def test_unpositioned_failure_freezes_the_watermark(
     expected_calls = 2 if position_kind == "savepoint" else 1
     assert getattr(harness, case.single_attr).call_count == expected_calls
     # Frozen: the watermark was NOT advanced at all this run.
-    harness._advance_sync_watermark.assert_not_called()
+    if case.sync_method == "sync_invoices":
+        harness._advance_sync_watermark_position.assert_not_called()
+    else:
+        harness._advance_sync_watermark.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
