@@ -16,10 +16,6 @@
 {% block header_actions %}
 <div class="flex items-center gap-3">
     <a href="/people/hr/org-chart" class="btn btn-secondary">Org Chart</a>
-    <button type="button" class="btn btn-secondary" @click="window.dispatchEvent(new CustomEvent('open-employee-export'))">
-        {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-        Export Employees
-    </button>
     <a href="/people/hr/employees/new" class="btn btn-primary group">
         {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
         Create Employee
@@ -191,6 +187,12 @@
         auto_submit=false,
         show_apply_button=true
     ) %}
+        <div class="col-span-full flex justify-end">
+            <button type="button" class="btn btn-secondary" @click="window.dispatchEvent(new CustomEvent('open-employee-export'))">
+                {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+                Export Employees
+            </button>
+        </div>
         <div>
             <label class="form-label text-xs" for="employee-search">Search</label>
             <input id="employee-search" aria-label="Search employees"
