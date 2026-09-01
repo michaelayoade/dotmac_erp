@@ -13251,6 +13251,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
         display: table-cell;
     }
 
+    .sm\:contents {
+        display: contents;
+    }
+
     .sm\:hidden {
         display: none;
     }
