@@ -4,6 +4,9 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
+from sqlalchemy import func, select
+
+from app.models.finance.ar.dotmac_sub_sync_watermark import DotmacSubSyncWatermark
 from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import InvoiceRecord
 from app.services.dotmac_sub.sync._base import BaseSyncMixin, SyncWatermarkPosition
@@ -179,8 +182,21 @@ def test_compound_watermark_position_is_advance_only(db_session) -> None:
         EntityType.INVOICE,
         SyncWatermarkPosition(_T0 + timedelta(days=3), "inv-002"),
     )
+    h._advance_sync_watermark_position(
+        EntityType.INVOICE,
+        SyncWatermarkPosition(_T0 + timedelta(days=3), "inv-004"),
+    )
     db_session.flush()
 
     stored = h._get_sync_watermark_position(EntityType.INVOICE)
     assert _norm(stored.watermark_at) == _norm(_T0 + timedelta(days=3))
-    assert stored.external_id == "inv-003"
+    assert stored.external_id == "inv-004"
+    row_count = db_session.scalar(
+        select(func.count())
+        .select_from(DotmacSubSyncWatermark)
+        .where(
+            DotmacSubSyncWatermark.organization_id == org,
+            DotmacSubSyncWatermark.entity_type == EntityType.INVOICE.value,
+        )
+    )
+    assert row_count == 1
