@@ -346,23 +346,37 @@ class BaseSyncMixin:
 
     # ---- Incremental-sync high-watermark ----
 
-    def _get_sync_watermark(self, entity_type: EntityType) -> datetime | None:
-        """Highest ``updated_at`` already synced for this entity type, or None
-        (never synced → the caller does a full pull)."""
-        stmt = select(DotmacSubSyncWatermark.watermark_at).where(
-            DotmacSubSyncWatermark.organization_id == self.organization_id,
-            DotmacSubSyncWatermark.entity_type == entity_type.value,
-        )
-        return self.db.scalar(stmt)
-
-    def _get_sync_watermark_position(
+    def _get_sync_watermark_row(
         self, entity_type: EntityType
-    ) -> SyncWatermarkPosition:
+    ) -> DotmacSubSyncWatermark | None:
+        """Return this entity's persisted or pending watermark row."""
         stmt = select(DotmacSubSyncWatermark).where(
             DotmacSubSyncWatermark.organization_id == self.organization_id,
             DotmacSubSyncWatermark.entity_type == entity_type.value,
         )
         row = self.db.scalar(stmt)
+        if row is not None:
+            return row
+
+        for pending in getattr(self.db, "new", ()):
+            if (
+                isinstance(pending, DotmacSubSyncWatermark)
+                and pending.organization_id == self.organization_id
+                and pending.entity_type == entity_type.value
+            ):
+                return pending
+        return None
+
+    def _get_sync_watermark(self, entity_type: EntityType) -> datetime | None:
+        """Highest ``updated_at`` already synced for this entity type, or None
+        (never synced → the caller does a full pull)."""
+        row = self._get_sync_watermark_row(entity_type)
+        return None if row is None else row.watermark_at
+
+    def _get_sync_watermark_position(
+        self, entity_type: EntityType
+    ) -> SyncWatermarkPosition:
+        row = self._get_sync_watermark_row(entity_type)
         if row is None:
             return SyncWatermarkPosition(None, None)
         return SyncWatermarkPosition(row.watermark_at, row.watermark_external_id)
@@ -373,11 +387,7 @@ class BaseSyncMixin:
         """Move the watermark forward to ``new_value`` (never backward)."""
         if new_value is None:
             return
-        stmt = select(DotmacSubSyncWatermark).where(
-            DotmacSubSyncWatermark.organization_id == self.organization_id,
-            DotmacSubSyncWatermark.entity_type == entity_type.value,
-        )
-        row = self.db.scalar(stmt)
+        row = self._get_sync_watermark_row(entity_type)
         if row is None:
             self.db.add(
                 DotmacSubSyncWatermark(
@@ -403,11 +413,7 @@ class BaseSyncMixin:
         """Move the compound watermark forward to a consumed source row."""
         if position is None or position.watermark_at is None:
             return
-        stmt = select(DotmacSubSyncWatermark).where(
-            DotmacSubSyncWatermark.organization_id == self.organization_id,
-            DotmacSubSyncWatermark.entity_type == entity_type.value,
-        )
-        row = self.db.scalar(stmt)
+        row = self._get_sync_watermark_row(entity_type)
         new_at = _aware_utc(position.watermark_at)
         if row is None:
             self.db.add(
