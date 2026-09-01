@@ -164,7 +164,7 @@ def test_the_erp_lineage_stays_single_headed_after_this_activation() -> None:
     assert len(parents) > 100, len(parents)
     referenced = {parent for values in parents.values() for parent in values}
     heads = sorted(revision for revision in parents if revision not in referenced)
-    assert heads == ["20260831_sync_history_heartbeat"], heads
+    assert heads == ["20260901_dotmac_sub_invoice_cursor_id"], heads
 
 
 def test_rbac_contract_is_a_frozen_exact_copy_of_the_authored_seed() -> None:

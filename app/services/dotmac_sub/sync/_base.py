@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -37,6 +38,34 @@ from app.services.dotmac_sub.client import (
 from ._constants import DEFAULT_BANK_NAME_MAPPING
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SyncWatermarkPosition:
+    """Last source row safely consumed by a deterministic sync feed."""
+
+    watermark_at: datetime | None
+    external_id: str | None = None
+
+    def includes(self, row_updated_at: datetime | None, row_external_id: str) -> bool:
+        """Return True when a row is at or before this consumed position."""
+        if self.watermark_at is None or row_updated_at is None:
+            return False
+        cursor_at = _aware_utc(self.watermark_at)
+        row_at = _aware_utc(row_updated_at)
+        if row_at < cursor_at:
+            return True
+        if row_at > cursor_at:
+            return False
+        if self.external_id is None:
+            return False
+        return str(row_external_id) <= self.external_id
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def next_watermark(
@@ -317,14 +346,40 @@ class BaseSyncMixin:
 
     # ---- Incremental-sync high-watermark ----
 
-    def _get_sync_watermark(self, entity_type: EntityType) -> datetime | None:
-        """Highest ``updated_at`` already synced for this entity type, or None
-        (never synced → the caller does a full pull)."""
-        stmt = select(DotmacSubSyncWatermark.watermark_at).where(
+    def _get_sync_watermark_row(
+        self, entity_type: EntityType
+    ) -> DotmacSubSyncWatermark | None:
+        """Return this entity's persisted or pending watermark row."""
+        stmt = select(DotmacSubSyncWatermark).where(
             DotmacSubSyncWatermark.organization_id == self.organization_id,
             DotmacSubSyncWatermark.entity_type == entity_type.value,
         )
-        return self.db.scalar(stmt)
+        row = self.db.scalar(stmt)
+        if row is not None:
+            return row
+
+        for pending in getattr(self.db, "new", ()):
+            if (
+                isinstance(pending, DotmacSubSyncWatermark)
+                and pending.organization_id == self.organization_id
+                and pending.entity_type == entity_type.value
+            ):
+                return pending
+        return None
+
+    def _get_sync_watermark(self, entity_type: EntityType) -> datetime | None:
+        """Highest ``updated_at`` already synced for this entity type, or None
+        (never synced → the caller does a full pull)."""
+        row = self._get_sync_watermark_row(entity_type)
+        return None if row is None else row.watermark_at
+
+    def _get_sync_watermark_position(
+        self, entity_type: EntityType
+    ) -> SyncWatermarkPosition:
+        row = self._get_sync_watermark_row(entity_type)
+        if row is None:
+            return SyncWatermarkPosition(None, None)
+        return SyncWatermarkPosition(row.watermark_at, row.watermark_external_id)
 
     def _advance_sync_watermark(
         self, entity_type: EntityType, new_value: datetime | None
@@ -332,11 +387,7 @@ class BaseSyncMixin:
         """Move the watermark forward to ``new_value`` (never backward)."""
         if new_value is None:
             return
-        stmt = select(DotmacSubSyncWatermark).where(
-            DotmacSubSyncWatermark.organization_id == self.organization_id,
-            DotmacSubSyncWatermark.entity_type == entity_type.value,
-        )
-        row = self.db.scalar(stmt)
+        row = self._get_sync_watermark_row(entity_type)
         if row is None:
             self.db.add(
                 DotmacSubSyncWatermark(
@@ -354,6 +405,41 @@ class BaseSyncMixin:
             current = current.replace(tzinfo=UTC)
         if current is None or new_value > current:
             row.watermark_at = new_value
+            row.watermark_external_id = None
+
+    def _advance_sync_watermark_position(
+        self, entity_type: EntityType, position: SyncWatermarkPosition | None
+    ) -> None:
+        """Move the compound watermark forward to a consumed source row."""
+        if position is None or position.watermark_at is None:
+            return
+        row = self._get_sync_watermark_row(entity_type)
+        new_at = _aware_utc(position.watermark_at)
+        if row is None:
+            self.db.add(
+                DotmacSubSyncWatermark(
+                    organization_id=self.organization_id,
+                    entity_type=entity_type.value,
+                    watermark_at=position.watermark_at,
+                    watermark_external_id=position.external_id,
+                )
+            )
+            return
+
+        current = row.watermark_at
+        if current is None:
+            row.watermark_at = position.watermark_at
+            row.watermark_external_id = position.external_id
+            return
+        current_at = _aware_utc(current)
+        current_id = row.watermark_external_id
+        if new_at > current_at or (
+            new_at == current_at
+            and position.external_id is not None
+            and (current_id is None or position.external_id > current_id)
+        ):
+            row.watermark_at = position.watermark_at
+            row.watermark_external_id = position.external_id
 
     def _get_synced_entity(
         self, entity_type: EntityType, external_id: str
