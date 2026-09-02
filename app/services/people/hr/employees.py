@@ -1468,12 +1468,19 @@ class EmployeeService:
         required_attrs = ("organization_id", "employee_id", "person_id", "status")
         if any(getattr(employee, attr, None) is None for attr in required_attrs):
             return
-        required_db_attrs = ("add", "flush", "get_bind", "scalar", "scalars")
+        required_db_attrs = (
+            "add",
+            "connection",
+            "flush",
+            "get_bind",
+            "scalar",
+            "scalars",
+        )
         if not all(hasattr(self.db, attr) for attr in required_db_attrs):
             return
         bind = self.db.get_bind()
         if getattr(bind.dialect, "name", "") == "sqlite":
-            inspector = inspect_db(bind)
+            inspector = inspect_db(self.db.connection())
             has_projection_tables = inspector.has_table(
                 "staff_account_status_projection"
             ) and inspector.has_table("staff_leave_access_restriction")

@@ -145,12 +145,14 @@ def _leave(
 
 
 def _outbox_events(db_session, event_name: str) -> list[EventOutbox]:
-    return list(
+    events = list(
         db_session.scalars(
-            select(EventOutbox)
-            .where(EventOutbox.event_name == event_name)
-            .order_by(EventOutbox.created_at, EventOutbox.event_id)
+            select(EventOutbox).where(EventOutbox.event_name == event_name)
         ).all()
+    )
+    return sorted(
+        events,
+        key=lambda event: (event.payload.get("version", 0), str(event.event_id)),
     )
 
 
