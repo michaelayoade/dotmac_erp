@@ -155,6 +155,7 @@ def sync_employee(
                     db, employee, employee.dotmac_sub_account_id, client
                 )
                 _mark_synced(employee)
+                _refresh_staff_access_projection(db, employee)
                 return {
                     "action": "created",
                     "account_id": employee.dotmac_sub_account_id,
@@ -167,9 +168,11 @@ def sync_employee(
                 client.set_staff_account_active(account_id, is_active=True)
                 _sync_erp_department_membership(db, employee, account_id, client)
                 _mark_synced(employee)
+                _refresh_staff_access_projection(db, employee)
                 return {"action": "enabled", "account_id": account_id}
             _sync_erp_department_membership(db, employee, account_id, client)
             _mark_synced(employee)
+            _refresh_staff_access_projection(db, employee)
             return {"action": "noop", "account_id": account_id}
 
         # Disabled lifecycle statuses or an explicit HR access revocation.
@@ -188,10 +191,12 @@ def sync_employee(
                 db, employee, account_id, client, remove=True
             )
             _mark_synced(employee)
+            _refresh_staff_access_projection(db, employee)
             return {"action": "noop", "account_id": account_id}
         _sync_erp_department_membership(db, employee, account_id, client, remove=True)
         client.set_staff_account_active(account_id, is_active=False)
         _mark_synced(employee)
+        _refresh_staff_access_projection(db, employee)
         return {"action": "disabled", "account_id": account_id}
     finally:
         if owns_client:
@@ -200,6 +205,14 @@ def sync_employee(
 
 def _mark_synced(employee: Employee) -> None:
     employee.dotmac_sub_staff_synced_at = datetime.now(timezone.utc)
+
+
+def _refresh_staff_access_projection(db: Session, employee: Employee) -> None:
+    from app.services.people.hr.staff_access_projection import (
+        StaffAccessProjectionService,
+    )
+
+    StaffAccessProjectionService(db).refresh_employee_projections(employee)
 
 
 def reconcile_staff_accounts(db: Session, organization_id: UUID) -> dict[str, Any]:

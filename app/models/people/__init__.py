@@ -102,6 +102,10 @@ from app.models.people.hr import (
     EmployeeStatus,
     EmploymentType,
     Gender,
+    StaffAccountStatusProjection,
+    StaffAccountStatusState,
+    StaffLeaveAccessRestriction,
+    StaffLeaveRestrictionStatus,
 )
 
 # Leave Models
@@ -210,6 +214,10 @@ __all__ = [
     "Employee",
     "EmployeeGrade",
     "EmployeeStatus",
+    "StaffAccountStatusProjection",
+    "StaffAccountStatusState",
+    "StaffLeaveAccessRestriction",
+    "StaffLeaveRestrictionStatus",
     "EmploymentType",
     "Gender",
     # Payroll
