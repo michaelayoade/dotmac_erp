@@ -1,7 +1,7 @@
 import csv
 import io
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -200,6 +200,66 @@ def _make_item(
         description="Taxi",
         claimed_amount=amount,
     )
+
+
+
+def test_expire_claims_marks_only_old_open_claims(db_session):
+    org_id = uuid.uuid4()
+    person = _make_person(org_id, "expiry-user@example.com")
+    employee = _make_employee(org_id, person, "EMP-EXP")
+    old_time = datetime(2026, 8, 20, 9, 0, 0)
+    now = datetime(2026, 9, 2, 9, 0, 0)
+
+    stale_claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-EXP-001",
+        status=ExpenseClaimStatus.SUBMITTED,
+    )
+    stale_claim.created_at = old_time
+    stale_claim.updated_at = old_time
+
+    fresh_claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-EXP-002",
+        status=ExpenseClaimStatus.PENDING_APPROVAL,
+    )
+    fresh_claim.created_at = now - timedelta(days=1)
+    fresh_claim.updated_at = now - timedelta(days=1)
+
+    approved_claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-EXP-003",
+        status=ExpenseClaimStatus.APPROVED,
+    )
+    approved_claim.created_at = old_time
+    approved_claim.updated_at = old_time
+
+    db_session.add_all([person, employee, stale_claim, fresh_claim, approved_claim])
+    db_session.commit()
+
+    expired = ExpenseService(db_session).expire_claims(
+        org_id,
+        expiry_days=7,
+        as_of=now,
+    )
+    db_session.commit()
+
+    assert [claim.claim_id for claim in expired] == [stale_claim.claim_id]
+    assert stale_claim.status == ExpenseClaimStatus.EXPIRED
+    assert fresh_claim.status == ExpenseClaimStatus.PENDING_APPROVAL
+    assert approved_claim.status == ExpenseClaimStatus.APPROVED
+
+    action = db_session.scalar(
+        select(ExpenseClaimAction).where(
+            ExpenseClaimAction.claim_id == stale_claim.claim_id,
+            ExpenseClaimAction.action_type == ExpenseClaimActionType.EXPIRE,
+        )
+    )
+    assert action is not None
+    assert action.status == ExpenseClaimActionStatus.COMPLETED
 
 
 def _request(path: str) -> Request:

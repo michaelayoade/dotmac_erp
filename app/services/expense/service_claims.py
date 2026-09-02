@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -1577,6 +1577,83 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 ExpenseClaimActionStatus.FAILED,
             )
             raise
+
+    def expire_claims(
+        self,
+        org_id: UUID,
+        *,
+        expiry_days: int,
+        as_of: datetime | None = None,
+        actor_id: UUID | None = None,
+        limit: int = 500,
+    ) -> list[ExpenseClaim]:
+        """Expire open claims that have been idle longer than the policy allows."""
+        if expiry_days <= 0:
+            return []
+
+        now = as_of or datetime.now(UTC)
+        cutoff = now - timedelta(days=expiry_days)
+        open_statuses = {
+            ExpenseClaimStatus.DRAFT,
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+        }
+        age_expr = func.coalesce(ExpenseClaim.updated_at, ExpenseClaim.created_at)
+        claims = list(
+            self.db.scalars(
+                select(ExpenseClaim)
+                .where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.status.in_(open_statuses),
+                    age_expr <= cutoff,
+                )
+                .order_by(age_expr.asc(), ExpenseClaim.claim_id.asc())
+                .limit(limit)
+            ).all()
+        )
+
+        expired: list[ExpenseClaim] = []
+        for claim in claims:
+            if claim.status not in open_statuses:
+                continue
+            if not self._begin_action(
+                org_id, claim.claim_id, ExpenseClaimActionType.EXPIRE
+            ):
+                continue
+            try:
+                old_status = claim.status.value
+                claim.status = ExpenseClaimStatus.EXPIRED
+                self._stamp_status_change(claim, actor_id)
+                reason = f"Expired by policy after {expiry_days} day(s)."
+                claim.notes = f"{claim.notes}\n\n{reason}" if claim.notes else reason
+                self.db.flush()
+                fire_audit_event(
+                    db=self.db,
+                    organization_id=org_id,
+                    table_schema="expense",
+                    table_name="expense_claim",
+                    record_id=str(claim.claim_id),
+                    action=AuditAction.UPDATE,
+                    old_values={"status": old_status},
+                    new_values={"status": ExpenseClaimStatus.EXPIRED.value},
+                )
+                self._set_action_status(
+                    org_id,
+                    claim.claim_id,
+                    ExpenseClaimActionType.EXPIRE,
+                    ExpenseClaimActionStatus.COMPLETED,
+                )
+                expired.append(claim)
+            except Exception:
+                self._set_action_status(
+                    org_id,
+                    claim.claim_id,
+                    ExpenseClaimActionType.EXPIRE,
+                    ExpenseClaimActionStatus.FAILED,
+                )
+                raise
+
+        return expired
 
     def cancel_claim(
         self,

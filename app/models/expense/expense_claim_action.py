@@ -35,6 +35,7 @@ class ExpenseClaimActionType(str, enum.Enum):
     CREATE_SUPPLIER_INVOICE = "CREATE_SUPPLIER_INVOICE"
     CANCEL = "CANCEL"
     RESUBMIT = "RESUBMIT"
+    EXPIRE = "EXPIRE"
 
 
 class ExpenseClaimActionStatus(str, enum.Enum):

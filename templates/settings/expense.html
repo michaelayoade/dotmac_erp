@@ -47,6 +47,32 @@
             </div>
         </div>
 
+        <!-- Claim Expiry -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Claim Expiry</h2>
+            <div class="space-y-4">
+                <div class="space-y-2">
+                    <label for="expense_claim_expiry_days" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {{ settings.expense_claim_expiry_days.label }}
+                    </label>
+                    <input type="number" id="expense_claim_expiry_days" name="expense_claim_expiry_days"
+                           value="{{ settings.expense_claim_expiry_days.value }}"
+                           min="{{ settings.expense_claim_expiry_days.min }}" max="{{ settings.expense_claim_expiry_days.max }}" step="1"
+                           class="form-input max-w-xs text-sm">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ settings.expense_claim_expiry_days.description }}</p>
+                </div>
+                <div class="space-y-2">
+                    <label for="expense_claim_expiry_warning_days" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {{ settings.expense_claim_expiry_warning_days.label }}
+                    </label>
+                    <input type="number" id="expense_claim_expiry_warning_days" name="expense_claim_expiry_warning_days"
+                           value="{{ settings.expense_claim_expiry_warning_days.value }}"
+                           min="{{ settings.expense_claim_expiry_warning_days.min }}" max="{{ settings.expense_claim_expiry_warning_days.max }}" step="1"
+                           class="form-input max-w-xs text-sm">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ settings.expense_claim_expiry_warning_days.description }}</p>
+                </div>
+            </div>
+        </div>
         <!-- Allowed Expense Accounts -->
         <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800"
              x-data='{

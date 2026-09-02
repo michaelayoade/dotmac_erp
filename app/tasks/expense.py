@@ -304,6 +304,221 @@ def process_expense_approval_reminders() -> dict:
 
 
 @shared_task
+def process_expense_expiry_warnings() -> dict:
+    """Warn approvers before old open expense claims expire."""
+    from app.models.domain_settings import SettingDomain
+    from app.models.notification import (
+        EntityType,
+        NotificationChannel,
+        NotificationType,
+    )
+    from app.services.expense.expense_notifications import ExpenseNotificationService
+    from app.services.settings_spec import resolve_value
+
+    logger.info("Processing expense claim expiry warnings")
+
+    results: dict[str, Any] = {
+        "organizations_processed": 0,
+        "warnings_sent": 0,
+        "disabled": 0,
+        "errors": [],
+    }
+
+    today = date.today()
+    today_start = datetime.combine(today, datetime.min.time())
+    warning_statuses = {
+        ExpenseClaimStatus.SUBMITTED,
+        ExpenseClaimStatus.PENDING_APPROVAL,
+    }
+
+    for org_id in active_organization_ids():
+        try:
+            with session_for_org(org_id) as db:
+                expiry_days = int(
+                    resolve_value(
+                        db,
+                        SettingDomain.expense,
+                        "expense_claim_expiry_days",
+                        organization_id=org_id,
+                    )
+                    or 0
+                )
+                warning_days = int(
+                    resolve_value(
+                        db,
+                        SettingDomain.expense,
+                        "expense_claim_expiry_warning_days",
+                        organization_id=org_id,
+                    )
+                    or 0
+                )
+                if expiry_days <= 0 or warning_days <= 0:
+                    results["disabled"] += 1
+                    continue
+
+                warn_after_days = max(expiry_days - warning_days, 0)
+                claims = db.scalars(
+                    select(ExpenseClaim)
+                    .where(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.status.in_(warning_statuses),
+                    )
+                    .order_by(ExpenseClaim.claim_date)
+                ).all()
+                notification_service = ExpenseNotificationService(db)
+
+                for claim in claims:
+                    try:
+                        last_changed = claim.updated_at or claim.created_at
+                        pending_since = (
+                            last_changed.date() if last_changed else claim.claim_date
+                        )
+                        days_open = (today - pending_since).days
+                        if days_open < warn_after_days or days_open >= expiry_days:
+                            continue
+
+                        approver = None
+                        if claim.approver_id:
+                            approver = db.get(Employee, claim.approver_id)
+                        if not approver and claim.employee:
+                            if claim.employee.expense_approver_id:
+                                approver = db.get(
+                                    Employee,
+                                    claim.employee.expense_approver_id,
+                                )
+                            if not approver:
+                                approver = OrgResolver(db).get_manager(
+                                    claim.employee.employee_id,
+                                    claim.organization_id,
+                                )
+                        if not approver or not approver.person_id:
+                            continue
+
+                        if NotificationService().was_sent_since(
+                            db,
+                            organization_id=claim.organization_id,
+                            entity_type=EntityType.EXPENSE,
+                            entity_id=claim.claim_id,
+                            notification_type=NotificationType.DUE_SOON,
+                            since=today_start,
+                            recipient_id=approver.person_id,
+                        ):
+                            continue
+
+                        days_until_expiry = max(expiry_days - days_open, 0)
+                        success = notification_service.send_expiry_warning(
+                            claim,
+                            approver,
+                            days_until_expiry=days_until_expiry,
+                            expiry_days=expiry_days,
+                        )
+                        notification = NotificationService().create_if_not_sent_since(
+                            db,
+                            organization_id=claim.organization_id,
+                            recipient_id=approver.person_id,
+                            entity_type=EntityType.EXPENSE,
+                            entity_id=claim.claim_id,
+                            notification_type=NotificationType.DUE_SOON,
+                            title=f"Expense Claim Expiring Soon: {claim.claim_number}",
+                            message=(
+                                f"Claim {claim.claim_number} expires in "
+                                f"{days_until_expiry} day(s)"
+                            ),
+                            since=today_start,
+                            channel=NotificationChannel.EMAIL,
+                            action_url=f"/expense/claims/{claim.claim_id}",
+                        )
+                        if success:
+                            if notification is not None:
+                                notification.email_sent = True
+                                notification.email_sent_at = datetime.now(UTC)
+                            results["warnings_sent"] += 1
+                    except Exception as e:
+                        logger.error(
+                            "Failed to process expiry warning for claim %s: %s",
+                            claim.claim_id,
+                            e,
+                        )
+                        results["errors"].append(
+                            {
+                                "claim_id": str(claim.claim_id),
+                                "error": str(e),
+                            }
+                        )
+
+                db.commit()
+                results["organizations_processed"] += 1
+        except Exception as e:
+            logger.error(
+                "Failed to process expense expiry warnings for org %s: %s",
+                org_id,
+                e,
+            )
+            results["errors"].append(
+                {
+                    "organization_id": str(org_id),
+                    "error": str(e),
+                }
+            )
+
+    logger.info(
+        "Expense claim expiry warnings complete: %d sent",
+        results["warnings_sent"],
+    )
+    return results
+
+
+@shared_task
+def expire_old_expense_claims() -> dict:
+    """Expire old open expense claims using each tenant's configured policy."""
+    from app.models.domain_settings import SettingDomain
+    from app.services.expense.expense_service import ExpenseService
+    from app.services.settings_spec import resolve_value
+
+    logger.info("Processing old expense claim expiry")
+
+    results: dict[str, Any] = {
+        "organizations_processed": 0,
+        "expired": 0,
+        "disabled": 0,
+        "errors": [],
+    }
+
+    for org_id in active_organization_ids():
+        try:
+            with session_for_org(org_id) as db:
+                raw_expiry_days = resolve_value(
+                    db,
+                    SettingDomain.expense,
+                    "expense_claim_expiry_days",
+                    organization_id=org_id,
+                )
+                expiry_days = int(raw_expiry_days or 0)
+                if expiry_days <= 0:
+                    results["disabled"] += 1
+                    continue
+
+                expired = ExpenseService(db).expire_claims(
+                    org_id,
+                    expiry_days=expiry_days,
+                )
+                db.commit()
+                results["expired"] += len(expired)
+                results["organizations_processed"] += 1
+        except Exception as e:
+            logger.error("Failed to expire expense claims for org %s: %s", org_id, e)
+            results["errors"].append(
+                {
+                    "organization_id": str(org_id),
+                    "error": str(e),
+                }
+            )
+
+    logger.info("Expense claim expiry complete: %d expired", results["expired"])
+    return results
+
+
+@shared_task
 def reset_weekly_approver_budgets() -> dict:
     """Reset weekly approver budgets every Monday at 07:00 Africa/Lagos."""
 

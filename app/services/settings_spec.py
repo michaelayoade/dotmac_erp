@@ -993,6 +993,28 @@ SETTINGS_SPECS: list[SettingSpec] = [
         label="Route Reimbursements through AP",
         description="Automatically create a supplier invoice in Accounts Payable when an expense claim is approved",
     ),
+    SettingSpec(
+        domain=SettingDomain.expense,
+        key="expense_claim_expiry_days",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=0,
+        min_value=0,
+        max_value=365,
+        label="Claim Expiry (days)",
+        description="Expire open expense claims after this many days without changes. 0 disables expiry.",
+    ),
+    SettingSpec(
+        domain=SettingDomain.expense,
+        key="expense_claim_expiry_warning_days",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=2,
+        min_value=0,
+        max_value=30,
+        label="Expiry Warning (days before)",
+        description="Email approvers this many days before an open claim expires. 0 disables warning emails.",
+    ),
     # Settings Domain: App-level configuration content
     SettingSpec(
         domain=SettingDomain.settings,

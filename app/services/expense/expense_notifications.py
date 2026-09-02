@@ -427,6 +427,52 @@ class ExpenseNotificationService:
             organization_id=claim.organization_id,
         )
 
+    def send_expiry_warning(
+        self,
+        claim: ExpenseClaim,
+        approver: Employee,
+        *,
+        days_until_expiry: int,
+        expiry_days: int,
+    ) -> bool:
+        """Warn an approver that a pending claim will expire soon."""
+        approver_email = _employee_work_email(approver)
+        if not approver_email:
+            approver_name = _employee_full_name(approver) or "unknown"
+            logger.warning(
+                "No email for approver %s (%s) - cannot send expiry warning "
+                "for claim %s",
+                approver.employee_id,
+                approver_name,
+                claim.claim_number,
+            )
+            return False
+
+        claimant_name = "An employee"
+        if claim.employee:
+            claimant_name = _employee_full_name(claim.employee)
+
+        app_url = _get_app_url()
+        context = {
+            "first_name": _employee_first_name(approver),
+            "claimant_name": claimant_name,
+            "claim_number": claim.claim_number,
+            "currency": claim.currency_code,
+            "amount": f"{claim.total_claimed_amount:,.2f}",
+            "claim_date": str(claim.claim_date),
+            "days_until_expiry": max(days_until_expiry, 0),
+            "expiry_days": expiry_days,
+            "claim_url": f"{app_url}/expense/claims/{claim.claim_id}",
+        }
+
+        return self._send(
+            "emails/expense/expiry_warning.html",
+            context,
+            to_email=approver_email,
+            subject=f"Expense Claim Expires Soon - {claim.claim_number}",
+            organization_id=claim.organization_id,
+        )
+
     def notify_claim_paid(
         self,
         claim: ExpenseClaim,
