@@ -316,5 +316,5 @@ def test_committed_openapi_surface_has_no_retired_crm_contract() -> None:
         for route in routes
         if "/api/v1/sync/sub/" in route and "/attendance/" not in route
     ]
-    assert len(material_and_operational_routes) == 17
+    assert len(material_and_operational_routes) == 18
     assert not [name for name in schemas if "CRM" in name or "Crm" in name]
