@@ -10,7 +10,7 @@ import logging
 from collections.abc import AsyncIterable, Iterable
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote, urlencode
 from uuid import UUID
 
@@ -2924,14 +2924,15 @@ class SelfServiceWebService:
         from app.services.settings_spec import resolve_value
 
         claim_expiry_days = int(
-            str(
+            cast(
+                Any,
                 resolve_value(
                     db,
                     SettingDomain.expense,
                     "expense_claim_expiry_days",
                     organization_id=org_id,
                 )
-                or 0
+                or 0,
             )
         )
 

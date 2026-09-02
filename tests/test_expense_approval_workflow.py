@@ -202,7 +202,8 @@ def _make_item(
     )
 
 
-def test_expire_claims_marks_only_old_open_claims(db_session):
+def test_expire_claims_marks_only_old_open_claims(db_session, engine):
+    _ensure_hr_tables(engine)
     org_id = uuid.uuid4()
     person = _make_person(org_id, "expiry-user@example.com")
     employee = _make_employee(org_id, person, "EMP-EXP")
