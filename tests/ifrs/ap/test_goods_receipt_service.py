@@ -17,6 +17,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.models.finance.ap.purchase_order import POStatus
 from app.services.finance.ap.goods_receipt import (
     GoodsReceiptInput,
     GoodsReceiptService,
@@ -32,20 +33,6 @@ class MockReceiptStatus:
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
     PARTIAL = "PARTIAL"
-
-    @property
-    def value(self):
-        return self
-
-
-class MockPOStatus:
-    DRAFT = "DRAFT"
-    PENDING_APPROVAL = "PENDING_APPROVAL"
-    APPROVED = "APPROVED"
-    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED"
-    RECEIVED = "RECEIVED"
-    CLOSED = "CLOSED"
-    CANCELLED = "CANCELLED"
 
     @property
     def value(self):
@@ -94,7 +81,7 @@ class MockPurchaseOrder:
         self.organization_id = organization_id or uuid4()
         self.supplier_id = supplier_id or uuid4()
         self.po_number = po_number
-        self.status = status or MockPOStatus()
+        self.status = status if status is not None else POStatus.APPROVED
         self._lines = lines or []
 
     @property
@@ -178,10 +165,8 @@ class TestCreateReceipt:
     @patch("app.services.finance.ap.goods_receipt.SequenceService")
     @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
     @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
     def test_create_receipt_success(
         self,
-        mock_po_status,
         mock_receipt_class,
         mock_line_class,
         mock_seq_service,
@@ -194,12 +179,6 @@ class TestCreateReceipt:
         user_id = uuid4()
         po_line_id = uuid4()
 
-        # Setup status mocks
-        mock_approved = MagicMock()
-        mock_partial = MagicMock()
-        mock_po_status.APPROVED = mock_approved
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-
         # Create mock PO with lines
         mock_po_line = MockPurchaseOrderLine(
             line_id=po_line_id,
@@ -211,7 +190,7 @@ class TestCreateReceipt:
             organization_id=org_id,
             lines=[mock_po_line],
         )
-        mock_po.status = mock_approved
+        mock_po.status = POStatus.APPROVED
 
         # Service calls: scalars().first() for PO, then scalars().first() for PO line
         sr1 = MagicMock()
@@ -246,8 +225,7 @@ class TestCreateReceipt:
         db.flush.assert_called()
         mock_seq_service.get_next_number.assert_called_once()
 
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
-    def test_create_receipt_po_not_found(self, mock_po_status):
+    def test_create_receipt_po_not_found(self):
         """Test receipt creation with non-existent PO."""
         db = MagicMock()
         org_id = uuid4()
@@ -272,23 +250,15 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 404
         assert "Purchase order not found" in str(exc_info.value.detail)
 
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
-    def test_create_receipt_po_wrong_status(self, mock_po_status):
+    def test_create_receipt_po_wrong_status(self):
         """Test receipt creation for PO not in receivable status."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
         user_id = uuid4()
 
-        mock_approved = MagicMock()
-        mock_partial = MagicMock()
-        mock_draft = MagicMock()
-        mock_draft.value = "DRAFT"
-        mock_po_status.APPROVED = mock_approved
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -309,21 +279,15 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 400
         assert "Cannot receive goods" in str(exc_info.value.detail)
 
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
-    def test_create_receipt_no_lines(self, mock_po_status):
+    def test_create_receipt_no_lines(self):
         """Test receipt creation without lines fails."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
         user_id = uuid4()
 
-        mock_approved = MagicMock()
-        mock_partial = MagicMock()
-        mock_po_status.APPROVED = mock_approved
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_approved
+        mock_po.status = POStatus.APPROVED
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -339,8 +303,7 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 400
         assert "at least one line" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
-    def test_create_receipt_invalid_po_line(self, mock_po_status):
+    def test_create_receipt_invalid_po_line(self):
         """Test receipt creation with invalid PO line."""
         db = MagicMock()
         org_id = uuid4()
@@ -349,11 +312,6 @@ class TestCreateReceipt:
         valid_po_line_id = uuid4()
         invalid_po_line_id = uuid4()
 
-        mock_approved = MagicMock()
-        mock_partial = MagicMock()
-        mock_po_status.APPROVED = mock_approved
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-
         # PO has one line
         mock_po_line = MockPurchaseOrderLine(line_id=valid_po_line_id)
         mock_po = MockPurchaseOrder(
@@ -361,7 +319,7 @@ class TestCreateReceipt:
             organization_id=org_id,
             lines=[mock_po_line],
         )
-        mock_po.status = mock_approved
+        mock_po.status = POStatus.APPROVED
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -388,10 +346,8 @@ class TestCreateReceipt:
     @patch("app.services.finance.ap.goods_receipt.SequenceService")
     @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
     @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
     def test_create_receipt_quantity_exceeds_remaining(
         self,
-        mock_po_status,
         mock_receipt_class,
         mock_line_class,
         mock_seq_service,
@@ -404,11 +360,6 @@ class TestCreateReceipt:
         user_id = uuid4()
         po_line_id = uuid4()
 
-        mock_approved = MagicMock()
-        mock_partial = MagicMock()
-        mock_po_status.APPROVED = mock_approved
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-
         # PO line with partial receipt already
         mock_po_line = MockPurchaseOrderLine(
             line_id=po_line_id,
@@ -420,7 +371,7 @@ class TestCreateReceipt:
             organization_id=org_id,
             lines=[mock_po_line],
         )
-        mock_po.status = mock_approved
+        mock_po.status = POStatus.APPROVED
 
         # Service calls: scalars().first() for PO, then scalars().first() for PO line
         sr1 = MagicMock()
@@ -457,10 +408,8 @@ class TestCreateReceipt:
     @patch("app.services.finance.ap.goods_receipt.SequenceService")
     @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
     @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
     def test_create_receipt_non_positive_quantity(
         self,
-        mock_po_status,
         mock_receipt_class,
         mock_line_class,
         mock_seq_service,
@@ -477,11 +426,6 @@ class TestCreateReceipt:
         user_id = uuid4()
         po_line_id = uuid4()
 
-        mock_approved = MagicMock()
-        mock_partial = MagicMock()
-        mock_po_status.APPROVED = mock_approved
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-
         mock_po_line = MockPurchaseOrderLine(
             line_id=po_line_id,
             quantity_ordered=Decimal("10"),
@@ -492,7 +436,7 @@ class TestCreateReceipt:
             organization_id=org_id,
             lines=[mock_po_line],
         )
-        mock_po.status = mock_approved
+        mock_po.status = POStatus.APPROVED
 
         sr1 = MagicMock()
         sr1.first.return_value = mock_po
@@ -957,57 +901,84 @@ class TestAcceptAll:
 class TestInternalMethods:
     """Tests for internal helper methods."""
 
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
-    def test_update_po_status_partially_received(self, mock_po_status):
-        """Test PO status update for partial receipt."""
-        db = MagicMock()
-
-        mock_partial = MagicMock()
-        mock_received = MagicMock()
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-        mock_po_status.RECEIVED = mock_received
-
-        # PO line with partial receipt
-        mock_line = MockPurchaseOrderLine(
-            quantity_ordered=Decimal("10"),
-            quantity_received=Decimal("5"),
+    def _po_with(self, ordered, received, status=POStatus.APPROVED):
+        line = MockPurchaseOrderLine(
+            quantity_ordered=Decimal(ordered),
+            quantity_received=Decimal(received),
             unit_price=Decimal("100.00"),
         )
-        mock_po = MockPurchaseOrder(lines=[mock_line])
+        return MockPurchaseOrder(lines=[line], status=status)
 
-        GoodsReceiptService._update_po_status(db, mock_po)
+    def test_update_po_status_partially_received(self):
+        """Partial receipt moves the PO to PARTIALLY_RECEIVED."""
+        po = self._po_with("10", "5")
 
-        assert mock_po.status == mock_partial
-        # The method decides STATUS from the line quantities and writes no
-        # amount. `amount_received` is derived by
-        # `app.services.finance.ap.purchase_order_amounts`; this used to be a
-        # second writer of it, recomputing it absolutely while the PO service
-        # incremented it. The mock has no such attribute, so a reinstated write
-        # would show up here as one appearing.
-        assert not hasattr(mock_po, "amount_received")
+        GoodsReceiptService._update_po_status(MagicMock(), po)
 
-    @patch("app.services.finance.ap.goods_receipt.POStatus")
-    def test_update_po_status_fully_received(self, mock_po_status):
-        """Test PO status update for full receipt."""
-        db = MagicMock()
+        assert po.status == POStatus.PARTIALLY_RECEIVED
+        # This method used to ASSIGN the status itself, bypassing
+        # `PurchaseOrderService` and its guards. It now delegates to the status
+        # owner, which is the only assigner. It also never writes an amount —
+        # `amount_received` is derived — and the mock has no such attribute, so
+        # a reinstated write would show up here as one appearing.
+        assert not hasattr(po, "amount_received")
 
-        mock_partial = MagicMock()
-        mock_received = MagicMock()
-        mock_po_status.PARTIALLY_RECEIVED = mock_partial
-        mock_po_status.RECEIVED = mock_received
+    def test_update_po_status_fully_received(self):
+        """Full receipt moves the PO to RECEIVED."""
+        po = self._po_with("10", "10")
 
-        # PO line fully received
-        mock_line = MockPurchaseOrderLine(
-            quantity_ordered=Decimal("10"),
-            quantity_received=Decimal("10"),
-            unit_price=Decimal("100.00"),
+        GoodsReceiptService._update_po_status(MagicMock(), po)
+
+        assert po.status == POStatus.RECEIVED
+        assert not hasattr(po, "amount_received")
+
+    def test_zero_price_line_must_still_be_received_before_po_is_complete(self):
+        """Receipt status follows line completion, not received monetary value."""
+        priced_line = MockPurchaseOrderLine(
+            quantity_ordered=Decimal("1"),
+            quantity_received=Decimal("1"),
+            unit_price=Decimal("100"),
         )
-        mock_po = MockPurchaseOrder(lines=[mock_line])
+        zero_price_line = MockPurchaseOrderLine(
+            quantity_ordered=Decimal("1"),
+            quantity_received=Decimal("0"),
+            unit_price=Decimal("0"),
+        )
+        po = MockPurchaseOrder(lines=[priced_line, zero_price_line])
 
-        GoodsReceiptService._update_po_status(db, mock_po)
+        GoodsReceiptService._update_po_status(MagicMock(), po)
 
-        assert mock_po.status == mock_received
-        assert not hasattr(mock_po, "amount_received")
+        assert po.status == POStatus.PARTIALLY_RECEIVED
+
+    def test_reversing_every_receipt_returns_the_po_to_approved(self):
+        """The regression that stranded purchase orders at RECEIVED forever.
+
+        The old implementation only moved status FORWARD: with nothing received
+        it left the status alone. So rejecting a PO's only receipt reversed the
+        line quantities to zero and left the PO at RECEIVED — which then refused
+        a cancel (RECEIVED is not cancellable) and refused any further receipt
+        (RECEIVED is not receivable). One rejected receipt bricked the purchase
+        order. Both reversal call sites already said "Recalculate PO status";
+        now it actually recalculates.
+        """
+        po = self._po_with("10", "0", status=POStatus.RECEIVED)
+
+        GoodsReceiptService._update_po_status(MagicMock(), po)
+
+        assert po.status == POStatus.APPROVED
+
+    def test_receipt_progress_does_not_touch_a_terminal_po(self):
+        """A receipt-driven recalculation must not resurrect a closed lifecycle.
+
+        The old absolute assignment would overwrite CANCELLED or CLOSED, because
+        it looked only at quantities and never at where the PO actually was.
+        """
+        for terminal in (POStatus.CANCELLED, POStatus.CLOSED):
+            po = self._po_with("10", "10", status=terminal)
+
+            GoodsReceiptService._update_po_status(MagicMock(), po)
+
+            assert po.status == terminal
 
     @patch(
         "app.services.finance.ap.goods_receipt.GoodsReceiptService._update_po_status"

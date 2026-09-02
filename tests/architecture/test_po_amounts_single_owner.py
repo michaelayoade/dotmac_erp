@@ -254,7 +254,7 @@ def test_the_automation_gate_still_bites() -> None:
     """
     from app.services.finance.automation.entity_registry import field_authority_owner
 
-    assert field_authority_owner("PURCHASE_ORDER", "status") is None
+    assert field_authority_owner("PURCHASE_ORDER", "terms_and_conditions") is None
     assert field_authority_owner("BILL", "amount_received") is None
 
 

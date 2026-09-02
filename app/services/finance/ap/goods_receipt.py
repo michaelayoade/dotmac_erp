@@ -25,7 +25,8 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
+from app.models.finance.ap.purchase_order import PurchaseOrder
+from app.services.finance.ap import purchase_order_status
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.inventory.inventory_transaction import TransactionType
@@ -205,7 +206,7 @@ class GoodsReceiptService(ListResponseMixin):
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
-        if po.status not in [POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]:
+        if not purchase_order_status.can_receive_against(po.status):
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot receive goods for PO in {po.status.value} status",
@@ -621,26 +622,22 @@ class GoodsReceiptService(ListResponseMixin):
 
     @staticmethod
     def _update_po_status(db: Session, po: PurchaseOrder) -> None:
-        """Update PO status from the received quantities on its lines.
+        """Ask the status owner to re-derive the PO status from its lines.
 
-        This used to also write `po.amount_received`.  It no longer does, and
-        must not again: the received amount is DERIVED by
-        `app.services.finance.ap.purchase_order_amounts`, which is its sole
-        owner.  `purchase_order_line.quantity_received` — written just above by
-        the receipt itself — is the authoritative input, and this method reads it
-        for the status decision only.
+        This was the SECOND writer of `PurchaseOrder.status`: it assigned
+        RECEIVED / PARTIALLY_RECEIVED directly, bypassing `PurchaseOrderService`
+        and its guards entirely. It no longer assigns anything — the column has
+        one owner, `app.services.finance.ap.purchase_order_status`, and this
+        delegates to it.
+
+        Two behaviours changed by delegating, both fixes:
+
+        * the derivation can now move status BACKWARDS, so reversing a rejected
+          receipt returns the PO to APPROVED instead of stranding it at RECEIVED;
+        * it no longer touches a CANCELLED or CLOSED PO, which the old absolute
+          assignment would happily overwrite.
         """
-        total_ordered = Decimal("0")
-        total_received = Decimal("0")
-
-        for line in po.lines:
-            total_ordered += line.quantity_ordered * line.unit_price
-            total_received += line.quantity_received * line.unit_price
-
-        if total_received >= total_ordered:
-            po.status = POStatus.RECEIVED
-        elif total_received > 0:
-            po.status = POStatus.PARTIALLY_RECEIVED
+        purchase_order_status.record_receipt_progress(db, po)
 
     @staticmethod
     def _reverse_po_quantities(db: Session, receipt: GoodsReceipt) -> None:

@@ -26,18 +26,6 @@ from app.services.finance.ap.purchase_order import (
 
 
 # Mock enums
-class MockPOStatus:
-    DRAFT = "DRAFT"
-    PENDING_APPROVAL = "PENDING_APPROVAL"
-    APPROVED = "APPROVED"
-    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED"
-    RECEIVED = "RECEIVED"
-    CLOSED = "CLOSED"
-    CANCELLED = "CANCELLED"
-
-    @property
-    def value(self):
-        return self
 
 
 class MockSupplier:
@@ -95,7 +83,7 @@ class MockPurchaseOrder:
         self.subtotal = subtotal
         self.tax_amount = tax_amount
         self.total_amount = total_amount
-        self.status = status or MockPOStatus()
+        self.status = status if status is not None else POStatus.DRAFT
         self.shipping_address = shipping_address
         self.terms_and_conditions = terms_and_conditions
         self.budget_id = budget_id
@@ -356,7 +344,7 @@ class TestUpdatePO:
             po_id=po_id,
             organization_id=org_id,
             supplier_id=supplier_id,
-            status=MockPOStatus(),
+            status=POStatus.DRAFT,
         )
         mock_po.status = POStatus.DRAFT
         existing_line = MockPurchaseOrderLine(po_id=po_id)
@@ -634,8 +622,7 @@ class TestDeletePO:
 class TestSubmitForApproval:
     """Tests for PO submission for approval."""
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_submit_for_approval_success(self, mock_status_class):
+    def test_submit_for_approval_success(self):
         """Test successful PO submission."""
         db = MagicMock()
         org_id = uuid4()
@@ -643,21 +630,15 @@ class TestSubmitForApproval:
         user_id = uuid4()
 
         # Setup status mocks
-        mock_draft = MagicMock()
-        mock_draft.value = "DRAFT"
-        mock_pending = MagicMock()
-        mock_status_class.DRAFT = mock_draft
-        mock_status_class.PENDING_APPROVAL = mock_pending
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.submit_for_approval(db, org_id, po_id, user_id)
 
         assert result is not None
-        assert mock_po.status == mock_pending
+        assert mock_po.status == POStatus.PENDING_APPROVAL
         db.flush.assert_called()
 
     def test_submit_for_approval_not_found(self):
@@ -673,22 +654,14 @@ class TestSubmitForApproval:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_submit_for_approval_wrong_status(self, mock_status_class):
+    def test_submit_for_approval_wrong_status(self):
         """Test submission of PO not in DRAFT status."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
         user_id = uuid4()
-
-        mock_draft = MagicMock()
-        mock_draft.value = "DRAFT"
-        mock_approved = MagicMock()
-        mock_approved.value = "APPROVED"
-        mock_status_class.DRAFT = mock_draft
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_approved  # Wrong status
+        mock_po.status = POStatus.APPROVED  # Wrong status: not DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -708,10 +681,8 @@ class TestApprovePO:
     @patch("app.services.finance.ap.purchase_order.queue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
-    @patch("app.services.finance.ap.purchase_order.POStatus")
     def test_approve_po_success(
         self,
-        mock_status_class,
         mock_render_branded_email,
         mock_pdf_service,
         mock_queue_email,
@@ -723,20 +694,13 @@ class TestApprovePO:
         supplier_id = uuid4()
         creator_id = uuid4()
         approver_id = uuid4()  # Different from creator
-
-        mock_pending = MagicMock()
-        mock_pending.value = "PENDING_APPROVAL"
-        mock_approved = MagicMock()
-        mock_status_class.PENDING_APPROVAL = mock_pending
-        mock_status_class.APPROVED = mock_approved
-
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
             supplier_id=supplier_id,
             created_by_user_id=creator_id,
         )
-        mock_po.status = mock_pending
+        mock_po.status = POStatus.PENDING_APPROVAL
         mock_supplier = MockSupplier(
             supplier_id=supplier_id,
             organization_id=org_id,
@@ -754,7 +718,7 @@ class TestApprovePO:
         result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
 
         assert result is not None
-        assert mock_po.status == mock_approved
+        assert mock_po.status == POStatus.APPROVED
         assert mock_po.approved_by_user_id == approver_id
         assert mock_po.approved_at is not None
         mock_render_branded_email.assert_called_once()
@@ -772,10 +736,8 @@ class TestApprovePO:
     @patch("app.services.finance.ap.purchase_order.queue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
-    @patch("app.services.finance.ap.purchase_order.POStatus")
     def test_approve_po_skips_supplier_notification_without_email(
         self,
-        mock_status_class,
         mock_render_branded_email,
         mock_pdf_service,
         mock_queue_email,
@@ -787,20 +749,13 @@ class TestApprovePO:
         supplier_id = uuid4()
         creator_id = uuid4()
         approver_id = uuid4()
-
-        mock_pending = MagicMock()
-        mock_pending.value = "PENDING_APPROVAL"
-        mock_approved = MagicMock()
-        mock_status_class.PENDING_APPROVAL = mock_pending
-        mock_status_class.APPROVED = mock_approved
-
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
             supplier_id=supplier_id,
             created_by_user_id=creator_id,
         )
-        mock_po.status = mock_pending
+        mock_po.status = POStatus.PENDING_APPROVAL
         mock_supplier = MockSupplier(
             supplier_id=supplier_id,
             organization_id=org_id,
@@ -824,10 +779,8 @@ class TestApprovePO:
     @patch("app.services.finance.ap.purchase_order.queue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
-    @patch("app.services.finance.ap.purchase_order.POStatus")
     def test_approve_po_queues_email_without_attachment_when_pdf_generation_fails(
         self,
-        mock_status_class,
         mock_render_branded_email,
         mock_pdf_service,
         mock_queue_email,
@@ -839,20 +792,13 @@ class TestApprovePO:
         supplier_id = uuid4()
         creator_id = uuid4()
         approver_id = uuid4()
-
-        mock_pending = MagicMock()
-        mock_pending.value = "PENDING_APPROVAL"
-        mock_approved = MagicMock()
-        mock_status_class.PENDING_APPROVAL = mock_pending
-        mock_status_class.APPROVED = mock_approved
-
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
             supplier_id=supplier_id,
             created_by_user_id=creator_id,
         )
-        mock_po.status = mock_pending
+        mock_po.status = POStatus.PENDING_APPROVAL
         mock_supplier = MockSupplier(
             supplier_id=supplier_id,
             organization_id=org_id,
@@ -886,10 +832,8 @@ class TestApprovePO:
     @patch("app.services.finance.ap.purchase_order.queue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
-    @patch("app.services.finance.ap.purchase_order.POStatus")
     def test_approve_po_continues_when_supplier_notification_rendering_fails(
         self,
-        mock_status_class,
         mock_render_branded_email,
         mock_pdf_service,
         mock_queue_email,
@@ -901,20 +845,13 @@ class TestApprovePO:
         supplier_id = uuid4()
         creator_id = uuid4()
         approver_id = uuid4()
-
-        mock_pending = MagicMock()
-        mock_pending.value = "PENDING_APPROVAL"
-        mock_approved = MagicMock()
-        mock_status_class.PENDING_APPROVAL = mock_pending
-        mock_status_class.APPROVED = mock_approved
-
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
             supplier_id=supplier_id,
             created_by_user_id=creator_id,
         )
-        mock_po.status = mock_pending
+        mock_po.status = POStatus.PENDING_APPROVAL
         mock_supplier = MockSupplier(
             supplier_id=supplier_id,
             organization_id=org_id,
@@ -947,21 +884,13 @@ class TestApprovePO:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_approve_po_wrong_status(self, mock_status_class):
+    def test_approve_po_wrong_status(self):
         """Test approval of PO not in PENDING_APPROVAL status."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-
-        mock_pending = MagicMock()
-        mock_pending.value = "PENDING_APPROVAL"
-        mock_draft = MagicMock()
-        mock_draft.value = "DRAFT"
-        mock_status_class.PENDING_APPROVAL = mock_pending
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT  # Wrong status: not PENDING_APPROVAL
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -971,24 +900,18 @@ class TestApprovePO:
         assert exc_info.value.status_code == 400
         assert "Cannot approve" in str(exc_info.value.detail)
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_approve_po_segregation_of_duties(self, mock_status_class):
+    def test_approve_po_segregation_of_duties(self):
         """Test SoD enforcement - approver cannot be creator."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
         user_id = uuid4()  # Same user creates and approves
-
-        mock_pending = MagicMock()
-        mock_pending.value = "PENDING_APPROVAL"
-        mock_status_class.PENDING_APPROVAL = mock_pending
-
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
             created_by_user_id=user_id,  # Creator is the same
         )
-        mock_po.status = mock_pending
+        mock_po.status = POStatus.PENDING_APPROVAL
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1005,26 +928,17 @@ class TestApprovePO:
 class TestCancelPO:
     """Tests for PO cancellation."""
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_cancel_po_success(self, mock_status_class):
+    def test_cancel_po_success(self):
         """Test successful PO cancellation."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
 
-        mock_draft = MagicMock()
-        mock_received = MagicMock()
-        mock_closed = MagicMock()
-        mock_cancelled = MagicMock()
-        mock_status_class.RECEIVED = mock_received
-        mock_status_class.CLOSED = mock_closed
-        mock_status_class.CANCELLED = mock_cancelled
-
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
         )
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1037,7 +951,7 @@ class TestCancelPO:
             result = PurchaseOrderService.cancel_po(db, org_id, po_id)
 
         assert result is not None
-        assert mock_po.status == mock_cancelled
+        assert mock_po.status == POStatus.CANCELLED
         db.flush.assert_called()
 
     def test_cancel_po_not_found(self):
@@ -1052,21 +966,13 @@ class TestCancelPO:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_cancel_po_received_status(self, mock_status_class):
+    def test_cancel_po_received_status(self):
         """Test cannot cancel PO in RECEIVED status."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-
-        mock_received = MagicMock()
-        mock_received.value = "RECEIVED"
-        mock_closed = MagicMock()
-        mock_status_class.RECEIVED = mock_received
-        mock_status_class.CLOSED = mock_closed
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_received
+        mock_po.status = POStatus.RECEIVED
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1076,21 +982,13 @@ class TestCancelPO:
         assert exc_info.value.status_code == 400
         assert "Cannot cancel" in str(exc_info.value.detail)
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_cancel_po_closed_status(self, mock_status_class):
+    def test_cancel_po_closed_status(self):
         """Test cannot cancel PO in CLOSED status."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-
-        mock_received = MagicMock()
-        mock_closed = MagicMock()
-        mock_closed.value = "CLOSED"
-        mock_status_class.RECEIVED = mock_received
-        mock_status_class.CLOSED = mock_closed
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_closed
+        mock_po.status = POStatus.CLOSED
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1099,24 +997,16 @@ class TestCancelPO:
 
         assert exc_info.value.status_code == 400
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_cancel_po_with_received_goods(self, mock_status_class):
+    def test_cancel_po_with_received_goods(self):
         """Test cannot cancel PO with received goods."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-
-        mock_received = MagicMock()
-        mock_closed = MagicMock()
-        mock_draft = MagicMock()
-        mock_status_class.RECEIVED = mock_received
-        mock_status_class.CLOSED = mock_closed
-
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
         )
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1141,29 +1031,20 @@ class TestCancelPO:
 class TestClosePO:
     """Tests for PO closing."""
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_close_po_success(self, mock_status_class):
+    def test_close_po_success(self):
         """Test successful PO closing."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-
-        mock_cancelled = MagicMock()
-        mock_closed = MagicMock()
-        mock_received = MagicMock()
-        mock_status_class.CANCELLED = mock_cancelled
-        mock_status_class.CLOSED = mock_closed
-        mock_status_class.RECEIVED = mock_received
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_received
+        mock_po.status = POStatus.RECEIVED
 
         db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.close_po(db, org_id, po_id)
 
         assert result is not None
-        assert mock_po.status == mock_closed
+        assert mock_po.status == POStatus.CLOSED
         db.flush.assert_called()
 
     def test_close_po_not_found(self):
@@ -1178,19 +1059,13 @@ class TestClosePO:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_close_po_cancelled(self, mock_status_class):
+    def test_close_po_cancelled(self):
         """Test cannot close cancelled PO."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-
-        mock_cancelled = MagicMock()
-        mock_cancelled.value = "CANCELLED"
-        mock_status_class.CANCELLED = mock_cancelled
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_cancelled
+        mock_po.status = POStatus.CANCELLED
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1200,19 +1075,13 @@ class TestClosePO:
         assert exc_info.value.status_code == 400
         assert "cancelled" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_close_po_draft_rejected(self, mock_status_class):
+    def test_close_po_draft_rejected(self):
         """F43: a DRAFT PO cannot be closed (only APPROVED/received)."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-
-        mock_draft = MagicMock()
-        mock_draft.value = "DRAFT"
-        mock_status_class.DRAFT = mock_draft
-
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1347,7 +1216,7 @@ class TestListPOs:
             db,
             organization_id=str(org_id),
             supplier_id=str(supplier_id),
-            status=MockPOStatus.APPROVED,
+            status=POStatus.APPROVED,
             from_date=date(2024, 1, 1),
             to_date=date(2024, 12, 31),
             limit=10,
