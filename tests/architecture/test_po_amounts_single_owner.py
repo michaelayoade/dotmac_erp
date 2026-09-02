@@ -256,3 +256,41 @@ def test_the_automation_gate_still_bites() -> None:
 
     assert field_authority_owner("PURCHASE_ORDER", "status") is None
     assert field_authority_owner("BILL", "amount_received") is None
+
+
+def test_the_write_detector_still_bites(tmp_path: Path) -> None:
+    """A scan that finds nothing passes whether or not it can find anything.
+
+    `test_nothing_writes_the_derived_amounts` is green because there are no
+    writers left. That is indistinguishable, from the outside, from an AST walk
+    that quietly stopped matching — a rename of the fields, a `_python_files`
+    glob that no longer reaches `app/`, a walk that misses `AugAssign`. So the
+    detector is run against a file that IS an offender, in every syntactic shape
+    a returning writer would plausibly take.
+    """
+    offender = tmp_path / "offender.py"
+    offender.write_text(
+        "\n".join(
+            (
+                "po.amount_received = total",  # plain assignment
+                "po.amount_invoiced += delta",  # the incremental writer's shape
+                "po.amount_received, po.status = total, RECEIVED",  # tuple target
+                "amount_received = total",  # a LOCAL: must NOT be flagged
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    found = _attribute_writes(offender)
+    names = sorted({name for _, name in found})
+
+    assert names == ["amount_invoiced", "amount_received"], (
+        f"The detector found {found} in a file with three deliberate writers. "
+        "It has stopped detecting, which means the green result above means "
+        "nothing."
+    )
+    assert len(found) == 3, (
+        f"Expected exactly the three attribute writes, got {found}. A count of 4 "
+        "means the bare local `amount_received = total` was flagged, which would "
+        "make the real scan fire on any function that merely computes the value."
+    )
