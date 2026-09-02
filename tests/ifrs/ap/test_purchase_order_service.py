@@ -934,12 +934,11 @@ class TestCancelPO:
         org_id = uuid4()
         po_id = uuid4()
 
-        mock_draft = MagicMock()
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
         )
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 
@@ -1003,12 +1002,11 @@ class TestCancelPO:
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
-        mock_draft = MagicMock()
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
         )
-        mock_po.status = mock_draft
+        mock_po.status = POStatus.DRAFT
 
         db.scalars.return_value.first.return_value = mock_po
 

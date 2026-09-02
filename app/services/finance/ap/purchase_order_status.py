@@ -67,7 +67,6 @@ from __future__ import annotations
 import enum
 import logging
 from dataclasses import dataclass
-from decimal import Decimal
 
 from fastapi import HTTPException
 
@@ -266,16 +265,9 @@ def _receipt_progress_target(po: PurchaseOrder) -> POStatus:
     receivable). Rejecting one receipt bricked the purchase order. Both call
     sites already say "Recalculate PO status"; now it actually recalculates.
     """
-    total_ordered = Decimal("0")
-    total_received = Decimal("0")
-
-    for line in po.lines:
-        total_ordered += line.quantity_ordered * line.unit_price
-        total_received += line.quantity_received * line.unit_price
-
-    if total_received <= 0:
+    if not po.lines or all(line.quantity_received <= 0 for line in po.lines):
         return POStatus.APPROVED
-    if total_received >= total_ordered:
+    if all(line.quantity_received >= line.quantity_ordered for line in po.lines):
         return POStatus.RECEIVED
     return POStatus.PARTIALLY_RECEIVED
 
