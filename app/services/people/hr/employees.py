@@ -799,6 +799,7 @@ class EmployeeService:
             },
         )
 
+        self._refresh_staff_access_projection(employee)
         if employee.dotmac_sub_access_enabled:
             self._enqueue_staff_sync(employee)
 
@@ -1247,6 +1248,7 @@ class EmployeeService:
             tuple(employee.dotmac_sub_roles or []),
             employee.department_id,
         )
+        self._refresh_staff_access_projection(employee)
         if current_staff_access != prior_staff_access:
             self._enqueue_staff_sync(employee)
 
@@ -1429,6 +1431,7 @@ class EmployeeService:
         employee.status = EmployeeStatus.TERMINATED
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
+        self._refresh_staff_access_projection(employee)
 
     # =========================================================================
     # Status Management
@@ -1460,6 +1463,14 @@ class EmployeeService:
                 exc_info=True,
             )
 
+    def _refresh_staff_access_projection(self, employee: Employee) -> None:
+        """Refresh ERP-owned Selfcare-facing staff access projections."""
+        from app.services.people.hr.staff_access_projection import (
+            StaffAccessProjectionService,
+        )
+
+        StaffAccessProjectionService(self.db).refresh_employee_projections(employee)
+
     def activate_employee(self, employee_id: uuid.UUID) -> Employee:
         """Activate an employee.
 
@@ -1476,6 +1487,7 @@ class EmployeeService:
         employee.status = EmployeeStatus.ACTIVE
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
+        self._refresh_staff_access_projection(employee)
         self._enqueue_staff_sync(employee)
         return employee
 
@@ -1499,6 +1511,7 @@ class EmployeeService:
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
         # Note: reason could be stored in notes field or separate audit log
+        self._refresh_staff_access_projection(employee)
         self._enqueue_staff_sync(employee)
         return employee
 
@@ -1552,6 +1565,7 @@ class EmployeeService:
             reason=data.reason if hasattr(data, "reason") else None,
         )
 
+        self._refresh_staff_access_projection(employee)
         self._enqueue_staff_sync(employee)
         return employee
 
@@ -1587,6 +1601,7 @@ class EmployeeService:
         employee.final_payroll_processed_at = None
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
+        self._refresh_staff_access_projection(employee)
         self._enqueue_staff_sync(employee)
         return employee
 
@@ -1662,6 +1677,7 @@ class EmployeeService:
                 employee.employee_id,
             )
 
+        self._refresh_staff_access_projection(employee)
         return employee
 
     def set_on_leave(self, employee_id: uuid.UUID) -> Employee:
@@ -1688,6 +1704,7 @@ class EmployeeService:
         employee.status = EmployeeStatus.ON_LEAVE
         employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
+        self._refresh_staff_access_projection(employee)
 
         return employee
 
@@ -1765,6 +1782,17 @@ class EmployeeService:
                     updated_employee_id,
                     data.reports_to_id,
                 )
+        if "status" in updates:
+            employees = list(
+                self.db.scalars(
+                    select(Employee).where(
+                        Employee.organization_id == self.organization_id,
+                        Employee.employee_id.in_(data.ids),
+                    )
+                ).all()
+            )
+            for employee in employees:
+                self._refresh_staff_access_projection(employee)
 
         return result
 
@@ -1799,5 +1827,16 @@ class EmployeeService:
         )
         result_proxy = cast(CursorResult[Any], self.db.execute(stmt))
         result.deleted_count = result_proxy.rowcount or 0
+        if result.deleted_count:
+            employees = list(
+                self.db.scalars(
+                    select(Employee).where(
+                        Employee.organization_id == self.organization_id,
+                        Employee.employee_id.in_(ids),
+                    )
+                ).all()
+            )
+            for employee in employees:
+                self._refresh_staff_access_projection(employee)
 
         return result
