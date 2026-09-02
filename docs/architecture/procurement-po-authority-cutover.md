@@ -124,10 +124,18 @@ silently widened.
 ## Dead code found during the census
 
 `app/services/finance/ap/web.py` (4651 lines) is **unreachable**: the
-`app/services/finance/ap/web/` package shadows the module, confirmed with
-`importlib.util.find_spec`. It contains a stale duplicate of the PO web
-surface, missing the `update`/`delete` handlers the live package has. It must
-not be "converted" — it must be deleted.
+`app/services/finance/ap/web/` package shadows the module.
+
+Verified in three parts, because the claim is load-bearing for deletion:
+both `web.py` and `web/__init__.py` exist in the same package directory; a
+clean-room `importlib.util.find_spec` reproduction of that exact layout
+resolves the name to the package's `__init__.py`, not the module; and nothing
+under `app/services/finance/ap/` uses `importlib` or `sys.path` manipulation
+that could load the shadowed file by another route.
+
+It contains a stale duplicate of the PO web surface, missing the
+`update`/`delete` handlers the live package has. It must not be "converted" —
+it must be deleted.
 
 ## Cutover gates
 
