@@ -140,6 +140,8 @@ MODULE_SETTINGS_CONFIGS = [
         template="settings/expense.html",
         setting_keys=[
             "expense_route_to_ap",
+            "expense_claim_expiry_days",
+            "expense_claim_expiry_warning_days",
             "expense_allowed_account_ids",
         ],
     ),
@@ -388,7 +390,15 @@ class ModuleSettingsWebService:
             IFRSCategory,
         )
 
-        ctx = self._build_settings_context(db, organization_id, ["expense_route_to_ap"])
+        ctx = self._build_settings_context(
+            db,
+            organization_id,
+            [
+                "expense_route_to_ap",
+                "expense_claim_expiry_days",
+                "expense_claim_expiry_warning_days",
+            ],
+        )
 
         # All IFRS expense-type posting accounts for the checklist
         from sqlalchemy import select
@@ -431,9 +441,18 @@ class ModuleSettingsWebService:
         allowed_account_ids: list[str] | None = None,
     ) -> tuple[bool, str | None]:
         """Update expense settings including allowed account list."""
-        # Handle the simple key-value settings (expense_route_to_ap)
+        data.setdefault("expense_route_to_ap", "false")
+
+        # Handle the simple key-value settings
         success, error = self._update_settings(
-            db, organization_id, data, ["expense_route_to_ap"]
+            db,
+            organization_id,
+            data,
+            [
+                "expense_route_to_ap",
+                "expense_claim_expiry_days",
+                "expense_claim_expiry_warning_days",
+            ],
         )
         if error:
             return False, error

@@ -2920,6 +2920,19 @@ class SelfServiceWebService:
             .list_vehicles(params=PaginationParams(offset=0, limit=500))
             .items
         )
+        from app.models.domain_settings import SettingDomain
+        from app.services.settings_spec import resolve_value
+
+        claim_expiry_days = int(
+            resolve_value(
+                db,
+                SettingDomain.expense,
+                "expense_claim_expiry_days",
+                organization_id=org_id,
+            )
+            or 0
+        )
+
         context = base_context(request, auth, "My Expenses", "self-expenses", db=db)
         context.update(
             {
@@ -2951,6 +2964,7 @@ class SelfServiceWebService:
                 "expense_approver_options": self._get_expense_approver_options(
                     db, org_id, employee_id=employee_id
                 ),
+                "claim_expiry_days": claim_expiry_days,
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(

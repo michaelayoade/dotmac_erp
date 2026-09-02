@@ -53,6 +53,7 @@ class ExpenseClaimStatus(str, enum.Enum):
     REJECTED = "REJECTED"
     PAID = "PAID"
     CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
 
     @classmethod
     def gl_impacting(cls) -> frozenset["ExpenseClaimStatus"]:
@@ -68,7 +69,13 @@ class ExpenseClaimStatus(str, enum.Enum):
     def terminal(cls) -> frozenset["ExpenseClaimStatus"]:
         """Statuses where the claim is fully settled or cancelled."""
         return frozenset(
-            {cls.PAID, cls.REJECTED, cls.CANCELLED, cls.APPROVAL_WITHDRAWN}
+            {
+                cls.PAID,
+                cls.REJECTED,
+                cls.CANCELLED,
+                cls.APPROVAL_WITHDRAWN,
+                cls.EXPIRED,
+            }
         )
 
 

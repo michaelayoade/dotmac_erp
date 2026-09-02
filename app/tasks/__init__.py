@@ -61,11 +61,13 @@ from app.tasks.dotmac_sub import (
 from app.tasks.email import send_email_async
 from app.tasks.expense import (
     calculate_expense_analytics,
+    expire_old_expense_claims,
     poll_stuck_expense_transfers,
     post_approved_expense,
     reconcile_unresolved_expense_transfers,
     post_cash_advance_disbursement,
     process_expense_approval_reminders,
+    process_expense_expiry_warnings,
     refresh_period_usage_cache,
     settle_cash_advance_with_claim,
 )
@@ -145,10 +147,12 @@ __all__ = [
     # Expense module tasks
     "refresh_period_usage_cache",
     "process_expense_approval_reminders",
+    "process_expense_expiry_warnings",
     "post_approved_expense",
     "post_cash_advance_disbursement",
     "settle_cash_advance_with_claim",
     "calculate_expense_analytics",
+    "expire_old_expense_claims",
     "poll_stuck_expense_transfers",
     "reconcile_unresolved_expense_transfers",
     # HR module tasks

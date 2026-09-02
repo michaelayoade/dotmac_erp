@@ -273,6 +273,14 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.expense.process_expense_approval_reminders",
             "schedule": crontab(hour=8, minute=15),  # Daily at 8:15 AM
         },
+        "expense-expiry-warnings": {
+            "task": "app.tasks.expense.process_expense_expiry_warnings",
+            "schedule": crontab(hour=8, minute=20),  # Daily at 8:20 AM
+        },
+        "expense-claim-expiry": {
+            "task": "app.tasks.expense.expire_old_expense_claims",
+            "schedule": crontab(hour=8, minute=25),  # Daily at 8:25 AM
+        },
         "expense-weekly-budget-reset": {
             "task": "app.tasks.expense.reset_weekly_approver_budgets",
             "schedule": crontab(
