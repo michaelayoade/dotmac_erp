@@ -51,6 +51,31 @@ _safe_form_text = partial(safe_form_text, strip=True)
 class ExpenseLimitWebService:
     """Service layer for expense limit web routes."""
 
+    @staticmethod
+    def _approver_limit_form_context(
+        *,
+        approver_limit: ExpenseApproverLimit | dict | None,
+        scope_options: dict,
+        errors: dict[str, str],
+        approver_limit_id: UUID | None = None,
+        scope_label: str | None = None,
+    ) -> dict:
+        """Build form state without confusing invalid create data with edit mode."""
+        is_edit = approver_limit_id is not None
+        form_action = "/expense/limits/approvers/new"
+        if is_edit:
+            form_action = f"/expense/limits/approvers/{approver_limit_id}/edit"
+
+        return {
+            "approver_limit": approver_limit,
+            "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
+            "scope_options": scope_options,
+            "scope_label": scope_label,
+            "errors": errors,
+            "is_edit": is_edit,
+            "form_action": form_action,
+        }
+
     def limits_index_response(
         self,
         request: Request,
@@ -567,12 +592,11 @@ class ExpenseLimitWebService:
 
         context = base_context(request, auth, "New Approver Limit", "limits")
         context.update(
-            {
-                "approver_limit": None,
-                "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
-                "scope_options": scope_options,
-                "errors": {},
-            }
+            self._approver_limit_form_context(
+                approver_limit=None,
+                scope_options=scope_options,
+                errors={},
+            )
         )
         return templates.TemplateResponse(
             request, "expense/limits/approver_form.html", context
@@ -658,13 +682,13 @@ class ExpenseLimitWebService:
 
         context = base_context(request, auth, "Edit Approver Limit", "limits")
         context.update(
-            {
-                "approver_limit": limit,
-                "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
-                "scope_options": scope_options,
-                "scope_label": scope_label,
-                "errors": {},
-            }
+            self._approver_limit_form_context(
+                approver_limit=limit,
+                approver_limit_id=limit.approver_limit_id,
+                scope_options=scope_options,
+                scope_label=scope_label,
+                errors={},
+            )
         )
         return templates.TemplateResponse(
             request, "expense/limits/approver_form.html", context
@@ -734,12 +758,11 @@ class ExpenseLimitWebService:
         if errors:
             context = base_context(request, auth, "New Approver Limit", "limits")
             context.update(
-                {
-                    "approver_limit": form_data,
-                    "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
-                    "scope_options": scope_options,
-                    "errors": errors,
-                }
+                self._approver_limit_form_context(
+                    approver_limit=form_data,
+                    scope_options=scope_options,
+                    errors=errors,
+                )
             )
             return templates.TemplateResponse(
                 request, "expense/limits/approver_form.html", context
@@ -767,12 +790,11 @@ class ExpenseLimitWebService:
             errors["_form"] = str(e)
             context = base_context(request, auth, "New Approver Limit", "limits")
             context.update(
-                {
-                    "approver_limit": form_data,
-                    "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
-                    "scope_options": scope_options,
-                    "errors": errors,
-                }
+                self._approver_limit_form_context(
+                    approver_limit=form_data,
+                    scope_options=scope_options,
+                    errors=errors,
+                )
             )
             return templates.TemplateResponse(
                 request, "expense/limits/approver_form.html", context
@@ -844,13 +866,12 @@ class ExpenseLimitWebService:
         if errors:
             context = base_context(request, auth, "Edit Approver Limit", "limits")
             context.update(
-                {
-                    "approver_limit": form_data,
-                    "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
-                    "scope_options": scope_options,
-                    "scope_label": None,
-                    "errors": errors,
-                }
+                self._approver_limit_form_context(
+                    approver_limit=form_data,
+                    approver_limit_id=approver_limit_id,
+                    scope_options=scope_options,
+                    errors=errors,
+                )
             )
             return templates.TemplateResponse(
                 request, "expense/limits/approver_form.html", context
@@ -879,13 +900,12 @@ class ExpenseLimitWebService:
             errors["_form"] = str(e)
             context = base_context(request, auth, "Edit Approver Limit", "limits")
             context.update(
-                {
-                    "approver_limit": form_data,
-                    "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
-                    "scope_options": scope_options,
-                    "scope_label": None,
-                    "errors": errors,
-                }
+                self._approver_limit_form_context(
+                    approver_limit=form_data,
+                    approver_limit_id=approver_limit_id,
+                    scope_options=scope_options,
+                    errors=errors,
+                )
             )
             return templates.TemplateResponse(
                 request, "expense/limits/approver_form.html", context

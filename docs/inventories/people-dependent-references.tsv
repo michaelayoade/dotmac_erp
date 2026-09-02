@@ -28,14 +28,14 @@ expense	expense_approver_limit	escalate_to_employee_id	hr	employee	employee_id	e
 expense	expense_approver_limit	updated_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:315 via app/models/mixins.py:106
 expense	expense_approver_limit_reset	approver_id	hr	employee	employee_id	explicit	app/models/expense/limit_rule.py:548
 expense	expense_approver_limit_reset	reviewed_by_id	public	people	id	explicit	app/models/expense/limit_rule.py:563
-expense	expense_category	created_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:75 via app/models/mixins.py:100|app/models/people/exp/expense_claim.py:52 via app/models/people/base.py:61
-expense	expense_category	updated_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:75 via app/models/mixins.py:106|app/models/people/exp/expense_claim.py:52 via app/models/people/base.py:66
-expense	expense_claim	approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:325|app/models/people/exp/expense_claim.py:270
-expense	expense_claim	created_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:151 via app/models/mixins.py:100|app/models/people/exp/expense_claim.py:128 via app/models/people/base.py:61
-expense	expense_claim	employee_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:204|app/models/people/exp/expense_claim.py:172
-expense	expense_claim	requested_approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:330|app/models/people/exp/expense_claim.py:275
-expense	expense_claim	status_changed_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:151 via app/models/mixins.py:156|app/models/people/exp/expense_claim.py:128 via app/models/people/base.py:85
-expense	expense_claim	updated_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:151 via app/models/mixins.py:106|app/models/people/exp/expense_claim.py:128 via app/models/people/base.py:66
+expense	expense_category	created_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:82 via app/models/mixins.py:100|app/models/people/exp/expense_claim.py:53 via app/models/people/base.py:61
+expense	expense_category	updated_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:82 via app/models/mixins.py:106|app/models/people/exp/expense_claim.py:53 via app/models/people/base.py:66
+expense	expense_claim	approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:332|app/models/people/exp/expense_claim.py:271
+expense	expense_claim	created_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:158 via app/models/mixins.py:100|app/models/people/exp/expense_claim.py:129 via app/models/people/base.py:61
+expense	expense_claim	employee_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:211|app/models/people/exp/expense_claim.py:173
+expense	expense_claim	requested_approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim.py:337|app/models/people/exp/expense_claim.py:276
+expense	expense_claim	status_changed_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:158 via app/models/mixins.py:156|app/models/people/exp/expense_claim.py:129 via app/models/people/base.py:85
+expense	expense_claim	updated_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:158 via app/models/mixins.py:106|app/models/people/exp/expense_claim.py:129 via app/models/people/base.py:66
 expense	expense_claim_approval_step	approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim_approval_step.py:83
 expense	expense_limit_evaluation	evaluated_by_id	public	people	id	explicit	app/models/expense/limit_rule.py:677
 expense	expense_limit_rule	created_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:103 via app/models/mixins.py:100
@@ -174,6 +174,10 @@ hr	salary_review	submitted_by_id	public	people	id	explicit	app/models/people/hr/
 hr	salary_review	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/salary_review.py:60 via app/models/people/base.py:66
 hr	skill	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:678 via app/models/people/base.py:61
 hr	skill	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:678 via app/models/people/base.py:66
+hr	staff_account_status_projection	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/staff_access_projection.py:182
+hr	staff_account_status_projection	person_id	public	people	id	explicit	app/models/people/hr/staff_access_projection.py:187
+hr	staff_leave_access_restriction	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/staff_access_projection.py:94
+hr	staff_leave_access_restriction	person_id	public	people	id	explicit	app/models/people/hr/staff_access_projection.py:99
 hr	succession_candidate	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/succession.py:190
 hr	succession_plan	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/succession.py:77 via app/models/people/base.py:61
 hr	succession_plan	incumbent_id	hr	employee	employee_id	explicit	app/models/people/hr/succession.py:116

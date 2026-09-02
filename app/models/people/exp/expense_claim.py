@@ -47,6 +47,7 @@ class ExpenseClaimStatus(str, enum.Enum):
     REJECTED = "REJECTED"
     PAID = "PAID"
     CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
 
 
 class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):

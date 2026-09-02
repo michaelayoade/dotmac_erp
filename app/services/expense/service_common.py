@@ -145,17 +145,20 @@ CLAIM_STATUS_TRANSITIONS = {
         ExpenseClaimStatus.SUBMITTED,
         ExpenseClaimStatus.PENDING_APPROVAL,
         ExpenseClaimStatus.CANCELLED,
+        ExpenseClaimStatus.EXPIRED,
     },
     ExpenseClaimStatus.SUBMITTED: {
         ExpenseClaimStatus.PENDING_APPROVAL,
         ExpenseClaimStatus.APPROVED,
         ExpenseClaimStatus.REJECTED,
         ExpenseClaimStatus.CANCELLED,
+        ExpenseClaimStatus.EXPIRED,
     },
     ExpenseClaimStatus.PENDING_APPROVAL: {
         ExpenseClaimStatus.APPROVED,
         ExpenseClaimStatus.REJECTED,
         ExpenseClaimStatus.CANCELLED,
+        ExpenseClaimStatus.EXPIRED,
     },
     ExpenseClaimStatus.APPROVED: {
         ExpenseClaimStatus.PAID,
@@ -166,6 +169,7 @@ CLAIM_STATUS_TRANSITIONS = {
     },
     ExpenseClaimStatus.PAID: set(),
     ExpenseClaimStatus.CANCELLED: set(),
+    ExpenseClaimStatus.EXPIRED: set(),
     ExpenseClaimStatus.APPROVAL_WITHDRAWN: set(),
 }
 

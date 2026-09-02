@@ -98,14 +98,15 @@ def _sync_erp_department_membership(
 
 
 def sync_employee(
-    db: Session,
+    db: Session | None,
     employee: Employee,
     *,
     client: DotmacSubClient | None = None,
 ) -> dict[str, Any]:
     """Push one employee's lifecycle state to dotmac_sub. Idempotent.
 
-    Returns a result dict: {action: created|enabled|disabled|skipped|noop, ...}.
+    Returns a result dict with action created, reactivation_projected, disabled,
+    skipped, or noop.
     Never raises on business-state gaps (missing email, draft status) — those
     are 'skipped' with a reason; transport/auth errors do raise so callers
     (Celery retry / reconcile error counters) see them.
@@ -155,6 +156,7 @@ def sync_employee(
                     db, employee, employee.dotmac_sub_account_id, client
                 )
                 _mark_synced(employee)
+                _refresh_staff_access_projection(db, employee)
                 return {
                     "action": "created",
                     "account_id": employee.dotmac_sub_account_id,
@@ -164,12 +166,13 @@ def sync_employee(
             employee.dotmac_sub_account_id = account_id
             client.set_staff_account_roles(account_id, roles=roles)
             if account and not account.get("is_active", True):
-                client.set_staff_account_active(account_id, is_active=True)
                 _sync_erp_department_membership(db, employee, account_id, client)
                 _mark_synced(employee)
-                return {"action": "enabled", "account_id": account_id}
+                _refresh_staff_access_projection(db, employee)
+                return {"action": "reactivation_projected", "account_id": account_id}
             _sync_erp_department_membership(db, employee, account_id, client)
             _mark_synced(employee)
+            _refresh_staff_access_projection(db, employee)
             return {"action": "noop", "account_id": account_id}
 
         # Disabled lifecycle statuses or an explicit HR access revocation.
@@ -188,10 +191,12 @@ def sync_employee(
                 db, employee, account_id, client, remove=True
             )
             _mark_synced(employee)
+            _refresh_staff_access_projection(db, employee)
             return {"action": "noop", "account_id": account_id}
         _sync_erp_department_membership(db, employee, account_id, client, remove=True)
         client.set_staff_account_active(account_id, is_active=False)
         _mark_synced(employee)
+        _refresh_staff_access_projection(db, employee)
         return {"action": "disabled", "account_id": account_id}
     finally:
         if owns_client:
@@ -200,6 +205,17 @@ def sync_employee(
 
 def _mark_synced(employee: Employee) -> None:
     employee.dotmac_sub_staff_synced_at = datetime.now(timezone.utc)
+
+
+def _refresh_staff_access_projection(db: Session | None, employee: Employee) -> None:
+    if db is None:
+        return
+
+    from app.services.people.hr.staff_access_projection import (
+        StaffAccessProjectionService,
+    )
+
+    StaffAccessProjectionService(db).refresh_employee_projections(employee)
 
 
 def reconcile_staff_accounts(db: Session, organization_id: UUID) -> dict[str, Any]:

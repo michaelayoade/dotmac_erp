@@ -191,6 +191,8 @@ hr	job_description_competency	inherited	false	false	app_admin	0	false	--	--
 hr	position	direct	false	false	app_admin	0	false	--	--
 hr	position_assignment	direct	false	false	app_admin	0	false	--	--
 hr	salary_review	direct	false	false	app_admin	0	false	--	--
+hr	staff_account_status_projection	direct	true	true	app_admin	1	false	rw	--
+hr	staff_leave_access_restriction	direct	true	true	app_admin	1	false	rw	--
 hr	skill	direct	false	false	app_admin	0	false	--	--
 hr	succession_candidate	direct	false	false	app_admin	0	false	--	--
 hr	succession_plan	direct	false	false	app_admin	0	false	--	--
