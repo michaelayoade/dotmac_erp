@@ -230,8 +230,12 @@ def apply_transition(
 
     if transition is POTransition.RECORD_RECEIPT_PROGRESS:
         target = _receipt_progress_target(po)
+    elif spec.to_state is None:
+        # Unreachable through the table above, and deliberately a raise rather
+        # than an `assert`: asserts are stripped under `python -O`, so an
+        # invariant guarded by one is not guarded in a production image.
+        raise RuntimeError(f"Transition {transition.value} declares no target state")
     else:
-        assert spec.to_state is not None  # every fixed transition declares one
         target = spec.to_state
 
     if target != current:
