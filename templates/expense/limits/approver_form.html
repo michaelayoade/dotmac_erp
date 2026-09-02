@@ -9,7 +9,7 @@
         </a>
         <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">
-                {{ "Edit Approver Limit" if approver_limit else "New Approver Limit" }}
+                {{ "Edit Approver Limit" if is_edit else "New Approver Limit" }}
             </h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Define approval authority for a role, grade, or individual</p>
         </div>
@@ -22,7 +22,7 @@
     {% endif %}
 
     <form method="post"
-          action="{% if approver_limit %}/expense/limits/approvers/{{ approver_limit.approver_limit_id }}/edit{% else %}/expense/limits/approvers/new{% endif %}"
+          action="{{ form_action }}"
           class="space-y-6">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
@@ -167,7 +167,7 @@
         <!-- Form Actions -->
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/expense/limits/approvers" class="btn btn-secondary">Cancel</a>
-            <button type="submit" class="btn btn-primary">Create Approver Limit</button>
+            <button type="submit" class="btn btn-primary">{{ "Update" if is_edit else "Create" }} Approver Limit</button>
         </div>
     </form>
 </div>
