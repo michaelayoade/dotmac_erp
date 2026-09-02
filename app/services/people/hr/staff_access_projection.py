@@ -457,8 +457,7 @@ class StaffAccessProjectionService:
             producer_module="people",
             correlation_id=str(projection.employee_id),
             idempotency_key=(
-                f"staff-account-status:{projection.projection_id}:"
-                f"v{projection.version}"
+                f"staff-account-status:{projection.projection_id}:v{projection.version}"
             ),
         )
 

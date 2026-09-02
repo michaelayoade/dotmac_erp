@@ -14,6 +14,28 @@ branch_labels = None
 depends_on = None
 
 
+PROJECTED_TABLES = (
+    "hr.staff_leave_access_restriction",
+    "hr.staff_account_status_projection",
+)
+
+
+def _protect_projected_tables() -> None:
+    for table in PROJECTED_TABLES:
+        policy_name = table.replace(".", "_") + "_tenant_isolation"
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+        op.execute(
+            f"""
+            CREATE POLICY {policy_name}
+                ON {table}
+                USING (organization_id = public.app_current_tenant_id())
+                WITH CHECK (organization_id = public.app_current_tenant_id())
+            """
+        )
+        op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {table} TO app_user")
+
+
 def upgrade() -> None:
     staff_leave_restriction_status = postgresql.ENUM(
         "ACTIVE",
@@ -180,6 +202,7 @@ def upgrade() -> None:
         ["organization_id", "updated_at", "projection_id"],
         schema="hr",
     )
+    _protect_projected_tables()
 
 
 def downgrade() -> None:
