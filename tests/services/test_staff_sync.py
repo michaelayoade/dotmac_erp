@@ -103,14 +103,14 @@ def test_active_employee_without_account_is_created_and_invited():
     ]
 
 
-def test_active_employee_with_inactive_account_is_reenabled():
+def test_active_employee_with_inactive_account_projects_reactivation():
     client = FakeClient(existing={"id": "acc-9", "is_active": False})
     emp = _employee(EmployeeStatus.ACTIVE)
 
     result = staff_sync.sync_employee(None, emp, client=client)
 
-    assert result["action"] == "enabled"
-    assert client.active_calls == [("acc-9", True)]
+    assert result["action"] == "reactivation_projected"
+    assert client.active_calls == []
     assert client.role_calls == [("acc-9", ["staff"])]
     assert client.department_calls == [
         (
