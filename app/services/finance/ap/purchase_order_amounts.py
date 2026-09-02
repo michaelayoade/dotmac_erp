@@ -72,7 +72,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.purchase_order import PurchaseOrder
@@ -293,12 +293,3 @@ def has_financial_activity(db: Session, organization_id: UUID, po_id: UUID) -> b
     """
     amounts = amounts_for(db, organization_id, po_id)
     return amounts.amount_received > ZERO or amounts.amount_invoiced > ZERO
-
-
-def with_amount_columns(stmt: Select) -> Select:
-    """Add the two derived amounts as extra columns on a PO select.
-
-    Rows come back as `(PurchaseOrder, received, invoiced)`.  Use this when a
-    list page needs the amounts alongside the ORM objects in one round trip.
-    """
-    return stmt.add_columns(received_expr(), invoiced_expr())
