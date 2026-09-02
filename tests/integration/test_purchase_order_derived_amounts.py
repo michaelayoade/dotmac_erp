@@ -141,7 +141,7 @@ def test_received_is_derived_from_the_line_quantities(
     _make_po_line(db, po, 1, ordered="10", received="4", unit_price="100.00")
     _make_po_line(db, po, 2, ordered="5", received="5", unit_price="20.00")
 
-    amounts = amounts_for(db, po.po_id)
+    amounts = amounts_for(db, org_id, po.po_id)
 
     # 4 * 100 + 5 * 20
     assert amounts.amount_received == Decimal("500.000000")
@@ -166,7 +166,7 @@ def test_invoiced_is_non_zero_once_an_invoice_line_matches_a_po_line(
     _make_invoice_line(db, supplier_invoice, line, 1, "300.00")
     db.flush()
 
-    amounts = amounts_for(db, po.po_id)
+    amounts = amounts_for(db, org_id, po.po_id)
     assert amounts.amount_invoiced == Decimal("300.000000")
     assert amounts.amount_received == Decimal("0")
 
@@ -184,17 +184,17 @@ def test_a_draft_invoice_is_not_yet_a_claim_against_the_po(
     _make_invoice_line(db, supplier_invoice, line, 1, "300.00")
     db.flush()
 
-    assert amounts_for(db, po.po_id).amount_invoiced == Decimal("0")
+    assert amounts_for(db, org_id, po.po_id).amount_invoiced == Decimal("0")
 
     # Approve it and the same line now counts.
     supplier_invoice.status = SupplierInvoiceStatus.APPROVED
     db.flush()
-    assert amounts_for(db, po.po_id).amount_invoiced == Decimal("300.000000")
+    assert amounts_for(db, org_id, po.po_id).amount_invoiced == Decimal("300.000000")
 
     # Void it and it stops counting, without anything having to rewrite a column.
     supplier_invoice.status = SupplierInvoiceStatus.VOID
     db.flush()
-    assert amounts_for(db, po.po_id).amount_invoiced == Decimal("0")
+    assert amounts_for(db, org_id, po.po_id).amount_invoiced == Decimal("0")
 
 
 def test_an_unmatched_invoice_line_does_not_count_against_the_po(
@@ -211,7 +211,7 @@ def test_an_unmatched_invoice_line_does_not_count_against_the_po(
     _make_invoice_line(db, supplier_invoice, None, 1, "900.00")
     db.flush()
 
-    assert amounts_for(db, po.po_id).amount_invoiced == Decimal("0")
+    assert amounts_for(db, org_id, po.po_id).amount_invoiced == Decimal("0")
 
 
 def test_the_batch_form_matches_the_single_form_and_zero_fills(
@@ -226,14 +226,14 @@ def test_the_batch_form_matches_the_single_form_and_zero_fills(
     _make_po_line(db, active, 1, ordered="3", received="2", unit_price="50.00")
     empty = _make_po(db, org_id, supplier, user_id, "PO-DERIVE-6")
 
-    batch = amounts_for_many(db, [active.po_id, empty.po_id, active.po_id])
+    batch = amounts_for_many(db, org_id, [active.po_id, empty.po_id, active.po_id])
 
     # Every requested id is present, including the one with no lines at all —
     # a list page must never have to tell "no rows" apart from "zero".
     assert set(batch) == {active.po_id, empty.po_id}
     assert batch[empty.po_id].amount_received == Decimal("0")
     assert batch[empty.po_id].amount_invoiced == Decimal("0")
-    assert batch[active.po_id] == amounts_for(db, active.po_id)
+    assert batch[active.po_id] == amounts_for(db, org_id, active.po_id)
 
 
 def test_the_correlated_expressions_agree_with_the_batch_form(
@@ -262,7 +262,7 @@ def test_the_correlated_expressions_agree_with_the_batch_form(
         select(received_expr(), invoiced_expr()).where(PurchaseOrder.po_id == po.po_id)
     ).one()
 
-    expected = amounts_for(db, po.po_id)
+    expected = amounts_for(db, org_id, po.po_id)
     assert Decimal(str(received)) == expected.amount_received
     assert Decimal(str(invoiced)) == expected.amount_invoiced
     assert expected.amount_received == Decimal("75.000000")
@@ -286,10 +286,38 @@ def test_the_supersede_and_cancel_interlock_now_fires_on_an_invoice_alone(
     po = _make_po(db, org_id, supplier, user_id, "PO-DERIVE-8")
     line = _make_po_line(db, po, 1, ordered="10", received="0", unit_price="100.00")
 
-    assert has_financial_activity(db, po.po_id) is False
+    assert has_financial_activity(db, org_id, po.po_id) is False
 
     supplier_invoice.status = SupplierInvoiceStatus.POSTED
     _make_invoice_line(db, supplier_invoice, line, 1, "1000.00")
     db.flush()
 
-    assert has_financial_activity(db, po.po_id) is True
+    assert has_financial_activity(db, org_id, po.po_id) is True
+
+
+def test_another_tenants_purchase_order_derives_as_zero(
+    db: Session, org_id: uuid.UUID, supplier, user_id: uuid.UUID
+) -> None:
+    """The derivation is scoped by argument, not by the caller's good manners.
+
+    `ap.purchase_order_line` and `ap.supplier_invoice_line` carry no
+    `organization_id` — they inherit isolation from their parents. A helper that
+    took only a `po_id` would read straight across tenants the first time a
+    caller handed it an id it had not already scoped. So the scope is a required
+    argument and the query joins through `ap.purchase_order` to apply it, and
+    this is the test that says so.
+    """
+    from app.services.finance.ap.purchase_order_amounts import (
+        amounts_for,
+        has_financial_activity,
+    )
+
+    po = _make_po(db, org_id, supplier, user_id, "PO-DERIVE-9")
+    _make_po_line(db, po, 1, ordered="10", received="10", unit_price="100.00")
+
+    assert amounts_for(db, org_id, po.po_id).amount_received == Decimal("1000.000000")
+
+    other_org = uuid.uuid4()
+    assert amounts_for(db, other_org, po.po_id).amount_received == Decimal("0")
+    assert amounts_for(db, other_org, po.po_id).amount_invoiced == Decimal("0")
+    assert has_financial_activity(db, other_org, po.po_id) is False

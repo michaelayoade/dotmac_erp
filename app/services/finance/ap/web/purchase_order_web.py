@@ -160,7 +160,7 @@ class PurchaseOrderWebService:
         ) or Decimal("0")
 
         # One batched derivation for the page, not one query per row.
-        page_amounts = amounts_for_many(db, [po.po_id for po, _ in orders])
+        page_amounts = amounts_for_many(db, org_id, [po.po_id for po, _ in orders])
 
         orders_view = []
         for po, supplier in orders:
@@ -259,7 +259,7 @@ class PurchaseOrderWebService:
                 }
             )
 
-        po_amounts = amounts_for(db, po.po_id)
+        po_amounts = amounts_for(db, org_id, po.po_id)
         order_view = {
             "po_id": po.po_id,
             "po_number": po.po_number,

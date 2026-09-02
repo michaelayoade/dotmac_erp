@@ -756,7 +756,7 @@ class PurchaseOrderService(ListResponseMixin):
         # column; `purchase_order_amounts` is its sole owner.
         from app.services.finance.ap.purchase_order_amounts import received_for
 
-        if received_for(db, po_id) > 0:
+        if received_for(db, org_id, po_id) > 0:
             raise HTTPException(
                 status_code=400, detail="Cannot cancel PO with received goods"
             )

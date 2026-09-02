@@ -45,6 +45,25 @@ does not issue one query per row.
 
 Both go to the database.  Neither reads a cached attribute off the ORM instance,
 because there is no longer an attribute to read.
+
+## Tenant scope is a required argument, not an assumption
+
+`ap.purchase_order_line` and `ap.supplier_invoice_line` carry no
+`organization_id` — they inherit isolation from their parents.  A helper that
+took only a `po_id` would therefore read across tenants if a caller ever handed
+it an id it had not already scoped, and "the caller checked" is not a boundary.
+So the instance-form functions REQUIRE `organization_id` and constrain through
+`ap.purchase_order`; the invoiced query additionally constrains
+`ap.supplier_invoice.organization_id`, so an invoice belonging to another tenant
+contributes nothing even if a line somehow points at this PO.
+
+A PO that does not exist, or belongs to another tenant, derives as zero rather
+than raising: these are read helpers behind guards that have already loaded the
+PO under tenant scope, and a zero cannot leak anything.
+
+The `*_expr()` forms take no `organization_id` because they correlate on
+`PurchaseOrder` and inherit whatever the enclosing query filters on — which must
+therefore include the tenant predicate.
 """
 
 from __future__ import annotations
@@ -159,7 +178,9 @@ def invoiced_expr() -> ColumnElement[Decimal]:
     )
 
 
-def _received_for_ids(db: Session, po_ids: list[UUID]) -> dict[UUID, Decimal]:
+def _received_for_ids(
+    db: Session, organization_id: UUID, po_ids: list[UUID]
+) -> dict[UUID, Decimal]:
     rows = db.execute(
         select(
             PurchaseOrderLine.po_id,
@@ -170,13 +191,19 @@ def _received_for_ids(db: Session, po_ids: list[UUID]) -> dict[UUID, Decimal]:
                 0,
             ),
         )
-        .where(PurchaseOrderLine.po_id.in_(po_ids))
+        .join(PurchaseOrder, PurchaseOrder.po_id == PurchaseOrderLine.po_id)
+        .where(
+            PurchaseOrderLine.po_id.in_(po_ids),
+            PurchaseOrder.organization_id == organization_id,
+        )
         .group_by(PurchaseOrderLine.po_id)
     ).all()
     return {po_id: Decimal(str(total)) for po_id, total in rows}
 
 
-def _invoiced_for_ids(db: Session, po_ids: list[UUID]) -> dict[UUID, Decimal]:
+def _invoiced_for_ids(
+    db: Session, organization_id: UUID, po_ids: list[UUID]
+) -> dict[UUID, Decimal]:
     rows = db.execute(
         select(
             PurchaseOrderLine.po_id,
@@ -191,8 +218,13 @@ def _invoiced_for_ids(db: Session, po_ids: list[UUID]) -> dict[UUID, Decimal]:
             PurchaseOrderLine,
             PurchaseOrderLine.line_id == SupplierInvoiceLine.po_line_id,
         )
+        .join(PurchaseOrder, PurchaseOrder.po_id == PurchaseOrderLine.po_id)
         .where(
             PurchaseOrderLine.po_id.in_(po_ids),
+            # Both parents are constrained, not just the PO: an invoice from
+            # another tenant must not contribute even if a line points here.
+            PurchaseOrder.organization_id == organization_id,
+            SupplierInvoice.organization_id == organization_id,
             SupplierInvoice.status.in_(
                 sorted(COUNTS_AS_INVOICED, key=lambda s: s.value)
             ),
@@ -203,20 +235,21 @@ def _invoiced_for_ids(db: Session, po_ids: list[UUID]) -> dict[UUID, Decimal]:
 
 
 def amounts_for_many(
-    db: Session, po_ids: list[UUID]
+    db: Session, organization_id: UUID, po_ids: list[UUID]
 ) -> dict[UUID, PurchaseOrderAmounts]:
     """Derive both amounts for a batch of POs in two queries, not two per PO.
 
     Every requested id appears in the result, zero-valued when the PO has no
-    lines, no receipts and no matched invoice lines.  A caller therefore never
-    has to distinguish "no rows" from "zero".
+    lines, no receipts and no matched invoice lines — and also when the id names
+    a PO that does not exist or belongs to another tenant.  A caller therefore
+    never has to distinguish "no rows" from "zero".
     """
     unique_ids = list(dict.fromkeys(po_ids))
     if not unique_ids:
         return {}
 
-    received = _received_for_ids(db, unique_ids)
-    invoiced = _invoiced_for_ids(db, unique_ids)
+    received = _received_for_ids(db, organization_id, unique_ids)
+    invoiced = _invoiced_for_ids(db, organization_id, unique_ids)
 
     return {
         po_id: PurchaseOrderAmounts(
@@ -228,22 +261,24 @@ def amounts_for_many(
     }
 
 
-def amounts_for(db: Session, po_id: UUID) -> PurchaseOrderAmounts:
+def amounts_for(
+    db: Session, organization_id: UUID, po_id: UUID
+) -> PurchaseOrderAmounts:
     """Derive both amounts for one PO."""
-    return amounts_for_many(db, [po_id])[po_id]
+    return amounts_for_many(db, organization_id, [po_id])[po_id]
 
 
-def received_for(db: Session, po_id: UUID) -> Decimal:
+def received_for(db: Session, organization_id: UUID, po_id: UUID) -> Decimal:
     """Derive just the received amount for one PO."""
-    return amounts_for(db, po_id).amount_received
+    return amounts_for(db, organization_id, po_id).amount_received
 
 
-def invoiced_for(db: Session, po_id: UUID) -> Decimal:
+def invoiced_for(db: Session, organization_id: UUID, po_id: UUID) -> Decimal:
     """Derive just the invoiced amount for one PO."""
-    return amounts_for(db, po_id).amount_invoiced
+    return amounts_for(db, organization_id, po_id).amount_invoiced
 
 
-def has_financial_activity(db: Session, po_id: UUID) -> bool:
+def has_financial_activity(db: Session, organization_id: UUID, po_id: UUID) -> bool:
     """True when a PO has been received against or invoiced against.
 
     This is the interlock the CRM supersede path and `cancel_po` need: a PO with
@@ -256,7 +291,7 @@ def has_financial_activity(db: Session, po_id: UUID) -> bool:
     Both halves of the "invoiced" interlock were dead.  This one reads the
     supplier invoice lines themselves.
     """
-    amounts = amounts_for(db, po_id)
+    amounts = amounts_for(db, organization_id, po_id)
     return amounts.amount_received > ZERO or amounts.amount_invoiced > ZERO
 
 
