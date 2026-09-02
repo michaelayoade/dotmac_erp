@@ -138,7 +138,7 @@ class StaffLeaveAccessRestriction(Base):
         onupdate=func.now(),
     )
 
-    employee: Mapped["Employee"] = relationship("Employee")
+    employee: Mapped[Employee] = relationship("Employee")
 
 
 class StaffAccountStatusProjection(Base):
@@ -220,7 +220,7 @@ class StaffAccountStatusProjection(Base):
         onupdate=func.now(),
     )
 
-    employee: Mapped["Employee"] = relationship("Employee")
+    employee: Mapped[Employee] = relationship("Employee")
 
 
 __all__ = [

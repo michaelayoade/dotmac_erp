@@ -291,9 +291,12 @@ def test_approved_leave_period_changes_advance_versions(db_session):
     moved = service.project_leave_application(application)
     assert moved.version == 4
     assert moved.effective_from == date(2026, 1, 12)
-    assert _outbox_events(db_session, STAFF_LEAVE_RESTRICTION_CHANGED)[-1].payload[
-        "version"
-    ] == 4
+    assert (
+        _outbox_events(db_session, STAFF_LEAVE_RESTRICTION_CHANGED)[-1].payload[
+            "version"
+        ]
+        == 4
+    )
 
 
 def test_overlapping_leaves_are_deterministic_and_independently_versioned(db_session):
