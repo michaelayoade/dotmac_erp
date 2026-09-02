@@ -95,8 +95,13 @@ part of this cutover, not a follow-up.
 - **Sync** — `app/api/sync/dotmac_sub.py:452` -> `sync/sub/procurement.py:1042`.
 - **Jobs** — **none exist.** No Celery task or Beat entry touches purchase
   orders. Nothing to convert; nothing to invent.
-- **Scripts/CLI** — **none exist.** Only `scripts/seed_rbac.py` permission
-  strings.
+- **Scripts/CLI** — **no runtime entrypoint exists.** `scripts/seed_rbac.py`
+  carries permission strings only. `scripts/add_active_filters.py:82` is a
+  one-off codemod that names `list_purchase_orders_context`; it writes no
+  purchase-order state and is not a runtime path. It is worth noting for one
+  reason: it targets `app/services/finance/ap/web.py`, the shadowed dead
+  module below, so running it would patch unreachable code. Retire it with
+  that file.
 - **Templates** — `templates/finance/ap/purchase_orders.html`,
   `purchase_order_detail.html`, `purchase_order_form.html`,
   `purchase_order_pdf.html`.
