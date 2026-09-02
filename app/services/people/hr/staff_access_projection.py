@@ -114,6 +114,7 @@ class StaffAccessProjectionService:
         reason: str | None = None,
     ) -> StaffLeaveAccessRestriction | None:
         """Upsert the restriction projection for one leave application."""
+        self.db.flush()
         employee = self._employee(
             application.organization_id,
             application.employee_id,

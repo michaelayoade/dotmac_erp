@@ -22,7 +22,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from sqlalchemy import func, literal, or_, select, text, update
+from sqlalchemy import func, inspect as inspect_db, literal, or_, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, selectinload
 
@@ -1465,6 +1465,21 @@ class EmployeeService:
 
     def _refresh_staff_access_projection(self, employee: Employee) -> None:
         """Refresh ERP-owned Selfcare-facing staff access projections."""
+        required_attrs = ("organization_id", "employee_id", "person_id", "status")
+        if any(getattr(employee, attr, None) is None for attr in required_attrs):
+            return
+        required_db_attrs = ("add", "flush", "get_bind", "scalar", "scalars")
+        if not all(hasattr(self.db, attr) for attr in required_db_attrs):
+            return
+        bind = self.db.get_bind()
+        if getattr(bind.dialect, "name", "") == "sqlite":
+            inspector = inspect_db(bind)
+            has_projection_tables = inspector.has_table(
+                "staff_account_status_projection"
+            ) and inspector.has_table("staff_leave_access_restriction")
+            if not has_projection_tables:
+                return
+
         from app.services.people.hr.staff_access_projection import (
             StaffAccessProjectionService,
         )
