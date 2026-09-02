@@ -31,4 +31,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     # PostgreSQL enum values cannot be removed safely while dependent rows exist.
     pass
-
