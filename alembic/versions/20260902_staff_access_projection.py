@@ -1,7 +1,7 @@
 """Add ERP-owned staff access projection tables.
 
 Revision ID: 20260902_staff_access_projection
-Revises: 20260902_drop_po_derived_amounts
+Revises: 20260902_expense_claim_expiry
 """
 
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "20260902_staff_access_projection"
-down_revision = "20260902_drop_po_derived_amounts"
+down_revision = "20260902_expense_claim_expiry"
 branch_labels = None
 depends_on = None
 

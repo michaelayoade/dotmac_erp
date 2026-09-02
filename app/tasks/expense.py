@@ -335,22 +335,26 @@ def process_expense_expiry_warnings() -> dict:
         try:
             with session_for_org(org_id) as db:
                 expiry_days = int(
-                    resolve_value(
-                        db,
-                        SettingDomain.expense,
-                        "expense_claim_expiry_days",
-                        organization_id=org_id,
+                    str(
+                        resolve_value(
+                            db,
+                            SettingDomain.expense,
+                            "expense_claim_expiry_days",
+                            organization_id=org_id,
+                        )
+                        or 0
                     )
-                    or 0
                 )
                 warning_days = int(
-                    resolve_value(
-                        db,
-                        SettingDomain.expense,
-                        "expense_claim_expiry_warning_days",
-                        organization_id=org_id,
+                    str(
+                        resolve_value(
+                            db,
+                            SettingDomain.expense,
+                            "expense_claim_expiry_warning_days",
+                            organization_id=org_id,
+                        )
+                        or 0
                     )
-                    or 0
                 )
                 if expiry_days <= 0 or warning_days <= 0:
                     results["disabled"] += 1
@@ -493,7 +497,7 @@ def expire_old_expense_claims() -> dict:
                     "expense_claim_expiry_days",
                     organization_id=org_id,
                 )
-                expiry_days = int(raw_expiry_days or 0)
+                expiry_days = int(str(raw_expiry_days or 0))
                 if expiry_days <= 0:
                     results["disabled"] += 1
                     continue

@@ -1,7 +1,7 @@
 """Add expense claim expiry status and action.
 
 Revision ID: 20260902_expense_claim_expiry
-Revises: 20260831_sync_history_heartbeat
+Revises: 20260902_drop_po_derived_amounts
 Create Date: 2026-09-02
 """
 
@@ -12,20 +12,16 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "20260902_expense_claim_expiry"
-down_revision: str = "20260831_sync_history_heartbeat"
+down_revision: str = "20260902_drop_po_derived_amounts"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     op.execute(
-        "ALTER TYPE expense.expense_claim_status "
-        "ADD VALUE IF NOT EXISTS 'EXPIRED'"
+        "ALTER TYPE expense.expense_claim_status ADD VALUE IF NOT EXISTS 'EXPIRED'"
     )
-    op.execute(
-        "ALTER TYPE expense_claim_action_type "
-        "ADD VALUE IF NOT EXISTS 'EXPIRE'"
-    )
+    op.execute("ALTER TYPE expense_claim_action_type ADD VALUE IF NOT EXISTS 'EXPIRE'")
 
 
 def downgrade() -> None:

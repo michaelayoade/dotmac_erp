@@ -2924,13 +2924,15 @@ class SelfServiceWebService:
         from app.services.settings_spec import resolve_value
 
         claim_expiry_days = int(
-            resolve_value(
-                db,
-                SettingDomain.expense,
-                "expense_claim_expiry_days",
-                organization_id=org_id,
+            str(
+                resolve_value(
+                    db,
+                    SettingDomain.expense,
+                    "expense_claim_expiry_days",
+                    organization_id=org_id,
+                )
+                or 0
             )
-            or 0
         )
 
         context = base_context(request, auth, "My Expenses", "self-expenses", db=db)
