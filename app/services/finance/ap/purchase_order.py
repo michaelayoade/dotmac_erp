@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.models.email_profile import EmailModule
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
+from app.services.finance.ap import purchase_order_status
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.core_config.numbering_sequence import SequenceType
@@ -603,12 +604,9 @@ class PurchaseOrderService(ListResponseMixin):
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
-        if po.status != POStatus.DRAFT:
-            raise HTTPException(
-                status_code=400, detail=f"Cannot submit PO in {po.status.value} status"
-            )
-
-        po.status = POStatus.PENDING_APPROVAL
+        purchase_order_status.apply_transition(
+            db, po, purchase_order_status.POTransition.SUBMIT
+        )
 
         try:
             from app.services.finance.automation.event_dispatcher import (
@@ -668,19 +666,27 @@ class PurchaseOrderService(ListResponseMixin):
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
-        if po.status != POStatus.PENDING_APPROVAL:
+        # State gate first, then SoD — the same order as before, so a PO in the
+        # wrong state still reports the state problem rather than an SoD one.
+        if po.status not in purchase_order_status.legal_from_states(
+            purchase_order_status.POTransition.APPROVE
+        ):
             raise HTTPException(
                 status_code=400, detail=f"Cannot approve PO in {po.status.value} status"
             )
 
-        # SoD check
+        # SoD check. This is the control that stops the raiser of a purchase
+        # order approving it, and until this slice a workflow rule could skip it
+        # entirely by writing `status` directly.
         if po.created_by_user_id == approved_by_user_id:
             raise HTTPException(
                 status_code=400,
                 detail="Approver cannot be the same as creator (Segregation of Duties)",
             )
 
-        po.status = POStatus.APPROVED
+        purchase_order_status.apply_transition(
+            db, po, purchase_order_status.POTransition.APPROVE
+        )
         po.approved_by_user_id = approved_by_user_id
         po.approved_at = datetime.now(UTC)
 
@@ -747,21 +753,12 @@ class PurchaseOrderService(ListResponseMixin):
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
-        if po.status in [POStatus.RECEIVED, POStatus.CLOSED]:
-            raise HTTPException(
-                status_code=400, detail=f"Cannot cancel PO in {po.status.value} status"
-            )
-
-        # Derived, not read off the row.  `amount_received` is no longer a
-        # column; `purchase_order_amounts` is its sole owner.
-        from app.services.finance.ap.purchase_order_amounts import received_for
-
-        if received_for(db, org_id, po_id) > 0:
-            raise HTTPException(
-                status_code=400, detail="Cannot cancel PO with received goods"
-            )
-
-        po.status = POStatus.CANCELLED
+        # Both the state gate and the derived "has received goods" interlock now
+        # live on the CANCEL transition, so a second cancel path cannot be
+        # written without them.
+        purchase_order_status.apply_transition(
+            db, po, purchase_order_status.POTransition.CANCEL
+        )
 
         try:
             from app.services.finance.automation.event_dispatcher import (
@@ -814,17 +811,9 @@ class PurchaseOrderService(ListResponseMixin):
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
-        if po.status not in (
-            POStatus.APPROVED,
-            POStatus.PARTIALLY_RECEIVED,
-            POStatus.RECEIVED,
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot close PO in {po.status.value} status",
-            )
-
-        po.status = POStatus.CLOSED
+        purchase_order_status.apply_transition(
+            db, po, purchase_order_status.POTransition.CLOSE
+        )
         db.flush()
 
         return po

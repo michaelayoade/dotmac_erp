@@ -15,13 +15,14 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
+from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.common.attachment import AttachmentCategory
 from app.services.common import coerce_uuid
 from app.services.finance.ap.goods_receipt import goods_receipt_service
 from app.services.finance.ap.supplier import supplier_service
+from app.services.finance.ap import purchase_order_status
 from app.services.finance.ap.web.base import (
     format_currency,
     format_date,
@@ -340,7 +341,11 @@ class GoodsReceiptWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get POs that can receive goods (APPROVED or PARTIALLY_RECEIVED)
-        receivable_statuses = [POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]
+        # One definition, in the status owner — this pair was previously copied
+        # here and into `goods_receipt.py`.
+        receivable_statuses = sorted(
+            purchase_order_status.RECEIVABLE_STATES, key=lambda s: s.value
+        )
         pos = db.execute(
             select(PurchaseOrder, Supplier)
             .join(Supplier, PurchaseOrder.supplier_id == Supplier.supplier_id)

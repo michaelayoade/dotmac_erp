@@ -186,6 +186,15 @@ _PROTECTED_FIELDS: dict[str, dict[str, str]] = {
     "PURCHASE_ORDER": {
         "amount_received": "app.services.finance.ap.purchase_order_amounts (derived)",
         "amount_invoiced": "app.services.finance.ap.purchase_order_amounts (derived)",
+        # The one that mattered. `UPDATE_FIELD` is offered in the admin UI as
+        # "Update Field" and `ON_STATUS_CHANGE` / `ON_APPROVAL` as "When Status
+        # Changes" / "When Approved", and `submit_for_approval` / `approve_po`
+        # fire exactly those events for exactly this entity type. So a rule an
+        # operator could build without touching code was able to rewrite the
+        # status on the very event a guarded transition fired — taking a PO to
+        # APPROVED without entering `approve_po`, leaving `approved_by_user_id`
+        # NULL and never running the Segregation of Duties check.
+        "status": "app.services.finance.ap.purchase_order_status (state machine)",
     },
 }
 

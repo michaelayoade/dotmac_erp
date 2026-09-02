@@ -22,6 +22,7 @@ from app.models.finance.ap.supplier import Supplier
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
+from app.services.finance.ap import purchase_order_status
 from app.services.finance.ap.purchase_order import purchase_order_service
 from app.services.finance.ap.purchase_order_amounts import (
     amounts_for,
@@ -153,8 +154,12 @@ class PurchaseOrderWebService:
                 )
             ).where(
                 PurchaseOrder.organization_id == org_id,
+                # "Still open to receive against" is the receivable set, and it
+                # has one definition in the status owner — this was its third copy.
                 PurchaseOrder.status.in_(
-                    [POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]
+                    sorted(
+                        purchase_order_status.RECEIVABLE_STATES, key=lambda s: s.value
+                    )
                 ),
             )
         ) or Decimal("0")
