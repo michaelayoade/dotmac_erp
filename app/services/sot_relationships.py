@@ -131,6 +131,21 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "single has_permission owner is the consolidation target."
                 ),
             ),
+            SOTService(
+                name="hr.staff_access_projection",
+                module="app.services.people.hr.staff_access_projection",
+                owns=(
+                    "ERP-owned staff leave and account-status projections",
+                    "idempotent organization staff-access projection repair",
+                ),
+                depends_on=("events.outbox",),
+                notes=(
+                    "Employee status and approved leave applications remain the "
+                    "authoritative inputs. Projection repair rebuilds only from "
+                    "those tenant-scoped facts and publishes the same versioned "
+                    "outbox events as interactive HR transitions."
+                ),
+            ),
             # No external-identity protocol owner is registered: ERP's
             # unshipped OIDC adapter was deleted, and the registry records
             # as-built owners only. Reintroduction adopts the released
@@ -187,7 +202,8 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             "MFA, and API keys resolve to person_id. ERP accepts no external "
             "identity assertion today. External authorization claims and "
             "counterparties (Customer, Supplier) are not ERP identities or "
-            "permission owners."
+            "permission owners. Staff-access projections are rebuildable from "
+            "ERP-owned employee and approved-leave facts."
         ),
     ),
     DomainSOT(

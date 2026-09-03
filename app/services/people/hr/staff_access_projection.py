@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from uuid import UUID
 
@@ -86,6 +87,14 @@ ACCOUNT_INACTIVE_STATUSES = {
     EmployeeStatus.TERMINATED,
     EmployeeStatus.RETIRED,
 }
+
+
+@dataclass(frozen=True)
+class StaffAccessProjectionReconcileOutcome:
+    employees_seen: int
+    mapped_employees_seen: int
+    account_statuses_seen: int
+    leave_restrictions_seen: int
 
 
 def is_mutating_permission_key(permission_key: str) -> bool:
@@ -283,6 +292,34 @@ class StaffAccessProjectionService:
         """Refresh every ERP-owned staff access projection for an employee."""
         self.project_employee_account_status(employee)
         self.refresh_employee_leave_restrictions(employee)
+
+    def reconcile_organization_projections(
+        self,
+        organization_id: UUID,
+    ) -> StaffAccessProjectionReconcileOutcome:
+        """Idempotently rebuild projection rows from current ERP-owned HR facts."""
+
+        employees = list(
+            self.db.scalars(
+                select(Employee)
+                .where(Employee.organization_id == organization_id)
+                .order_by(Employee.employee_id)
+            ).all()
+        )
+        mapped_employees = 0
+        leave_restrictions = 0
+        for employee in employees:
+            mapped_employees += int(bool(employee.dotmac_sub_account_id))
+            self.project_employee_account_status(employee)
+            leave_restrictions += len(
+                self.refresh_employee_leave_restrictions(employee)
+            )
+        return StaffAccessProjectionReconcileOutcome(
+            employees_seen=len(employees),
+            mapped_employees_seen=mapped_employees,
+            account_statuses_seen=len(employees),
+            leave_restrictions_seen=leave_restrictions,
+        )
 
     def list_leave_restrictions(
         self,
@@ -496,6 +533,7 @@ __all__ = [
     "STAFF_ACCESS_EVENT_SCHEMA_VERSION",
     "STAFF_LEAVE_RESTRICTION_CHANGED",
     "StaffAccessProjectionService",
+    "StaffAccessProjectionReconcileOutcome",
     "has_active_staff_leave_restriction",
     "is_mutating_permission_key",
     "refresh_staff_access_projections_for_employees",
