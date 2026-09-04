@@ -443,6 +443,67 @@ materials, the lineage bindings and their tests. Nothing reads or writes the
 relation. That is what allows the legacy grant to be revoked outright at
 retirement rather than migrated.
 
+### The invariant these denials keep
+
+Recorded beside the denial ledger itself — `CONTROL_PLANE_ACCESS_INVARIANT`
+in `app/privilege_manifest.py`, rendered into the header of
+`scripts/erp_identity_cutover_denied.sql`, so whoever reads a refusal reads
+it in the same file:
+
+> A future tenant-runtime caller may reach control-plane state only through a
+> typed request or outbox handled by the named platform-plane executor. It
+> must never be accommodated by granting the tenant application role direct
+> access to a control-plane relation or administrative function.
+
+It is a standing rule rather than a disposition of any row here: it decides
+the **next** caller, the one nobody has written yet. That is why every entry
+in the ledger names a `PERMITTED INSTEAD` principal — a refusal with no
+permitted route is an instruction nobody can follow, and the next person
+under delivery pressure follows it by granting the thing the ledger refuses.
+
+### The three additional denials in `public` — the rationale for each
+
+`public.platform_outbox_events` was the recorded finding. The same reading of
+the same declarations catches three more, and each is denied on its own
+evidence rather than by association:
+
+**`public.platform_idempotency_records`** (`20260820_idempotency_ledger`). The
+control-plane half of a split ledger. One migration creates both halves and
+tells them apart deliberately: `public.idempotency_records` carries
+`tenant_id NOT NULL` and is indexed and uniquely constrained by it, while
+`public.platform_idempotency_records` carries no tenant column at all, is
+`GRANT`ed to `platform_api, app_admin`, and is `REVOKE`d from `app_user` at
+table level and again per column for SELECT/INSERT/UPDATE/REFERENCES. The
+split is the whole point of the migration; granting the platform half would
+erase in an ACL sweep the distinction the migration was written to make, and
+would do it silently, because from the role's side the two halves would then
+look alike. (The tenant half carries no legacy-role privilege in the census
+and so has no row in this manifest either way.)
+
+**`public.tenants`** and **`public.tenant_domains`**
+(`20260813_tenant_projection`). Both are revoked from `PUBLIC` *and* from
+`app_user` in the migration that creates them, and the runtime reaches the
+tenant catalogue through the narrow `SECURITY DEFINER`
+`tenant_catalog.organization_ids` (`app/tenant_catalog.py`), which returns
+identifiers and nothing else. So there is no caller to accommodate: granting
+either relation would add a second, wider path to state that already has a
+deliberately narrow one, which is the shape the invariant above forbids by
+name. `tenant_domains` in particular carries host-to-tenant routing; a tenant
+role that can read or write it can read or redirect the mapping that decides
+which tenant a request belongs to.
+
+For all three the ruling's own reason applies unchanged: granting them
+reverses a tested migration decision under cover of a compatibility sweep,
+and there is no disposition for "declared control plane, granted anyway" —
+that shape would be the second writer the ruling forbids. Twelve privileges
+are therefore reported here rather than applied.
+
+**What this record is.** This is the **architecture disposition adopted for
+this pull request**, not a recorded approval. Repository approval belongs to
+the project's authorized decider and its review process; nothing in this
+document substitutes for it, and the widened scope is still listed under
+"What is not closed" below for exactly that reason.
+
 ### The five schema USAGE cases — settled, removed, origins kept
 
 `hr`, `mod_files`, `public`, `rpt` and `sync` carry 448 relation privileges
@@ -776,8 +837,13 @@ check that checks it is named:
 
 ## What is not closed
 
-- **The scope of Decision 2 exceeded the letter of the ruling, and that needs
-  Michael's sign-off.** The ruling named `public.platform_outbox_events` and
+- **The scope of Decision 2 exceeds the letter of the ruling, and the
+  widening has not been formally approved.** The rationale for each of the
+  three additional relations is now recorded above as the architecture
+  disposition adopted for this PR; approving the widened scope for the
+  repository is a separate act belonging to the project's authorized decider
+  and its review process, and it has not happened. The ruling named
+  `public.platform_outbox_events` and
   `mod_files.platform_stored_files` — "both control-plane relations". Read
   honestly, the host declaration classifies **four** relations in `public`, not
   one: `20260820_idempotency_ledger` revokes
@@ -819,3 +885,4 @@ check that checks it is named:
 | `scripts/verify_identity_cutover_privileges.py` | read-only OID-based verifier |
 | `tests/architecture/test_privilege_manifest.py` | the guard, its sensitivity proofs and the nine plane proofs |
 | `tests/architecture/test_persistence_planes.py` | the resolver's own guard: derived-not-copied, cited evidence, fail-closed |
+| `tests/architecture/test_persistence_planes_import_boundary.py` | who may import the resolver — a closed, two-directional inventory |

@@ -13,6 +13,15 @@
 -- denial nobody thought of. 25 rows are recorded here, each with the
 -- privilege that is NOT granted, the reason, the declaration that decided the
 -- plane, and who MAY do it instead.
+--
+-- THE INVARIANT THESE DENIALS KEEP -- it decides the NEXT caller, not the
+-- rows below, and it is the reason every entry names a PERMITTED INSTEAD:
+--
+--   A future tenant-runtime caller may reach control-plane state only
+--   through a typed request or outbox handled by the named platform-plane
+--   executor. It must never be accommodated by granting the tenant
+--   application role direct access to a control-plane relation or
+--   administrative function.
 
 
 -- ===== section: functions =====

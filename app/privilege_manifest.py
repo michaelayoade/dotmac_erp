@@ -187,6 +187,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 import json
+import textwrap
 from typing import Any, Final
 
 from app.persistence_planes import (
@@ -1595,6 +1596,36 @@ _HEADER = """\
 -- contains no executable statement, so there is nothing here to uncomment.
 """
 
+#: The standing invariant the denial ledger exists to keep, recorded BESIDE
+#: the denials themselves so that whoever reads a refusal also reads what
+#: replaces it. A denial with no permitted route is an instruction nobody can
+#: follow, and the next person under delivery pressure resolves it by granting
+#: the thing this ledger refuses.
+#:
+#: It is the standing rule, not a disposition of any one row: it decides the
+#: NEXT caller, which is the one nobody has written yet.
+CONTROL_PLANE_ACCESS_INVARIANT: Final[str] = (
+    "A future tenant-runtime caller may reach control-plane state only "
+    "through a typed request or outbox handled by the named platform-plane "
+    "executor. It must never be accommodated by granting the tenant "
+    "application role direct access to a control-plane relation or "
+    "administrative function."
+)
+
+
+def _comment_block(text: str, *, indent: str = "--   ", width: int = 74) -> str:
+    """Wrap prose into SQL line comments, so the ledger stays comment-only.
+
+    The ledger's whole claim is that every line in it is a comment; prose
+    pasted in unwrapped would be the one line that is not.
+    """
+    return "\n".join(
+        textwrap.wrap(
+            text, width=width, initial_indent=indent, subsequent_indent=indent
+        )
+    )
+
+
 _DENIAL_HEADER = """\
 -- GENERATED FILE -- do not edit. Regenerate with:
 --     python scripts/generate_privilege_manifest.py
@@ -1611,6 +1642,11 @@ _DENIAL_HEADER = """\
 -- denial nobody thought of. {denied} rows are recorded here, each with the
 -- privilege that is NOT granted, the reason, the declaration that decided the
 -- plane, and who MAY do it instead.
+--
+-- THE INVARIANT THESE DENIALS KEEP -- it decides the NEXT caller, not the
+-- rows below, and it is the reason every entry names a PERMITTED INSTEAD:
+--
+{invariant}
 """
 
 
@@ -1676,7 +1712,14 @@ def render_denial_ledger(rows: Sequence[GrantRow], title: str) -> str:
             "refusing to render a denial ledger containing grantable rows: "
             + ", ".join(sorted({row.identity for row in granted}))
         )
-    lines = [_DENIAL_HEADER.format(title=title, denied=len(ordered)), ""]
+    lines = [
+        _DENIAL_HEADER.format(
+            title=title,
+            denied=len(ordered),
+            invariant=_comment_block(CONTROL_PLANE_ACCESS_INVARIANT),
+        ),
+        "",
+    ]
     current_section = ""
     current_identity = ""
     for row in ordered:
