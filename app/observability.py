@@ -9,6 +9,8 @@ from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+from app.net import get_client_ip, is_from_trusted_proxy
+
 from app.metrics import REQUEST_COUNT, REQUEST_ERRORS, REQUEST_LATENCY
 
 logger = logging.getLogger(__name__)
@@ -18,6 +20,11 @@ logger = logging.getLogger(__name__)
 _QUIET_PATH_PREFIXES = ("/health", "/static", "/metrics", "/favicon")
 
 # Context variables for request tracking - accessible anywhere in the request lifecycle
+#: What an unauthenticated request WRITES, rather than what an unset variable
+#: happens to read as. A submitted username or header never becomes an actor —
+#: anonymous stays anonymous, and it says so.
+ANONYMOUS_ACTOR = "anonymous"
+
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 actor_id_var: ContextVar[str] = ContextVar("actor_id", default="")
 ip_address_var: ContextVar[str] = ContextVar("ip_address", default="")
@@ -106,22 +113,80 @@ def _request_path(request: Request) -> str:
 
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
-        request.state.request_id = request_id
-        # Set context variable for request ID - accessible anywhere in the request
-        request_id_var.set(request_id)
+    """Create the per-request observability context, once, and always clear it.
 
-        # Set IP address and user agent for audit logging
-        ip_address_var.set(request.client.host if request.client else "")
-        user_agent_var.set(request.headers.get("user-agent", ""))
+    ## The defect this shape exists to prevent
+
+    Until 2026-09-04 this middleware called `actor_id_var.set()` only
+    ``if actor_id:`` and never reset any variable it set. An ANONYMOUS request
+    therefore did not clear the previous request's actor — it declined to write,
+    and the previous value was what a reader saw. Every audit event, log line
+    and field-tracker attribution taken during that request could be attributed
+    to whoever happened to be authenticated before it.
+
+    Two rules follow, and neither is a style preference:
+
+    **Every variable is set on every request, including explicit anonymous
+    values.** An anonymous request SETS anonymous. Declining to set is what lets
+    a stale actor persist, and "unset" and "anonymous" are different facts that
+    a default of `""` cannot tell apart at the read site — so anonymity is
+    written down rather than inferred from silence.
+
+    **Every `set()` token is retained and reset in `finally`.** `ContextVar.reset`
+    requires the token from its OWN `set()`; a bare reset-to-default would
+    discard whatever an outer scope had established. `finally` is what makes it
+    survive the exception path, which is exactly where inheritance is most
+    likely because the failing request is the one that leaves state behind.
+
+    ## The client address comes from the trusted-origin resolver
+
+    `app.net.get_client_ip` honours `X-Forwarded-For` only when the PEER is
+    inside a configured trusted-proxy network, and trusts nothing when none is
+    configured. This middleware previously read `request.client.host` directly,
+    so ERP had a correct resolver and its own request-context creator bypassed
+    it — the address behind a proxy was the proxy's.
+
+    ## An inbound request ID is believed only from a trusted peer
+
+    `x-request-id` was accepted from anyone, so any caller could choose the
+    correlation identity its own request would be logged under and collide it
+    with somebody else's deliberately. It is now honoured only from a trusted
+    proxy; otherwise a fresh one is generated.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Believed only from a trusted peer. An untrusted caller does not choose
+        # the identity its request is correlated under.
+        inbound = request.headers.get("x-request-id") if is_from_trusted_proxy(
+            request
+        ) else None
+        request_id = inbound or str(uuid.uuid4())
+        request.state.request_id = request_id
 
         token = _extract_bearer_token(request) or _extract_access_token_cookie(request)
-        actor_id = getattr(
-            request.state, "actor_id", None
-        ) or _extract_actor_id_from_jwt(token)
-        if actor_id:
-            actor_id_var.set(actor_id)
+        # EXPLICIT anonymity. `ANONYMOUS_ACTOR` rather than `""`, so a reader can
+        # tell "nobody was authenticated" from "nobody has set this yet".
+        actor_id = (
+            getattr(request.state, "actor_id", None)
+            or _extract_actor_id_from_jwt(token)
+            or ANONYMOUS_ACTOR
+        )
+
+        # Every variable, every request, tokens retained for `finally`.
+        tokens = (
+            request_id_var.set(request_id),
+            actor_id_var.set(actor_id),
+            ip_address_var.set(get_client_ip(request)),
+            user_agent_var.set(request.headers.get("user-agent", "")),
+        )
+        variables = (request_id_var, actor_id_var, ip_address_var, user_agent_var)
+        try:
+            return await self._dispatch(request, call_next, request_id, actor_id)
+        finally:
+            for variable, reset_token in zip(variables, tokens, strict=True):
+                variable.reset(reset_token)
+
+    async def _dispatch(self, request: Request, call_next, request_id, actor_id):
 
         # Set change source for field-level tracking.
         # Lazy import: field_tracker imports from app.observability (actor_id_var,
