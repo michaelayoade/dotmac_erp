@@ -18,7 +18,7 @@ NEGATIVE CONTROL asserts the same clean snapshot produces zero violations, so
 none of the eight can be passing because the detector flags everything.
 
 The clean snapshot is built by `app.privilege_manifest.clean_snapshot` from
-the real committed manifest -- 1,766 rows -- so these proofs run against the
+the real committed manifest -- 1,761 rows -- so these proofs run against the
 production shape rather than a two-row toy.
 """
 
@@ -34,6 +34,12 @@ import pytest
 from app.privilege_manifest import (
     ACCEPTED_PRIVILEGE_ORIGIN,
     BASELINE_TOTALS,
+    COLUMN_LEVEL_PRIVILEGES,
+    DENIAL_REASON,
+    DENIED_TABLE_PRIVILEGES,
+    DISPOSITION_DENIED,
+    DISPOSITION_GRANT,
+    DISPOSITION_REVIEW_REQUIRED,
     EXPECTED_OWNER,
     MODULE_ERA_ALLOWLIST,
     REVIEW_SQL_TITLE,
@@ -44,8 +50,10 @@ from app.privilege_manifest import (
     SECTION_SCHEMA_USAGE,
     SECTION_SEQUENCES,
     SECTIONS,
+    SETTLED_SCHEMA_USAGE,
     SOURCE_ROLE,
     TARGET_ROLE,
+    ObservedColumnGrant,
     ObservedMembership,
     ObservedPrivilege,
     ObservedRolePosture,
@@ -55,6 +63,7 @@ from app.privilege_manifest import (
     baseline_violations,
     clean_snapshot,
     cutover_violations,
+    denial_violations,
     function_name_and_identity_arguments,
     manifest_from_census,
     manifest_from_json,
@@ -83,7 +92,10 @@ CENSUS_REVERSE_GAP = 132
 #: here) exactly as `tests/architecture/test_database_role_contract.py` states
 #: the role contract a third time, and for the same reason.
 EXPECTED_SECTION_ROWS = {
-    SECTION_SCHEMA_USAGE: 42,
+    # 37, not 42: the five DERIVED usage rows were settled as no-ops on
+    # 2026-09-04 and removed. Lowering a baseline is legitimate only as an
+    # edit like this one, in the same commit as the change that earned it.
+    SECTION_SCHEMA_USAGE: 37,
     SECTION_RELATIONS: 1712,
     SECTION_SEQUENCES: 3,
     SECTION_FUNCTIONS: 5,
@@ -145,7 +157,7 @@ def test_the_committed_sql_is_what_the_manifest_renders(census: dict) -> None:
         built.routine(), ROUTINE_SQL_TITLE
     ) == ROUTINE_SQL_PATH.read_text(encoding="utf-8")
     assert render_grant_sql(
-        built.review_required(), REVIEW_SQL_TITLE
+        built.exceptional(), REVIEW_SQL_TITLE
     ) == REVIEW_SQL_PATH.read_text(encoding="utf-8")
 
 
@@ -268,14 +280,124 @@ def test_security_definer_functions_are_isolated_for_review(
     assert review_sql.count("GRANT EXECUTE") == CENSUS_FUNCTIONS
 
 
-def test_the_module_era_grant_is_separated_and_frozen(
+def test_the_module_era_grant_is_denied_not_merely_flagged(
     manifest: PrivilegeManifest,
 ) -> None:
+    """The decision is MADE. `review_required` and `denied` are not the same.
+
+    A row marked `review_required` says "someone must read this before it is
+    applied". A row marked `denied_by_architecture` says "this is never
+    applied". Reporting the second as the first would put a settled refusal
+    back on somebody's decision queue, and the SQL would still carry a
+    `GRANT` for them to sign off.
+    """
     rows = manifest.section(SECTION_MODULE_ERA)
     assert {row.identity for row in rows} == set(MODULE_ERA_ALLOWLIST)
-    assert all(row.review_required for row in rows)
+    assert all(row.disposition == DISPOSITION_DENIED for row in rows)
+    assert all(row.denied for row in rows)
+    assert not any(row.review_required for row in rows), (
+        "a denied row is not review debt: the review happened and the "
+        "answer was no"
+    )
+    assert all(row.reason.startswith(DENIAL_REASON) for row in rows)
     assert all("ADR-0023" in row.reason for row in rows)
     assert "mod_files" not in ROUTINE_SQL_PATH.read_text(encoding="utf-8")
+
+    # And it must not be rendered as an executable GRANT anywhere.
+    review_sql = REVIEW_SQL_PATH.read_text(encoding="utf-8")
+    statements = [
+        line.strip()
+        for line in review_sql.splitlines()
+        if line.strip() and not line.strip().startswith("--")
+    ]
+    assert not any("platform_stored_files" in line for line in statements), (
+        "a denied relation must never appear in an executable statement"
+    )
+    assert "NOT GRANTED: GRANT SELECT ON TABLE" in review_sql, (
+        "the denial is kept VISIBLE as a comment -- a denial that is merely "
+        "absent cannot be told apart from one nobody thought of"
+    )
+    assert DENIAL_REASON in review_sql
+
+
+def test_the_settled_schema_usage_rows_are_gone_with_their_origins_kept(
+    manifest: PrivilegeManifest, census: dict
+) -> None:
+    """Item 3, settled 2026-09-04. Removed as no-ops; origins preserved.
+
+    The five schemas all returned `legacy=True, app_user=True`, so the delta
+    reading holds and the derived GRANT changed nothing. What must NOT be
+    lost is that the origins DIFFER: four are direct grants to `app_user`,
+    and `public` is reached through `PUBLIC` -- the one origin this manifest
+    refuses everywhere else, because it reaches every login in the cluster.
+    Flattening that into "all five already have USAGE" would discard the only
+    part with a consequence for Change 3.
+    """
+    settled = set(SETTLED_SCHEMA_USAGE)
+    assert settled == {"hr", "mod_files", "public", "rpt", "sync"}
+
+    observed = {str(entry["schema"]) for entry in census["schemas"]}
+    with_relations = {str(row["schema"]) for row in census["tables"]}
+    assert with_relations - observed == settled, (
+        "these are exactly the schemas that carry relation privileges and no "
+        "observed schema-USAGE row"
+    )
+
+    usage_schemas = {row.schema for row in manifest.section(SECTION_SCHEMA_USAGE)}
+    assert usage_schemas == observed
+    assert not (usage_schemas & settled), (
+        "the settled rows are REMOVED, not re-marked; a no-op GRANT carried "
+        "as review debt is debt nobody can discharge"
+    )
+    assert all(
+        row.disposition == DISPOSITION_GRANT
+        for row in manifest.section(SECTION_SCHEMA_USAGE)
+    )
+
+    origins = {schema: origin for schema, (origin, _) in SETTLED_SCHEMA_USAGE.items()}
+    assert origins == {
+        "hr": "direct",
+        "mod_files": "direct",
+        "rpt": "direct",
+        "sync": "direct",
+        "public": "public",
+    }, "public is reached via PUBLIC:USAGE, not by a grant to app_user"
+
+    exclusions = {
+        row.scope: row
+        for row in manifest.exclusions
+        if row.kind == "settled-schema-usage"
+    }
+    assert set(exclusions) == settled
+    assert "PUBLIC:USAGE" in exclusions["public"].reason
+    assert "NOT a direct grant" in exclusions["public"].reason
+    for schema in ("hr", "rpt", "sync"):
+        assert "held DIRECTLY" in exclusions[schema].reason
+        assert "alembic/versions/" in exclusions[schema].reason, (
+            "a direct grant has an author; the migration that made it is the "
+            "evidence, not the assertion"
+        )
+    # mod_files carries BOTH planes' roles in one schema ACL -- which is why
+    # isolation there has to be a table-level fact.
+    assert "platform_api:USAGE" in exclusions["mod_files"].reason
+    assert "app_user:USAGE" in exclusions["mod_files"].reason
+    assert "TABLE level" in exclusions["mod_files"].reason
+
+
+def test_every_row_carries_one_of_the_three_dispositions(
+    manifest: PrivilegeManifest,
+) -> None:
+    """A boolean cannot say 'never'. Three outcomes, and they partition."""
+    counted = {
+        DISPOSITION_GRANT: len(manifest.routine()),
+        DISPOSITION_REVIEW_REQUIRED: len(manifest.review_required()),
+        DISPOSITION_DENIED: len(manifest.denied()),
+    }
+    assert sum(counted.values()) == len(manifest.rows)
+    assert counted[DISPOSITION_REVIEW_REQUIRED] == CENSUS_FUNCTIONS
+    assert counted[DISPOSITION_DENIED] == 4
+    with pytest.raises(ValueError, match="unknown disposition"):
+        replace(manifest.rows[0], disposition="probably_fine")
 
 
 def test_the_reverse_gap_is_recorded_as_a_preserved_exclusion(
@@ -314,6 +436,7 @@ def test_the_prohibitions_are_stated_in_the_manifest(
         if row.kind == "prohibited-action"
     }
     assert prohibited == {
+        "denied-control-plane-relation",
         "no-grant-all",
         "no-role-membership",
         "no-ownership-transfer",
@@ -322,6 +445,61 @@ def test_the_prohibitions_are_stated_in_the_manifest(
         "no-module-activation-change",
         "no-revoke",
     }
+    denial = next(
+        row
+        for row in manifest.exclusions
+        if row.exclusion_id == "denied-control-plane-relation"
+    )
+    assert denial.reason.startswith(DENIAL_REASON)
+    assert "will NOT be given" in denial.reason
+
+
+def test_the_manifest_states_the_target_and_why_the_files_stay_split(
+    manifest: PrivilegeManifest,
+) -> None:
+    """The arithmetic this whole programme computes, in the artefact itself.
+
+    legacy compatibility privileges
+      - architecturally forbidden access
+      - unapproved SECURITY DEFINER execution
+      + module-era privileges app_user already owns
+    """
+    target = next(note for note in manifest.notes if note.startswith("TARGET:"))
+    assert "legacy compatibility privileges" in target
+    assert "architecturally forbidden access" in target
+    assert "unapproved SECURITY DEFINER execution" in target
+    assert "module-era privileges app_user already owns" in target
+    assert "PERMANENT" in target, (
+        "the split is a property of the shape, not a staging step: bulk-safe "
+        "grants in the bulk file, the five functions isolated, the "
+        "control-plane grants prohibited, the schema cases resolved"
+    )
+
+
+def test_the_recorded_finding_about_the_platform_relay_survives(
+    manifest: PrivilegeManifest,
+) -> None:
+    """Found while classifying the definers; recorded, not silently acted on.
+
+    `public.platform_outbox_events` sits in the ROUTINE sweep because its
+    schema is `public` rather than `mod_`, yet `20260824_outbox_relay`
+    creates it as the control-plane relay ledger and explicitly REVOKEs it
+    from `app_user` at both table and column level. Applying the sweep would
+    reverse that. The same is true of the `hr` definer EXECUTE row, which
+    `20260828_people_et_activation` explicitly revokes from `app_user`.
+
+    Neither is changed here: a disposition is an authorized decision, and a
+    generator does not make one on its own. What it must not do is lose the
+    finding, so the note is asserted rather than trusted to a review comment.
+    """
+    finding = next(
+        note for note in manifest.notes if note.startswith("UNRESOLVED, RECORDED:")
+    )
+    assert "public.platform_outbox_events" in finding
+    assert "20260824_outbox_relay" in finding
+    assert "REVOKE ALL" in finding and "column-level" in finding
+    assert "hr.enforce_employment_type_projection()" in finding
+    assert "20260828_people_et_activation" in finding
 
 
 @pytest.mark.parametrize("path", [ROUTINE_SQL_PATH, REVIEW_SQL_PATH])
@@ -361,20 +539,29 @@ def test_the_generated_sql_only_grants(path: Path) -> None:
     assert SOURCE_ROLE not in body
 
 
-def test_the_review_required_rows_never_leak_into_the_sweep(
+def test_the_exceptional_rows_never_leak_into_the_sweep(
     manifest: PrivilegeManifest,
 ) -> None:
-    """The split IS the control. A buried escalation decision gets skimmed."""
+    """The split IS the control, and it is PERMANENT.
+
+    Michael's ruling: bulk-safe grants in the bulk file, the five functions
+    isolated, the control-plane grants prohibited, the schema cases resolved.
+    Keeping exceptional authorization separate from mechanical compatibility
+    is the point -- a 1,700-line file with escalation decisions buried in it
+    gets skimmed, and that does not stop being true once the decisions are
+    made.
+    """
     routine = manifest.routine()
-    review = manifest.review_required()
-    assert len(routine) + len(review) == len(manifest.rows)
-    assert len(review) == 14, (
-        "5 SECURITY DEFINER EXECUTE + 4 control-plane module-era + 5 derived "
-        "schema USAGE"
+    exceptional = manifest.exceptional()
+    assert len(routine) + len(exceptional) == len(manifest.rows)
+    assert len(exceptional) == 9, (
+        "5 SECURITY DEFINER EXECUTE (review required) + 4 control-plane "
+        "module-era (denied). The 5 derived schema-USAGE rows were settled "
+        "and removed on 2026-09-04."
     )
-    assert not any(row.review_required for row in routine)
+    assert not any(row.review_required or row.denied for row in routine)
     routine_sql = ROUTINE_SQL_PATH.read_text(encoding="utf-8")
-    for row in review:
+    for row in exceptional:
         if row.object_kind == "schema":
             marker = f'ON SCHEMA "{row.schema}" TO'
         elif row.object_kind == "function":
@@ -404,11 +591,20 @@ def test_negative_control_a_clean_snapshot_produces_no_violations(
 
     A detector that returned a violation for every input would "catch" every
     planted defect and prove nothing at all. This asserts the opposite end:
-    the exact same 1,766-row fixture the eight proofs mutate produces ZERO
+    the exact same 1,761-row fixture the fourteen proofs mutate produces ZERO
     violations when nothing is wrong.
     """
     assert cutover_violations(manifest, snapshot) == []
-    assert len(snapshot.privileges) == len(manifest.rows) + CENSUS_REVERSE_GAP
+    assert len(snapshot.privileges) == (
+        len(manifest.rows) - len(manifest.denied()) + CENSUS_REVERSE_GAP
+    ), "a denied row is not a privilege the target is expected to hold"
+    # The clean state is SILENT on the denial too -- the other half of the
+    # ADR-0018 pair. A negative verifier that stayed quiet only because it
+    # never fired would be worthless, and one that complained about a clean
+    # database would be worse.
+    assert denial_violations(manifest, snapshot) == []
+    assert snapshot.denied_privileges, "the denial must actually be probed"
+    assert snapshot.denied_column_grants
 
 
 # ---------------------------------------------------------------------------
@@ -682,10 +878,146 @@ def test_sensitivity_8b_a_revoked_exclusion_is_named(
     assert "mod_tax" in fell
 
 
+def test_sensitivity_9_a_planted_table_grant_on_the_denied_relation_is_named(
+    manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot
+) -> None:
+    """Half one of the denial proof: the relation ACL.
+
+    `app_user` holding SELECT on `mod_files.platform_stored_files` is the
+    plainest form of the defect ADR-0023 forbids -- the tenant application
+    role reaching a control-plane relation.
+    """
+    victim = manifest.denied()[0].identity
+    planted = tuple(
+        entry
+        if not (entry.identity == victim and entry.privilege == "SELECT")
+        else replace(entry, held=True)
+        for entry in snapshot.denied_privileges
+    )
+    violations = cutover_violations(
+        manifest, replace(snapshot, denied_privileges=planted)
+    )
+    held = _only_violation(violations)
+    assert held.startswith("DENIED PRIVILEGE HELD")
+    assert victim in held and "SELECT" in held
+    assert DENIAL_REASON in held
+
+
+def test_sensitivity_10_a_planted_column_grant_on_the_denied_relation_is_named(
+    manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot
+) -> None:
+    """Half two, and the one that is easy to miss.
+
+    `GRANT SELECT(storage_key) ON mod_files.platform_stored_files TO app_user`
+    leaves `relacl` untouched. `has_table_privilege(..., 'SELECT')` answers
+    FALSE, the table-level half above stays silent, and the tenant role reads
+    the column anyway. A denial proved only against the relation ACL is not
+    proved, so this defect is planted at COLUMN level with the table level
+    left clean -- if the column check were missing, this test would pass
+    trivially with zero violations.
+    """
+    victim = manifest.denied()[0].identity
+    planted = tuple(
+        entry
+        if not (entry.identity == victim and entry.privilege == "SELECT")
+        else replace(entry, columns_held=("storage_key",))
+        for entry in snapshot.denied_column_grants
+    )
+    mutated = replace(snapshot, denied_column_grants=planted)
+    # The table-level answer is untouched and still false: this defect is
+    # invisible to every relation-level check in the module.
+    assert all(
+        not entry.held
+        for entry in mutated.denied_privileges
+        if entry.identity == victim
+    )
+    violations = cutover_violations(manifest, mutated)
+    column = _only_violation(violations)
+    assert column.startswith("DENIED COLUMN PRIVILEGE HELD")
+    assert victim in column and "storage_key" in column and "SELECT" in column
+
+
+def test_sensitivity_11_a_denial_nobody_probed_is_named(
+    manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot
+) -> None:
+    """An absence is the one claim that passes for free.
+
+    A verifier that asked nothing produces an empty violation list, which is
+    byte-identical to a clean database. So not-probing is itself a refusal,
+    in both halves -- and `columns_probed == 0` is refused as loudly as a
+    missing observation, because "no columns held" from a probe that examined
+    no columns is not evidence.
+    """
+    victim = manifest.denied()[0].identity
+    blind = replace(snapshot, denied_privileges=(), denied_column_grants=())
+    violations = denial_violations(manifest, blind)
+    assert len(violations) == len(DENIED_TABLE_PRIVILEGES) + len(
+        COLUMN_LEVEL_PRIVILEGES
+    ), violations[:5]
+    assert all(v.startswith("UNPROBED") for v in violations)
+    assert any("TRUNCATE" in v for v in violations), (
+        "all seven table privileges must be answered, not the four the "
+        "census happened to record"
+    )
+    assert any("REFERENCES" in v for v in violations)
+    assert any("TRIGGER" in v for v in violations)
+    assert all(victim in v for v in violations)
+
+    # And a column probe that looked at ZERO columns is not a clean answer.
+    # Built explicitly rather than by `replace`, because the shape being
+    # refused is the one a verifier produces when the catalog query returned
+    # no rows: an observation that exists, holds nothing, and examined
+    # nothing.
+    hollow = tuple(
+        ObservedColumnGrant(
+            identity=entry.identity,
+            role=entry.role,
+            privilege=entry.privilege,
+            columns_held=(),
+            columns_probed=0,
+        )
+        for entry in snapshot.denied_column_grants
+    )
+    violations = cutover_violations(
+        manifest, replace(snapshot, denied_column_grants=hollow)
+    )
+    assert len(violations) == len(COLUMN_LEVEL_PRIVILEGES), violations[:5]
+    assert all(v.startswith("UNPROBED COLUMN DENIAL") for v in violations)
+    assert any("attacl" in v for v in violations)
+
+
+def test_the_denial_is_owned_by_exactly_one_refusal(
+    manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot
+) -> None:
+    """One decision, one owner -- otherwise one defect makes two complaints.
+
+    The denied rows are in the manifest, so the ordinary privilege check
+    would otherwise demand `app_user` HOLD them (the exact inversion the
+    denial exists to prevent) and would additionally report a held privilege
+    as `PRIVILEGE ADDED` beside `denial_violations`' own finding.
+    """
+    victim = manifest.denied()[0]
+    intruder = ObservedPrivilege(
+        identity=victim.identity,
+        role=TARGET_ROLE,
+        privilege=victim.privilege,
+        held=True,
+        origin=ACCEPTED_PRIVILEGE_ORIGIN,
+    )
+    violations = cutover_violations(
+        manifest, replace(snapshot, privileges=(*snapshot.privileges, intruder))
+    )
+    assert violations == [], (
+        "the ordinary privilege checks must stay out of a denied relation "
+        "entirely; denial_violations owns it, probing all seven privileges "
+        "and every column"
+    )
+
+
 def test_the_eight_proofs_are_all_distinct() -> None:
     """A roll-call, so a deleted proof is visible rather than merely absent."""
     proofs = {name for name in globals() if name.startswith("test_sensitivity_")}
-    assert len(proofs) == 11, sorted(proofs)
+    assert len(proofs) == 14, sorted(proofs)
     for required in (
         "test_sensitivity_1_a_vanished_object_is_named",
         "test_sensitivity_2_an_added_privilege_is_named",
@@ -695,6 +1027,9 @@ def test_the_eight_proofs_are_all_distinct() -> None:
         "test_sensitivity_6_a_membership_grant_is_named",
         "test_sensitivity_7_a_module_privilege_on_the_legacy_role_is_named",
         "test_sensitivity_8_a_silently_lowered_baseline_is_named",
+        "test_sensitivity_9_a_planted_table_grant_on_the_denied_relation_is_named",
+        "test_sensitivity_10_a_planted_column_grant_on_the_denied_relation_is_named",
+        "test_sensitivity_11_a_denial_nobody_probed_is_named",
     ):
         assert required in proofs
 

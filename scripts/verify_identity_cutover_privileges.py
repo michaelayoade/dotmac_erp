@@ -49,6 +49,27 @@ The cutover requires DIRECT grants, so this script decomposes each object's
 ACL with `aclexplode` and classifies the origin, and the guard refuses
 anything but `direct`.
 
+## Why the DENIED relation is probed differently
+
+Every other check here asks "does the target hold what the manifest says?".
+`mod_files.platform_stored_files` asks the opposite -- "does the target hold
+NOTHING?" -- and an absence is the one claim that passes for free. So it gets
+its own probe, and that probe is wider in two directions.
+
+It asks about all SEVEN table privileges, not the four the census recorded:
+TRUNCATE, REFERENCES and TRIGGER are privileges too, and a denial silent about
+them denies nothing.
+
+And it asks at COLUMN level. `GRANT SELECT(storage_key) ON ... TO app_user`
+leaves `relacl` untouched and makes `has_table_privilege(..., 'SELECT')`
+answer FALSE while the role reads the column -- so a denial proved only
+against the relation ACL is not proved. `has_column_privilege(role, oid,
+attnum, priv)` gives the effective per-column answer, and `aclexplode` over
+`pg_attribute.attacl` -- the catalog behind
+`information_schema.column_privileges` -- reports the origin. The number of
+columns examined is carried into the snapshot, because "nothing held" from a
+probe that looked at nothing is not evidence, and the guard refuses it.
+
 ## Usage
 
     VERIFY_DATABASE_URL=postgresql://app_admin@host/db \\
@@ -76,6 +97,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.privilege_manifest import (  # noqa: E402
+    COLUMN_LEVEL_PRIVILEGES,
+    DENIED_TABLE_PRIVILEGES,
     MODULE_SCHEMA_PREFIX,
     SECTION_FUNCTIONS,
     SECTION_MODULE_ERA,
@@ -83,6 +106,7 @@ from app.privilege_manifest import (  # noqa: E402
     SECTION_SCHEMA_USAGE,
     SECTION_SEQUENCES,
     GrantRow,
+    ObservedColumnGrant,
     ObservedMembership,
     ObservedObject,
     ObservedPrivilege,
@@ -275,6 +299,56 @@ WHERE c.oid = ANY(%(oids)s::bigint[])
   AND pg_catalog.pg_get_userbyid(a.grantee) = %(role)s
 """
 
+#: The NEGATIVE probe for a DENIED relation, at COLUMN level.
+#:
+#: `has_column_privilege(role, oid, attnum, priv)` is the effective answer for
+#: one column: it is true if the role reaches the column through a column
+#: grant OR through the relation. That is deliberately the wider question,
+#: because the denial asserts the role cannot read the data by ANY path, and
+#: a check that saw only column ACLs would miss a table grant while a check
+#: that saw only the table ACL would miss `GRANT SELECT(col)`.
+#:
+#: Dropped columns are excluded (`attisdropped`) and system columns are not
+#: grantable (`attnum > 0`), so both are skipped -- but the count of what WAS
+#: examined is returned, because "nothing held" from a probe that looked at
+#: nothing is not evidence.
+DENIED_COLUMN_PRIVILEGE_SQL = """
+SELECT c.oid::bigint,
+       a.attname::text,
+       w.priv,
+       pg_catalog.has_column_privilege(%(role)s::name, c.oid::oid, a.attnum, w.priv)
+FROM pg_catalog.pg_class AS c
+JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.oid
+CROSS JOIN unnest(%(privs)s::text[]) AS w(priv)
+WHERE c.oid = ANY(%(oids)s::bigint[])
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+"""
+
+#: The column ACL itself, so a held column privilege can be reported with its
+#: ORIGIN rather than only its effect. Note the asymmetry with `relacl`: a
+#: NULL `attacl` genuinely means "no column-level grants", because column
+#: privileges have no default -- so unlike the relation and function ACLs
+#: above, this one needs no `acldefault` stand-in. This is
+#: `information_schema.column_privileges` read from the catalog directly, for
+#: the same reason every other question here takes an OID: the
+#: information_schema view resolves names and is filtered to the roles the
+#: reader is a member of, and neither is the question being asked.
+DENIED_COLUMN_ACL_SQL = """
+SELECT c.oid::bigint,
+       a.attname::text,
+       acl.privilege_type::text,
+       (CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+             ELSE pg_catalog.pg_get_userbyid(acl.grantee) END)::text
+FROM pg_catalog.pg_class AS c
+JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.oid,
+     LATERAL aclexplode(a.attacl) AS acl
+WHERE c.oid = ANY(%(oids)s::bigint[])
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+  AND a.attacl IS NOT NULL
+"""
+
 RELATION_PRIVILEGE_SECTIONS = (SECTION_RELATIONS, SECTION_MODULE_ERA)
 MODULE_PROBE_PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE")
 
@@ -433,7 +507,12 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
             (SECTION_RELATIONS, TABLE_PRIVILEGE_SQL, "r"),
             (SECTION_MODULE_ERA, TABLE_PRIVILEGE_SQL, "r"),
         ):
-            section_rows = manifest.section(section)
+            # A DENIED row is not probed here. This loop asserts "the target
+            # HOLDS it"; the denied rows assert the exact opposite and are
+            # probed by the denial block below, which owns them end to end.
+            section_rows = [
+                row for row in manifest.section(section) if not row.denied
+            ]
             wanted = [
                 (rel_resolved[(row.schema, row.object_name)][0], row.privilege)
                 for row in section_rows
@@ -491,6 +570,77 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
                         held=True,
                         origin="direct",
                     )
+                )
+
+        # --- DENIED relations: the negative proof, table AND column ---
+        denied_rows = manifest.denied()
+        denied_privileges: list[ObservedPrivilege] = []
+        denied_column_grants: list[ObservedColumnGrant] = []
+        denied_by_oid: dict[int, str] = {}
+        for row in denied_rows:
+            found = rel_resolved.get((row.schema, row.object_name))
+            if found is not None:
+                denied_by_oid[found[0]] = row.identity
+        if denied_by_oid:
+            denied_oids = sorted(denied_by_oid)
+            wanted = [
+                (oid, priv)
+                for oid in denied_oids
+                for priv in DENIED_TABLE_PRIVILEGES
+            ]
+            oids, privs = _split(wanted)
+            cursor.execute(
+                TABLE_PRIVILEGE_SQL, {"role": target, "oids": oids, "privs": privs}
+            )
+            held_by_oid = {(oid, priv): held for oid, priv, held in cursor.fetchall()}
+            for oid, priv in wanted:
+                denied_privileges.append(
+                    ObservedPrivilege(
+                        identity=denied_by_oid[oid],
+                        role=target,
+                        privilege=priv,
+                        held=bool(held_by_oid.get((oid, priv), False)),
+                        origin="none",
+                    )
+                )
+
+            cursor.execute(
+                DENIED_COLUMN_PRIVILEGE_SQL,
+                {
+                    "role": target,
+                    "oids": denied_oids,
+                    "privs": list(COLUMN_LEVEL_PRIVILEGES),
+                },
+            )
+            probed: dict[tuple[int, str], set[str]] = {}
+            held_columns: dict[tuple[int, str], set[str]] = {}
+            for oid, column, priv, held in cursor.fetchall():
+                probed.setdefault((oid, priv), set()).add(column)
+                if held:
+                    held_columns.setdefault((oid, priv), set()).add(column)
+            for oid in denied_oids:
+                for priv in COLUMN_LEVEL_PRIVILEGES:
+                    denied_column_grants.append(
+                        ObservedColumnGrant(
+                            identity=denied_by_oid[oid],
+                            role=target,
+                            privilege=priv,
+                            columns_held=tuple(
+                                sorted(held_columns.get((oid, priv), ()))
+                            ),
+                            columns_probed=len(probed.get((oid, priv), ())),
+                        )
+                    )
+
+            # The column ACL itself, reported so a held column privilege
+            # arrives with its origin rather than only its effect.
+            cursor.execute(DENIED_COLUMN_ACL_SQL, {"oids": denied_oids})
+            for oid, column, priv, grantee in sorted(cursor.fetchall()):
+                notes.append(
+                    f"COLUMN ACL: {denied_by_oid.get(oid, oid)} column "
+                    f"{column!r} grants {priv} to {grantee}. This entry lives "
+                    "in pg_attribute.attacl and is invisible to "
+                    "has_table_privilege."
                 )
 
         # --- functions, by overload family ---
@@ -641,6 +791,8 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
             sorted(memberships, key=lambda m: (m.member, m.granted_role))
         ),
         legacy_module_privileges=tuple(legacy),
+        denied_privileges=tuple(denied_privileges),
+        denied_column_grants=tuple(denied_column_grants),
         notes=tuple(notes),
     )
 
@@ -668,11 +820,27 @@ def _report(manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot) -> list[st
             f"  privilege answers       {len(snapshot.privileges)}"
             " (one call per privilege; never a comma-joined ANY test)",
             f"  legacy module probes    {len(snapshot.legacy_module_privileges)}",
+            f"  denial table probes     {len(snapshot.denied_privileges)}"
+            f" (all {len(DENIED_TABLE_PRIVILEGES)} table privileges, per denied"
+            " relation)",
+            f"  denial column probes    {len(snapshot.denied_column_grants)}"
+            " (pg_attribute.attacl / has_column_privilege; a column grant is"
+            " invisible to has_table_privilege)",
             f"  role memberships        {len(snapshot.memberships)}",
             "",
-            "EXCLUSIONS (preserved, never revoked)",
+            "DENIED BY ARCHITECTURE (never granted, absence proved)",
         ]
     )
+    for identity in sorted({row.identity for row in manifest.denied()}):
+        columns = sum(
+            entry.columns_probed
+            for entry in snapshot.denied_column_grants
+            if entry.identity == identity
+        )
+        lines.append(f"  {identity} -- {columns} column answers taken")
+    if not manifest.denied():
+        lines.append("  (none)")
+    lines.extend(["", "EXCLUSIONS (preserved, never revoked)"])
     for scope, count in sorted(manifest.preserved_scopes().items()):
         lines.append(f"  {scope:20s} {count:5d} target privileges preserved")
     if snapshot.notes:

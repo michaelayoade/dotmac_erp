@@ -23,7 +23,12 @@ These are the repo-level instructions Codex should follow for this workspace.
   ENFORCING gate is `tests/architecture/test_privilege_manifest.py` (which
   regenerates and compares in the test job); the Make target is the
   convenience form. `make privilege-manifest` rewrites the artefacts — never
-  hand-edit them.
+  hand-edit them. Every row carries one of three dispositions: `grant`
+  (bulk file), `review_required` (exceptional file, needs a sign-off) and
+  `denied_by_architecture` (never applied — rendered as a comment, with its
+  absence proved at table AND column level by `denial_violations`). A
+  boolean cannot tell "grant after review" from "never grant"; the split
+  between the two files is permanent, not a staging step.
 - CSS build: `npm run dev` or `npm run watch:css` (outputs `static/css/app.css`)
 
 ## Priorities
