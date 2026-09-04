@@ -1,4 +1,4 @@
-.PHONY: help test lint type-check format format-check security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
+.PHONY: privilege-manifest privilege-manifest-check help test lint type-check format format-check security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
 
 DB_CONTAINER ?= dotmac_erp_db
 DB_NAME ?= dotmac_erp
@@ -57,6 +57,26 @@ semgrep: ## Run semgrep custom rules (DotMac anti-patterns)
 	poetry run pre-commit run semgrep --all-files
 
 check: lint format-check type-check security semgrep ## Run all quality checks (lint + format + type-check + security + semgrep)
+
+# The identity-cutover manifest and its SQL are GENERATED from the frozen
+# production census and committed. Both targets are entirely offline: they
+# open no connection and need no database.
+#
+# `privilege-manifest-check` is deliberately NOT a prerequisite of `check`.
+# The enforcing gate is
+# `tests/architecture/test_privilege_manifest.py`, which regenerates the
+# artefacts in memory and byte-compares them, so the drift check already runs
+# in the test job. Wiring the same assertion into `check` would add
+# `poetry run python` to the tool set
+# `tests/architecture/test_toolchain_coherence.py
+# ::test_make_check_tools_are_declared_dev_dependencies` requires to be a
+# declared dev dependency -- `python` is not one, and evading that guard to
+# duplicate a check that already runs would be worse than not duplicating it.
+privilege-manifest-check: ## Verify the ERP identity-cutover manifest and SQL match the census
+	poetry run python scripts/generate_privilege_manifest.py --check
+
+privilege-manifest: ## Regenerate the ERP identity-cutover manifest and SQL
+	poetry run python scripts/generate_privilege_manifest.py
 
 # ─── Testing ──────────────────────────────────────────────
 
