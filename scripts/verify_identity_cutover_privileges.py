@@ -544,9 +544,7 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
             # A DENIED row is not probed here. This loop asserts "the target
             # HOLDS it"; the denied rows assert the exact opposite and are
             # probed by the denial block below, which owns them end to end.
-            section_rows = [
-                row for row in manifest.section(section) if not row.denied
-            ]
+            section_rows = [row for row in manifest.section(section) if not row.denied]
             wanted = [
                 (rel_resolved[(row.schema, row.object_name)][0], row.privilege)
                 for row in section_rows
@@ -618,9 +616,7 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
         if denied_by_oid:
             denied_oids = sorted(denied_by_oid)
             wanted = [
-                (oid, priv)
-                for oid in denied_oids
-                for priv in DENIED_TABLE_PRIVILEGES
+                (oid, priv) for oid in denied_oids for priv in DENIED_TABLE_PRIVILEGES
             ]
             oids, privs = _split(wanted)
             cursor.execute(

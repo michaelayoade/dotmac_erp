@@ -312,9 +312,9 @@ FUNCTION_EXECUTOR_DECLARATIONS: Final[Mapping[str, ExecutorDeclaration]] = {
         permitted_executor=NO_RUNTIME_EXECUTOR,
         executor_note=(
             "Trigger installation and operation ONLY. PostgreSQL checks "
-            "EXECUTE on a trigger function when the trigger is CREATED, not "
-            "when it fires, and a trigger function cannot be invoked as an "
-            "ordinary function -- so NO RUNTIME PRINCIPAL needs direct "
+            "EXECUTE on a trigger function when CREATE TRIGGER is executed, "
+            "not when it fires, and a trigger function cannot be invoked as "
+            "an ordinary function -- so NO RUNTIME PRINCIPAL needs direct "
             "execution and granting it confers nothing callable. Granting it "
             "anyway remains unnecessary AND would reverse a tested migration "
             "decision, which is the reason that matters."
@@ -800,9 +800,7 @@ class PrivilegeManifest:
 
     def routine(self) -> tuple[GrantRow, ...]:
         """The mechanical sweep: everything with no judgement call in it."""
-        return tuple(
-            row for row in self.rows if row.disposition == DISPOSITION_GRANT
-        )
+        return tuple(row for row in self.rows if row.disposition == DISPOSITION_GRANT)
 
     def exceptional(self) -> tuple[GrantRow, ...]:
         """Everything the sweep must NOT contain, in manifest order.
@@ -812,9 +810,7 @@ class PrivilegeManifest:
         reviewer must read line by line stays short enough that they do.
         """
         return tuple(
-            sorted(
-                (*self.review_required(), *self.denied()), key=GrantRow.sort_key
-            )
+            sorted((*self.review_required(), *self.denied()), key=GrantRow.sort_key)
         )
 
     def preserved_scopes(self) -> dict[str, int]:
@@ -1016,9 +1012,7 @@ def manifest_from_census(
         for entry in sorted(entries, key=lambda item: str(item["privilege"])):
             rows.append(
                 GrantRow(
-                    section=(
-                        SECTION_CONTROL_PLANE if control else SECTION_RELATIONS
-                    ),
+                    section=(SECTION_CONTROL_PLANE if control else SECTION_RELATIONS),
                     object_kind="relation",
                     identity=identity,
                     schema=schema,
@@ -1056,9 +1050,7 @@ def manifest_from_census(
                             f"least-privilege target.{moved}"
                         )
                     ),
-                    disposition=(
-                        DISPOSITION_DENIED if control else DISPOSITION_GRANT
-                    ),
+                    disposition=(DISPOSITION_DENIED if control else DISPOSITION_GRANT),
                     denial_reason=DENIAL_REASON if control else "",
                     plane=verdict.plane,
                     plane_declared_by=verdict.declared_by,
@@ -1254,21 +1246,21 @@ def _exclusions_from_census(
             )
         )
 
-    for declaration in planes.control_plane_relations():
+    for relation_declaration in planes.control_plane_relations():
         exclusions.append(
             ExclusionRow(
                 exclusion_id=(
-                    f"control-plane-relation:{declaration.schema}."
-                    f"{declaration.relation}"
+                    f"control-plane-relation:{relation_declaration.schema}."
+                    f"{relation_declaration.relation}"
                 ),
                 kind="denied-control-plane-relation",
-                scope=f"{declaration.schema}.{declaration.relation}",
+                scope=f"{relation_declaration.schema}.{relation_declaration.relation}",
                 privileges=0,
                 reason=(
                     f"{DENIAL_REASON}. Declared control plane by "
-                    f"{declaration.declared_by}. {declaration.authority} "
+                    f"{relation_declaration.declared_by}. {relation_declaration.authority} "
                     "Permitted principals: "
-                    f"{', '.join(declaration.permitted_principals)}. The "
+                    f"{', '.join(relation_declaration.permitted_principals)}. The "
                     "target role will NOT be given any privilege on it. The "
                     "rows stay in the manifest with disposition "
                     "`denied_by_architecture` so the decision is visible "
@@ -1280,7 +1272,9 @@ def _exclusions_from_census(
             )
         )
 
-    for identity, declaration in sorted(FUNCTION_EXECUTOR_DECLARATIONS.items()):
+    for identity, executor_declaration in sorted(
+        FUNCTION_EXECUTOR_DECLARATIONS.items()
+    ):
         exclusions.append(
             ExclusionRow(
                 exclusion_id=f"denied-execute:{identity}",
@@ -1290,11 +1284,11 @@ def _exclusions_from_census(
                 reason=(
                     f"{DENIAL_REASON_EXECUTE}. Permitted executor: "
                     + (
-                        f"`{declaration.permitted_executor}`. "
-                        if declaration.has_runtime_executor
+                        f"`{executor_declaration.permitted_executor}`. "
+                        if executor_declaration.has_runtime_executor
                         else "NONE -- no runtime principal. "
                     )
-                    + f"{declaration.executor_note} {declaration.authority} "
+                    + f"{executor_declaration.executor_note} {executor_declaration.authority} "
                     "The row stays in the manifest as a deliberate denial, "
                     "renders no GRANT, and is proved absent by an EFFECTIVE "
                     "has_function_privilege question asked of the target role "
@@ -1697,8 +1691,7 @@ def render_denial_ledger(rows: Sequence[GrantRow], title: str) -> str:
             lines.append(f"--   DENIED ({row.disposition}): {row.denial_reason}.")
             if row.plane:
                 lines.append(
-                    f"--   PLANE: {row.plane} -- declared by "
-                    f"{row.plane_declared_by}."
+                    f"--   PLANE: {row.plane} -- declared by {row.plane_declared_by}."
                 )
             if row.permitted_principals:
                 lines.append(
@@ -2256,8 +2249,8 @@ def denial_violations(
     }
     for identity in denied_identities:
         for privilege in DENIED_TABLE_PRIVILEGES:
-            entry = table_answers.get((identity, privilege))
-            if entry is None:
+            table_entry = table_answers.get((identity, privilege))
+            if table_entry is None:
                 violations.append(
                     f"UNPROBED DENIAL: {privilege} on {identity} was never "
                     f"asked about for {manifest.target_role!r}. "
@@ -2268,7 +2261,7 @@ def denial_violations(
                     "answered."
                 )
                 continue
-            if entry.held:
+            if table_entry.held:
                 violations.append(
                     f"DENIED PRIVILEGE HELD: {manifest.target_role!r} holds "
                     f"{privilege} on {identity}. {DENIAL_REASON} -- ADR-0023 "
@@ -2277,9 +2270,11 @@ def denial_violations(
                     "grant made outside this programme."
                 )
         for privilege in COLUMN_LEVEL_PRIVILEGES:
-            entry = column_answers.get((identity, privilege))
-            if entry is None or entry.columns_probed == 0:
-                probed = "no column observation" if entry is None else "0 columns"
+            column_entry = column_answers.get((identity, privilege))
+            if column_entry is None or column_entry.columns_probed == 0:
+                probed = (
+                    "no column observation" if column_entry is None else "0 columns"
+                )
                 violations.append(
                     f"UNPROBED COLUMN DENIAL: {privilege} on {identity} has "
                     f"{probed} for {manifest.target_role!r}. A column ACL "
@@ -2289,11 +2284,11 @@ def denial_violations(
                     "information_schema.column_privileges."
                 )
                 continue
-            if entry.columns_held:
+            if column_entry.columns_held:
                 violations.append(
                     f"DENIED COLUMN PRIVILEGE HELD: {manifest.target_role!r} "
                     f"holds {privilege} on {identity} at COLUMN level: "
-                    f"{', '.join(entry.columns_held)}. {DENIAL_REASON}. This "
+                    f"{', '.join(column_entry.columns_held)}. {DENIAL_REASON}. This "
                     "is the grant a relation-ACL check cannot see -- "
                     "has_table_privilege answers false while the role reads "
                     "the column."
@@ -2318,9 +2313,8 @@ def _legacy_module_violations(
             f"LEGACY MODULE PRIVILEGE: {manifest.source_role!r} holds "
             f"{entry.privilege} on {entry.identity}. The legacy role is "
             "being retired, not extended: module access must reach "
-            f"{manifest.target_role!r} only. The one frozen exception is "
-            f"{sorted(MODULE_ERA_ALLOWLIST)}, and that set may shrink, never "
-            "grow."
+            f"{manifest.target_role!r} only. The frozen exception set may "
+            "shrink, never grow."
         )
     return violations
 

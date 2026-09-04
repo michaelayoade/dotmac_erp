@@ -76,9 +76,7 @@ def test_module_declarations_come_from_the_composed_module_list() -> None:
         (item.schema, item.relation) for item in declared if item.plane == PLANE_TENANT
     }
     control = {
-        (item.schema, item.relation)
-        for item in declared
-        if item.plane == PLANE_CONTROL
+        (item.schema, item.relation) for item in declared if item.plane == PLANE_CONTROL
     }
     assert tenant == expected_tenant
     assert control == expected_control
@@ -177,9 +175,9 @@ def test_every_host_control_plane_declaration_cites_a_real_revoke() -> None:
             qualified = f"{declaration.schema}.{declaration.relation}"
             if (
                 f"REVOKE ALL PRIVILEGES ON TABLE {qualified} FROM "
-                f"{TENANT_APPLICATION_ROLE}" in source
-                or f"REVOKE ALL ON {qualified} FROM {TENANT_APPLICATION_ROLE}"
+                f"{TENANT_APPLICATION_ROLE}"
                 in source
+                or f"REVOKE ALL ON {qualified} FROM {TENANT_APPLICATION_ROLE}" in source
             ):
                 found = True
         assert found, (
@@ -194,9 +192,7 @@ def test_every_host_control_plane_declaration_cites_a_real_revoke() -> None:
 
 def test_the_host_declaration_covers_the_four_public_relations() -> None:
     """Stated a second time, so a declaration dropped in silence fails here."""
-    assert {
-        (item.schema, item.relation) for item in HOST_CONTROL_PLANE_RELATIONS
-    } == {
+    assert {(item.schema, item.relation) for item in HOST_CONTROL_PLANE_RELATIONS} == {
         ("public", "platform_outbox_events"),
         ("public", "platform_idempotency_records"),
         ("public", "tenants"),
@@ -323,8 +319,6 @@ def test_a_schema_move_is_reported_but_does_not_reclassify() -> None:
     assert not home.schema_moved
 
     moved = resolver.resolve("mod_relay", "platform_outbox_events")
-    assert moved.plane == PLANE_CONTROL, (
-        "moving a relation does not change what it is"
-    )
+    assert moved.plane == PLANE_CONTROL, "moving a relation does not change what it is"
     assert moved.schema_moved
     assert moved.declared_schema == "public"
