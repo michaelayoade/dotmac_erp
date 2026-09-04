@@ -25,10 +25,10 @@ version.
 Both are here because they fail for different reasons, and a suite carrying only
 one of them would have passed against the code as it shipped.
 
-## Measured, 2026-09-04: seven of these ten fail against the unrepaired code
+## Measured, 2026-09-04: eight of these twelve fail against the unrepaired code
 
-Run against a variant with the same module surface and the old behaviour, seven
-fail and THREE PASS. Which three is the useful part, and each is paired with one
+Run against a variant with the same module surface and the old behaviour, eight
+fail and FOUR PASS. Which four is the useful part, and each is paired with one
 that discriminates:
 
 * `test_concurrent_requests_cannot_inherit_each_others_actor` passes against the
@@ -39,14 +39,15 @@ that discriminates:
   property of the current middleware base class rather than of this code, so it
   would stop holding the day someone changes the base class. It is a guard on an
   assumption, not on the defect.
-* `test_a_trusted_peer_may_supply_the_request_id` passes, because the old code
-  accepted ANY inbound id including a trusted one. Only its untrusted twin
-  discriminates.
 * `test_an_untrusted_forwarded_address_cannot_become_the_client_ip` passes,
   because `request.client.host` happens to give the right answer when nothing is
   trusted. Only the trusted case shows the resolver was never reached.
 
-A suite of only those three would have been fully green against a live
+* `test_a_trusted_peer_may_supply_the_request_id` passes, because the old code
+  accepted ANY inbound id including a trusted one. Only its untrusted twin
+  discriminates.
+
+A suite of only those four would have been fully green against a live
 cross-request identity leak.
 """
 
@@ -155,15 +156,56 @@ async def test_an_anonymous_request_after_an_authenticated_one_is_anonymous(
 
 
 @pytest.mark.asyncio
-async def test_the_context_is_cleared_after_the_request(middleware, trusting_nobody):
-    """`finally` plus the token, so the exception path clears too."""
-    await _run(middleware, _request(actor="alice"))
-    assert actor_id_var.get() == ""
-    assert request_id_var.get() == ""
+async def test_the_context_is_restored_to_the_outer_value_after_the_request(
+    middleware, trusting_nobody
+):
+    """`reset(token)` restores the value from BEFORE this middleware's `set()`.
+
+    Not a blunt clear to empty, and the difference is load-bearing. Forcing empty
+    values would discard whatever an outer scope had established — and it is
+    precisely token semantics that make a LATER `set()` by a dependency still get
+    discarded at request end, which is the property the repair depends on.
+
+    So this seeds a known outer value and asserts restoration to THAT.
+
+    CI found the earlier version of this test, not the implementation: the suite
+    carried a leaked actor UUID from a previous test, and a postcondition of
+    `== ""` failed against correct code. The leak itself is worth noting — it is
+    this same defect class inside the test suite, because `app/web/deps.py` and
+    `auth_dependencies.py` both `set()` the actor without resetting.
+    """
+    outer = actor_id_var.set("outer-actor")
+    try:
+        await _run(middleware, _request(actor="alice"))
+        assert actor_id_var.get() == "outer-actor", (
+            "the middleware clobbered an outer context instead of restoring it"
+        )
+    finally:
+        actor_id_var.reset(outer)
 
 
 @pytest.mark.asyncio
-async def test_the_context_is_cleared_when_the_request_raises(
+async def test_the_request_actor_does_not_survive_the_request(
+    middleware, trusting_nobody
+):
+    """The half the restoration assertion does not make on its own.
+
+    Restoring to an outer value and never writing the request's actor at all
+    would both satisfy the test above. This one requires that `alice` was
+    genuinely visible INSIDE the request and genuinely gone after it.
+    """
+    seen: list[dict] = []
+    outer = actor_id_var.set("outer-actor")
+    try:
+        await _run(middleware, _request(actor="alice"), seen=seen)
+        assert seen[0]["actor"] == "alice"
+        assert actor_id_var.get() != "alice"
+    finally:
+        actor_id_var.reset(outer)
+
+
+@pytest.mark.asyncio
+async def test_the_context_is_restored_when_the_request_raises(
     middleware, trusting_nobody
 ):
     """The path where inheritance is most likely, because the failing request is
@@ -172,9 +214,41 @@ async def test_the_context_is_cleared_when_the_request_raises(
     async def exploding(_request):
         raise RuntimeError("boom")
 
-    with pytest.raises(RuntimeError):
-        await middleware.dispatch(_request(actor="alice"), exploding)
-    assert actor_id_var.get() == ""
+    outer = actor_id_var.set("outer-actor")
+    try:
+        with pytest.raises(RuntimeError):
+            await middleware.dispatch(_request(actor="alice"), exploding)
+        assert actor_id_var.get() == "outer-actor"
+    finally:
+        actor_id_var.reset(outer)
+
+
+@pytest.mark.asyncio
+async def test_a_later_set_by_a_dependency_is_still_discarded(
+    middleware, trusting_nobody
+):
+    """Why token reset rather than a forced clear, stated as a test.
+
+    `app/web/deps.py` and `auth_dependencies.py` both call `actor_id_var.set()`
+    during dependency resolution, AFTER this middleware ran. `reset(token)`
+    restores the value from before the middleware's own `set()` and discards
+    every intervening one, so the context is torn down whoever wrote to it.
+
+    A blunt clear-to-empty would also discard it — and would additionally
+    discard the outer value, which is the behaviour the test above forbids. Both
+    tests together pin the semantics; either alone admits the wrong fix.
+    """
+    outer = actor_id_var.set("outer-actor")
+    try:
+
+        async def sets_actor_midway(_request):
+            actor_id_var.set("set-by-a-dependency")
+            return Response(status_code=200)
+
+        await middleware.dispatch(_request(), sets_actor_midway)
+        assert actor_id_var.get() == "outer-actor"
+    finally:
+        actor_id_var.reset(outer)
 
 
 # ── concurrency, and it has to be real ──────────────────────────────────────
