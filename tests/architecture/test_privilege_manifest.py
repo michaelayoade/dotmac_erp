@@ -63,6 +63,7 @@ from app.privilege_manifest import (
     EXPECTED_OWNER,
     FUNCTION_EXECUTOR_DECLARATIONS,
     MODULE_ERA_ALLOWLIST,
+    NO_RUNTIME_EXECUTOR,
     PUBLIC_PSEUDO_ROLE,
     ROUTINE_SQL_TITLE,
     SECTION_CONTROL_PLANE,
@@ -364,8 +365,34 @@ def test_decision_1_all_five_execute_grants_are_denied_with_an_executor(
         row for row in rows if row.object_name == "enforce_employment_type_projection"
     )
     assert "reverse a tested migration decision" in fence.reason
-    fence_note = FUNCTION_EXECUTOR_DECLARATIONS[fence.identity].executor_note
-    assert "CREATE TRIGGER" in fence_note
+
+    # What is DECIDED about the fence, asserted directly. The note explains
+    # why no runtime principal needs direct execution, and an earlier version
+    # of this test demanded the literal string "CREATE TRIGGER" from that
+    # sentence -- which makes a rewording a failure while every decision
+    # stays put, and makes the prose editable to turn the test green. A test
+    # must not enforce an incidental spelling. The things that are actually
+    # decided are these:
+    fence_declaration = FUNCTION_EXECUTOR_DECLARATIONS[fence.identity]
+    assert fence.disposition == DISPOSITION_DENIED
+    assert fence.denial_reason == DENIAL_REASON_EXECUTE
+    assert fence_declaration.permitted_executor == NO_RUNTIME_EXECUTOR
+    assert not fence_declaration.has_runtime_executor
+    assert fence.permitted_principals == ()
+    assert "no runtime principal" in fence.reason
+    assert fence.object_name not in ROUTINE_SQL_PATH.read_text(encoding="utf-8"), (
+        "a denied function renders no SQL: it must not appear in the file "
+        "that is applied"
+    )
+    ledger_mentions = [
+        line
+        for line in DENIAL_LEDGER_PATH.read_text(encoding="utf-8").splitlines()
+        if fence.object_name in line
+    ]
+    assert ledger_mentions, "the refusal is recorded, not merely absent"
+    assert all(line.startswith("--") for line in ledger_mentions), (
+        "and it is recorded as comment, so the ledger renders nothing"
+    )
 
     # And no GRANT EXECUTE is emitted, anywhere, in any file.
     assert "EXECUTE" not in ROUTINE_SQL_PATH.read_text(encoding="utf-8")
