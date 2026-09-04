@@ -1250,7 +1250,16 @@ class EmployeeService:
         )
         self._refresh_staff_access_projection(employee)
         if current_staff_access != prior_staff_access:
-            self._enqueue_staff_sync(employee)
+            allow_active_access_revocation = (
+                prior_staff_access[0] in {EmployeeStatus.ACTIVE}
+                and employee.status in {EmployeeStatus.ACTIVE}
+                and prior_staff_access[1] is True
+                and employee.dotmac_sub_access_enabled is False
+            )
+            self._enqueue_staff_sync(
+                employee,
+                allow_active_access_revocation=allow_active_access_revocation,
+            )
 
         return employee
 
@@ -1437,7 +1446,12 @@ class EmployeeService:
     # Status Management
     # =========================================================================
 
-    def _enqueue_staff_sync(self, employee: Employee) -> None:
+    def _enqueue_staff_sync(
+        self,
+        employee: Employee,
+        *,
+        allow_active_access_revocation: bool = False,
+    ) -> None:
         """Queue the dotmac_sub staff-account push for a lifecycle change.
 
         Enqueued with a short countdown so the caller's transaction commits
@@ -1454,6 +1468,9 @@ class EmployeeService:
 
             sync_employee_staff_account.apply_async(
                 args=[str(employee.employee_id), str(employee.organization_id)],
+                kwargs={
+                    "allow_active_access_revocation": allow_active_access_revocation,
+                },
                 countdown=10,
             )
         except Exception:  # noqa: BLE001 — broker down must not block HR writes

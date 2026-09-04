@@ -26,7 +26,11 @@ logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=120)
 def sync_employee_staff_account(
-    self, employee_id: str, organization_id: str
+    self,
+    employee_id: str,
+    organization_id: str,
+    *,
+    allow_active_access_revocation: bool = False,
 ) -> dict[str, Any]:
     """Push one employee's staff-account state to dotmac_sub (with retry)."""
     org_id = _resolve_org_id(organization_id)
@@ -38,7 +42,11 @@ def sync_employee_staff_account(
             employee = db.get(Employee, UUID(employee_id))
             if not employee:
                 return {"success": False, "error": "Employee not found"}
-            result = staff_sync.sync_employee(db, employee)
+            result = staff_sync.sync_employee(
+                db,
+                employee,
+                allow_active_access_revocation=allow_active_access_revocation,
+            )
             db.commit()
             logger.info(
                 "Staff sync for employee %s: %s", employee_id, result.get("action")

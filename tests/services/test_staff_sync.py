@@ -157,7 +157,7 @@ def test_terminated_employee_without_account_is_skipped():
     assert not client.active_calls
 
 
-def test_active_employee_without_sub_access_is_disabled():
+def test_active_employee_without_sub_access_is_not_disabled_by_default():
     client = FakeClient(existing={"id": "acc-9", "is_active": True})
     emp = _employee(
         EmployeeStatus.ACTIVE,
@@ -166,6 +166,30 @@ def test_active_employee_without_sub_access_is_disabled():
     )
 
     result = staff_sync.sync_employee(None, emp, client=client)
+
+    assert result == {
+        "action": "skipped",
+        "reason": "dotmac_sub access not granted",
+    }
+    assert not client.active_calls
+    assert not client.role_calls
+    assert not client.department_calls
+
+
+def test_active_employee_explicit_access_revocation_is_disabled():
+    client = FakeClient(existing={"id": "acc-9", "is_active": True})
+    emp = _employee(
+        EmployeeStatus.ACTIVE,
+        account_id="acc-9",
+        access_enabled=False,
+    )
+
+    result = staff_sync.sync_employee(
+        None,
+        emp,
+        client=client,
+        allow_active_access_revocation=True,
+    )
 
     assert result["action"] == "disabled"
     assert client.active_calls == [("acc-9", False)]

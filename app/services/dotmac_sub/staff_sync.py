@@ -102,6 +102,7 @@ def sync_employee(
     employee: Employee,
     *,
     client: DotmacSubClient | None = None,
+    allow_active_access_revocation: bool = False,
 ) -> dict[str, Any]:
     """Push one employee's lifecycle state to dotmac_sub. Idempotent.
 
@@ -123,6 +124,13 @@ def sync_employee(
     account_id = employee.dotmac_sub_account_id
     if not email and not account_id:
         return {"action": "skipped", "reason": "employee has no email"}
+
+    if (
+        status in _ENABLED_STATUSES
+        and not access_enabled
+        and not allow_active_access_revocation
+    ):
+        return {"action": "skipped", "reason": "dotmac_sub access not granted"}
 
     owns_client = client is None
     if client is None:
