@@ -41,6 +41,14 @@ Deploy preflight uses the same verifier without elevated credentials:
     MIGRATION_DATABASE_URL=postgresql://app_admin@host/db python \
         scripts/bootstrap_database_roles.py --verify-only
 
+Bind the verification to the database it was authorised for — otherwise a run
+aimed at the wrong cluster satisfies every other check and says so only as an
+`UNVERIFIED` line:
+
+    MIGRATION_EXPECTED_DATABASE=dotmac_erp \\
+    MIGRATION_DATABASE_URL=postgresql://app_admin@host/db python \\
+        scripts/bootstrap_database_roles.py --verify-only
+
 Exit codes: 0 satisfied (or created), 1 contract drift,
 2 usage/connection error.
 """
@@ -65,16 +73,27 @@ from psycopg import sql
 
 from app.migration_database_roles import (
     MIGRATION_OWNERSHIP_SQL,
+    NON_ESCALATING_ROLES,
     RELAY_DISPATCHER_CONTRACT,
     ROLE_CONTRACT,
+    ROLE_ESCALATION_SQL,
+    database_identity_violations,
     migration_executor_violations,
     migration_ownership_violations,
     relay_dispatcher_violations,
     role_contract_violations,
+    role_escalation_violations,
+    unverified_database_identity_notice,
 )
 
 BOOTSTRAP_URL_VAR = "BOOTSTRAP_DATABASE_URL"
 MIGRATION_URL_VAR = "MIGRATION_DATABASE_URL"
+#: Optional operator binding: the database name this verification was
+#: authorised against. Optional because making it mandatory would fail every
+#: existing caller on the first run, which is how a check gets deleted rather
+#: than adopted. Absent, the run prints `database identity UNVERIFIED` and
+#: nobody can mistake a green result for a checked one.
+EXPECTED_DATABASE_VAR = "MIGRATION_EXPECTED_DATABASE"
 
 
 def _attributes(bypassrls: bool, superuser: bool) -> str:
@@ -156,15 +175,48 @@ def bootstrap(conn: psycopg.Connection, *, dry_run: bool, repair: bool) -> int:
     return 0
 
 
+def _escalation_edges(
+    conn: psycopg.Connection,
+) -> list[tuple[str, str, bool, bool, bool]]:
+    """Flatten the live role graph into (subject, reachable privileged role).
+
+    Read from `pg_roles` and `pg_auth_members`, both world-readable, so this
+    answers from evidence the NOSUPERUSER preflight connection can actually see.
+    """
+    rows = conn.execute(
+        ROLE_ESCALATION_SQL, {"subjects": sorted(NON_ESCALATING_ROLES)}
+    ).fetchall()
+    return [
+        (str(row[0]), str(row[1]), bool(row[2]), bool(row[3]), bool(row[4]))
+        for row in rows
+    ]
+
+
 def verify_migration_connection(conn: psycopg.Connection) -> int:
     current_user = str(conn.execute("SELECT current_user").fetchone()[0])
+    observed_database = str(conn.execute("SELECT current_database()").fetchone()[0])
+    expected_database = os.environ.get(EXPECTED_DATABASE_VAR, "").strip() or None
     observed = _observe(conn)
     ownership_rows = conn.execute(MIGRATION_OWNERSHIP_SQL).fetchall()
     non_owned_counts = {str(row[0]): int(row[1]) for row in ownership_rows}
     violations = (
         *migration_executor_violations(current_user, observed),
         *migration_ownership_violations(non_owned_counts),
+        # Removing the migration DSN from a runtime service is undone by a role
+        # graph that lets the runtime role BECOME the migration role. The graph
+        # is checked here, on the same connection, because a credential
+        # separation nobody re-derives from the live catalogue is a claim about
+        # an env file rather than about the database.
+        *role_escalation_violations(_escalation_edges(conn)),
+        # WHERE the connection landed. Everything above is satisfiable by a
+        # different, correctly shaped cluster.
+        *database_identity_violations(observed_database, expected_database),
     )
+    notice = unverified_database_identity_notice(
+        observed_database, expected_database, EXPECTED_DATABASE_VAR
+    )
+    if notice is not None:
+        print(f"MIGRATION CONTRACT: {notice}", file=sys.stderr)
     for violation in violations:
         print(f"MIGRATION CONTRACT: {violation}", file=sys.stderr)
     return 1 if violations else 0
@@ -185,7 +237,11 @@ def main() -> int:
     parser.add_argument(
         "--verify-only",
         action="store_true",
-        help="verify roles and the app_admin executor; execute no DDL",
+        help=(
+            "verify roles, the app_admin executor, that no runtime role can "
+            "SET ROLE into a privileged one, and the database identity; "
+            "execute no DDL"
+        ),
     )
     args = parser.parse_args()
 

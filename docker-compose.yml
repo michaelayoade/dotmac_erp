@@ -68,6 +68,33 @@ services:
       DEFAULT_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000001
       TRUSTED_PROXY_IPS: 172.16.0.0/12,127.0.0.1
       DATABASE_URL: ${DATABASE_URL}
+      # MIGRATION_DATABASE_URL is NEUTRALISED here, on purpose.
+      #
+      # This service, `worker` and `beat` all read `env_file: - .env`, and the
+      # production entrypoint census records the app_admin migration DSN inside
+      # that same file (docs/inventories/2026-08-30-erp-deployment-entrypoint-
+      # census.md E2). That credential is BYPASSRLS by contract
+      # (app/migration_database_roles.py ROLE_CONTRACT) and owns every
+      # non-extension object in the database, so three long-running,
+      # network-facing processes were holding a credential that can read and
+      # write every organization's rows and issue arbitrary DDL.
+      #
+      # `.env.example` asked, in prose, that the value be left blank. Prose is
+      # not enforcement, and the census says the host file does not honour it.
+      # A Compose `environment:` entry OVERRIDES `env_file:`, so an empty value
+      # here is what actually removes the credential from this container —
+      # whatever the host `.env` happens to contain.
+      #
+      # The one-shot migration executor still receives the real DSN: every
+      # migration step in scripts/deploy.sh is `docker compose run --rm -e
+      # MIGRATION_DATABASE_URL app ...`, and `run --env` overrides the service
+      # definition. If that precedence ever failed, the deploy preflight
+      # (step 3a) refuses BEFORE any DDL with a named remedy — a loud stop, not
+      # a silent leak.
+      #
+      # Gated by tests/architecture/test_migration_credential_not_on_runtime_
+      # services.py against these bytes AND deploy/rendered/docker-compose.yml.
+      MIGRATION_DATABASE_URL: ''
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
@@ -151,6 +178,9 @@ services:
     - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      # Neutralised for the same reason as `app` — see the block there. This
+      # service reads the same `env_file: - .env`.
+      MIGRATION_DATABASE_URL: ''
       BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -181,6 +211,9 @@ services:
     - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      # Neutralised for the same reason as `app` — see the block there. This
+      # service reads the same `env_file: - .env`.
+      MIGRATION_DATABASE_URL: ''
       BANKING_AUTO_MATCH_ENABLED: ${BANKING_AUTO_MATCH_ENABLED:-false}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
