@@ -18,6 +18,7 @@ from app.db.session_context import session_for_org
 from app.models.people.hr.employee import Employee
 from app.services.dotmac_sub import DotmacSubPermanentSyncError
 from app.services.dotmac_sub import staff_sync
+from app.services.people.hr.staff_access_projection import StaffAccessProjectionService
 from app.tasks.dotmac_sub import _resolve_org_id
 
 logger = logging.getLogger(__name__)
@@ -61,4 +62,17 @@ def run_staff_sync_reconcile(organization_id: str | None = None) -> dict[str, An
         return {"success": False, "error": "No valid organization ID configured"}
 
     with session_for_org(org_id) as db:
-        return staff_sync.reconcile_staff_accounts(db, org_id)
+        projection_outcome = StaffAccessProjectionService(
+            db
+        ).reconcile_organization_projections(org_id)
+        db.commit()
+        staff_outcome = staff_sync.reconcile_staff_accounts(db, org_id)
+        return {
+            **staff_outcome,
+            "staff_access_projection": {
+                "employees_seen": projection_outcome.employees_seen,
+                "mapped_employees_seen": projection_outcome.mapped_employees_seen,
+                "account_statuses_seen": projection_outcome.account_statuses_seen,
+                "leave_restrictions_seen": projection_outcome.leave_restrictions_seen,
+            },
+        }

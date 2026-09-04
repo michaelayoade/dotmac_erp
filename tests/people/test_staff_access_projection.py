@@ -487,3 +487,56 @@ def test_projecting_restrictions_does_not_mutate_role_assignments(db_session):
             RolePermission.permission_id == permission.id,
         )
     )
+
+
+def test_organization_reconcile_backfills_and_idempotently_reuses_projections(
+    db_session,
+):
+    org = _org(db_session)
+    _, employee = _employee(
+        db_session,
+        org.organization_id,
+        selfcare_user_id=str(uuid.uuid4()),
+    )
+    _leave(db_session, org.organization_id, employee.employee_id)
+    db_session.flush()
+    service = StaffAccessProjectionService(db_session)
+
+    first = service.reconcile_organization_projections(org.organization_id)
+    first_event_count = len(
+        list(
+            db_session.scalars(
+                select(EventOutbox).where(
+                    EventOutbox.event_name.in_(
+                        [STAFF_ACCOUNT_STATUS_CHANGED, STAFF_LEAVE_RESTRICTION_CHANGED]
+                    )
+                )
+            ).all()
+        )
+    )
+    second = service.reconcile_organization_projections(org.organization_id)
+
+    assert first.employees_seen == 1
+    assert first.mapped_employees_seen == 1
+    assert first.account_statuses_seen == 1
+    assert first.leave_restrictions_seen == 1
+    assert second == first
+    assert db_session.scalar(select(StaffAccountStatusProjection)).version == 1
+    assert db_session.scalar(select(StaffLeaveAccessRestriction)).version == 1
+    assert (
+        len(
+            list(
+                db_session.scalars(
+                    select(EventOutbox).where(
+                        EventOutbox.event_name.in_(
+                            [
+                                STAFF_ACCOUNT_STATUS_CHANGED,
+                                STAFF_LEAVE_RESTRICTION_CHANGED,
+                            ]
+                        )
+                    )
+                ).all()
+            )
+        )
+        == first_event_count
+    )

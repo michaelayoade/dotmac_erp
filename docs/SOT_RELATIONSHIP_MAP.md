@@ -28,7 +28,7 @@ semantics.
 | Domain | Owns | Rule in one line |
 |---|---|---|
 | `organization_tenancy` | org context priming, ORM filter, RLS GUCs | Both enforcement layers are primed together or not at all |
-| `identity_access` | auth flows, guards, RBAC catalogue, assembly-owned baseline role grants, Person→Party catalogue projection | Person is the single login identity and the person authority; ERP owns product role policy and persistence; shared modules declare permission definitions but never assign ERP roles; the kernel party catalogue is a rebuildable projection of Person, never a second identity; RBAC scope decision pending (ledger finding 2) |
+| `identity_access` | auth flows, guards, RBAC catalogue, assembly-owned baseline role grants, Person→Party catalogue projection, ERP staff-access projections | Person is the single login identity and the person authority; ERP owns product role policy and persistence; employee status and approved leave applications rebuild the staff-access projection; shared modules declare permission definitions but never assign ERP roles; the kernel party catalogue is a rebuildable projection of Person, never a second identity; RBAC scope decision pending (ledger finding 2) |
 | `configuration_control` | settings writes + history, specs, flags | One canonical settings writer; flags never substitute for authorization |
 | `audit_trail` | manual business audit (as-built; fragmented) | No NEW audit writer until the four existing mechanisms consolidate (finding 1) |
 | `general_ledger` | single poster, period guards, sequences, FX, tax policy | GL only via posting adapters; posted lines immutable; balances are cache |
@@ -45,6 +45,13 @@ schedule must not dispatch the same task in parallel. The task also owns a
 per-organization PostgreSQL advisory single-flight lock and bounded execution
 time, so connector latency or authentication failure cannot consume the shared
 worker pool. Celery remains the transport and does not decide sync state.
+
+The built-in `staff-sync-reconcile` run at 02:30 Africa/Lagos also repairs the
+ERP-owned staff account-status and approved-leave projections before invoking
+the external account synchronizer. The repair is tenant-scoped and idempotent:
+it derives rows only from `hr.employee` and approved leave applications through
+`hr.staff_access_projection`, and emits the same versioned outbox events as the
+interactive HR owners. It never creates or approves leave applications.
 
 Service API keys authenticate an identity but receive no authority unless an
 operator assigns at least one explicit leaf scope. NULL or empty scope lists are
