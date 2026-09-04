@@ -129,7 +129,19 @@ accepted:
 
 - app liveness is `/health/live`; dependency-aware readiness is
   `/health/ready`, never legacy always-200 `/health`;
-- no runtime role may receive `MIGRATION_DATABASE_URL`;
+- no runtime role may receive `MIGRATION_DATABASE_URL` — and as of this slice
+  that is enforced against the RENDERED bytes and the live root
+  `docker-compose.yml`, not only against this descriptor's `roles` table.
+  `tests/architecture/test_deployment_descriptor.py::
+  test_no_role_holds_the_migration_owner_material` reads `deploy/product.toml`
+  and nothing else; the descriptor is not what runs, and the two already
+  disagree in a measurable way (this descriptor declares `[ingress]
+  trusted_proxies`, and `TRUSTED_PROXY_IPS` appears nowhere under
+  `deploy/rendered/`). `tests/architecture/
+  test_migration_credential_not_on_runtime_services.py` reads the deployed
+  artifacts instead, and treats any `env_file:` on a long-running service as
+  capable of carrying the credential unless the service explicitly neutralises
+  it;
 - images are digest-shaped, never tags — and as of this slice that is
   enforced on the live deploy path, not only inside this descriptor;
 - worker liveness uses a Celery ping and Beat freshness uses a declared tick
