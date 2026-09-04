@@ -196,10 +196,24 @@ def test_a_bare_address_is_parsed_as_a_single_host_network():
 
 
 def test_an_invalid_entry_is_dropped_and_the_rest_survive():
-    """Recorded as the shipped behaviour, not endorsed: a typo'd network is
-    silently ignored, so a deployment can believe it configured a proxy it did
-    not. The kernel contract should refuse rather than skip — noted for the
-    port."""
+    """Recorded as the shipped behaviour, not endorsed — and the DIRECTION of
+    the failure is the part worth stating precisely.
+
+    A typo'd network is silently ignored. That **fails closed for forwarded-
+    header trust**: the malformed entry trusts nobody, so no header is honoured
+    that would not have been honoured anyway, and no trust is widened.
+
+    What it fails at is **deployment correctness and client provenance**. An
+    operator believes they configured a proxy they did not; from then on every
+    downstream client address is the proxy's rather than the client's, and
+    nothing reports it. Rate limiting, CSRF and the audit trail all read that
+    address.
+
+    So the kernel contract must REFUSE a malformed non-empty entry — for
+    provenance, not because trust would otherwise leak. And it must keep empty
+    configuration VALID, trusting nobody: a deployment that configured nothing
+    has made a choice, and one that configured garbage has not.
+    """
     parsed = net._parse_trusted_proxy_networks("nonsense, 10.1.0.0/16, ")
     assert len(parsed) == 1
     assert ipaddress.ip_address("10.1.2.3") in parsed[0]
