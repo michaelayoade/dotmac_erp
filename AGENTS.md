@@ -17,6 +17,13 @@ These are the repo-level instructions Codex should follow for this workspace.
   part of `make check`; ruff is pinned exactly and the pins are guarded by
   `tests/architecture/test_toolchain_coherence.py`.
 - Typing: `mypy`
+- ERP identity cutover: `make privilege-manifest-check` byte-compares the
+  generated `dotmac_erp_app` -> `app_user` privilege manifest and SQL against
+  the frozen production census. It is offline and needs no database. The
+  ENFORCING gate is `tests/architecture/test_privilege_manifest.py` (which
+  regenerates and compares in the test job); the Make target is the
+  convenience form. `make privilege-manifest` rewrites the artefacts — never
+  hand-edit them.
 - CSS build: `npm run dev` or `npm run watch:css` (outputs `static/css/app.css`)
 
 ## Priorities
@@ -33,6 +40,11 @@ These are the repo-level instructions Codex should follow for this workspace.
 - Do not weaken security controls without explicit approval.
 
 ## Codebase Rules (Source of Truth)
+- `docs/architecture/erp-runtime-identity-cutover.md` for the
+  `dotmac_erp_app` -> `app_user` runtime identity cutover: the ruling
+  (identity migration first, least-privilege reduction second), the frozen
+  census, the manifest's OID-independent identity scheme, and the guard's
+  refusals. No SQL from that programme has been applied anywhere.
 - `docs/adr/` for accepted architecture decisions. An ADR outranks a plan
   document; where they disagree, fix the plan. Added 2026-08-15 — ERP had no
   decision record directory, which is how a gate ("After E8 ADR") came to point
