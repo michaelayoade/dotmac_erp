@@ -20,6 +20,7 @@ from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.services.dotmac_sub.client import (
     CreditNoteRecord,
+    DotmacSubAuthenticationError,
     DotmacSubError,
     InvoiceRecord,
     TaxApplication,
@@ -166,6 +167,11 @@ class InvoiceSyncMixin:
                         self._reprime_tenant_context()
                         self.db.expunge_all()
                         logger.info("Progress: %d invoices processed", processed)
+                except DotmacSubAuthenticationError:
+                    # Auth failures cannot be repaired per document. Abort the
+                    # run so one denied endpoint does not create an error
+                    # cascade for every invoice.
+                    raise
                 except OperationalError:
                     if savepoint is not None:
                         try:

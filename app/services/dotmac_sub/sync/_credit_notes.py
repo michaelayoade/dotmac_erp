@@ -14,7 +14,11 @@ from sqlalchemy import select
 
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
-from app.services.dotmac_sub.client import CreditNoteRecord, DotmacSubError
+from app.services.dotmac_sub.client import (
+    CreditNoteRecord,
+    DotmacSubAuthenticationError,
+    DotmacSubError,
+)
 
 from ._constants import (
     DOTMAC_SUB_SYNC_MIN_DATE,
@@ -95,6 +99,11 @@ class CreditNoteSyncMixin:
                         self.db.commit()
                         self._reprime_tenant_context()
                         self.db.expunge_all()
+                except DotmacSubAuthenticationError:
+                    # Auth failures cannot be repaired per document. Abort the
+                    # run so one denied endpoint does not create an error
+                    # cascade for every credit note.
+                    raise
                 except Exception as e:  # noqa: BLE001
                     try:
                         savepoint.rollback()

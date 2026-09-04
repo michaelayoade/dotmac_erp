@@ -37,6 +37,7 @@ from app.models.sync import SyncHistory, SyncJobStatus, SyncType
 from app.services.dotmac_sub import (
     SYSTEM_USER_ID,
     DotmacSubConfig,
+    DotmacSubAuthenticationError,
     DotmacSubSyncService,
 )
 
@@ -347,6 +348,22 @@ def _handle_sync_failure(
             db2.commit()
 
 
+def _handle_auth_failure(
+    history_id: UUID, org_id: UUID, exc: DotmacSubAuthenticationError, tier_name: str
+) -> dict[str, Any]:
+    """Record an auth denial once; retrying cannot repair credentials or scopes."""
+    logger.error(
+        "%s dotmac_sub authorization failure for org %s: %s", tier_name, org_id, exc
+    )
+    _handle_sync_failure(history_id, org_id, exc, tier_name)
+    return {
+        "success": False,
+        "history_id": str(history_id),
+        "organization_id": str(org_id),
+        "error": "dotmac_sub authentication or authorization failed",
+    }
+
+
 def _rollback_interrupted_session(db: Session) -> bool:
     """Roll back interrupted work, invalidating a connection left unusable.
 
@@ -603,6 +620,11 @@ def _enqueue_incremental_sync_workflow(
                 "workflow_id": str(async_result.id),
                 "phases": list(_INCREMENTAL_SYNC_PHASES),
             }
+        except DotmacSubAuthenticationError as exc:
+            db.rollback()
+            if history_id is not None:
+                return _handle_auth_failure(history_id, org_id, exc, "Incremental")
+            raise
         except Exception as exc:
             db.rollback()
             if history_id is not None:
@@ -730,6 +752,13 @@ def run_dotmac_sub_incremental_sync_phase(
                 "phase": phase,
                 "error": "Incremental sync phase exceeded its execution time limit",
             }
+        except DotmacSubAuthenticationError as exc:
+            session_usable = _rollback_interrupted_session(db)
+            result = _handle_auth_failure(
+                history_uuid, org_id, exc, "Incremental phase"
+            )
+            result["phase"] = phase
+            return result
         except Exception as exc:
             session_usable = _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
@@ -794,6 +823,9 @@ def run_dotmac_sub_daily_reconciliation(
             if post["errors"]:
                 payments.errors.extend(post["errors"][:100])
             return _finalize_sync(db, history_id, results, org_id=org_id)
+        except DotmacSubAuthenticationError as exc:
+            db.rollback()
+            return _handle_auth_failure(history_id, org_id, exc, "Daily reconciliation")
         except Exception as exc:
             db.rollback()
             _handle_sync_failure(history_id, org_id, exc, "Daily reconciliation")
@@ -840,6 +872,9 @@ def run_dotmac_sub_full_reconciliation(
                 ],
                 org_id=org_id,
             )
+        except DotmacSubAuthenticationError as exc:
+            db.rollback()
+            return _handle_auth_failure(history_id, org_id, exc, "Full reconciliation")
         except Exception as exc:
             db.rollback()
             _handle_sync_failure(history_id, org_id, exc, "Full reconciliation")
