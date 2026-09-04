@@ -72,6 +72,15 @@ These are the repo-level instructions Codex should follow for this workspace.
   document; where they disagree, fix the plan. Added 2026-08-15 — ERP had no
   decision record directory, which is how a gate ("After E8 ADR") came to point
   at a document that did not exist.
+- `docs/adr/reservations.toml` allocates ADR numbers, and it is the only thing
+  that does. Take `next_free`, land that row alone on `main`, and write the ADR
+  afterwards. Never read the directory and take the next gap: that is a
+  read-then-write with no lock across branches that cannot see each other, and
+  it is how 0003, 0004, 0006 and 0008 each came to name more than one decision.
+  A number is never reused, including after withdrawal — it survives in commit
+  messages, review threads and `match="ADR-00NN"` assertions that removing a
+  row does not update. Enforced by
+  `tests/architecture/test_adr_number_allocation.py`.
 - `CLAUDE.md` for critical coding rules, workflow, verification steps, and module map.
 - `.claude/rules/` for design system, templates, security, services, and web routes standards.
 - `UI_CONVENTIONS.md` and `CONSISTENCY_CHECKLIST.md` for UI consistency checks.
