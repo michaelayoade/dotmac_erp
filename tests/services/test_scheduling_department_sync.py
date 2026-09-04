@@ -121,7 +121,9 @@ def test_update_employee_enqueues_staff_sync_when_department_changes(
     monkeypatch.setattr(
         EmployeeService,
         "_enqueue_staff_sync",
-        lambda self, synced_employee: enqueued.append(synced_employee.department_id),
+        lambda self, synced_employee, **kwargs: enqueued.append(
+            synced_employee.department_id
+        ),
     )
 
     service.update_employee(
