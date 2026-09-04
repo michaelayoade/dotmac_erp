@@ -786,7 +786,10 @@ def test_no_denied_item_renders_sql_because_the_ledger_has_none() -> None:
     # It is still a LEDGER, not an empty file: every denial is named, with the
     # statement that is NOT run, why, and who may do it instead.
     assert text.count("NOT GRANTED: GRANT ") == 25
-    assert text.count("PERMITTED INSTEAD:") == 10, (
+    permitted_instead_lines = [
+        line for line in text.splitlines() if line.startswith("--   PERMITTED INSTEAD:")
+    ]
+    assert len(permitted_instead_lines) == 10, (
         "five control-plane relations and five denied functions, one line each"
     )
     for identity in EXPECTED_CONTROL_PLANE_RELATIONS:

@@ -118,7 +118,7 @@ def plane_import_violations(
     observed = plane_importers(root, roots=roots)
     permitted = set(PERMITTED_IMPORTERS)
     violations = [
-        f"UNPERMITTED PLANE IMPORT: {path} imports {PLANES_MODULE}. The plane "
+        f"UNPERMITTED PLANE IMPORT: {path.as_posix()} imports {PLANES_MODULE}. The plane "
         "resolver decides which relations the tenant application role may be "
         "granted -- an offline governance decision reviewed as a diff, never "
         "a runtime one. Add the file to PERMITTED_IMPORTERS with the reason "
@@ -126,7 +126,7 @@ def plane_import_violations(
         for path in sorted(observed - permitted)
     ]
     violations.extend(
-        f"STALE PLANE IMPORT ENTRY: {path} is listed in PERMITTED_IMPORTERS "
+        f"STALE PLANE IMPORT ENTRY: {path.as_posix()} is listed in PERMITTED_IMPORTERS "
         f"but no longer imports {PLANES_MODULE}. An inventory that outlives "
         "its contents stops covering anything; remove the entry."
         for path in sorted(permitted - observed)

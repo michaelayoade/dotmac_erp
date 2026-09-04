@@ -754,11 +754,11 @@ def run_dotmac_sub_incremental_sync_phase(
             }
         except DotmacSubAuthenticationError as exc:
             session_usable = _rollback_interrupted_session(db)
-            result = _handle_auth_failure(
+            auth_failure = _handle_auth_failure(
                 history_uuid, org_id, exc, "Incremental phase"
             )
-            result["phase"] = phase
-            return result
+            auth_failure["phase"] = phase
+            return auth_failure
         except Exception as exc:
             session_usable = _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
