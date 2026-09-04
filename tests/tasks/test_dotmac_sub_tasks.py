@@ -200,7 +200,7 @@ def test_incremental_phase_authorization_denial_fails_once_without_retry(
     monkeypatch.setattr(dotmac_sub, "_handle_auth_failure", handle_auth_failure)
 
     result = dotmac_sub.run_dotmac_sub_incremental_sync_phase.run(
-        str(organization_id), str(history_id), "subscribers"
+        str(organization_id), str(history_id), "subscribers", batch_size=123
     )
 
     assert result["success"] is False
@@ -210,7 +210,7 @@ def test_incremental_phase_authorization_denial_fails_once_without_retry(
     )
     service.sync_subscribers.assert_called_once_with(
         created_by_user_id=dotmac_sub.SYSTEM_USER_ID,
-        batch_size=500,
+        batch_size=123,
     )
     service.close.assert_called_once_with()
 
