@@ -17,10 +17,9 @@
 -- This file contains GRANT statements only. No REVOKE, no ALTER, no CREATE,
 -- no DROP, no ownership change, no role membership, no `GRANT ALL`.
 --
--- Rows: 1752 to grant, 0 DENIED.
--- A DENIED row is rendered as a comment and is NEVER executed. It is kept
--- here so the refusal is visible: a denial that is merely absent cannot be
--- told apart from a denial nobody thought of.
+-- Rows: 1736 to grant. NO denied row appears in this file at all --
+-- the denials live in scripts/erp_identity_cutover_denied.sql, which
+-- contains no executable statement, so there is nothing here to uncomment.
 
 
 BEGIN;
@@ -1846,16 +1845,6 @@ GRANT DELETE ON TABLE "public"."person_roles" TO "app_user";
 GRANT INSERT ON TABLE "public"."person_roles" TO "app_user";
 GRANT SELECT ON TABLE "public"."person_roles" TO "app_user";
 GRANT UPDATE ON TABLE "public"."person_roles" TO "app_user";
--- relation:public.platform_idempotency_records [relkind r] -- legacy-estate-compatibility-baseline
-GRANT DELETE ON TABLE "public"."platform_idempotency_records" TO "app_user";
-GRANT INSERT ON TABLE "public"."platform_idempotency_records" TO "app_user";
-GRANT SELECT ON TABLE "public"."platform_idempotency_records" TO "app_user";
-GRANT UPDATE ON TABLE "public"."platform_idempotency_records" TO "app_user";
--- relation:public.platform_outbox_events [relkind r] -- legacy-estate-compatibility-baseline
-GRANT DELETE ON TABLE "public"."platform_outbox_events" TO "app_user";
-GRANT INSERT ON TABLE "public"."platform_outbox_events" TO "app_user";
-GRANT SELECT ON TABLE "public"."platform_outbox_events" TO "app_user";
-GRANT UPDATE ON TABLE "public"."platform_outbox_events" TO "app_user";
 -- relation:public.role_permissions [relkind r] -- legacy-estate-compatibility-baseline
 GRANT DELETE ON TABLE "public"."role_permissions" TO "app_user";
 GRANT INSERT ON TABLE "public"."role_permissions" TO "app_user";
@@ -1876,16 +1865,6 @@ GRANT DELETE ON TABLE "public"."sessions" TO "app_user";
 GRANT INSERT ON TABLE "public"."sessions" TO "app_user";
 GRANT SELECT ON TABLE "public"."sessions" TO "app_user";
 GRANT UPDATE ON TABLE "public"."sessions" TO "app_user";
--- relation:public.tenant_domains [relkind r] -- legacy-estate-compatibility-baseline
-GRANT DELETE ON TABLE "public"."tenant_domains" TO "app_user";
-GRANT INSERT ON TABLE "public"."tenant_domains" TO "app_user";
-GRANT SELECT ON TABLE "public"."tenant_domains" TO "app_user";
-GRANT UPDATE ON TABLE "public"."tenant_domains" TO "app_user";
--- relation:public.tenants [relkind r] -- legacy-estate-compatibility-baseline
-GRANT DELETE ON TABLE "public"."tenants" TO "app_user";
-GRANT INSERT ON TABLE "public"."tenants" TO "app_user";
-GRANT SELECT ON TABLE "public"."tenants" TO "app_user";
-GRANT UPDATE ON TABLE "public"."tenants" TO "app_user";
 -- relation:public.user_credentials [relkind r] -- legacy-estate-compatibility-baseline
 GRANT DELETE ON TABLE "public"."user_credentials" TO "app_user";
 GRANT INSERT ON TABLE "public"."user_credentials" TO "app_user";

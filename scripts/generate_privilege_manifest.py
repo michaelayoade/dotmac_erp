@@ -10,30 +10,46 @@ It never connects to anything. The census is a committed artefact captured
 read-only from production on 2026-09-04; re-taking it is a separate,
 deliberate act, not something a generator does.
 
-## Why TWO SQL files
+## Why TWO files, and why only one of them is SQL
 
-`scripts/erp_identity_cutover_grants.sql` is the routine half: 1,712 relation
+`scripts/erp_identity_cutover_grants.sql` is the routine half: 1,696 relation
 privileges, 3 sequence privileges and the 37 observed schema USAGE grants.
-Mechanical, reviewable in bulk, safe to apply as a unit.
+Mechanical, reviewable in bulk, safe to apply as a unit. It contains no denied
+row at all.
 
-`scripts/erp_identity_cutover_review_required.sql` is everything exceptional,
-which must NOT be folded into that sweep:
+`scripts/erp_identity_cutover_denied.sql` is the DENIAL LEDGER, and it contains
+no SQL. Every line is a comment; there is no `BEGIN`, no `COMMIT` and no
+statement to uncomment, which is the strongest available form of Michael's
+Change-1 condition *no denied item renders SQL* -- a fact about the bytes
+rather than a promise about how the file is read. Twenty-five rows are recorded
+there:
 
-* the five `SECURITY DEFINER` EXECUTE grants -- each executes as `app_admin`,
-  a BYPASSRLS role, so EXECUTE is an escalation surface, not a row. Their
-  dispositions are recorded in
-  `docs/architecture/erp-runtime-identity-cutover.md`;
-* `mod_files.platform_stored_files`, a CONTROL-PLANE relation ADR-0023
-  requires to be REVOKEd from the tenant application role. DENIED: its four
-  rows render as comments and are never executed.
+* the five `SECURITY DEFINER` EXECUTE grants (Decision 1). Each executes as
+  `app_admin`, a BYPASSRLS role. All five are DENIED, and each records its
+  PERMITTED EXECUTOR -- none for the `hr` trigger fence, `outbox_dispatcher`
+  for the tenant relay pair, `platform_outbox_dispatcher` for the platform
+  pair. Dispositions in `docs/architecture/erp-runtime-identity-cutover.md`;
+* the five CONTROL-PLANE relations (Decision 2), resolved by DECLARATION in
+  `app.persistence_planes` rather than by the `mod_` prefix the generator used
+  to read. Four of them sit in `public` and were in the bulk sweep until the
+  heuristic was removed.
 
 The five derived schema-USAGE rows that used to sit here were SETTLED on
 2026-09-04 -- all five schemas returned `legacy=True, app_user=True`, so the
 GRANT was a no-op -- and are removed, with their origins kept in
 `SETTLED_SCHEMA_USAGE`.
 
-The split is PERMANENT, not staging: a 1,700-line file with six escalation
+The split is PERMANENT, not staging: a 1,700-line file with escalation
 decisions buried in it gets skimmed.
+
+## Fail-closed
+
+`manifest_from_census` resolves every relation's persistence plane from a
+declaration and raises `UnclassifiedRelation` when none covers it. That
+exception propagates out of `build()` on purpose: generation REFUSES rather
+than defaulting an undeclared relation to the tenant plane, because defaulting
+is exactly how four `public` control-plane relations ended up in a
+compatibility grant file.
 
 ## Usage
 
@@ -59,11 +75,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.privilege_manifest import (  # noqa: E402
-    REVIEW_SQL_TITLE,
+    DENIAL_LEDGER_TITLE,
     ROUTINE_SQL_TITLE,
     baseline_violations,
     manifest_from_census,
     manifest_to_json,
+    render_denial_ledger,
     render_grant_sql,
 )
 
@@ -72,7 +89,7 @@ MANIFEST_PATH = (
     REPO_ROOT / "docs/inventories/erp-identity-cutover-manifest-2026-09-04.json"
 )
 ROUTINE_SQL_PATH = REPO_ROOT / "scripts/erp_identity_cutover_grants.sql"
-REVIEW_SQL_PATH = REPO_ROOT / "scripts/erp_identity_cutover_review_required.sql"
+DENIAL_LEDGER_PATH = REPO_ROOT / "scripts/erp_identity_cutover_denied.sql"
 
 
 def build() -> dict[Path, str]:
@@ -87,7 +104,9 @@ def build() -> dict[Path, str]:
     return {
         MANIFEST_PATH: manifest_to_json(manifest),
         ROUTINE_SQL_PATH: render_grant_sql(manifest.routine(), ROUTINE_SQL_TITLE),
-        REVIEW_SQL_PATH: render_grant_sql(manifest.exceptional(), REVIEW_SQL_TITLE),
+        DENIAL_LEDGER_PATH: render_denial_ledger(
+            manifest.denied(), DENIAL_LEDGER_TITLE
+        ),
     }
 
 

@@ -1,0 +1,79 @@
+-- GENERATED FILE -- do not edit. Regenerate with:
+--     python scripts/generate_privilege_manifest.py
+-- Source of truth: docs/inventories/erp-identity-cutover-manifest-2026-09-04.json
+-- Census:          docs/inventories/erp-privilege-census-2026-09-04.json
+--
+-- Change 1, the DENIALS: five control-plane relations and five SECURITY DEFINER functions the architecture refuses to mirror onto app_user. Nothing here is applied, ever -- there is no SQL in this file. The plane of every relation was resolved from a DECLARATION (app.persistence_planes), never from a schema name; the five derived schema-USAGE rows that used to sit beside these were SETTLED on 2026-09-04 as no-ops and removed.
+--
+-- THIS FILE IS NOT APPLICABLE AND CONTAINS NO SQL. Every line is a comment;
+-- there is no BEGIN, no COMMIT and no statement to uncomment. Applying it with
+-- psql is a no-op by construction rather than by convention.
+--
+-- It exists because a denial that is merely ABSENT cannot be told apart from a
+-- denial nobody thought of. 25 rows are recorded here, each with the
+-- privilege that is NOT granted, the reason, the declaration that decided the
+-- plane, and who MAY do it instead.
+
+
+-- ===== section: functions =====
+-- function:hr.enforce_employment_type_projection() -- denied-by-architecture-security-definer-execute
+--   DENIED (denied_by_architecture): SECURITY DEFINER EXECUTE denied: the permitted executor is not the tenant application role.
+--   PERMITTED INSTEAD: no runtime principal -- trigger installation and operation only.
+--   NOT GRANTED: GRANT EXECUTE ON FUNCTION "hr"."enforce_employment_type_projection"() TO "app_user";
+-- function:public.claim_outbox_batch(text, integer, integer) -- denied-by-architecture-security-definer-execute
+--   DENIED (denied_by_architecture): SECURITY DEFINER EXECUTE denied: the permitted executor is not the tenant application role.
+--   PERMITTED INSTEAD: outbox_dispatcher.
+--   NOT GRANTED: GRANT EXECUTE ON FUNCTION "public"."claim_outbox_batch"(text, integer, integer) TO "app_user";
+-- function:public.claim_platform_outbox_batch(text, integer, integer) -- denied-by-architecture-security-definer-execute
+--   DENIED (denied_by_architecture): SECURITY DEFINER EXECUTE denied: the permitted executor is not the tenant application role.
+--   PERMITTED INSTEAD: platform_outbox_dispatcher.
+--   NOT GRANTED: GRANT EXECUTE ON FUNCTION "public"."claim_platform_outbox_batch"(text, integer, integer) TO "app_user";
+-- function:public.settle_outbox_event(uuid, text, text, timestamp with time zone, integer, text) -- denied-by-architecture-security-definer-execute
+--   DENIED (denied_by_architecture): SECURITY DEFINER EXECUTE denied: the permitted executor is not the tenant application role.
+--   PERMITTED INSTEAD: outbox_dispatcher.
+--   NOT GRANTED: GRANT EXECUTE ON FUNCTION "public"."settle_outbox_event"(uuid, text, text, timestamp with time zone, integer, text) TO "app_user";
+-- function:public.settle_platform_outbox_event(uuid, text, text, timestamp with time zone, integer, text) -- denied-by-architecture-security-definer-execute
+--   DENIED (denied_by_architecture): SECURITY DEFINER EXECUTE denied: the permitted executor is not the tenant application role.
+--   PERMITTED INSTEAD: platform_outbox_dispatcher.
+--   NOT GRANTED: GRANT EXECUTE ON FUNCTION "public"."settle_platform_outbox_event"(uuid, text, text, timestamp with time zone, integer, text) TO "app_user";
+-- ===== section: control_plane =====
+-- relation:mod_files.platform_stored_files [relkind r] -- denied-by-architecture-control-plane-relation
+--   DENIED (denied_by_architecture): ADR-0023 control-plane relation.
+--   PLANE: control -- declared by module manifest: files.platform_tables.
+--   PERMITTED INSTEAD: platform_api, app_admin.
+--   NOT GRANTED: GRANT DELETE ON TABLE "mod_files"."platform_stored_files" TO "app_user";
+--   NOT GRANTED: GRANT INSERT ON TABLE "mod_files"."platform_stored_files" TO "app_user";
+--   NOT GRANTED: GRANT SELECT ON TABLE "mod_files"."platform_stored_files" TO "app_user";
+--   NOT GRANTED: GRANT UPDATE ON TABLE "mod_files"."platform_stored_files" TO "app_user";
+-- relation:public.platform_idempotency_records [relkind r] -- denied-by-architecture-control-plane-relation
+--   DENIED (denied_by_architecture): ADR-0023 control-plane relation.
+--   PLANE: control -- declared by host assembly (ERP alembic lineage).
+--   PERMITTED INSTEAD: platform_api, app_admin.
+--   NOT GRANTED: GRANT DELETE ON TABLE "public"."platform_idempotency_records" TO "app_user";
+--   NOT GRANTED: GRANT INSERT ON TABLE "public"."platform_idempotency_records" TO "app_user";
+--   NOT GRANTED: GRANT SELECT ON TABLE "public"."platform_idempotency_records" TO "app_user";
+--   NOT GRANTED: GRANT UPDATE ON TABLE "public"."platform_idempotency_records" TO "app_user";
+-- relation:public.platform_outbox_events [relkind r] -- denied-by-architecture-control-plane-relation
+--   DENIED (denied_by_architecture): ADR-0023 control-plane relation.
+--   PLANE: control -- declared by host assembly (ERP alembic lineage).
+--   PERMITTED INSTEAD: platform_api, app_admin.
+--   NOT GRANTED: GRANT DELETE ON TABLE "public"."platform_outbox_events" TO "app_user";
+--   NOT GRANTED: GRANT INSERT ON TABLE "public"."platform_outbox_events" TO "app_user";
+--   NOT GRANTED: GRANT SELECT ON TABLE "public"."platform_outbox_events" TO "app_user";
+--   NOT GRANTED: GRANT UPDATE ON TABLE "public"."platform_outbox_events" TO "app_user";
+-- relation:public.tenant_domains [relkind r] -- denied-by-architecture-control-plane-relation
+--   DENIED (denied_by_architecture): ADR-0023 control-plane relation.
+--   PLANE: control -- declared by host assembly (ERP alembic lineage).
+--   PERMITTED INSTEAD: app_admin.
+--   NOT GRANTED: GRANT DELETE ON TABLE "public"."tenant_domains" TO "app_user";
+--   NOT GRANTED: GRANT INSERT ON TABLE "public"."tenant_domains" TO "app_user";
+--   NOT GRANTED: GRANT SELECT ON TABLE "public"."tenant_domains" TO "app_user";
+--   NOT GRANTED: GRANT UPDATE ON TABLE "public"."tenant_domains" TO "app_user";
+-- relation:public.tenants [relkind r] -- denied-by-architecture-control-plane-relation
+--   DENIED (denied_by_architecture): ADR-0023 control-plane relation.
+--   PLANE: control -- declared by host assembly (ERP alembic lineage).
+--   PERMITTED INSTEAD: app_admin.
+--   NOT GRANTED: GRANT DELETE ON TABLE "public"."tenants" TO "app_user";
+--   NOT GRANTED: GRANT INSERT ON TABLE "public"."tenants" TO "app_user";
+--   NOT GRANTED: GRANT SELECT ON TABLE "public"."tenants" TO "app_user";
+--   NOT GRANTED: GRANT UPDATE ON TABLE "public"."tenants" TO "app_user";

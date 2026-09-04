@@ -1,10 +1,13 @@
 # ERP runtime identity cutover: `dotmac_erp_app` → `app_user`
 
-**Status:** Change 1, step 3 — the manifest and its guard are built, the five
-`SECURITY DEFINER` bodies are classified, the five schema-USAGE cases are
-settled, and `mod_files.platform_stored_files` is denied with its absence
-proved. Nothing has been applied. No SQL in this change has been executed
-anywhere, and no function, owner or role has been changed.
+**Status:** Change 1, step 4 — both open manifest items are RULED and
+applied. The five `SECURITY DEFINER` EXECUTE grants are denied with their
+permitted executors recorded (Decision 1), the `mod_` plane heuristic is gone
+and the plane is resolved from declarations (Decision 2), five control-plane
+relations are denied with their absence proved at table and column level, and
+no denied item renders SQL at all. The five schema-USAGE cases remain settled.
+Nothing has been applied. No SQL in this change has been executed anywhere, and
+no function, owner or role has been changed.
 
 ERP production connects as the legacy login `dotmac_erp_app`. Every module
 `GRANT` and every RLS policy in the composed lineages is addressed to
@@ -56,12 +59,142 @@ Nothing in this change may be read as a complete picture of either role's ACL.
 | Section | Rows | Objects |
 | --- | --- | --- |
 | schema USAGE | 37 | 37 observed (the 5 derived rows were settled and removed) |
-| relations (legacy estate) | 1,712 | 428 (427 tables, 1 materialized view) |
+| relations (tenant plane) | 1,696 | 424 (423 tables, 1 materialized view) |
 | sequences | 3 | 1 |
-| functions (by full signature) | 5 | 5, all `SECURITY DEFINER`, all `review_required` |
-| module-era grants | 4 | 1, `denied_by_architecture` — **not granted** |
-| **total manifest rows** | **1,761** | 1,752 granted, 5 review-required, 4 denied |
-| exclusions | 18 | 5 preserved scopes (132 privileges) + 5 settled schema cases + 8 prohibitions |
+| functions (by full signature) | 5 | 5, all `SECURITY DEFINER`, all `denied_by_architecture` |
+| control plane | 20 | 5 relations, all `denied_by_architecture` — **not granted** |
+| **total manifest rows** | **1,761** | 1,736 granted, 0 review-required, 25 denied |
+| exclusions | 28 | 5 preserved scopes (132 privileges) + 5 settled schema cases + 5 denied relations + 5 denied functions + 8 prohibitions |
+
+The census total is unchanged at 1,716 relation privileges. What moved on
+2026-09-04 is **which side of the plane boundary sixteen of them are on** —
+see "Decision 2" below.
+
+## The two Change-1 blockers, ruled 2026-09-04
+
+Michael ruled both open manifest items **blockers of Change 1, not optional
+hardening**. Both are applied.
+
+### Decision 1 — all five `SECURITY DEFINER` EXECUTE grants are DENIED
+
+They were `review_required`; they are now `denied_by_architecture`. They stay
+in the manifest as deliberate denials, because a denial that is merely absent
+cannot be told apart from a denial nobody thought of. The generator emits **no
+`GRANT EXECUTE` anywhere**.
+
+| Function | Permitted executor | Why |
+| --- | --- | --- |
+| `hr.enforce_employment_type_projection()` | **none — no runtime principal** | trigger installation and operation only; PostgreSQL checks `EXECUTE` at `CREATE TRIGGER`, not at fire time, and a trigger function cannot be invoked as an ordinary function |
+| `public.claim_outbox_batch(text, integer, integer)` | `outbox_dispatcher` | the cross-tenant drain IS the function; it requires `BYPASSRLS` by construction |
+| `public.settle_outbox_event(…)` | `outbox_dispatcher` | same ledger, same absent tenant predicate |
+| `public.claim_platform_outbox_batch(text, integer, integer)` | `platform_outbox_dispatcher` | operates on the control-plane ledger ADR-0023 forbids the tenant role |
+| `public.settle_platform_outbox_event(…)` | `platform_outbox_dispatcher` | same |
+
+Michael's reason, and it is the subtle half: *"Even though a trigger function
+cannot be invoked as an ordinary function, granting it remains unnecessary and
+would reverse a tested migration decision."* Both halves matter. The first says
+the grant confers nothing; the second says that is not the reason to withhold
+it. A grant that confers nothing and reverses a tested revoke is still a
+reversal, and the next person reading the ACL cannot tell which of the two it
+was.
+
+#### The verifier tests EFFECTIVE privileges, and `PUBLIC` by name
+
+`CREATE FUNCTION` grants `EXECUTE` to `PUBLIC` **by default**. That single fact
+decides the shape of the check.
+
+```
+has_function_privilege('app_user', oid, 'EXECUTE')            must be false
+has_function_privilege('public',   oid, 'EXECUTE')            must be false
+has_function_privilege(<declared executor>, oid, 'EXECUTE')   must be true
+```
+
+* **Effective, not an ACL reading.** A function whose `proacl` names no
+  `app_user` entry at all can still be executable by `app_user`, through the
+  `PUBLIC` default. `has_function_privilege` — "can this role do it" — sees
+  that; `aclexplode(proacl)` filtered to the role's own name does not. The
+  snapshot records *how* each answer was obtained and the guard refuses one
+  that is not effective (`NON-EFFECTIVE EXECUTE ANSWER`).
+* **`PUBLIC` asked about by name.** Michael: *"If any function currently
+  inherits default `PUBLIC EXECUTE`, treat that as a separate remediation
+  required before cutover. `REVOKE … FROM app_user` alone does not neutralize
+  an effective grant inherited through `PUBLIC`."* So a surviving default is
+  reported as `PUBLIC EXECUTE INHERITED … REMEDIATION REQUIRED BEFORE CUTOVER`
+  — a standing grant to remove, not a Change-1 grant to withhold. The census
+  recorded `public_execute = False` for all five, so this is quiet on today's
+  data; that is precisely why it is planted in a sensitivity proof. A check
+  that is only correct on the data it was written against is not a check.
+* **The executor asserted POSITIVELY.** A denial can pass for the wrong
+  reason: the function became unreachable to everyone and the relay stopped
+  draining. `PERMITTED EXECUTOR CANNOT EXECUTE` is the refusal that catches it.
+  The `hr` fence names no executor, and says so explicitly rather than by
+  leaving the field blank.
+
+### Decision 2 — the `mod_` heuristic is removed; plane comes from declarations
+
+> `ModuleManifest.tables` → tenant plane · `ModuleManifest.platform_tables` →
+> control plane · host/assembly platform-table declaration → control plane ·
+> **anything unclassified → refuse generation.**
+>
+> Never infer plane from the `mod_` prefix, the `public` schema, the presence
+> or absence of `tenant_id`, RLS state, or current ACLs. *"Those are evidence
+> to validate the declaration, not sources of ownership."*
+
+`app/persistence_planes.py` owns this. `public.platform_outbox_events` is the
+proof: its qualified name looks like legacy estate, its declared behaviour and
+its migration are control plane. Reading the plane off a schema name got it —
+and three others — exactly backwards:
+
+| relation | migration | what the migration actually does |
+| --- | --- | --- |
+| `public.platform_outbox_events` | `20260824_outbox_relay` | no tenant column, no RLS, `REVOKE ALL PRIVILEGES … FROM app_user` plus column-level `REVOKE`s |
+| `public.platform_idempotency_records` | `20260820_idempotency_ledger` | the same shape, beside the tenant ledger |
+| `public.tenants` | `20260813_tenant_projection` | `REVOKE ALL … FROM PUBLIC` and `FROM app_user`; read through a narrow definer instead |
+| `public.tenant_domains` | `20260813_tenant_projection` | the same block |
+| `mod_files.platform_stored_files` | composed `dotmac-files` lineage | the module declares it in `platform_tables` |
+
+Granting any of the four `public` ones would have **reversed a tested migration
+decision** under cover of a compatibility sweep. Four privileges each: sixteen
+rows moved out of the bulk file into the denied set, plus the four that were
+already there.
+
+**Where the declarations are read from.** Module planes come from
+`app.runtime_admission.COMPOSED_MODULES`, which is the assembly's
+manifest-derived declaration of every composed module's `tenant_tables` and
+`platform_tables`, proven against `tests/integration/tenant_table_inventory.tsv`
+by `tests/architecture/test_runtime_admission_is_read_only.py`. They are READ,
+never restated: `test_no_module_table_name_is_a_literal_in_the_plane_module`
+fails if any module table name appears as a literal in
+`app/persistence_planes.py`, because a copied list is a second writer and a
+second writer drifts.
+
+The kernel's `ModuleManifest` objects themselves are **not** statically
+readable in this assembly — `dotmac_kernel` is not an installed import in the
+static toolchain and the composed module distributions are not vendored — so
+`COMPOSED_MODULES` is the manifest-derived declaration that is readable, and
+the test above is what makes reading it equivalent to reading the manifests.
+
+For the host assembly there is no `ModuleManifest` at all: ERP's own estate is
+built by ERP's alembic lineage. `HOST_CONTROL_PLANE_RELATIONS` is therefore the
+**first** writer of that fact, not a copy of one — and every entry cites the
+migration that is its evidence, which
+`test_every_host_control_plane_declaration_cites_a_real_revoke` reads
+statically and requires to contain the revoke it is cited for.
+
+**Unknown fails closed.** A relation no declaration covers raises
+`UnclassifiedRelation` and generation refuses. It never defaults to the tenant
+plane — defaulting is exactly how the four `public` relations were swept up.
+
+**A schema move is a finding, not a reclassification.** Relation-level
+declarations are keyed by relation NAME with the schema recorded as data, so
+relocating a relation reports `schema_moved` and leaves the plane alone. A
+resolver that lost the classification at that moment would be the name-based
+heuristic wearing a different hat.
+
+**`mod_` survives for one question only** — "does the retiring role reach
+module storage?", a namespace question, which is what
+`MODULE_ERA_ALLOWLIST` and the legacy-role refusal ask. It is never consulted
+for a plane.
 
 ## The target, stated once
 
@@ -69,26 +202,36 @@ Nothing in this change may be read as a complete picture of either role's ACL.
 > unapproved `SECURITY DEFINER` execution + module-era privileges `app_user`
 > already owns
 
-Everything here is that arithmetic made executable. The three artefacts it
-produces stay **split, permanently**: bulk-safe grants in the bulk file, the
-five `SECURITY DEFINER` functions isolated, the control-plane grants
-prohibited, the schema cases resolved. Collapsing them would put exceptional
+Everything here is that arithmetic made executable. The artefacts it produces
+stay **split, permanently**: bulk-safe grants in
+`scripts/erp_identity_cutover_grants.sql`, every denial in
+`scripts/erp_identity_cutover_denied.sql` — a file with no `BEGIN`, no
+`COMMIT` and no statement at all. Collapsing them would put exceptional
 authorization back inside mechanical compatibility, which is the one thing
 this shape exists to prevent.
 
 ## Three dispositions, never a boolean
 
-| Disposition | Meaning | Rendered as |
-| --- | --- | --- |
-| `grant` | mechanical; no judgement call | a `GRANT` in the bulk file |
-| `review_required` | a human must read it before it may be applied | a `GRANT` in the exceptional file |
-| `denied_by_architecture` | never applied | a **comment** in the exceptional file |
+| Disposition | Meaning | Rendered as | Rows today |
+| --- | --- | --- | --- |
+| `grant` | mechanical; no judgement call | a `GRANT` in the grant file | 1,736 |
+| `review_required` | a human must read it before it may be applied | *(nothing today)* | 0 |
+| `denied_by_architecture` | never applied | a **comment** in the denial ledger | 25 |
 
 A boolean can say "not routine". It cannot tell "grant this once someone has
 read the body" apart from "never grant this at all", and those are opposite
-instructions to whoever runs the SQL. A denied row stays in the manifest and
-in the file, commented, because a denial that is merely *absent* cannot be
-told apart from a denial nobody thought of.
+instructions to whoever runs the SQL. `review_required` is empty today because
+both open items were ruled on; the disposition stays in the vocabulary because
+the next open question will need it, and an empty set is a fact rather than a
+deletion.
+
+**No denied item renders SQL.** A denied row stays in the manifest and in the
+ledger, because a denial that is merely *absent* cannot be told apart from a
+denial nobody thought of — but the ledger contains no executable statement, so
+there is nothing to uncomment. That is a property of the bytes rather than of
+how the file is read, and both renderers refuse the wrong rows
+(`render_grant_sql` raises on a denied row, `render_denial_ledger` raises on a
+grantable one) so the split is enforced rather than merely observed.
 
 ### All 1,716 are direct grants
 
@@ -99,7 +242,10 @@ every login in the cluster, including the next one someone creates; ownership
 carries `DROP` and defeats RLS. "The role can do it" and "the role was granted
 it" are different facts, and only the second one is the cutover's goal.
 
-### The five `SECURITY DEFINER` functions: bodies read, dispositions recorded
+### The five `SECURITY DEFINER` functions: bodies read, all five denied
+
+*(The bodies below are what Decision 1 above was decided from. They are kept
+in full because the ruling is only as good as the reading behind it.)*
 
 A `SECURITY DEFINER` function executes as its **owner**. All five are owned by
 `app_admin`, which is `BYPASSRLS`, so `EXECUTE` hands `app_user` whatever that
@@ -396,20 +542,18 @@ Two files, both generated, both committed, both regenerable and byte-compared
 by `tests/architecture/test_privilege_manifest.py`, which regenerates them in
 memory and compares bytes:
 
-- `scripts/erp_identity_cutover_grants.sql` — 1,752 statements. The routine
-  half: mechanical, reviewable in bulk.
-- `scripts/erp_identity_cutover_review_required.sql` — 5 executable statements
-  and 4 commented denials. The five `SECURITY DEFINER` EXECUTEs (review
-  required) plus `mod_files.platform_stored_files` (`denied_by_architecture`,
-  rendered as `NOT GRANTED:` comments and never executed). **Do not apply
-  until each remaining row has been individually signed off** — and see "What
-  is not closed": the classification above says no to all five.
+- `scripts/erp_identity_cutover_grants.sql` — 1,736 statements. The routine
+  half: mechanical, reviewable in bulk. It contains no denied row at all.
+- `scripts/erp_identity_cutover_denied.sql` — **25 rows and zero statements.**
+  Every line is a comment; there is no `BEGIN`, no `COMMIT` and nothing to
+  uncomment, so applying it with `psql` is a no-op by construction rather than
+  by convention. Each entry names the privilege that is NOT granted, the
+  reason, the declaration that decided the plane, and who MAY do it instead.
 
 Splitting them is the control, and the split is **permanent**. A 1,700-line
 file with escalation decisions buried in it gets skimmed, and that does not
-stop being true once the decisions are made. Bulk-safe grants in the bulk
-file; the five functions isolated; the control-plane grants prohibited; the
-schema cases resolved.
+stop being true once the decisions are made. Both renderers refuse the wrong
+rows, so the split cannot quietly stop holding.
 
 **Idempotent on re-run.** `GRANT` in PostgreSQL is an assertion about an ACL,
 not an append: granting a privilege the role already holds leaves the ACL
@@ -465,7 +609,7 @@ NULL ACL, which is *not* "no privileges") and classifies the origin as
 `direct` / `ownership` / `public` / `inherited` / `default`. The target must
 reach its state by deliberate **direct** grants; anything else is refused.
 
-## The guard's eight refusals
+## The guard's nine refusals
 
 `app.privilege_manifest.cutover_violations` is a pure function over one
 manifest and one snapshot. It refuses:
@@ -484,8 +628,14 @@ manifest and one snapshot. It refuses:
    `MODULE_ERA_ALLOWLIST` entry (`relation:mod_files.platform_stored_files`,
    which may shrink, never grow);
 8. **a DENIED relation being reachable after all** — at table *or* column
-   level, or the verifier not having looked at all. This is the only refusal
-   that asserts an absence, which is why it also refuses its own silence.
+   level, or the verifier not having looked at all;
+9. **a DENIED function being EXECUTABLE after all** — by `app_user`, by
+   `PUBLIC`, or by *nobody* (the permitted executor lost it too) — or the
+   answer having been read off an ACL rather than asked effectively.
+
+Refusals 8 and 9 are the only two that assert an **absence**, which is why
+each also refuses its own silence: an unprobed denial and a clean database
+produce the same empty list.
 
 Plus the two-directional baseline ratchet, which is refusal 1 seen offline: a
 manifest whose section counts moved — up **or down** — without
@@ -527,63 +677,133 @@ and asserts the violation **names** it:
 | 9 | `app_user` holds `SELECT` on the denied relation (table ACL) | `DENIED PRIVILEGE HELD` |
 | 10 | `app_user` holds `SELECT(storage_key)` on it (column ACL only, table level left clean) | `DENIED COLUMN PRIVILEGE HELD` |
 | 11 | the denial probe is removed, then reduced to `columns_probed == 0` | `UNPROBED DENIAL` / `UNPROBED COLUMN DENIAL` |
+| 12 | `app_user` holds `EXECUTE` on a denied definer | `DENIED EXECUTE HELD` |
+| 13 | `PUBLIC` holds `EXECUTE`, with the `app_user` answer left false | `PUBLIC EXECUTE INHERITED` (remediation owed) |
+| 13b | the `app_user` answer marked non-effective | `NON-EFFECTIVE EXECUTE ANSWER` |
+| 14 | `outbox_dispatcher` loses `EXECUTE` | `PERMITTED EXECUTOR CANNOT EXECUTE` |
 
-Proof 10 is the one that matters most: it plants the defect **only** at column
-level and asserts the table-level answers stay false, so a guard missing the
-column half would pass it with zero violations rather than failing loudly.
-Proof 11 is the non-vacuity half — a negative verifier that never looks
-produces the same empty list as a clean database, so not-probing is itself a
-refusal.
+Proof 10 is the one that matters most on the relation side: it plants the
+defect **only** at column level and asserts the table-level answers stay
+false, so a guard missing the column half would pass it with zero violations
+rather than failing loudly. Proof 13 is its counterpart on the function side —
+it plants the grant on `PUBLIC` only, leaves the `app_user` answer false, and
+requires the remediation to be named; a verifier reading the ACL for
+`app_user` would see nothing at all. Proof 11 and the unprobed-EXECUTE proof
+are the non-vacuity half — a negative verifier that never looks produces the
+same empty list as a clean database, so not-probing is itself a refusal.
 
-**Negative control.** The same clean snapshot the fourteen proofs mutate
-produces **zero** violations, and `denial_violations` is silent on it too. Without that assertion, every proof above could be passing
-because the detector flags everything. Each proof additionally requires that
-one planted defect produces exactly the expected violations and no cascade —
-specificity is half of naming.
+### The nine plane proofs (Decision 2)
+
+The resolver's own coverage, each planted, in
+`tests/architecture/test_privilege_manifest.py` (`test_plane_sensitivity_*`)
+with the resolver's structural guards in
+`tests/architecture/test_persistence_planes.py`:
+
+| # | Planted | Required outcome |
+| --- | --- | --- |
+| 1 | a platform table in `public` | denied |
+| 2 | a platform table in a `mod_*` schema | denied |
+| 3 | a **tenant** table in a `mod_*` schema | **granted** — not falsely denied |
+| 4 | a **tenant** table in `public`, declared at relation level, beside a control-plane one | follows its declaration: granted |
+| 5 | a relation no declaration covers | `UnclassifiedRelation` — generation refuses |
+| 6 | a table-level grant on a denied relation | `DENIED PRIVILEGE HELD` (proof 9 above) |
+| 7 | a column-level grant with the table ACL clean | `DENIED COLUMN PRIVILEGE HELD` (proof 10 above) |
+| 8 | a declared relation observed under a different schema | plane unchanged, `schema_moved` reported |
+| 9 | the same relation declared tenant, then control | the disposition flips |
+
+Numbers **3, 4 and 8** are the ones that carry the argument. Any rule that
+denied things called `platform*` would satisfy 1, 2, 6, 7 and 9; only a
+resolver actually reading a declaration can pass a `mod_` table that is
+granted, a `public` table that is granted beside four that are denied, and a
+relation whose plane survives its schema changing underneath it.
+
+**Negative control.** The same clean snapshot every proof mutates produces
+**zero** violations; `denial_violations` and `function_denial_violations` are
+both silent on it; and on the *real* census the resolver returns 1,696 tenant
+rows against 20 control rows rather than denying everything. Without those
+assertions, every proof above could be passing because the detector flags
+everything. Each proof additionally requires that one planted defect produces
+exactly the expected violations and no cascade — specificity is half of
+naming.
+
+## The revised Change-1 boundary
+
+Change 1 may proceed only when **all** of these hold. Each is checked, and the
+check that checks it is named:
+
+| Condition | Where it is enforced |
+| --- | --- |
+| the five functions are tracked denials | `DENIED_TOTALS[functions] == 5`; `test_decision_1_all_five_execute_grants_are_denied_with_an_executor` |
+| both control-plane relation families are tracked denials | `DENIED_TOTALS[control_plane] == 20` over five relations; `test_decision_2_every_control_plane_relation_is_denied_by_declaration` |
+| **no denied item renders SQL** | `render_grant_sql` raises on a denied row; the ledger has zero executable lines; `test_no_denied_item_renders_sql_because_the_ledger_has_none` |
+| the plane resolver uses declarations | `app/persistence_planes.py`; `tests/architecture/test_persistence_planes.py`; the nine plane proofs |
+| unknown plane classification **fails closed** | `UnclassifiedRelation` propagates out of `manifest_from_census`; plane proof 5 |
+| effective and column-level denial checks pass | `denial_violations` + `function_denial_violations`; proofs 9–14 |
+| totals and ratchets updated mechanically | `BASELINE_TOTALS` and `DENIED_TOTALS`, both two-directional; `test_the_denial_ratchet_is_two_directional` |
+| the safe grant set remains idempotent | `GRANT` is an ACL assertion, not an append — see "The generated SQL, and its idempotency"; one privilege, one object, per statement |
+
+### Two constraints that bound the scope, and were not crossed
+
+- **`PUBLIC:USAGE` on schema `public` is unchanged.** Whether to revoke it is a
+  **Change 3** least-privilege decision, because revoking it affects every
+  database role in the cluster rather than only ERP's runtime. It is recorded
+  in `SETTLED_SCHEMA_USAGE["public"]` as a settled no-op for the identity
+  cutover and an open question for Change 3, and nothing here touches it. The
+  generated SQL contains no `REVOKE` at all.
+- **The legacy role's existing `mod_files.platform_stored_files` grant is not
+  revoked.** Change 1 is **grant-only**. That grant has no caller anywhere in
+  the ERP source, so it is revoked during the explicit old-role retirement
+  step, not here. `MODULE_ERA_ALLOWLIST` keeps it frozen — it may shrink,
+  never grow — and the guard would refuse any *new* module privilege on the
+  legacy role.
 
 ## Closed on 2026-09-04
 
 - **The five derived schema USAGE rows.** Settled as no-ops, removed, origins
   recorded — see above. `BASELINE_TOTALS` lowered 42 → 37 in the same commit.
 - **The five `SECURITY DEFINER` bodies.** Read and classified. All five are
-  outcome 1: keep unavailable to `app_user`, no replacement needed.
-- **`mod_files.platform_stored_files`.** `denied_by_architecture`, with the
-  absence proved at table and column level and no caller anywhere in the ERP
-  source.
+  outcome 1: keep unavailable to `app_user`, no replacement needed — and now
+  DENIED, with the permitted executor of each recorded (Decision 1).
+- **The `mod_` plane heuristic.** Removed. Plane is resolved from declarations
+  (Decision 2), and an unclassified relation refuses generation.
+- **Five control-plane relations** — `mod_files.platform_stored_files` plus the
+  four in `public` the heuristic was missing — are `denied_by_architecture`,
+  with the absence proved at table and column level and no caller anywhere in
+  the ERP source.
+- **`public.platform_outbox_events`, and the three relations beside it.** The
+  finding recorded on 2026-09-04 was ruled a Change-1 blocker and acted on the
+  same day.
 
 ## What is not closed
 
-- **The five `EXECUTE` rows are still rendered as `GRANT`s.** The bodies are
-  classified above and every one says *do not grant*, but changing a row's
-  disposition is a decision, not a classification, and the four relay rows'
-  removal from the exceptional file has not been authorized. Today the file
-  carries five `GRANT EXECUTE` statements the analysis above says must never
-  be applied — the file's own header says do not apply until each row is
-  signed off, and this is the sign-off saying no to all five. Flipping them to
-  `denied_by_architecture` (which would take `BASELINE_TOTALS[functions]`
-  with it) is the next authorized act.
-- **`public.platform_outbox_events` is in the ROUTINE sweep.** Found while
-  classifying the definers. It lands in the bulk file because its schema is
-  `public` rather than `mod_`, yet `20260824_outbox_relay` creates it as the
-  control-plane relay ledger — no `tenant_id`, no RLS, granted to
-  `platform_api` and `app_admin` — and then explicitly `REVOKE ALL PRIVILEGES
-  … FROM app_user` plus column-level revokes of SELECT/INSERT/UPDATE/REFERENCES
-  from `app_user`. **Applying the routine sweep as it stands would reverse that
-  revocation**, which is the same defect the `mod_files` denial exists to
-  prevent, one schema-prefix test away from being caught. The `mod_`-prefix
-  rule is the thing that is wrong: control-plane-ness is a declared property
-  (`app.runtime_admission`'s `platform_tables`), not a schema-name heuristic.
-  Recorded in the manifest notes; not acted on here, because a disposition is
-  an authorized decision.
-- **The same reversal applies to the `hr` `EXECUTE` row**, which
-  `20260828_people_et_activation` explicitly revokes from `app_user`.
+- **The scope of Decision 2 exceeded the letter of the ruling, and that needs
+  Michael's sign-off.** The ruling named `public.platform_outbox_events` and
+  `mod_files.platform_stored_files` — "both control-plane relations". Read
+  honestly, the host declaration classifies **four** relations in `public`, not
+  one: `20260820_idempotency_ledger` revokes
+  `public.platform_idempotency_records` from `app_user` at table and column
+  level, and `20260813_tenant_projection` revokes `public.tenants` and
+  `public.tenant_domains` from both `PUBLIC` and `app_user`. Granting any of
+  them reverses a tested migration decision for exactly the reason the ruling
+  gives, and there is no third disposition for "declared control plane, granted
+  anyway" — that shape would be the second writer the ruling forbids. So all
+  five are denied and the extra twelve privileges are reported here rather than
+  applied quietly. Evidence that the extra three are safe to deny: no ERP
+  runtime code reads `public.tenants` or `public.tenant_domains` — the tenant
+  catalogue is reached through the narrow `SECURITY DEFINER`
+  `tenant_catalog.organization_ids` (`app/tenant_catalog.py`), which returns
+  identifiers and nothing else — and `platform_idempotency_records` is the
+  control-plane half of a ledger whose tenant half `app_user` keeps.
 - **The reverse gap is a count, not an inventory.** 132 privileges across five
   schemas, with no object-level detail. The guard ratchets the count; it cannot
   tell you *which* privilege changed.
-- **The denial is proved against a live catalog, and has not been run.** No
-  SQL from this programme has been executed anywhere; `denial_violations` is
-  exercised today only against the synthetic clean snapshot and its three
-  planted defects.
+- **The denials are proved against a live catalog, and that has not been run.**
+  No SQL from this programme has been executed anywhere; `denial_violations`
+  and `function_denial_violations` are exercised today only against the
+  synthetic clean snapshot and their planted defects. In particular the
+  `PUBLIC EXECUTE` remediation check has never met a real catalog — the census
+  recorded `public_execute = False` for all five, so if a default has survived
+  anywhere the first thing that will say so is the verifier's first real run.
 
 ## Files
 
@@ -593,7 +813,9 @@ specificity is half of naming.
 | `docs/inventories/erp-identity-cutover-manifest-2026-09-04.json` | the generated manifest |
 | `app/privilege_manifest.py` | the pure contract: generator, renderer, refusals |
 | `scripts/generate_privilege_manifest.py` | offline generator / `--check` |
-| `scripts/erp_identity_cutover_grants.sql` | generated, routine half |
-| `scripts/erp_identity_cutover_review_required.sql` | generated, EXCEPTIONAL half: 5 review-required `GRANT`s + 4 commented denials |
+| `app/persistence_planes.py` | the plane DECLARATIONS and the resolver that refuses when none covers a relation |
+| `scripts/erp_identity_cutover_grants.sql` | generated, routine half — 1,736 `GRANT`s, no denied row |
+| `scripts/erp_identity_cutover_denied.sql` | generated DENIAL LEDGER — 25 rows, **zero statements** |
 | `scripts/verify_identity_cutover_privileges.py` | read-only OID-based verifier |
-| `tests/architecture/test_privilege_manifest.py` | the guard and its sensitivity proofs |
+| `tests/architecture/test_privilege_manifest.py` | the guard, its sensitivity proofs and the nine plane proofs |
+| `tests/architecture/test_persistence_planes.py` | the resolver's own guard: derived-not-copied, cited evidence, fail-closed |
