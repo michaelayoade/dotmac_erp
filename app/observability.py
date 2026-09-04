@@ -157,9 +157,11 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Believed only from a trusted peer. An untrusted caller does not choose
         # the identity its request is correlated under.
-        inbound = request.headers.get("x-request-id") if is_from_trusted_proxy(
-            request
-        ) else None
+        inbound = (
+            request.headers.get("x-request-id")
+            if is_from_trusted_proxy(request)
+            else None
+        )
         request_id = inbound or str(uuid.uuid4())
         request.state.request_id = request_id
 

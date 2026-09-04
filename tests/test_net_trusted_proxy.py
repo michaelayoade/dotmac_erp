@@ -95,9 +95,7 @@ def test_no_configured_network_trusts_no_proxy(trusting_nobody):
 
 def test_an_untrusted_peer_cannot_supply_a_client_address(trusting_nobody):
     """The header is present, well-formed and ignored."""
-    request = _request(
-        client="198.51.100.7", headers={"x-forwarded-for": "1.2.3.4"}
-    )
+    request = _request(client="198.51.100.7", headers={"x-forwarded-for": "1.2.3.4"})
     assert net.get_client_ip(request) == "198.51.100.7"
 
 
@@ -127,9 +125,7 @@ def test_a_peer_outside_the_configured_network_is_not(trusting):
 
 
 def test_a_trusted_peer_supplies_the_client_address(trusting):
-    request = _request(
-        client="203.0.113.9", headers={"x-forwarded-for": "1.2.3.4"}
-    )
+    request = _request(client="203.0.113.9", headers={"x-forwarded-for": "1.2.3.4"})
     assert net.get_client_ip(request) == "1.2.3.4"
 
 
