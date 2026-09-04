@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+from app.services.dotmac_sub.client import DotmacSubAuthorizationError
 from app.tasks import dotmac_sub
 
 
@@ -155,6 +156,63 @@ def test_incremental_posting_phase_uses_bounded_batch(monkeypatch) -> None:
     assert result["complete"] is True
     assert result["synced_count"] == 7
     history.touch.assert_called_once()
+
+
+def test_incremental_phase_authorization_denial_fails_once_without_retry(
+    monkeypatch,
+) -> None:
+    organization_id = uuid4()
+    history_id = uuid4()
+    db = MagicMock()
+    history = SimpleNamespace(
+        status=dotmac_sub.SyncJobStatus.RUNNING,
+        touch=MagicMock(),
+    )
+    service = MagicMock()
+    denial = DotmacSubAuthorizationError("scope denied", status_code=403)
+    service.sync_subscribers.side_effect = denial
+    handle_auth_failure = MagicMock(
+        return_value={
+            "success": False,
+            "history_id": str(history_id),
+            "organization_id": str(organization_id),
+            "error": "dotmac_sub authentication or authorization failed",
+        }
+    )
+    db.get.return_value = history
+
+    monkeypatch.setattr(
+        dotmac_sub,
+        "session_for_org",
+        lambda _organization_id: nullcontext(db),
+    )
+    monkeypatch.setattr(
+        dotmac_sub,
+        "_try_acquire_incremental_sync_lock",
+        lambda _db, _organization_id: True,
+    )
+    monkeypatch.setattr(dotmac_sub, "_release_incremental_sync_lock", lambda *_: True)
+    monkeypatch.setattr(
+        dotmac_sub,
+        "_build_sync_service_context",
+        lambda *_: (service, organization_id),
+    )
+    monkeypatch.setattr(dotmac_sub, "_handle_auth_failure", handle_auth_failure)
+
+    result = dotmac_sub.run_dotmac_sub_incremental_sync_phase.run(
+        str(organization_id), str(history_id), "subscribers", batch_size=123
+    )
+
+    assert result["success"] is False
+    assert result["phase"] == "subscribers"
+    handle_auth_failure.assert_called_once_with(
+        history_id, organization_id, denial, "Incremental phase"
+    )
+    service.sync_subscribers.assert_called_once_with(
+        created_by_user_id=dotmac_sub.SYSTEM_USER_ID,
+        batch_size=123,
+    )
+    service.close.assert_called_once_with()
 
 
 def test_interrupted_session_invalidates_connection_when_rollback_fails() -> None:

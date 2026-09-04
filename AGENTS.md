@@ -17,6 +17,36 @@ These are the repo-level instructions Codex should follow for this workspace.
   part of `make check`; ruff is pinned exactly and the pins are guarded by
   `tests/architecture/test_toolchain_coherence.py`.
 - Typing: `mypy`
+- ERP identity cutover: `make privilege-manifest-check` byte-compares the
+  generated `dotmac_erp_app` -> `app_user` privilege manifest and SQL against
+  the frozen production census. It is offline and needs no database. The
+  ENFORCING gate is `tests/architecture/test_privilege_manifest.py` (which
+  regenerates and compares in the test job); the Make target is the
+  convenience form. `make privilege-manifest` rewrites the artefacts — never
+  hand-edit them. Every row carries one of three dispositions: `grant`
+  (goes in `scripts/erp_identity_cutover_grants.sql`), `review_required`
+  (needs a sign-off; EMPTY today — both open items were ruled on 2026-09-04)
+  and `denied_by_architecture` (never applied). A boolean cannot tell "grant
+  after review" from "never grant"; the split between the two files is
+  permanent, not a staging step.
+- ERP identity cutover, the two rulings (2026-09-04, Michael, both Change-1
+  BLOCKERS). **The persistence plane is resolved from a DECLARATION**
+  (`app/persistence_planes.py`: a module's `tables`/`platform_tables` read
+  from `app.runtime_admission.COMPOSED_MODULES`, plus the host assembly's own
+  declaration) and NEVER inferred from the `mod_` prefix, the `public`
+  schema, a `tenant_id` column, RLS state or current ACLs — those are
+  evidence to validate a declaration, not sources of ownership. An
+  unclassified relation REFUSES generation; it never defaults to the tenant
+  plane. And **no denied item renders SQL**: the denials live in
+  `scripts/erp_identity_cutover_denied.sql`, which has no `BEGIN`, no
+  `COMMIT` and no statement at all, so it is a no-op by construction rather
+  than by convention. A denied relation's absence is proved at table AND
+  column level (`denial_violations`); a denied function's is proved with an
+  EFFECTIVE `has_function_privilege` question asked of `app_user`, of
+  `PUBLIC` and of the declared permitted executor
+  (`function_denial_violations`) — PostgreSQL grants EXECUTE to `PUBLIC` by
+  default, so `REVOKE … FROM app_user` alone does not neutralize an inherited
+  grant, and a surviving default is reported as remediation owed.
 - CSS build: `npm run dev` or `npm run watch:css` (outputs `static/css/app.css`)
 
 ## Priorities
@@ -33,6 +63,11 @@ These are the repo-level instructions Codex should follow for this workspace.
 - Do not weaken security controls without explicit approval.
 
 ## Codebase Rules (Source of Truth)
+- `docs/architecture/erp-runtime-identity-cutover.md` for the
+  `dotmac_erp_app` -> `app_user` runtime identity cutover: the ruling
+  (identity migration first, least-privilege reduction second), the frozen
+  census, the manifest's OID-independent identity scheme, and the guard's
+  refusals. No SQL from that programme has been applied anywhere.
 - `docs/adr/` for accepted architecture decisions. An ADR outranks a plan
   document; where they disagree, fix the plan. Added 2026-08-15 — ERP had no
   decision record directory, which is how a gate ("After E8 ADR") came to point

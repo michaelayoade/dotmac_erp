@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from app.services.dotmac_sub.client import (
     DotmacSubAuthenticationError,
+    DotmacSubAuthorizationError,
     DotmacSubClient,
     DotmacSubConfig,
     DotmacSubError,
@@ -27,6 +28,7 @@ from app.services.dotmac_sub.sync import (
 __all__ = [
     "SYSTEM_USER_ID",
     "DotmacSubAuthenticationError",
+    "DotmacSubAuthorizationError",
     "DotmacSubClient",
     "DotmacSubConfig",
     "DotmacSubError",

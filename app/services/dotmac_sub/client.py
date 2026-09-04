@@ -125,7 +125,11 @@ class DotmacSubError(Exception):
 
 
 class DotmacSubAuthenticationError(DotmacSubError):
-    """Authentication failed (bad or missing bearer token)."""
+    """Authentication failed (bad or missing API key)."""
+
+
+class DotmacSubAuthorizationError(DotmacSubAuthenticationError):
+    """Authentication succeeded, but the API key lacks endpoint access."""
 
 
 class DotmacSubNotFoundError(DotmacSubError):
@@ -1093,9 +1097,14 @@ class DotmacSubClient:
             if detail:
                 message = f"{message} Self-Care detail: {detail}"
             raise DotmacSubPermanentSyncError(message, status_code=status)
-        if status in (401, 403):
+        if status == 401:
             raise DotmacSubAuthenticationError(
                 "Authentication failed for dotmac_sub.", status_code=status
+            )
+        if status == 403:
+            raise DotmacSubAuthorizationError(
+                f"Authorization denied for dotmac_sub endpoint: {endpoint}",
+                status_code=status,
             )
         if status == 404:
             raise DotmacSubNotFoundError(
@@ -1191,6 +1200,10 @@ class DotmacSubClient:
             raise DotmacSubError(
                 f"Request failed after {self.config.max_retries} attempts: {e}"
             ) from e
+        except DotmacSubAuthorizationError as e:
+            if e.status_code is not None:
+                metric_status = "authorization_denied"
+            raise
         except DotmacSubAuthenticationError as e:
             # A response-mapped 401/403 counts as auth_error; a locally raised
             # missing-api-key error (status None) never reached the wire and,
