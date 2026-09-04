@@ -16,17 +16,23 @@ deliberate act, not something a generator does.
 privileges, 3 sequence privileges and the 37 observed schema USAGE grants.
 Mechanical, reviewable in bulk, safe to apply as a unit.
 
-`scripts/erp_identity_cutover_review_required.sql` is everything that needs a
-judgement call and must NOT be folded into that sweep:
+`scripts/erp_identity_cutover_review_required.sql` is everything exceptional,
+which must NOT be folded into that sweep:
 
 * the five `SECURITY DEFINER` EXECUTE grants -- each executes as `app_admin`,
-  a BYPASSRLS role, so EXECUTE is an escalation surface, not a row;
-* `mod_files.platform_stored_files`, a CONTROL-PLANE relation that ADR-0023
-  requires to be REVOKEd from the tenant application role;
-* the five schema USAGE grants the census did not observe, which are derived
-  from the relation grants rather than mirrored from an observation.
+  a BYPASSRLS role, so EXECUTE is an escalation surface, not a row. Their
+  dispositions are recorded in
+  `docs/architecture/erp-runtime-identity-cutover.md`;
+* `mod_files.platform_stored_files`, a CONTROL-PLANE relation ADR-0023
+  requires to be REVOKEd from the tenant application role. DENIED: its four
+  rows render as comments and are never executed.
 
-Splitting them is the whole point: a 1,700-line file with six escalation
+The five derived schema-USAGE rows that used to sit here were SETTLED on
+2026-09-04 -- all five schemas returned `legacy=True, app_user=True`, so the
+GRANT was a no-op -- and are removed, with their origins kept in
+`SETTLED_SCHEMA_USAGE`.
+
+The split is PERMANENT, not staging: a 1,700-line file with six escalation
 decisions buried in it gets skimmed.
 
 ## Usage
@@ -81,7 +87,7 @@ def build() -> dict[Path, str]:
     return {
         MANIFEST_PATH: manifest_to_json(manifest),
         ROUTINE_SQL_PATH: render_grant_sql(manifest.routine(), ROUTINE_SQL_TITLE),
-        REVIEW_SQL_PATH: render_grant_sql(manifest.review_required(), REVIEW_SQL_TITLE),
+        REVIEW_SQL_PATH: render_grant_sql(manifest.exceptional(), REVIEW_SQL_TITLE),
     }
 
 

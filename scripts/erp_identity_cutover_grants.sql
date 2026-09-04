@@ -17,7 +17,10 @@
 -- This file contains GRANT statements only. No REVOKE, no ALTER, no CREATE,
 -- no DROP, no ownership change, no role membership, no `GRANT ALL`.
 --
--- Rows: 1752
+-- Rows: 1752 to grant, 0 DENIED.
+-- A DENIED row is rendered as a comment and is NEVER executed. It is kept
+-- here so the refusal is visible: a denial that is merely absent cannot be
+-- told apart from a denial nobody thought of.
 
 
 BEGIN;

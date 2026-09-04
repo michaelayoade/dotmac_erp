@@ -28,6 +28,21 @@ The 1,716 relation privileges below are the COMPATIBILITY BASELINE, not the
 permanent least-privilege target.  Reduction is Change 3, driven by a
 two-directional ratchet, once the cutover has been stable.
 
+## The target, stated once
+
+    legacy compatibility privileges
+      - architecturally forbidden access
+      - unapproved `SECURITY DEFINER` execution
+      + module-era privileges `app_user` already owns
+
+Everything below is that arithmetic made executable.  The three files it
+produces stay SPLIT, permanently: bulk-safe grants in the bulk file, the five
+`SECURITY DEFINER` functions isolated, the control-plane grants prohibited,
+the schema cases resolved.  Collapsing them would put exceptional
+authorization back inside mechanical compatibility, which is the one thing
+this shape exists to prevent -- a 1,700-line file with six escalation
+decisions buried in it gets skimmed.
+
 ## Why identity here is OID-independent
 
 Change 2 applies this manifest to a RESTORED database.  A restore assigns new
@@ -62,15 +77,21 @@ is "what must be GRANTED to reach equivalence", and equivalence itself is
 that `app_user` holds nothing else, and nothing here may be read as a complete
 picture of either role's privileges.
 
-That distinction has one unresolved consequence, recorded rather than guessed
-at.  Five schemas -- `hr`, `mod_files`, `public`, `rpt`, `sync` -- carry 448
-relation privileges between them and appear in NO schema-USAGE row.  Under the
-delta reading that means `app_user` already has USAGE there and the delta is
-empty; under a whole-ACL reading it would mean the source role's own USAGE was
-never observed and those 448 privileges are inert.  The census does not say
-which, so the manifest carries a DERIVED USAGE row for each, marked for
-review.  Under the first reading applying it is a no-op; under the second it
-is required.  One read-only follow-up query settles it.
+That distinction had one unresolved consequence, and a read-only follow-up
+query SETTLED it on 2026-09-04.  Five schemas -- `hr`, `mod_files`, `public`,
+`rpt`, `sync` -- carry 448 relation privileges between them and appear in NO
+schema-USAGE row.  All five returned `legacy=True, app_user=True`: the DELTA
+reading is correct, `app_user` already holds USAGE in every one of them, and
+the derived GRANT would have been a no-op.  So the five derived rows are GONE
+from the manifest rather than carried as review debt, and what survives is the
+ORIGIN of each -- recorded in `SETTLED_SCHEMA_USAGE`, because the origins are
+not the same fact and flattening them would lose the one that matters.  Four
+schemas hold it by a DIRECT `app_user:USAGE` grant; `public` holds it via
+`PUBLIC:USAGE`, which is PostgreSQL's own default and reaches every login in
+the cluster.  A privilege reached through `PUBLIC` is exactly what
+`REJECTED_PRIVILEGE_ORIGINS` refuses everywhere else in this manifest, so
+`public` is a settled no-op for THIS change and an open least-privilege
+question for Change 3.
 
 ## Facts the census fixed, and what they mean
 
@@ -88,9 +109,15 @@ is required.  One read-only follow-up query settles it.
 * **One module-era grant is already in the legacy baseline**:
   `mod_files.platform_stored_files`.  That is a CONTROL-PLANE table under
   ADR-0023, which requires it to be REVOKEd from the tenant application role
-  -- and `app_user` is the tenant application role.  Mirroring it is
-  therefore not mechanical, and it is carried in its own section, marked for
-  review, and emitted into the review-required SQL rather than the sweep.
+  -- and `app_user` is the tenant application role.  That decision is now
+  MADE, not deferred: the four rows carry the disposition
+  `denied_by_architecture` and render as commented denials rather than
+  `GRANT`s.  A denial nobody checks is a comment, so the guard additionally
+  PROVES the absence -- `denial_violations` requires that `app_user` holds
+  none of the seven table privileges AND no column-level equivalent, and
+  fails if the verifier did not look at all.  A column ACL can grant
+  `SELECT(col)` where the relation ACL shows nothing, which is exactly the
+  half a table-level check misses.
 * **The reverse gap is 132 privileges** the TARGET holds and the source does
   not, across five module schemas.  They are preserved, never revoked, and
   recorded as explicit exclusions.  The census records them as a per-schema
@@ -146,6 +173,49 @@ MODULE_ERA_ALLOWLIST: Final[frozenset[str]] = frozenset(
     {"relation:mod_files.platform_stored_files"}
 )
 
+#: What this manifest DOES with a row. Three outcomes, never a boolean: a
+#: boolean can say "not routine" but cannot tell "grant this after a human
+#: reads the body" apart from "never grant this at all", and those are
+#: opposite instructions to whoever applies the SQL.
+DISPOSITION_GRANT: Final[str] = "grant"
+DISPOSITION_REVIEW_REQUIRED: Final[str] = "review_required"
+DISPOSITION_DENIED: Final[str] = "denied_by_architecture"
+DISPOSITIONS: Final[tuple[str, ...]] = (
+    DISPOSITION_GRANT,
+    DISPOSITION_REVIEW_REQUIRED,
+    DISPOSITION_DENIED,
+)
+
+#: The reason a row is denied. One string, stated once, so the artefact, the
+#: rendered SQL and the guard all say the same words.
+DENIAL_REASON: Final[str] = "ADR-0023 control-plane relation"
+
+#: The SEVEN privileges PostgreSQL can hold on a table. A denial that checked
+#: only the four the census happened to record would leave TRUNCATE,
+#: REFERENCES and TRIGGER unexamined -- and REFERENCES in particular is
+#: grantable at column level, which is the half a relation-ACL check misses.
+DENIED_TABLE_PRIVILEGES: Final[tuple[str, ...]] = (
+    "SELECT",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "TRUNCATE",
+    "REFERENCES",
+    "TRIGGER",
+)
+
+#: The four of those that PostgreSQL also grants per COLUMN. `GRANT
+#: SELECT(secret_column)` leaves `relacl` untouched and `has_table_privilege`
+#: answering false, so a denial proved only against the relation ACL is not
+#: proved at all. `pg_attribute.attacl` / `information_schema.column_privileges`
+#: is where these live.
+COLUMN_LEVEL_PRIVILEGES: Final[tuple[str, ...]] = (
+    "SELECT",
+    "INSERT",
+    "UPDATE",
+    "REFERENCES",
+)
+
 SECTION_SCHEMA_USAGE: Final[str] = "schema_usage"
 SECTION_RELATIONS: Final[str] = "relations"
 SECTION_SEQUENCES: Final[str] = "sequences"
@@ -168,7 +238,11 @@ SECTIONS: Final[tuple[str, ...]] = (
 #: it is what Change 3 does -- but it is an edit to this constant, reviewed,
 #: never a side effect of a census being retaken.
 BASELINE_TOTALS: Final[Mapping[str, int]] = {
-    SECTION_SCHEMA_USAGE: 42,
+    # 37, not 42: the five DERIVED usage rows were removed on 2026-09-04 when
+    # the follow-up query settled them as no-ops. Lowering this constant is
+    # the reviewed, in-commit act the ratchet demands -- the count did not
+    # move on its own.
+    SECTION_SCHEMA_USAGE: 37,
     SECTION_RELATIONS: 1712,
     SECTION_SEQUENCES: 3,
     SECTION_FUNCTIONS: 5,
@@ -363,10 +437,30 @@ class GrantRow:
     origin: str
     category: str
     reason: str
-    review_required: bool
+    disposition: str
     relkind: str = ""
     signature: str = ""
     identity_arguments: str = ""
+
+    def __post_init__(self) -> None:
+        if self.disposition not in DISPOSITIONS:
+            raise ValueError(
+                f"unknown disposition {self.disposition!r} on {self.identity}; "
+                f"the three outcomes are {DISPOSITIONS}"
+            )
+
+    @property
+    def review_required(self) -> bool:
+        """Kept as a READ-ONLY view over the disposition, never a second fact.
+
+        A denied row is not "review required" and must never be reported as
+        one: the review is over and the answer was no.
+        """
+        return self.disposition == DISPOSITION_REVIEW_REQUIRED
+
+    @property
+    def denied(self) -> bool:
+        return self.disposition == DISPOSITION_DENIED
 
     def sort_key(self) -> tuple[int, str, str]:
         return (SECTIONS.index(self.section), self.identity, self.privilege)
@@ -404,10 +498,31 @@ class PrivilegeManifest:
         return {name: len(self.section(name)) for name in SECTIONS}
 
     def review_required(self) -> tuple[GrantRow, ...]:
+        """Rows that need a human decision before they may be applied."""
         return tuple(row for row in self.rows if row.review_required)
 
+    def denied(self) -> tuple[GrantRow, ...]:
+        """Rows the architecture REFUSES. Never rendered as a `GRANT`."""
+        return tuple(row for row in self.rows if row.denied)
+
     def routine(self) -> tuple[GrantRow, ...]:
-        return tuple(row for row in self.rows if not row.review_required)
+        """The mechanical sweep: everything with no judgement call in it."""
+        return tuple(
+            row for row in self.rows if row.disposition == DISPOSITION_GRANT
+        )
+
+    def exceptional(self) -> tuple[GrantRow, ...]:
+        """Everything the sweep must NOT contain, in manifest order.
+
+        The split is permanent, not a staging convenience: exceptional
+        authorization stays out of mechanical compatibility, so the file a
+        reviewer must read line by line stays short enough that they do.
+        """
+        return tuple(
+            sorted(
+                (*self.review_required(), *self.denied()), key=GrantRow.sort_key
+            )
+        )
 
     def preserved_scopes(self) -> dict[str, int]:
         """Scopes whose TARGET privileges are preserved, and their counts.
@@ -430,13 +545,74 @@ class PrivilegeManifest:
 # Generation -- pure, deterministic, from the frozen census
 # ---------------------------------------------------------------------------
 
-#: Schemas the census recorded table privileges in but recorded NO schema
-#: USAGE grant for. Their table privileges are unreachable without USAGE, so
-#: the manifest carries a DERIVED usage row for each -- marked for review,
-#: because the census does not say where the source role's own reachability
-#: comes from and this programme does not guess at a grant nobody observed.
-DERIVED_USAGE_CATEGORY: Final[str] = "derived-usage-unrecorded-in-census"
 MIRRORED_USAGE_CATEGORY: Final[str] = "mirrored-schema-usage"
+
+#: The five schemas the census recorded relation privileges in but recorded NO
+#: schema-USAGE row for, and how a read-only follow-up query on 2026-09-04
+#: settled each. All five came back `legacy=True, app_user=True` -- the DELTA
+#: interpretation, so the target already reaches every one of them and the
+#: derived GRANT this manifest used to carry would have changed nothing.
+#:
+#: The rows are therefore REMOVED rather than deferred. What is kept is the
+#: ORIGIN, because the origins are NOT the same fact:
+#:
+#: * `hr`, `rpt` and `sync` hold it by a DIRECT `app_user:USAGE` grant made by
+#:   a named ERP migration -- a deliberate, attributable act;
+#: * `mod_files` holds it by a DIRECT `app_user:USAGE` grant made by the
+#:   composed `dotmac-files` lineage, and its ACL carries `platform_api:USAGE`
+#:   alongside. Tenant and platform tables SHARE that schema, which is exactly
+#:   why isolation there has to hold at the TABLE level: schema USAGE cannot
+#:   separate the two planes and was never meant to;
+#: * `public` holds it via `PUBLIC:USAGE` -- PostgreSQL's own default, NOT a
+#:   grant to `app_user` at all. That is the same origin
+#:   `REJECTED_PRIVILEGE_ORIGINS` refuses everywhere else here, because
+#:   `PUBLIC` reaches every login in the cluster including the next one
+#:   created. It is a settled no-op for the identity cutover and an open
+#:   least-privilege question for Change 3; flattening it into "app_user has
+#:   USAGE" would lose precisely that.
+SETTLED_SCHEMA_USAGE: Final[Mapping[str, tuple[str, str]]] = {
+    "hr": (
+        "direct",
+        "`app_user:USAGE` held DIRECTLY. ACL: `app_admin:USAGE "
+        "app_admin:CREATE dotmac_erp_app:USAGE app_user:USAGE`. Granted by "
+        "`alembic/versions/20260828_people_et_activation.py` (and before it "
+        "`20260828_people_et_bootstrap.py`).",
+    ),
+    "mod_files": (
+        "direct",
+        "`app_user:USAGE` held DIRECTLY. ACL: `app_admin:USAGE "
+        "app_admin:CREATE app_user:USAGE platform_api:USAGE "
+        "dotmac_erp_app:USAGE` -- it carries `app_user:USAGE` AND "
+        "`platform_api:USAGE`, confirming the tenant and platform tables of "
+        "the composed `dotmac-files` module share one schema. Isolation "
+        "between the planes therefore has to hold at the TABLE level, which "
+        "is what the `mod_files.platform_stored_files` denial does.",
+    ),
+    "public": (
+        "public",
+        "NOT a direct grant. `app_user` reaches `public` via `PUBLIC:USAGE` "
+        "-- PostgreSQL's own default on the `public` schema. ACL: "
+        "`pg_database_owner:USAGE pg_database_owner:CREATE PUBLIC:USAGE "
+        "dotmac_erp_app:USAGE dotmac_erp_app:CREATE outbox_dispatcher:USAGE "
+        "platform_outbox_dispatcher:USAGE`, with no `app_user` entry at all. "
+        "`PUBLIC` reaches every login in the cluster, so this is the one "
+        "origin `REJECTED_PRIVILEGE_ORIGINS` refuses elsewhere in this "
+        "manifest. It makes the derived row a no-op for the identity cutover "
+        "and leaves an open question for Change 3.",
+    ),
+    "rpt": (
+        "direct",
+        "`app_user:USAGE` held DIRECTLY. ACL: `app_admin:USAGE "
+        "app_admin:CREATE dotmac_erp_app:USAGE app_user:USAGE`. Granted by "
+        "`alembic/versions/20260828_sales_analysis_refresh_definer.py`.",
+    ),
+    "sync": (
+        "direct",
+        "`app_user:USAGE` held DIRECTLY. ACL: `app_admin:USAGE "
+        "app_admin:CREATE dotmac_erp_app:USAGE app_user:USAGE`. Granted by "
+        "`alembic/versions/20260825_retire_dotmac_crm.py`.",
+    ),
+}
 
 
 def _census_relations(census: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -472,8 +648,17 @@ def manifest_from_census(census: Mapping[str, Any]) -> PrivilegeManifest:
         key = str(row["schema"])
         relation_privilege_counts[key] = relation_privilege_counts.get(key, 0) + 1
 
-    for schema in sorted(schemas_with_usage | schemas_with_relations):
-        recorded = schema in schemas_with_usage
+    unobserved = sorted(schemas_with_relations - schemas_with_usage)
+    if set(unobserved) != set(SETTLED_SCHEMA_USAGE):
+        raise ValueError(
+            "the set of schemas carrying relation privileges with no observed "
+            f"schema-USAGE row is {unobserved}, but SETTLED_SCHEMA_USAGE "
+            f"settles {sorted(SETTLED_SCHEMA_USAGE)}. A schema that fell out "
+            "of that set is one whose reachability nobody has checked; a new "
+            "one is a derived grant this generator refuses to invent."
+        )
+
+    for schema in sorted(schemas_with_usage):
         rows.append(
             GrantRow(
                 section=SECTION_SCHEMA_USAGE,
@@ -485,29 +670,13 @@ def manifest_from_census(census: Mapping[str, Any]) -> PrivilegeManifest:
                 source_role=source,
                 target_role=target,
                 owner="",
-                origin="direct" if recorded else "unrecorded",
-                category=(
-                    MIRRORED_USAGE_CATEGORY if recorded else DERIVED_USAGE_CATEGORY
-                ),
+                origin="direct",
+                category=MIRRORED_USAGE_CATEGORY,
                 reason=(
                     "The source role holds USAGE on this schema; the target "
                     "needs it to reach anything inside."
-                    if recorded
-                    else (
-                        "The census records "
-                        f"{relation_privilege_counts.get(schema, 0)} relation "
-                        "privileges in this schema but NO schema-USAGE row. "
-                        "The census is a source-minus-target DELTA, so that "
-                        "means EITHER the target already holds USAGE here "
-                        "(delta empty, this GRANT a no-op) OR the source's "
-                        "own USAGE was never observed and those relation "
-                        "privileges are inert without it. The census does "
-                        "not say which, so this row is DERIVED rather than "
-                        "mirrored. One read-only follow-up query settles it; "
-                        "review before applying."
-                    )
                 ),
-                review_required=not recorded,
+                disposition=DISPOSITION_GRANT,
             )
         )
 
@@ -534,18 +703,23 @@ def manifest_from_census(census: Mapping[str, Any]) -> PrivilegeManifest:
                     owner=str(entry["owner"]),
                     origin="direct",
                     category=(
-                        "module-era-grant-already-held-by-legacy-role"
+                        "denied-by-architecture-control-plane-relation"
                         if module_era
                         else "legacy-estate-compatibility-baseline"
                     ),
                     reason=(
-                        "A CONTROL-PLANE relation under ADR-0023, which "
-                        "requires it to be REVOKEd from the tenant "
-                        "application role. The legacy role already holds "
-                        "this privilege, so mirroring it preserves "
-                        "behaviour -- and granting it to the tenant runtime "
-                        "role is a dual-plane isolation decision, not a "
-                        "mechanical mirror. Review before applying."
+                        f"{DENIAL_REASON}. ADR-0023 requires a module's "
+                        "declared `platform_tables` to be REVOKEd from the "
+                        "tenant application role, and `app_user` IS the "
+                        "tenant application role -- "
+                        "`app.runtime_admission` names this exact relation "
+                        "as the `files` module's platform table. The legacy "
+                        "role holding it is legacy debt to be revoked at "
+                        "retirement, not a behaviour to mirror: mirroring it "
+                        "would move a control-plane privilege ONTO the "
+                        "identity the architecture forbids it on, under "
+                        "cover of a compatibility sweep. NOT GRANTED. The "
+                        "guard proves the absence at table AND column level."
                         if module_era
                         else (
                             "Held DIRECTLY by the source role at census time "
@@ -555,7 +729,9 @@ def manifest_from_census(census: Mapping[str, Any]) -> PrivilegeManifest:
                             "least-privilege target."
                         )
                     ),
-                    review_required=module_era,
+                    disposition=(
+                        DISPOSITION_DENIED if module_era else DISPOSITION_GRANT
+                    ),
                 )
             )
 
@@ -587,7 +763,7 @@ def manifest_from_census(census: Mapping[str, Any]) -> PrivilegeManifest:
                     "UPDATE are what let nextval() run; SELECT alone would "
                     "make the allocator fail at its first write."
                 ),
-                review_required=False,
+                disposition=DISPOSITION_GRANT,
             )
         )
 
@@ -628,7 +804,11 @@ def manifest_from_census(census: Mapping[str, Any]) -> PrivilegeManifest:
                     if security_definer
                     else "EXECUTE held by the source role at census time."
                 ),
-                review_required=security_definer,
+                disposition=(
+                    DISPOSITION_REVIEW_REQUIRED
+                    if security_definer
+                    else DISPOSITION_GRANT
+                ),
             )
         )
 
@@ -680,7 +860,39 @@ def _exclusions_from_census(census: Mapping[str, Any]) -> tuple[ExclusionRow, ..
             )
         )
 
+    for schema, (origin, detail) in sorted(SETTLED_SCHEMA_USAGE.items()):
+        exclusions.append(
+            ExclusionRow(
+                exclusion_id=f"settled-schema-usage:{schema}",
+                kind="settled-schema-usage",
+                scope=schema,
+                privileges=0,
+                reason=(
+                    f"SETTLED 2026-09-04, origin `{origin}`. A read-only "
+                    "follow-up query returned `legacy=True, app_user=True`, "
+                    "confirming the DELTA interpretation: the target already "
+                    "holds USAGE here, so the derived GRANT this manifest "
+                    "used to carry was a no-op and the row is REMOVED rather "
+                    f"than deferred. {detail}"
+                ),
+            )
+        )
+
     for exclusion_id, scope, reason in (
+        (
+            "denied-control-plane-relation",
+            ", ".join(sorted(MODULE_ERA_ALLOWLIST)),
+            f"{DENIAL_REASON}. The legacy role holds SELECT/INSERT/UPDATE/"
+            "DELETE on this relation; the target role will NOT be given "
+            "them. This is the one place the cutover deliberately does not "
+            "mirror, because mirroring would carry a control-plane privilege "
+            "across the exact boundary ADR-0023 draws. The rows stay in the "
+            "manifest with disposition `denied_by_architecture` so the "
+            "decision is visible rather than absent, they render as "
+            "commented denials rather than GRANTs, and `denial_violations` "
+            "proves `app_user` holds none of the seven table privileges and "
+            "no column-level equivalent.",
+        ),
         (
             "no-grant-all",
             "every generated statement",
@@ -768,22 +980,59 @@ def _notes(
         "DIRECT grants -- zero via PUBLIC, zero via ownership. A later run "
         "that finds a PUBLIC-derived privilege standing in for one of these "
         "has found a defect, not an equivalent.",
+        "TARGET: legacy compatibility privileges - architecturally forbidden "
+        "access - unapproved SECURITY DEFINER execution + module-era "
+        "privileges app_user already owns. The file split is a PERMANENT "
+        "property of that arithmetic, not a staging convenience: bulk-safe "
+        "grants in the bulk file, the five SECURITY DEFINER functions "
+        "isolated, the control-plane grants prohibited, the schema cases "
+        "resolved. Keeping exceptional authorization separate from "
+        "mechanical compatibility is the point.",
         "SECURITY DEFINER: all five EXECUTE rows are on SECURITY DEFINER "
         "functions owned by app_admin (a BYPASSRLS role). They are isolated "
         "in their own section, marked review_required, and rendered into the "
-        "review-required SQL file rather than the sweep.",
+        "review-required SQL file rather than the sweep. Their dispositions "
+        "are recorded in "
+        "docs/architecture/erp-runtime-identity-cutover.md; nothing here "
+        "converts a definer, changes an owner or creates a role, which are "
+        "separate authorized acts.",
+        "DENIED: relation:mod_files.platform_stored_files carries "
+        f"disposition denied_by_architecture ({DENIAL_REASON}). Its four rows "
+        "stay in the manifest so the decision is visible, render as "
+        "commented denials rather than GRANTs, and are proved absent by "
+        "denial_violations at BOTH table and column level -- a column ACL "
+        "can grant SELECT(col) where the relation ACL shows nothing.",
+        "UNRESOLVED, RECORDED: public.platform_outbox_events is in the "
+        "ROUTINE sweep (4 privileges) because its schema is `public` rather "
+        "than `mod_`, but alembic revision 20260824_outbox_relay creates it "
+        "as the CONTROL-PLANE relay ledger -- no tenant_id, no RLS, granted "
+        "to platform_api and app_admin, and explicitly `REVOKE ALL "
+        "PRIVILEGES ... FROM app_user` followed by column-level REVOKEs of "
+        "SELECT/INSERT/UPDATE/REFERENCES from app_user. Applying the sweep "
+        "would REVERSE that deliberate revocation. Same for the EXECUTE row "
+        "on hr.enforce_employment_type_projection(), which "
+        "20260828_people_et_activation explicitly REVOKEs from app_user. "
+        "Neither is changed here: this is a recorded finding for the same "
+        "authority that settled the five schema cases, not a disposition "
+        "this generator may make on its own.",
         "MATERIALIZED VIEW: rpt.sales_analysis_mv is relkind 'm'. PostgreSQL "
         "has no `GRANT ... ON MATERIALIZED VIEW`, so the rendered statement "
         "says `ON TABLE` -- that is the correct spelling, and the relkind is "
         "kept in the manifest so a kind change is still detectable. "
         "INSERT/UPDATE/DELETE are present in its ACL and are mirrored "
         "faithfully even though DML on a matview is not executable.",
-        f"OPEN QUESTION: {len(derived)} schemas ({', '.join(derived)}) carry "
-        f"{unreachable} relation privileges between them but appear in no "
-        "schema-USAGE row. Either the target already has USAGE there (delta "
-        "empty) or the source's USAGE was never observed (those privileges "
-        "inert). Those USAGE rows are DERIVED and marked review_required; "
-        "one read-only follow-up query against production closes it.",
+        f"SETTLED: {len(derived)} schemas ({', '.join(derived)}) carry "
+        f"{unreachable} relation privileges between them and appear in no "
+        "schema-USAGE row. The read-only follow-up query of 2026-09-04 "
+        "returned legacy=True, app_user=True for all five: the DELTA reading "
+        "is correct, the target already holds USAGE, and the derived GRANT "
+        "would have been a no-op. The five rows are REMOVED and "
+        "BASELINE_TOTALS lowered 42 -> 37 in the same commit. The ORIGINS "
+        "are kept and are NOT uniform: hr, mod_files, rpt and sync hold it "
+        "by a DIRECT app_user:USAGE grant, while public holds it via "
+        "PUBLIC:USAGE -- PostgreSQL's own default, with no app_user entry in "
+        "the ACL at all. See SETTLED_SCHEMA_USAGE and the "
+        "settled-schema-usage exclusions.",
         "BASELINE: these counts are the compatibility baseline for the "
         "identity cutover, NOT the permanent least-privilege target. "
         "Reduction is a separate change with its own ratchet.",
@@ -898,14 +1147,32 @@ _HEADER = """\
 -- This file contains GRANT statements only. No REVOKE, no ALTER, no CREATE,
 -- no DROP, no ownership change, no role membership, no `GRANT ALL`.
 --
--- Rows: {count}
+-- Rows: {count} to grant, {denied} DENIED.
+-- A DENIED row is rendered as a comment and is NEVER executed. It is kept
+-- here so the refusal is visible: a denial that is merely absent cannot be
+-- told apart from a denial nobody thought of.
 """
 
 
 def render_grant_sql(rows: Sequence[GrantRow], title: str) -> str:
-    """Render one GRANT per row, in manifest order, inside one transaction."""
+    """Render one statement per row, in manifest order, in one transaction.
+
+    A DENIED row renders as a COMMENT, never as SQL. It is kept in the file
+    on purpose: a denial that is simply absent is indistinguishable from a
+    denial nobody thought of, and the next person to regenerate this file
+    would have no way to tell that the missing GRANT was a decision. The
+    executable content stays GRANT-only, so a reviewer reading statements and
+    a reviewer reading decisions both get the whole picture.
+    """
     ordered = sorted(rows, key=GrantRow.sort_key)
-    lines = [_HEADER.format(title=title, count=len(ordered)), "", "BEGIN;", ""]
+    granted = [row for row in ordered if not row.denied]
+    denied = [row for row in ordered if row.denied]
+    lines = [
+        _HEADER.format(title=title, count=len(granted), denied=len(denied)),
+        "",
+        "BEGIN;",
+        "",
+    ]
     current_section = ""
     current_identity = ""
     for row in ordered:
@@ -917,6 +1184,15 @@ def render_grant_sql(rows: Sequence[GrantRow], title: str) -> str:
             current_identity = row.identity
             suffix = f" [relkind {row.relkind}]" if row.relkind else ""
             lines.append(f"-- {row.identity}{suffix} -- {row.category}")
+            if row.denied:
+                lines.append(f"--   DENIED ({row.disposition}): {DENIAL_REASON}.")
+                lines.append(
+                    "--   The statements below are NOT executed and must not "
+                    "be uncommented."
+                )
+        if row.denied:
+            lines.append(f"--   NOT GRANTED: {_grant_statement(row)}")
+            continue
         lines.append(_grant_statement(row))
     lines.extend(["", "COMMIT;"])
     return "\n".join(lines) + "\n"
@@ -927,11 +1203,14 @@ ROUTINE_SQL_TITLE: Final[str] = (
     "Mechanical rows only -- nothing here needs a judgement call."
 )
 REVIEW_SQL_TITLE: Final[str] = (
-    "Change 1, REVIEW-REQUIRED half: SECURITY DEFINER function EXECUTE, the "
-    "control-plane module-era relation, and schema USAGE the census did not "
-    "observe. DO NOT APPLY until each row below has been individually "
-    "reviewed and signed off. These are deliberately NOT folded into the "
-    "sweep."
+    "Change 1, EXCEPTIONAL half: SECURITY DEFINER function EXECUTE (review "
+    "required, one body at a time) and the control-plane module-era relation "
+    "(DENIED -- rendered as comments, never executed). DO NOT APPLY until "
+    "each remaining row has been individually reviewed and signed off. These "
+    "are deliberately NOT folded into the sweep, permanently: exceptional "
+    "authorization does not belong inside mechanical compatibility. The five "
+    "derived schema-USAGE rows that used to live here were SETTLED on "
+    "2026-09-04 as no-ops and removed."
 )
 
 
@@ -973,6 +1252,31 @@ class ObservedPrivilege:
 
 
 @dataclass(frozen=True)
+class ObservedColumnGrant:
+    """The COLUMN-level answer for one (relation, privilege), aggregated.
+
+    `GRANT SELECT(storage_key) ON mod_files.platform_stored_files TO app_user`
+    leaves `relacl` untouched and `has_table_privilege(..., 'SELECT')`
+    answering FALSE. The grant lives in `pg_attribute.attacl` -- what
+    `information_schema.column_privileges` exposes -- and is invisible to
+    every relation-level check in this module. A denial proved only against
+    the relation ACL is therefore not proved at all, which is why this
+    observation exists.
+
+    `columns_probed` is how many columns the verifier actually examined, and
+    it is load-bearing: an observation reporting zero columns held because it
+    looked at zero columns is not evidence of anything, and the guard refuses
+    it rather than reading it as a clean answer.
+    """
+
+    identity: str
+    role: str
+    privilege: str
+    columns_held: tuple[str, ...] = ()
+    columns_probed: int = 0
+
+
+@dataclass(frozen=True)
 class ObservedRolePosture:
     role: str
     bypassrls: bool
@@ -995,6 +1299,11 @@ class PrivilegeSnapshot:
     memberships: tuple[ObservedMembership, ...] = ()
     #: Every privilege observed for the LEGACY role under a `mod_` schema.
     legacy_module_privileges: tuple[ObservedPrivilege, ...] = ()
+    #: The NEGATIVE half: table-level answers on every DENIED relation, for
+    #: all seven table privileges rather than the four the census recorded.
+    denied_privileges: tuple[ObservedPrivilege, ...] = ()
+    #: The other negative half: column-level answers on the same relations.
+    denied_column_grants: tuple[ObservedColumnGrant, ...] = ()
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -1096,15 +1405,21 @@ def _privilege_violations(
     vanished = {
         identity for identity, entry in observed_objects.items() if not entry.exists
     }
+    # A DENIED relation is owned end to end by `denial_violations`. Leaving it
+    # here would make the guard demand `app_user` HOLD the four privileges it
+    # just refused -- the exact inversion the denial exists to prevent -- and
+    # would answer one planted defect with two complaints from two owners.
+    denied_identities = {row.identity for row in manifest.denied()}
     expected = {
         (row.identity, row.privilege): row
         for row in manifest.rows
-        if row.target_role == manifest.target_role
+        if row.target_role == manifest.target_role and not row.denied
     }
     observed = {
         (entry.identity, entry.privilege): entry
         for entry in snapshot.privileges
         if entry.role == manifest.target_role
+        and entry.identity not in denied_identities
     }
     violations: list[str] = []
     for key, row in sorted(expected.items()):
@@ -1225,6 +1540,88 @@ def _escalation_violations(
     return violations
 
 
+def denial_violations(
+    manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot
+) -> list[str]:
+    """Refusal 8: a DENIED relation must be unreachable, and PROVED so.
+
+    Denial is the only disposition in this manifest that asserts an ABSENCE,
+    and an absence is the one claim that passes for free. Three things are
+    therefore required of every denied relation, and each of them can fail:
+
+    1. all SEVEN table privileges answered -- not the four the census
+       happened to record, because TRUNCATE, REFERENCES and TRIGGER are
+       privileges too and a denial silent about them denies nothing;
+    2. all four COLUMN-grantable privileges answered against the column
+       catalog, because `GRANT SELECT(col)` is invisible in `relacl` and
+       `has_table_privilege` returns false for a relation the role can
+       nonetheless read;
+    3. every one of those answers actually TAKEN. A verifier that probed
+       nothing produces an empty violation list, which looks exactly like a
+       clean database -- so an unprobed privilege is itself a refusal.
+    """
+    violations: list[str] = []
+    denied_identities = sorted({row.identity for row in manifest.denied()})
+    if not denied_identities:
+        return violations
+
+    table_answers = {
+        (entry.identity, entry.privilege): entry
+        for entry in snapshot.denied_privileges
+        if entry.role == manifest.target_role
+    }
+    column_answers = {
+        (entry.identity, entry.privilege): entry
+        for entry in snapshot.denied_column_grants
+        if entry.role == manifest.target_role
+    }
+    for identity in denied_identities:
+        for privilege in DENIED_TABLE_PRIVILEGES:
+            entry = table_answers.get((identity, privilege))
+            if entry is None:
+                violations.append(
+                    f"UNPROBED DENIAL: {privilege} on {identity} was never "
+                    f"asked about for {manifest.target_role!r}. "
+                    f"{DENIAL_REASON}: this relation is denied, and a denial "
+                    "the verifier did not test is indistinguishable from a "
+                    "clean answer. All "
+                    f"{len(DENIED_TABLE_PRIVILEGES)} table privileges must be "
+                    "answered."
+                )
+                continue
+            if entry.held:
+                violations.append(
+                    f"DENIED PRIVILEGE HELD: {manifest.target_role!r} holds "
+                    f"{privilege} on {identity}. {DENIAL_REASON} -- ADR-0023 "
+                    "requires it REVOKEd from the tenant application role, "
+                    "and this manifest never grants it. Its presence is a "
+                    "grant made outside this programme."
+                )
+        for privilege in COLUMN_LEVEL_PRIVILEGES:
+            entry = column_answers.get((identity, privilege))
+            if entry is None or entry.columns_probed == 0:
+                probed = "no column observation" if entry is None else "0 columns"
+                violations.append(
+                    f"UNPROBED COLUMN DENIAL: {privilege} on {identity} has "
+                    f"{probed} for {manifest.target_role!r}. A column ACL "
+                    "grants where the relation ACL shows nothing, so a "
+                    "table-level denial alone proves nothing; read "
+                    "pg_attribute.attacl / "
+                    "information_schema.column_privileges."
+                )
+                continue
+            if entry.columns_held:
+                violations.append(
+                    f"DENIED COLUMN PRIVILEGE HELD: {manifest.target_role!r} "
+                    f"holds {privilege} on {identity} at COLUMN level: "
+                    f"{', '.join(entry.columns_held)}. {DENIAL_REASON}. This "
+                    "is the grant a relation-ACL check cannot see -- "
+                    "has_table_privilege answers false while the role reads "
+                    "the column."
+                )
+    return violations
+
+
 def _legacy_module_violations(
     manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot
 ) -> list[str]:
@@ -1264,7 +1661,9 @@ def cutover_violations(
     6. ownership, BYPASSRLS/SUPERUSER, or role membership being granted;
     7. a module privilege being added to the legacy role -- plus the
        two-directional baseline ratchet, which is the same refusal viewed
-       offline.
+       offline;
+    8. a DENIED relation being reachable after all, at table OR column level,
+       or the verifier not having looked (`denial_violations`).
     """
     observed_objects = {entry.identity: entry for entry in snapshot.objects}
     return [
@@ -1273,7 +1672,12 @@ def cutover_violations(
         *_privilege_violations(manifest, snapshot, observed_objects),
         *_escalation_violations(manifest, snapshot, observed_objects),
         *_legacy_module_violations(manifest, snapshot),
+        *denial_violations(manifest, snapshot),
     ]
+
+
+#: Synthetic column count for the clean fixture. Only "non-zero" matters.
+_CLEAN_COLUMNS_PROBED: Final[int] = 12
 
 
 def clean_snapshot(manifest: PrivilegeManifest) -> PrivilegeSnapshot:
@@ -1310,6 +1714,7 @@ def clean_snapshot(manifest: PrivilegeManifest) -> PrivilegeSnapshot:
             origin=ACCEPTED_PRIVILEGE_ORIGIN,
         )
         for row in manifest.rows
+        if not row.denied
     ]
     # The reverse gap: privileges the target already holds inside a preserved
     # scope. Synthesized at the recorded COUNT, because that is the only
@@ -1337,6 +1742,35 @@ def clean_snapshot(manifest: PrivilegeManifest) -> PrivilegeSnapshot:
         )
         for row in manifest.section(SECTION_MODULE_ERA)
     ]
+    # The denial half of a CORRECTLY cut-over database: every one of the
+    # seven table privileges answered and false, every column-grantable
+    # privilege answered against a non-empty column set and holding nothing.
+    # `_CLEAN_COLUMNS_PROBED` stands for "the verifier examined the
+    # relation's columns" -- the count is synthetic because the census never
+    # captured column names, and only its being NON-ZERO is load-bearing.
+    denied_identities = sorted({row.identity for row in manifest.denied()})
+    denied_privileges = [
+        ObservedPrivilege(
+            identity=identity,
+            role=manifest.target_role,
+            privilege=privilege,
+            held=False,
+            origin="none",
+        )
+        for identity in denied_identities
+        for privilege in DENIED_TABLE_PRIVILEGES
+    ]
+    denied_column_grants = [
+        ObservedColumnGrant(
+            identity=identity,
+            role=manifest.target_role,
+            privilege=privilege,
+            columns_held=(),
+            columns_probed=_CLEAN_COLUMNS_PROBED,
+        )
+        for identity in denied_identities
+        for privilege in COLUMN_LEVEL_PRIVILEGES
+    ]
     return PrivilegeSnapshot(
         objects=tuple(objects),
         privileges=tuple(privileges),
@@ -1346,4 +1780,6 @@ def clean_snapshot(manifest: PrivilegeManifest) -> PrivilegeSnapshot:
         ),
         memberships=(),
         legacy_module_privileges=tuple(legacy),
+        denied_privileges=tuple(denied_privileges),
+        denied_column_grants=tuple(denied_column_grants),
     )
