@@ -47,6 +47,7 @@ from app.persistence_planes import (
     RelationPlane,
     SchemaPlane,
     UnclassifiedRelation,
+    default_resolver,
 )
 from app.privilege_manifest import (
     ACCEPTED_PRIVILEGE_ORIGIN,
@@ -1101,7 +1102,39 @@ def test_sensitivity_7_a_module_privilege_on_the_legacy_role_is_named(
     assert "mod_people.employees" in leak and SOURCE_ROLE in leak
     # And the one pre-existing module-era grant must NOT fire: an allowlist
     # that also flags its own contents is a detector nobody can act on.
-    assert not any("mod_files" in v for v in violations)
+    #
+    # That was asserted as `"mod_files" not in <any violation>`, which was
+    # never quite the property: the refusal now NAMES the frozen allowlist
+    # in its own message, so the substring stopped telling "the allowlisted
+    # grant fired" apart from "the message quotes the allowlist" and could
+    # not pass again however correct the detector was. It is asserted on the
+    # SUBJECT of the violation instead, which is the thing that was meant.
+    (allowlisted,) = sorted(MODULE_ERA_ALLOWLIST)
+    assert allowlisted in {
+        entry.identity
+        for entry in snapshot.legacy_module_privileges
+        if entry.role == SOURCE_ROLE and entry.held
+    }, "non-vacuous: the legacy role really does hold the allowlisted grant"
+    assert not any(f" on {allowlisted}. " in v for v in violations), (
+        "the frozen exception is not reported as a leak by the detector "
+        "whose allowlist holds it"
+    )
+
+    # The two things the allowlist entry means, stated where a reader
+    # arriving at `mod_files` will meet them. Files declares BOTH planes in
+    # ONE schema, so the plane is decided per DECLARED RELATION and the
+    # schema name decides nothing: the platform relation is denied, and the
+    # tenant relation beside it is not.
+    assert {
+        row.disposition for row in manifest.rows if row.identity == allowlisted
+    } == {DISPOSITION_DENIED}
+    resolver = default_resolver()
+    assert resolver.resolve("mod_files", "platform_stored_files").plane == PLANE_CONTROL
+    assert resolver.resolve("mod_files", "stored_files").plane == PLANE_TENANT
+    assert not any(
+        row.schema == "mod_files" and row.object_name == "stored_files" and row.denied
+        for row in manifest.rows
+    ), "a tenant-plane Files relation is not denied by its schema's company"
 
 
 def test_sensitivity_8_a_silently_lowered_baseline_is_named(
