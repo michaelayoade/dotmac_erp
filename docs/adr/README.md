@@ -40,3 +40,15 @@ is exactly what blocked E8 for two weeks.
 | [0004](0004-the-erp-bill-of-materials-is-frozen.md) | The ERP bill of materials is frozen before composition starts | Accepted |
 | [0005](0005-payment-intent-status-has-one-writer.md) | `PaymentIntent.status` has one writer | Accepted |
 | [0007](0007-unobserved-is-not-failed.md) | An unobserved transfer is not a failed one | Accepted |
+| [0011](0011-the-app-admin-migration-credential-has-one-custody-pointer.md) | The `app_admin` migration credential has one custody pointer | Proposed |
+
+## A note on the gap at 0006 and the jump to 0011
+
+The index above runs 0001–0005, 0007, then 0011. That is not tidiness lost; it
+is the number register being visible. 0006, 0008, 0009 and 0010 are claimed by
+records on branches that have not merged, and the register that serializes
+allocation (`docs/adr/reservations.toml`, itself unmerged) exists precisely
+because taking "the next free number on `main`" is a read-then-write with no
+lock. 0011 was taken after surveying every local and remote branch for a
+`docs/adr/0011-*`; ADR-0011 records that survey and the deviation it had to
+make. When the register lands, the numbers above need reconciling with it.
