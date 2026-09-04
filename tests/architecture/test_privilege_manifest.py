@@ -143,9 +143,7 @@ EXPECTED_CONTROL_PLANE_RELATIONS = {
 #: OPERATIONAL half of Decision 1. "" means no runtime principal at all.
 EXPECTED_PERMITTED_EXECUTORS = {
     "function:hr.enforce_employment_type_projection()": "",
-    "function:public.claim_outbox_batch(text, integer, integer)": (
-        "outbox_dispatcher"
-    ),
+    "function:public.claim_outbox_batch(text, integer, integer)": ("outbox_dispatcher"),
     "function:public.claim_platform_outbox_batch(text, integer, integer)": (
         "platform_outbox_dispatcher"
     ),
@@ -373,9 +371,9 @@ def test_decision_1_all_five_execute_grants_are_denied_with_an_executor(
     assert "EXECUTE" not in ROUTINE_SQL_PATH.read_text(encoding="utf-8")
     ledger = DENIAL_LEDGER_PATH.read_text(encoding="utf-8")
     assert "GRANT EXECUTE" in ledger, "the refusal stays VISIBLE"
-    assert all(
-        line.startswith("--") for line in ledger.splitlines() if line.strip()
-    ), "every GRANT EXECUTE in the ledger is a comment, not a statement"
+    assert all(line.startswith("--") for line in ledger.splitlines() if line.strip()), (
+        "every GRANT EXECUTE in the ledger is a comment, not a statement"
+    )
 
 
 def test_decision_2_every_control_plane_relation_is_denied_by_declaration(
@@ -857,8 +855,7 @@ def test_negative_control_a_clean_snapshot_produces_no_violations(
     # about: 5 x 2 target/PUBLIC answers + 4 executor answers.
     assert len(snapshot.denied_function_execute) == 14
     assert all(
-        entry.effective and entry.probed
-        for entry in snapshot.denied_function_execute
+        entry.effective and entry.probed for entry in snapshot.denied_function_execute
     ), "an answer that is not effective and not probed is not an answer"
     assert {entry.role for entry in snapshot.denied_function_execute} == {
         TARGET_ROLE,
@@ -1285,24 +1282,27 @@ def test_the_denial_is_owned_by_exactly_one_refusal(
 def test_the_proofs_are_all_distinct() -> None:
     """A roll-call, so a deleted proof is visible rather than merely absent."""
     proofs = {name for name in globals() if name.startswith("test_sensitivity_")}
-    assert len(proofs) == 17, sorted(proofs)
-    for required in (
+    required = {
         "test_sensitivity_1_a_vanished_object_is_named",
         "test_sensitivity_2_an_added_privilege_is_named",
         "test_sensitivity_3_an_absent_expected_privilege_is_named",
+        "test_sensitivity_3b_a_privilege_reached_by_the_wrong_origin_is_named",
         "test_sensitivity_4_a_kind_change_is_named",
         "test_sensitivity_5_a_confused_function_overload_is_named",
         "test_sensitivity_6_a_membership_grant_is_named",
+        "test_sensitivity_6b_bypassrls_and_an_ownership_change_are_named",
         "test_sensitivity_7_a_module_privilege_on_the_legacy_role_is_named",
         "test_sensitivity_8_a_silently_lowered_baseline_is_named",
+        "test_sensitivity_8b_a_revoked_exclusion_is_named",
         "test_sensitivity_9_a_planted_table_grant_on_the_denied_relation_is_named",
         "test_sensitivity_10_a_planted_column_grant_on_the_denied_relation_is_named",
         "test_sensitivity_11_a_denial_nobody_probed_is_named",
         "test_sensitivity_12_a_planted_execute_grant_on_a_denied_function_is_named",
         "test_sensitivity_13_a_surviving_public_execute_default_is_named",
+        "test_sensitivity_13b_a_non_effective_answer_is_refused",
         "test_sensitivity_14_an_unexecutable_permitted_executor_is_named",
-    ):
-        assert required in proofs
+    }
+    assert proofs == required
 
 
 PLANE_PROOF_COVERAGE = {
@@ -1449,9 +1449,7 @@ def test_sensitivity_14_an_unexecutable_permitted_executor_is_named(
     )
     planted = tuple(
         entry
-        if not (
-            entry.identity == victim.identity and entry.role == "outbox_dispatcher"
-        )
+        if not (entry.identity == victim.identity and entry.role == "outbox_dispatcher")
         else replace(entry, held=False)
         for entry in snapshot.denied_function_execute
     )
@@ -1578,9 +1576,7 @@ def _census_of(*relations: tuple[str, str]) -> dict:
     }
 
 
-def _planes(
-    *relations: RelationPlane, schemas: tuple[str, ...] = ()
-) -> PlaneResolver:
+def _planes(*relations: RelationPlane, schemas: tuple[str, ...] = ()) -> PlaneResolver:
     return PlaneResolver(
         relation_planes=relations,
         schema_planes=tuple(
@@ -1721,9 +1717,7 @@ def test_plane_sensitivity_8_a_schema_move_does_not_change_the_plane() -> None:
     moved_census = _census_of(("legacy", "platform_outbox_events"))
     built = manifest_from_census(moved_census, resolver=resolver)
     rows = built.section(SECTION_CONTROL_PLANE)
-    assert {row.identity for row in rows} == {
-        "relation:legacy.platform_outbox_events"
-    }
+    assert {row.identity for row in rows} == {"relation:legacy.platform_outbox_events"}
     assert all(row.disposition == DISPOSITION_DENIED for row in rows)
     assert all(
         "schema MOVE does not change what a relation is" in row.reason for row in rows
@@ -1731,9 +1725,7 @@ def test_plane_sensitivity_8_a_schema_move_does_not_change_the_plane() -> None:
 
     # The mirror image: a TENANT relation moved into `public` beside the
     # control-plane ones stays tenant, and is still granted.
-    tenant_resolver = _planes(
-        _tenant("invoices", "ar"), schemas=("public", "ar")
-    )
+    tenant_resolver = _planes(_tenant("invoices", "ar"), schemas=("public", "ar"))
     assert tenant_resolver.resolve("public", "invoices").plane == PLANE_TENANT
 
 
