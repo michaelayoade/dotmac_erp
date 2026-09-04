@@ -181,6 +181,10 @@
                         <th scope="col">{% if material_request.request_type == 'TRANSFER' %}Source Warehouse{% else %}Warehouse{% endif %}</th>
                         <th scope="col" class="text-right">Requested Qty</th>
                         <th scope="col" class="text-right">Ordered Qty</th>
+                        {% if material_request.stock_required %}
+                        <th scope="col" class="text-right">Available</th>
+                        <th scope="col" class="text-right">Short</th>
+                        {% endif %}
                         <th scope="col">UOM</th>
                         <th scope="col">Schedule Date</th>
                     </tr>
@@ -202,6 +206,16 @@
                             <span class="text-slate-400">0</span>
                             {% endif %}
                         </td>
+                        {% if material_request.stock_required %}
+                        <td class="text-right font-mono {% if item.has_sufficient_stock %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-700 dark:text-slate-200{% endif %}">{{ item.available_qty }}</td>
+                        <td class="text-right font-mono">
+                            {% if item.shortage_qty_value > 0 %}
+                            <span class="text-rose-600 dark:text-rose-400">{{ item.shortage_qty }}</span>
+                            {% else %}
+                            <span class="text-slate-400">0</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
                         <td class="text-slate-500">{{ item.uom or '-' }}</td>
                         <td class="text-slate-500">{{ item.schedule_date or '-' }}</td>
                     </tr>
@@ -212,6 +226,9 @@
                         <td colspan="3" class="font-semibold text-slate-900 dark:text-white">Total</td>
                         <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ material_request.total_requested_qty }}</td>
                         <td class="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ material_request.total_ordered_qty }}</td>
+                        {% if material_request.stock_required %}
+                        <td colspan="2"></td>
+                        {% endif %}
                         <td colspan="2"></td>
                     </tr>
                 </tfoot>
@@ -253,6 +270,13 @@
                     {% endif %}
                 </button>
             </form>
+            {% endif %}
+
+{% if material_request.approval_blocked_reason %}
+            <div class="w-full rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+                <p class="font-semibold">Issue blocked</p>
+                <p class="mt-1">{{ material_request.approval_blocked_reason }}</p>
+            </div>
             {% endif %}
 
 {% if material_request.can_cancel and auth is defined and (auth.is_admin or auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit', 'inv:material_requests:approve', 'inventory:material_requests:approve'])) %}

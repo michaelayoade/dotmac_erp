@@ -16,17 +16,19 @@ from decimal import Decimal
 from typing import Any, TypedDict
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models.finance.core_org.project import Project, ProjectStatus
 from app.models.inventory import (
+    InventoryTransaction,
     Item,
     MaterialRequest,
     MaterialRequestItem,
     MaterialRequestStatus,
     MaterialRequestType,
+    TransactionType,
     Warehouse,
 )
 from app.models.people.hr import Employee, EmployeeStatus
@@ -40,6 +42,17 @@ from app.services.formatters import format_datetime as _format_datetime
 from app.services.recent_activity import get_recent_activity_for_record
 
 logger = logging.getLogger(__name__)
+
+
+def _generate_material_request_number(db: Session, organization_id: UUID) -> str:
+    """Generate material request numbers through the finance numbering service."""
+    from app.models.finance.core_config.numbering_sequence import SequenceType
+    from app.services.finance.common.numbering import SyncNumberingService
+
+    return SyncNumberingService(db).generate_next_number(
+        organization_id,
+        SequenceType.MATERIAL_REQUEST,
+    )
 
 
 class _GroupTotals(TypedDict):
@@ -529,9 +542,16 @@ class MaterialRequestWebService:
 
         # Get related data for items
         item_ids = [item.inventory_item_id for item in request_items]
-        warehouse_ids = [
-            item.warehouse_id for item in request_items if item.warehouse_id
-        ]
+        warehouse_ids = list(
+            {
+                warehouse_id
+                for warehouse_id in (
+                    item.warehouse_id or request.default_warehouse_id
+                    for item in request_items
+                )
+                if warehouse_id
+            }
+        )
         items_map = {}
         if item_ids:
             inv_items = db.scalars(
@@ -551,6 +571,59 @@ class MaterialRequestWebService:
                 )
             ).all()
             warehouses_map = {w.warehouse_id: w for w in wh_list}
+
+        stock_required = request.request_type in {
+            MaterialRequestType.ISSUE,
+            MaterialRequestType.TRANSFER,
+            MaterialRequestType.MANUFACTURE,
+        }
+        availability_by_item_warehouse: dict[tuple[UUID, UUID], Decimal] = {}
+        if stock_required and item_ids and warehouse_ids:
+            net_qty_expr = case(
+                (
+                    InventoryTransaction.transaction_type.in_(
+                        [
+                            TransactionType.RECEIPT,
+                            TransactionType.RETURN,
+                            TransactionType.ASSEMBLY,
+                        ]
+                    ),
+                    InventoryTransaction.quantity,
+                ),
+                (
+                    InventoryTransaction.transaction_type.in_(
+                        [
+                            TransactionType.ISSUE,
+                            TransactionType.SALE,
+                            TransactionType.SCRAP,
+                            TransactionType.DISASSEMBLY,
+                        ]
+                    ),
+                    -InventoryTransaction.quantity,
+                ),
+                else_=InventoryTransaction.quantity,
+            )
+            availability_rows = db.execute(
+                select(
+                    InventoryTransaction.item_id,
+                    InventoryTransaction.warehouse_id,
+                    func.coalesce(func.sum(net_qty_expr), Decimal("0")),
+                )
+                .where(
+                    InventoryTransaction.organization_id == org_id,
+                    InventoryTransaction.item_id.in_(item_ids),
+                    InventoryTransaction.warehouse_id.in_(warehouse_ids),
+                )
+                .group_by(
+                    InventoryTransaction.item_id,
+                    InventoryTransaction.warehouse_id,
+                )
+            ).all()
+            availability_by_item_warehouse = {
+                (item_id, warehouse_id): available or Decimal("0")
+                for item_id, warehouse_id, available in availability_rows
+                if warehouse_id is not None
+            }
 
         # Get default warehouse and requested by names
         default_warehouse_name = None
@@ -627,9 +700,37 @@ class MaterialRequestWebService:
         )
 
         detail_items = []
+        stock_blocking_items: list[str] = []
         for item in request_items:
             inv_item = items_map.get(item.inventory_item_id)
-            wh = warehouses_map.get(item.warehouse_id) if item.warehouse_id else None
+            effective_warehouse_id = item.warehouse_id or request.default_warehouse_id
+            wh = (
+                warehouses_map.get(effective_warehouse_id)
+                if effective_warehouse_id
+                else None
+            )
+            requested_qty = item.requested_qty or Decimal("0")
+            ordered_qty = item.ordered_qty or Decimal("0")
+            available_qty = Decimal("0")
+            if effective_warehouse_id:
+                available_qty = availability_by_item_warehouse.get(
+                    (item.inventory_item_id, effective_warehouse_id),
+                    Decimal("0"),
+                )
+            shortage_qty = (
+                max(requested_qty - available_qty, Decimal("0"))
+                if stock_required
+                else Decimal("0")
+            )
+            has_sufficient_stock = not stock_required or bool(
+                effective_warehouse_id and available_qty >= requested_qty
+            )
+            if not has_sufficient_stock:
+                code = inv_item.item_code if inv_item else f"Item #{item.sequence}"
+                stock_blocking_items.append(
+                    f"{code}: {_format_currency(available_qty)} available, "
+                    f"{_format_currency(requested_qty)} requested"
+                )
 
             detail_items.append(
                 {
@@ -638,18 +739,38 @@ class MaterialRequestWebService:
                     "item_name": inv_item.item_name if inv_item else "Unknown Item",
                     "warehouse_code": wh.warehouse_code if wh else None,
                     "warehouse_name": wh.warehouse_name if wh else None,
-                    "requested_qty": _format_currency(item.requested_qty),
-                    "ordered_qty": _format_currency(item.ordered_qty),
-                    "ordered_qty_value": float(item.ordered_qty or Decimal("0")),
-                    "pending_qty": _format_currency(
-                        item.requested_qty - item.ordered_qty
-                    ),
+                    "requested_qty": _format_currency(requested_qty),
+                    "ordered_qty": _format_currency(ordered_qty),
+                    "ordered_qty_value": float(ordered_qty),
+                    "pending_qty": _format_currency(requested_qty - ordered_qty),
+                    "available_qty": _format_currency(available_qty),
+                    "available_qty_value": float(available_qty),
+                    "shortage_qty": _format_currency(shortage_qty),
+                    "shortage_qty_value": float(shortage_qty),
+                    "has_sufficient_stock": has_sufficient_stock,
                     "uom": item.uom or (inv_item.base_uom if inv_item else ""),
                     "schedule_date": _format_date(item.schedule_date),
                     "sequence": item.sequence,
                 }
             )
 
+        stock_is_sufficient = not stock_blocking_items
+        approval_blocked_reason = None
+        if (
+            request.status == MaterialRequestStatus.PENDING_STOCK
+            and not stock_is_sufficient
+        ):
+            approval_blocked_reason = "Waiting for stock: " + "; ".join(
+                stock_blocking_items
+            )
+        elif (
+            request.status == MaterialRequestStatus.SUBMITTED
+            and stock_required
+            and not stock_is_sufficient
+        ):
+            approval_blocked_reason = "Cannot issue stock yet: " + "; ".join(
+                stock_blocking_items
+            )
         return {
             "material_request_items": detail_items,
             "material_request": {
@@ -682,7 +803,15 @@ class MaterialRequestWebService:
                 "erpnext_id": request.erpnext_id,
                 "can_edit": request.status == MaterialRequestStatus.DRAFT,
                 "can_submit": request.status == MaterialRequestStatus.DRAFT,
-                "can_approve": request.status == MaterialRequestStatus.SUBMITTED,
+                "can_approve": request.status
+                in {
+                    MaterialRequestStatus.SUBMITTED,
+                    MaterialRequestStatus.PENDING_STOCK,
+                }
+                and (not stock_required or stock_is_sufficient),
+                "approval_blocked_reason": approval_blocked_reason,
+                "stock_required": stock_required,
+                "stock_is_sufficient": stock_is_sufficient,
                 "can_cancel": request.status
                 in [
                     MaterialRequestStatus.DRAFT,
@@ -879,13 +1008,7 @@ class MaterialRequestWebService:
         items: list[dict] | None = None,
     ) -> MaterialRequest:
         """Create a material request from form data."""
-        from app.models.finance.core_config.numbering_sequence import SequenceType
-        from app.services.finance.common.numbering import SyncNumberingService
-
-        # Generate request number via unified numbering system
-        request_number = SyncNumberingService(db).generate_next_number(
-            organization_id, SequenceType.MATERIAL_REQUEST
-        )
+        request_number = _generate_material_request_number(db, organization_id)
 
         # Parse date
         parsed_date = None
@@ -1240,8 +1363,22 @@ class MaterialRequestWebService:
         if not request:
             raise ValueError("Material request not found")
 
-        if request.status != MaterialRequestStatus.SUBMITTED:
-            raise ValueError("Only submitted requests can be approved")
+        stock_request_types = {
+            MaterialRequestType.ISSUE,
+            MaterialRequestType.TRANSFER,
+            MaterialRequestType.MANUFACTURE,
+        }
+        can_approve_pending_stock = (
+            request.status == MaterialRequestStatus.PENDING_STOCK
+            and request.request_type in stock_request_types
+        )
+        if (
+            request.status != MaterialRequestStatus.SUBMITTED
+            and not can_approve_pending_stock
+        ):
+            raise ValueError(
+                "Only submitted or stock-ready pending requests can be approved"
+            )
 
         if not request.items:
             raise ValueError("Cannot approve request without items")

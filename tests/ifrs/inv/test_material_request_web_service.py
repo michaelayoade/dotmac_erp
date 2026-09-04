@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,12 +19,9 @@ def test_create_from_form_requires_destination_for_transfer() -> None:
     db = MagicMock()
 
     with patch(
-        "app.services.finance.common.numbering.SyncNumberingService"
-    ) as mock_numbering_cls:
-        mock_numbering = MagicMock()
-        mock_numbering.generate_next_number.return_value = "MAT-MR-2026-00011"
-        mock_numbering_cls.return_value = mock_numbering
-
+        "app.services.inventory.material_request_web._generate_material_request_number",
+        return_value="MAT-MR-2026-00011",
+    ):
         with pytest.raises(ValueError, match="Destination warehouse is required"):
             MaterialRequestWebService.create_from_form(
                 db=db,
@@ -50,12 +48,9 @@ def test_create_from_form_sets_transfer_destination() -> None:
     destination_warehouse_id = uuid.uuid4()
 
     with patch(
-        "app.services.finance.common.numbering.SyncNumberingService"
-    ) as mock_numbering_cls:
-        mock_numbering = MagicMock()
-        mock_numbering.generate_next_number.return_value = "MAT-MR-2026-00012"
-        mock_numbering_cls.return_value = mock_numbering
-
+        "app.services.inventory.material_request_web._generate_material_request_number",
+        return_value="MAT-MR-2026-00012",
+    ):
         request = MaterialRequestWebService.create_from_form(
             db=db,
             organization_id=uuid.uuid4(),
@@ -242,3 +237,221 @@ def test_cancel_request_requires_reason_and_enforces_tenant() -> None:
             request_id=str(uuid.uuid4()),
             cancel_reason="Wrong warehouse selected",
         )
+
+
+def _scalar_first(value):
+    result = MagicMock()
+    result.first.return_value = value
+    return result
+
+
+def _scalar_all(values):
+    result = MagicMock()
+    result.all.return_value = values
+    return result
+
+
+def test_detail_context_explains_pending_stock_shortage() -> None:
+    db = MagicMock()
+    organization_id = uuid.uuid4()
+    request_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+
+    request = SimpleNamespace(
+        request_id=request_id,
+        organization_id=organization_id,
+        request_number="MR202609-00013",
+        request_type=MaterialRequestType.ISSUE,
+        status=MaterialRequestStatus.PENDING_STOCK,
+        schedule_date=None,
+        default_warehouse_id=None,
+        transfer_to_warehouse_id=None,
+        requested_by_id=None,
+        project_id=None,
+        ticket_id=None,
+        remarks=None,
+        cancel_reason=None,
+        created_at=None,
+        updated_at=None,
+        last_synced_at=None,
+        erpnext_id=None,
+    )
+    line = SimpleNamespace(
+        item_id=uuid.uuid4(),
+        inventory_item_id=item_id,
+        warehouse_id=warehouse_id,
+        requested_qty=Decimal("1"),
+        ordered_qty=Decimal("0"),
+        uom="Nos",
+        schedule_date=None,
+        sequence=1,
+    )
+    item = SimpleNamespace(
+        item_id=item_id, item_code="EDGE-16", item_name="Edge 16", base_uom="Nos"
+    )
+    warehouse = SimpleNamespace(
+        warehouse_id=warehouse_id,
+        warehouse_code="Stores - DT",
+        warehouse_name="Stores Garki",
+    )
+    db.scalars.side_effect = [
+        _scalar_first(request),
+        _scalar_all([line]),
+        _scalar_all([item]),
+        _scalar_all([warehouse]),
+    ]
+    db.execute.return_value.all.return_value = [(item_id, warehouse_id, Decimal("0"))]
+
+    with patch(
+        "app.services.inventory.material_request_web.get_recent_activity_for_record",
+        return_value=[],
+    ):
+        context = MaterialRequestWebService.detail_context(
+            db,
+            str(organization_id),
+            str(request_id),
+        )
+
+    material_request = context["material_request"]
+    detail_line = context["material_request_items"][0]
+    assert material_request["stock_required"] is True
+    assert material_request["stock_is_sufficient"] is False
+    assert material_request["can_approve"] is False
+    assert "EDGE-16" in material_request["approval_blocked_reason"]
+    assert detail_line["available_qty_value"] == 0.0
+    assert detail_line["shortage_qty_value"] == 1.0
+    assert detail_line["has_sufficient_stock"] is False
+
+
+def test_detail_context_allows_stock_ready_pending_request_approval() -> None:
+    db = MagicMock()
+    organization_id = uuid.uuid4()
+    request_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+
+    request = SimpleNamespace(
+        request_id=request_id,
+        organization_id=organization_id,
+        request_number="MR202609-00014",
+        request_type=MaterialRequestType.ISSUE,
+        status=MaterialRequestStatus.PENDING_STOCK,
+        schedule_date=None,
+        default_warehouse_id=warehouse_id,
+        transfer_to_warehouse_id=None,
+        requested_by_id=None,
+        project_id=None,
+        ticket_id=None,
+        remarks=None,
+        cancel_reason=None,
+        created_at=None,
+        updated_at=None,
+        last_synced_at=None,
+        erpnext_id=None,
+    )
+    line = SimpleNamespace(
+        item_id=uuid.uuid4(),
+        inventory_item_id=item_id,
+        warehouse_id=None,
+        requested_qty=Decimal("1"),
+        ordered_qty=Decimal("0"),
+        uom="Nos",
+        schedule_date=None,
+        sequence=1,
+    )
+    item = SimpleNamespace(
+        item_id=item_id, item_code="EDGE-16", item_name="Edge 16", base_uom="Nos"
+    )
+    warehouse = SimpleNamespace(
+        warehouse_id=warehouse_id,
+        warehouse_code="Stores - DT",
+        warehouse_name="Stores Garki",
+    )
+    db.scalars.side_effect = [
+        _scalar_first(request),
+        _scalar_all([line]),
+        _scalar_all([item]),
+        _scalar_all([warehouse]),
+        _scalar_first(warehouse),
+    ]
+    db.execute.return_value.all.return_value = [(item_id, warehouse_id, Decimal("2"))]
+
+    with patch(
+        "app.services.inventory.material_request_web.get_recent_activity_for_record",
+        return_value=[],
+    ):
+        context = MaterialRequestWebService.detail_context(
+            db,
+            str(organization_id),
+            str(request_id),
+        )
+
+    material_request = context["material_request"]
+    detail_line = context["material_request_items"][0]
+    assert material_request["stock_is_sufficient"] is True
+    assert material_request["can_approve"] is True
+    assert material_request["approval_blocked_reason"] is None
+    assert detail_line["available_qty_value"] == 2.0
+    assert detail_line["shortage_qty_value"] == 0.0
+    assert detail_line["has_sufficient_stock"] is True
+
+
+def test_approve_request_allows_stock_ready_pending_issue_request() -> None:
+    db = MagicMock()
+    organization_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    request_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    line_id = uuid.uuid4()
+
+    line = MagicMock()
+    line.sequence = 1
+    line.warehouse_id = warehouse_id
+    line.inventory_item_id = item_id
+    line.requested_qty = Decimal("1")
+    line.uom = "Nos"
+    line.item_id = line_id
+    line.ordered_qty = Decimal("0")
+
+    request = MagicMock()
+    request.request_id = request_id
+    request.request_number = "MR202609-00014"
+    request.organization_id = organization_id
+    request.status = MaterialRequestStatus.PENDING_STOCK
+    request.request_type = MaterialRequestType.ISSUE
+    request.default_warehouse_id = None
+    request.transfer_to_warehouse_id = None
+    request.items = [line]
+    request.updated_by_id = None
+
+    request_result = MagicMock()
+    request_result.unique.return_value.first.return_value = request
+    fiscal_period = MagicMock()
+    fiscal_period.fiscal_period_id = uuid.uuid4()
+    fiscal_result = MagicMock()
+    fiscal_result.first.return_value = fiscal_period
+    db.scalars.side_effect = [request_result, fiscal_result]
+
+    item = MagicMock()
+    item.average_cost = Decimal("12")
+    item.base_uom = "Nos"
+    item.currency_code = "NGN"
+    db.get.return_value = item
+
+    with patch(
+        "app.services.inventory.transaction.InventoryTransactionService.create_issue"
+    ) as mock_create_issue:
+        result = MaterialRequestWebService.approve_request(
+            db=db,
+            organization_id=organization_id,
+            user_id=user_id,
+            request_id=str(request_id),
+        )
+
+    assert result is request
+    assert request.status == MaterialRequestStatus.ISSUED
+    assert request.updated_by_id == user_id
+    assert line.ordered_qty == line.requested_qty
+    mock_create_issue.assert_called_once()

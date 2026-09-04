@@ -140,6 +140,14 @@
                                     {{ icon_svg("eye", "h-4 w-4") }}
                                 </a>
                                 {% if req.status == 'DRAFT' %}
+                                {% if auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
+                                <form method="post" action="/inventory/material-requests/{{ req.request_id }}/submit" class="inline" title="Submit" aria-label="Submit">
+                                    {{ request.state.csrf_form | safe }}
+                                    <button type="submit" class="table-action-btn">
+                                        {{ icon_svg("paper-airplane", "h-4 w-4") }}
+                                    </button>
+                                </form>
+                                {% endif %}
                                 <a href="/inventory/material-requests/{{ req.request_id }}/edit" class="table-action-btn" title="Edit" aria-label="Edit">
                                     {{ icon_svg("edit", "h-4 w-4") }}
                                 </a>
