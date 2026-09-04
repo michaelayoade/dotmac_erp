@@ -52,9 +52,9 @@ anything but `direct`.
 ## Why the DENIED relation is probed differently
 
 Every other check here asks "does the target hold what the manifest says?".
-`mod_files.platform_stored_files` asks the opposite -- "does the target hold
-NOTHING?" -- and an absence is the one claim that passes for free. So it gets
-its own probe, and that probe is wider in two directions.
+A DENIED relation asks the opposite -- "does the target hold NOTHING?" -- and
+an absence is the one claim that passes for free. So it gets its own probe, and
+that probe is wider in two directions.
 
 It asks about all SEVEN table privileges, not the four the census recorded:
 TRUNCATE, REFERENCES and TRIGGER are privileges too, and a denial silent about
@@ -69,6 +69,32 @@ attnum, priv)` gives the effective per-column answer, and `aclexplode` over
 `information_schema.column_privileges` -- reports the origin. The number of
 columns examined is carried into the snapshot, because "nothing held" from a
 probe that looked at nothing is not evidence, and the guard refuses it.
+
+## The DENIED functions, and why `PUBLIC` is asked about by name
+
+A denied `SECURITY DEFINER` function gets THREE effective questions, not one:
+
+    has_function_privilege('app_user', oid, 'EXECUTE')          must be false
+    has_function_privilege('public',   oid, 'EXECUTE')          must be false
+    has_function_privilege(<declared executor>, oid, 'EXECUTE')  must be true
+
+The second one is the half that is easy to omit and expensive to get wrong.
+`CREATE FUNCTION` grants `EXECUTE` to `PUBLIC` **by default**, so a function
+whose `proacl` names no `app_user` entry at all can still be executable by
+`app_user`. `REVOKE ... FROM app_user` does nothing to a grant held through
+`PUBLIC`; only `REVOKE ... FROM PUBLIC` removes it, and that is a SEPARATE
+REMEDIATION owed before cutover rather than a Change-1 grant to withhold.
+`has_function_privilege` -- "can this role do it" -- sees the inherited grant;
+reading the ACL for the role's own name does not, which is why every answer is
+recorded with `effective=True` and the guard refuses one that is not.
+
+PostgreSQL spells the pseudo-role `public` in `has_function_privilege`; it is
+recorded in the snapshot as `PUBLIC`, which is how `aclexplode` and every
+`GRANT`/`REVOKE` statement name it.
+
+The third question is the positive one. A denial that passes because the
+function became unreachable to EVERYONE is not the denial that was decided --
+the relay would stop draining and a negative-only check would say nothing.
 
 ## Usage
 
@@ -99,14 +125,17 @@ if str(REPO_ROOT) not in sys.path:
 from app.privilege_manifest import (  # noqa: E402
     COLUMN_LEVEL_PRIVILEGES,
     DENIED_TABLE_PRIVILEGES,
+    FUNCTION_EXECUTOR_DECLARATIONS,
     MODULE_SCHEMA_PREFIX,
+    PUBLIC_PSEUDO_ROLE,
+    SECTION_CONTROL_PLANE,
     SECTION_FUNCTIONS,
-    SECTION_MODULE_ERA,
     SECTION_RELATIONS,
     SECTION_SCHEMA_USAGE,
     SECTION_SEQUENCES,
     GrantRow,
     ObservedColumnGrant,
+    ObservedFunctionExecute,
     ObservedMembership,
     ObservedObject,
     ObservedPrivilege,
@@ -117,6 +146,11 @@ from app.privilege_manifest import (  # noqa: E402
     manifest_from_json,
     relation_identity,
 )
+
+#: How PostgreSQL's `has_*_privilege` family spells the pseudo-role. The
+#: snapshot records it as `PUBLIC` (the spelling `GRANT`, `REVOKE` and
+#: `aclexplode` use); this is the argument the catalog function wants.
+PUBLIC_ROLE_ARGUMENT = "public"
 
 DATABASE_URL_VAR = "VERIFY_DATABASE_URL"
 MANIFEST_PATH = (
@@ -349,7 +383,7 @@ WHERE c.oid = ANY(%(oids)s::bigint[])
   AND a.attacl IS NOT NULL
 """
 
-RELATION_PRIVILEGE_SECTIONS = (SECTION_RELATIONS, SECTION_MODULE_ERA)
+RELATION_PRIVILEGE_SECTIONS = (SECTION_RELATIONS, SECTION_CONTROL_PLANE)
 MODULE_PROBE_PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE")
 
 
@@ -505,7 +539,7 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
         for section, statement, objtype in (
             (SECTION_SEQUENCES, SEQUENCE_PRIVILEGE_SQL, "S"),
             (SECTION_RELATIONS, TABLE_PRIVILEGE_SQL, "r"),
-            (SECTION_MODULE_ERA, TABLE_PRIVILEGE_SQL, "r"),
+            (SECTION_CONTROL_PLANE, TABLE_PRIVILEGE_SQL, "r"),
         ):
             # A DENIED row is not probed here. This loop asserts "the target
             # HOLDS it"; the denied rows assert the exact opposite and are
@@ -705,37 +739,62 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
                         candidate_count=0,
                     )
                 )
+        # --- DENIED functions: three EFFECTIVE questions each ---
+        #
+        # Every one goes through `has_function_privilege`, never through the
+        # ACL. `CREATE FUNCTION` grants EXECUTE to PUBLIC by default, so a
+        # function whose proacl names no `app_user` entry can still be
+        # executable by `app_user`; only the effective question sees that, and
+        # the guard refuses an answer not marked `effective`.
+        denied_function_execute: list[ObservedFunctionExecute] = []
         if function_probes:
-            oids, privs = _split([(oid, row.privilege) for oid, row in function_probes])
-            cursor.execute(
-                FUNCTION_PRIVILEGE_SQL,
-                {"role": target, "oids": oids, "privs": privs},
-            )
-            held_by_oid = {(oid, priv): held for oid, priv, held in cursor.fetchall()}
-            cursor.execute(FUNCTION_ACL_SQL, {"oids": sorted(set(oids))})
-            acl_by_oid = {}
-            owner_by_oid = {}
-            for oid, grantee, priv, owner in cursor.fetchall():
-                acl_by_oid.setdefault(oid, []).append((grantee, priv))
-                owner_by_oid[oid] = owner
             for oid, row in function_probes:
-                priv = row.privilege
-                held = bool(held_by_oid.get((oid, priv), False))
-                privileges.append(
-                    ObservedPrivilege(
-                        identity=row.identity,
-                        role=target,
-                        privilege=priv,
-                        held=held,
-                        origin=_classify(
-                            target,
-                            owner_by_oid.get(oid, ""),
-                            held,
-                            priv,
-                            acl_by_oid.get(oid, ()),
-                            (row.schema, "f", target, priv) in default_scopes,
-                        ),
+                declaration = FUNCTION_EXECUTOR_DECLARATIONS.get(row.identity)
+                principals = [
+                    (target, target),
+                    (PUBLIC_PSEUDO_ROLE, PUBLIC_ROLE_ARGUMENT),
+                ]
+                if declaration is not None and declaration.has_runtime_executor:
+                    principals.append(
+                        (declaration.permitted_executor, declaration.permitted_executor)
                     )
+                for recorded_role, catalog_role in principals:
+                    cursor.execute(
+                        FUNCTION_PRIVILEGE_SQL,
+                        {
+                            "role": catalog_role,
+                            "oids": [oid],
+                            "privs": [row.privilege],
+                        },
+                    )
+                    answered = cursor.fetchall()
+                    held = bool(answered[0][2]) if answered else False
+                    denied_function_execute.append(
+                        ObservedFunctionExecute(
+                            identity=row.identity,
+                            role=recorded_role,
+                            held=held,
+                            effective=True,
+                            probed=bool(answered),
+                        )
+                    )
+            # The ACL is read too, but only to REPORT an origin -- never to
+            # decide the denial. A PUBLIC entry here is the remediation the
+            # guard names, arriving with its provenance instead of only its
+            # effect.
+            cursor.execute(
+                FUNCTION_ACL_SQL,
+                {"oids": sorted({oid for oid, _row in function_probes})},
+            )
+            identity_by_oid = {oid: row.identity for oid, row in function_probes}
+            for oid, grantee, priv, _owner in sorted(cursor.fetchall()):
+                if grantee != "PUBLIC":
+                    continue
+                notes.append(
+                    f"FUNCTION ACL: {identity_by_oid.get(oid, oid)} grants "
+                    f"{priv} to PUBLIC. PostgreSQL applies this by default at "
+                    "CREATE FUNCTION; REVOKE ... FROM app_user does not remove "
+                    "it, and it reaches every login in the cluster."
                 )
 
         # --- the legacy role's module access ---
@@ -793,6 +852,7 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
         legacy_module_privileges=tuple(legacy),
         denied_privileges=tuple(denied_privileges),
         denied_column_grants=tuple(denied_column_grants),
+        denied_function_execute=tuple(denied_function_execute),
         notes=tuple(notes),
     )
 
@@ -826,19 +886,61 @@ def _report(manifest: PrivilegeManifest, snapshot: PrivilegeSnapshot) -> list[st
             f"  denial column probes    {len(snapshot.denied_column_grants)}"
             " (pg_attribute.attacl / has_column_privilege; a column grant is"
             " invisible to has_table_privilege)",
+            f"  denial EXECUTE probes   {len(snapshot.denied_function_execute)}"
+            " (has_function_privilege -- EFFECTIVE, asked of the target role,"
+            " of PUBLIC, and of the declared executor)",
             f"  role memberships        {len(snapshot.memberships)}",
             "",
-            "DENIED BY ARCHITECTURE (never granted, absence proved)",
+            "DENIED BY ARCHITECTURE, control-plane relations"
+            " (never granted, absence proved)",
         ]
     )
-    for identity in sorted({row.identity for row in manifest.denied()}):
+    seen_relations: set[str] = set()
+    for row in manifest.denied_relations():
+        if row.identity in seen_relations:
+            continue
+        seen_relations.add(row.identity)
         columns = sum(
             entry.columns_probed
             for entry in snapshot.denied_column_grants
-            if entry.identity == identity
+            if entry.identity == row.identity
         )
-        lines.append(f"  {identity} -- {columns} column answers taken")
-    if not manifest.denied():
+        lines.append(
+            f"  {row.identity} -- plane declared by {row.plane_declared_by}; "
+            f"{columns} column answers taken; permitted instead: "
+            + (", ".join(row.permitted_principals) or "nobody")
+        )
+    if not manifest.denied_relations():
+        lines.append("  (none)")
+    lines.extend(
+        ["", "DENIED BY ARCHITECTURE, SECURITY DEFINER EXECUTE (absence proved)"]
+    )
+    seen_functions: set[str] = set()
+    for row in manifest.denied_functions():
+        if row.identity in seen_functions:
+            continue
+        seen_functions.add(row.identity)
+        answers = {
+            entry.role: entry
+            for entry in snapshot.denied_function_execute
+            if entry.identity == row.identity
+        }
+        executor = FUNCTION_EXECUTOR_DECLARATIONS.get(row.identity)
+        permitted = (
+            executor.permitted_executor
+            if executor is not None and executor.has_runtime_executor
+            else "none -- no runtime principal"
+        )
+        rendered = ", ".join(
+            f"{role}={'YES' if entry.held else 'no'}"
+            f"{'' if entry.effective else ' (NOT EFFECTIVE)'}"
+            for role, entry in sorted(answers.items())
+        )
+        lines.append(
+            f"  {row.identity} -- permitted executor: {permitted}; "
+            f"effective EXECUTE: {rendered or 'NOT PROBED'}"
+        )
+    if not manifest.denied_functions():
         lines.append("  (none)")
     lines.extend(["", "EXCLUSIONS (preserved, never revoked)"])
     for scope, count in sorted(manifest.preserved_scopes().items()):
