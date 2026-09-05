@@ -25,6 +25,7 @@ class StaffLeaveRestrictionProjection(BaseModel):
     person_id: UUID
     selfcare_user_id: str | None = None
     leave_application_id: UUID
+    organization_timezone: str
     effective_from: date
     effective_until: date
     status: str

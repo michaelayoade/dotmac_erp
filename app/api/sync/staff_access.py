@@ -40,6 +40,7 @@ def read_staff_access_projection(
     service = StaffAccessProjectionService(db)
     items: list[StaffAccessProjectionRecord]
     if entity == StaffAccessProjectionEntity.LEAVE_RESTRICTION:
+        organization_timezone = service.organization_timezone(organization_id)
         items = [
             StaffLeaveRestrictionProjection(
                 restriction_id=row.restriction_id,
@@ -48,6 +49,7 @@ def read_staff_access_projection(
                 person_id=row.person_id,
                 selfcare_user_id=row.selfcare_user_id,
                 leave_application_id=row.leave_application_id,
+                organization_timezone=organization_timezone,
                 effective_from=row.effective_from,
                 effective_until=row.effective_until,
                 status=row.status.value,
