@@ -70,10 +70,20 @@ pins the AST ordering as the cheap early warning.
 ### Availability → adoption
 
 The knob existed and nothing set it. `MIGRATION_EXPECTED_DATABASE` is now bound
-in CI's integration lane (`ci.yml`), so `Run Alembic migrations` — the real
-executor, as `app_admin`, on a disposable database — **asserts** rather than
-prints `UNVERIFIED`. That is the difference between shipping a capability and
-adopting one.
+on CI's `Run Alembic migrations` step, so the real executor — as `app_admin`, on
+a disposable database — **asserts** rather than prints `UNVERIFIED`. That is the
+difference between shipping a capability and adopting one.
+
+**Bound per RUN, not per job, and the first attempt got this wrong.** An
+authorisation is a property of one run against one database. Binding it at job
+level leaked into the pytest step, where `test_accounting_lineage_composition`
+and `test_kernel_lineage_rehearsal` create isolated `erp_*_<uuid>` databases and
+point the executor at them — and every one of those upgrades was refused,
+naming both databases. The refusal was **correct**; the granularity was wrong.
+Both fixtures now declare their own expectation, so the module-lineage
+rehearsals assert their target too instead of running `UNVERIFIED`. The
+regression turned into wider coverage, but the lesson is the one worth keeping:
+a job is not a run.
 
 ### Still open
 

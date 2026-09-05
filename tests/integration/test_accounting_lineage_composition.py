@@ -199,6 +199,11 @@ def composed_database(
     try:
         database_url = base_url.set(database=name, username="app_admin", password=None)
         monkeypatch.setenv("MIGRATION_DATABASE_URL", _render(database_url))
+        # This fixture created `name` moments ago, so it can say which database
+        # the upgrade is authorised for instead of leaving the executor to
+        # report `database identity UNVERIFIED`. A rehearsal that cannot name
+        # its own target is the weaker half of the same check it relies on.
+        monkeypatch.setenv("MIGRATION_EXPECTED_DATABASE", name)
         monkeypatch.setattr(
             app_config.settings, "database_url", _render(database_url), raising=False
         )
