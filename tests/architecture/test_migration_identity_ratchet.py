@@ -65,7 +65,6 @@ BOUND: frozenset[str] = frozenset(
         ".github/workflows/ci.yml:hardened-image-migration",
         ".github/workflows/ci.yml:integration-alembic-upgrade",
         ".github/workflows/release-hardened.yml:hardened-release-migration",
-        "Makefile:docker-migrate",
     }
 )
 
@@ -76,6 +75,20 @@ BOUND: frozenset[str] = frozenset(
 #:   repository cannot know. Binding it would mean inventing a value or
 #:   demanding one on every local run. The operator may still export the
 #:   variable; nothing here supplies it.
+#: * `Makefile:docker-migrate` — the same operator database, one layer out. It
+#:   is NOT bound by the invocation, and deliberately so: `docker-compose.yml`
+#:   gives the `app` service `env_file: - .env`, and unlike
+#:   `MIGRATION_DATABASE_URL` — which that file overrides to `''` so the
+#:   credential leaves the runtime services — `MIGRATION_EXPECTED_DATABASE` is
+#:   NOT overridden. So `env_file` already carries it to the one-shot, exactly
+#:   as `.env.example` says it should ("it is a database name, not a
+#:   credential"). An added `-e` flag would be redundant, and it would break
+#:   `test_operator_migration_entrypoints_do_not_reuse_the_running_app` and
+#:   `test_the_one_shot_executor_still_receives_it_on_the_flag`, which pin the
+#:   exact `docker compose run --rm -e MIGRATION_DATABASE_URL app` invocation.
+#:   Those two guard the credential boundary; this ratchet must not be silenced
+#:   by loosening them. The two variables take different routes for a principled
+#:   reason — one is overridden and must beat the override, the other is not.
 #: * `scripts/deploy.sh:production-migration` — the production one-shot. The
 #:   name is real and knowable, but only on the host: `.env.example` ships
 #:   `MIGRATION_EXPECTED_DATABASE=` EMPTY, so a production deployment prints
@@ -83,6 +96,7 @@ BOUND: frozenset[str] = frozenset(
 #:   against a named target and is not this repository's to take.
 UNBOUND: frozenset[str] = frozenset(
     {
+        "Makefile:docker-migrate",
         "Makefile:migrate",
         "scripts/deploy.sh:production-migration",
     }
