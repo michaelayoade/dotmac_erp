@@ -43,7 +43,19 @@ def test_sub_guard_allows_only_an_explicit_accepted_scope():
     assert require_sub_material_scope(auth) is auth
 
 
-def test_material_bootstrap_key_includes_operational_domain_scope():
+def test_selfcare_bootstrap_key_has_complete_integration_scope_set():
     from scripts.one_off.bootstrap_sub_material_integration import SCOPES
 
-    assert "sub:domain:write" in SCOPES
+    assert set(SCOPES) == {
+        "sub:inventory:read",
+        "sub:material:read",
+        "sub:material:write",
+        "sub:domain:write",
+        "sub:staff_access:read",
+        "sub:attendance:read",
+        "sub:attendance:write",
+        "sub:po:write",
+        "sub:ap:write",
+        "sub:expense:write",
+    }
+    assert len(SCOPES) == len(set(SCOPES))
