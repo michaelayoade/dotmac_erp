@@ -1,4 +1,4 @@
-"""Provision the least-privilege Sub material integration and status hook.
+"""Provision the least-privilege Selfcare integration and status hook.
 
 The webhook secret must be supplied through ``ERP_SUB_WEBHOOK_SECRET`` and is
 never persisted by this script. The generated API token is printed once.
@@ -20,9 +20,15 @@ SERVICE_EMAIL = "service-dotmac-sub-material@dotmac.io"
 EVENT_NAME = "sub.material_request.status_changed"
 SCOPES = [
     "sub:inventory:read",
-    "sub:material:write",
     "sub:material:read",
+    "sub:material:write",
     "sub:domain:write",
+    "sub:staff_access:read",
+    "sub:attendance:read",
+    "sub:attendance:write",
+    "sub:po:write",
+    "sub:ap:write",
+    "sub:expense:write",
 ]
 
 
