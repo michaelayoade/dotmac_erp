@@ -6,10 +6,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_org.organization import Organization
 from app.models.people.hr import (
     Employee,
     EmployeeStatus,
@@ -402,6 +404,17 @@ class StaffAccessProjectionService:
 
         return LeaveService(self.db).get_org_today(organization_id)
 
+    def organization_timezone(self, organization_id: UUID) -> str:
+        """Return the IANA timezone used to interpret ERP-owned local dates."""
+        organization = self.db.get(Organization, organization_id)
+        timezone_name = organization.timezone if organization else None
+        timezone_name = timezone_name or "UTC"
+        try:
+            ZoneInfo(timezone_name)
+        except Exception:
+            return "UTC"
+        return timezone_name
+
     @staticmethod
     def _account_state(employee: Employee) -> StaffAccountStatusState:
         if employee.status in ACCOUNT_ENABLED_STATUSES:
@@ -438,6 +451,9 @@ class StaffAccessProjectionService:
                 "id": str(restriction.leave_application_id),
                 "status": restriction.source_leave_status,
             },
+            "organization_timezone": self.organization_timezone(
+                restriction.organization_id
+            ),
             "effective_from": restriction.effective_from.isoformat(),
             "effective_until": restriction.effective_until.isoformat(),
             "status": restriction.status.value,

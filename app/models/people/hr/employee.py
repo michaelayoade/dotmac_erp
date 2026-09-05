@@ -139,6 +139,11 @@ class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
             "organization_id", "employee_code", name="uq_employee_org_code"
         ),
         UniqueConstraint("person_id", name="uq_employee_person"),
+        UniqueConstraint(
+            "organization_id",
+            "dotmac_sub_account_id",
+            name="uq_employee_org_selfcare_account",
+        ),
         Index("idx_employee_org_dept", "organization_id", "department_id"),
         Index("idx_employee_org_status", "organization_id", "status"),
         {"schema": "hr"},

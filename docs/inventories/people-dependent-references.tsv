@@ -103,9 +103,9 @@ hr	disciplinary_case	reported_by_id	hr	employee	employee_id	explicit	app/models/
 hr	disciplinary_case	status_changed_by_id	public	people	id	mixin_expansion	app/models/people/discipline/case.py:79 via app/models/people/base.py:85
 hr	disciplinary_case	updated_by_id	public	people	id	mixin_expansion	app/models/people/discipline/case.py:79 via app/models/people/base.py:66
 hr	employee	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee.py:124 via app/models/people/base.py:61
-hr	employee	expense_approver_id	hr	employee	employee_id	explicit	app/models/people/hr/employee.py:303
-hr	employee	person_id	public	people	id	explicit	app/models/people/hr/employee.py:163
-hr	employee	reports_to_id	hr	employee	employee_id	explicit	app/models/people/hr/employee.py:298
+hr	employee	expense_approver_id	hr	employee	employee_id	explicit	app/models/people/hr/employee.py:308
+hr	employee	person_id	public	people	id	explicit	app/models/people/hr/employee.py:168
+hr	employee	reports_to_id	hr	employee	employee_id	explicit	app/models/people/hr/employee.py:303
 hr	employee	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee.py:124 via app/models/people/base.py:66
 hr	employee_certification	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/employee_extended.py:394 via app/models/people/base.py:61
 hr	employee_certification	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/employee_extended.py:423

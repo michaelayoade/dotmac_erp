@@ -157,7 +157,7 @@ def _outbox_events(db_session, event_name: str) -> list[EventOutbox]:
 
 
 def test_approved_leave_creates_active_versioned_restriction_and_outbox(db_session):
-    org = _org(db_session)
+    org = _org(db_session, timezone_name="Africa/Lagos")
     person, employee = _employee(
         db_session,
         org.organization_id,
@@ -183,6 +183,7 @@ def test_approved_leave_creates_active_versioned_restriction_and_outbox(db_sessi
     assert event.payload["status"] == "ACTIVE"
     assert event.payload["version"] == 1
     assert event.payload["selfcare_user_id"] == employee.dotmac_sub_account_id
+    assert event.payload["organization_timezone"] == "Africa/Lagos"
 
 
 def test_non_approved_leave_projection_does_not_create_active_restriction(db_session):
