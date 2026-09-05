@@ -62,7 +62,12 @@ def mapping_engine(engine, monkeypatch):
                 for column in table.columns:
                     column.foreign_keys.clear()
                 table.create(connection)
-        monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", True)
+        monkeypatch.setattr(
+            settings, "dotmac_sub_staff_sync_enabled", True, raising=False
+        )
+        monkeypatch.setattr(
+            settings, "dotmac_sub_staff_default_role", "staff", raising=False
+        )
         monkeypatch.setattr(
             staff_sync, "_refresh_staff_access_projection", lambda *a: None
         )
