@@ -42,7 +42,8 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
+import shutil
+import subprocess  # nosec B404
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -50,6 +51,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+GIT = shutil.which("git") or "git"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ADR_DIR = REPO_ROOT / "docs" / "adr"
 REGISTER = ADR_DIR / "reservations.toml"
@@ -176,14 +178,28 @@ def _append_row(text: str, row: str) -> str:
 
 
 def other_changed_paths(repo_root: Path = REPO_ROOT) -> list[str]:
-    """Every modified or staged path that is not the register itself."""
-    out = subprocess.run(  # noqa: S603
-        ["git", "status", "--porcelain", "--untracked-files=no"],  # noqa: S607
+    """Every modified or staged path that is not the register itself.
+
+    A directory that is not a git repository is a REFUSAL, not an empty list.
+    "I could not tell whether anything else changed" and "nothing else changed"
+    are different answers, and collapsing them would quietly retire the
+    committed-alone rule in exactly the situation where it cannot be checked.
+    """
+    probe = subprocess.run(  # noqa: S603  # nosec B603
+        [GIT, "status", "--porcelain", "--untracked-files=no"],
         cwd=repo_root,
         capture_output=True,
         text=True,
-        check=True,
-    ).stdout
+        check=False,
+    )
+    if probe.returncode != 0:
+        detail = probe.stderr.strip() or "no output"
+        raise Refusal(
+            f"`git status` failed in {repo_root} ({detail}). An allocation "
+            "must be committed alone, and that cannot be established here. "
+            "Run this inside the repository."
+        )
+    out = probe.stdout
     paths = []
     for line in out.splitlines():
         path = line[3:].strip()
@@ -205,14 +221,20 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         text = read_register()
-        dirty = other_changed_paths()
-        if dirty and not args.check:
-            raise Refusal(
-                "the worktree carries other changes: "
-                + ", ".join(dirty)
-                + ". An allocation is committed alone, so that it can land on "
-                "main ahead of the ADR it claims a number for."
-            )
+        if not args.check:
+            # Only the WRITING path asks this. `--check` reports a number and
+            # touches nothing, so whether the worktree is clean is not a
+            # question it needs answered — and asking it made a read-only
+            # query fail outside a repository. The refusal itself is not
+            # relaxed: on the path that writes, it still bites.
+            dirty = other_changed_paths()
+            if dirty:
+                raise Refusal(
+                    "the worktree carries other changes: "
+                    + ", ".join(dirty)
+                    + ". An allocation is committed alone, so that it can land "
+                    "on main ahead of the ADR it claims a number for."
+                )
         authored = {p.name for p in ADR_DIR.glob("*.md")}
         allocation = plan(text, args.slug, args.claimed, authored)
     except Refusal as refusal:

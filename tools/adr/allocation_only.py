@@ -20,11 +20,14 @@ migration with the rule the genesis migration introduces.
 from __future__ import annotations
 
 import argparse
-import subprocess
+import shutil
+import subprocess  # nosec B404
 import sys
 import tomllib
 from pathlib import Path
 from typing import Any
+
+GIT = shutil.which("git") or "git"
 
 REGISTER_PATH = "docs/adr/reservations.toml"
 
@@ -87,8 +90,8 @@ def verdict(changed: set[str], base_text: str, head_text: str) -> list[str]:
 
 
 def changed_files(base: str, head: str, repo_root: Path = REPO_ROOT) -> set[str]:
-    out = subprocess.run(  # noqa: S603
-        ["git", "diff", "--name-only", f"{base}...{head}"],  # noqa: S607
+    out = subprocess.run(  # noqa: S603  # nosec B603
+        [GIT, "diff", "--name-only", f"{base}...{head}"],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -98,8 +101,8 @@ def changed_files(base: str, head: str, repo_root: Path = REPO_ROOT) -> set[str]
 
 
 def show(ref: str, path: str, repo_root: Path = REPO_ROOT) -> str:
-    result = subprocess.run(  # noqa: S603
-        ["git", "show", f"{ref}:{path}"],  # noqa: S607
+    result = subprocess.run(  # noqa: S603  # nosec B603
+        [GIT, "show", f"{ref}:{path}"],
         cwd=repo_root,
         capture_output=True,
         text=True,

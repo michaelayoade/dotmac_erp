@@ -145,6 +145,64 @@ def test_the_absent_register_refusal_survives_check_mode(tmp_path: Path) -> None
     assert "will not create it" in result.stderr
 
 
+# --- the worktree probe, which only the writing path needs -----------------
+
+
+def _bare(tmp_path: Path) -> Path:
+    """The allocator and a register, in a directory that is NOT a git repo."""
+    (tmp_path / "tools" / "adr").mkdir(parents=True)
+    (tmp_path / "docs" / "adr").mkdir(parents=True)
+    shutil.copy(ALLOCATOR, tmp_path / "tools" / "adr" / "allocate.py")
+    (tmp_path / "docs" / "adr" / "reservations.toml").write_text(BASE, encoding="utf-8")
+    return tmp_path
+
+
+def test_check_mode_works_outside_a_git_repository(tmp_path: Path) -> None:
+    """The defect CI found, and reading could not.
+
+    `main` called `other_changed_paths()` unconditionally and only made the
+    REFUSAL conditional on `--check`. So a read-only query that writes nothing
+    still ran `git status`, and died with a traceback wherever there was no
+    repository. `--check` does not need to know whether the worktree is clean,
+    so it no longer asks."""
+    result = _run(_bare(tmp_path), "--slug", "gamma", "--check")
+
+    assert result.returncode == 0, result.stderr
+    assert "would claim ADR-0003" in result.stdout
+    assert "Traceback" not in result.stderr
+
+
+def test_allocating_outside_a_git_repository_is_a_typed_refusal(
+    tmp_path: Path,
+) -> None:
+    """The other half, and the one that must NOT be relaxed. `--check` may skip
+    the probe; the writing path may not. "I cannot tell whether anything else
+    changed" is not "nothing else changed", and a version that treats the two
+    alike retires the committed-alone rule exactly where it cannot be checked.
+    A refusal is a legitimate answer here; a crash and a silent pass are not."""
+    result = _run(_bare(tmp_path), "--slug", "gamma")
+
+    assert result.returncode == 2, result
+    assert "refused:" in result.stderr
+    assert "Run this inside the repository" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_the_committed_alone_refusal_still_bites_inside_a_repository(
+    repo: Path,
+) -> None:
+    """Near miss for the two above: skipping the probe in `--check` must not
+    have weakened the real path. Inside a repository with another change
+    staged, an allocation is still refused."""
+    (repo / "docs" / "adr" / "unrelated.md").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "docs/adr/unrelated.md")
+
+    result = _run(repo, "--slug", "gamma")
+
+    assert result.returncode == 2, result
+    assert "committed alone" in result.stderr
+
+
 # --- 2. valid single allocation --------------------------------------------
 
 
