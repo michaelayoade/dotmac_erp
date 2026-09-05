@@ -390,15 +390,27 @@ lands in its own change, cites this ADR, and is owned as noted.
 11. **Correct `docs/inventories/2026-09-04-erp-migration-credential-custody.md`
     §§ 4–7**, which still describe the superseded local-contract shape. *(ERP;
     the inventory is outside this lane's file set.)*
-12. **Clear the `detect-secrets` pre-commit failure at
-    `docs/inventories/2026-09-04-erp-migration-credential-custody.md:45`.** The
-    flagged string is row V9's placeholder reference grammar,
-    `openbao://<mount>/data/<path>#<field>` — a grammar, not material. It needs
-    the repository's existing inline `# pragma: allowlist secret` treatment, or
-    a baseline refresh. **This blocks the pull request carrying this ADR**, and
-    it is a defect of the base commit, not of this revision. Both the inventory
-    and `.secrets.baseline` are outside this lane's file set, so it was reported
-    rather than fixed here. *(ERP.)*
+12. **~~Clear the `detect-secrets` pre-commit failure at
+    `docs/inventories/2026-09-04-erp-migration-credential-custody.md:45`.~~
+    DONE** — annotated in place, under a one-file extension of this lane's
+    scope. The flagged string is row V9's reference *grammar*,
+    `openbao://<mount>/data/<path>#<field>`: `<mount>`, `<path>` and `<field>`
+    are literal angle-bracket placeholders, and no credential, path or value is
+    named. It carries the repository's existing inline
+    `# pragma: allowlist secret` with that reason written on the line.
+    **Deliberately not a `.secrets.baseline` refresh:** a regenerated baseline
+    silently absorbs whatever else has appeared since, which makes it the
+    easiest place to wave a real secret through; a pragma marks one line, with a
+    visible reason, and leaves every other finding still failing. *(ERP.)*
+
+13. **Fix `.env.example:13`, which defaults the runtime `DATABASE_URL` to the
+    cluster superuser.** This is a separate defect from the blank-instruction
+    comment at `:14-17`, and the first draft of this ADR folded the two together
+    by citing `13-17` for the blank instruction alone. It is the same family as
+    the `.env` leak — an example that hands more authority than the role needs —
+    and `deploy/product.toml`'s own `[runtime_materials]` comment already names
+    it as the mistake that table exists to make structurally impossible. Naming
+    it here so it is not lost between D2 and D8. *(ERP.)*
 
 ---
 

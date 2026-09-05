@@ -42,7 +42,7 @@ change it, or how a change is proven. Those are the gaps below.
 | V6 | Runtime services receive only `DATABASE_URL` | `deploy/rendered/docker-compose.yml` — `MIGRATION_DATABASE_URL` appears at line 63 under `services.migrate` **and nowhere else in that file** |
 | V7 | The one-shot containers get it explicitly | `scripts/deploy.sh:299, 485, 537` — `docker compose run --rm -e MIGRATION_DATABASE_URL app …` |
 | V8 | ERP already has a custody-pointer precedent | `docs/runbooks/database-restore.md:93` names `secret/dotmac/postgres/erp-shared-primary/postgres` as the approved source for the cluster superuser |
-| V9 | The `openbao://` reference grammar exists and resolves | `app/services/secrets.py:is_openbao_ref`; `README.md:300-303`; `openbao://<mount>/data/<path>#<field>` |
+| V9 | The `openbao://` reference grammar exists and resolves | `app/services/secrets.py:is_openbao_ref`; `README.md:300-303`; `openbao://<mount>/data/<path>#<field>` — a placeholder GRAMMAR, not material: `<mount>`, `<path>` and `<field>` are literal angle-bracket placeholders and no credential, path or value is named. detect-secrets reads the URI shape as a secret.  # pragma: allowlist secret |
 
 ## 2. The six gaps this inventory closes
 
