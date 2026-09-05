@@ -1,8 +1,8 @@
 """
 Staff sync: mirror employee lifecycle into dotmac_sub staff accounts.
 
-ERP is the HR system of record. On hire (ACTIVE) the employee gets a
-dotmac_sub SystemUser (created + invited, or re-enabled); on exit
+ERP is the HR system of record. Active employees synchronize an existing,
+administrator-provisioned dotmac_sub SystemUser; on exit
 (TERMINATED / RESIGNED / RETIRED / SUSPENDED) the account is disabled —
 dotmac_sub revokes live sessions on deactivation.
 
@@ -13,18 +13,24 @@ lifecycle events and from the nightly reconcile sweep alike.
 from __future__ import annotations
 
 import logging
+import hashlib
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session_context import prime_tenant_context
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
+from app.services.dotmac_sub.client import (
+    DotmacSubClient,
+    DotmacSubConfig,
+    DotmacSubPermanentSyncError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +103,56 @@ def _sync_erp_department_membership(
     )
 
 
+class SelfcareMappingConflict(DotmacSubPermanentSyncError):
+    """Account ownership requires administrator review before retrying."""
+
+
+def _account_id(value: Any) -> str:
+    # StaffAccountRead.id is a UUID serialized in canonical form. Reject
+    # malformed/noncanonical IDs instead of creating aliases in a text column.
+    try:
+        if not isinstance(value, str) or str(UUID(value)) != value:
+            raise ValueError("not a canonical UUID")
+    except ValueError as exc:
+        raise DotmacSubPermanentSyncError(
+            "Selfcare account ID must be a canonical UUID"
+        ) from exc
+    return value
+
+
+def _claim_account(db: Session, employee: Employee, value: Any) -> str:
+    account_id = _account_id(value)
+    with db.no_autoflush:
+        owner = db.scalar(
+            select(Employee.employee_id)
+            .where(
+                Employee.organization_id == employee.organization_id,
+                Employee.dotmac_sub_account_id == account_id,
+                Employee.employee_id != employee.employee_id,
+            )
+            .limit(1)
+        )
+    if owner is not None:
+        raise SelfcareMappingConflict(
+            "Selfcare account already belongs to another employee in this "
+            "organization (including inactive employees); administrator review "
+            "required. See docs/operations/selfcare-employee-mappings.md"
+        )
+    employee.dotmac_sub_account_id = account_id
+    # A non-deferrable unique constraint arbitrates even writers that do not
+    # take our advisory lock. The losing writer never reaches remote mutations.
+    db.flush()
+    return account_id
+
+
+def _check_account_identity(account: dict[str, Any] | None, account_id: str) -> None:
+    if account is not None and _account_id(account.get("id")) != account_id:
+        raise SelfcareMappingConflict(
+            "Employee email resolves to a different Selfcare account than its "
+            "existing mapping; administrator review required"
+        )
+
+
 def sync_employee(
     db: Session | None,
     employee: Employee,
@@ -104,9 +160,64 @@ def sync_employee(
     client: DotmacSubClient | None = None,
     allow_active_access_revocation: bool = False,
 ) -> dict[str, Any]:
+    """Claim ownership before remote mutations; caller commits the transaction.
+
+    Serialize syncs within the tenant, including email lookup before
+    the remote ID is known. Locks survive savepoint release until the
+    caller commits. A savepoint restores mapping/projection/timestamp changes on
+    failure without rolling back the caller's unrelated work.
+    """
+    if not settings.dotmac_sub_staff_sync_enabled:
+        return {"action": "skipped", "reason": "staff sync disabled"}
+    if db is None:
+        raise ValueError("A database session is required to verify Selfcare ownership")
+    org_id = employee.organization_id
+    employee_id = employee.employee_id
+    lock_key = int.from_bytes(
+        hashlib.sha256(f"selfcare-staff:{org_id}".encode()).digest()[:8],
+        signed=True,
+    )
+    try:
+        with db.begin_nested():
+            db.execute(select(func.pg_advisory_xact_lock(lock_key)))
+            # Protect existing ownership from concurrent edits and reload after
+            # waiting: another sync may have assigned this employee an account.
+            db.execute(
+                select(Employee.employee_id)
+                .where(
+                    Employee.organization_id == org_id,
+                    Employee.employee_id == employee_id,
+                )
+                .with_for_update()
+            ).scalar_one()
+            db.refresh(employee)
+            return _sync_employee(
+                db,
+                employee,
+                client=client,
+                allow_active_access_revocation=allow_active_access_revocation,
+            )
+    except IntegrityError as exc:
+        if getattr(getattr(exc.orig, "diag", None), "constraint_name", None) != (
+            "uq_employee_org_selfcare_account"
+        ):
+            raise
+        raise SelfcareMappingConflict(
+            "Concurrent Selfcare mapping claim rejected; administrator review "
+            "required. See docs/operations/selfcare-employee-mappings.md"
+        ) from exc
+
+
+def _sync_employee(
+    db: Session,
+    employee: Employee,
+    *,
+    client: DotmacSubClient | None = None,
+    allow_active_access_revocation: bool = False,
+) -> dict[str, Any]:
     """Push one employee's lifecycle state to dotmac_sub. Idempotent.
 
-    Returns a result dict with action created, reactivation_projected, disabled,
+    Returns a result dict with action reactivation_projected, disabled,
     skipped, or noop.
     Never raises on business-state gaps (missing email, draft status) — those
     are 'skipped' with a reason; transport/auth errors do raise so callers
@@ -122,6 +233,8 @@ def sync_employee(
 
     email = _staff_email(employee)
     account_id = employee.dotmac_sub_account_id
+    if account_id is not None:
+        account_id = _account_id(account_id)
     if not email and not account_id:
         return {"action": "skipped", "reason": "employee has no email"}
 
@@ -143,35 +256,28 @@ def sync_employee(
         account: dict[str, Any] | None = None
         if not account_id and email:
             account = client.get_staff_account(email)
-            if account:
-                account_id = str(account.get("id"))
+            if account is not None:
+                account_id = _account_id(account.get("id"))
+
+        if account_id is not None:
+            account_id = _claim_account(db, employee, account_id)
 
         if status in _ENABLED_STATUSES and access_enabled:
             roles = _staff_roles(employee)
             if not account_id:
-                if not email:
-                    return {"action": "skipped", "reason": "employee has no email"}
-                created = client.create_staff_account(
-                    email=email,
-                    first_name=employee.first_name or "",
-                    last_name=employee.last_name or "",
-                    role=settings.dotmac_sub_staff_default_role,
-                    roles=roles,
-                    send_invite=True,
+                # Selfcare POST /staff-accounts is an UPSERT: it may change an
+                # existing account's roles before returning its ID. Neither a
+                # prior GET nor an ERP lock can make that remote pair atomic.
+                # Require administrator provisioning until a create-only remote
+                # contract exists; never mutate an account we cannot claim first.
+                raise DotmacSubPermanentSyncError(
+                    "Selfcare account must be provisioned by an administrator "
+                    "before employee sync; automatic create-or-update cannot "
+                    "verify ownership before changing roles"
                 )
-                employee.dotmac_sub_account_id = str(created.get("id"))
-                _sync_erp_department_membership(
-                    db, employee, employee.dotmac_sub_account_id, client
-                )
-                _mark_synced(employee)
-                _refresh_staff_access_projection(db, employee)
-                return {
-                    "action": "created",
-                    "account_id": employee.dotmac_sub_account_id,
-                }
             if account is None and email:
                 account = client.get_staff_account(email)
-            employee.dotmac_sub_account_id = account_id
+            _check_account_identity(account, account_id)
             client.set_staff_account_roles(account_id, roles=roles)
             if account and not account.get("is_active", True):
                 _sync_erp_department_membership(db, employee, account_id, client)
@@ -191,9 +297,9 @@ def sync_employee(
                 else "no dotmac_sub account"
             )
             return {"action": "skipped", "reason": reason}
-        employee.dotmac_sub_account_id = account_id
         if account is None and email:
             account = client.get_staff_account(email)
+        _check_account_identity(account, account_id)
         if account and not account.get("is_active", True):
             _sync_erp_department_membership(
                 db, employee, account_id, client, remove=True
@@ -265,8 +371,8 @@ def reconcile_staff_accounts(db: Session, organization_id: UUID) -> dict[str, An
                 if employee is None:
                     continue
                 result = sync_employee(db, employee, client=client)
-                counts[result["action"]] = counts.get(result["action"], 0) + 1
                 db.commit()
+                counts[result["action"]] = counts.get(result["action"], 0) + 1
             except Exception as e:  # noqa: BLE001 — isolate per-employee failures
                 db.rollback()
                 errors.append(f"{emp_code}: {e}")
