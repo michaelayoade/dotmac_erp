@@ -43,6 +43,7 @@ list alone.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import re
 from pathlib import Path
 
@@ -134,10 +135,20 @@ INVOCATIONS: dict[str, tuple[Path, str]] = {
 }
 
 
-def _region(entry_point: str) -> str:
-    """The bytes of one invocation, read from the file it actually lives in."""
+def _region(entry_point: str, sources: Mapping[Path, str] | None = None) -> str:
+    """The bytes of one invocation, read from the file it actually lives in.
+
+    `sources` substitutes the CONTENTS of a file without writing it, so a
+    sensitivity proof can plant a defect in the bytes this function reads and
+    watch the real derivation react. Omitted — which is every production call —
+    it reads the tree, unchanged.
+    """
     relative, pattern = INVOCATIONS[entry_point]
-    text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    text = (
+        sources[relative]
+        if sources is not None and relative in sources
+        else (REPO_ROOT / relative).read_text(encoding="utf-8")
+    )
     match = re.search(pattern, text, re.S | re.M)
     assert match is not None, (
         f"{entry_point} no longer matches its locator in {relative}. Either the "
@@ -147,8 +158,23 @@ def _region(entry_point: str) -> str:
     return match.group(0)
 
 
-def _binds(entry_point: str) -> bool:
-    return VAR in _region(entry_point)
+def _binds(entry_point: str, sources: Mapping[Path, str] | None = None) -> bool:
+    return VAR in _region(entry_point, sources)
+
+
+def _derived_unbound(sources: Mapping[Path, str] | None = None) -> set[str]:
+    """THE RATCHET'S DERIVATION, in one place.
+
+    Stated once so the ratchet, its clean-tree half and its planted defect all
+    exercise the SAME code. Three copies of a two-line comprehension is how a
+    sensitivity proof ends up demonstrating something adjacent to the check it
+    is supposed to be proving.
+    """
+    return {
+        entry_point
+        for entry_point in (BOUND | UNBOUND)
+        if not _binds(entry_point, sources)
+    }
 
 
 def _observed_invocations() -> set[str]:
@@ -218,9 +244,7 @@ def test_the_backlog_is_exact_in_both_directions() -> None:
     remaining debt is not merely untidy: it leaves slack a later regression can
     re-enter without failing anything.
     """
-    actually_unbound = {
-        entry_point for entry_point in (BOUND | UNBOUND) if not _binds(entry_point)
-    }
+    actually_unbound = _derived_unbound()
     assert actually_unbound == UNBOUND, (
         "the migration-identity backlog is wrong in at least one direction.\n"
         f"  newly unbound (rose):  {sorted(actually_unbound - UNBOUND)}\n"
@@ -249,12 +273,96 @@ def test_the_backlog_only_contains_entry_points_that_cannot_know_the_name() -> N
         )
 
 
+#: The BOUND entry point the planted defect below is applied to. Derived, not
+#: hardcoded: whichever entry point is chosen must really bind today, and the
+#: proof asserts that before it strips anything — so if this one is ever moved
+#: to UNBOUND the proof fails loudly instead of silently tampering with
+#: something that was already unbound, which is the exact way the previous
+#: version of this proof was vacuous.
+def _a_bound_entry_point() -> str:
+    for entry_point in sorted(BOUND):
+        if _binds(entry_point):
+            return entry_point
+    raise AssertionError("nothing in BOUND binds; the ratchet has nothing to prove")
+
+
+def _without_the_variable(region: str) -> str:
+    """The same invocation with every line that supplies VAR removed."""
+    return "\n".join(line for line in region.splitlines() if VAR not in line)
+
+
 def test_the_ratchet_notices_an_unbound_entry_point() -> None:
-    """SENSITIVITY, planted defect. The guard must name a real regression."""
-    pretend_unbound = {"Makefile:docker-migrate"} | UNBOUND
-    assert pretend_unbound != UNBOUND, (
-        "planting an extra unbound entry point produced the declared set, so "
-        "the comparison in the ratchet could not distinguish them"
+    """SENSITIVITY, planted defect — in the SOURCE, not in the declaration.
+
+    The previous version of this proof was
+    `assert {"Makefile:docker-migrate"} | UNBOUND != UNBOUND`. Two things were
+    wrong with it, and the second is the one that matters:
+
+    1. `Makefile:docker-migrate` is ALREADY a member of `UNBOUND`, so the union
+       was the identity and the assertion was simply false. That is why this
+       file was red.
+    2. Even with a non-member it was `{x} | S != S` — set algebra over two
+       constants. It never called `_binds`, never called `_region`, never read a
+       file. **It could not tell a working ratchet from a deleted one**, which
+       is precisely the thing a sensitivity proof exists to rule out. Fixing
+       only the wrong element would have left a test that passes over a deleted
+       ratchet and looks repaired.
+
+    So the defect is now planted where a real regression happens: in the bytes
+    of an invocation. A `BOUND` entry point has the lines supplying `VAR`
+    stripped out, and the REAL derivation — the same `_derived_unbound` the
+    ratchet itself calls — must report that entry point as newly unbound.
+
+    Modelled on `test_the_credential_asymmetry_detector_is_sensitive` in
+    `tests/architecture/test_database_role_contract.py`: read the real file,
+    tamper the exact bytes, assert the tamper landed, then run the real
+    derivation over the tampered text.
+    """
+    victim = _a_bound_entry_point()
+    relative, _ = INVOCATIONS[victim]
+    original = (REPO_ROOT / relative).read_text(encoding="utf-8")
+
+    region = _region(victim)
+    assert VAR in region, f"{victim} does not bind, so stripping proves nothing"
+    tampered = original.replace(region, _without_the_variable(region), 1)
+    assert tampered != original, "the tamper target moved; update this proof"
+
+    planted = _derived_unbound({relative: tampered})
+    assert planted != UNBOUND, (
+        f"{VAR} was stripped from {victim} and the ratchet still agreed with "
+        f"the declared backlog — the comparison cannot detect an entry point "
+        f"that stops binding"
+    )
+    assert planted - UNBOUND == {victim}, (
+        f"the ratchet reported {sorted(planted - UNBOUND)} rather than exactly "
+        f"{victim}; a detector that fires on the wrong entry point is not "
+        f"evidence about this one"
+    )
+
+
+def test_the_ratchet_ignores_an_unrelated_edit_to_the_same_invocation() -> None:
+    """SENSITIVITY, near-miss — and the half that stops the proof above being
+    satisfied by a detector that fires on ANY edit.
+
+    The same region is changed in a way that leaves the binding intact: a
+    comment is inserted into it. If the verdict moved, the planted defect above
+    would be evidence that the file changed, not that the binding was removed.
+    """
+    victim = _a_bound_entry_point()
+    relative, _ = INVOCATIONS[victim]
+    original = (REPO_ROOT / relative).read_text(encoding="utf-8")
+
+    region = _region(victim)
+    lines = region.splitlines()
+    indent = " " * (len(lines[-1]) - len(lines[-1].lstrip()))
+    edited = "\n".join([lines[0], f"{indent}# an unrelated edit", *lines[1:]])
+    tampered = original.replace(region, edited, 1)
+    assert tampered != original, "the near-miss did not change anything"
+    assert VAR in edited, "the near-miss removed the binding; it is not a near miss"
+
+    assert _derived_unbound({relative: tampered}) == UNBOUND, (
+        "an edit that left the binding in place moved the ratchet's verdict, so "
+        "the planted defect above proves only that the bytes changed"
     )
 
 
@@ -266,7 +374,4 @@ def test_the_ratchet_does_not_fire_on_the_current_tree() -> None:
     This pairs with the planted defect above: together they show the ratchet
     discriminates rather than always-fires or always-passes.
     """
-    actually_unbound = {
-        entry_point for entry_point in (BOUND | UNBOUND) if not _binds(entry_point)
-    }
-    assert actually_unbound == UNBOUND
+    assert _derived_unbound() == UNBOUND
