@@ -17,10 +17,14 @@ from app.migration_database_roles import (
     EXPECTED_DATABASE_VAR,
     MIGRATION_EXECUTOR,
     MIGRATION_OWNERSHIP_SQL,
+    NON_ESCALATING_ROLES,
     ROLE_CONTRACT,
+    ROLE_ESCALATION_SQL,
+    RoleEscalationEdge,
     database_identity_violations,
     migration_executor_violations,
     migration_ownership_violations,
+    role_escalation_violations,
     unverified_database_identity_notice,
 )
 from app.migration_planes import ASSEMBLY_MODULE_PLANES
@@ -87,6 +91,31 @@ def _migration_url() -> str:
     return value
 
 
+def _escalation_edges(connection: Connection) -> list[RoleEscalationEdge]:
+    """Flatten the live role graph into (subject, reachable privileged role).
+
+    `exec_driver_sql`, not `text()`, and that is not a style choice.
+    `ROLE_ESCALATION_SQL` is written in psycopg's pyformat (`%(subjects)s`)
+    because the deploy preflight runs it through psycopg directly. `text()`
+    would apply SQLAlchemy's own `:name` paramstyle and leave `%(subjects)s` as
+    a literal. `exec_driver_sql` hands the string to the DBAPI unchanged, so
+    this executor runs THE SAME QUERY BYTES the preflight runs rather than a
+    re-spelled copy that could drift from it.
+
+    The subjects are `NON_ESCALATING_ROLES`, derived from the declaration rather
+    than listed here. A role added to that contract is covered by this call the
+    moment it is added, with no edit to this file — which is the only way the
+    coverage stays true as the role set grows.
+    """
+    rows = connection.exec_driver_sql(
+        ROLE_ESCALATION_SQL, {"subjects": sorted(NON_ESCALATING_ROLES)}
+    ).all()
+    return [
+        (str(row[0]), str(row[1]), bool(row[2]), bool(row[3]), bool(row[4]))
+        for row in rows
+    ]
+
+
 def verify_migration_connection(connection: Connection) -> None:
     """The executor contract, evaluated by the thing that actually migrates.
 
@@ -114,6 +143,18 @@ def verify_migration_connection(connection: Connection) -> None:
     * `database_identity_violations` — WHERE it landed. Everything above is
       satisfiable by a different, correctly shaped cluster: a staging database
       with its own well-formed `app_admin` owning its own objects passes both.
+    * `role_escalation_violations` — WHETHER an ERP runtime identity can BECOME
+      a privileged one. A dirty graph is not an unrelated cluster condition: the
+      subjects are this deployment's own `app_user`, `platform_api`,
+      `outbox_dispatcher` and `platform_outbox_dispatcher`. Advancing a
+      migration while one of them can `SET ROLE` into SUPERUSER, CREATEROLE or
+      BYPASSRLS would admit an unsafe runtime — so the executor refuses rather
+      than leaving the question to a preflight three of four migration paths
+      never reach.
+
+      `app_admin` itself is NOT a subject, so whether IT can reach SUPERUSER or
+      CREATEROLE remains UNMONITORED — stated, not exempted (ADR-0018), and
+      recorded at `NON_ESCALATING_ROLES` in `app/migration_database_roles.py`.
 
     ## Absent is reported, never assumed
 
@@ -142,6 +183,7 @@ def verify_migration_connection(connection: Connection) -> None:
         *migration_executor_violations(current_user, observed),
         *migration_ownership_violations(non_owned_counts),
         *database_identity_violations(observed_database, expected_database),
+        *role_escalation_violations(_escalation_edges(connection)),
     )
     notice = unverified_database_identity_notice(
         observed_database, expected_database, EXPECTED_DATABASE_VAR

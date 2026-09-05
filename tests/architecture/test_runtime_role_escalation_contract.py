@@ -134,6 +134,12 @@ def test_the_real_executor_asserts_which_database_it_reached() -> None:
     that ordering, because the ordering is the entire argument.
     """
     called = _calls_in(ENV_PY, "verify_migration_connection")
+    assert "role_escalation_violations" in called, (
+        "the real executor must refuse an escalating role graph: the subjects "
+        "are this deployment's own runtime identities, so advancing a migration "
+        "while one can SET ROLE into SUPERUSER/CREATEROLE/BYPASSRLS admits an "
+        "unsafe runtime"
+    )
     assert "database_identity_violations" in called, (
         "the real migration executor must assert WHERE it landed; role posture "
         "and object ownership are both satisfiable by the wrong cluster"
@@ -256,3 +262,60 @@ def test_a_non_subject_role_is_not_named() -> None:
         )
         == ()
     )
+
+
+def test_the_executor_reuses_the_declared_subjects_rather_than_a_hand_list() -> None:
+    """COVERAGE, DERIVED. A role added to the contract must be covered without
+    editing the executor.
+
+    The whole value of `NON_ESCALATING_ROLES` is that it is one declaration. An
+    executor that spelled the four names itself would keep passing the day a
+    fifth runtime identity joined the contract, and would cover it nowhere —
+    the quietest way for a security check to stop being true.
+
+    So this asserts the call SITE references the declaration. The behavioural
+    half, which grants escalation to every declared role and requires each to be
+    named, is
+    `tests/integration/test_migration_executor_role_escalation.py
+    ::test_every_declared_runtime_role_is_covered`.
+    """
+    tree = ast.parse(ENV_PY.read_text(encoding="utf-8"))
+    edges = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_escalation_edges"
+    )
+    referenced = {node.id for node in ast.walk(edges) if isinstance(node, ast.Name)}
+    assert "NON_ESCALATING_ROLES" in referenced, (
+        "the executor must derive its subjects from the declared contract"
+    )
+    assert "ROLE_ESCALATION_SQL" in referenced, (
+        "the executor must run the OWNED query, not a re-spelled copy: two "
+        "spellings of one policy is two policies"
+    )
+
+
+def test_the_executor_does_not_redefine_the_escalation_policy() -> None:
+    """One owner, two callers.
+
+    `alembic/env.py` may READ the graph and hand rows to the decision function.
+    It may not decide. If the attribute set or the subject rule were re-stated
+    here, the preflight and the executor could disagree about what an escalation
+    is — and the one that runs on three of four migration paths would be the
+    copy.
+    """
+    source = ENV_PY.read_text(encoding="utf-8")
+    # Escalation-SPECIFIC tokens only. `rolbypassrls` and `rolsuper` are
+    # deliberately NOT listed: the executor legitimately reads them for the
+    # ROLE_CONTRACT posture query, which asks a different question — each role's
+    # OWN attributes, not what it can reach. Forbidding them would fail on
+    # correct code, and a guard that fires on correct code gets deleted.
+    for owned in (
+        "ESCALATING_ATTRIBUTES",
+        "WITH RECURSIVE",
+        "pg_auth_members",
+    ):
+        assert owned not in source, (
+            f"{owned!r} appears in the executor. The policy and its query belong "
+            f"to app/migration_database_roles.py; the executor is a caller."
+        )
