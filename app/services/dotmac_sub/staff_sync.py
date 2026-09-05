@@ -175,6 +175,7 @@ def sync_employee(
     employee_id = employee.employee_id
     lock_key = int.from_bytes(
         hashlib.sha256(f"selfcare-staff:{org_id}".encode()).digest()[:8],
+        "big",
         signed=True,
     )
     try:
