@@ -1,0 +1,29 @@
+# Thin adapter. The rule lives in tools/adr/allocation_only.py; this file only
+# supplies the two refs and reports the exit code, per the repository's
+# adapters-are-not-logic convention.
+name: ADR allocation
+
+on:
+  pull_request:
+    branches: [main, dev, 'integration/**']
+    paths:
+      - 'docs/adr/reservations.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  allocation-claims-nothing-else:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The gate is a three-dot diff against the merge base, so it needs
+          # both sides of the history rather than a shallow head.
+          fetch-depth: 0
+
+      - name: An allocation claims a number and nothing else
+        run: |
+          python tools/adr/allocation_only.py \
+            --base "origin/${{ github.base_ref }}" \
+            --head "${{ github.event.pull_request.head.sha }}"
