@@ -141,6 +141,12 @@ def test_publish_job_waits_for_every_ci_gate_and_uploads_exact_evidence() -> Non
         "release-engineering-standards",
         "docker-build",
         "integration-test",
+        # PostgreSQL with real password authentication. `system_user` is NULL
+        # under trust, so this is the only tier that can prove the migration
+        # executor AUTHENTICATED as `app_admin` rather than `SET ROLE`-ing into
+        # it — publishing an image whose authority proof never ran would defeat
+        # the point of having one.
+        "migration-authentication-proof",
     } == set(re.findall(r"^      - ([a-z][a-z-]+)$", publish_job, re.MULTILINE))
     assert "id: registry" in publish_job
     assert "steps.registry.outputs.digest" in publish_job

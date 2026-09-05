@@ -49,6 +49,8 @@ from alembic import command
 from alembic.config import Config
 from psycopg import sql
 from sqlalchemy import URL, create_engine, make_url, text
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine import Engine
 
 from app.migration_authority import (
     AUTHORITY_SUBJECTS,
@@ -72,6 +74,34 @@ RUNTIME_SUBJECTS = sorted(RuntimeRoleAuthorityPolicyV1.subjects)
 ALL_SUBJECTS = sorted(AUTHORITY_SUBJECTS)
 #: Attributes a test may plant directly on a subject, in `ALTER ROLE` spelling.
 PLANTABLE = ("SUPERUSER", "CREATEROLE", "CREATEDB", "REPLICATION", "BYPASSRLS")
+
+
+@pytest.fixture(autouse=True)
+def real_postgresql_types(engine: Engine) -> None:
+    """Undo `tests/conftest.py`'s SQLite type patch before any migration runs.
+
+    `tests/conftest.py` replaces `sqlalchemy.dialects.postgresql.UUID` with a
+    `String(36)` TypeDecorator so the SQLite unit suite can import the models.
+    `tests/integration/conftest.py` undoes that — but only inside the
+    session-scoped `engine` fixture. A module that never asks for `engine`
+    therefore runs `alembic upgrade` with UUID columns rendering as VARCHAR, and
+    the chain dies on a real foreign key: `people.organization_id` cannot
+    reference `core_org.organization(organization_id)` when one is `varchar` and
+    the other is `uuid`.
+
+    Every other PostgreSQL module in this directory gets the restoration BY
+    ACCIDENT, because some alphabetically earlier module happened to ask for
+    `engine` first. Depending on that is depending on collection order. This
+    fixture makes the dependency explicit, and the assertion below means it
+    cannot silently stop working: if someone removes the parameter, the patched
+    class is detected here rather than eight migrations later as a type
+    mismatch nobody connects to a test fixture.
+    """
+    assert postgresql.UUID.__module__.startswith("sqlalchemy"), (
+        "postgresql.UUID is still the SQLite-compatible stand-in from "
+        "tests/conftest.py; every UUID column this migration chain creates "
+        "would be VARCHAR"
+    )
 
 
 def _render(url: URL) -> str:
