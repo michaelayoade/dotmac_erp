@@ -33,6 +33,29 @@ from app.migration_database_roles import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BOOTSTRAP = REPO_ROOT / "scripts" / "bootstrap_database_roles.py"
+#: The REAL migration executor. `alembic upgrade` runs this on every path,
+#: including the ones that never reach the deploy preflight.
+ENV_PY = REPO_ROOT / "alembic" / "env.py"
+
+
+def _calls_in(path: Path, function: str) -> set[str]:
+    """Names called inside one named function, read from the AST.
+
+    AST rather than a substring scan: these functions carry docstrings that
+    NAME the checks they run and explain why, and a text search happily matches
+    the prose justifying a check instead of the call performing it.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    target = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == function
+    )
+    return {
+        node.func.id
+        for node in ast.walk(target)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
 
 
 def test_every_online_identity_is_a_subject() -> None:
@@ -86,31 +109,80 @@ def test_the_walk_is_transitive() -> None:
 
 
 def test_the_preflight_actually_runs_the_check() -> None:
-    """A contract no entry point evaluates is documentation.
-
-    Pinned on the deploy PREFLIGHT (`--verify-only`, scripts/deploy.sh step 3a)
-    rather than inside `alembic/env.py`: the preflight stops before any DDL and
-    prints a remedy, whereas a refusal mid-chain leaves a half-applied upgrade.
-    That `alembic/env.py` does NOT carry this check is a stated unmonitored
-    region, not an exemption — a migration run that skips the preflight is not
-    covered.
-    """
-    source = BOOTSTRAP.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    verifier = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef)
-        and node.name == "verify_migration_connection"
-    )
-    called = {
-        node.func.id
-        for node in ast.walk(verifier)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    }
+    """A contract no entry point evaluates is documentation."""
+    called = _calls_in(BOOTSTRAP, "verify_migration_connection")
     assert "role_escalation_violations" in called
     assert "database_identity_violations" in called
     assert "migration_executor_violations" in called
+
+
+def test_the_real_executor_asserts_which_database_it_reached() -> None:
+    """The check has to run where the migration runs.
+
+    The deploy preflight is ONE caller — `scripts/deploy.sh` step 3a. `make
+    migrate`, `make docker-migrate` and CI's own `alembic upgrade heads` reach
+    the database without it. A capability proven only on a path a caller may
+    skip is available, not adopted.
+
+    THE PREMISE THAT KEPT THIS OUT WAS FALSE. The recorded reason for pinning it
+    to the preflight was that a refusal inside `alembic/env.py` "leaves a
+    half-applied upgrade". It does not, at this call site:
+    `run_migrations_online` invokes `verify_migration_connection` inside a
+    read-only `connection.begin()` block that closes BEFORE `context.configure`,
+    before `context.begin_transaction()` and before `context.run_migrations()`.
+    `test_the_executor_check_runs_before_any_migration_is_applied` below pins
+    that ordering, because the ordering is the entire argument.
+    """
+    called = _calls_in(ENV_PY, "verify_migration_connection")
+    assert "database_identity_violations" in called, (
+        "the real migration executor must assert WHERE it landed; role posture "
+        "and object ownership are both satisfiable by the wrong cluster"
+    )
+    assert "unverified_database_identity_notice" in called, (
+        "unset must be reported, never assumed — a green migration that checked "
+        "nothing must not read as a checked one"
+    )
+    assert "migration_executor_violations" in called
+
+
+def test_the_executor_check_runs_before_any_migration_is_applied() -> None:
+    """The ordering that makes the check above safe, pinned so it cannot drift.
+
+    This is the sensitivity proof for the claim in the docstring above. If
+    someone moved `verify_migration_connection` after `context.run_migrations()`
+    — or into a revision — a refusal really would leave a half-applied upgrade,
+    and the reason the check was originally kept out would become true. The
+    guard is on the ORDER, not on the presence, because presence is what the
+    previous test already covers.
+    """
+    tree = ast.parse(ENV_PY.read_text(encoding="utf-8"))
+    online = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "run_migrations_online"
+    )
+    order: list[tuple[int, str]] = [
+        (node.lineno, node.func.id)
+        for node in ast.walk(online)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"verify_migration_connection"}
+    ]
+    order += [
+        (node.lineno, node.func.attr)
+        for node in ast.walk(online)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"run_migrations", "configure", "begin_transaction"}
+    ]
+    positions = {name: line for line, name in order}
+    for later in ("configure", "begin_transaction", "run_migrations"):
+        assert later in positions, f"{later} vanished from run_migrations_online"
+        assert positions["verify_migration_connection"] < positions[later], (
+            f"the executor contract must be evaluated before {later}; a refusal "
+            f"after it is the half-applied upgrade the check was once kept out "
+            f"to avoid"
+        )
 
 
 def test_a_direct_grant_into_the_migration_executor_is_named() -> None:

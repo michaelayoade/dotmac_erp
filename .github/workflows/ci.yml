@@ -878,6 +878,21 @@ jobs:
           poetry run python -c "import os, psycopg; connection = psycopg.connect(os.environ['BOOTSTRAP_DATABASE_URL'], autocommit=True); connection.execute('ALTER DATABASE dotmac_erp_test OWNER TO app_admin'); connection.close()"
 
       - name: Run Alembic migrations
+        # ADOPTION, not availability. `alembic/env.py` reads this and ASSERTS
+        # the database it reached; unset it would print `database identity
+        # UNVERIFIED` and pass. Binding it here is what makes this step an
+        # executor-side proof rather than an offer of one — the same real
+        # executor a deployment runs, on a disposable database.
+        #
+        # Scoped to THIS STEP, deliberately not to the job. An authorisation is
+        # a property of ONE RUN against ONE database, and this job contains
+        # runs against others: the integration suite's fixtures create isolated
+        # `erp_*_<uuid>` databases and point the executor at them. A job-level
+        # binding leaked into those and refused every one of them — correctly,
+        # which is the check working and the granularity being wrong. Each such
+        # fixture now declares its own expectation instead.
+        env:
+          MIGRATION_EXPECTED_DATABASE: "dotmac_erp_test"
         run: poetry run alembic upgrade heads
 
       # RLS is applied by point-in-time sweeps over information_schema, so
