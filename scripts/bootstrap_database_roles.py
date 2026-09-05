@@ -27,6 +27,11 @@ string, not an implicit escalation hidden inside a migration.
   role names only.
 - **Never grants object privileges.** Migrations own grants, because they own
   the objects. This creates identities, nothing more.
+- **Never repairs the membership graph.** After creating or repairing roles it
+  RE-READS the graph and refuses to report success over a violation, but the
+  fix is a separately authorised `REVOKE` or `ALTER ROLE ... NOCREATEROLE`.
+  Rewriting cluster-wide membership without being asked would be a larger
+  version of the mistake `--repair` is already opt-in to avoid.
 - **Never repairs a wrong-shaped existing role by default.** An `app_user` that
   is already SUPERUSER is a security finding, not a typo: `--repair` will fix it
   and it is opt-in so nobody silently rewrites cluster access.
@@ -71,19 +76,29 @@ if str(REPO_ROOT) not in sys.path:
 import psycopg
 from psycopg import sql
 
+from app.migration_authority import (
+    AUTHORITY_SUBJECTS,
+    EXPECTED_AUTHENTICATION_VAR,
+    ROLE_AUTHORITY_SQL,
+    MigrationExecutorAuthorityPolicyV1,
+    RoleAuthorityObservationV1,
+    RuntimeRoleAuthorityPolicyV1,
+    observation_from_rows,
+    parse_authentication_expectation,
+    role_authority_violations,
+    unverified_authentication_notice,
+    violation_messages,
+)
 from app.migration_database_roles import (
     EXPECTED_DATABASE_VAR,
     MIGRATION_OWNERSHIP_SQL,
-    NON_ESCALATING_ROLES,
     RELAY_DISPATCHER_CONTRACT,
     ROLE_CONTRACT,
-    ROLE_ESCALATION_SQL,
     database_identity_violations,
     migration_executor_violations,
     migration_ownership_violations,
     relay_dispatcher_violations,
     role_contract_violations,
-    role_escalation_violations,
     unverified_database_identity_notice,
 )
 
@@ -167,24 +182,71 @@ def bootstrap(conn: psycopg.Connection, *, dry_run: bool, repair: bool) -> int:
             )
             print(f"repaired: {role} {have} -> {wanted}")
 
+    if dry_run:
+        return 0
+    return _authority_after_bootstrap(conn)
+
+
+def _authority_after_bootstrap(conn: psycopg.Connection) -> int:
+    """Re-read the graph AFTER creating or repairing, before reporting success.
+
+    Bootstrap creates identities; it does not create memberships, so a
+    violation found here is something the cluster already had. Reporting
+    `created:` lines and exiting 0 over it would let an operator read a
+    successful bootstrap as a safe one.
+
+    The executor policy is evaluated with `without_direct_authentication()`.
+    This connection is the ELEVATED bootstrap identity: it may repair and it may
+    inspect, but it is not `app_admin` and must not be allowed to claim it is.
+    That proof belongs to `--verify-only` and to the Alembic environment, each
+    of which opens a fresh `app_admin` connection.
+
+    Repair is deliberately NOT attempted. `REVOKE` and `ALTER ROLE ...
+    NOCREATEROLE` change cluster-wide access, and this script already refuses
+    to rewrite role attributes without an explicit `--repair`; silently
+    rewriting the membership graph would be a larger version of the same
+    mistake.
+    """
+    observation = _authority_observation(conn)
+    violations = (
+        *role_authority_violations(RuntimeRoleAuthorityPolicyV1, observation),
+        *role_authority_violations(
+            MigrationExecutorAuthorityPolicyV1.without_direct_authentication(),
+            observation,
+        ),
+    )
+    for message in violation_messages(violations):
+        print(
+            f"AUTHORITY: {message}",
+            file=sys.stderr,
+        )
+    if violations:
+        print(
+            "bootstrap created or adopted every role and then found the "
+            "authority graph unsatisfied. The roles are in place; the finding "
+            "above is not. It needs a separately authorised REVOKE or ALTER "
+            "ROLE, so this run does not report success.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
-def _escalation_edges(
-    conn: psycopg.Connection,
-) -> list[tuple[str, str, bool, bool, bool]]:
-    """Flatten the live role graph into (subject, reachable privileged role).
+def _authority_observation(conn: psycopg.Connection) -> RoleAuthorityObservationV1:
+    """One catalogue reading, shared by BOTH authority policies.
 
-    Read from `pg_roles` and `pg_auth_members`, both world-readable, so this
-    answers from evidence the NOSUPERUSER preflight connection can actually see.
+    The catalogues it reads are world-readable, so this answers from evidence
+    the NOSUPERUSER preflight connection can actually see.
+
+    `ROLE_AUTHORITY_SQL` is executed here through psycopg, and by the Alembic
+    environment through `exec_driver_sql`. Both hand the SAME BYTES to the same
+    DBAPI: the query is psycopg pyformat, and SQLAlchemy's `text()` would apply
+    `:name` paramstyle and leave `%(subjects)s` a literal.
     """
     rows = conn.execute(
-        ROLE_ESCALATION_SQL, {"subjects": sorted(NON_ESCALATING_ROLES)}
+        ROLE_AUTHORITY_SQL, {"subjects": sorted(AUTHORITY_SUBJECTS)}
     ).fetchall()
-    return [
-        (str(row[0]), str(row[1]), bool(row[2]), bool(row[3]), bool(row[4]))
-        for row in rows
-    ]
+    return observation_from_rows(rows)
 
 
 def verify_migration_connection(conn: psycopg.Connection) -> int:
@@ -194,24 +256,39 @@ def verify_migration_connection(conn: psycopg.Connection) -> int:
     observed = _observe(conn)
     ownership_rows = conn.execute(MIGRATION_OWNERSHIP_SQL).fetchall()
     non_owned_counts = {str(row[0]): int(row[1]) for row in ownership_rows}
+    observation = _authority_observation(conn)
+    # This connection IS `app_admin`, freshly authenticated with the migration
+    # DSN, so it is the one place — with the Alembic environment — that can
+    # prove direct authentication rather than a privileged session that ran
+    # `SET ROLE app_admin`. The elevated bootstrap deliberately cannot.
+    executor_policy = MigrationExecutorAuthorityPolicyV1.binding_authentication(
+        parse_authentication_expectation(os.environ.get(EXPECTED_AUTHENTICATION_VAR))
+    )
     violations = (
         *migration_executor_violations(current_user, observed),
         *migration_ownership_violations(non_owned_counts),
         # Removing the migration DSN from a runtime service is undone by a role
-        # graph that lets the runtime role BECOME the migration role. The graph
-        # is checked here, on the same connection, because a credential
-        # separation nobody re-derives from the live catalogue is a claim about
-        # an env file rather than about the database.
-        *role_escalation_violations(_escalation_edges(conn)),
+        # graph that lets the runtime role BECOME the migration role, and
+        # equally by a runtime role holding CREATEROLE on itself. The graph is
+        # checked here, on the same connection, because a credential separation
+        # nobody re-derives from the live catalogue is a claim about an env file
+        # rather than about the database.
+        *violation_messages(
+            role_authority_violations(RuntimeRoleAuthorityPolicyV1, observation)
+        ),
+        *violation_messages(role_authority_violations(executor_policy, observation)),
         # WHERE the connection landed. Everything above is satisfiable by a
         # different, correctly shaped cluster.
         *database_identity_violations(observed_database, expected_database),
     )
-    notice = unverified_database_identity_notice(
-        observed_database, expected_database, EXPECTED_DATABASE_VAR
-    )
-    if notice is not None:
-        print(f"MIGRATION CONTRACT: {notice}", file=sys.stderr)
+    for unverified in (
+        unverified_database_identity_notice(
+            observed_database, expected_database, EXPECTED_DATABASE_VAR
+        ),
+        unverified_authentication_notice(executor_policy, EXPECTED_AUTHENTICATION_VAR),
+    ):
+        if unverified is not None:
+            print(f"MIGRATION CONTRACT: {unverified}", file=sys.stderr)
     for violation in violations:
         print(f"MIGRATION CONTRACT: {violation}", file=sys.stderr)
     return 1 if violations else 0
@@ -233,9 +310,11 @@ def main() -> int:
         "--verify-only",
         action="store_true",
         help=(
-            "verify roles, the app_admin executor, that no runtime role can "
-            "SET ROLE into a privileged one, and the database identity; "
-            "execute no DDL"
+            "verify roles, the app_admin executor, both authority policies "
+            "(no runtime role and no reachable role may hold or reach "
+            "forbidden authority), that the connection AUTHENTICATED as "
+            "app_admin rather than SET ROLE into it, and the database "
+            "identity; execute no DDL"
         ),
     )
     args = parser.parse_args()

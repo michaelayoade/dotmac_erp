@@ -918,7 +918,130 @@ jobs:
         # confcutdir prevents loading tests/conftest.py which monkey-patches
         # PostgreSQL UUID/JSONB types for SQLite compatibility
         # --timeout=120 prevents individual tests from hanging forever
-        run: poetry run pytest tests/integration/ -v --tb=short --timeout=120 -o "addopts=" -o "confcutdir=tests/integration"
+        # -m "not authentication" DESELECTS the authentication proof rather
+        # than letting it skip inside: this cluster is
+        # POSTGRES_HOST_AUTH_METHOD=trust, PostgreSQL returns NULL from
+        # `system_user` under trust, and a green computed there would be a green
+        # about a cluster that authenticated nothing. The
+        # migration-authentication-proof job below runs it against scram-sha-256.
+        run: |
+          poetry run pytest tests/integration/ -v --tb=short --timeout=120 \
+            -m "not authentication" -o "addopts=" -o "confcutdir=tests/integration"
+
+  # ---------------------------------------------------------------------------
+  # Migration Authentication Proof — PostgreSQL with REAL password auth
+  #
+  # Every other PostgreSQL tier in this workflow runs
+  # POSTGRES_HOST_AUTH_METHOD=trust, and PostgreSQL returns NULL from
+  # `system_user` under trust. So no existing tier can be evidence that the
+  # migration executor AUTHENTICATED as `app_admin` rather than arriving as a
+  # privileged session that ran `SET ROLE app_admin` — a trust cluster never
+  # checked anything, and a proof drawn from it would be a proof about nothing.
+  #
+  # This tier therefore uses scram-sha-256. It is deliberately SEPARATE rather
+  # than a conversion of the integration lane: `scripts/bootstrap_database_roles.py`
+  # never sets a password, by design, so converting that lane would have meant
+  # teaching the bootstrap to mint credentials.
+  #
+  # The passwords below are generated per run, live only inside this
+  # disposable service container, and are never used anywhere else. No
+  # production credential is read, minted or rotated by CI.
+  #
+  # Blocking. A skipped authentication proof is indistinguishable from a passing
+  # one, so the proof FAILS on a trust cluster instead of skipping — see
+  # tests/integration/test_migration_authentication_proof.py.
+  # ---------------------------------------------------------------------------
+  migration-authentication-proof:
+    name: Migration Authentication Proof (scram-sha-256)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: erp-ci-superuser  # pragma: allowlist secret
+          POSTGRES_DB: postgres
+          # Both halves are needed: INITDB_ARGS decides what `initdb` writes
+          # into pg_hba.conf for host connections, HOST_AUTH_METHOD is what the
+          # image's entrypoint enforces. Either alone leaves a trust line.
+          POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+          POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SUPERUSER_URL: "postgresql://postgres:erp-ci-superuser@localhost:5432/postgres"  # pragma: allowlist secret
+      MIGRATION_DATABASE_URL: "postgresql+psycopg://app_admin:erp-ci-executor@localhost:5432/dotmac_erp_auth"  # pragma: allowlist secret
+      MIGRATION_EXPECTED_DATABASE: "dotmac_erp_auth"
+      DATABASE_URL: "postgresql+psycopg://app_user:erp-ci-runtime@localhost:5432/dotmac_erp_auth"  # pragma: allowlist secret
+      PEOPLE_EMPLOYMENT_TYPE_ACTIVATION: "1"
+      JWT_SECRET: "ci-authentication-proof-secret-key-minimum-32-bytes"  # pragma: allowlist secret
+      TOTP_ENCRYPTION_KEY: "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="  # pragma: allowlist secret
+      REDIS_URL: "redis://localhost:6379/0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      # Exactly as an operator would: elevated credentials, its own connection
+      # string. The bootstrap creates the identities and then re-reads the graph
+      # it built before reporting success — with its authentication clause
+      # dropped, because this connection is `postgres` and must not be able to
+      # claim it is `app_admin`.
+      - name: Bootstrap database roles (explicitly privileged)
+        env:
+          BOOTSTRAP_DATABASE_URL: ${{ env.SUPERUSER_URL }}
+        run: poetry run python scripts/bootstrap_database_roles.py
+
+      # The one thing the bootstrap deliberately never does. Passwords are an
+      # operator concern; here the "operator" is this job, and the material is
+      # disposable with the container.
+      - name: Give the roles disposable passwords and a database to own
+        run: |  # pragma: allowlist secret
+          poetry run python - <<'PY'
+          import os
+          import psycopg
+
+          connection = psycopg.connect(os.environ["SUPERUSER_URL"], autocommit=True)
+          connection.execute("ALTER ROLE app_admin PASSWORD 'erp-ci-executor'")  # pragma: allowlist secret
+          connection.execute("ALTER ROLE app_user PASSWORD 'erp-ci-runtime'")  # pragma: allowlist secret
+          connection.execute("DROP DATABASE IF EXISTS dotmac_erp_auth")
+          connection.execute("CREATE DATABASE dotmac_erp_auth OWNER app_admin")
+          connection.close()
+          PY
+
+      # `-m authentication` is the other half of the trust lane's
+      # `-m "not authentication"`. Selecting the marker rather than naming the
+      # file means a second authentication proof added later runs here the day
+      # it is marked, with no edit to this workflow.
+      - name: Prove the executor authenticated as app_admin
+        run: |
+          poetry run pytest tests/integration/ -v --tb=short --timeout=300 \
+            -m authentication -o "addopts=" -o "confcutdir=tests/integration"
 
   # ---------------------------------------------------------------------------
   # Publish Docker Image to GHCR
@@ -940,6 +1063,7 @@ jobs:
       - release-engineering-standards
       - docker-build
       - integration-test
+      - migration-authentication-proof
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read
