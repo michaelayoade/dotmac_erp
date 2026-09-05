@@ -355,3 +355,82 @@ def test_a_scan_with_no_session_row_raises_rather_than_inventing_one() -> None:
         observation_from_rows(
             [("subject", "app_admin", None, None, False, False, False, False, True)]
         )
+
+
+def test_the_refusal_names_the_exact_statement_that_repairs_it() -> None:
+    """An operator meets this as a refused deploy, not as a design document.
+
+    `NOCREATEDB` and `NOREPLICATION` are new requirements — the frozen
+    `ROLE_CONTRACT` never asserted either — so a real cluster whose `app_admin`
+    holds one will refuse on the first deploy after this lands. That refusal has
+    to carry the remediation verbatim, not a description of it: a message that
+    says "app_admin has too many attributes" sends someone to read source at the
+    exact moment a deployment is stopped.
+
+    Asserted as the WHOLE statement, so reordering the sentence around it still
+    fails rather than quietly producing something uncopyable.
+    """
+    for attribute, expected in (
+        ("createdb", "ALTER ROLE app_admin NOCREATEDB"),
+        ("replication", "ALTER ROLE app_admin NOREPLICATION"),
+        ("createrole", "ALTER ROLE app_admin NOCREATEROLE"),
+        ("superuser", "ALTER ROLE app_admin NOSUPERUSER"),
+    ):
+        held = RoleAttributesV1(
+            superuser=attribute == "superuser",
+            createrole=attribute == "createrole",
+            createdb=attribute == "createdb",
+            replication=attribute == "replication",
+            bypassrls=True,
+        )
+        violations = role_authority_violations(
+            MigrationExecutorAuthorityPolicyV1,
+            _observation(subjects={"app_admin": held}),
+        )
+        assert _codes(violations) == [MIGRATION_EXECUTOR_DIRECT_ATTRIBUTE_FORBIDDEN]
+        assert expected in violations[0].message, (
+            f"the refusal for {attribute} does not spell out {expected!r}"
+        )
+        assert "no migration may grant itself authority it was refused" in (
+            violations[0].message
+        ), "the refusal must say why it will not repair this itself"
+
+    # A missing REQUIRED attribute names the statement that ADDS it — the same
+    # sentence with the opposite polarity, which is the case most likely to be
+    # written backwards.
+    missing_bypassrls = role_authority_violations(
+        MigrationExecutorAuthorityPolicyV1,
+        _observation(subjects={"app_admin": CLEAN}),
+    )
+    assert "ALTER ROLE app_admin BYPASSRLS" in missing_bypassrls[0].message
+    assert "NOBYPASSRLS" not in missing_bypassrls[0].message.split("Repair it")[1]
+
+
+def test_a_refusal_names_no_credential_dsn_or_host() -> None:
+    """Refusals are read out of CI logs and deploy transcripts.
+
+    The near-miss matters as much as the rule: the message must still be
+    SPECIFIC — it names the subject, the target and the authority class — so
+    this is not satisfied by a message that says nothing at all.
+    """
+    edge = MembershipEdgeV1(
+        subject="app_user",
+        target="pg_execute_server_program",
+        direct=True,
+        target_attributes=CLEAN,
+    )
+    violations = role_authority_violations(
+        RuntimeRoleAuthorityPolicyV1,
+        _observation(
+            system_user="scram-sha-256:app_admin",
+            edges=(edge,),
+        ),
+    )
+    message = violations[0].message
+    for forbidden in ("://", "password", "PGPASSWORD", "localhost", "@", "scram"):
+        assert forbidden not in message, (
+            f"the refusal leaked {forbidden!r}; these are read out of logs"
+        )
+    assert "app_user" in message
+    assert "pg_execute_server_program" in message
+    assert "runtime role" in message

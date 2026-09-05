@@ -427,3 +427,136 @@ def test_the_authentication_tier_guard_still_bites() -> None:
     near_steps = _integration_pytest_steps(yaml.safe_load(near_miss))
     assert _unqualified_collections(near_steps) == []
     assert _trust_selections(near_steps) == []
+
+
+# ---------------------------------------------------------------------------
+# Every import of a migration-contract name resolves to something that exists.
+# ---------------------------------------------------------------------------
+#: The prefix the migration-authority programme owns. Derived, not listed: a
+#: future `app/migration_<next>.py` is covered the day it is added.
+CONTRACT_MODULE_PREFIX = "app.migration_"
+
+
+def _contract_imports() -> list[tuple[Path, int, str, str]]:
+    """Every `from app.migration_* import NAME` in the tree."""
+    found: list[tuple[Path, int, str, str]] = []
+    for path in sorted(REPO_ROOT.rglob("*.py")):
+        if any(part in {".venv", "node_modules", ".git"} for part in path.parts):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover - a broken file fails elsewhere
+            continue
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.level == 0
+                and node.module
+                and node.module.startswith(CONTRACT_MODULE_PREFIX)
+            ):
+                found.extend(
+                    (path, node.lineno, node.module, alias.name)
+                    for alias in node.names
+                    if alias.name != "*"
+                )
+    return found
+
+
+def _unresolved(surfaces: dict[str, set[str]]) -> list[str]:
+    return [
+        f"{path.relative_to(REPO_ROOT)}:{line} imports {module}.{name}, which "
+        f"{module} does not declare"
+        for path, line, module, name in _contract_imports()
+        if module in surfaces
+        and name not in surfaces[module]
+        and path.resolve() != _module_path(module).resolve()
+    ]
+
+
+def _module_path(module: str) -> Path:
+    return REPO_ROOT / (module.replace(".", "/") + ".py")
+
+
+def _declared_surfaces() -> dict[str, set[str]]:
+    """Each owned module's `__all__`, read STATICALLY.
+
+    Not by importing. `app/migration_bindings.py` imports the kernel, so an
+    import-based sweep answers differently depending on which kernel version
+    happens to be installed — and a guard whose verdict depends on the
+    environment is one that gets believed on the machine where it is green.
+    `__all__` is a declaration; reading it needs nothing but the file.
+    """
+    surfaces: dict[str, set[str]] = {}
+    for _, _, module, _ in _contract_imports():
+        if module in surfaces:
+            continue
+        path = _module_path(module)
+        if not path.exists():
+            continue
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            targets = (
+                node.targets
+                if isinstance(node, ast.Assign)
+                else [node.target]
+                if isinstance(node, ast.AnnAssign)
+                else []
+            )
+            for target in targets:
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "__all__"
+                    and node.value is not None
+                ):
+                    surfaces[module] = set(ast.literal_eval(node.value))
+        assert module in surfaces, (
+            f"{module} is in the owned prefix and declares no __all__; the "
+            "sweep cannot tell a public name from a private one there"
+        )
+    return surfaces
+
+
+def test_every_migration_contract_import_names_something_that_exists() -> None:
+    """A removed public name breaks somewhere ELSE, and that is the problem.
+
+    Deleting `ROLE_ESCALATION_SQL` and friends passed every check in the module
+    that owned them, and every check in the two callers that were updated with
+    them. It failed in three unrelated test modules, on CI, in a job that takes
+    fifteen minutes to tell you. Nothing in the change itself could have caught
+    it — which is exactly why the guard has to sweep the tree rather than the
+    diff.
+
+    Scoped to `app.migration_*` and not to every `app.*` import: a repo-wide
+    rule has 183 pre-existing hits from packages that re-export dynamically, and
+    a check that starts red is a check that gets an allowlist and then gets
+    deleted. This prefix has none, and it grows with the programme.
+    """
+    assert _contract_imports(), "the sweep found nothing to check"
+    assert _unresolved(_declared_surfaces()) == []
+
+
+def test_the_contract_import_sweep_still_bites() -> None:
+    """SENSITIVITY. Planted defect: a name removed from a module's namespace,
+    which is precisely what a refactor does. Near-miss: a name that is still
+    there, and an import of a module OUTSIDE the owned prefix, neither of which
+    may be reported."""
+    surfaces = _declared_surfaces()
+    assert "app.migration_authority" in surfaces
+
+    planted = {
+        module: (names - {"ROLE_AUTHORITY_SQL"})
+        if module == "app.migration_authority"
+        else names
+        for module, names in surfaces.items()
+    }
+    reported = _unresolved(planted)
+    assert reported, "removing a name that two callers import was not reported"
+    assert all("ROLE_AUTHORITY_SQL" in line for line in reported)
+
+    assert _unresolved(surfaces) == [], (
+        "the unplanted sweep must stay quiet, or the proof above is about a "
+        "detector that fires on everything"
+    )
+    assert not any(
+        module.startswith("app.services") or module.startswith("app.api")
+        for _, _, module, _ in _contract_imports()
+    ), "the sweep widened past the prefix it can keep green"

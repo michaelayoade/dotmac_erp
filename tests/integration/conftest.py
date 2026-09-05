@@ -32,7 +32,37 @@ from sqlalchemy.sql.sqltypes import UUID as _REAL_UUID  # noqa: E402
 
 
 def _fix_patched_types():
-    """Replace SQLite-patched column types with real PostgreSQL types."""
+    """Replace SQLite-patched column types with real PostgreSQL types.
+
+    ## UNMONITORED REGION (recorded 2026-09-05, ADR-0018: stated, not exempted)
+
+    **This restoration is applied only from the session-scoped `engine` fixture
+    below. Every other PostgreSQL module in this directory that does not ask for
+    `engine` gets it BY ACCIDENT, via an alphabetically earlier module that
+    did.** Collection order is not a dependency anyone can see, and nothing
+    asserts it.
+
+    The failure is silent and lands far away. With the patch still in place,
+    `postgresql.UUID` renders as `VARCHAR(36)`, so `alembic upgrade heads`
+    builds UUID columns as text and the chain dies adding a real foreign key —
+    `people.organization_id` cannot reference
+    `core_org.organization(organization_id)` when one is `varchar` and the other
+    is `uuid`. Nothing in the error mentions a test fixture.
+
+    **This is a landmine for any future CI job that narrows its selection.** The
+    `migration-authentication-proof` tier was the first PostgreSQL job to
+    deselect everything except one module; nothing asked for `engine`, and it
+    failed exactly this way. Two modules now depend on the restoration
+    explicitly, with a self-checking fixture:
+
+    * `tests/integration/test_migration_authentication_proof.py`
+    * `tests/integration/test_migration_authority_graph.py`
+
+    Every OTHER module here remains restored by accident. Making the fixture
+    autouse for the whole directory would close it, and is deliberately NOT done
+    in the change that found it: it alters the type state of every existing
+    integration test, which is a separate decision with its own blast radius.
+    """
     from sqlalchemy import Text  # noqa: E402
 
     previous_uuid_type = _pg_dialect.UUID

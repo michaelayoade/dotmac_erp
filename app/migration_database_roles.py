@@ -438,6 +438,11 @@ __all__ = [
     "OWNERSHIP_PLAN_SQL",
     "OWNERSHIP_PLAN_VERSION",
     "OwnershipPlanRow",
+    # Public, and three modules import them — the bootstrap script, the relay
+    # migration test and the authority contract test. They were simply missing
+    # here, which made `__all__` a partial account of the surface rather than a
+    # statement of it, and left the import sweep unable to use it.
+    "RELAY_DISPATCHER_CONTRACT",
     "ROLE_CONTRACT",
     "RolePosture",
     "database_identity_violations",
@@ -445,6 +450,7 @@ __all__ = [
     "migration_ownership_violations",
     "ownership_plan_sha256",
     "posture",
+    "relay_dispatcher_violations",
     "role_contract_violations",
     "unexpected_owners",
     "unverified_database_identity_notice",
