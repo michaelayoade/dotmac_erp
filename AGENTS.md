@@ -79,8 +79,18 @@ These are the repo-level instructions Codex should follow for this workspace.
   it is how 0003, 0004, 0006 and 0008 each came to name more than one decision.
   A number is never reused, including after withdrawal — it survives in commit
   messages, review threads and `match="ADR-00NN"` assertions that removing a
-  row does not update. Enforced by
-  `tests/architecture/test_adr_number_allocation.py`.
+  row does not update. Claim with `python tools/adr/allocate.py --slug <slug>`;
+  it refuses an absent register outright, because a tool that creates one on
+  first run is indistinguishable from a branch that lost the file and
+  re-allocates 0001. Enforced by
+  `tests/architecture/test_adr_number_allocation.py` (the register),
+  `test_adr_allocator.py` (the writer's logic),
+  `test_adr_allocator_cli.py` (the entry point, run for real) and
+  `.github/workflows/adr-allocation.yml` (a claim changes the register alone).
+  `claimed` is always the git AUTHOR date and never a merge time; `landed_at`
+  is separate and exists only for rows on `main`; every off-`main` row carries
+  `visibility` = `pr`/`remote_ref`/`local_only`, because a claim only one
+  workstation can see does not support a count anyone else is asked to check.
 - `CLAUDE.md` for critical coding rules, workflow, verification steps, and module map.
 - `.claude/rules/` for design system, templates, security, services, and web routes standards.
 - `UI_CONVENTIONS.md` and `CONSISTENCY_CHECKLIST.md` for UI consistency checks.
