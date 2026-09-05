@@ -61,21 +61,3 @@ sequencing call and is not recorded here as though it were settled.
 | [0004](0004-the-erp-bill-of-materials-is-frozen.md) | The ERP bill of materials is frozen before composition starts | Accepted |
 | [0005](0005-payment-intent-status-has-one-writer.md) | `PaymentIntent.status` has one writer | Accepted |
 | [0007](0007-unobserved-is-not-failed.md) | An unobserved transfer is not a failed one | Accepted |
-| [0011](0011-the-app-admin-migration-credential-has-one-custody-pointer.md) | The `app_admin` migration credential has one custody pointer, and ERP holds only the pointer | Proposed |
-
-## A note on the gap at 0006 and the jump to 0011
-
-The index above runs 0001–0005, 0007, then 0011. That is not tidiness lost; it
-is the number register being visible. 0006, 0008, 0009 and 0010 are claimed by
-records on branches that have not merged, and the register that serializes
-allocation (`docs/adr/reservations.toml`, itself unmerged) exists precisely
-because taking "the next free number on `main`" is a read-then-write with no
-lock. 0011 was taken after surveying every local and remote ref for a
-`docs/adr/0011-*`, and the survey was repeated on 2026-09-05: still uncontested.
-
-`reservations.toml` is now carried on this branch too, with rows for 10 and 11
-and `next_free = 12`. That is two branches holding one record. The register was
-built so that this CONTENDS rather than passes silently — `next_free` is one
-scalar and the two copies cannot auto-merge — but which branch is the register's
-single writer is an open question, recorded in ADR-0011 under "On the number"
-and not settled here.
