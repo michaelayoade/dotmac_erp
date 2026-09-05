@@ -1,0 +1,412 @@
+# The ERP ADR number register — the allocator, not a summary of one.
+#
+# ERP allocated ADR numbers by looking at `docs/adr/` and taking the next free
+# one. That is a read-then-write with no lock, performed on branches that
+# cannot see each other, and it produced exactly the race it looks like:
+# 0003, 0004, 0006 and 0008 each name more than one decision today. This file
+# replaces that with a serialized allocator.
+#
+# HOW TO CLAIM A NUMBER
+#
+#   1. Run `python tools/adr/allocate.py --slug <your-slug>`. It takes
+#      `next_free`, appends the row and raises the scalar, and refuses if the
+#      number is taken, the slug is spent, a document already exists, or your
+#      worktree carries anything else. Steps 1 and 2 by hand are still correct
+#      and still checked; the tool exists so they are not done from memory.
+#   2. (By hand, if you must: append a `[[reservation]]` row with
+#      `status = "reserved"`, and raise `next_free` by one.)
+#   3. Commit THAT ALONE, and land it on `main` before you write the ADR.
+#   4. Write the ADR in a later change, and flip your row to
+#      `status = "authored"` in the same change.
+#
+# WHY IT SERIALIZES
+#
+# `next_free` is one scalar on one line. Two branches that both allocate must
+# both rewrite it, so git cannot silently auto-merge them — it raises a
+# conflict, and a conflict is the lock being contended rather than a duplicate
+# being created. Appended rows alone would not be enough: git will often merge
+# two appends at the end of a file without complaint, and that is precisely how
+# 0008 came to name two decisions.
+#
+# Step 3 is the load-bearing one. A number claimed in the same change that
+# authors the ADR is claimed on a branch, and a claim on a branch is not a
+# claim — it is what every colliding record here already did.
+#
+# PERMANENCE
+#
+# A number, once in this file, is never removed, reused, or reassigned to a
+# different decision. An abandoned ADR takes `status = "withdrawn"` and keeps
+# its number forever. Reuse is not a tidy-up: the number appears in commit
+# messages, review threads, `pytest.raises(match="ADR-00NN")` assertions and
+# other repositories' pins, and none of those are updated by deleting a row.
+# A withdrawn record may be re-authored under a NEW number, declaring
+# `replaces = <old number>` so the trail survives.
+#
+# STATUS VALUES
+#
+#   reserved   number claimed, ADR not yet written. No file may exist.
+#   authored   `NNNN-<slug>.md` exists in this directory.
+#   withdrawn  abandoned. The number is spent forever. No file may exist.
+# THE THREE DATE-FREE FIELDS, AND WHY THEY ARE SEPARATE
+#
+#   claimed     ONE meaning, always: the git AUTHOR date of the commit that
+#               claimed the number. It is never a merge time. A row whose
+#               `claimed` matches no author date in this repository is wrong
+#               and gets corrected; row 2 was, on 2026-09-05.
+#   landed_at   Optional, and present only when the ADR is on protected
+#               `main`. Derived from `main`'s FIRST-PARENT history, which is
+#               the only history that says a change landed rather than merely
+#               existed. Off-`main` rows have no `landed_at` and never will
+#               until they land -- that absence is the point.
+#   visibility  Present on every row that is NOT on `main`. One of:
+#                 pr          reachable through an open or merged pull
+#                             request -- anyone can audit it;
+#                 remote_ref  pushed to `origin` but carries no pull request;
+#                 local_only  exists on ONE WORKSTATION and nowhere else.
+#   coordinate  The claimant's strongest IMMUTABLE coordinate: a blob SHA and
+#               the ref carrying it, plus the pull request when there is one.
+#               A branch name alone is not a coordinate -- it moves.
+#
+# WHY VISIBILITY IS RECORDED RATHER THAN AVERAGED AWAY
+#
+# A local-only claim cannot support a remotely auditable count. Saying "0006
+# has five divergent contents" reads as a fact anyone can check; it is not.
+# Two of those five are on `origin` and THREE EXIST ONLY ON ONE WORKSTATION,
+# with no rescue ref published. If that machine is lost, the register's count
+# becomes unverifiable and the material is gone. The honest form is to label
+# each claimant with what an outside reviewer can actually reach. Publishing a
+# non-merge rescue ref would change these labels, and requires its own
+# authorization -- it has not been done.
+#
+# WHY THE BLOBS CARRY `pragma: allowlist secret`
+#
+# `detect-secrets` reads a 40-character hex string as a possible credential and
+# is right to, in general. A git blob name is the opposite of a credential: it
+# is a CONTENT ADDRESS, derived from the bytes it names, disclosing nothing that
+# the object does not already disclose to whoever can read the object. Its whole
+# purpose here is to be public and immutable, because a branch name moves and a
+# blob does not.
+#
+# The pragma is a suppression, so it states its premise rather than silencing:
+# every value under a `blob` key is a git object name and nothing else. Nothing
+# else in this file may carry the pragma.
+#
+# WHAT NO CHECK HERE VERIFIES, declared rather than called coverage
+#
+# That each blob RESOLVES. `git cat-file -e` would answer it, and cannot be run
+# in CI: a pull-request checkout carries this branch, not the nine other refs
+# these blobs live on, and four of the claimants are on branches that were never
+# pushed at all. A `local_only` coordinate is, by construction, unverifiable by
+# anyone but the workstation holding it — that is what the label means, and a
+# test asserting otherwise would fail for environmental reasons and teach
+# nothing. This is an unmonitored region with a named cause, not an exemption.
+#
+# A DOCUMENT'S SELF-DECLARED DATE IS NOT AN AUTHOR DATE
+#
+# The archived 0003 and 0004 claimants both print `**Date:** 2026-08-17` in
+# their own front matter, and were authored in git on 2026-08-26. The register
+# records the git date and names the other as the document's own claim. This
+# is the same conflation that made row 2 wrong: two different dates in one
+# column reads as one meaning and is two.
+#
+#   contested  PRE-EXISTING DEBT ONLY. More than one decision already claims
+#              this number, on branches that are not merged. No file may exist
+#              on `main`, which is what stops a colliding branch merging: the
+#              moment its file arrives, `authored` and the register disagree
+#              and CI fails. Reconciling the claim is how the branch merges.
+#              No new `contested` row may ever be added.
+
+next_free = 12
+
+# ---------------------------------------------------------------------------
+# On protected `main`. `landed_at` is derived from `main`'s first-parent
+# history and is the only column that says a decision landed.
+# ---------------------------------------------------------------------------
+
+[[reservation]]
+number = 1
+slug = "kernel-idempotency-is-erps-only-at-most-once-owner"
+status = "authored"
+claimed = "2026-08-15"
+landed_at = "2026-08-15"
+landed_commit = "adba1258"
+pr = 308
+
+[[reservation]]
+number = 2
+slug = "bank-statement-numbers-take-the-module-grammar"
+status = "authored"
+claimed = "2026-08-16"
+landed_at = "2026-08-16"
+landed_commit = "41fbe521"
+pr = 310
+note = """Amended 2026-09-04: the family-selection clause is withdrawn and \
+QUOTE is the first family. The filename keeps the original title because an \
+ADR is never renamed. CORRECTED 2026-09-05: `claimed` read 2026-08-15, which \
+is not an author date of any commit that touched this ADR — the authoring \
+commit 41fbe521 carries 2026-08-16T02:52:02+01:00, and it landed the same \
+day. The old value matched no column under any timezone."""
+
+[[reservation]]
+number = 3
+slug = "clean-install-starts-from-governed-opening-state"
+status = "authored"
+claimed = "2026-08-24"
+landed_at = "2026-08-24"
+landed_commit = "c48c5f80"
+pr = 346
+note = """Contested by an archived record — see the 0003 entry under \
+`[[collision]]` below. This row records the claimant that reached `main`; it \
+is not a ruling on which one should keep the number."""
+
+[[reservation]]
+number = 4
+slug = "the-erp-bill-of-materials-is-frozen"
+status = "authored"
+claimed = "2026-08-24"
+landed_at = "2026-08-24"
+landed_commit = "7b3e4528"
+pr = 347
+note = """Contested by an archived record — see the 0004 entry under \
+`[[collision]]` below."""
+
+[[reservation]]
+number = 5
+slug = "payment-intent-status-has-one-writer"
+status = "authored"
+claimed = "2026-08-24"
+landed_at = "2026-08-25"
+landed_commit = "63f607d2"
+pr = 363
+
+[[reservation]]
+number = 7
+slug = "unobserved-is-not-failed"
+status = "authored"
+claimed = "2026-08-25"
+landed_at = "2026-08-28"
+landed_commit = "713c072c"
+pr = 384
+note = """`claimed` and `landed_at` are three days apart, and both are \
+correct. The claim was authored on the 25th and reached `main` on the 28th \
+through PR #384. Collapsing them into one column is what made row 2 wrong."""
+
+# ---------------------------------------------------------------------------
+# Claimed off `main`. These are the numbers a new allocation must not take.
+# Every row carries `visibility` and `coordinate`, because "a claim exists" is
+# a different statement depending on who can see it.
+# ---------------------------------------------------------------------------
+
+[[reservation]]
+number = 6
+slug = "module-access-is-not-write-authority"
+status = "contested"
+claimed = "2026-08-25"
+visibility = "remote_ref"
+coordinate = "blob 953b0ffaa9bedf0fa00d07ff0d5d85bb920bba59 on refs/remotes/origin/fix/module-access-is-not-write-authority"
+contested_by = ["module-access-is-not-write-authority"]
+note = """One decision, FIVE divergent contents of the same filename across \
+unmerged branches, in two amendment lineages that have never been reconciled \
+with each other. Not a number collision — a content collision under one \
+number, which the number register cannot fix and must not pretend to. \
+Reconciling the five into one is a prerequisite to merging any of them, and \
+it is the owning branches' work, not the register's. TWO of the five are on \
+`origin`; THREE exist only on one workstation and no rescue ref is \
+published. `visibility` above is the STRONGEST of the five, so it overstates \
+what a reviewer can reach for the other four — the per-claimant rows under \
+`[[collision]]` are where each one is labelled honestly. No claimant carries \
+a pull request."""
+
+[[reservation]]
+number = 8
+slug = "refunds-have-one-owner"
+status = "contested"
+claimed = "2026-08-25"
+visibility = "remote_ref"
+coordinate = "blob 6f4811f69de5c4973ca5644d910d33323564d038 on refs/remotes/origin/fix/refunds-have-one-owner"
+contested_by = ["sales-quotes-are-the-first-numbering-family"]
+note = """Two different decisions. `refunds-have-one-owner` is Accepted, \
+authored 2026-08-25, and pushed to `origin` with no pull request; \
+`sales-quotes-are-the-first-numbering-family` is Proposed, authored \
+2026-09-03, and exists only on one workstation. Both authors took the first \
+number free on `main`, nine days apart, and neither could see the other."""
+
+[[reservation]]
+number = 9
+slug = "a-shadow-that-cannot-record-its-disagreement-is-not-evidence"
+status = "reserved"
+claimed = "2026-09-03"
+visibility = "local_only"
+coordinate = "blob cc9a6737e7ae0aef8a732fc37390ca643be86d2b on refs/heads/docs/imports-files-customer-shadow"
+note = """Uncontested: re-surveyed 2026-09-05 across all 260 remote refs, all \
+199 local branches and all tags — no other ref carries a `docs/adr/0009-*`. \
+It is the one off-`main` number that is simply waiting rather than disputed. \
+It is also LOCAL-ONLY: a local tag `rescue-erp-docs-imports-files-customer- \
+shadow-20260904` exists but was never pushed, and `origin` carries no rescue \
+tag at all. Nobody outside this workstation can verify this row."""
+
+[[reservation]]
+number = 10
+slug = "erp-deployment-operations-owns-the-runtime-credential-migration"
+status = "reserved"
+claimed = "2026-09-04"
+visibility = "local_only"
+coordinate = "blob f1ae22d2c946fb3c720c072c3257379352478720 on refs/heads/docs/adr-erp-runtime-identity-ownership"
+note = """Recorded from OUTSIDE the claiming lane, because raising `next_free` \
+past 10 without a row would leave the number free for a second allocator. \
+This row records the claim; it is not a ruling on that ADR's content, status \
+or merge. VERIFIED INDEPENDENTLY 2026-09-05, from git rather than from \
+another branch's copy of this register: the adding commit is \
+9630cd24c229e74de9efd5307602a42eccd7197c, author date \
+2026-09-04T09:40:36+01:00, and no other ref in the repository carries a \
+`docs/adr/0010-*`. The branch has no upstream and `git ls-remote --heads \
+origin` returns nothing for it. A local tag \
+`rescue-erp-adr-runtime-identity-ownership-20260904` carries the same blob, \
+but `origin` holds no rescue tag, so it adds no auditability."""
+
+[[reservation]]
+number = 11
+slug = "the-app-admin-migration-credential-has-one-custody-pointer"
+status = "contested"
+claimed = "2026-09-04"
+visibility = "pr"
+coordinate = "blob f66d2ba6d22029fc0cdf475931a472312f285e93 on refs/remotes/origin/docs/erp-app-admin-credential-custody (PR #464)"
+contested_by = ["the-app-admin-migration-credential-has-one-custody-pointer"]
+note = """PERMANENTLY CONTESTED by Michael's ruling of 2026-09-05. ONE \
+decision, TWO divergent contents of the same filename on branches that are \
+not in each other's ancestry (merge-base 2aeb1ca9), added on the same day \
+under the same commit subject and then diverged: 316 insertions and 454 \
+deletions apart. NEITHER CLAIMANT MAY MERGE A DOCUMENT AS 0011. The \
+surviving content is re-authored under a NEW number declaring `replaces = \
+11`, per the permanence rule above. This corrects a claim that PR #464 \
+carried and that was false when written: that no other local or remote ref \
+held a `docs/adr/0011-*`. One does — see `[[collision]]` below. The \
+collision predates this register reaching `main`, so it is pre-existing debt \
+discovered by the 2026-09-05 survey, not debt this register allowed to \
+form."""
+
+# ---------------------------------------------------------------------------
+# Pre-existing collisions, declared. This block is a two-directional ratchet:
+# it may not grow, and it may only shrink in the change that reconciles the
+# entry it removes. It is DECLARED, not detected — a checker reading one
+# worktree cannot see another branch, and calling this coverage would be a
+# claim the mechanism cannot honour. What IS enforced is the merge gate: a
+# colliding branch cannot land while its number is `contested`.
+#
+# Each claimant carries its own blob, ref and visibility. The blob is the
+# coordinate; the branch name is not, because a branch moves and a blob does
+# not. Where a claimant is `local_only`, that is stated rather than smoothed
+# over: the entry is unverifiable by anyone but this workstation.
+# ---------------------------------------------------------------------------
+
+[[collision]]
+number = 3
+where = "origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
+
+[[collision.claimant]]
+slug = "clean-install-starts-from-governed-opening-state"
+blob = "e30b4895cca21c0a5a0294beb2b896deefefe099"  # pragma: allowlist secret
+ref = "refs/heads/main"
+visibility = "pr"
+pr = 346
+authored = "2026-08-24"
+
+[[collision.claimant]]
+slug = "erp-owns-managed-application-lifecycle"
+blob = "33c86b6354791680d9ac7409bfc5f0b3e59ca502"  # pragma: allowlist secret
+ref = "refs/remotes/origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
+visibility = "remote_ref"
+authored = "2026-08-26"
+self_declared_date = "2026-08-17"
+
+[[collision]]
+number = 4
+where = "origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
+
+[[collision.claimant]]
+slug = "the-erp-bill-of-materials-is-frozen"
+blob = "9e8df6a21ad55494111ee610ca2b47375f0a82b7"  # pragma: allowlist secret
+ref = "refs/heads/main"
+visibility = "pr"
+pr = 347
+authored = "2026-08-24"
+
+[[collision.claimant]]
+slug = "erp-owns-external-bindings-and-session-finalization"
+blob = "5b47bf8bd80d2b46a4340616fc99044199095a13"  # pragma: allowlist secret
+ref = "refs/remotes/origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
+visibility = "remote_ref"
+authored = "2026-08-26"
+self_declared_date = "2026-08-17"
+
+[[collision]]
+number = 6
+where = "five divergent contents of one filename across nine refs"
+
+[[collision.claimant]]
+slug = "module-access-is-not-write-authority"
+blob = "953b0ffaa9bedf0fa00d07ff0d5d85bb920bba59"  # pragma: allowlist secret
+ref = "refs/remotes/origin/fix/module-access-is-not-write-authority"
+visibility = "remote_ref"
+authored = "2026-08-25"
+
+[[collision.claimant]]
+slug = "module-access-is-not-write-authority"
+blob = "782748d6"
+ref = "refs/remotes/origin/fix/module-access-ratchet-covers-all-web"
+visibility = "remote_ref"
+
+[[collision.claimant]]
+slug = "module-access-is-not-write-authority"
+blob = "b467a5f4"
+ref = "refs/heads/fix/finance-core-write-authority-provisioned"
+visibility = "local_only"
+
+[[collision.claimant]]
+slug = "module-access-is-not-write-authority"
+blob = "0a93a77a"
+ref = "refs/heads/fix/finance-rest-write-authority-provisioned"
+visibility = "local_only"
+
+[[collision.claimant]]
+slug = "module-access-is-not-write-authority"
+blob = "d7866aab"
+ref = "refs/heads/fix/fixed-assets-write-authority-provisioned"
+visibility = "local_only"
+
+[[collision]]
+number = 8
+where = "fix/refunds-have-one-owner and docs/numbering-first-series-family"
+
+[[collision.claimant]]
+slug = "refunds-have-one-owner"
+blob = "6f4811f69de5c4973ca5644d910d33323564d038"  # pragma: allowlist secret
+ref = "refs/remotes/origin/fix/refunds-have-one-owner"
+visibility = "remote_ref"
+authored = "2026-08-25"
+
+[[collision.claimant]]
+slug = "sales-quotes-are-the-first-numbering-family"
+blob = "7758885061b01a87502faff1b07554172c9ffe02"  # pragma: allowlist secret
+ref = "refs/heads/docs/numbering-first-series-family"
+visibility = "local_only"
+authored = "2026-09-03"
+
+[[collision]]
+number = 11
+where = "docs/erp-app-admin-credential-custody and feat/erp-migration-credential-custody-boundary"
+
+[[collision.claimant]]
+slug = "the-app-admin-migration-credential-has-one-custody-pointer"
+blob = "f66d2ba6d22029fc0cdf475931a472312f285e93"  # pragma: allowlist secret
+ref = "refs/remotes/origin/docs/erp-app-admin-credential-custody"
+visibility = "pr"
+pr = 464
+authored = "2026-09-04"
+
+[[collision.claimant]]
+slug = "the-app-admin-migration-credential-has-one-custody-pointer"
+blob = "6e5dec7139558fbfe11b4d5c1d402a82f0e50050"  # pragma: allowlist secret
+ref = "refs/heads/feat/erp-migration-credential-custody-boundary"
+visibility = "local_only"
+authored = "2026-09-04"
