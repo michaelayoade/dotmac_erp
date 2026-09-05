@@ -78,6 +78,29 @@
 # non-merge rescue ref would change these labels, and requires its own
 # authorization -- it has not been done.
 #
+# WHY THE BLOBS CARRY `pragma: allowlist secret`
+#
+# `detect-secrets` reads a 40-character hex string as a possible credential and
+# is right to, in general. A git blob name is the opposite of a credential: it
+# is a CONTENT ADDRESS, derived from the bytes it names, disclosing nothing that
+# the object does not already disclose to whoever can read the object. Its whole
+# purpose here is to be public and immutable, because a branch name moves and a
+# blob does not.
+#
+# The pragma is a suppression, so it states its premise rather than silencing:
+# every value under a `blob` key is a git object name and nothing else. Nothing
+# else in this file may carry the pragma.
+#
+# WHAT NO CHECK HERE VERIFIES, declared rather than called coverage
+#
+# That each blob RESOLVES. `git cat-file -e` would answer it, and cannot be run
+# in CI: a pull-request checkout carries this branch, not the nine other refs
+# these blobs live on, and four of the claimants are on branches that were never
+# pushed at all. A `local_only` coordinate is, by construction, unverifiable by
+# anyone but the workstation holding it — that is what the label means, and a
+# test asserting otherwise would fail for environmental reasons and teach
+# nothing. This is an unmonitored region with a named cause, not an exemption.
+#
 # A DOCUMENT'S SELF-DECLARED DATE IS NOT AN AUTHOR DATE
 #
 # The archived 0003 and 0004 claimants both print `**Date:** 2026-08-17` in
@@ -282,7 +305,7 @@ where = "origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
 
 [[collision.claimant]]
 slug = "clean-install-starts-from-governed-opening-state"
-blob = "e30b4895cca21c0a5a0294beb2b896deefefe099"
+blob = "e30b4895cca21c0a5a0294beb2b896deefefe099"  # pragma: allowlist secret
 ref = "refs/heads/main"
 visibility = "pr"
 pr = 346
@@ -290,7 +313,7 @@ authored = "2026-08-24"
 
 [[collision.claimant]]
 slug = "erp-owns-managed-application-lifecycle"
-blob = "33c86b6354791680d9ac7409bfc5f0b3e59ca502"
+blob = "33c86b6354791680d9ac7409bfc5f0b3e59ca502"  # pragma: allowlist secret
 ref = "refs/remotes/origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
 visibility = "remote_ref"
 authored = "2026-08-26"
@@ -302,7 +325,7 @@ where = "origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
 
 [[collision.claimant]]
 slug = "the-erp-bill-of-materials-is-frozen"
-blob = "9e8df6a21ad55494111ee610ca2b47375f0a82b7"
+blob = "9e8df6a21ad55494111ee610ca2b47375f0a82b7"  # pragma: allowlist secret
 ref = "refs/heads/main"
 visibility = "pr"
 pr = 347
@@ -310,7 +333,7 @@ authored = "2026-08-24"
 
 [[collision.claimant]]
 slug = "erp-owns-external-bindings-and-session-finalization"
-blob = "5b47bf8bd80d2b46a4340616fc99044199095a13"
+blob = "5b47bf8bd80d2b46a4340616fc99044199095a13"  # pragma: allowlist secret
 ref = "refs/remotes/origin/archive/worktrees/2026-08-25/erp-managed-application-lifecycle"
 visibility = "remote_ref"
 authored = "2026-08-26"
@@ -322,7 +345,7 @@ where = "five divergent contents of one filename across nine refs"
 
 [[collision.claimant]]
 slug = "module-access-is-not-write-authority"
-blob = "953b0ffaa9bedf0fa00d07ff0d5d85bb920bba59"
+blob = "953b0ffaa9bedf0fa00d07ff0d5d85bb920bba59"  # pragma: allowlist secret
 ref = "refs/remotes/origin/fix/module-access-is-not-write-authority"
 visibility = "remote_ref"
 authored = "2026-08-25"
@@ -357,14 +380,14 @@ where = "fix/refunds-have-one-owner and docs/numbering-first-series-family"
 
 [[collision.claimant]]
 slug = "refunds-have-one-owner"
-blob = "6f4811f69de5c4973ca5644d910d33323564d038"
+blob = "6f4811f69de5c4973ca5644d910d33323564d038"  # pragma: allowlist secret
 ref = "refs/remotes/origin/fix/refunds-have-one-owner"
 visibility = "remote_ref"
 authored = "2026-08-25"
 
 [[collision.claimant]]
 slug = "sales-quotes-are-the-first-numbering-family"
-blob = "7758885061b01a87502faff1b07554172c9ffe02"
+blob = "7758885061b01a87502faff1b07554172c9ffe02"  # pragma: allowlist secret
 ref = "refs/heads/docs/numbering-first-series-family"
 visibility = "local_only"
 authored = "2026-09-03"
@@ -375,7 +398,7 @@ where = "docs/erp-app-admin-credential-custody and feat/erp-migration-credential
 
 [[collision.claimant]]
 slug = "the-app-admin-migration-credential-has-one-custody-pointer"
-blob = "f66d2ba6d22029fc0cdf475931a472312f285e93"
+blob = "f66d2ba6d22029fc0cdf475931a472312f285e93"  # pragma: allowlist secret
 ref = "refs/remotes/origin/docs/erp-app-admin-credential-custody"
 visibility = "pr"
 pr = 464
@@ -383,7 +406,7 @@ authored = "2026-09-04"
 
 [[collision.claimant]]
 slug = "the-app-admin-migration-credential-has-one-custody-pointer"
-blob = "6e5dec7139558fbfe11b4d5c1d402a82f0e50050"
+blob = "6e5dec7139558fbfe11b4d5c1d402a82f0e50050"  # pragma: allowlist secret
 ref = "refs/heads/feat/erp-migration-credential-custody-boundary"
 visibility = "local_only"
 authored = "2026-09-04"

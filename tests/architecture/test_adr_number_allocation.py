@@ -822,3 +822,58 @@ def test_every_collision_claimant_in_the_real_register_is_labelled() -> None:
         assert claimant["visibility"] in VISIBILITY_RANK, claimant
         assert BLOB_SHA.search(claimant["blob"]), claimant
         assert claimant["ref"].startswith("refs/"), claimant
+
+
+# ---------------------------------------------------------------------------
+# The `detect-secrets` suppression is BOUNDED.  A pragma is a guard being
+# switched off; the premise it rests on — "this value is a git object name and
+# nothing else" — is checkable, so it is checked rather than trusted.
+# ---------------------------------------------------------------------------
+
+ALLOWLIST_PRAGMA = "pragma: allowlist secret"
+
+
+def misplaced_pragmas(text: str) -> list[str]:
+    """Lines suppressing the secret scanner that are not blob coordinates."""
+    out: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if ALLOWLIST_PRAGMA not in line or line.lstrip().startswith("#"):
+            continue
+        if not re.match(r'^blob = "[0-9a-f]{8,40}"\s*#', line):
+            out.append(f"line {number}: {line.strip()}")
+    return out
+
+
+def test_only_blob_coordinates_suppress_the_secret_scanner() -> None:
+    """Fails before this rule: nine pragmas were added to get `detect-secrets`
+    to pass, and nothing stopped a tenth appearing on a line that really did
+    hold a credential. A blob name is a CONTENT ADDRESS and discloses nothing;
+    that premise is what the suppression rests on, so it is enforced."""
+    stray = misplaced_pragmas(REGISTER.read_text(encoding="utf-8"))
+    assert stray == [], (
+        "only a `blob` coordinate may carry the allowlist pragma: " + "; ".join(stray)
+    )
+
+
+def test_a_planted_pragma_on_a_non_blob_line_is_named() -> None:
+    planted = 'claimed = "2026-01-01"  # pragma: allowlist secret\n'
+    assert misplaced_pragmas(planted), "the pragma guard does not bite"
+
+
+def test_a_pragma_on_a_blob_line_is_not_named() -> None:
+    """Near miss. If this ever starts failing, the guard has stopped reading
+    the line and started rejecting the pragma itself."""
+    allowed = 'blob = "f66d2ba6d22029fc0cdf475931a472312f285e93"  # pragma: allowlist secret\n'  # noqa: E501
+    assert misplaced_pragmas(allowed) == []
+
+
+def test_the_suppression_is_not_vacuous() -> None:
+    """A rule over zero pragmas passes for the wrong reason. The register
+    really does carry them, one per full-length blob."""
+    text = REGISTER.read_text(encoding="utf-8")
+    live = [
+        line
+        for line in text.splitlines()
+        if ALLOWLIST_PRAGMA in line and not line.lstrip().startswith("#")
+    ]
+    assert len(live) == 9, f"expected nine suppressed blob lines, found {len(live)}"
