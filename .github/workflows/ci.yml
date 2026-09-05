@@ -403,6 +403,7 @@ jobs:
             --security-opt no-new-privileges:true \
             -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
             -e MIGRATION_DATABASE_URL=postgresql+psycopg://app_admin@ci-db:5432/dotmac_erp_ci \
+            -e MIGRATION_EXPECTED_DATABASE=dotmac_erp_ci \
             -e PEOPLE_EMPLOYMENT_TYPE_ACTIVATION=1 \
             -e SECRET_KEY=ci-test-secret-key-not-for-production \
             -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
