@@ -13,6 +13,7 @@ a migration environment.
 from __future__ import annotations
 
 import ast
+from functools import cache
 from pathlib import Path
 
 from app.migration_authority import (
@@ -437,8 +438,15 @@ def test_the_authentication_tier_guard_still_bites() -> None:
 CONTRACT_MODULE_PREFIX = "app.migration_"
 
 
-def _contract_imports() -> list[tuple[Path, int, str, str]]:
-    """Every `from app.migration_* import NAME` in the tree."""
+@cache
+def _contract_imports() -> tuple[tuple[Path, int, str, str], ...]:
+    """Every `from app.migration_* import NAME` in the tree.
+
+    Cached, and that is not an optimisation detail. This parses every `.py`
+    file in the repository; the sensitivity proof below calls it five times, and
+    uncached that alone exceeded the suite's 60-second per-test timeout. A guard
+    that times out is a guard that gets deleted.
+    """
     found: list[tuple[Path, int, str, str]] = []
     for path in sorted(REPO_ROOT.rglob("*.py")):
         if any(part in {".venv", "node_modules", ".git"} for part in path.parts):
@@ -459,7 +467,7 @@ def _contract_imports() -> list[tuple[Path, int, str, str]]:
                     for alias in node.names
                     if alias.name != "*"
                 )
-    return found
+    return tuple(found)
 
 
 def _unresolved(surfaces: dict[str, set[str]]) -> list[str]:
