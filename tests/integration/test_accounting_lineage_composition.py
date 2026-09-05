@@ -414,10 +414,28 @@ def test_the_people_schema_exists_with_every_declared_table(
     assert present == set(module.tables)
 
 
-def test_two_concurrent_import_workers_claim_different_partitions(
+def test_an_overlapping_transaction_does_not_reclaim_a_locked_partition(
     composed_database: URL,
 ) -> None:
-    """The first adopter proves SKIP LOCKED ownership on its real schema."""
+    """`FOR UPDATE SKIP LOCKED` on the real schema, with OVERLAPPING transactions.
+
+    RENAMED. This was `test_two_concurrent_import_workers_claim_different_
+    partitions`, and it is not concurrent: both `claim_partition` calls happen
+    in ONE THREAD, one after the other. The transactions genuinely overlap — the
+    first session still holds its row lock, uncommitted, when the second claims —
+    so `SKIP LOCKED` is really exercised, and that is worth keeping.
+
+    What it cannot do is RACE. The ordering is deterministic, so it cannot
+    detect a defect that only appears when two claimants execute the claim
+    simultaneously. The old name asserted a property the body never tested, and
+    a test whose name is broader than its cases terminates the search: a reader
+    checking whether concurrent claims were covered found this and stopped.
+
+    The real race, with a barrier and a negative control proving the harness
+    interleaves, is
+    `tests/integration/test_imports_concurrent_partition_claims.py`
+    (adoption-boundary gate 3). Neither replaces the other.
+    """
     from dotmac_imports import (
         ColumnMapping,
         PartitionDescriptor,
