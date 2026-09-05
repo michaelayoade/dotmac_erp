@@ -72,6 +72,7 @@ import psycopg
 from psycopg import sql
 
 from app.migration_database_roles import (
+    EXPECTED_DATABASE_VAR,
     MIGRATION_OWNERSHIP_SQL,
     NON_ESCALATING_ROLES,
     RELAY_DISPATCHER_CONTRACT,
@@ -88,12 +89,6 @@ from app.migration_database_roles import (
 
 BOOTSTRAP_URL_VAR = "BOOTSTRAP_DATABASE_URL"
 MIGRATION_URL_VAR = "MIGRATION_DATABASE_URL"
-#: Optional operator binding: the database name this verification was
-#: authorised against. Optional because making it mandatory would fail every
-#: existing caller on the first run, which is how a check gets deleted rather
-#: than adopted. Absent, the run prints `database identity UNVERIFIED` and
-#: nobody can mistake a green result for a checked one.
-EXPECTED_DATABASE_VAR = "MIGRATION_EXPECTED_DATABASE"
 
 
 def _attributes(bypassrls: bool, superuser: bool) -> str:

@@ -1,6 +1,7 @@
 from logging.config import fileConfig
 import importlib
 import os
+import sys
 from pathlib import Path
 
 from sqlalchemy import engine_from_config, pool, text
@@ -13,11 +14,14 @@ from alembic import context
 from app.db import Base
 from app.migration_bindings import ASSEMBLY_PREREQUISITE_BINDINGS
 from app.migration_database_roles import (
+    EXPECTED_DATABASE_VAR,
     MIGRATION_EXECUTOR,
     MIGRATION_OWNERSHIP_SQL,
     ROLE_CONTRACT,
+    database_identity_violations,
     migration_executor_violations,
     migration_ownership_violations,
+    unverified_database_identity_notice,
 )
 from app.migration_planes import ASSEMBLY_MODULE_PLANES
 
@@ -84,9 +88,46 @@ def _migration_url() -> str:
 
 
 def verify_migration_connection(connection: Connection) -> None:
+    """The executor contract, evaluated by the thing that actually migrates.
+
+    ## Why the database check is HERE and not only in the deploy preflight
+
+    `scripts/bootstrap_database_roles.py --verify-only` makes this same
+    assertion, but it is `scripts/deploy.sh` step 3a — one caller. `make
+    migrate`, `make docker-migrate` and CI's own `alembic upgrade heads` reach
+    the database WITHOUT it. A capability proven only on a path a caller may
+    skip is not proven where it runs.
+
+    The reason recorded for keeping it preflight-only was that "a refusal
+    mid-chain leaves a half-applied upgrade". That premise does not hold at THIS
+    call site, and the call site is the whole argument: `run_migrations_online`
+    invokes this inside a read-only `connection.begin()` block that closes
+    BEFORE `context.configure`, before `context.begin_transaction()` and before
+    `context.run_migrations()`. Nothing has been applied when this raises —
+    which is already true of the executor and ownership checks below, and has
+    been since they were added. There is no chain here to be mid-way through.
+
+    ## What each check answers
+
+    * `migration_executor_violations` — WHO the connection is.
+    * `migration_ownership_violations` — WHAT it owns.
+    * `database_identity_violations` — WHERE it landed. Everything above is
+      satisfiable by a different, correctly shaped cluster: a staging database
+      with its own well-formed `app_admin` owning its own objects passes both.
+
+    ## Absent is reported, never assumed
+
+    `MIGRATION_EXPECTED_DATABASE` is an optional operator binding. Mandatory
+    would fail every existing caller on its first run, which is how a check gets
+    deleted rather than adopted. Unset, this prints `database identity
+    UNVERIFIED` and names the variable, so a green migration cannot be read as a
+    checked one (ADR-0018: silence is not a pass).
+    """
     if connection.dialect.name != "postgresql":
         return
     current_user = str(connection.scalar(text("SELECT current_user")))
+    observed_database = str(connection.scalar(text("SELECT current_database()")))
+    expected_database = os.environ.get(EXPECTED_DATABASE_VAR, "").strip() or None
     rows = connection.execute(
         text(
             "SELECT rolname, rolbypassrls, rolsuper FROM pg_roles "
@@ -100,7 +141,16 @@ def verify_migration_connection(connection: Connection) -> None:
     violations = (
         *migration_executor_violations(current_user, observed),
         *migration_ownership_violations(non_owned_counts),
+        *database_identity_violations(observed_database, expected_database),
     )
+    notice = unverified_database_identity_notice(
+        observed_database, expected_database, EXPECTED_DATABASE_VAR
+    )
+    if notice is not None:
+        # stderr rather than the logger: `fileConfig` has not necessarily been
+        # applied for every caller of this module, and a notice that a log
+        # configuration can swallow is the same as no notice.
+        sys.stderr.write(f"MIGRATION CONTRACT: {notice}\n")
     if violations:
         raise RuntimeError(
             "migration executor contract failed: " + "; ".join(violations)

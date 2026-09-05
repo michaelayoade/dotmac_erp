@@ -38,6 +38,18 @@ RELAY_DISPATCHER_CONTRACT: Final[dict[str, RolePosture]] = {
 
 MIGRATION_EXECUTOR: Final[str] = "app_admin"
 
+#: Optional operator binding: the database name a migration verification was
+#: authorised against. Optional because making it mandatory would fail every
+#: existing caller on its first run, which is how a check gets deleted rather
+#: than adopted. Absent, the caller prints `database identity UNVERIFIED` and
+#: nobody can mistake a green result for a checked one.
+#:
+#: Defined HERE rather than in either caller because BOTH the deploy preflight
+#: (`scripts/bootstrap_database_roles.py`) and the real migration executor
+#: (`alembic/env.py`) read it. Two spellings of one operator-facing name is a
+#: drift that presents as "the variable I set did nothing".
+EXPECTED_DATABASE_VAR: Final[str] = "MIGRATION_EXPECTED_DATABASE"
+
 #: The roles a LONG-RUNNING process connects as. Removing a credential from an
 #: env file accomplishes nothing if the credential that remains can become the
 #: one that was removed: PostgreSQL role ATTRIBUTES are not inherited through
@@ -528,6 +540,7 @@ def migration_ownership_violations(
 
 __all__ = [
     "ESCALATING_ATTRIBUTES",
+    "EXPECTED_DATABASE_VAR",
     "MIGRATION_EXECUTOR",
     "MIGRATION_OWNERSHIP_SQL",
     "NON_ESCALATING_ROLES",

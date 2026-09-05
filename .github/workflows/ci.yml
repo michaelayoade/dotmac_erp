@@ -818,6 +818,14 @@ jobs:
     env:
       DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp_test"
       MIGRATION_DATABASE_URL: "postgresql+psycopg://app_admin@localhost:5432/dotmac_erp_test"
+      # ADOPTION, not availability. `alembic/env.py` reads this and ASSERTS the
+      # database it reached; unset, it would print `database identity
+      # UNVERIFIED` and pass. Setting it here is what makes the "Run Alembic
+      # migrations" step below an executor-side proof rather than an offer of
+      # one — the same real executor a deployment runs, on a disposable
+      # database. It must equal POSTGRES_DB above; if the two ever diverge the
+      # migration step refuses and names both, which is the check working.
+      MIGRATION_EXPECTED_DATABASE: "dotmac_erp_test"
       # CI has no previous serving image, so the activation drain premise is
       # true for its disposable database. Production sets this only through
       # scripts/deploy.sh --people-employment-type-activation.
