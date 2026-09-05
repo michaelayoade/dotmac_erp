@@ -390,6 +390,15 @@ lands in its own change, cites this ADR, and is owned as noted.
 11. **Correct `docs/inventories/2026-09-04-erp-migration-credential-custody.md`
     §§ 4–7**, which still describe the superseded local-contract shape. *(ERP;
     the inventory is outside this lane's file set.)*
+12. **Clear the `detect-secrets` pre-commit failure at
+    `docs/inventories/2026-09-04-erp-migration-credential-custody.md:45`.** The
+    flagged string is row V9's placeholder reference grammar,
+    `openbao://<mount>/data/<path>#<field>` — a grammar, not material. It needs
+    the repository's existing inline `# pragma: allowlist secret` treatment, or
+    a baseline refresh. **This blocks the pull request carrying this ADR**, and
+    it is a defect of the base commit, not of this revision. Both the inventory
+    and `.secrets.baseline` are outside this lane's file set, so it was reported
+    rather than fixed here. *(ERP.)*
 
 ---
 
