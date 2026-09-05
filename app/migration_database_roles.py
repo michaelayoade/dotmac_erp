@@ -50,123 +50,16 @@ MIGRATION_EXECUTOR: Final[str] = "app_admin"
 #: drift that presents as "the variable I set did nothing".
 EXPECTED_DATABASE_VAR: Final[str] = "MIGRATION_EXPECTED_DATABASE"
 
-#: The roles a LONG-RUNNING process connects as. Removing a credential from an
-#: env file accomplishes nothing if the credential that remains can become the
-#: one that was removed: PostgreSQL role ATTRIBUTES are not inherited through
-#: membership, but `SET ROLE` adopts them wholesale, so a member of `app_admin`
-#: is one statement away from BYPASSRLS and a member of a superuser role is one
-#: statement away from everything.
+#: WHICH roles hold which authority, and what each authority class may hold and
+#: reach, is `app.migration_authority` — two versioned policies over one shared
+#: catalogue observation. It is a SEPARATE module and not a growth of this one
+#: for a reason worth stating: `ROLE_CONTRACT` above is a point-in-time snapshot
+#: copied into the applied `20260814` revision, and every attribute added here
+#: would change what that revision asserted. `app.migration_authority` is
+#: runtime-only, versioned in its own type names, and has no migration copy.
 #:
-#: `app_admin` is deliberately NOT a subject. It is BYPASSRLS by contract and
-#: exists to own DDL, so "may it reach BYPASSRLS" is not a question about it.
-#: Whether `app_admin` can reach SUPERUSER or CREATEROLE is a real question and
-#: this contract does not ask it — that region is UNMONITORED, stated here
-#: rather than silently exempted (ADR-0018).
-NON_ESCALATING_ROLES: Final[frozenset[str]] = frozenset(
-    {
-        "app_user",
-        "platform_api",
-        "outbox_dispatcher",
-        "platform_outbox_dispatcher",
-    }
-)
-
-#: The attributes that make a reachable role an escalation target. Named
-#: individually because a category ("privileged roles") is not checkable.
-ESCALATING_ATTRIBUTES: Final[tuple[str, ...]] = (
-    "SUPERUSER",
-    "CREATEROLE",
-    "BYPASSRLS",
-)
-
-#: Transitive role membership, computed from the two PUBLICLY READABLE
-#: catalogues.
-#:
-#: `pg_has_role()` is the shorter spelling and is NOT used: PostgreSQL restricts
-#: which roles a non-superuser may interrogate with it, and this query has to
-#: run on the deploy preflight's `app_admin` connection, which is NOSUPERUSER by
-#: contract. A check that silently answers "no edges" because it was not allowed
-#: to look is worse than no check. `pg_roles` and `pg_auth_members` are
-#: world-readable, so the recursive walk answers the same question from evidence
-#: `app_admin` can actually see.
-#:
-#: Membership is the right relation for BOTH halves of the ruling. Inheritance
-#: (`rolinherit`) grants a member the target's PRIVILEGES automatically;
-#: `SET ROLE` adopts the target's ATTRIBUTES on demand and needs only
-#: membership. Walking membership therefore over-reports rather than
-#: under-reports, which is the correct direction for a security gate.
-#:
-#: What it does NOT see, stated rather than implied: escalation through a
-#: SECURITY DEFINER routine owned by a privileged role, through `rolreplication`
-#: or `rolcreatedb`, or through anything granted after this observation. Those
-#: regions are UNMONITORED.
-ROLE_ESCALATION_SQL: Final[str] = """
-WITH RECURSIVE reachable(subject, target_oid) AS (
-    SELECT subject_role.rolname, membership.roleid
-    FROM pg_roles AS subject_role
-    JOIN pg_auth_members AS membership
-      ON membership.member = subject_role.oid
-    WHERE subject_role.rolname = ANY(%(subjects)s)
-
-    UNION
-
-    SELECT reachable.subject, membership.roleid
-    FROM reachable
-    JOIN pg_auth_members AS membership
-      ON membership.member = reachable.target_oid
-)
-SELECT reachable.subject,
-       target_role.rolname,
-       target_role.rolsuper,
-       target_role.rolcreaterole,
-       target_role.rolbypassrls
-FROM reachable
-JOIN pg_roles AS target_role ON target_role.oid = reachable.target_oid
-WHERE target_role.rolsuper
-   OR target_role.rolcreaterole
-   OR target_role.rolbypassrls
-ORDER BY reachable.subject, target_role.rolname
-"""
-
-RoleEscalationEdge = tuple[str, str, bool, bool, bool]
-
-
-def role_escalation_violations(
-    edges: Sequence[RoleEscalationEdge],
-) -> tuple[str, ...]:
-    """Name EVERY way a runtime role can become a privileged one.
-
-    One line per (subject, reachable target) pair, spelling out which attributes
-    the target carries, because "app_user can escalate" does not tell an
-    operator which GRANT to revoke.
-
-    A subject reaching a target it is not supposed to reach is reported whether
-    the edge is direct or transitive; the SQL above has already flattened the
-    chain, so this function never has to know the graph's shape.
-    """
-    violations: list[str] = []
-    for subject, target, superuser, createrole, bypassrls in edges:
-        if subject not in NON_ESCALATING_ROLES:
-            continue
-        attributes = tuple(
-            name
-            for name, held in zip(
-                ESCALATING_ATTRIBUTES,
-                (superuser, createrole, bypassrls),
-                strict=True,
-            )
-            if held
-        )
-        if not attributes:
-            continue
-        violations.append(
-            f"runtime role {subject!r} is a member of {target!r} "
-            f"({'/'.join(attributes)}); SET ROLE adopts those attributes, so "
-            "withholding a privileged connection string does not withhold the "
-            "privilege"
-        )
-    return tuple(sorted(violations))
-
+#: What this module still owns: the frozen `(rolbypassrls, rolsuper)` contract,
+#: the executor's NAME, object ownership, and database identity.
 
 OWNERSHIP_PLAN_VERSION: Final[int] = 1
 OwnershipPlanRow = tuple[str, str, str, str]
@@ -539,25 +432,26 @@ def migration_ownership_violations(
 
 
 __all__ = [
-    "ESCALATING_ATTRIBUTES",
     "EXPECTED_DATABASE_VAR",
     "MIGRATION_EXECUTOR",
     "MIGRATION_OWNERSHIP_SQL",
-    "NON_ESCALATING_ROLES",
     "OWNERSHIP_PLAN_SQL",
     "OWNERSHIP_PLAN_VERSION",
     "OwnershipPlanRow",
+    # Public, and three modules import them — the bootstrap script, the relay
+    # migration test and the authority contract test. They were simply missing
+    # here, which made `__all__` a partial account of the surface rather than a
+    # statement of it, and left the import sweep unable to use it.
+    "RELAY_DISPATCHER_CONTRACT",
     "ROLE_CONTRACT",
-    "ROLE_ESCALATION_SQL",
-    "RoleEscalationEdge",
     "RolePosture",
     "database_identity_violations",
     "migration_executor_violations",
     "migration_ownership_violations",
     "ownership_plan_sha256",
     "posture",
+    "relay_dispatcher_violations",
     "role_contract_violations",
-    "role_escalation_violations",
     "unexpected_owners",
     "unverified_database_identity_notice",
 ]

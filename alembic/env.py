@@ -13,6 +13,19 @@ from dotmac_kernel.prerequisites import install_prerequisite_bindings
 from alembic import context
 from app.db import Base
 from app.migration_bindings import ASSEMBLY_PREREQUISITE_BINDINGS
+from app.migration_authority import (
+    AUTHORITY_SUBJECTS,
+    EXPECTED_AUTHENTICATION_VAR,
+    ROLE_AUTHORITY_SQL,
+    MigrationExecutorAuthorityPolicyV1,
+    RoleAuthorityObservationV1,
+    RuntimeRoleAuthorityPolicyV1,
+    observation_from_rows,
+    parse_authentication_expectation,
+    role_authority_violations,
+    unverified_authentication_notice,
+    violation_messages,
+)
 from app.migration_database_roles import (
     EXPECTED_DATABASE_VAR,
     MIGRATION_EXECUTOR,
@@ -87,6 +100,27 @@ def _migration_url() -> str:
     return value
 
 
+def _authority_observation(connection: Connection) -> RoleAuthorityObservationV1:
+    """One catalogue reading, shared by BOTH authority policies.
+
+    `exec_driver_sql`, not `text()`, and that is not a style choice.
+    `ROLE_AUTHORITY_SQL` is written in psycopg's pyformat (`%(subjects)s`)
+    because the deploy preflight runs it through psycopg directly. `text()`
+    would apply SQLAlchemy's own `:name` paramstyle and leave `%(subjects)s` a
+    literal. `exec_driver_sql` hands the string to the DBAPI unchanged, so this
+    executor runs THE SAME QUERY BYTES the preflight runs rather than a
+    re-spelled copy that could drift from it.
+
+    The subjects are `AUTHORITY_SUBJECTS`, derived from the two policies'
+    declarations rather than listed here. A role added to either policy is
+    covered by this call the moment it is added, with no edit to this file.
+    """
+    rows = connection.exec_driver_sql(
+        ROLE_AUTHORITY_SQL, {"subjects": sorted(AUTHORITY_SUBJECTS)}
+    ).all()
+    return observation_from_rows(rows)
+
+
 def verify_migration_connection(connection: Connection) -> None:
     """The executor contract, evaluated by the thing that actually migrates.
 
@@ -114,6 +148,34 @@ def verify_migration_connection(connection: Connection) -> None:
     * `database_identity_violations` — WHERE it landed. Everything above is
       satisfiable by a different, correctly shaped cluster: a staging database
       with its own well-formed `app_admin` owning its own objects passes both.
+    * `role_authority_violations` — WHETHER this deployment's identities hold
+      and can reach only what their authority class permits. Two policies,
+      one shared catalogue observation:
+
+      - `RuntimeRoleAuthorityPolicyV1` over `app_user`, `platform_api` and the
+        two relay dispatchers. Removing `MIGRATION_DATABASE_URL` from a runtime
+        service is undone by a role graph that lets the runtime role BECOME the
+        migration role, and equally by a runtime role that simply holds
+        CREATEROLE on itself — which `ROLE_CONTRACT` cannot see, because it
+        reads `(rolbypassrls, rolsuper)` and nothing else.
+      - `MigrationExecutorAuthorityPolicyV1` over `app_admin`. It asks a
+        DIFFERENT question and therefore is a different policy: `app_admin`
+        must HOLD BYPASSRLS, so a membership reaching only another BYPASSRLS
+        role is not an escalation for it, while SUPERUSER, CREATEROLE and the
+        server file/program roles are. Folding `app_admin` into the runtime
+        subject set would have made one policy answer two questions.
+
+      It also proves the connection AUTHENTICATED as `app_admin` rather than
+      arriving as a privileged session that ran `SET ROLE app_admin` —
+      `session_user` and `current_user` are read together, and
+      `MIGRATION_EXPECTED_AUTHENTICATION` optionally binds `system_user` to an
+      approved method and identity.
+
+    ## Alembic never repairs the graph
+
+    A violation here raises. It revokes nothing and alters no role:
+    the repair is a separately authorised bootstrap action, because a migration
+    that can fix its own authority has no authority constraint at all.
 
     ## Absent is reported, never assumed
 
@@ -138,19 +200,31 @@ def verify_migration_connection(connection: Connection) -> None:
     observed = {str(row[0]): (bool(row[1]), bool(row[2])) for row in rows}
     ownership_rows = connection.execute(text(MIGRATION_OWNERSHIP_SQL)).all()
     non_owned_counts = {str(row[0]): int(row[1]) for row in ownership_rows}
+    observation = _authority_observation(connection)
+    executor_policy = MigrationExecutorAuthorityPolicyV1.binding_authentication(
+        parse_authentication_expectation(os.environ.get(EXPECTED_AUTHENTICATION_VAR))
+    )
     violations = (
         *migration_executor_violations(current_user, observed),
         *migration_ownership_violations(non_owned_counts),
         *database_identity_violations(observed_database, expected_database),
+        *violation_messages(
+            role_authority_violations(RuntimeRoleAuthorityPolicyV1, observation)
+        ),
+        *violation_messages(role_authority_violations(executor_policy, observation)),
     )
-    notice = unverified_database_identity_notice(
-        observed_database, expected_database, EXPECTED_DATABASE_VAR
-    )
-    if notice is not None:
+    for unverified in (
+        unverified_database_identity_notice(
+            observed_database, expected_database, EXPECTED_DATABASE_VAR
+        ),
+        unverified_authentication_notice(executor_policy, EXPECTED_AUTHENTICATION_VAR),
+    ):
+        if unverified is None:
+            continue
         # stderr rather than the logger: `fileConfig` has not necessarily been
         # applied for every caller of this module, and a notice that a log
         # configuration can swallow is the same as no notice.
-        sys.stderr.write(f"MIGRATION CONTRACT: {notice}\n")
+        sys.stderr.write(f"MIGRATION CONTRACT: {unverified}\n")
     if violations:
         raise RuntimeError(
             "migration executor contract failed: " + "; ".join(violations)

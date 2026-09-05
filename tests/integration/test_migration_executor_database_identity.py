@@ -16,7 +16,7 @@ objects passes every check the executor made. That is the defect these measure.
 
 ## Why these are integration tests and not unit tests
 
-`tests/architecture/test_runtime_role_escalation_contract.py` reads the AST and
+`tests/architecture/test_runtime_role_authority_contract.py` reads the AST and
 proves the call sites exist and are ordered correctly. That is a claim about
 source. THIS file drives `alembic upgrade` against a real PostgreSQL database
 through `alembic/env.py` — the same entry point a deployment uses — so what is
