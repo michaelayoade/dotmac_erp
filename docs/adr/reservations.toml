@@ -116,7 +116,7 @@
 #              and CI fails. Reconciling the claim is how the branch merges.
 #              No new `contested` row may ever be added.
 
-next_free = 12
+next_free = 13
 
 # ---------------------------------------------------------------------------
 # On protected `main`. `landed_at` is derived from `main`'s first-parent
@@ -298,6 +298,12 @@ form."""
 # not. Where a claimant is `local_only`, that is stated rather than smoothed
 # over: the entry is unverifiable by anyone but this workstation.
 # ---------------------------------------------------------------------------
+
+[[reservation]]
+number = 12
+slug = "invoice-sync-failures-are-durable-outcomes"
+status = "reserved"
+claimed = "2026-09-06"
 
 [[collision]]
 number = 3
