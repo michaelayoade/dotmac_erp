@@ -139,7 +139,9 @@ def test_accounting_v2_feed_uses_additive_endpoint_and_filters() -> None:
 
     records = list(
         client.get_invoice_accounting_sync_v2(
-            status="issued", updated_since="2026-09-01T00:00:00+00:00"
+            invoice_id="11111111-1111-1111-1111-111111111111",
+            status="issued",
+            updated_since="2026-09-01T00:00:00+00:00",
         )
     )
 
@@ -149,6 +151,7 @@ def test_accounting_v2_feed_uses_additive_endpoint_and_filters() -> None:
         "/invoices/accounting-sync/v2",
     )
     params = client._request.call_args.kwargs["params"]
+    assert params["invoice_id"] == "11111111-1111-1111-1111-111111111111"
     assert params["status"] == "issued"
     assert params["updated_since"] == "2026-09-01T00:00:00+00:00"
 
