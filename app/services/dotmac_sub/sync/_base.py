@@ -109,6 +109,22 @@ class CustomerLockContentionError(RuntimeError):
     """
 
 
+class InvoiceSyncPermanentDataError(ValueError):
+    """A source/configuration contradiction that retries cannot repair."""
+
+    def __init__(self, message: str, *, dedupe_key: tuple[str, ...]) -> None:
+        super().__init__(message)
+        self.dedupe_key = dedupe_key
+
+
+class TaxMappingConfigurationError(InvoiceSyncPermanentDataError):
+    """A stable source-tax mapping is absent or ambiguous in ERP."""
+
+
+class InvoiceSourceAccountingMismatchError(InvoiceSyncPermanentDataError):
+    """Self-Care line facts do not reconcile to its invoice header facts."""
+
+
 class BaseSyncMixin:
     """Core utilities shared by all dotmac_sub sync mixins."""
 
@@ -260,6 +276,7 @@ class BaseSyncMixin:
             TaxCode.applies_to_sales.is_(True),
             TaxCode.tax_rate == ratio,
             TaxCode.is_inclusive.is_(application == "inclusive"),
+            TaxCode.is_fixed_amount.is_(False),
             TaxCode.is_active.is_(True),
             TaxCode.effective_from <= effective_date,
             or_(
@@ -268,14 +285,32 @@ class BaseSyncMixin:
             ),
             TaxCode.tax_collected_account_id.is_not(None),
         ]
-        if source_rate.code:
-            predicates.append(TaxCode.tax_code == source_rate.code)
         candidates = list(self.db.scalars(select(TaxCode).where(*predicates)).all())
+        # Sub and ERP own different tax-code namespaces (for example VAT75 vs
+        # NG-VAT-7.5). A source display code is therefore only a deterministic
+        # tie-breaker when ERP has several otherwise-equivalent codes; it is
+        # never a cross-system identifier. Rate, application, effective date,
+        # sales applicability and the collected-tax account are the semantic
+        # mapping boundary.
+        if len(candidates) > 1 and source_rate.code:
+            code_matches = [
+                candidate
+                for candidate in candidates
+                if candidate.tax_code == source_rate.code
+            ]
+            if len(code_matches) == 1:
+                candidates = code_matches
         if len(candidates) != 1:
-            raise ValueError(
-                "ERP must have exactly one effective sales tax code with a "
-                f"collected-tax account for Sub rate {source_rate.name} "
-                f"({source_rate.rate}%, {application}); found {len(candidates)}"
+            candidate_codes = ", ".join(
+                sorted(candidate.tax_code for candidate in candidates)
+            )
+            detail = candidate_codes or "none"
+            raise TaxMappingConfigurationError(
+                "ERP must have exactly one effective percentage sales tax code "
+                "with a collected-tax account for Sub rate "
+                f"{source_rate.name} ({source_rate.rate}%, {application}) on "
+                f"{effective_date}; semantic candidates: {detail}",
+                dedupe_key=(source_tax_rate_id, application),
             )
         self._source_tax_code_cache[key] = candidates[0]
         return candidates[0]

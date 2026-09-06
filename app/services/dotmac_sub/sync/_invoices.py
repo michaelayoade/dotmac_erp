@@ -27,7 +27,11 @@ from app.services.dotmac_sub.client import (
 )
 from app.services.finance.money_boundary import round_to_minor_units, to_boundary_money
 
-from ._base import SyncWatermarkPosition
+from ._base import (
+    InvoiceSourceAccountingMismatchError,
+    InvoiceSyncPermanentDataError,
+    SyncWatermarkPosition,
+)
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
 from ._progress import WatermarkPositionProgress
 from ._types import SyncResult
@@ -119,6 +123,8 @@ class InvoiceSyncMixin:
     ) -> SyncResult:
         result = SyncResult(success=True, entity_type="invoices")
         processed = 0
+        attempted = 0
+        reported_permanent_errors: set[tuple[str, ...]] = set()
         # Incremental pull: only when this is the unfiltered full sync (a
         # targeted account_id/status pull must not touch the global cursor).
         use_watermark = account_id is None and status is None
@@ -149,9 +155,10 @@ class InvoiceSyncMixin:
                     and watermark_position.includes(inv.updated_at, inv.id)
                 ):
                     continue
-                if batch_size and processed >= batch_size:
+                if batch_size and attempted >= batch_size:
                     limit_reached = True
                     break
+                attempted += 1
                 row_updated_at = inv.updated_at
                 savepoint = None
                 try:
@@ -172,6 +179,30 @@ class InvoiceSyncMixin:
                     # run so one denied endpoint does not create an error
                     # cascade for every invoice.
                     raise
+                except InvoiceSyncPermanentDataError as e:
+                    try:
+                        if savepoint is not None:
+                            savepoint.rollback()
+                        else:
+                            self.db.rollback()
+                    except Exception:  # noqa: BLE001
+                        self.db.rollback()
+                    result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
+                    if e.dedupe_key not in reported_permanent_errors:
+                        reported_permanent_errors.add(e.dedupe_key)
+                        logger.error(
+                            "Permanent invoice input/configuration failure: %s; "
+                            "suppressing duplicate error logs for this source "
+                            "failure class during the current run",
+                            e,
+                        )
+                    else:
+                        logger.debug(
+                            "Invoice %s has the already-reported permanent failure %s",
+                            inv.id,
+                            e.dedupe_key,
+                        )
+                    progress.record_failure(row_updated_at, inv.id)
                 except OperationalError:
                     if savepoint is not None:
                         try:
@@ -464,10 +495,11 @@ class InvoiceSyncMixin:
             or _round(projected_tax) != doc.tax_total
         )
         if line_mismatch or doc.subtotal + doc.tax_total != doc.total:
-            raise ValueError(
+            raise InvoiceSourceAccountingMismatchError(
                 f"Sub {label} {number} tax lines do not reconcile to the "
                 f"source header: lines={projected_subtotal}+{projected_tax}, "
-                f"header={doc.subtotal}+{doc.tax_total}={doc.total}"
+                f"header={doc.subtotal}+{doc.tax_total}={doc.total}",
+                dedupe_key=("source_accounting_mismatch", label.lower()),
             )
         return projected
 

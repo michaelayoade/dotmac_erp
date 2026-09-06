@@ -10,6 +10,7 @@ from app.models.finance.ar.dotmac_sub_sync_watermark import DotmacSubSyncWaterma
 from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import InvoiceRecord
 from app.services.dotmac_sub.sync._base import BaseSyncMixin, SyncWatermarkPosition
+from app.services.dotmac_sub.sync._base import TaxMappingConfigurationError
 from app.services.dotmac_sub.sync._invoices import InvoiceSyncMixin
 
 _T0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -141,6 +142,45 @@ def test_invoice_sync_does_not_advance_past_failed_compound_position() -> None:
     assert synced_ids == ["inv-002", "inv-003", "inv-004"]
     advanced = harness._advance_sync_watermark_position.call_args.args[1]
     assert advanced == SyncWatermarkPosition(shared_at, "inv-002")
+
+
+def test_invoice_batch_size_bounds_attempts_not_only_successes() -> None:
+    rows = [
+        _invoice_record(f"inv-{index:03d}", _T0 + timedelta(minutes=index))
+        for index in range(1, 5)
+    ]
+    harness = _invoice_harness_for_cursor(rows, SyncWatermarkPosition(None, None))
+    harness._sync_single_invoice.side_effect = ValueError("permanent bad row")
+
+    result = harness.sync_invoices(batch_size=2)
+
+    assert harness._sync_single_invoice.call_count == 2
+    assert len(result.errors) == 2
+    assert "invoice work limit (2) reached" in result.message
+    harness._advance_sync_watermark_position.assert_not_called()
+
+
+def test_invoice_sync_logs_tax_configuration_once_per_mapping(monkeypatch) -> None:
+    import app.services.dotmac_sub.sync._invoices as invoices_module
+
+    rows = [
+        _invoice_record(f"inv-{index:03d}", _T0 + timedelta(minutes=index))
+        for index in range(1, 4)
+    ]
+    harness = _invoice_harness_for_cursor(rows, SyncWatermarkPosition(None, None))
+    mapping_error = TaxMappingConfigurationError(
+        "missing VAT mapping", dedupe_key=("source-vat", "exclusive")
+    )
+    harness._sync_single_invoice.side_effect = mapping_error
+    logger = MagicMock()
+    monkeypatch.setattr(invoices_module, "logger", logger)
+
+    result = harness.sync_invoices(batch_size=3)
+
+    assert len(result.errors) == 3
+    assert logger.error.call_count == 1
+    assert logger.debug.call_count == 2
+    logger.exception.assert_not_called()
 
 
 def test_compound_watermark_position_roundtrip(db_session) -> None:
