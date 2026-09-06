@@ -55,6 +55,7 @@ from app.tasks.dotmac_sub import (
     process_dotmac_sub_webhook,
     run_dotmac_sub_daily_reconciliation,
     run_dotmac_sub_full_reconciliation,
+    run_dotmac_sub_invoice_accounting_v2_shadow,
     run_dotmac_sub_incremental_sync,
     run_dotmac_sub_incremental_sync_phase,
 )
@@ -193,6 +194,7 @@ __all__ = [
     "process_dotmac_sub_webhook",
     "run_dotmac_sub_incremental_sync",
     "run_dotmac_sub_incremental_sync_phase",
+    "run_dotmac_sub_invoice_accounting_v2_shadow",
     "run_dotmac_sub_daily_reconciliation",
     "run_dotmac_sub_full_reconciliation",
     "cleanup_stale_dotmac_sub_sync_history",
