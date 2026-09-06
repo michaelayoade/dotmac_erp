@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import uuid
 from unittest.mock import MagicMock, patch
@@ -17,7 +18,7 @@ from dotmac_files import (
 )
 from dotmac_imports import ImportIssue, PreparedPartition, RowSkipped
 
-from app.services.finance.import_export.base import ImportConfig
+from app.services.finance.import_export.base import FieldMapping, ImportConfig
 from app.services.finance.import_export.contacts import CustomerImporter
 from app.services.finance.import_export.durable_customers import (
     ClaimedCustomerPartition,
@@ -35,6 +36,14 @@ from app.tasks.imports import enqueue_customer_import_run
 ORG = uuid.UUID("00000000-0000-0000-0000-000000000001")
 USER = uuid.UUID("00000000-0000-0000-0000-000000000002")
 AR = uuid.UUID("00000000-0000-0000-0000-000000000003")
+
+# Captured at import, before any monkeypatch can reach the module attribute the
+# retiring importer resolves at call time.  The parity tests below perturb that
+# attribute; this binding stays the real, unperturbed vocabulary.
+_REAL_SOURCE_MAPPINGS = customer_source_mappings
+_REAL_COLUMN_MAPPING = [
+    [item.source_field, item.target_field] for item in _REAL_SOURCE_MAPPINGS()
+]
 
 
 class _MemoryProvider:
@@ -212,7 +221,16 @@ def test_partition_read_preserves_the_files_provider_authorization() -> None:
         read_customer_partition(_MemoryProvider(), authorized)
 
 
-def test_shadow_parity_mismatch_refuses_partition_settlement() -> None:
+def test_the_parity_refusal_is_wired_to_a_verdict_difference() -> None:
+    """Proves the ``raise`` is reachable, and nothing more.
+
+    Both sides are mocks: the retiring importer, the durable port and the
+    ledger read are all patched, and the disagreement is a stubbed return
+    value rather than a decision either implementation made.  This is a
+    wiring canary.  The parity PROOF is the real pair below —
+    ``test_the_parity_guard_admits_two_real_implementations_that_agree`` and
+    ``test_the_parity_guard_refuses_when_one_real_rule_diverges``.
+    """
     prepared = PreparedPartition(
         claim=MagicMock(run_id=uuid.uuid4()),
         rows=((("Display Name", "Acme"),),),
@@ -247,6 +265,136 @@ def test_shadow_parity_mismatch_refuses_partition_settlement() -> None:
             ar_control_account_id=AR,
             skip_duplicates=True,
         )
+
+
+class _StubSession:
+    """The database, stubbed — neither implementation under comparison is.
+
+    Both real paths run their real duplicate rule through
+    ``db.execute(select(...)).scalar_one_or_none()``.  Answering that one read
+    is the smallest substitution that lets the two real decisions run without
+    a database; ``existing`` chooses whether the organization already holds a
+    matching customer.
+    """
+
+    def __init__(self, *, existing: object | None = None) -> None:
+        self._existing = existing
+        self.execute_calls = 0
+
+    def execute(self, statement: object) -> _StubSession:
+        del statement
+        self.execute_calls += 1
+        return self
+
+    def scalar_one_or_none(self) -> object | None:
+        return self._existing
+
+
+class _StubRun:
+    """The ledger row's column mapping, which is input rather than a decision."""
+
+    def __init__(self, column_mapping: list[list[str]]) -> None:
+        self.column_mapping = column_mapping
+
+
+def _install_run(monkeypatch) -> None:
+    def _get_run(db: object, *, tenant_id: uuid.UUID, run_id: uuid.UUID) -> _StubRun:
+        del db, tenant_id, run_id
+        return _StubRun(_REAL_COLUMN_MAPPING)
+
+    monkeypatch.setattr(
+        "app.services.finance.import_export.durable_customers.get_run", _get_run
+    )
+
+
+def _partition(*rows: dict[str, str]) -> PreparedPartition:
+    return PreparedPartition(
+        claim=MagicMock(run_id=uuid.uuid4()),
+        rows=tuple(tuple(row.items()) for row in rows),
+    )
+
+
+def _run_parity(db: object, prepared: PreparedPartition) -> None:
+    assert_legacy_customer_parity(
+        db,
+        prepared,
+        tenant_id=ORG,
+        created_by=USER,
+        ar_control_account_id=AR,
+        skip_duplicates=True,
+    )
+
+
+def test_the_parity_guard_admits_two_real_implementations_that_agree(
+    monkeypatch,
+) -> None:
+    """The admit control.
+
+    A guard only ever observed refusing is indistinguishable from one that
+    refuses everything.  Here the real ``CustomerImporter`` and the real
+    ``CustomerImportPort`` see the same rows with no perturbation, and must
+    reach the same verdict in BOTH directions — one row they both accept and
+    one row they both reject — without raising.
+    """
+    _install_run(monkeypatch)
+    db = _StubSession(existing=None)
+
+    _run_parity(
+        db,
+        _partition(
+            {"Display Name": "Northwind Trading", "Company Name": "Northwind Ltd"},
+            {"Display Name": ""},
+        ),
+    )
+
+    # The real duplicate rule ran rather than being short-circuited.
+    assert db.execute_calls > 0
+
+
+def test_the_parity_guard_admits_a_duplicate_both_real_paths_skip(
+    monkeypatch,
+) -> None:
+    """Second admit direction: agreement on SKIPPED, not just OK and ERROR."""
+    _install_run(monkeypatch)
+    db = _StubSession(existing=object())
+
+    _run_parity(db, _partition({"Display Name": "Northwind Trading"}))
+
+    assert db.execute_calls > 0
+
+
+def test_the_parity_guard_refuses_when_one_real_rule_diverges(monkeypatch) -> None:
+    """Both implementations are real; a real rule is perturbed, not a return value.
+
+    The retiring path's required-field rule is table-driven — it validates
+    against whatever ``customer_source_mappings()`` declares — so flipping
+    ``Currency Code`` to required makes its REAL validator reject a row that
+    omits the column.  The durable validator's required-field rule is its own
+    (``display_name`` only) and is untouched, so it still accepts the row.
+
+    Note the perturbation is on the legacy side rather than the durable one:
+    ``CustomerImportPort.validate`` hardcodes its rule in the method body, so
+    perturbing it would mean replacing the real implementation — the very
+    thing this test exists to stop doing.
+    """
+    _install_run(monkeypatch)
+
+    def _currency_code_required() -> list[FieldMapping]:
+        return [
+            dataclasses.replace(item, required=True)
+            if item.source_field == "Currency Code"
+            else item
+            for item in _REAL_SOURCE_MAPPINGS()
+        ]
+
+    monkeypatch.setattr(
+        "app.services.finance.import_export.contacts.customer_source_mappings",
+        _currency_code_required,
+    )
+    db = _StubSession(existing=None)
+
+    with pytest.raises(CustomerImportParityError):
+        _run_parity(db, _partition({"Display Name": "Northwind Trading"}))
 
 
 @patch("app.tasks.imports.process_customer_import_partitions.delay")
