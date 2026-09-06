@@ -1214,6 +1214,11 @@ class ImportConfig:
     user_id: UUID
     skip_duplicates: bool = True
     dry_run: bool = False
+    # A dry run that additionally CONSTRUCTS each entity without persisting it,
+    # so a shadow comparison can see the field vector the legacy path decides.
+    # Only meaningful as a refinement of ``dry_run``: it is rejected on its own
+    # so that setting it can never silently turn a real import into a no-op.
+    construct_only: bool = False
     batch_size: int = 100
     stop_on_error: bool = False
     date_format: str = "%Y-%m-%d"
@@ -1222,6 +1227,13 @@ class ImportConfig:
     encoding: str = "utf-8"
     # Column mapping overrides (source_column -> target_field)
     column_mapping: dict[str, str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.construct_only and not self.dry_run:
+            raise ValueError(
+                "construct_only is a dry-run refinement; it cannot be set on a "
+                "run that persists"
+            )
 
 
 @dataclass
@@ -1433,11 +1445,20 @@ class BaseImporter(ABC, Generic[T]):
     # Subclasses must define these
     entity_name: str = "Entity"
     model_class: type[T] | None = None
+    # Whether this importer's row loop honours ``ImportConfig.construct_only``.
+    # A subclass that overrides ``_import_rows`` must opt out, or the mode
+    # would report a dry run that quietly built nothing.
+    supports_construct_only: bool = True
 
     def __init__(self, db: Session, config: ImportConfig):
+        if config.construct_only and not self.supports_construct_only:
+            raise ValueError(f"{type(self).__name__} does not implement construct_only")
         self.db = db
         self.config = config
         self.result = ImportResult(entity_type=self.entity_name)
+        # Entities built by a ``construct_only`` run.  Never handed to the
+        # session: this list is the whole point of that mode.
+        self.constructed: list[T] = []
         self._field_mappings: list[FieldMapping] = []
         self._id_cache: dict[str, UUID] = {}  # Cache for lookups
 
@@ -1951,7 +1972,11 @@ class BaseImporter(ABC, Generic[T]):
                 transformed = self.transform_row(row, idx)
 
                 # Create entity (dry run check)
-                if not self.config.dry_run:
+                if self.config.construct_only:
+                    # Construct and keep, but never batch: nothing here reaches
+                    # ``_commit_batch``, ``db.add`` or ``db.flush``.
+                    self.constructed.append(self.create_entity(transformed))
+                elif not self.config.dry_run:
                     entity = self.create_entity(transformed)
                     batch.append(entity)
 

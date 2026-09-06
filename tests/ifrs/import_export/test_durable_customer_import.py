@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import uuid
 from unittest.mock import MagicMock, patch
@@ -15,9 +16,16 @@ from dotmac_files import (
     StoredObjectRef,
     prepare_upload,
 )
-from dotmac_imports import ImportIssue, PreparedPartition, RowSkipped
+from dotmac_imports import (
+    ColumnMapping,
+    ImportIssue,
+    PreparedPartition,
+    RowSkipped,
+    apply_mapping,
+    auto_map,
+)
 
-from app.services.finance.import_export.base import ImportConfig
+from app.services.finance.import_export.base import FieldMapping, ImportConfig
 from app.services.finance.import_export.contacts import CustomerImporter
 from app.services.finance.import_export.durable_customers import (
     ClaimedCustomerPartition,
@@ -35,6 +43,12 @@ from app.tasks.imports import enqueue_customer_import_run
 ORG = uuid.UUID("00000000-0000-0000-0000-000000000001")
 USER = uuid.UUID("00000000-0000-0000-0000-000000000002")
 AR = uuid.UUID("00000000-0000-0000-0000-000000000003")
+
+# Captured at import, before any monkeypatch can reach the module attribute the
+# retiring importer resolves at call time.  The parity tests below perturb that
+# attribute; this binding stays the real, unperturbed vocabulary.
+_REAL_SOURCE_MAPPINGS = customer_source_mappings
+_REAL_HEADERS = tuple(item.source_field for item in _REAL_SOURCE_MAPPINGS())
 
 
 class _MemoryProvider:
@@ -212,7 +226,16 @@ def test_partition_read_preserves_the_files_provider_authorization() -> None:
         read_customer_partition(_MemoryProvider(), authorized)
 
 
-def test_shadow_parity_mismatch_refuses_partition_settlement() -> None:
+def test_the_parity_refusal_is_wired_to_a_verdict_difference() -> None:
+    """Proves the ``raise`` is reachable, and nothing more.
+
+    Both sides are mocks: the retiring importer, the durable port and the
+    ledger read are all patched, and the disagreement is a stubbed return
+    value rather than a decision either implementation made.  This is a
+    wiring canary.  The parity PROOF is the real pair below —
+    ``test_the_parity_guard_admits_two_real_implementations_that_agree`` and
+    ``test_the_parity_guard_refuses_when_one_real_rule_diverges``.
+    """
     prepared = PreparedPartition(
         claim=MagicMock(run_id=uuid.uuid4()),
         rows=((("Display Name", "Acme"),),),
@@ -246,6 +269,206 @@ def test_shadow_parity_mismatch_refuses_partition_settlement() -> None:
             created_by=USER,
             ar_control_account_id=AR,
             skip_duplicates=True,
+        )
+
+
+class _StubSession:
+    """The database, stubbed — neither implementation under comparison is.
+
+    Both real paths run their real duplicate rule through
+    ``db.execute(select(...)).scalar_one_or_none()``.  Answering that one read
+    is the smallest substitution that lets the two real decisions run without
+    a database; ``existing`` chooses whether the organization already holds a
+    matching customer.
+    """
+
+    def __init__(self, *, existing: object | None = None) -> None:
+        self._existing = existing
+        self.execute_calls = 0
+
+    def execute(self, statement: object) -> _StubSession:
+        del statement
+        self.execute_calls += 1
+        return self
+
+    def scalar_one_or_none(self) -> object | None:
+        return self._existing
+
+
+class _StubRun:
+    """The ledger row's column mapping, which is input rather than a decision."""
+
+    def __init__(self, column_mapping: list[list[str]]) -> None:
+        self.column_mapping = column_mapping
+
+
+def _mapping_pairs(mapping: object) -> list[list[str]]:
+    """Serialize a REAL ``ColumnMapping`` the way a ledger row stores it.
+
+    The pair order is deliberately not hand-written here.  The literal
+    ``("Display Name", "display_name")`` appears three times in this
+    repository -- two integration tests and the mocked canary above -- and not
+    one of them ever fed it through ``apply_mapping`` into a real validator, so
+    the shape was propagated rather than proven.  Taking it from ``auto_map``,
+    the function production itself calls, makes these tests correct under
+    whichever order ``dotmac_imports`` actually uses.
+
+    ``dotmac_imports`` is not installable in this repo's dev environment, so
+    the accessor is discovered rather than assumed.  An unknown shape fails
+    HERE, named, at fixture setup -- never as a parity verdict.
+    """
+    for attribute in ("pairs", "columns", "entries"):
+        value = getattr(mapping, attribute, None)
+        if value:
+            return [[str(left), str(right)] for left, right in value]
+    try:
+        return [[str(left), str(right)] for left, right in mapping]  # type: ignore[misc]
+    except TypeError as exc:  # pragma: no cover - fixture diagnostics
+        raise AssertionError(
+            f"fixture cannot serialize ColumnMapping {mapping!r}: {exc}"
+        ) from exc
+
+
+def _install_run(monkeypatch) -> list[list[str]]:
+    """Give the parity function the mapping production would have stored."""
+    pairs = _mapping_pairs(auto_map(_REAL_HEADERS, customer_field_set()))
+
+    def _get_run(db: object, *, tenant_id: uuid.UUID, run_id: uuid.UUID) -> _StubRun:
+        del db, tenant_id, run_id
+        return _StubRun(pairs)
+
+    monkeypatch.setattr(
+        "app.services.finance.import_export.durable_customers.get_run", _get_run
+    )
+    return pairs
+
+
+def _row(**values: str) -> dict[str, str]:
+    """One full-width CSV row: every real header, blank unless named.
+
+    A real partition row carries every column, so the mapping is never asked
+    about a column the row lacks.
+    """
+    row = dict.fromkeys(_REAL_HEADERS, "")
+    row.update(values)
+    return row
+
+
+def _partition(*rows: dict[str, str]) -> PreparedPartition:
+    return PreparedPartition(
+        claim=MagicMock(run_id=uuid.uuid4()),
+        rows=tuple(tuple(row.items()) for row in rows),
+    )
+
+
+def _run_parity(
+    db: object, prepared: PreparedPartition, pairs: list[list[str]]
+) -> None:
+    """Check the fixture reaches the durable validator, then run the guard.
+
+    Without this precondition a malformed column mapping starves
+    ``CustomerImportPort.validate`` of ``display_name``, it returns its
+    required-field issue on EVERY row, and the guard raises
+    ``CustomerImportParityError`` -- a fixture defect wearing the exact costume
+    of a real divergence.  That already happened once.  The two failure modes
+    are kept distinguishable from here on.
+    """
+    mapped = apply_mapping(
+        dict(prepared.rows[0]),
+        ColumnMapping(tuple((str(one[0]), str(one[1])) for one in pairs)),
+    )
+    display_name = str(mapped.get("display_name", "") or "")
+    if not display_name and dict(prepared.rows[0]).get("Display Name"):
+        raise AssertionError(
+            "fixture defect, not a parity verdict: the column mapping did not "
+            "deliver a populated 'display_name' to the durable validator. "
+            f"mapped keys={sorted(mapped)}"
+        )
+
+    assert_legacy_customer_parity(
+        db,
+        prepared,
+        tenant_id=ORG,
+        created_by=USER,
+        ar_control_account_id=AR,
+        skip_duplicates=True,
+    )
+
+
+def test_the_parity_guard_admits_two_real_implementations_that_agree(
+    monkeypatch,
+) -> None:
+    """The admit control.
+
+    A guard only ever observed refusing is indistinguishable from one that
+    refuses everything.  Here the real ``CustomerImporter`` and the real
+    ``CustomerImportPort`` see the same rows with no perturbation, and must
+    reach the same verdict in BOTH directions — one row they both accept and
+    one row they both reject — without raising.
+    """
+    pairs = _install_run(monkeypatch)
+    db = _StubSession(existing=None)
+
+    _run_parity(
+        db,
+        _partition(
+            _row(
+                **{"Display Name": "Northwind Trading", "Company Name": "Northwind Ltd"}
+            ),
+            _row(**{"Display Name": ""}),
+        ),
+        pairs,
+    )
+
+    # The real duplicate rule ran rather than being short-circuited.
+    assert db.execute_calls > 0
+
+
+def test_the_parity_guard_admits_a_duplicate_both_real_paths_skip(
+    monkeypatch,
+) -> None:
+    """Second admit direction: agreement on SKIPPED, not just OK and ERROR."""
+    pairs = _install_run(monkeypatch)
+    db = _StubSession(existing=object())
+
+    _run_parity(db, _partition(_row(**{"Display Name": "Northwind Trading"})), pairs)
+
+    assert db.execute_calls > 0
+
+
+def test_the_parity_guard_refuses_when_one_real_rule_diverges(monkeypatch) -> None:
+    """Both implementations are real; a real rule is perturbed, not a return value.
+
+    The retiring path's required-field rule is table-driven — it validates
+    against whatever ``customer_source_mappings()`` declares — so flipping
+    ``Currency Code`` to required makes its REAL validator reject a row that
+    omits the column.  The durable validator's required-field rule is its own
+    (``display_name`` only) and is untouched, so it still accepts the row.
+
+    Note the perturbation is on the legacy side rather than the durable one:
+    ``CustomerImportPort.validate`` hardcodes its rule in the method body, so
+    perturbing it would mean replacing the real implementation — the very
+    thing this test exists to stop doing.
+    """
+    pairs = _install_run(monkeypatch)
+
+    def _currency_code_required() -> list[FieldMapping]:
+        return [
+            dataclasses.replace(item, required=True)
+            if item.source_field == "Currency Code"
+            else item
+            for item in _REAL_SOURCE_MAPPINGS()
+        ]
+
+    monkeypatch.setattr(
+        "app.services.finance.import_export.contacts.customer_source_mappings",
+        _currency_code_required,
+    )
+    db = _StubSession(existing=None)
+
+    with pytest.raises(CustomerImportParityError):
+        _run_parity(
+            db, _partition(_row(**{"Display Name": "Northwind Trading"})), pairs
         )
 
 
