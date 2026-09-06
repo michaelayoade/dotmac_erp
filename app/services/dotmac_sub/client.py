@@ -2047,6 +2047,7 @@ class DotmacSubClient:
 
     def get_invoice_accounting_sync_v2(
         self,
+        invoice_id: str | None = None,
         account_id: str | None = None,
         status: str | None = None,
         *,
@@ -2056,6 +2057,8 @@ class DotmacSubClient:
         """Read the additive v2 feed for shadow comparison only."""
 
         params = _watermark_params(account_id, status, updated_since)
+        if invoice_id:
+            params["invoice_id"] = invoice_id
         logger.info("Fetching dotmac_sub invoice accounting v2 with params: %s", params)
         for item in self._sync_paginate("/invoices/accounting-sync/v2", params=params):
             try:
