@@ -342,7 +342,7 @@ def test_ci_runs_every_product_process_in_the_hardened_envelope() -> None:
     )
     assert "stat -c %Y /tmp/dotmac-erp-beat-heartbeat" in operational
     assert "http://127.0.0.1:8004/metrics" in operational
-    assert "job_runs_total" in operational
+    assert "worker_metrics_exporter_up 1.0" in operational
     assert "age > 120" in operational
 
 
