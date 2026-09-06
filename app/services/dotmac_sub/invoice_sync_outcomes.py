@@ -5,9 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
-from enum import StrEnum
+from enum import Enum
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -21,18 +21,18 @@ from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
 CONTRACT_VERSION = "invoice-accounting-sync.v2"
 
 
-class InvoiceSyncDisposition(StrEnum):
+class InvoiceSyncDisposition(str, Enum):
     READY = "ready"
     BLOCKED = "blocked"
     NOT_APPLICABLE = "not_applicable"
 
 
-class InvoiceSyncSourceKind(StrEnum):
+class InvoiceSyncSourceKind(str, Enum):
     NATIVE = "native"
     SPLYNX_LEGACY = "splynx_legacy"
 
 
-class InvoiceSyncIssueCode(StrEnum):
+class InvoiceSyncIssueCode(str, Enum):
     NO_ACTIVE_LINES = "no_active_lines"
     LINE_AMOUNT_MISMATCH = "line_amount_mismatch"
     MISSING_TAX_RATE_REFERENCE = "missing_tax_rate_reference"
@@ -122,7 +122,7 @@ def _validated(
     fingerprints = [item[0] for item in normalized]
     if len(fingerprints) != len(set(fingerprints)):
         raise InvoiceSyncOutcomeError("duplicate issue evidence is not allowed")
-    return command.observed_at or datetime.now(UTC), normalized
+    return command.observed_at or datetime.now(timezone.utc), normalized
 
 
 def record_invoice_sync_outcome(
