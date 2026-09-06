@@ -304,6 +304,8 @@ number = 12
 slug = "invoice-sync-failures-are-durable-outcomes"
 status = "reserved"
 claimed = "2026-09-06"
+visibility = "pr"
+coordinate = "blob 546ccc5f403e34be02ef6a89527a87844aeaf164 on refs/remotes/origin/chore/reserve-invoice-sync-failure-ledger-adr (PR #476)"
 
 [[collision]]
 number = 3
