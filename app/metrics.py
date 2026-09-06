@@ -43,6 +43,12 @@ JOB_RUNS = Counter(
     ["task", "status"],
 )
 
+WORKER_METRICS_EXPORTER_UP = Gauge(
+    "worker_metrics_exporter_up",
+    "Whether this Celery container's private metrics exporter is running",
+    multiprocess_mode="livemax",
+)
+
 INTEGRATION_REQUESTS = Counter(
     "integration_requests_total",
     "Outbound integration requests",
@@ -187,7 +193,12 @@ def start_worker_metrics_server(port: int) -> tuple[object, object]:
         if os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip()
         else REGISTRY
     )
-    return start_http_server(port, addr="0.0.0.0", registry=registry)
+    WORKER_METRICS_EXPORTER_UP.set(1)
+    return start_http_server(
+        port,
+        addr="0.0.0.0",  # noqa: S104  # nosec B104 -- private container network
+        registry=registry,
+    )
 
 
 def mark_metrics_process_dead(pid: int) -> None:

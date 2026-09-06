@@ -7,7 +7,7 @@ from pathlib import Path
 
 PROMETHEUS_MULTIPROC_ENV = "PROMETHEUS_MULTIPROC_DIR"
 PROMETHEUS_MULTIPROC_PATH = Path(
-    "/tmp/dotmac-erp-prometheus"  # noqa: S108 -- private container tmpfs
+    "/tmp/dotmac-erp-prometheus"  # noqa: S108  # nosec B108 -- private container tmpfs
 )
 
 

@@ -9,7 +9,7 @@ from app.prometheus_multiprocess import prepare_configured_multiprocess_director
 
 def main() -> None:
     prepare_configured_multiprocess_directory()
-    os.execvp(  # noqa: S606 -- replace this process with the locked CLI
+    os.execvp(  # noqa: S606 -- replace this process with the locked CLI  # nosec B606 B607
         "celery",  # noqa: S607 -- resolved from the locked image virtualenv
         ("celery", "-A", "app.celery_app", "worker", "-l", "info"),
     )
