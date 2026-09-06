@@ -52,6 +52,9 @@ class InvoiceImporter(BaseImporter[Invoice]):
 
     entity_name = "Invoice"
     model_class = Invoice
+    # This importer owns its row loop (rows are grouped into invoices), so it
+    # does not reach the base class's construct-only branch.
+    supports_construct_only = False
 
     def __init__(
         self,
