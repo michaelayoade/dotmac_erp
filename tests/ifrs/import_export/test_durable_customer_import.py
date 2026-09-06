@@ -16,7 +16,14 @@ from dotmac_files import (
     StoredObjectRef,
     prepare_upload,
 )
-from dotmac_imports import ImportIssue, PreparedPartition, RowSkipped
+from dotmac_imports import (
+    ColumnMapping,
+    ImportIssue,
+    PreparedPartition,
+    RowSkipped,
+    apply_mapping,
+    auto_map,
+)
 
 from app.services.finance.import_export.base import FieldMapping, ImportConfig
 from app.services.finance.import_export.contacts import CustomerImporter
@@ -41,9 +48,7 @@ AR = uuid.UUID("00000000-0000-0000-0000-000000000003")
 # retiring importer resolves at call time.  The parity tests below perturb that
 # attribute; this binding stays the real, unperturbed vocabulary.
 _REAL_SOURCE_MAPPINGS = customer_source_mappings
-_REAL_COLUMN_MAPPING = [
-    [item.source_field, item.target_field] for item in _REAL_SOURCE_MAPPINGS()
-]
+_REAL_HEADERS = tuple(item.source_field for item in _REAL_SOURCE_MAPPINGS())
 
 
 class _MemoryProvider:
@@ -297,14 +302,56 @@ class _StubRun:
         self.column_mapping = column_mapping
 
 
-def _install_run(monkeypatch) -> None:
+def _mapping_pairs(mapping: object) -> list[list[str]]:
+    """Serialize a REAL ``ColumnMapping`` the way a ledger row stores it.
+
+    The pair order is deliberately not hand-written here.  The literal
+    ``("Display Name", "display_name")`` appears three times in this
+    repository -- two integration tests and the mocked canary above -- and not
+    one of them ever fed it through ``apply_mapping`` into a real validator, so
+    the shape was propagated rather than proven.  Taking it from ``auto_map``,
+    the function production itself calls, makes these tests correct under
+    whichever order ``dotmac_imports`` actually uses.
+
+    ``dotmac_imports`` is not installable in this repo's dev environment, so
+    the accessor is discovered rather than assumed.  An unknown shape fails
+    HERE, named, at fixture setup -- never as a parity verdict.
+    """
+    for attribute in ("pairs", "columns", "entries"):
+        value = getattr(mapping, attribute, None)
+        if value:
+            return [[str(left), str(right)] for left, right in value]
+    try:
+        return [[str(left), str(right)] for left, right in mapping]  # type: ignore[misc]
+    except TypeError as exc:  # pragma: no cover - fixture diagnostics
+        raise AssertionError(
+            f"fixture cannot serialize ColumnMapping {mapping!r}: {exc}"
+        ) from exc
+
+
+def _install_run(monkeypatch) -> list[list[str]]:
+    """Give the parity function the mapping production would have stored."""
+    pairs = _mapping_pairs(auto_map(_REAL_HEADERS, customer_field_set()))
+
     def _get_run(db: object, *, tenant_id: uuid.UUID, run_id: uuid.UUID) -> _StubRun:
         del db, tenant_id, run_id
-        return _StubRun(_REAL_COLUMN_MAPPING)
+        return _StubRun(pairs)
 
     monkeypatch.setattr(
         "app.services.finance.import_export.durable_customers.get_run", _get_run
     )
+    return pairs
+
+
+def _row(**values: str) -> dict[str, str]:
+    """One full-width CSV row: every real header, blank unless named.
+
+    A real partition row carries every column, so the mapping is never asked
+    about a column the row lacks.
+    """
+    row = dict.fromkeys(_REAL_HEADERS, "")
+    row.update(values)
+    return row
 
 
 def _partition(*rows: dict[str, str]) -> PreparedPartition:
@@ -314,7 +361,30 @@ def _partition(*rows: dict[str, str]) -> PreparedPartition:
     )
 
 
-def _run_parity(db: object, prepared: PreparedPartition) -> None:
+def _run_parity(
+    db: object, prepared: PreparedPartition, pairs: list[list[str]]
+) -> None:
+    """Check the fixture reaches the durable validator, then run the guard.
+
+    Without this precondition a malformed column mapping starves
+    ``CustomerImportPort.validate`` of ``display_name``, it returns its
+    required-field issue on EVERY row, and the guard raises
+    ``CustomerImportParityError`` -- a fixture defect wearing the exact costume
+    of a real divergence.  That already happened once.  The two failure modes
+    are kept distinguishable from here on.
+    """
+    mapped = apply_mapping(
+        dict(prepared.rows[0]),
+        ColumnMapping(tuple((str(one[0]), str(one[1])) for one in pairs)),
+    )
+    display_name = str(mapped.get("display_name", "") or "")
+    if not display_name and dict(prepared.rows[0]).get("Display Name"):
+        raise AssertionError(
+            "fixture defect, not a parity verdict: the column mapping did not "
+            "deliver a populated 'display_name' to the durable validator. "
+            f"mapped keys={sorted(mapped)}"
+        )
+
     assert_legacy_customer_parity(
         db,
         prepared,
@@ -336,15 +406,18 @@ def test_the_parity_guard_admits_two_real_implementations_that_agree(
     reach the same verdict in BOTH directions — one row they both accept and
     one row they both reject — without raising.
     """
-    _install_run(monkeypatch)
+    pairs = _install_run(monkeypatch)
     db = _StubSession(existing=None)
 
     _run_parity(
         db,
         _partition(
-            {"Display Name": "Northwind Trading", "Company Name": "Northwind Ltd"},
-            {"Display Name": ""},
+            _row(
+                **{"Display Name": "Northwind Trading", "Company Name": "Northwind Ltd"}
+            ),
+            _row(**{"Display Name": ""}),
         ),
+        pairs,
     )
 
     # The real duplicate rule ran rather than being short-circuited.
@@ -355,10 +428,10 @@ def test_the_parity_guard_admits_a_duplicate_both_real_paths_skip(
     monkeypatch,
 ) -> None:
     """Second admit direction: agreement on SKIPPED, not just OK and ERROR."""
-    _install_run(monkeypatch)
+    pairs = _install_run(monkeypatch)
     db = _StubSession(existing=object())
 
-    _run_parity(db, _partition({"Display Name": "Northwind Trading"}))
+    _run_parity(db, _partition(_row(**{"Display Name": "Northwind Trading"})), pairs)
 
     assert db.execute_calls > 0
 
@@ -377,7 +450,7 @@ def test_the_parity_guard_refuses_when_one_real_rule_diverges(monkeypatch) -> No
     perturbing it would mean replacing the real implementation — the very
     thing this test exists to stop doing.
     """
-    _install_run(monkeypatch)
+    pairs = _install_run(monkeypatch)
 
     def _currency_code_required() -> list[FieldMapping]:
         return [
@@ -394,7 +467,9 @@ def test_the_parity_guard_refuses_when_one_real_rule_diverges(monkeypatch) -> No
     db = _StubSession(existing=None)
 
     with pytest.raises(CustomerImportParityError):
-        _run_parity(db, _partition({"Display Name": "Northwind Trading"}))
+        _run_parity(
+            db, _partition(_row(**{"Display Name": "Northwind Trading"})), pairs
+        )
 
 
 @patch("app.tasks.imports.process_customer_import_partitions.delay")
