@@ -1,6 +1,18 @@
+import os
 import re
 
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import (
+    REGISTRY,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+    multiprocess,
+    start_http_server,
+)
+
+from app.prometheus_multiprocess import PROMETHEUS_MULTIPROC_ENV
 
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -68,10 +80,12 @@ OUTBOX_REPLAYS = Counter(
 OUTBOX_OLDEST_PENDING_AGE = Gauge(
     "outbox_oldest_pending_age_seconds",
     "Age of the oldest deliverable (PENDING/FAILED) outbox event",
+    multiprocess_mode="livemax",
 )
 OUTBOX_OLDEST_LEASE_AGE = Gauge(
     "outbox_oldest_lease_age_seconds",
     "Age of the oldest still-active claim lease (0 when none held)",
+    multiprocess_mode="livemax",
 )
 OUTBOX_RECONCILIATION = Counter(
     "outbox_reconciliation_total",
@@ -114,6 +128,7 @@ TRANSFER_UNRESOLVED = Counter(
 TRANSFER_UNRESOLVED_OLDEST_AGE = Gauge(
     "payment_transfer_unresolved_oldest_age_seconds",
     "Age of the oldest INDETERMINATE outbound transfer intent (0 when none)",
+    multiprocess_mode="livemax",
 )
 
 
@@ -136,6 +151,40 @@ LOKI_LOGS_DROPPED = Counter(
 
 
 _ID_TOKEN_RE = re.compile(r"\b(?:[0-9a-f]{8,}|[0-9]{3,})\b", re.IGNORECASE)
+
+
+def _export_registry() -> CollectorRegistry:
+    registry = CollectorRegistry()
+    multiprocess.MultiProcessCollector(registry)
+    return registry
+
+
+def render_metrics() -> bytes:
+    """Render process-local metrics or aggregate the configured worker set."""
+
+    if os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip():
+        return generate_latest(_export_registry())
+    return generate_latest(REGISTRY)
+
+
+def start_worker_metrics_server(port: int) -> tuple[object, object]:
+    """Expose a worker container's in-memory metrics on its private network."""
+
+    if not 1 <= port <= 65535:
+        raise ValueError("worker metrics port must be between 1 and 65535")
+    registry = (
+        _export_registry()
+        if os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip()
+        else REGISTRY
+    )
+    return start_http_server(port, addr="0.0.0.0", registry=registry)
+
+
+def mark_metrics_process_dead(pid: int) -> None:
+    """Remove live-gauge files for one exited managed child process."""
+
+    if os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip():
+        multiprocess.mark_process_dead(pid)
 
 
 def observe_job(task_name: str, status: str, duration: float) -> None:

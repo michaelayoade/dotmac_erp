@@ -9,10 +9,17 @@ from celery.signals import (
     task_postrun,
     task_prerun,
     worker_process_init,
+    worker_process_shutdown,
+    worker_ready,
 )
 
 from app.logging import configure_logging
-from app.metrics import observe_job
+from app.metrics import (
+    mark_metrics_process_dead,
+    observe_job,
+    start_worker_metrics_server,
+)
+from app.prometheus_multiprocess import PROMETHEUS_MULTIPROC_ENV
 from app.monitoring import setup_monitoring
 from app.telemetry import setup_otel
 
@@ -22,6 +29,7 @@ from app.services.scheduler_config import build_beat_schedule, get_celery_config
 logger = logging.getLogger(__name__)
 _logging_bootstrapped_pid: int | None = None
 _runtime_bootstrapped_pid: int | None = None
+_worker_metrics_server: tuple[object, object] | None = None
 _task_start_times: dict[tuple[int, str], float] = {}
 
 
@@ -79,6 +87,32 @@ def _setup_celery_logging(**kwargs) -> None:
 @worker_process_init.connect
 def _bootstrap_worker_process_observability(**kwargs) -> None:
     bootstrap_celery_observability()
+
+
+@worker_ready.connect
+def _start_worker_metrics_exporter(**kwargs) -> None:
+    """Start one private metrics listener in the Celery parent process."""
+
+    global _worker_metrics_server  # noqa: PLW0603
+
+    if _worker_metrics_server is not None:
+        return
+    if not os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip():
+        logger.warning("Worker metrics exporter disabled: multiprocess dir is unset")
+        return
+    raw_port = os.getenv("WORKER_METRICS_PORT", "8004")
+    try:
+        port = int(raw_port)
+    except ValueError:
+        logger.error("Worker metrics exporter refused invalid port")
+        return
+    _worker_metrics_server = start_worker_metrics_server(port)
+    logger.info("Worker metrics exporter listening", extra={"port": port})
+
+
+@worker_process_shutdown.connect
+def _retire_worker_metrics_process(pid=None, **kwargs) -> None:
+    mark_metrics_process_dead(int(pid or os.getpid()))
 
 
 @beat_init.connect

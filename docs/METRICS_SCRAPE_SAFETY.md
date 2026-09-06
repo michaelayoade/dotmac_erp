@@ -45,6 +45,12 @@ database, cache, worker fleet, or a business integration is degraded.
 7. Every change to a metrics route, custom collector, or scrape helper must pass
    the local architecture test that rejects database and business-service
    access from the scrape path.
+8. Multi-process roles use one container-local scratch directory, cleared
+   before Prometheus collectors are imported. A directory is never shared
+   between containers because container PID namespaces can reuse the same PID.
+9. vmagent scrapes the authenticated app endpoint and the worker's private
+   Compose-network exporter as separate instances. Worker metrics ports are not
+   published on the host.
 
 ## Migration Rule
 
