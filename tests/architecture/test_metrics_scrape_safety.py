@@ -80,6 +80,7 @@ def test_metrics_exporter_modules_do_not_import_persistence() -> None:
         for path in (
             ROOT / "app/metrics.py",
             ROOT / "app/middleware/metrics.py",
+            ROOT / "app/prometheus_multiprocess.py",
         )
         if path.exists()
     ]
@@ -99,6 +100,20 @@ def test_metrics_exporter_modules_do_not_import_persistence() -> None:
 
 def test_metrics_scrape_policy_is_checked_in() -> None:
     assert (ROOT / "docs/METRICS_SCRAPE_SAFETY.md").is_file()
+
+
+def test_vmagent_scrapes_authenticated_app_and_private_worker() -> None:
+    config = (ROOT / "config/vmagent/config.yml").read_text(encoding="utf-8")
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert "credentials: '%{METRICS_TOKEN}'" in config
+    assert "targets: ['app:8002']" in config
+    assert "targets: ['worker:8004']" in config
+    assert "METRICS_TOKEN must be set for vmagent" in compose
+    assert "PROMETHEUS_MULTIPROC_DIR: /tmp/dotmac-erp-prometheus" in compose
+    worker_block = compose.split("  worker:", 1)[1].split("  beat:", 1)[0]
+    assert "app.celery_worker_entrypoint" in worker_block
+    assert "ports:" not in worker_block
 
 
 def test_prometheus_callbacks_stay_in_reviewed_exporter_modules() -> None:

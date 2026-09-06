@@ -332,13 +332,17 @@ def test_ci_runs_every_product_process_in_the_hardened_envelope() -> None:
     app = runs["app"]
     assert "dotmac-erp:ci\n" in app
     assert "gunicorn -c" not in app  # exercise the image's default CMD
-    assert "celery -A app.celery_app worker -l info" in runs["worker"]
+    assert "PROMETHEUS_MULTIPROC_DIR=/tmp/dotmac-erp-prometheus" in app
+    assert "python -m app.celery_worker_entrypoint" in runs["worker"]
+    assert "PROMETHEUS_MULTIPROC_DIR=/tmp/dotmac-erp-prometheus" in runs["worker"]
     assert "celery -A app.celery_app beat -l info" in runs["beat"]
 
     operational = _named_step(
         job, "Verify Celery worker and scheduler stay operational"
     )
     assert "stat -c %Y /tmp/dotmac-erp-beat-heartbeat" in operational
+    assert "http://127.0.0.1:8004/metrics" in operational
+    assert "job_runs_total" in operational
     assert "age > 120" in operational
 
 

@@ -107,6 +107,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-dotmac-erp}
       GUNICORN_WORKERS: '4'
+      PROMETHEUS_MULTIPROC_DIR: /tmp/dotmac-erp-prometheus
       PYTHONDONTWRITEBYTECODE: '1'
       PYTHONPYCACHEPREFIX: /tmp/pycache
     depends_on:
@@ -192,16 +193,15 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-dotmac-erp}
+      PROMETHEUS_MULTIPROC_DIR: /tmp/dotmac-erp-prometheus
+      WORKER_METRICS_PORT: '8004'
     depends_on:
       redis:
         condition: service_started
     command:
-    - celery
-    - -A
-    - app.celery_app
-    - worker
-    - -l
-    - info
+    - python
+    - -m
+    - app.celery_worker_entrypoint
   beat:
     image: ${APP_IMAGE:?APP_IMAGE must be set to an immutable ghcr.io/michaelayoade/dotmac_erp@sha256:<digest>; scripts/deploy.sh writes it}
     platform: linux/amd64
@@ -301,11 +301,13 @@ services:
     - -remoteWrite.maxDiskUsagePerURL=512MB
     environment:
       DEPLOY_ENV: ${DEPLOY_ENV:-production}
+      METRICS_TOKEN: ${METRICS_TOKEN:?METRICS_TOKEN must be set for vmagent}
     volumes:
       - ./config/vmagent/config.yml:/etc/vmagent/config.yml:ro
       - vmagent_data:/vmagent-data
     depends_on:
     - app
+    - worker
     logging:
       driver: json-file
       options:
