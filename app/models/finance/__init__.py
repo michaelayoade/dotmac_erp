@@ -66,6 +66,8 @@ from app.models.finance.ar import (
     Customer,
     CustomerPayment,
     CustomerType,
+    DotmacSubInvoiceSyncIssue,
+    DotmacSubInvoiceSyncOutcome,
     Invoice,
     InvoiceLine,
     InvoiceStatus,
@@ -420,6 +422,8 @@ __all__ = [
     # AR
     "Customer",
     "CustomerType",
+    "DotmacSubInvoiceSyncOutcome",
+    "DotmacSubInvoiceSyncIssue",
     "RiskCategory",
     "PaymentTerms",
     "Contract",
