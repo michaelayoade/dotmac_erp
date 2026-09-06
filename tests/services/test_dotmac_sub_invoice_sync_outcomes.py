@@ -128,4 +128,6 @@ def test_later_ready_revision_resolves_prior_blocked_evidence(db_session) -> Non
     assert ready.resolved_prior_count == 1
     prior = db_session.get(DotmacSubInvoiceSyncOutcome, blocked.outcome_id)
     assert prior is not None
-    assert prior.resolved_at == ready_at + timedelta(seconds=1)
+    # SQLite drops timezone metadata even for DateTime(timezone=True); compare
+    # the UTC instant rather than the backend-specific returned wrapper.
+    assert prior.resolved_at.replace(tzinfo=UTC) == ready_at + timedelta(seconds=1)
