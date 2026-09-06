@@ -112,6 +112,8 @@ class CustomerLockContentionError(RuntimeError):
 class InvoiceSyncPermanentDataError(ValueError):
     """A source/configuration contradiction that retries cannot repair."""
 
+    metric_reason = "permanent_data_error"
+
     def __init__(self, message: str, *, dedupe_key: tuple[str, ...]) -> None:
         super().__init__(message)
         self.dedupe_key = dedupe_key
@@ -120,9 +122,13 @@ class InvoiceSyncPermanentDataError(ValueError):
 class TaxMappingConfigurationError(InvoiceSyncPermanentDataError):
     """A stable source-tax mapping is absent or ambiguous in ERP."""
 
+    metric_reason = "tax_mapping_configuration"
+
 
 class InvoiceSourceAccountingMismatchError(InvoiceSyncPermanentDataError):
     """Self-Care line facts do not reconcile to its invoice header facts."""
+
+    metric_reason = "source_accounting_mismatch"
 
 
 class BaseSyncMixin:

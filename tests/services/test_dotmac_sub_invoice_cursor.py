@@ -173,7 +173,11 @@ def test_invoice_sync_logs_tax_configuration_once_per_mapping(monkeypatch) -> No
     )
     harness._sync_single_invoice.side_effect = mapping_error
     logger = MagicMock()
+    observe_row = MagicMock()
     monkeypatch.setattr(invoices_module, "logger", logger)
+    monkeypatch.setattr(
+        invoices_module, "observe_dotmac_sub_invoice_sync_row", observe_row
+    )
 
     result = harness.sync_invoices(batch_size=3)
 
@@ -181,6 +185,11 @@ def test_invoice_sync_logs_tax_configuration_once_per_mapping(monkeypatch) -> No
     assert logger.error.call_count == 1
     assert logger.debug.call_count == 2
     logger.exception.assert_not_called()
+    assert [call.args[0] for call in observe_row.call_args_list] == [
+        "tax_mapping_configuration",
+        "tax_mapping_configuration",
+        "tax_mapping_configuration",
+    ]
 
 
 def test_compound_watermark_position_roundtrip(db_session) -> None:

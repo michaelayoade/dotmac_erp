@@ -53,6 +53,16 @@ PAYSTACK_SELFCARE_RELAY_DURATION = Histogram(
     ["outcome"],
 )
 
+DOTMAC_SUB_INVOICE_SYNC_ROWS = Counter(
+    "dotmac_sub_invoice_sync_rows_total",
+    "ERP invoice sync row outcomes from Self-Care",
+    ["outcome"],
+)
+DOTMAC_SUB_INVOICE_SYNC_LIMITS = Counter(
+    "dotmac_sub_invoice_sync_limits_total",
+    "ERP invoice sync runs that reached the attempted-row work limit",
+)
+
 # ── Finance event outbox (claim/deliver/settle relay) ──────────────────
 # Outcome labels: published, no_consequence, retried, dead, unsupported,
 # stale_claim, commit_failed, partial_failure_rolled_back, missing_org.
@@ -169,6 +179,14 @@ def observe_paystack_selfcare_relay(outcome: str, duration: float) -> None:
     PAYSTACK_SELFCARE_RELAY_DURATION.labels(outcome=normalized_outcome).observe(
         max(duration, 0.0)
     )
+
+
+def observe_dotmac_sub_invoice_sync_row(outcome: str) -> None:
+    DOTMAC_SUB_INVOICE_SYNC_ROWS.labels(outcome=normalize_metric_label(outcome)).inc()
+
+
+def observe_dotmac_sub_invoice_sync_limit() -> None:
+    DOTMAC_SUB_INVOICE_SYNC_LIMITS.inc()
 
 
 def categorize_http_status(status_code: int) -> str:
