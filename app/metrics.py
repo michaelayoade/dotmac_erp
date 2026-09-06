@@ -1,6 +1,18 @@
+import os
 import re
 
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import (
+    REGISTRY,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+    multiprocess,
+    start_http_server,
+)
+
+from app.prometheus_multiprocess import PROMETHEUS_MULTIPROC_ENV
 
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -31,6 +43,12 @@ JOB_RUNS = Counter(
     ["task", "status"],
 )
 
+WORKER_METRICS_EXPORTER_UP = Gauge(
+    "worker_metrics_exporter_up",
+    "Whether this Celery container's private metrics exporter is running",
+    multiprocess_mode="livemax",
+)
+
 INTEGRATION_REQUESTS = Counter(
     "integration_requests_total",
     "Outbound integration requests",
@@ -53,6 +71,16 @@ PAYSTACK_SELFCARE_RELAY_DURATION = Histogram(
     ["outcome"],
 )
 
+DOTMAC_SUB_INVOICE_SYNC_ROWS = Counter(
+    "dotmac_sub_invoice_sync_rows_total",
+    "ERP invoice sync row outcomes from Self-Care",
+    ["outcome"],
+)
+DOTMAC_SUB_INVOICE_SYNC_LIMITS = Counter(
+    "dotmac_sub_invoice_sync_limits_total",
+    "ERP invoice sync runs that reached the attempted-row work limit",
+)
+
 # ── Finance event outbox (claim/deliver/settle relay) ──────────────────
 # Outcome labels: published, no_consequence, retried, dead, unsupported,
 # stale_claim, commit_failed, partial_failure_rolled_back, missing_org.
@@ -68,10 +96,12 @@ OUTBOX_REPLAYS = Counter(
 OUTBOX_OLDEST_PENDING_AGE = Gauge(
     "outbox_oldest_pending_age_seconds",
     "Age of the oldest deliverable (PENDING/FAILED) outbox event",
+    multiprocess_mode="livemax",
 )
 OUTBOX_OLDEST_LEASE_AGE = Gauge(
     "outbox_oldest_lease_age_seconds",
     "Age of the oldest still-active claim lease (0 when none held)",
+    multiprocess_mode="livemax",
 )
 OUTBOX_RECONCILIATION = Counter(
     "outbox_reconciliation_total",
@@ -114,6 +144,7 @@ TRANSFER_UNRESOLVED = Counter(
 TRANSFER_UNRESOLVED_OLDEST_AGE = Gauge(
     "payment_transfer_unresolved_oldest_age_seconds",
     "Age of the oldest INDETERMINATE outbound transfer intent (0 when none)",
+    multiprocess_mode="livemax",
 )
 
 
@@ -136,6 +167,45 @@ LOKI_LOGS_DROPPED = Counter(
 
 
 _ID_TOKEN_RE = re.compile(r"\b(?:[0-9a-f]{8,}|[0-9]{3,})\b", re.IGNORECASE)
+
+
+def _export_registry() -> CollectorRegistry:
+    registry = CollectorRegistry()
+    multiprocess.MultiProcessCollector(registry)
+    return registry
+
+
+def render_metrics() -> bytes:
+    """Render process-local metrics or aggregate the configured worker set."""
+
+    if os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip():
+        return generate_latest(_export_registry())
+    return generate_latest(REGISTRY)
+
+
+def start_worker_metrics_server(port: int) -> tuple[object, object]:
+    """Expose a worker container's in-memory metrics on its private network."""
+
+    if not 1 <= port <= 65535:
+        raise ValueError("worker metrics port must be between 1 and 65535")
+    registry = (
+        _export_registry()
+        if os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip()
+        else REGISTRY
+    )
+    WORKER_METRICS_EXPORTER_UP.set(1)
+    return start_http_server(
+        port,
+        addr="0.0.0.0",  # noqa: S104  # nosec B104 -- private container network
+        registry=registry,
+    )
+
+
+def mark_metrics_process_dead(pid: int) -> None:
+    """Remove live-gauge files for one exited managed child process."""
+
+    if os.getenv(PROMETHEUS_MULTIPROC_ENV, "").strip():
+        multiprocess.mark_process_dead(pid)
 
 
 def observe_job(task_name: str, status: str, duration: float) -> None:
@@ -169,6 +239,14 @@ def observe_paystack_selfcare_relay(outcome: str, duration: float) -> None:
     PAYSTACK_SELFCARE_RELAY_DURATION.labels(outcome=normalized_outcome).observe(
         max(duration, 0.0)
     )
+
+
+def observe_dotmac_sub_invoice_sync_row(outcome: str) -> None:
+    DOTMAC_SUB_INVOICE_SYNC_ROWS.labels(outcome=normalize_metric_label(outcome)).inc()
+
+
+def observe_dotmac_sub_invoice_sync_limit() -> None:
+    DOTMAC_SUB_INVOICE_SYNC_LIMITS.inc()
 
 
 def categorize_http_status(status_code: int) -> str:

@@ -35,7 +35,7 @@ semantics.
 | `platform_events` | transactional outbox (claim/lease, retry, dead-letter, replay), service hooks | Consequences ride the outbox; the relay owns commits (claim/deliver/settle, token-gated); unknown events dead-letter unless declared no-consequence; handlers never commit |
 | `payment_execution` | payment-intent status (every transition), transfer initiation/completion/failure/reversal, scheduled reconciliation, the observed-verdict vs unobserved-outcome distinction | One service decides what a payment intent's status is **and may only claim what was observed**; webhooks, routes and schedulers validate, authorize and delegate |
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
-| `external_sync` | Sub AR ingestion, Sub operational-context projections, ERP material support and source-qualified correlations | External systems are transports or contracted authorities; mirrors are rebuildable |
+| `external_sync` | Sub AR ingestion, durable invoice disposition evidence, Sub operational-context projections, ERP material support and source-qualified correlations | External systems are transports or contracted authorities; mirrors are rebuildable; an observed blocked invoice is evidence, not a transport failure |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
@@ -45,6 +45,13 @@ schedule must not dispatch the same task in parallel. The task also owns a
 per-organization PostgreSQL advisory single-flight lock and bounded execution
 time, so connector latency or authentication failure cannot consume the shared
 worker pool. Celery remains the transport and does not decide sync state.
+
+For the versioned Self-Care invoice accounting feed, Self-Care owns invoice
+facts and ERP owns accounting mappings and postings. ERP persists each consumed
+source revision in `ar.dotmac_sub_invoice_sync_outcome` and normalized blockers
+in `ar.dotmac_sub_invoice_sync_issue`. An exact replay increments recurrence; a
+later ready revision resolves rather than deletes prior evidence. See ADR-0012
+and `docs/operations/dotmac-sub-invoice-sync-outcomes.md`.
 
 The built-in `staff-sync-reconcile` run at 02:30 Africa/Lagos also repairs the
 ERP-owned staff account-status and approved-leave projections before invoking

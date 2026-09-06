@@ -1,4 +1,5 @@
 import app.celery_app as celery_module
+from app.prometheus_multiprocess import PROMETHEUS_MULTIPROC_PATH
 
 
 def test_configure_celery_runtime_logging_is_idempotent_per_process(
@@ -132,3 +133,39 @@ def test_task_metrics_ignore_postrun_without_matching_start(monkeypatch) -> None
     )
 
     assert observed == []
+
+
+def test_worker_metrics_exporter_starts_once(monkeypatch) -> None:
+    servers: list[int] = []
+    server = (object(), object())
+    monkeypatch.setenv(
+        celery_module.PROMETHEUS_MULTIPROC_ENV,
+        str(PROMETHEUS_MULTIPROC_PATH),
+    )
+    monkeypatch.setenv("WORKER_METRICS_PORT", "8123")
+    monkeypatch.setattr(celery_module.logger, "info", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        celery_module,
+        "start_worker_metrics_server",
+        lambda port: servers.append(port) or server,
+    )
+    monkeypatch.setattr(celery_module, "_worker_metrics_server", None)
+
+    celery_module._start_worker_metrics_exporter()
+    celery_module._start_worker_metrics_exporter()
+
+    assert servers == [8123]
+    assert celery_module._worker_metrics_server is server
+
+
+def test_worker_process_shutdown_retires_live_gauges(monkeypatch) -> None:
+    retired: list[int] = []
+    monkeypatch.setattr(
+        celery_module,
+        "mark_metrics_process_dead",
+        lambda pid: retired.append(pid),
+    )
+
+    celery_module._retire_worker_metrics_process(pid=4242)
+
+    assert retired == [4242]

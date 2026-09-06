@@ -31,3 +31,18 @@ def test_post_worker_init_bootstraps_runtime_observability(monkeypatch) -> None:
     gunicorn_conf.post_worker_init(worker=object())
 
     assert calls == [fake_app]
+
+
+def test_child_exit_retires_live_metrics_gauges(monkeypatch) -> None:
+    gunicorn_conf = _load_gunicorn_conf()
+    calls: list[int] = []
+    fake_metrics = ModuleType("app.metrics")
+    fake_metrics.mark_metrics_process_dead = lambda pid: calls.append(pid)
+    monkeypatch.setitem(sys.modules, "app.metrics", fake_metrics)
+
+    class Worker:
+        pid = 4242
+
+    gunicorn_conf.child_exit(server=object(), worker=Worker())
+
+    assert calls == [4242]

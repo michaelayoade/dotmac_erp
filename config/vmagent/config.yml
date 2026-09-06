@@ -18,6 +18,9 @@ global:
 scrape_configs:
   - job_name: 'dotmac-erp-app'
     metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: '%{METRICS_TOKEN}'
     static_configs:
       # Container port over the compose network. Note this is 8002, not the
       # 8003 published on the host — and not app-dev, which also listens on 8002
@@ -27,3 +30,12 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: 'dotmac-erp-app'
+
+  - job_name: 'dotmac-erp-worker'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['worker:8004']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'dotmac-erp-worker'

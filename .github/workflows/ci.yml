@@ -521,6 +521,7 @@ jobs:
             -e CELERY_BROKER_URL=redis://ci-redis:6379/0 \
             -e DOTMAC_DEV_MODE=true \
             -e GUNICORN_WORKERS=1 \
+            -e PROMETHEUS_MULTIPROC_DIR=/tmp/dotmac-erp-prometheus \
             dotmac-erp:ci
 
       - name: Wait for health check
@@ -534,6 +535,7 @@ jobs:
             fi
             HEALTH=$(docker exec ci-app python -c "import json,urllib.request; payload=json.load(urllib.request.urlopen('http://localhost:8002/health/ready')); assert str(payload['status']).startswith('ready'); print(payload['status'])" 2>/dev/null || echo "")
             if [[ "$HEALTH" == ready* ]]; then
+              docker exec ci-app python -c "import urllib.request; body=urllib.request.urlopen('http://127.0.0.1:8002/metrics', timeout=3).read(); assert b'http_requests_total' in body"
               echo "Readiness check passed: $HEALTH"
               exit 0
             fi
@@ -665,8 +667,10 @@ jobs:
             -e CELERY_BROKER_URL=redis://ci-redis:6379/0 \
             -e CELERY_RESULT_BACKEND=redis://ci-redis:6379/1 \
             -e DOTMAC_DEV_MODE=true \
+            -e PROMETHEUS_MULTIPROC_DIR=/tmp/dotmac-erp-prometheus \
+            -e WORKER_METRICS_PORT=8004 \
             dotmac-erp:ci \
-            celery -A app.celery_app worker -l info
+            python -m app.celery_worker_entrypoint
           docker run -d --name ci-beat --network ci-net \
             --read-only \
             --user 10001:10001 \
@@ -701,6 +705,7 @@ jobs:
             fi
             sleep 2
           done
+          docker exec ci-worker python -c "import urllib.request; body=urllib.request.urlopen('http://127.0.0.1:8004/metrics', timeout=3).read(); assert b'worker_metrics_exporter_up 1.0' in body"
           sleep 5
           if [ "$(docker inspect --format='{{.State.Running}}' ci-beat 2>/dev/null || true)" != "true" ]; then
             docker logs ci-beat

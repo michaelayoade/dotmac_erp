@@ -40,6 +40,11 @@ from app.services.dotmac_sub import (
     DotmacSubAuthenticationError,
     DotmacSubSyncService,
 )
+from app.services.dotmac_sub.client import DotmacSubClient
+from app.services.dotmac_sub.invoice_sync_shadow import (
+    InvoiceSyncShadowContractError,
+    observe_invoice_accounting_v2,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +72,62 @@ _INCREMENTAL_ENTITY_TYPES = [
     "payments",
     "credit_notes",
 ]
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def run_dotmac_sub_invoice_accounting_v2_shadow(
+    self: Any,
+    organization_id: str | None = None,
+    invoice_id: str | None = None,
+    batch_size: int = 500,
+) -> dict[str, Any]:
+    """Explicit, unscheduled v2 observation; never invokes ERP invoice posting."""
+    org_id = _resolve_org_id(organization_id)
+    if org_id is None:
+        return {"success": False, "error": "No valid organization ID configured"}
+    try:
+        target_invoice_id = UUID(invoice_id) if invoice_id else None
+    except ValueError:
+        return {"success": False, "error": "Invalid invoice ID"}
+
+    with session_for_org(org_id) as db:
+        config = DotmacSubConfig.for_org(db, org_id)
+        if not config.is_configured():
+            return {
+                "success": False,
+                "error": "dotmac_sub integration is not configured",
+            }
+        try:
+            with DotmacSubClient(config) as client:
+                result = observe_invoice_accounting_v2(
+                    db,
+                    client,
+                    org_id,
+                    invoice_id=target_invoice_id,
+                    batch_size=batch_size,
+                )
+            db.commit()
+            return {
+                "success": True,
+                "organization_id": str(org_id),
+                "observed": result.observed,
+                "ready": result.ready,
+                "blocked": result.blocked,
+                "not_applicable": result.not_applicable,
+                "replayed": result.replayed,
+                "resolved_prior": result.resolved_prior,
+                "truncated": result.truncated,
+            }
+        except InvoiceSyncShadowContractError as exc:
+            db.rollback()
+            logger.error("Invoice accounting v2 shadow rejected its feed: %s", exc)
+            return {"success": False, "error": str(exc), "retryable": False}
+        except DotmacSubAuthenticationError as exc:
+            db.rollback()
+            return {"success": False, "error": str(exc), "retryable": False}
+        except Exception as exc:
+            db.rollback()
+            raise self.retry(exc=exc)
 
 
 def _resolve_org_id(explicit_org_id: str | None) -> UUID | None:

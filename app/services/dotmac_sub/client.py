@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 from dotmac_integration_client import (
@@ -47,6 +47,8 @@ from app.metrics import observe_integration_request, observe_paystack_selfcare_r
 from app.observability import get_request_id
 
 logger = logging.getLogger(__name__)
+
+_EnumT = TypeVar("_EnumT", bound=Enum)
 
 _INTEGRATION_CLIENT_HEADER = "X-Dotmac-Integration-Client"
 _INTEGRATION_CLIENT_NAME = "dotmac-erp"
@@ -287,6 +289,36 @@ class TaxApplication(str, Enum):
     EXEMPT = "exempt"
 
 
+class InvoiceAccountingSyncDisposition(str, Enum):
+    """Closed v2 decision supplied by Self-Care's billing owner."""
+
+    READY = "ready"
+    BLOCKED = "blocked"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class InvoiceAccountingSyncSourceKind(str, Enum):
+    """Closed provenance vocabulary for the v2 accounting projection."""
+
+    NATIVE = "native"
+    SPLYNX_LEGACY = "splynx_legacy"
+
+
+class InvoiceAccountingSyncIssueCode(str, Enum):
+    """Machine-actionable v2 contradictions ERP may quarantine."""
+
+    NO_ACTIVE_LINES = "no_active_lines"
+    LINE_AMOUNT_MISMATCH = "line_amount_mismatch"
+    MISSING_TAX_RATE_REFERENCE = "missing_tax_rate_reference"
+    TAX_SNAPSHOT_MISSING = "tax_snapshot_missing"
+    HEADER_SUBTOTAL_MISMATCH = "header_subtotal_mismatch"
+    TAXED_HEADER_WITHOUT_LINE_TAX = "taxed_header_without_line_tax"
+    HEADER_TAX_MISMATCH = "header_tax_mismatch"
+    HEADER_TOTAL_MISMATCH = "header_total_mismatch"
+    LEGACY_HEADER_TOTALS_MISSING = "legacy_header_totals_missing"
+    DISCOUNT_ALLOCATION_UNDEFINED = "discount_allocation_undefined"
+
+
 @dataclass(frozen=True)
 class ResellerRecord:
     """Reseller (parent account) from dotmac_sub — ADMITTED evidence.
@@ -501,6 +533,67 @@ class InvoiceRecord:
                 self.balance_due, self.currency, field=f"{label} balance_due"
             ),
         )
+
+
+@dataclass(frozen=True)
+class InvoiceAccountingSyncIssueRecord:
+    """One typed contradiction from Self-Care's v2 projection."""
+
+    code: InvoiceAccountingSyncIssueCode
+    line_id: str | None = None
+    expected_amount: Decimal | None = None
+    actual_amount: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class InvoiceAccountingSyncLineRecord:
+    """Immutable line money and tax facts from the v2 projection."""
+
+    id: str
+    description: str
+    quantity: Decimal
+    unit_price: Decimal
+    source_amount: Decimal
+    net_amount_before_discount: Decimal
+    tax_amount_before_discount: Decimal
+    gross_amount_before_discount: Decimal
+    tax_rate_id: str | None
+    tax_rate_code: str | None
+    tax_rate_percent: Decimal | None
+    tax_rate_is_active: bool | None
+    tax_application: TaxApplication
+
+
+@dataclass(frozen=True)
+class InvoiceAccountingSyncRecord:
+    """Admitted ``invoice-accounting-sync.v2`` evidence for ERP shadowing."""
+
+    contract_version: str
+    source_kind: InvoiceAccountingSyncSourceKind
+    source_invoice_id: str
+    source_splynx_invoice_id: int | None
+    account_id: str
+    account: SubscriberRecord
+    invoice_number: str | None
+    status: str
+    currency: str
+    subtotal_before_discount: Decimal
+    discount_type: str | None
+    discount_value: Decimal | None
+    discount_amount: Decimal
+    discounted_subtotal: Decimal
+    tax_total: Decimal
+    total: Decimal
+    balance_due: Decimal
+    issued_at: datetime | None
+    due_at: datetime | None
+    paid_at: datetime | None
+    memo: str | None
+    is_proforma: bool
+    updated_at: datetime | None
+    disposition: InvoiceAccountingSyncDisposition
+    issues: tuple[InvoiceAccountingSyncIssueRecord, ...]
+    lines: tuple[InvoiceAccountingSyncLineRecord, ...]
 
 
 @dataclass(frozen=True)
@@ -1673,6 +1766,276 @@ class DotmacSubClient:
             ),
         )
 
+    @staticmethod
+    def _accounting_v2_enum(
+        value: Any,
+        enum_type: type[_EnumT],
+        *,
+        field: str,
+        record: str,
+        updated_at: datetime | None,
+    ) -> _EnumT:
+        """Parse a closed v2 vocabulary without silently accepting drift."""
+
+        try:
+            return enum_type(value)
+        except (TypeError, ValueError) as exc:
+            allowed = ", ".join(sorted(str(member.value) for member in enum_type))
+            raise DotmacSubParseError(
+                f"{record}: unsupported {field} {value!r}; ERP admits exactly "
+                f"{{{allowed}}}",
+                record=record,
+                updated_at=updated_at,
+            ) from exc
+
+    def _parse_invoice_accounting_sync_v2(
+        self, item: dict[str, Any]
+    ) -> InvoiceAccountingSyncRecord:
+        """Admit one versioned accounting projection without posting it."""
+
+        record = f"Sub invoice accounting v2 {item.get('source_invoice_id', '?')}"
+        updated_at = _wire_updated_at(item, record=record)
+        if updated_at is None:
+            raise DotmacSubParseError(
+                f"{record}: updated_at is required for durable revision identity",
+                record=record,
+                updated_at=None,
+            )
+        contract_version = item.get("contract_version")
+        if contract_version != "invoice-accounting-sync.v2":
+            raise DotmacSubParseError(
+                f"{record}: unsupported contract_version {contract_version!r}",
+                record=record,
+                updated_at=updated_at,
+            )
+        currency = _required_currency(item, record=record, updated_at=updated_at)
+        minor_units = _registry_minor_units(currency)
+        account = item.get("account")
+        if not isinstance(account, dict):
+            raise DotmacSubParseError(
+                f"{record}: account projection is required",
+                record=record,
+                updated_at=updated_at,
+            )
+
+        lines: list[InvoiceAccountingSyncLineRecord] = []
+        for line in item.get("lines", []):
+            if not isinstance(line, dict):
+                raise DotmacSubParseError(
+                    f"{record}: line projection must be an object",
+                    record=record,
+                    updated_at=updated_at,
+                )
+            line_record = f"{record} line {line.get('id', '?')}"
+            tax_rate_is_active = line.get("tax_rate_is_active")
+            if tax_rate_is_active is not None and not isinstance(
+                tax_rate_is_active, bool
+            ):
+                raise DotmacSubParseError(
+                    f"{line_record}: tax_rate_is_active must be boolean or null",
+                    record=record,
+                    updated_at=updated_at,
+                )
+            lines.append(
+                InvoiceAccountingSyncLineRecord(
+                    id=str(line.get("id", "")),
+                    description=str(line.get("description", "")),
+                    quantity=_dec(line.get("quantity"), "1"),
+                    unit_price=_dec(line.get("unit_price")),
+                    source_amount=_required_money(
+                        line,
+                        "source_amount",
+                        record=line_record,
+                        updated_at=updated_at,
+                        minor_units=minor_units,
+                    ),
+                    net_amount_before_discount=_required_money(
+                        line,
+                        "net_amount_before_discount",
+                        record=line_record,
+                        updated_at=updated_at,
+                        minor_units=minor_units,
+                    ),
+                    tax_amount_before_discount=_required_money(
+                        line,
+                        "tax_amount_before_discount",
+                        record=line_record,
+                        updated_at=updated_at,
+                        minor_units=minor_units,
+                    ),
+                    gross_amount_before_discount=_required_money(
+                        line,
+                        "gross_amount_before_discount",
+                        record=line_record,
+                        updated_at=updated_at,
+                        minor_units=minor_units,
+                    ),
+                    tax_rate_id=(
+                        str(line["tax_rate_id"])
+                        if line.get("tax_rate_id") is not None
+                        else None
+                    ),
+                    tax_rate_code=line.get("tax_rate_code"),
+                    tax_rate_percent=(
+                        _dec(line.get("tax_rate_percent"))
+                        if line.get("tax_rate_percent") is not None
+                        else None
+                    ),
+                    tax_rate_is_active=tax_rate_is_active,
+                    tax_application=_wire_tax_application(
+                        line, record=line_record, updated_at=updated_at
+                    ),
+                )
+            )
+
+        issues: list[InvoiceAccountingSyncIssueRecord] = []
+        for issue in item.get("issues", []):
+            if not isinstance(issue, dict):
+                raise DotmacSubParseError(
+                    f"{record}: issue projection must be an object",
+                    record=record,
+                    updated_at=updated_at,
+                )
+            issues.append(
+                InvoiceAccountingSyncIssueRecord(
+                    code=self._accounting_v2_enum(
+                        issue.get("code"),
+                        InvoiceAccountingSyncIssueCode,
+                        field="issue code",
+                        record=record,
+                        updated_at=updated_at,
+                    ),
+                    line_id=(
+                        str(issue["line_id"])
+                        if issue.get("line_id") is not None
+                        else None
+                    ),
+                    expected_amount=_optional_money(
+                        issue,
+                        "expected_amount",
+                        record=record,
+                        updated_at=updated_at,
+                        minor_units=minor_units,
+                    ),
+                    actual_amount=_optional_money(
+                        issue,
+                        "actual_amount",
+                        record=record,
+                        updated_at=updated_at,
+                        minor_units=minor_units,
+                    ),
+                )
+            )
+
+        disposition = self._accounting_v2_enum(
+            item.get("disposition"),
+            InvoiceAccountingSyncDisposition,
+            field="disposition",
+            record=record,
+            updated_at=updated_at,
+        )
+        if disposition is InvoiceAccountingSyncDisposition.READY and issues:
+            raise DotmacSubParseError(
+                f"{record}: ready disposition cannot carry blocking issues",
+                record=record,
+                updated_at=updated_at,
+            )
+        if disposition is InvoiceAccountingSyncDisposition.BLOCKED and not issues:
+            raise DotmacSubParseError(
+                f"{record}: blocked disposition requires issue evidence",
+                record=record,
+                updated_at=updated_at,
+            )
+
+        discount_value = item.get("discount_value")
+        return InvoiceAccountingSyncRecord(
+            contract_version=contract_version,
+            source_kind=self._accounting_v2_enum(
+                item.get("source_kind"),
+                InvoiceAccountingSyncSourceKind,
+                field="source_kind",
+                record=record,
+                updated_at=updated_at,
+            ),
+            source_invoice_id=str(item.get("source_invoice_id", "")),
+            source_splynx_invoice_id=item.get("source_splynx_invoice_id"),
+            account_id=str(item.get("account_id", "")),
+            account=self._parse_subscriber(account),
+            invoice_number=item.get("invoice_number"),
+            status=str(item.get("status", "")),
+            currency=currency,
+            subtotal_before_discount=_required_money(
+                item,
+                "subtotal_before_discount",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
+            discount_type=item.get("discount_type"),
+            discount_value=(
+                _dec(discount_value) if discount_value is not None else None
+            ),
+            discount_amount=_required_money(
+                item,
+                "discount_amount",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
+            discounted_subtotal=_required_money(
+                item,
+                "discounted_subtotal",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
+            tax_total=_required_money(
+                item,
+                "tax_total",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
+            total=_required_money(
+                item,
+                "total",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
+            balance_due=_required_money(
+                item,
+                "balance_due",
+                record=record,
+                updated_at=updated_at,
+                minor_units=minor_units,
+            ),
+            issued_at=_parse_wire_instant(
+                item.get("issued_at"),
+                record=record,
+                field="issued_at",
+                updated_at=updated_at,
+            ),
+            due_at=_parse_wire_instant(
+                item.get("due_at"),
+                record=record,
+                field="due_at",
+                updated_at=updated_at,
+            ),
+            paid_at=_parse_wire_instant(
+                item.get("paid_at"),
+                record=record,
+                field="paid_at",
+                updated_at=updated_at,
+            ),
+            memo=item.get("memo"),
+            is_proforma=bool(item.get("is_proforma", False)),
+            updated_at=updated_at,
+            disposition=disposition,
+            issues=tuple(issues),
+            lines=tuple(lines),
+        )
+
     def get_invoices(
         self,
         account_id: str | None = None,
@@ -1696,6 +2059,31 @@ class DotmacSubClient:
         for item in self._sync_paginate("/invoices/sync", params=params):
             try:
                 record = self._parse_invoice(item)
+            except DotmacSubParseError as exc:
+                if on_parse_error is None:
+                    raise
+                on_parse_error(exc)
+                continue
+            yield record
+
+    def get_invoice_accounting_sync_v2(
+        self,
+        invoice_id: str | None = None,
+        account_id: str | None = None,
+        status: str | None = None,
+        *,
+        updated_since: str | None = None,
+        on_parse_error: Callable[[DotmacSubParseError], None] | None = None,
+    ) -> Generator[InvoiceAccountingSyncRecord, None, None]:
+        """Read the additive v2 feed for shadow comparison only."""
+
+        params = _watermark_params(account_id, status, updated_since)
+        if invoice_id:
+            params["invoice_id"] = invoice_id
+        logger.info("Fetching dotmac_sub invoice accounting v2 with params: %s", params)
+        for item in self._sync_paginate("/invoices/accounting-sync/v2", params=params):
+            try:
+                record = self._parse_invoice_accounting_sync_v2(item)
             except DotmacSubParseError as exc:
                 if on_parse_error is None:
                     raise

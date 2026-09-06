@@ -3,6 +3,13 @@
 import multiprocessing
 import os
 
+from app.prometheus_multiprocess import prepare_configured_multiprocess_directory
+
+
+# Gunicorn preloads the application. Clear stale mmap files before that import
+# creates any Prometheus collectors inherited by the worker processes.
+prepare_configured_multiprocess_directory()
+
 
 def _int_env(name: str, default: int) -> int:
     """Parse integer environment variables with safe fallback."""
@@ -61,3 +68,9 @@ def post_worker_init(worker):
     from app.main import app, bootstrap_runtime_observability
 
     bootstrap_runtime_observability(app)
+
+
+def child_exit(server, worker):
+    from app.metrics import mark_metrics_process_dead
+
+    mark_metrics_process_dead(worker.pid)

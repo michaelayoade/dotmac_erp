@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -73,6 +73,7 @@ from app.db import SessionLocal
 from app.db.session_context import allow_cross_org, prime_tenant_context
 from app.errors import register_error_handlers
 from app.logging import configure_logging
+from app.metrics import render_metrics
 from app.middleware.csp import add_unsafe_eval_to_csp
 from app.middleware.rate_limit import rate_limit_middleware
 from app.monitoring import setup_monitoring
@@ -1109,5 +1110,5 @@ def _monitoring_authorized(request: Request) -> bool:
 def metrics(request: Request):
     if not _metrics_authorized(request):
         return Response(status_code=404)
-    data = generate_latest()
+    data = render_metrics()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
