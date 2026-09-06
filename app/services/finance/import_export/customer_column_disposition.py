@@ -62,7 +62,7 @@ from __future__ import annotations
 
 import enum
 import hashlib
-from collections.abc import Iterable, Mapping, MutableSet, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -230,6 +230,56 @@ def correlate_row(
         row_ordinal=start_row + index,
         identity_digest=identity_digest(display_name),
     )
+
+
+class CodeRegistry:
+    """Which ``(organization_id, customer_code)`` pairs this RUN has seen.
+
+    The ruled invariant is uniqueness within ``(organization_id,
+    customer_code)``.  A registry created per partition would enforce
+    uniqueness within ``(organization_id, customer_code, partition)`` instead
+    -- a different and weaker claim, and a dishonest one, because partitioning
+    is a function of ``IMPORT_PARTITION_ROWS`` and a byte ceiling.  The same
+    corpus split differently would then get a different verdict, and a guard
+    whose answer depends on chunking is not enforcing the invariant it names.
+
+    So the registry is opened ONCE per run and threaded through every
+    partition.  ``compare_partition`` takes it as a required argument rather
+    than defaulting one into existence, because a default is exactly how the
+    per-partition scope got in.
+
+    It does not read the database.  Codes already persisted by an earlier run
+    are supplied by the CALLER through ``persisted``: the caller owns the
+    session and the query, this module owns the rule.  Keeping the comparator
+    session-free is what lets every plant below run without a database, and
+    the authority for uniqueness remains the ``uq_customer_code`` constraint
+    -- this is a shadow-comparison check, not the enforcement point.
+
+    UNMONITORED, and deliberately not implied otherwise: with no ``persisted``
+    seed, a code allocated by an earlier run is invisible here, and a
+    concurrent run in another process is invisible either way.
+    """
+
+    __slots__ = ("_persisted", "_seen")
+
+    def __init__(self, *, persisted: Iterable[tuple[Any, str]] = ()) -> None:
+        self._persisted = frozenset(persisted)
+        self._seen: set[tuple[Any, str]] = set(self._persisted)
+
+    @property
+    def seeded_from_durable_state(self) -> bool:
+        """Whether this run was told about codes an earlier run allocated."""
+        return bool(self._persisted)
+
+    def claim(self, organization_id: Any, code: str) -> str | None:
+        """Record a code, returning why it was refused if it was already held."""
+        key = (organization_id, code)
+        if key in self._persisted:
+            return "a customer already persisted in this organization holds this code"
+        if key in self._seen:
+            return "a second row in this organization got the same generated code"
+        self._seen.add(key)
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -413,7 +463,7 @@ def check_generated_code(
     code: Any,
     *,
     organization_id: Any,
-    seen: MutableSet[tuple[Any, str]],
+    registry: CodeRegistry,
     correlation: RowCorrelation | None = None,
     model: type[Any] = Customer,
 ) -> tuple[DispositionFinding, ...]:
@@ -421,7 +471,8 @@ def check_generated_code(
 
     Not equality with the legacy code -- see this module's docstring.  What is
     required is that the value is non-empty, fits the column, and is unique
-    within ``(organization_id, customer_code)`` across the run.
+    within ``(organization_id, customer_code)`` across the RUN -- which is why
+    the registry is passed in rather than created here.
     """
     findings: list[DispositionFinding] = []
     if not isinstance(code, str) or not code.strip():
@@ -447,17 +498,16 @@ def check_generated_code(
                 correlation=correlation,
             )
         )
-    key = (organization_id, code)
-    if key in seen:
+    refusal = registry.claim(organization_id, code)
+    if refusal is not None:
         findings.append(
             DispositionFinding(
                 kind=FindingKind.GENERATED_CODE_NOT_UNIQUE,
                 field="customer_code",
-                reason="a second row in this organization got the same generated code",
+                reason=refusal,
                 correlation=correlation,
             )
         )
-    seen.add(key)
     return tuple(findings)
 
 
@@ -613,9 +663,12 @@ def compare_constructed_row(
     row: ConstructedRow,
     *,
     window: RunWindow,
-    seen_codes: MutableSet[tuple[Any, str]],
+    registry: CodeRegistry,
 ) -> tuple[DispositionFinding, ...]:
-    """Compare one row's field vector under the disposition."""
+    """Compare one row's field vector under the disposition.
+
+    ``registry`` is the RUN's, never one made for this row or this partition.
+    """
     legacy_stage = _stage(row.legacy)
     durable_stage = _stage(row.durable)
     if legacy_stage != durable_stage:
@@ -648,7 +701,7 @@ def compare_constructed_row(
                 check_generated_code(
                     effective_value(row.durable, name),
                     organization_id=effective_value(row.durable, "organization_id"),
-                    seen=seen_codes,
+                    registry=registry,
                     correlation=row.correlation,
                 )
             )
@@ -751,17 +804,22 @@ def compare_partition(
     rows: Iterable[ConstructedRow | DuplicateRow],
     *,
     window: RunWindow,
+    registry: CodeRegistry,
     model: type[Any] = Customer,
 ) -> tuple[DispositionFinding, ...]:
-    """Close the disposition, then compare every row against it."""
+    """Close the disposition, then compare every row of ONE partition.
+
+    ``registry`` is required and belongs to the RUN.  It is not defaulted:
+    a default would silently re-scope customer-code uniqueness to the
+    partition, which is the narrower claim this argument exists to stop.
+    """
     findings: list[DispositionFinding] = list(closure_findings(model))
-    seen_codes: set[tuple[Any, str]] = set()
     for row in rows:
         if isinstance(row, DuplicateRow):
             findings.extend(compare_duplicate_row(row))
         else:
             findings.extend(
-                compare_constructed_row(row, window=window, seen_codes=seen_codes)
+                compare_constructed_row(row, window=window, registry=registry)
             )
     return tuple(findings)
 
@@ -770,10 +828,11 @@ def assert_partition_agrees(
     rows: Sequence[ConstructedRow | DuplicateRow],
     *,
     window: RunWindow,
+    registry: CodeRegistry,
     model: type[Any] = Customer,
 ) -> None:
     """Guard form: raise if anything at all was refused."""
-    findings = compare_partition(rows, window=window, model=model)
+    findings = compare_partition(rows, window=window, registry=registry, model=model)
     if findings:
         raise ColumnDispositionError(_describe(findings))
 
@@ -800,6 +859,7 @@ __all__ = [
     "CUSTOMER_FIELD_DISPOSITION",
     "DATABASE_ASSIGNED",
     "CodeAllocation",
+    "CodeRegistry",
     "ColumnDispositionError",
     "ConstructedRow",
     "Disposition",

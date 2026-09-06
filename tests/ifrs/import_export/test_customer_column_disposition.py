@@ -53,6 +53,7 @@ from app.services.finance.import_export.contacts import CustomerImporter
 from app.services.finance.import_export.customer_column_disposition import (
     CUSTOMER_FIELD_DISPOSITION,
     CodeAllocation,
+    CodeRegistry,
     ColumnDispositionError,
     ConstructedRow,
     Disposition,
@@ -210,12 +211,12 @@ class _DurableSession:
         del instance
 
 
-def _legacy_entity(raw: dict[str, str]) -> Customer:
+def _legacy_entity(raw: dict[str, str], org: uuid.UUID = ORG) -> Customer:
     """What the retiring importer decides, kept instead of thrown away."""
     importer = CustomerImporter(
         _ForbiddenSession(),
         ImportConfig(
-            organization_id=ORG,
+            organization_id=org,
             user_id=USER,
             skip_duplicates=False,
             dry_run=True,
@@ -233,7 +234,9 @@ def _legacy_entity(raw: dict[str, str]) -> Customer:
     return importer.constructed[0]
 
 
-def _durable_entity(raw: dict[str, str], db: _DurableSession) -> Customer:
+def _durable_entity(
+    raw: dict[str, str], db: _DurableSession, org: uuid.UUID = ORG
+) -> Customer:
     """What the durable path decides, through the one canonical writer."""
     mapped = apply_mapping(raw, _column_mapping())
     if not str(mapped.get("display_name", "") or "") and raw.get("Display Name"):
@@ -242,7 +245,7 @@ def _durable_entity(raw: dict[str, str], db: _DurableSession) -> Customer:
             "not deliver a populated 'display_name' to the durable port. "
             f"mapped keys={sorted(mapped)}"
         )
-    port = CustomerImportPort(db, ORG, USER, AR, skip_duplicates=False)
+    port = CustomerImportPort(db, org, USER, AR, skip_duplicates=False)
     port.apply(mapped)
     customers = [item for item in db.added if isinstance(item, Customer)]
     if not customers:
@@ -254,11 +257,14 @@ def _durable_entity(raw: dict[str, str], db: _DurableSession) -> Customer:
 
 
 def _correlation(
-    index: int = 0, display_name: str = "Northwind Trading"
+    index: int = 0,
+    display_name: str = "Northwind Trading",
+    *,
+    partition_ordinal: int = 0,
 ) -> RowCorrelation:
     return correlate_row(
         source_file_sha256=SOURCE_SHA,
-        partition_ordinal=0,
+        partition_ordinal=partition_ordinal,
         start_row=0,
         index=index,
         display_name=display_name,
@@ -270,11 +276,19 @@ def _window() -> RunWindow:
     return RunWindow(started_at=now - timedelta(minutes=5), finished_at=now)
 
 
-def _row_under_comparison(raw: dict[str, str] = ROW, index: int = 0) -> ConstructedRow:
+def _row_under_comparison(
+    raw: dict[str, str] = ROW,
+    index: int = 0,
+    *,
+    org: uuid.UUID = ORG,
+    partition_ordinal: int = 0,
+) -> ConstructedRow:
     return ConstructedRow(
-        correlation=_correlation(index, str(raw["Display Name"])),
-        legacy=_legacy_entity(raw),
-        durable=_durable_entity(raw, _DurableSession()),
+        correlation=_correlation(
+            index, str(raw["Display Name"]), partition_ordinal=partition_ordinal
+        ),
+        legacy=_legacy_entity(raw, org),
+        durable=_durable_entity(raw, _DurableSession(), org),
     )
 
 
@@ -311,7 +325,7 @@ def test_two_real_constructors_agree_on_every_exact_field() -> None:
     durable = _durable_entity(ROW, db)
     row = ConstructedRow(correlation=_correlation(), legacy=legacy, durable=durable)
 
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
 
     # The comparison ran against two distinct objects, not one object twice.
     assert legacy is not durable
@@ -333,7 +347,7 @@ def test_the_second_name_branch_also_agrees() -> None:
     """Second admit direction: the individual branch of the name split."""
     row = _row_under_comparison(SECOND_ROW, index=1)
 
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
     assert row.legacy.legal_name == "Ada Example"
     assert row.legacy.trading_name is None
 
@@ -377,7 +391,7 @@ def test_a_business_field_that_diverges_is_named(monkeypatch) -> None:
     _perturb_legacy_default(monkeypatch, "Credit Limit", Decimal("999.00"))
     row = _row_under_comparison()
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.EXACT_MISMATCH]
     assert _fields(findings) == ["credit_limit"]
@@ -399,7 +413,7 @@ def test_the_same_perturbation_on_a_field_no_constructor_uses_is_silent(
     _perturb_legacy_default(monkeypatch, "Notes", "perturbed")
     row = _row_under_comparison()
 
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
     # The perturbation really did reach the retiring transform -- otherwise
     # this near-miss would be silent for the trivial reason that nothing
     # changed at all.
@@ -450,7 +464,7 @@ def test_a_generated_code_past_the_column_length_is_named(monkeypatch) -> None:
     _fixed_generated_code(monkeypatch, "CUST-" + "9" * (limit - 4))
     row = _row_under_comparison()
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.GENERATED_CODE_INVALID]
     assert _fields(findings) == ["customer_code"]
@@ -463,28 +477,32 @@ def test_a_generated_code_exactly_at_the_limit_is_silent(monkeypatch) -> None:
     _fixed_generated_code(monkeypatch, "CUST-" + "9" * (limit - 5))
     row = _row_under_comparison()
 
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
     assert len(row.durable.customer_code) == limit
 
 
 def test_an_empty_generated_code_is_named() -> None:
     """PLANT 2b, at the other end of the same invariant."""
-    findings = check_generated_code("   ", organization_id=ORG, seen=set())
+    findings = check_generated_code("   ", organization_id=ORG, registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.GENERATED_CODE_INVALID]
 
 
 def test_a_short_generated_code_is_silent() -> None:
     """NEAR-MISS for plant 2b."""
-    assert check_generated_code("C", organization_id=ORG, seen=set()) == ()
+    assert check_generated_code("C", organization_id=ORG, registry=CodeRegistry()) == ()
 
 
 def test_a_repeated_code_in_one_organization_is_named() -> None:
     """PLANT 2c: uniqueness is within ``(organization_id, customer_code)``."""
-    seen: set[tuple[Any, str]] = set()
+    registry = CodeRegistry()
 
-    assert check_generated_code("CUST-00001", organization_id=ORG, seen=seen) == ()
-    findings = check_generated_code("CUST-00001", organization_id=ORG, seen=seen)
+    assert (
+        check_generated_code("CUST-00001", organization_id=ORG, registry=registry) == ()
+    )
+    findings = check_generated_code(
+        "CUST-00001", organization_id=ORG, registry=registry
+    )
 
     assert _kinds(findings) == [FindingKind.GENERATED_CODE_NOT_UNIQUE]
 
@@ -496,11 +514,14 @@ def test_the_same_code_in_another_organization_is_silent() -> None:
     be enforcing a fleet-wide unique code, which is not what
     ``uq_customer_code`` says.
     """
-    seen: set[tuple[Any, str]] = set()
+    registry = CodeRegistry()
 
-    assert check_generated_code("CUST-00001", organization_id=ORG, seen=seen) == ()
     assert (
-        check_generated_code("CUST-00001", organization_id=OTHER_ORG, seen=seen) == ()
+        check_generated_code("CUST-00001", organization_id=ORG, registry=registry) == ()
+    )
+    assert (
+        check_generated_code("CUST-00001", organization_id=OTHER_ORG, registry=registry)
+        == ()
     )
 
 
@@ -514,7 +535,7 @@ def test_two_rows_that_receive_the_same_code_are_named_end_to_end(monkeypatch) -
     _fixed_generated_code(monkeypatch, "CUST-00001")
     rows = [_row_under_comparison(ROW, 0), _row_under_comparison(SECOND_ROW, 1)]
 
-    findings = compare_partition(rows, window=_window())
+    findings = compare_partition(rows, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.GENERATED_CODE_NOT_UNIQUE]
     assert findings[0].correlation == rows[1].correlation
@@ -536,7 +557,7 @@ def test_two_rows_with_distinct_codes_are_silent() -> None:
         ),
     ]
 
-    assert compare_partition(rows, window=_window()) == ()
+    assert compare_partition(rows, window=_window(), registry=CodeRegistry()) == ()
     assert rows[0].durable.customer_code != rows[1].durable.customer_code
 
 
@@ -720,7 +741,7 @@ def test_two_sides_sharing_a_surrogate_key_are_named() -> None:
     row = _row_under_comparison()
     row.durable.customer_id = row.legacy.customer_id
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert FindingKind.SURROGATE_KEY_COLLIDED in _kinds(findings)
 
@@ -730,7 +751,7 @@ def test_distinct_surrogate_keys_are_silent() -> None:
     row = _row_under_comparison()
     row.durable.customer_id = uuid.uuid4()
 
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
 
 
 def test_one_entity_handed_in_twice_is_named() -> None:
@@ -744,7 +765,7 @@ def test_one_entity_handed_in_twice_is_named() -> None:
     only = _legacy_entity(ROW)
     row = ConstructedRow(correlation=_correlation(), legacy=only, durable=only)
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert FindingKind.SURROGATE_KEY_COLLIDED in _kinds(findings)
 
@@ -763,7 +784,7 @@ def test_two_entities_built_from_the_same_row_are_not_a_collision() -> None:
     )
 
     assert row.legacy is not row.durable
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
 
 
 def test_neither_side_carrying_a_surrogate_key_is_named() -> None:
@@ -778,7 +799,7 @@ def test_neither_side_carrying_a_surrogate_key_is_named() -> None:
     row = _row_under_comparison()
     del row.legacy.customer_id
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.SURROGATE_KEY_INDETERMINATE]
     assert _fields(findings) == ["customer_id"]
@@ -795,7 +816,7 @@ def test_one_side_carrying_a_surrogate_key_is_silent() -> None:
 
     assert isinstance(row.legacy.customer_id, uuid.UUID)
     assert "customer_id" not in sa_inspect(row.durable).dict
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
 
 
 def test_a_surrogate_key_that_is_not_a_uuid_is_named() -> None:
@@ -803,7 +824,7 @@ def test_a_surrogate_key_that_is_not_a_uuid_is_named() -> None:
     row = _row_under_comparison()
     row.durable.customer_id = "not-a-uuid"
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.SURROGATE_KEY_MALFORMED]
 
@@ -819,7 +840,7 @@ def test_a_timestamp_outside_the_run_window_is_named() -> None:
     row.legacy.created_at = window.started_at + timedelta(seconds=1)
     row.durable.created_at = window.started_at - timedelta(days=1)
 
-    findings = compare_constructed_row(row, window=window, seen_codes=set())
+    findings = compare_constructed_row(row, window=window, registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.TIMESTAMP_OUTSIDE_RUN_WINDOW]
     assert _fields(findings) == ["created_at"]
@@ -833,7 +854,7 @@ def test_two_timestamps_inside_the_run_window_are_silent() -> None:
     row.durable.created_at = window.started_at + timedelta(seconds=2)
 
     assert row.legacy.created_at != row.durable.created_at
-    assert compare_constructed_row(row, window=window, seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=window, registry=CodeRegistry()) == ()
 
 
 def test_a_timestamp_only_one_path_decides_is_named() -> None:
@@ -848,7 +869,7 @@ def test_a_timestamp_only_one_path_decides_is_named() -> None:
     row = _row_under_comparison()
     row.durable.created_at = window.started_at + timedelta(seconds=1)
 
-    findings = compare_constructed_row(row, window=window, seen_codes=set())
+    findings = compare_constructed_row(row, window=window, registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.TIMESTAMP_PROVENANCE_DIVERGED]
     assert _fields(findings) == ["created_at"]
@@ -865,7 +886,7 @@ def test_both_paths_leaving_the_timestamp_to_the_database_is_silent() -> None:
 
     assert "created_at" not in sa_inspect(row.legacy).dict
     assert "created_at" not in sa_inspect(row.durable).dict
-    assert compare_constructed_row(row, window=_window(), seen_codes=set()) == ()
+    assert compare_constructed_row(row, window=_window(), registry=CodeRegistry()) == ()
 
 
 def test_entities_captured_at_different_persistence_stages_are_refused() -> None:
@@ -883,7 +904,7 @@ def test_entities_captured_at_different_persistence_stages_are_refused() -> None
     session = Session()
     session.add(row.durable)
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.STAGE_MISMATCH]
     assert _fields(findings) == ["*"]
@@ -898,7 +919,7 @@ def test_entities_captured_at_the_same_stage_are_compared(monkeypatch) -> None:
     _perturb_legacy_default(monkeypatch, "Credit Limit", Decimal("999.00"))
     row = _row_under_comparison()
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.EXACT_MISMATCH]
 
@@ -1000,7 +1021,7 @@ def test_a_finding_never_carries_a_customer_value() -> None:
     )
     row.durable.legal_name = "Someone Private Limited"
 
-    findings = compare_constructed_row(row, window=_window(), seen_codes=set())
+    findings = compare_constructed_row(row, window=_window(), registry=CodeRegistry())
 
     assert _kinds(findings) == [FindingKind.EXACT_MISMATCH]
     rendered = str(findings)
@@ -1016,7 +1037,7 @@ def test_the_guard_form_raises_with_the_correlation_of_the_offending_row(
     row = _row_under_comparison()
 
     with pytest.raises(ColumnDispositionError) as refused:
-        assert_partition_agrees([row], window=_window())
+        assert_partition_agrees([row], window=_window(), registry=CodeRegistry())
 
     message = str(refused.value)
     assert "exact_mismatch on credit_limit" in message
@@ -1045,7 +1066,7 @@ def test_the_guard_form_admits_a_partition_that_agrees() -> None:
         ),
     ]
 
-    assert_partition_agrees(rows, window=_window())
+    assert_partition_agrees(rows, window=_window(), registry=CodeRegistry())
 
 
 def test_the_sequence_type_the_allocator_uses_is_the_customer_one() -> None:
@@ -1114,3 +1135,189 @@ def test_evidence_is_refused_when_no_code_was_assigned(monkeypatch) -> None:
 
     assert _kinds(findings) == [FindingKind.ALLOCATION_NOT_RECORDABLE]
     assert _fields(findings) == ["customer_code"]
+
+
+# ---------------------------------------------------------------------------
+# Uniqueness is scoped to the RUN, not to the partition
+# ---------------------------------------------------------------------------
+#
+# The first version of this contract created the registry inside
+# `compare_partition`, which enforced uniqueness within
+# `(organization_id, customer_code, partition)`.  That is a different and
+# weaker claim than the ruled one, and a dishonest one: partitioning is a
+# function of `IMPORT_PARTITION_ROWS` and a byte ceiling, so the same corpus
+# split differently would have produced a different verdict.  These tests are
+# the acceptance evidence that the scope is now the run.
+
+
+def _partition_rows(
+    ordinal: int, *, org: uuid.UUID = ORG
+) -> list[ConstructedRow | DuplicateRow]:
+    """One partition holding one row, correlated to that partition."""
+    return [
+        _row_under_comparison(
+            ROW if ordinal == 0 else SECOND_ROW,
+            index=ordinal,
+            org=org,
+            partition_ordinal=ordinal,
+        )
+    ]
+
+
+def test_the_same_code_in_two_partitions_is_named(monkeypatch) -> None:
+    """PLANT: the collision a per-partition registry could not see.
+
+    Two partitions, settled by two separate `compare_partition` calls exactly
+    as a worker fanned out across partitions would, sharing ONE run registry.
+    A stuck allocator hands both rows the same code, and it must be refused on
+    the second partition rather than passing because each partition looked
+    clean on its own.
+    """
+    _fixed_generated_code(monkeypatch, "CUST-00001")
+    registry = CodeRegistry()
+    window = _window()
+
+    first = compare_partition(_partition_rows(0), window=window, registry=registry)
+    second = compare_partition(_partition_rows(1), window=window, registry=registry)
+
+    assert first == ()
+    assert _kinds(second) == [FindingKind.GENERATED_CODE_NOT_UNIQUE]
+    # Named against the row that collided, in the partition it came from.
+    assert second[0].correlation is not None
+    assert second[0].correlation.partition_ordinal == 1
+
+
+def test_a_registry_made_per_partition_would_have_missed_it(monkeypatch) -> None:
+    """Why the argument is required rather than defaulted.
+
+    This pins the defect itself, so the repair cannot be quietly undone: given
+    a FRESH registry per partition the very same collision goes unreported.
+    If this test ever starts failing, someone has changed the scope again --
+    in which case it is this test, not the guard, that should be revisited.
+    """
+    _fixed_generated_code(monkeypatch, "CUST-00001")
+    window = _window()
+
+    first = compare_partition(
+        _partition_rows(0), window=window, registry=CodeRegistry()
+    )
+    second = compare_partition(
+        _partition_rows(1), window=window, registry=CodeRegistry()
+    )
+
+    assert first == ()
+    assert second == ()
+
+
+def test_compare_partition_will_not_invent_a_registry() -> None:
+    """A default registry is exactly how the partition scope got in."""
+    with pytest.raises(TypeError, match="registry"):
+        compare_partition(_partition_rows(0), window=_window())  # type: ignore[call-arg]
+
+    with pytest.raises(TypeError, match="registry"):
+        assert_partition_agrees(_partition_rows(0), window=_window())  # type: ignore[call-arg]
+
+
+def test_the_same_code_in_two_partitions_of_another_organization_is_silent(
+    monkeypatch,
+) -> None:
+    """NEAR-MISS: the scope really is the pair, across partitions too.
+
+    Same stuck allocator, same two partitions, but the second belongs to a
+    different organization.  `uq_customer_code` is scoped to
+    `(organization_id, customer_code)`, so this must pass -- a run registry
+    that had drifted into a fleet-wide unique code would fail here.
+    """
+    _fixed_generated_code(monkeypatch, "CUST-00001")
+    registry = CodeRegistry()
+    window = _window()
+
+    first = compare_partition(_partition_rows(0), window=window, registry=registry)
+    second = compare_partition(
+        _partition_rows(1, org=OTHER_ORG), window=window, registry=registry
+    )
+
+    assert first == ()
+    assert second == ()
+
+
+def test_two_partitions_with_distinct_codes_are_silent() -> None:
+    """ADMIT CONTROL: the run-scoped registry passes an honest two-partition run.
+
+    The real allocator runs, so the two rows get genuinely different codes.
+    Without this, a registry that refused every second partition would look
+    identical to one that catches collisions.
+    """
+    db = _DurableSession()
+    registry = CodeRegistry()
+    window = _window()
+    first_row = ConstructedRow(
+        correlation=_correlation(0, "Northwind Trading", partition_ordinal=0),
+        legacy=_legacy_entity(ROW),
+        durable=_durable_entity(ROW, db),
+    )
+    second_row = ConstructedRow(
+        correlation=_correlation(1, "Ada Example", partition_ordinal=1),
+        legacy=_legacy_entity(SECOND_ROW),
+        durable=_durable_entity(SECOND_ROW, db),
+    )
+
+    assert compare_partition([first_row], window=window, registry=registry) == ()
+    assert compare_partition([second_row], window=window, registry=registry) == ()
+    assert first_row.durable.customer_code != second_row.durable.customer_code
+
+
+# ---------------------------------------------------------------------------
+# Codes an EARLIER run persisted, when the caller supplies them
+# ---------------------------------------------------------------------------
+
+
+def test_a_code_an_earlier_run_persisted_is_named(monkeypatch) -> None:
+    """PLANT: the residue a run-scoped registry cannot see unaided.
+
+    The comparator never reaches a database -- that is what lets every plant
+    here run without one -- so persisted codes arrive through the caller.
+    Given them, a collision with an earlier run is refused on FIRST sighting,
+    not on the second row.
+    """
+    _fixed_generated_code(monkeypatch, "CUST-00001")
+    registry = CodeRegistry(persisted=[(ORG, "CUST-00001")])
+
+    findings = compare_partition(
+        _partition_rows(0), window=_window(), registry=registry
+    )
+
+    assert _kinds(findings) == [FindingKind.GENERATED_CODE_NOT_UNIQUE]
+    assert "already persisted" in findings[0].reason
+    assert registry.seeded_from_durable_state is True
+
+
+def test_a_persisted_code_in_another_organization_is_silent(monkeypatch) -> None:
+    """NEAR-MISS for the durable seed: same pair scope as everywhere else."""
+    _fixed_generated_code(monkeypatch, "CUST-00001")
+    registry = CodeRegistry(persisted=[(OTHER_ORG, "CUST-00001")])
+
+    findings = compare_partition(
+        _partition_rows(0), window=_window(), registry=registry
+    )
+
+    assert findings == ()
+    assert registry.seeded_from_durable_state is True
+
+
+def test_an_unseeded_registry_says_so(monkeypatch) -> None:
+    """The residue is reportable, not silent.
+
+    With no seed the same collision above is invisible.  That is an
+    UNMONITORED region, and `seeded_from_durable_state` is how a caller can
+    tell which of the two claims a clean run actually made.
+    """
+    _fixed_generated_code(monkeypatch, "CUST-00001")
+    registry = CodeRegistry()
+
+    findings = compare_partition(
+        _partition_rows(0), window=_window(), registry=registry
+    )
+
+    assert findings == ()
+    assert registry.seeded_from_durable_state is False
