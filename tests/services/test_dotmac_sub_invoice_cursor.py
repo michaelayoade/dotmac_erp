@@ -157,7 +157,10 @@ def test_invoice_batch_size_bounds_attempts_not_only_successes() -> None:
     assert harness._sync_single_invoice.call_count == 2
     assert len(result.errors) == 2
     assert "invoice work limit (2) reached" in result.message
-    harness._advance_sync_watermark_position.assert_not_called()
+    harness._advance_sync_watermark_position.assert_called_once_with(
+        EntityType.INVOICE,
+        SyncWatermarkPosition(None, None),
+    )
 
 
 def test_invoice_sync_logs_tax_configuration_once_per_mapping(monkeypatch) -> None:
