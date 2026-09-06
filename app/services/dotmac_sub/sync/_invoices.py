@@ -14,6 +14,10 @@ except ImportError:  # pragma: no cover
 from sqlalchemy import delete, select
 from sqlalchemy.exc import OperationalError
 
+from app.metrics import (
+    observe_dotmac_sub_invoice_sync_limit,
+    observe_dotmac_sub_invoice_sync_row,
+)
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import Invoice, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
@@ -168,6 +172,7 @@ class InvoiceSyncMixin:
                     )
                     savepoint.commit()
                     processed += 1
+                    observe_dotmac_sub_invoice_sync_row("accepted")
                     progress.record_success(row_updated_at, inv.id)
                     if processed % 500 == 0:
                         self.db.commit()
@@ -188,6 +193,7 @@ class InvoiceSyncMixin:
                     except Exception:  # noqa: BLE001
                         self.db.rollback()
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
+                    observe_dotmac_sub_invoice_sync_row(e.metric_reason)
                     if e.dedupe_key not in reported_permanent_errors:
                         reported_permanent_errors.add(e.dedupe_key)
                         logger.error(
@@ -215,6 +221,7 @@ class InvoiceSyncMixin:
                         "Database error syncing invoice %s; aborting dotmac_sub run",
                         inv.id,
                     )
+                    observe_dotmac_sub_invoice_sync_row("database_error")
                     raise
                 except Exception as e:  # noqa: BLE001
                     try:
@@ -225,6 +232,7 @@ class InvoiceSyncMixin:
                     except Exception:  # noqa: BLE001
                         self.db.rollback()
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
+                    observe_dotmac_sub_invoice_sync_row("unexpected_row_error")
                     logger.exception("Error syncing invoice %s", inv.id)
                     progress.record_failure(row_updated_at, inv.id)
             # Advance the cursor only after the pull completed without an API
@@ -234,6 +242,8 @@ class InvoiceSyncMixin:
             if use_watermark:
                 progress.conclude(self._advance_invoice_watermark_position)
             self.db.flush()
+            if limit_reached:
+                observe_dotmac_sub_invoice_sync_limit()
             suffix = (
                 f"; invoice work limit ({batch_size}) reached"
                 if limit_reached and batch_size
