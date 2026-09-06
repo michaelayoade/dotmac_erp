@@ -16,6 +16,8 @@ ar	contract	direct	true	true	app_admin	4	true	--	--
 ar	customer	direct	true	true	app_admin	4	true	--	--
 ar	customer_payment	direct	true	true	app_admin	4	true	--	--
 ar	dotmac_sub_sync_watermark	direct	false	false	app_admin	0	false	--	--
+ar	dotmac_sub_invoice_sync_issue	direct	true	true	app_admin	1	false	rw	--
+ar	dotmac_sub_invoice_sync_outcome	direct	true	true	app_admin	1	false	rw	--
 ar	expected_credit_loss	direct	true	true	app_admin	4	true	--	--
 ar	external_sync	direct	false	false	app_admin	0	false	--	--
 ar	invoice	direct	true	true	app_admin	4	true	--	--

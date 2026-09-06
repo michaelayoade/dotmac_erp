@@ -422,6 +422,10 @@ from app.models.feature_flag import FeatureFlagRegistry  # noqa: E402
 from app.models.finance.ar.dotmac_sub_sync_watermark import (  # noqa: E402
     DotmacSubSyncWatermark,
 )
+from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (  # noqa: E402
+    DotmacSubInvoiceSyncIssue,
+    DotmacSubInvoiceSyncOutcome,
+)
 from app.models.finance.automation.custom_field import (  # noqa: E402
     CustomFieldDefinition,
 )
@@ -472,6 +476,8 @@ SQLITE_COMPATIBLE_TABLES = [
     InfrastructureAlert.__table__,
     Notification.__table__,
     DotmacSubSyncWatermark.__table__,
+    DotmacSubInvoiceSyncOutcome.__table__,
+    DotmacSubInvoiceSyncIssue.__table__,
 ]
 
 # Create only SQLite-compatible tables, tolerating per-table failures
