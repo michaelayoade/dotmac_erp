@@ -133,6 +133,38 @@ def test_accounting_v2_parser_rejects_unknown_issue_code() -> None:
         _client()._parse_invoice_accounting_sync_v2(payload)
 
 
+def test_accounting_v2_parser_requires_durable_source_revision() -> None:
+    payload = _payload()
+    payload["updated_at"] = None
+
+    with pytest.raises(DotmacSubParseError, match="updated_at is required"):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
+@pytest.mark.parametrize(
+    ("disposition", "issues", "message"),
+    [
+        (
+            "ready",
+            [{"code": "header_tax_mismatch"}],
+            "ready disposition cannot carry blocking issues",
+        ),
+        ("blocked", [], "blocked disposition requires issue evidence"),
+    ],
+)
+def test_accounting_v2_parser_rejects_contradictory_disposition_evidence(
+    disposition: str,
+    issues: list[dict[str, str]],
+    message: str,
+) -> None:
+    payload = _payload()
+    payload["disposition"] = disposition
+    payload["issues"] = issues
+
+    with pytest.raises(DotmacSubParseError, match=message):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
 def test_accounting_v2_feed_uses_additive_endpoint_and_filters() -> None:
     client = _client()
     client._request = MagicMock(return_value={"items": [deepcopy(_payload())]})

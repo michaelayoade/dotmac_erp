@@ -1794,6 +1794,12 @@ class DotmacSubClient:
 
         record = f"Sub invoice accounting v2 {item.get('source_invoice_id', '?')}"
         updated_at = _wire_updated_at(item, record=record)
+        if updated_at is None:
+            raise DotmacSubParseError(
+                f"{record}: updated_at is required for durable revision identity",
+                record=record,
+                updated_at=None,
+            )
         contract_version = item.get("contract_version")
         if contract_version != "invoice-accounting-sync.v2":
             raise DotmacSubParseError(
@@ -1920,6 +1926,26 @@ class DotmacSubClient:
                 )
             )
 
+        disposition = self._accounting_v2_enum(
+            item.get("disposition"),
+            InvoiceAccountingSyncDisposition,
+            field="disposition",
+            record=record,
+            updated_at=updated_at,
+        )
+        if disposition is InvoiceAccountingSyncDisposition.READY and issues:
+            raise DotmacSubParseError(
+                f"{record}: ready disposition cannot carry blocking issues",
+                record=record,
+                updated_at=updated_at,
+            )
+        if disposition is InvoiceAccountingSyncDisposition.BLOCKED and not issues:
+            raise DotmacSubParseError(
+                f"{record}: blocked disposition requires issue evidence",
+                record=record,
+                updated_at=updated_at,
+            )
+
         discount_value = item.get("discount_value")
         return InvoiceAccountingSyncRecord(
             contract_version=contract_version,
@@ -2004,13 +2030,7 @@ class DotmacSubClient:
             memo=item.get("memo"),
             is_proforma=bool(item.get("is_proforma", False)),
             updated_at=updated_at,
-            disposition=self._accounting_v2_enum(
-                item.get("disposition"),
-                InvoiceAccountingSyncDisposition,
-                field="disposition",
-                record=record,
-                updated_at=updated_at,
-            ),
+            disposition=disposition,
             issues=tuple(issues),
             lines=tuple(lines),
         )
