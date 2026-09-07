@@ -902,7 +902,9 @@ class WorkflowService:
                     .group_by(EntityAssignment.assignee_id)
                 ).all()
             )
-            assignee_id = min(candidates, key=lambda item: (counts.get(item, 0), str(item)))
+            assignee_id = min(
+                candidates, key=lambda item: (counts.get(item, 0), str(item))
+            )
 
         assignment = db.scalar(
             select(EntityAssignment).where(
@@ -943,7 +945,9 @@ class WorkflowService:
 
         code = str(config.get("field_code", "")).strip()
         if not code or context.organization_id is None:
-            return ActionResult(False, error_message="field_code and organization are required")
+            return ActionResult(
+                False, error_message="field_code and organization are required"
+            )
         try:
             entity_type = CustomFieldEntityType(context.entity_type)
             values = custom_fields_service.save_values(
@@ -954,7 +958,9 @@ class WorkflowService:
                 {code: config.get("value")},
                 context.user_id,
             )
-            return ActionResult(True, result={"field_code": code, "value": values[code]})
+            return ActionResult(
+                True, result={"field_code": code, "value": values[code]}
+            )
         except Exception as exc:
             return ActionResult(False, error_message=str(exc))
 
