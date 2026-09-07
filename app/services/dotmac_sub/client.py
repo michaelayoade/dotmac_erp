@@ -134,7 +134,13 @@ def _staff_sync_error_context(response: httpx.Response) -> dict[str, str]:
     details = detail.get("details")
     if not isinstance(details, dict):
         return context
-    for key in ("provider", "account_scope", "department_id"):
+    for key in (
+        "provider",
+        "account_scope",
+        "department_id",
+        "department_code",
+        "department_name",
+    ):
         value = details.get(key)
         if isinstance(value, str) and value:
             context[key] = value

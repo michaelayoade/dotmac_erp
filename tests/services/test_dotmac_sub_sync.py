@@ -558,6 +558,8 @@ def test_department_sync_error_preserves_safe_selfcare_context() -> None:
                     "provider": "dotmac_erp",
                     "account_scope": "default",
                     "department_id": "dept-operations",
+                    "department_code": "OPS",
+                    "department_name": "Operations",
                     "ignored_secret": "must-not-be-retained",
                 },
             }
@@ -574,6 +576,8 @@ def test_department_sync_error_preserves_safe_selfcare_context() -> None:
         "provider": "dotmac_erp",
         "account_scope": "default",
         "department_id": "dept-operations",
+        "department_code": "OPS",
+        "department_name": "Operations",
     }
 
 
