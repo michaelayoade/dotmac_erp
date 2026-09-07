@@ -891,8 +891,9 @@ class WorkflowService:
         strategy = str(config.get("strategy", "DIRECT")).upper()
         assignee_id = sorted(candidates, key=str)[0]
         if strategy == "LEAST_LOADED" and len(candidates) > 1:
-            counts = dict(
-                db.execute(
+            counts: dict[UUID, int] = {
+                candidate_id: int(count)
+                for candidate_id, count in db.execute(
                     select(EntityAssignment.assignee_id, func.count())
                     .where(
                         EntityAssignment.organization_id == context.organization_id,
@@ -901,7 +902,8 @@ class WorkflowService:
                     )
                     .group_by(EntityAssignment.assignee_id)
                 ).all()
-            )
+                if candidate_id is not None
+            }
             assignee_id = min(
                 candidates, key=lambda item: (counts.get(item, 0), str(item))
             )
