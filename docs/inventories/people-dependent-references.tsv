@@ -11,6 +11,7 @@ attendance	shift_assignment	employee_id	hr	employee	employee_id	explicit	app/mod
 attendance	shift_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/people/attendance/shift_assignment.py:23 via app/models/people/base.py:66
 attendance	shift_type	created_by_id	public	people	id	mixin_expansion	app/models/people/attendance/shift_type.py:30 via app/models/people/base.py:61
 attendance	shift_type	updated_by_id	public	people	id	mixin_expansion	app/models/people/attendance/shift_type.py:30 via app/models/people/base.py:66
+automation	entity_assignment	assignee_id	public	people	id	explicit	app/models/finance/automation/entity_assignment.py:47
 core_org	organization_branding	created_by_id	public	people	id	explicit	app/models/finance/core_org/organization_branding.py:261
 expense	card_transaction	created_by_id	public	people	id	mixin_expansion	app/models/expense/corporate_card.py:169 via app/models/mixins.py:100|app/models/people/exp/corporate_card.py:169 via app/models/people/base.py:61
 expense	card_transaction	updated_by_id	public	people	id	mixin_expansion	app/models/expense/corporate_card.py:169 via app/models/mixins.py:106|app/models/people/exp/corporate_card.py:169 via app/models/people/base.py:66

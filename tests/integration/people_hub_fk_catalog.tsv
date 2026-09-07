@@ -11,6 +11,7 @@ attendance	shift_assignment	employee_id	hr	employee	employee_id	NO ACTION	NO ACT
 attendance	shift_assignment	updated_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 attendance	shift_type	created_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 attendance	shift_type	updated_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
+automation	entity_assignment	assignee_id	public	people	id	NO ACTION	RESTRICT	SIMPLE	false	false
 core_org	organization_branding	created_by_id	public	people	id	NO ACTION	SET NULL	SIMPLE	false	false
 expense	card_transaction	created_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 expense	card_transaction	updated_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
