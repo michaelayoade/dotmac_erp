@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import httpx
 from dotmac_integration_client import (
@@ -1423,11 +1423,14 @@ class DotmacSubClient:
             request_id_provider=_request_id_provider,
         )
         try:
-            result = engine.request(
-                "POST",
-                endpoint,
-                headers={"X-Paystack-Signature": signature.strip()},
-                handler_kwargs={},
+            result = cast(
+                dict[str, Any],
+                engine.request(
+                    "POST",
+                    endpoint,
+                    headers={"X-Paystack-Signature": signature.strip()},
+                    handler_kwargs={},
+                ),
             )
             outcome = "success"
             return result
