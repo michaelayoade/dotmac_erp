@@ -808,6 +808,7 @@ class TestRateLimiting:
         self, workflow_service, sample_context
     ):
         rule = _make_mock_rule(cooldown_seconds=60)
+        sample_context.organization_id = rule.organization_id
         db = MagicMock()
         with (
             patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
