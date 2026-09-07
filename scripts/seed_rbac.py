@@ -447,6 +447,12 @@ FINANCE_PERMISSIONS = [
     ("automation:workflows:manage", "Manage workflow rules"),
     ("automation:templates:read", "View document templates"),
     ("automation:templates:manage", "Manage document templates"),
+    ("automation:read", "View the cross-module automation center"),
+    ("automation:create", "Create workflow and custom-field drafts"),
+    ("automation:update", "Edit workflows, schedules, and custom fields"),
+    ("automation:publish", "Activate, pause, and run automations"),
+    ("automation:test", "Simulate automation rules"),
+    ("automation:retry", "Retry failed automation executions"),
     # -------------------------------------------------------------------------
     # Organization Setup
     # -------------------------------------------------------------------------
@@ -1244,6 +1250,12 @@ ROLE_PERMISSIONS = {
         "automation:workflows:manage",
         "automation:templates:read",
         "automation:templates:manage",
+        "automation:read",
+        "automation:create",
+        "automation:update",
+        "automation:publish",
+        "automation:test",
+        "automation:retry",
         # IPSAS Fund Accounting - full control
         "ipsas:funds:read",
         "ipsas:funds:create",

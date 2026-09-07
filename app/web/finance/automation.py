@@ -22,7 +22,7 @@ from app.web.deps import (
     get_db_for_org,
     WebAuthContext,
     base_context,
-    require_finance_access,
+    require_automation_access,
 )
 
 router = APIRouter(prefix="/automation", tags=["automation-web"])
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/automation", tags=["automation-web"])
 @router.get("", response_class=HTMLResponse)
 def automation_dashboard(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Automation landing page."""
@@ -55,7 +55,7 @@ def list_recurring(
     entity_type: str | None = None,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Recurring templates list page."""
@@ -79,7 +79,7 @@ def new_recurring_form(
     request: Request,
     source_type: str | None = Query(None),
     source_id: str | None = Query(None),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """New recurring template form page."""
@@ -102,7 +102,7 @@ def new_recurring_form(
 def view_recurring(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Recurring template detail page."""
@@ -123,7 +123,7 @@ def view_recurring(
 def edit_recurring_form(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit recurring template form page."""
@@ -141,7 +141,7 @@ def edit_recurring_form(
 @router.post("/recurring/new")
 async def create_recurring(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle recurring template form submission."""
@@ -234,7 +234,7 @@ async def create_recurring(
 async def update_recurring(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle recurring template update form submission."""
@@ -298,7 +298,7 @@ async def update_recurring(
 def pause_recurring(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Pause a recurring template."""
@@ -319,7 +319,7 @@ def pause_recurring(
 def resume_recurring(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Resume a paused recurring template."""
@@ -340,7 +340,7 @@ def resume_recurring(
 def cancel_recurring(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Cancel a recurring template."""
@@ -361,7 +361,7 @@ def cancel_recurring(
 def generate_now(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Manually generate the next occurrence."""
@@ -404,7 +404,7 @@ def list_workflows(
     trigger_event: str | None = None,
     is_active: str | None = None,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Workflow rules list page."""
@@ -433,7 +433,7 @@ def list_workflows(
 @router.get("/workflows/new", response_class=HTMLResponse)
 def new_workflow_form(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """New workflow rule form page."""
@@ -450,7 +450,7 @@ def new_workflow_form(
 @router.get("/workflows/monitoring", response_class=HTMLResponse)
 def workflow_monitoring(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Workflow execution monitoring dashboard."""
@@ -469,7 +469,7 @@ def workflow_monitoring(
 def view_workflow(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Workflow rule detail page."""
@@ -490,7 +490,7 @@ def view_workflow(
 def edit_workflow_form(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit workflow rule form page."""
@@ -508,7 +508,7 @@ def edit_workflow_form(
 @router.post("/workflows/new")
 async def create_workflow(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle workflow rule form submission."""
@@ -560,7 +560,7 @@ async def create_workflow(
 async def update_workflow(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle workflow rule update form submission."""
@@ -658,7 +658,7 @@ async def update_workflow(
 def toggle_workflow(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Toggle workflow rule active status."""
@@ -693,7 +693,7 @@ def toggle_workflow(
 def workflow_versions(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Workflow rule version history page."""
@@ -712,7 +712,7 @@ def workflow_versions(
 async def test_workflow(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Dry-run test a workflow rule against sample data."""
@@ -738,7 +738,7 @@ async def test_workflow(
 def delete_workflow(
     request: Request,
     rule_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Delete a workflow rule."""
@@ -766,7 +766,7 @@ def list_custom_fields(
     entity_type: str | None = None,
     is_active: str | None = None,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Custom fields list page."""
@@ -794,7 +794,7 @@ def list_custom_fields(
 @router.get("/fields/new", response_class=HTMLResponse)
 def new_custom_field_form(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """New custom field form page."""
@@ -812,7 +812,7 @@ def new_custom_field_form(
 def view_custom_field(
     request: Request,
     field_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Custom field detail page."""
@@ -833,7 +833,7 @@ def view_custom_field(
 def edit_custom_field_form(
     request: Request,
     field_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit custom field form page."""
@@ -851,7 +851,7 @@ def edit_custom_field_form(
 @router.post("/fields/new")
 async def create_custom_field(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle custom field form submission."""
@@ -905,7 +905,7 @@ async def create_custom_field(
 async def update_custom_field(
     request: Request,
     field_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle custom field update form submission."""
@@ -975,7 +975,7 @@ async def update_custom_field(
 def delete_custom_field(
     request: Request,
     field_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Delete (deactivate) a custom field."""
@@ -1003,7 +1003,7 @@ def list_templates(
     template_type: str | None = None,
     is_active: str | None = None,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Document templates list page."""
@@ -1031,7 +1031,7 @@ def list_templates(
 @router.get("/templates/new", response_class=HTMLResponse)
 def new_template_form(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """New document template form page."""
@@ -1049,7 +1049,7 @@ def new_template_form(
 def view_template(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Document template detail page."""
@@ -1070,7 +1070,7 @@ def view_template(
 def edit_template_form(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit document template form page."""
@@ -1088,7 +1088,7 @@ def edit_template_form(
 @router.post("/templates/new")
 async def create_template(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle document template form submission."""
@@ -1138,7 +1138,7 @@ async def create_template(
 async def update_template(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Handle document template update form submission."""
@@ -1191,7 +1191,7 @@ async def update_template(
 def delete_template(
     request: Request,
     template_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Delete a document template."""
