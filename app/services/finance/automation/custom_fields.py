@@ -561,7 +561,10 @@ class CustomFieldsService:
             raw = form_values[key]
             if definition.field_type == CustomFieldType.BOOLEAN:
                 result[definition.field_code] = str(raw).lower() in {
-                    "1", "true", "yes", "on"
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
                 }
             elif definition.field_type == CustomFieldType.MULTISELECT:
                 result[definition.field_code] = (
