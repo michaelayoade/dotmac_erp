@@ -385,6 +385,67 @@ def test_reconcile_reprimes_per_employee_and_isolates_errors(monkeypatch, commit
     assert db.commit.call_count == (3 if commit_fails else 2)
 
 
+def test_reconcile_logs_department_context_for_permanent_mapping_error(
+    monkeypatch, caplog
+):
+    from unittest.mock import MagicMock
+
+    monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", True, raising=False)
+    org_id = uuid4()
+    employee_id = uuid4()
+    department_id = uuid4()
+    department = SimpleNamespace(
+        department_id=department_id,
+        department_code="OPS",
+        department_name="Operations",
+        organization_id=org_id,
+    )
+    employee = SimpleNamespace(
+        employee_id=employee_id,
+        employee_code="EMP-OPS",
+        organization_id=org_id,
+        department_id=department_id,
+        department=department,
+    )
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [(employee_id, "EMP-OPS")]
+    db.get.return_value = employee
+    monkeypatch.setattr(staff_sync, "prime_tenant_context", lambda *_args: None)
+    cfg = MagicMock()
+    cfg.is_configured.return_value = True
+    monkeypatch.setattr(
+        staff_sync.DotmacSubConfig, "for_org", classmethod(lambda cls, d, o: cfg)
+    )
+    monkeypatch.setattr(staff_sync, "DotmacSubClient", lambda _config: MagicMock())
+    monkeypatch.setattr(
+        staff_sync,
+        "sync_employee",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staff_sync.DotmacSubPermanentSyncError(
+                "unmapped",
+                status_code=422,
+                context={
+                    "error_code": "service_team_erp_department_unmapped",
+                    "account_scope": "default",
+                },
+            )
+        ),
+    )
+
+    staff_sync.reconcile_staff_accounts(db, org_id)
+
+    record = next(
+        item
+        for item in caplog.records
+        if item.getMessage().startswith("Staff sync failed for employee")
+    )
+    assert record.department_id == str(department_id)
+    assert record.department_code == "OPS"
+    assert record.department_name == "Operations"
+    assert record.selfcare_error_code == "service_team_erp_department_unmapped"
+    assert record.selfcare_account_scope == "default"
+
+
 @pytest.mark.parametrize("status", [EmployeeStatus.ACTIVE, EmployeeStatus.TERMINATED])
 @pytest.mark.parametrize("already_mapped", [False, True])
 def test_conflicting_owner_prevents_all_remote_mutations(db, status, already_mapped):

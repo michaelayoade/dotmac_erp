@@ -538,6 +538,45 @@ def test_department_sync_permanent_errors_are_clear(
         )
 
 
+def test_department_sync_error_preserves_safe_selfcare_context() -> None:
+    import httpx as _httpx
+
+    from app.services.dotmac_sub.client import (
+        DotmacSubClient,
+        DotmacSubConfig,
+        DotmacSubPermanentSyncError,
+    )
+
+    client = DotmacSubClient(DotmacSubConfig(api_url="https://x", api_token="svc-key"))
+    response = _httpx.Response(
+        422,
+        json={
+            "detail": {
+                "code": "service_team_erp_department_unmapped",
+                "message": "ERP department is not mapped.",
+                "details": {
+                    "provider": "dotmac_erp",
+                    "account_scope": "default",
+                    "department_id": "dept-operations",
+                    "ignored_secret": "must-not-be-retained",
+                },
+            }
+        },
+    )
+
+    with pytest.raises(DotmacSubPermanentSyncError) as exc_info:
+        client._handle_response(
+            response, endpoint="/staff-accounts/acc-9/erp-department"
+        )
+
+    assert exc_info.value.context == {
+        "error_code": "service_team_erp_department_unmapped",
+        "provider": "dotmac_erp",
+        "account_scope": "default",
+        "department_id": "dept-operations",
+    }
+
+
 def test_department_sync_forbidden_error_identifies_missing_scope() -> None:
     import httpx as _httpx
 
