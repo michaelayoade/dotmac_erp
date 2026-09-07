@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import httpx
 from dotmac_integration_client import (
@@ -166,6 +166,32 @@ class _TransientServerError(DotmacSubError):
     Never escapes ``DotmacSubClient._request`` — exhausted retries are
     re-wrapped as a plain :class:`DotmacSubError`, exactly like the old loop.
     """
+
+
+class _ExactBodyHttpClient:
+    """Adapt the shared retry engine without re-serializing signed bytes."""
+
+    def __init__(self, client: httpx.Client, content: bytes) -> None:
+        self._client = client
+        self._content = content
+
+    def request(
+        self,
+        *,
+        method: str,
+        url: str,
+        params: dict[str, Any] | None = None,
+        json: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
+        del json
+        return self._client.request(
+            method=method,
+            url=url,
+            params=params,
+            content=self._content,
+            headers=headers,
+        )
 
 
 class DotmacSubParseError(MoneyBoundaryError):
@@ -1112,6 +1138,9 @@ class DotmacSubClient:
             edge="dotmac_sub",
             request_id_provider=_request_id_provider,
         )
+        self._paystack_relay_circuit = ReachabilityCircuit(
+            cooldown_seconds=_circuit_cooldown_seconds()
+        )
 
     def __enter__(self) -> DotmacSubClient:
         return self
@@ -1342,16 +1371,12 @@ class DotmacSubClient:
 
         if not raw_payload or not signature.strip():
             raise ValueError("Paystack payload and signature are required")
+        endpoint = "/payment-events/paystack"
         started_at = time.perf_counter()
         outcome = "request_error"
-        try:
-            response = self.client.post(
-                "/payment-events/paystack",
-                content=raw_payload,
-                headers={"X-Paystack-Signature": signature.strip()},
-            )
+
+        def handle_response(response: httpx.Response) -> dict[str, Any]:
             if response.status_code == 429:
-                outcome = "rate_limited"
                 raise DotmacSubRateLimitError(
                     "Selfcare rate-limited the Paystack relay",
                     status_code=429,
@@ -1360,31 +1385,83 @@ class DotmacSubClient:
                     ),
                 )
             if response.status_code >= 500:
-                outcome = "server_error"
-                raise DotmacSubError(
+                raise _TransientServerError(
                     "Selfcare could not accept the Paystack relay",
                     status_code=response.status_code,
                 )
             if response.status_code >= 400:
-                outcome = "client_error"
                 raise DotmacSubError(
                     "Selfcare rejected the Paystack relay",
                     status_code=response.status_code,
                 )
             result = response.json()
             if not isinstance(result, dict):
-                outcome = "invalid_response"
                 raise DotmacSubError(
                     "Selfcare returned an invalid Paystack relay result"
                 )
+            return result
+
+        engine = IntegrationHttpClient(
+            client_factory=lambda: _ExactBodyHttpClient(self.client, raw_payload),
+            response_handler=handle_response,
+            backoff=exponential_backoff(
+                base=self._RETRY_BACKOFF_BASE, cap=self._RETRY_BACKOFF_CAP
+            ),
+            max_attempts=self.config.max_retries,
+            retryable_excs=(_TransientServerError,),
+            non_retryable_excs=(DotmacSubError,),
+            transport_exhausted_factory=lambda exc, retries: DotmacSubError(
+                f"Selfcare Paystack relay failed after {retries + 1} attempts: {exc}"
+            ),
+            loop_exhausted_factory=self._loop_exhausted_error,
+            circuit=self._paystack_relay_circuit,
+            auth_headers=lambda: {
+                "X-Api-Key": self._api_key(),
+                _INTEGRATION_CLIENT_HEADER: _INTEGRATION_CLIENT_NAME,
+            },
+            edge="dotmac_sub_paystack_relay",
+            request_id_provider=_request_id_provider,
+        )
+        try:
+            result = cast(
+                dict[str, Any],
+                engine.request(
+                    "POST",
+                    endpoint,
+                    headers={"X-Paystack-Signature": signature.strip()},
+                    handler_kwargs={},
+                ),
+            )
             outcome = "success"
             return result
+        except DotmacSubRateLimitError:
+            outcome = "rate_limited"
+            raise
+        except _TransientServerError as exc:
+            outcome = "server_error"
+            raise DotmacSubError(
+                "Selfcare could not accept the Paystack relay after "
+                f"{self.config.max_retries} attempts",
+                status_code=exc.status_code,
+            ) from exc
         except httpx.TimeoutException as exc:
             outcome = "timeout"
             raise DotmacSubError("Selfcare Paystack relay timed out") from exc
         except httpx.RequestError as exc:
             outcome = "request_error"
             raise DotmacSubError("Selfcare Paystack relay was unreachable") from exc
+        except DotmacSubError as exc:
+            if "circuit open" in exc.message:
+                outcome = "circuit_open"
+            elif isinstance(exc.__cause__, httpx.TimeoutException):
+                outcome = "timeout"
+            elif isinstance(exc.__cause__, httpx.RequestError):
+                outcome = "request_error"
+            elif exc.status_code is not None and exc.status_code >= 500:
+                outcome = "server_error"
+            elif exc.status_code is not None and exc.status_code >= 400:
+                outcome = "client_error"
+            raise
         finally:
             observe_paystack_selfcare_relay(
                 outcome, max(time.perf_counter() - started_at, 0.0)
