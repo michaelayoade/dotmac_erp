@@ -9,6 +9,7 @@ from app.models.finance.automation.custom_field import (
     CustomFieldDefinition,
     CustomFieldEntityType,
     CustomFieldType,
+    CustomFieldValue,
 )
 from app.models.finance.automation.document_template import (
     DocumentTemplate,
@@ -62,6 +63,7 @@ __all__ = [
     "CustomFieldDefinition",
     "CustomFieldEntityType",
     "CustomFieldType",
+    "CustomFieldValue",
     # Document Templates
     "DocumentTemplate",
     "TemplateType",

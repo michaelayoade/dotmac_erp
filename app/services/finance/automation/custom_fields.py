@@ -18,6 +18,7 @@ from app.models.finance.automation import (
     CustomFieldDefinition,
     CustomFieldEntityType,
     CustomFieldType,
+    CustomFieldValue,
 )
 from app.services.settings_spec import resolve_value
 
@@ -346,6 +347,130 @@ class CustomFieldsService:
 
         return result
 
+    def get_values(
+        self,
+        db: Session,
+        organization_id: UUID,
+        entity_type: CustomFieldEntityType,
+        entity_id: UUID,
+    ) -> dict[str, Any]:
+        """Return values keyed by stable field code for one tenant entity."""
+        rows = db.execute(
+            select(CustomFieldDefinition.field_code, CustomFieldValue.value)
+            .join(CustomFieldValue, CustomFieldValue.field_id == CustomFieldDefinition.field_id)
+            .where(
+                CustomFieldValue.organization_id == organization_id,
+                CustomFieldValue.entity_type == entity_type,
+                CustomFieldValue.entity_id == entity_id,
+                CustomFieldDefinition.organization_id == organization_id,
+            )
+        ).all()
+        return {str(code): value for code, value in rows}
+
+    def save_values(
+        self,
+        db: Session,
+        organization_id: UUID,
+        entity_type: CustomFieldEntityType,
+        entity_id: UUID,
+        field_values: dict[str, Any],
+        actor_id: UUID,
+        *,
+        replace: bool = False,
+    ) -> dict[str, Any]:
+        """Validate and upsert values without requiring entity-table JSON columns."""
+        current = self.get_values(db, organization_id, entity_type, entity_id)
+        effective = self.merge_with_defaults(
+            db, organization_id, entity_type, {} if replace else current
+        )
+        effective.update(field_values)
+        valid, errors = self.validate_custom_fields(
+            db, organization_id, entity_type, effective
+        )
+        if not valid:
+            raise HTTPException(status_code=422, detail={"custom_fields": errors})
+
+        definitions = {
+            field.field_code: field
+            for field in self.list_for_entity(db, organization_id, entity_type)
+        }
+        existing = {
+            row.field_id: row
+            for row in db.scalars(
+                select(CustomFieldValue).where(
+                    CustomFieldValue.organization_id == organization_id,
+                    CustomFieldValue.entity_type == entity_type,
+                    CustomFieldValue.entity_id == entity_id,
+                )
+            ).all()
+        }
+        for code, value in effective.items():
+            definition = definitions[code]
+            normalized = self._json_value(definition.field_type, value)
+            row = existing.get(definition.field_id)
+            if row is None:
+                db.add(
+                    CustomFieldValue(
+                        organization_id=organization_id,
+                        field_id=definition.field_id,
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        value=normalized,
+                        created_by=actor_id,
+                    )
+                )
+            else:
+                row.value = normalized
+                row.updated_by = actor_id
+
+        if replace:
+            retained_ids = {definitions[code].field_id for code in effective}
+            for field_id, row in existing.items():
+                if field_id not in retained_ids:
+                    db.delete(row)
+        db.flush()
+        return effective
+
+    @staticmethod
+    def _json_value(field_type: CustomFieldType, value: Any) -> Any:
+        """Normalize validated values to stable JSON scalar types."""
+        from decimal import Decimal
+
+        if value is None:
+            return None
+        if field_type == CustomFieldType.NUMBER:
+            return int(value)
+        if field_type == CustomFieldType.DECIMAL:
+            return str(Decimal(str(value)))
+        if field_type == CustomFieldType.BOOLEAN:
+            return bool(value)
+        if field_type in {CustomFieldType.DATE, CustomFieldType.DATETIME}:
+            return value.isoformat() if hasattr(value, "isoformat") else str(value)
+        if field_type == CustomFieldType.MULTISELECT:
+            return list(value)
+        return str(value)
+
+    def filter_entity_ids(
+        self,
+        db: Session,
+        organization_id: UUID,
+        entity_type: CustomFieldEntityType,
+        field_code: str,
+        value: Any,
+    ) -> list[UUID]:
+        """Support list/report filters through the indexed EAV store."""
+        stmt = (
+            select(CustomFieldValue.entity_id)
+            .join(CustomFieldDefinition, CustomFieldValue.field_id == CustomFieldDefinition.field_id)
+            .where(
+                CustomFieldValue.organization_id == organization_id,
+                CustomFieldValue.entity_type == entity_type,
+                CustomFieldDefinition.field_code == field_code,
+                CustomFieldValue.value == value,
+            )
+        )
+        return list(db.scalars(stmt).all())
+
     def get_form_schema(
         self,
         db: Session,
@@ -457,6 +582,17 @@ class CustomFieldsService:
         field = db.get(CustomFieldDefinition, field_id)
         if not field:
             return False
+
+        value_count = db.scalar(
+            select(func.count(CustomFieldValue.value_id)).where(
+                CustomFieldValue.field_id == field_id
+            )
+        )
+        if value_count:
+            raise HTTPException(
+                status_code=409,
+                detail="Custom fields with stored values must be deactivated, not deleted",
+            )
 
         db.delete(field)
         db.flush()
