@@ -10,7 +10,10 @@ from app.models.finance.ar.dotmac_sub_sync_watermark import DotmacSubSyncWaterma
 from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import InvoiceRecord
 from app.services.dotmac_sub.sync._base import BaseSyncMixin, SyncWatermarkPosition
-from app.services.dotmac_sub.sync._base import TaxMappingConfigurationError
+from app.services.dotmac_sub.sync._base import (
+    InvoiceSourceAccountingMismatchError,
+    TaxMappingConfigurationError,
+)
 from app.services.dotmac_sub.sync._invoices import InvoiceSyncMixin
 
 _T0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -193,6 +196,46 @@ def test_invoice_sync_logs_tax_configuration_once_per_mapping(monkeypatch) -> No
         "tax_mapping_configuration",
         "tax_mapping_configuration",
     ]
+
+
+def test_invoice_mismatch_is_logged_and_quarantined_by_source_revision(
+    monkeypatch,
+) -> None:
+    import app.services.dotmac_sub.sync._invoices as invoices_module
+
+    row = _invoice_record("inv-mismatch", _T0)
+    harness = _invoice_harness_for_cursor([row], SyncWatermarkPosition(None, None))
+    harness._sync_single_invoice.side_effect = InvoiceSourceAccountingMismatchError(
+        "lines do not reconcile",
+        dedupe_key=("source_accounting_mismatch", "invoice"),
+        line_subtotal=100,
+        line_tax=7.5,
+        header_subtotal=100,
+        header_tax=0,
+        header_total=100,
+    )
+    logger = MagicMock()
+    monkeypatch.setattr(invoices_module, "logger", logger)
+
+    result = harness.sync_invoices(batch_size=10)
+
+    assert len(result.errors) == 1
+    advanced = harness._advance_sync_watermark_position.call_args.args[1]
+    assert advanced == SyncWatermarkPosition(_T0, "inv-mismatch")
+    _, kwargs = logger.error.call_args
+    assert kwargs["extra"] == {
+        "event": "dotmac_sub_invoice_source_revision_quarantined",
+        "error_code": "dotmac_sub_invoice_source_accounting_mismatch",
+        "source_invoice_id": "inv-mismatch",
+        "source_invoice_number": "INV-inv-mismatch",
+        "source_updated_at": _T0.isoformat(),
+        "currency": "NGN",
+        "line_subtotal": "100",
+        "line_tax_total": "7.5",
+        "header_subtotal": "100",
+        "header_tax_total": "0",
+        "header_total": "100",
+    }
 
 
 def test_compound_watermark_position_roundtrip(db_session) -> None:

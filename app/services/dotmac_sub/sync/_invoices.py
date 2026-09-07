@@ -194,6 +194,33 @@ class InvoiceSyncMixin:
                         self.db.rollback()
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
                     observe_dotmac_sub_invoice_sync_row(e.metric_reason)
+                    if isinstance(e, InvoiceSourceAccountingMismatchError):
+                        logger.error(
+                            "Quarantined dotmac_sub invoice source revision: %s",
+                            e,
+                            extra={
+                                "event": "dotmac_sub_invoice_source_revision_quarantined",
+                                "error_code": "dotmac_sub_invoice_source_accounting_mismatch",
+                                "source_invoice_id": inv.id,
+                                "source_invoice_number": inv.invoice_number,
+                                "source_updated_at": (
+                                    row_updated_at.isoformat()
+                                    if row_updated_at is not None
+                                    else None
+                                ),
+                                "currency": inv.currency,
+                                "line_subtotal": str(e.line_subtotal),
+                                "line_tax_total": str(e.line_tax),
+                                "header_subtotal": str(e.header_subtotal),
+                                "header_tax_total": str(e.header_tax),
+                                "header_total": str(e.header_total),
+                            },
+                        )
+                        # Quarantine this immutable source revision instead of
+                        # retrying it forever. A corrected revision has a later
+                        # updated_at and will be considered again normally.
+                        progress.record_success(row_updated_at, inv.id)
+                        continue
                     if e.dedupe_key not in reported_permanent_errors:
                         reported_permanent_errors.add(e.dedupe_key)
                         logger.error(
@@ -510,6 +537,11 @@ class InvoiceSyncMixin:
                 f"source header: lines={projected_subtotal}+{projected_tax}, "
                 f"header={doc.subtotal}+{doc.tax_total}={doc.total}",
                 dedupe_key=("source_accounting_mismatch", label.lower()),
+                line_subtotal=projected_subtotal,
+                line_tax=projected_tax,
+                header_subtotal=doc.subtotal,
+                header_tax=doc.tax_total,
+                header_total=doc.total,
             )
         return projected
 
