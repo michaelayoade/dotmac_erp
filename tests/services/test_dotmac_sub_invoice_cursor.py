@@ -10,7 +10,10 @@ from app.models.finance.ar.dotmac_sub_sync_watermark import DotmacSubSyncWaterma
 from app.models.finance.ar.external_sync import EntityType
 from app.services.dotmac_sub.client import InvoiceRecord
 from app.services.dotmac_sub.sync._base import BaseSyncMixin, SyncWatermarkPosition
-from app.services.dotmac_sub.sync._base import TaxMappingConfigurationError
+from app.services.dotmac_sub.sync._base import (
+    InvoiceSourceAccountingMismatchError,
+    TaxMappingConfigurationError,
+)
 from app.services.dotmac_sub.sync._invoices import InvoiceSyncMixin
 
 _T0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -55,6 +58,7 @@ def _invoice_harness_for_cursor(
 ) -> _InvoiceSyncHarness:
     harness = _InvoiceSyncHarness()
     harness.db = MagicMock()
+    harness.organization_id = uuid.UUID("10000000-0000-0000-0000-000000000001")
     harness.client = MagicMock()
     harness.client.get_invoices.return_value = rows
     harness._get_sync_watermark_position = MagicMock(return_value=position)
@@ -193,6 +197,92 @@ def test_invoice_sync_logs_tax_configuration_once_per_mapping(monkeypatch) -> No
         "tax_mapping_configuration",
         "tax_mapping_configuration",
     ]
+
+
+def test_invoice_mismatch_is_logged_and_quarantined_by_source_revision(
+    monkeypatch,
+) -> None:
+    import app.services.dotmac_sub.sync._invoices as invoices_module
+
+    invoice_id = "20000000-0000-0000-0000-000000000001"
+    row = _invoice_record(invoice_id, _T0)
+    harness = _invoice_harness_for_cursor([row], SyncWatermarkPosition(None, None))
+    harness._sync_single_invoice.side_effect = InvoiceSourceAccountingMismatchError(
+        "lines do not reconcile",
+        dedupe_key=("source_accounting_mismatch", "invoice"),
+        line_subtotal=100,
+        line_tax=7.5,
+        header_subtotal=100,
+        header_tax=0,
+        header_total=100,
+    )
+    logger = MagicMock()
+    monkeypatch.setattr(invoices_module, "logger", logger)
+    outcome_id = uuid.UUID("30000000-0000-0000-0000-000000000001")
+    quarantine = MagicMock(return_value=MagicMock(outcome_id=outcome_id))
+    monkeypatch.setattr(
+        invoices_module, "record_blocked_invoice_accounting_revision", quarantine
+    )
+
+    result = harness.sync_invoices(batch_size=10)
+
+    assert result.errors == []
+    assert result.skipped == 1
+    advanced = harness._advance_sync_watermark_position.call_args.args[1]
+    assert advanced == SyncWatermarkPosition(_T0, invoice_id)
+    quarantine.assert_called_once_with(
+        harness.db,
+        harness.client,
+        harness.organization_id,
+        invoice_id=uuid.UUID(invoice_id),
+        expected_updated_at=_T0,
+    )
+    _, kwargs = logger.error.call_args
+    assert kwargs["extra"] == {
+        "event": "dotmac_sub_invoice_source_revision_quarantine_staged",
+        "error_code": "dotmac_sub_invoice_source_accounting_mismatch",
+        "outcome_id": str(outcome_id),
+        "source_invoice_id": invoice_id,
+        "source_invoice_number": f"INV-{invoice_id}",
+        "source_updated_at": _T0.isoformat(),
+        "currency": "NGN",
+        "line_subtotal": "100",
+        "line_tax_total": "7.5",
+        "header_subtotal": "100",
+        "header_tax_total": "0",
+        "header_total": "100",
+    }
+
+
+def test_invoice_mismatch_parks_cursor_without_durable_v2_evidence(
+    monkeypatch,
+) -> None:
+    import app.services.dotmac_sub.sync._invoices as invoices_module
+
+    invoice_id = "20000000-0000-0000-0000-000000000002"
+    row = _invoice_record(invoice_id, _T0)
+    harness = _invoice_harness_for_cursor([row], SyncWatermarkPosition(None, None))
+    harness._sync_single_invoice.side_effect = InvoiceSourceAccountingMismatchError(
+        "lines do not reconcile",
+        dedupe_key=("source_accounting_mismatch", "invoice"),
+        line_subtotal=100,
+        line_tax=7.5,
+        header_subtotal=100,
+        header_tax=0,
+        header_total=100,
+    )
+    monkeypatch.setattr(
+        invoices_module,
+        "record_blocked_invoice_accounting_revision",
+        MagicMock(side_effect=ValueError("v2 evidence unavailable")),
+    )
+
+    result = harness.sync_invoices(batch_size=10)
+
+    assert len(result.errors) == 1
+    assert "durable quarantine evidence unavailable" in result.errors[0]
+    advanced = harness._advance_sync_watermark_position.call_args.args[1]
+    assert advanced == SyncWatermarkPosition(None, None)
 
 
 def test_compound_watermark_position_roundtrip(db_session) -> None:

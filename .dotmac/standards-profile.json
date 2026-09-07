@@ -140,6 +140,18 @@
         "fingerprint": "3db300e89674052e47d62060f10e90da27fa084ee070ba39df0a9a577d6bf628"
       },
       {
+        "path": "tests/services/test_paystack_relay_resilience.py",
+        "symbol": "test_relay_circuit_opens_after_transport_failure",
+        "category": "delivery_retry",
+        "fingerprint": "900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912"
+      },
+      {
+        "path": "tests/services/test_paystack_relay_resilience.py",
+        "symbol": "test_relay_retries_transient_server_error_with_exact_body",
+        "category": "delivery_retry",
+        "fingerprint": "900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912"
+      },
+      {
         "path": "tests/tasks/test_hooks_tasks.py",
         "symbol": "TestExecuteAsyncHook",
         "category": "delivery_retry",
