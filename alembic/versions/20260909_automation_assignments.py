@@ -68,6 +68,24 @@ def upgrade() -> None:
         ["organization_id", "assignee_id"],
         schema="automation",
     )
+    op.execute("ALTER TABLE automation.entity_assignment ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE automation.entity_assignment FORCE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY entity_assignment_tenant_isolation
+        ON automation.entity_assignment
+        USING (
+            organization_id = NULLIF(
+                current_setting('app.current_organization_id', true), ''
+            )::uuid
+        )
+        WITH CHECK (
+            organization_id = NULLIF(
+                current_setting('app.current_organization_id', true), ''
+            )::uuid
+        )
+        """
+    )
 
 
 def downgrade() -> None:
