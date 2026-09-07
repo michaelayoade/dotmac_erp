@@ -5,7 +5,9 @@ Handles workflow rule evaluation and action execution.
 """
 
 import builtins
+import hashlib
 import ipaddress
+import json
 import logging
 import re
 import socket
@@ -273,6 +275,10 @@ class ActionResult:
     error_message: str | None = None
 
 
+class WorkflowPolicyViolation(RuntimeError):
+    """A workflow policy or tenant invariant rejected an operation."""
+
+
 class WorkflowService:
     """Service for managing and executing workflow rules."""
 
@@ -288,6 +294,13 @@ class WorkflowService:
         created_by: UUID,
     ) -> WorkflowRule:
         """Create a new workflow rule."""
+        self._validate_configuration(
+            input_data.entity_type,
+            input_data.trigger_event,
+            input_data.action_type,
+            input_data.action_config,
+            input_data.schedule_config,
+        )
         # Check for duplicate name
         existing = db.execute(
             select(WorkflowRule).where(
@@ -324,6 +337,54 @@ class WorkflowService:
         db.add(rule)
         db.flush()
         return rule
+
+    @staticmethod
+    def _validate_configuration(
+        entity_type: WorkflowEntityType,
+        trigger_event: TriggerEvent,
+        action_type: ActionType,
+        config: dict[str, Any],
+        schedule_config: dict[str, Any] | None,
+    ) -> None:
+        """Reject rules the runtime cannot execute before they are activated."""
+        from app.services.finance.automation.entity_registry import get_pk_field
+
+        if get_pk_field(entity_type.value) is None:
+            raise HTTPException(status_code=422, detail="Entity is not connected")
+        required_any = {
+            ActionType.SEND_EMAIL: ("recipients", "recipient", "recipient_role"),
+            ActionType.SEND_NOTIFICATION: (
+                "recipient_ids",
+                "recipient",
+                "recipient_role",
+            ),
+            ActionType.UPDATE_FIELD: ("field",),
+            ActionType.CREATE_TASK: ("project_id",),
+            ActionType.WEBHOOK: ("url",),
+            ActionType.TRIGGER_RULE: ("rule_id",),
+            ActionType.ASSIGN: ("assignee_id", "assignee_role", "assignee"),
+            ActionType.UPDATE_CUSTOM_FIELD: ("field_code",),
+        }
+        choices = required_any.get(action_type)
+        if choices and not any(config.get(key) for key in choices):
+            raise HTTPException(
+                status_code=422,
+                detail=(f"{action_type.value} requires one of: " + ", ".join(choices)),
+            )
+        if trigger_event in {
+            TriggerEvent.ON_SCHEDULE,
+            TriggerEvent.ON_DUE_DATE,
+            TriggerEvent.ON_OVERDUE,
+        }:
+            interval = (schedule_config or {}).get("interval_minutes", 60)
+            try:
+                valid_interval = int(interval) > 0
+            except (TypeError, ValueError):
+                valid_interval = False
+            if not valid_interval:
+                raise HTTPException(
+                    status_code=422, detail="Schedule interval must be positive"
+                )
 
     def get(
         self,
@@ -444,7 +505,7 @@ class WorkflowService:
             for cond in conditions_list:
                 if "field" in cond:
                     values = context.new_values or {}
-                    field_value = values.get(cond["field"])
+                    field_value = self._condition_value(values, cond["field"])
                     cond_op = cond.get("operator", "equals")
                     expected = cond.get("value")
                     results.append(self._compare_values(field_value, cond_op, expected))
@@ -465,7 +526,7 @@ class WorkflowService:
                         results.append(self._evaluate_condition_node(group, context))
                     elif "field" in group:
                         values = context.new_values or {}
-                        field_value = values.get(group["field"])
+                        field_value = self._condition_value(values, group["field"])
                         cond_op = group.get("operator", "equals")
                         expected = group.get("value")
                         results.append(
@@ -491,7 +552,7 @@ class WorkflowService:
         # Field comparisons
         field_conditions = conditions.get("fields", {})
         for field, condition in field_conditions.items():
-            field_value = values.get(field)
+            field_value = self._condition_value(values, field)
 
             if isinstance(condition, dict):
                 operator = condition.get("operator", "equals")
@@ -513,31 +574,62 @@ class WorkflowService:
             )
             new_status = values.get("status")
 
-            if status_from and old_status != status_from:
+            if status_from and not self._matches_expected_value(
+                old_status, status_from
+            ):
                 return False
-            if status_to and new_status != status_to:
+            if status_to and not self._matches_expected_value(new_status, status_to):
                 return False
 
         # Changed fields check
         required_changes = conditions.get("changed_fields", [])
-        if required_changes and context.changed_fields:
-            if not any(f in context.changed_fields for f in required_changes):
+        if required_changes:
+            if not context.changed_fields or not any(
+                f in context.changed_fields for f in required_changes
+            ):
                 return False
 
         # Amount threshold check
         amount_threshold = conditions.get("amount_threshold")
         if amount_threshold:
             amount_field = amount_threshold.get("field", "total_amount")
-            threshold_value = Decimal(str(amount_threshold.get("value", 0)))
+            try:
+                threshold_value = Decimal(str(amount_threshold.get("value", 0)))
+            except (ArithmeticError, ValueError):
+                return False
             operator = amount_threshold.get("operator", "greater_than")
 
             amount_value = values.get(amount_field)
-            if amount_value is not None:
+            if amount_value is None:
+                return False
+            try:
                 amount_value = Decimal(str(amount_value))
-                if not self._compare_values(amount_value, operator, threshold_value):
-                    return False
+            except (ArithmeticError, ValueError):
+                return False
+            if not self._compare_values(amount_value, operator, threshold_value):
+                return False
 
         return True
+
+    @staticmethod
+    def _condition_value(values: dict[str, Any], field: str) -> Any:
+        """Resolve dotted fields, including ``custom.<field_code>``."""
+        parts = field.split(".")
+        if parts[0] == "custom":
+            parts[0] = "custom_fields"
+        current: Any = values
+        for part in parts:
+            if not isinstance(current, dict) or part not in current:
+                return None
+            current = current[part]
+        return current
+
+    @staticmethod
+    def _matches_expected_value(value: Any, expected: Any) -> bool:
+        """Match either one expected value or a legacy list of values."""
+        if isinstance(expected, (list, tuple, set, frozenset)):
+            return value in expected
+        return bool(value == expected)
 
     def _compare_values(self, value: Any, operator: str, expected: Any) -> bool:
         """Compare values using the specified operator."""
@@ -545,17 +637,29 @@ class WorkflowService:
             return operator == "is_null" or (operator == "equals" and expected is None)
 
         if operator == "equals":
-            return bool(value == expected)
+            return self._matches_expected_value(value, expected)
         elif operator == "not_equals":
-            return bool(value != expected)
+            return not self._matches_expected_value(value, expected)
         elif operator == "greater_than":
-            return bool(value > expected)
+            try:
+                return bool(value > expected)
+            except TypeError:
+                return False
         elif operator == "greater_than_or_equal":
-            return bool(value >= expected)
+            try:
+                return bool(value >= expected)
+            except TypeError:
+                return False
         elif operator == "less_than":
-            return bool(value < expected)
+            try:
+                return bool(value < expected)
+            except TypeError:
+                return False
         elif operator == "less_than_or_equal":
-            return bool(value <= expected)
+            try:
+                return bool(value <= expected)
+            except TypeError:
+                return False
         elif operator == "contains":
             return str(expected).lower() in str(value).lower()
         elif operator == "starts_with":
@@ -563,11 +667,24 @@ class WorkflowService:
         elif operator == "ends_with":
             return str(value).lower().endswith(str(expected).lower())
         elif operator == "matches":
-            return bool(re.match(str(expected), str(value), re.IGNORECASE))
+            pattern = str(expected)
+            candidate = str(value)
+            if len(pattern) > 512 or len(candidate) > 10_000:
+                return False
+            try:
+                return bool(re.match(pattern, candidate, re.IGNORECASE))
+            except re.error:
+                return False
         elif operator == "in":
-            return bool(value in expected)
+            try:
+                return bool(value in expected)
+            except TypeError:
+                return False
         elif operator == "not_in":
-            return bool(value not in expected)
+            try:
+                return bool(value not in expected)
+            except TypeError:
+                return False
         elif operator == "is_null":
             return bool(value is None)
         elif operator == "is_not_null":
@@ -603,9 +720,12 @@ class WorkflowService:
         try:
             result = self._run_action(db, rule, context, chain_depth=chain_depth)
 
-            execution.status = (
-                ExecutionStatus.SUCCESS if result.success else ExecutionStatus.FAILED
-            )
+            if result.success:
+                execution.status = ExecutionStatus.SUCCESS
+            elif rule.action_type in {ActionType.BLOCK, ActionType.VALIDATE}:
+                execution.status = ExecutionStatus.BLOCKED
+            else:
+                execution.status = ExecutionStatus.FAILED
             execution.result = result.result
             execution.error_message = result.error_message
             execution.completed_at = datetime.utcnow()
@@ -669,11 +789,237 @@ class WorkflowService:
                 context,
                 _depth=chain_depth,
             )
+        elif rule.action_type == ActionType.ASSIGN:
+            return self._action_assign(db, config, context)
+        elif rule.action_type == ActionType.UPDATE_CUSTOM_FIELD:
+            return self._action_update_custom_field(db, config, context)
         else:
             return ActionResult(
                 success=False,
                 error_message=f"Unknown action type: {rule.action_type}",
             )
+
+    def _entity_employee_id(
+        self,
+        db: Session,
+        context: TriggerContext,
+    ) -> UUID | None:
+        """Return the employee represented by an HR workflow entity."""
+        from app.services.finance.automation.entity_registry import resolve_entity
+
+        entity = resolve_entity(db, context.entity_type, context.entity_id)
+        if entity is None:
+            return None
+        entity_org_id = getattr(entity, "organization_id", context.organization_id)
+        if context.organization_id and entity_org_id != context.organization_id:
+            return None
+        employee_id = (
+            getattr(entity, "employee_id", None)
+            if context.entity_type != "EMPLOYEE"
+            else context.entity_id
+        )
+        try:
+            return UUID(str(employee_id)) if employee_id else None
+        except (TypeError, ValueError):
+            return None
+
+    def _resolve_recipient_person_ids(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> builtins.list[UUID]:
+        """Resolve explicit IDs and supported legacy recipient selectors."""
+        resolved: list[UUID] = []
+        configured_ids = config.get("recipient_ids", [])
+        if not isinstance(configured_ids, (list, tuple, set)):
+            configured_ids = [configured_ids]
+        for recipient_id in configured_ids:
+            try:
+                resolved.append(UUID(str(recipient_id)))
+            except (TypeError, ValueError):
+                logger.warning("Invalid workflow recipient ID: %s", recipient_id)
+
+        selector = str(config.get("recipient", "")).strip().lower()
+        role_selector = str(config.get("recipient_role", "")).strip().lower()
+        employee_id = (
+            self._entity_employee_id(db, context)
+            if selector == "entity_owner" or role_selector == "manager"
+            else None
+        )
+
+        if selector == "entity_owner" and employee_id:
+            from app.models.people.hr.employee import Employee
+
+            employee = db.get(Employee, employee_id)
+            if employee and employee.organization_id == context.organization_id:
+                resolved.append(employee.person_id)
+
+        if role_selector == "manager" and employee_id and context.organization_id:
+            from app.services.people.hr.org_resolver import OrgResolver
+
+            manager = OrgResolver(db).get_manager(employee_id, context.organization_id)
+            if manager:
+                resolved.append(manager.person_id)
+        elif role_selector and context.organization_id:
+            from app.models.person import Person
+            from app.models.rbac import PersonRole, Role
+
+            normalized_role = role_selector.replace("_", " ")
+            role_people = db.scalars(
+                select(PersonRole.person_id)
+                .join(Role, Role.id == PersonRole.role_id)
+                .join(Person, Person.id == PersonRole.person_id)
+                .where(
+                    Person.organization_id == context.organization_id,
+                    Person.is_active.is_(True),
+                    Role.is_active.is_(True),
+                    func.lower(Role.name).in_({normalized_role, role_selector}),
+                )
+            ).all()
+            resolved.extend(role_people)
+
+        # Stable de-duplication avoids duplicate notifications when a user is
+        # both explicitly selected and resolved through a role.
+        return list(dict.fromkeys(resolved))
+
+    def _resolve_email_recipients(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> builtins.list[str]:
+        """Resolve literal email addresses or person-based selectors."""
+        configured_recipients = config.get("recipients", [])
+        if not isinstance(configured_recipients, (list, tuple, set)):
+            configured_recipients = [configured_recipients]
+        recipients = [
+            str(value).strip() for value in configured_recipients if str(value).strip()
+        ]
+        person_ids = self._resolve_recipient_person_ids(db, config, context)
+        if person_ids and context.organization_id:
+            from app.models.person import Person
+
+            emails = db.scalars(
+                select(Person.email).where(
+                    Person.organization_id == context.organization_id,
+                    Person.id.in_(person_ids),
+                    Person.is_active.is_(True),
+                )
+            ).all()
+            recipients.extend(str(email).strip() for email in emails if email)
+        return list(dict.fromkeys(recipients))
+
+    def _action_assign(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> ActionResult:
+        """Assign any workflow entity through the cross-module assignment store."""
+        from app.models.finance.automation import EntityAssignment
+        from app.models.person import Person
+
+        selector = {
+            "recipient_ids": [config.get("assignee_id")]
+            if config.get("assignee_id")
+            else [],
+            "recipient_role": config.get("assignee_role"),
+            "recipient": "entity_owner"
+            if str(config.get("assignee", "")).lower() == "entity_owner"
+            else "",
+        }
+        candidates = self._resolve_recipient_person_ids(db, selector, context)
+        if context.organization_id:
+            candidates = list(
+                db.scalars(
+                    select(Person.id).where(
+                        Person.organization_id == context.organization_id,
+                        Person.id.in_(candidates),
+                        Person.is_active.is_(True),
+                    )
+                ).all()
+            )
+        if not candidates:
+            return ActionResult(False, error_message="No eligible assignee resolved")
+
+        strategy = str(config.get("strategy", "DIRECT")).upper()
+        assignee_id = sorted(candidates, key=str)[0]
+        if strategy == "LEAST_LOADED" and len(candidates) > 1:
+            counts: dict[UUID, int] = {
+                candidate_id: int(count)
+                for candidate_id, count in db.execute(
+                    select(EntityAssignment.assignee_id, func.count())
+                    .where(
+                        EntityAssignment.organization_id == context.organization_id,
+                        EntityAssignment.assignee_id.in_(candidates),
+                        EntityAssignment.is_active.is_(True),
+                    )
+                    .group_by(EntityAssignment.assignee_id)
+                ).all()
+                if candidate_id is not None
+            }
+            assignee_id = min(
+                candidates, key=lambda item: (counts.get(item, 0), str(item))
+            )
+
+        assignment = db.scalar(
+            select(EntityAssignment).where(
+                EntityAssignment.organization_id == context.organization_id,
+                EntityAssignment.entity_type == context.entity_type,
+                EntityAssignment.entity_id == context.entity_id,
+                EntityAssignment.is_active.is_(True),
+            )
+        )
+        if assignment is None:
+            assignment = EntityAssignment(
+                organization_id=context.organization_id,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                assignee_id=assignee_id,
+                strategy=strategy,
+                created_by=context.user_id,
+            )
+            db.add(assignment)
+        else:
+            assignment.assignee_id = assignee_id
+            assignment.strategy = strategy
+        db.flush()
+        return ActionResult(
+            True,
+            result={"assignee_id": str(assignee_id), "strategy": strategy},
+        )
+
+    def _action_update_custom_field(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> ActionResult:
+        """Validate and update a custom value through its stable field code."""
+        from app.models.finance.automation import CustomFieldEntityType
+        from app.services.finance.automation.custom_fields import custom_fields_service
+
+        code = str(config.get("field_code", "")).strip()
+        if not code or context.organization_id is None:
+            return ActionResult(
+                False, error_message="field_code and organization are required"
+            )
+        try:
+            entity_type = CustomFieldEntityType(context.entity_type)
+            values = custom_fields_service.save_values(
+                db,
+                context.organization_id,
+                entity_type,
+                context.entity_id,
+                {code: config.get("value")},
+                context.user_id,
+            )
+            return ActionResult(
+                True, result={"field_code": code, "value": values[code]}
+            )
+        except Exception as exc:
+            return ActionResult(False, error_message=str(exc))
 
     def _action_send_email(
         self,
@@ -686,9 +1032,9 @@ class WorkflowService:
         from app.services.finance.automation.template_renderer import render_template
 
         try:
-            recipients = config.get("recipients", [])
+            recipients = self._resolve_email_recipients(db, config, context)
             subject_tpl = config.get("subject", "Workflow Notification")
-            body_html_tpl = config.get("body_html", "")
+            body_html_tpl = config.get("body_html") or config.get("message", "")
             body_text_tpl = config.get("body_text")
 
             subject = render_template(
@@ -762,11 +1108,11 @@ class WorkflowService:
         from app.services.notification import NotificationService
 
         try:
-            recipient_ids = config.get("recipient_ids", [])
+            recipient_ids = self._resolve_recipient_person_ids(db, config, context)
             if not recipient_ids:
                 return ActionResult(
                     success=False,
-                    error_message="No recipient_ids specified in action config",
+                    error_message="No notification recipients could be resolved",
                 )
 
             title_template = config.get("title", "Workflow Notification")
@@ -1281,6 +1627,10 @@ class WorkflowService:
         # Ensure context carries org_id for downstream action handlers
         if context.organization_id is None:
             context.organization_id = organization_id
+        elif context.organization_id != organization_id:
+            raise WorkflowPolicyViolation(
+                "Workflow context organization does not match trigger scope"
+            )
 
         matching_rules = self.get_matching_rules(db, organization_id, context)
         executions: list[WorkflowExecution] = []
@@ -1294,13 +1644,34 @@ class WorkflowService:
                 context.entity_id,
                 context.event.value,
             )
+            overflow_rules = matching_rules[self.MAX_RULES_PER_EVENT :]
             matching_rules = matching_rules[: self.MAX_RULES_PER_EVENT]
+            for rule in overflow_rules:
+                executions.append(
+                    self._record_skipped(
+                        db,
+                        rule,
+                        context,
+                        "Per-event workflow rule limit exceeded",
+                    )
+                )
 
         # Per-entity rate limit check
         if self._check_entity_rate_limit(db, context.entity_id):
+            for rule in matching_rules:
+                executions.append(
+                    self._record_skipped(
+                        db, rule, context, "Per-entity workflow rate limit exceeded"
+                    )
+                )
             return executions
 
         for rule in matching_rules:
+            if rule.organization_id != organization_id:
+                raise WorkflowPolicyViolation(
+                    "Workflow rule organization does not match trigger scope"
+                )
+
             # Throttle check
             if self._is_throttled(db, rule, context.entity_id):
                 logger.info(
@@ -1308,6 +1679,9 @@ class WorkflowService:
                     rule.rule_id,
                     context.entity_id,
                     rule.cooldown_seconds,
+                )
+                executions.append(
+                    self._record_skipped(db, rule, context, "Rule cooldown is active")
                 )
                 continue
 
@@ -1320,33 +1694,89 @@ class WorkflowService:
                 context.event.value,
             )
 
-            # Async dispatch via Celery if configured
-            if rule.execute_async:
-                try:
-                    from app.tasks.automation import execute_workflow_action
-
-                    execute_workflow_action.delay(str(rule.rule_id), context.to_dict())
-                    logger.info(
-                        "Dispatched async execution for rule %s entity %s",
-                        rule.rule_id,
-                        context.entity_id,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to dispatch async task for rule %s, "
-                        "falling back to sync execution",
-                        rule.rule_id,
-                    )
-                    execution = self.execute_action(db, rule, context)
-                    executions.append(execution)
+            must_run_synchronously = rule.action_type in {
+                ActionType.BLOCK,
+                ActionType.VALIDATE,
+            }
+            if rule.execute_async and not must_run_synchronously:
+                self._enqueue_action(db, rule, context)
             else:
                 execution = self.execute_action(db, rule, context)
                 executions.append(execution)
+                if execution.status == ExecutionStatus.BLOCKED:
+                    raise WorkflowPolicyViolation(
+                        execution.error_message or "Operation blocked by workflow rule"
+                    )
 
             if rule.stop_on_match:
                 break
 
         return executions
+
+    def _record_skipped(
+        self,
+        db: Session,
+        rule: WorkflowRule,
+        context: TriggerContext,
+        reason: str,
+    ) -> WorkflowExecution:
+        """Persist an operator-visible explanation for a rule not being run."""
+        now = datetime.utcnow()
+        execution = WorkflowExecution(
+            rule_id=rule.rule_id,
+            entity_type=context.entity_type,
+            entity_id=context.entity_id,
+            trigger_event=context.event.value,
+            trigger_data={
+                "old_values": context.old_values,
+                "new_values": context.new_values,
+                "changed_fields": context.changed_fields,
+            },
+            triggered_by=context.user_id,
+            status=ExecutionStatus.SKIPPED,
+            started_at=now,
+            completed_at=now,
+            duration_ms=0,
+            error_message=reason,
+        )
+        db.add(execution)
+        db.flush()
+        return execution
+
+    def _enqueue_action(
+        self,
+        db: Session,
+        rule: WorkflowRule,
+        context: TriggerContext,
+    ) -> None:
+        """Write an async action request into the transaction's outbox."""
+        from app.services.finance.platform.outbox_publisher import OutboxPublisher
+
+        payload = {
+            "rule_id": str(rule.rule_id),
+            "organization_id": str(rule.organization_id),
+            "context": context.to_dict(),
+        }
+        encoded = json.dumps(
+            payload, sort_keys=True, default=str, separators=(",", ":")
+        )
+        durable_payload = json.loads(encoded)
+        digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        OutboxPublisher.publish_event(
+            db,
+            event_name="automation.workflow.requested",
+            aggregate_type=context.entity_type,
+            aggregate_id=str(context.entity_id),
+            payload=durable_payload,
+            headers={
+                "organization_id": str(rule.organization_id),
+                "user_id": str(context.user_id) if context.user_id else None,
+                "source": "workflow_engine",
+            },
+            producer_module="automation",
+            correlation_id=digest,
+            idempotency_key=f"automation:{rule.rule_id}:{digest}",
+        )
 
     def update_rule(
         self,
@@ -1359,6 +1789,15 @@ class WorkflowService:
         rule = db.get(WorkflowRule, rule_id)
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
+
+        if "action_config" in updates or updates.get("is_active") is True:
+            self._validate_configuration(
+                rule.entity_type,
+                rule.trigger_event,
+                rule.action_type,
+                updates.get("action_config", rule.action_config),
+                updates.get("schedule_config", rule.schedule_config),
+            )
 
         # Snapshot current state before applying changes
         self._create_version_snapshot(db, rule, updated_by)

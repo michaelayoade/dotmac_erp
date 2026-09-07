@@ -100,6 +100,12 @@ ADMIN_SETTINGS_SECTIONS = [
         "icon": "link",
     },
     {
+        "title": "Automation",
+        "description": "Workflows, assignment rules, schedules, and custom fields",
+        "url": "/automation",
+        "icon": "refresh",
+    },
+    {
         "title": "Coach / AI",
         "description": "Configure LLM backends (DeepSeek, Llama) for the AI Coach module.",
         "url": "/admin/settings/coach",

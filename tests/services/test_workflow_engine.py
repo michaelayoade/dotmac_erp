@@ -22,6 +22,7 @@ from app.services.finance.automation import workflow as workflow_module
 from app.services.finance.automation.webhook_policy import WebhookCeiling
 from app.services.finance.automation.workflow import (
     TriggerContext,
+    WorkflowPolicyViolation,
     WorkflowService,
 )
 
@@ -115,6 +116,18 @@ class TestFlatConditionEvaluation:
     def test_empty_conditions_match(self, workflow_service, sample_context):
         assert workflow_service._evaluate_conditions({}, sample_context) is True
 
+    def test_custom_field_condition_uses_dotted_code(
+        self, workflow_service, sample_context
+    ):
+        sample_context.new_values = {
+            "status": "APPROVED",
+            "custom_fields": {"service_tier": "gold"},
+        }
+
+        assert workflow_service._evaluate_conditions(
+            {"fields": {"custom.service_tier": "gold"}}, sample_context
+        )
+
     def test_field_equality(self, workflow_service, sample_context):
         conditions = {"fields": {"status": "APPROVED"}}
         assert workflow_service._evaluate_conditions(conditions, sample_context) is True
@@ -135,6 +148,33 @@ class TestFlatConditionEvaluation:
         assert workflow_service._evaluate_conditions(conditions, sample_context) is True
 
         conditions = {"status_from": "DRAFT", "status_to": "APPROVED"}
+        assert (
+            workflow_service._evaluate_conditions(conditions, sample_context) is False
+        )
+
+    def test_legacy_status_list_matches(self, workflow_service, sample_context):
+        conditions = {"status_to": ["APPROVED", "POSTED"]}
+        assert workflow_service._evaluate_conditions(conditions, sample_context) is True
+
+    def test_changed_field_condition_requires_change_context(
+        self, workflow_service, sample_context
+    ):
+        conditions = {"changed_fields": ["status"]}
+        sample_context.changed_fields = None
+        assert (
+            workflow_service._evaluate_conditions(conditions, sample_context) is False
+        )
+
+    def test_amount_condition_requires_target_field(
+        self, workflow_service, sample_context
+    ):
+        conditions = {
+            "amount_threshold": {
+                "field": "missing_amount",
+                "operator": "greater_than",
+                "value": 100,
+            }
+        }
         assert (
             workflow_service._evaluate_conditions(conditions, sample_context) is False
         )
@@ -245,6 +285,10 @@ class TestValueComparison:
         assert workflow_service._compare_values(None, "equals", None) is True
         assert workflow_service._compare_values(None, "equals", 5) is False
 
+    def test_type_mismatch_and_invalid_regex_fail_closed(self, workflow_service):
+        assert workflow_service._compare_values("ten", "greater_than", 5) is False
+        assert workflow_service._compare_values("abc", "matches", "[") is False
+
 
 class TestWebhookAllowlist:
     # The `webhook_allowlist_configured()` assertions that used to sit
@@ -302,6 +346,17 @@ class TestTemplateRenderer:
 
         assert render_template("", entity_type="X", entity_id=None) == ""
 
+    def test_legacy_flat_variables_use_new_values(self):
+        from app.services.finance.automation.template_renderer import render_template
+
+        result = render_template(
+            "Leave from {{ from_date }} to {{ to_date }}",
+            entity_type="LEAVE_REQUEST",
+            entity_id=uuid.uuid4(),
+            new_values={"from_date": "2026-09-10", "to_date": "2026-09-12"},
+        )
+        assert result == "Leave from 2026-09-10 to 2026-09-12"
+
     def test_invalid_syntax_falls_back(self):
         from app.services.finance.automation.template_renderer import render_template
 
@@ -352,7 +407,21 @@ class TestEntityRegistry:
         assert get_pk_field("INVOICE") == "invoice_id"
         assert get_pk_field("EXPENSE") == "claim_id"
         assert get_pk_field("PAYROLL_RUN") == "entry_id"
+        assert get_pk_field("JOURNAL") == "journal_entry_id"
+        assert get_pk_field("SALES_ORDER") == "so_id"
         assert get_pk_field("UNKNOWN_TYPE") is None
+
+    def test_every_registered_model_and_primary_key_resolves(self):
+        from app.services.finance.automation.entity_registry import (
+            _get_model_class,
+            get_pk_field,
+            get_registered_types,
+        )
+
+        for entity_type in get_registered_types():
+            model = _get_model_class(entity_type)
+            assert model is not None, entity_type
+            assert hasattr(model, get_pk_field(entity_type)), entity_type
 
 
 # ---------------------------------------------------------------------------
@@ -518,6 +587,83 @@ class TestEventDispatcher:
         call_args = mock_trigger.call_args
         assert call_args[0][1] == org_id
 
+
+class TestReliableDispatch:
+    def test_async_rule_is_written_to_transactional_outbox(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(
+            execute_async=True,
+            organization_id=sample_context.organization_id,
+        )
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
+            patch.object(workflow_service, "_is_throttled", return_value=False),
+            patch(
+                "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
+            ) as publish,
+        ):
+            workflow_service.trigger_event(
+                MagicMock(), sample_context.organization_id, sample_context
+            )
+
+        assert publish.call_args.kwargs["event_name"] == "automation.workflow.requested"
+        assert publish.call_args.kwargs["headers"]["organization_id"] == str(
+            sample_context.organization_id
+        )
+        assert publish.call_args.kwargs["idempotency_key"].startswith("automation:")
+
+    def test_blocking_rule_rejects_caller_synchronously(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(
+            action_type=ActionType.BLOCK,
+            execute_async=True,
+            organization_id=sample_context.organization_id,
+        )
+        blocked = MagicMock(
+            status=ExecutionStatus.BLOCKED,
+            error_message="Blocked by policy",
+        )
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
+            patch.object(workflow_service, "_is_throttled", return_value=False),
+            patch.object(workflow_service, "execute_action", return_value=blocked),
+        ):
+            with pytest.raises(WorkflowPolicyViolation, match="Blocked by policy"):
+                workflow_service.trigger_event(
+                    MagicMock(), sample_context.organization_id, sample_context
+                )
+
+    def test_cross_org_rule_is_rejected_before_dispatch(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(execute_async=True)
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
+            patch(
+                "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
+            ) as publish,
+        ):
+            with pytest.raises(
+                WorkflowPolicyViolation,
+                match="rule organization does not match trigger scope",
+            ):
+                workflow_service.trigger_event(
+                    MagicMock(), sample_context.organization_id, sample_context
+                )
+
+        publish.assert_not_called()
+
     def test_fire_unknown_event_is_noop(self):
         from app.services.finance.automation.event_dispatcher import (
             fire_workflow_event,
@@ -589,6 +735,32 @@ class TestActionTriggerRule:
         assert "trigger_event" in (result.error_message or "")
 
 
+class TestAssignmentActions:
+    def test_direct_assignment_is_persisted(self, workflow_service, sample_context):
+        assignee_id = uuid.uuid4()
+        db = MagicMock()
+        db.scalars.return_value.all.return_value = [assignee_id]
+        db.scalar.return_value = None
+
+        with patch.object(
+            workflow_service,
+            "_resolve_recipient_person_ids",
+            return_value=[assignee_id],
+        ):
+            result = workflow_service._action_assign(
+                db,
+                {"assignee_id": str(assignee_id), "strategy": "DIRECT"},
+                sample_context,
+            )
+
+        assert result.success is True
+        assert result.result == {
+            "assignee_id": str(assignee_id),
+            "strategy": "DIRECT",
+        }
+        db.add.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # Scheduled Rules
 # ---------------------------------------------------------------------------
@@ -627,6 +799,7 @@ class TestScheduledRules:
                 "app.services.finance.automation.workflow.workflow_service.execute_action"
             ) as mock_execute,
         ):
+            mock_execute.return_value.status.value = "SUCCESS"
             result = evaluator.evaluate_due_rules(mock_db)
 
         assert result["rules_checked"] == 1
@@ -668,6 +841,27 @@ class TestRateLimiting:
 
     def test_max_executions_per_minute_constant(self, workflow_service):
         assert workflow_service.MAX_EXECUTIONS_PER_MINUTE == 50
+
+    def test_throttled_rule_is_visible_as_skipped(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(cooldown_seconds=60)
+        sample_context.organization_id = rule.organization_id
+        db = MagicMock()
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
+            patch.object(workflow_service, "_is_throttled", return_value=True),
+        ):
+            executions = workflow_service.trigger_event(
+                db, rule.organization_id, sample_context
+            )
+
+        assert len(executions) == 1
+        assert executions[0].status == ExecutionStatus.SKIPPED
+        assert executions[0].error_message == "Rule cooldown is active"
 
     def test_check_entity_rate_limit_under_limit(self, workflow_service):
         mock_db = MagicMock()

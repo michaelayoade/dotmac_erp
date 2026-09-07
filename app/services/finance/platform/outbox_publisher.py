@@ -440,6 +440,25 @@ class OutboxPublisher(ListResponseMixin):
         )
 
     @staticmethod
+    def requeue_dead_event(db: Session, event_id: UUID) -> EventOutbox:
+        """Return a failed/dead event to the retry queue for manual replay."""
+        event = db.get(EventOutbox, coerce_uuid(event_id), with_for_update=True)
+        if not event:
+            raise ValueError(f"Event not found: {event_id}")
+        if event.status not in {EventStatus.FAILED, EventStatus.DEAD}:
+            raise ValueError(f"Event {event_id} is not failed or dead")
+
+        event.status = EventStatus.PENDING
+        event.retry_count = 0
+        event.next_retry_at = None
+        event.last_error = None
+        event.error_class = None
+        event.terminal_reason = None
+        OutboxPublisher._release_lease(event)
+        db.flush()
+        return event
+
+    @staticmethod
     def get_failed_events(
         db: Session,
         status: EventStatus = EventStatus.FAILED,

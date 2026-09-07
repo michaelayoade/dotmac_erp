@@ -1,25 +1,10 @@
 """
 Event Dispatcher for Workflow Automation.
 
-Provides ``fire_workflow_event()`` — the single entry point that all
-service-layer status-transition methods call after a state change.
-
-Usage::
-
-    try:
-        from app.services.finance.automation.event_dispatcher import fire_workflow_event
-        fire_workflow_event(
-            db=self.db,
-            organization_id=org_id,
-            entity_type="EXPENSE",
-            entity_id=claim.claim_id,
-            event="ON_APPROVAL",
-            old_values={"status": "SUBMITTED"},
-            new_values={"status": "APPROVED"},
-            user_id=approver_id,
-        )
-    except Exception:
-        pass  # Side effect — never breaks the main operation
+Provides ``fire_workflow_event()`` — the single entry point that service-layer
+writers call after a state change. Async actions are stored in the platform
+outbox in the same transaction. Validation and blocking actions execute
+synchronously and must not be swallowed by callers.
 """
 
 import logging
@@ -42,12 +27,12 @@ def fire_workflow_event(
     new_values: dict[str, Any] | None = None,
     changed_fields: list[str] | None = None,
     user_id: UUID | None = None,
-) -> None:
+) -> list[Any]:
     """Fire a workflow event, matching and executing any applicable rules.
 
-    This function is intentionally **fire-and-forget**: callers should
-    wrap it in ``try/except Exception: pass`` so that workflow failures
-    never break the primary business operation.
+    Async actions are persisted in the caller's transaction through the
+    platform outbox. Validation and blocking actions run synchronously and may
+    reject the caller's operation.
 
     Args:
         db: Active database session (same session as the calling service).
@@ -72,17 +57,37 @@ def fire_workflow_event(
         trigger_event = TriggerEvent(event)
     except ValueError:
         logger.debug("Unknown trigger event '%s', skipping", event)
-        return
+        return []
+
+    # Module emitters and the automatic ORM connector share this de-duplication
+    # set, so an explicit semantic event is not fired twice at commit time.
+    fired = db.info.setdefault("automation_fired_events", set())
+    fired.add((entity_type, str(entity_id), trigger_event.value))
+
+    effective_new = dict(new_values or {})
+    effective_old = dict(old_values or {})
+    try:
+        from app.models.finance.automation import CustomFieldEntityType
+        from app.services.finance.automation.custom_fields import custom_fields_service
+
+        custom_entity_type = CustomFieldEntityType(entity_type)
+        custom_values = custom_fields_service.get_values(
+            db, organization_id, custom_entity_type, entity_id
+        )
+        effective_new["custom_fields"] = custom_values
+        effective_old.setdefault("custom_fields", custom_values)
+    except ValueError:
+        pass
 
     context = TriggerContext(
         entity_type=entity_type,
         entity_id=entity_id,
         event=trigger_event,
         organization_id=organization_id,
-        old_values=old_values,
-        new_values=new_values,
+        old_values=effective_old,
+        new_values=effective_new,
         changed_fields=changed_fields,
         user_id=user_id,
     )
 
-    workflow_service.trigger_event(db, organization_id, context)
+    return workflow_service.trigger_event(db, organization_id, context)

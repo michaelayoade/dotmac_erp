@@ -261,6 +261,13 @@
                         <span x-show="!sidebarCollapsed" x-transition>Settings</span>
                     </a>
 
+                    <!-- Automation Center -->
+                    <a href="/automation"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'automation' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
+                        {{ icon_svg("refresh", "h-5 w-5 flex-shrink-0") }}
+                        <span x-show="!sidebarCollapsed" x-transition>Automation</span>
+                    </a>
+
                     <!-- Audit Logs -->
                     <a href="/admin/audit-logs"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'audit' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">

@@ -46,13 +46,21 @@ class ScheduledRuleEvaluator:
             "rules_checked": 0,
             "rules_due": 0,
             "actions_fired": 0,
+            "actions_failed": 0,
+            "actions_throttled": 0,
             "errors": [],
         }
 
-        # Find all active ON_SCHEDULE rules
+        # Time-driven trigger types share the same bounded entity evaluator.
         stmt = select(WorkflowRule).where(
             WorkflowRule.is_active.is_(True),
-            WorkflowRule.trigger_event == TriggerEvent.ON_SCHEDULE,
+            WorkflowRule.trigger_event.in_(
+                [
+                    TriggerEvent.ON_SCHEDULE,
+                    TriggerEvent.ON_DUE_DATE,
+                    TriggerEvent.ON_OVERDUE,
+                ]
+            ),
         )
         rules = list(db.scalars(stmt).all())
         results["rules_checked"] = len(rules)
@@ -70,18 +78,32 @@ class ScheduledRuleEvaluator:
                 for entity_id in entity_ids:
                     # Check throttle
                     if workflow_service._is_throttled(db, rule, entity_id):
+                        results["actions_throttled"] += 1
                         continue
 
                     context = TriggerContext(
                         entity_type=rule.entity_type.value,
                         entity_id=entity_id,
-                        event=TriggerEvent.ON_SCHEDULE,
+                        event=rule.trigger_event,
                         organization_id=rule.organization_id,
                     )
 
                     try:
-                        workflow_service.execute_action(db, rule, context)
-                        results["actions_fired"] += 1
+                        if rule.execute_async:
+                            workflow_service._enqueue_action(db, rule, context)
+                            results["actions_fired"] += 1
+                        else:
+                            execution = workflow_service.execute_action(
+                                db, rule, context
+                            )
+                            if execution.status.value == "SUCCESS":
+                                results["actions_fired"] += 1
+                            else:
+                                results["actions_failed"] += 1
+                                results["errors"].append(
+                                    execution.error_message
+                                    or f"Rule {rule.rule_id} action failed"
+                                )
                     except Exception as e:
                         logger.exception(
                             "Error executing scheduled rule %s for entity %s",
@@ -180,8 +202,10 @@ class ScheduledRuleEvaluator:
             elif op == "is_not_null":
                 stmt = stmt.where(col.isnot(None))
 
-        # Limit results to prevent runaway queries
-        stmt = stmt.limit(200)
+        # A deterministic, configurable ceiling prevents runaway scans without
+        # silently truncating every schedule at the first 200 rows.
+        max_entities = min(max(int(config.get("max_entities", 5000)), 1), 50_000)
+        stmt = stmt.order_by(pk_col).limit(max_entities)
 
         return list(db.scalars(stmt).all())
 

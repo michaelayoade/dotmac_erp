@@ -65,6 +65,9 @@ class WorkflowEntityType(str, enum.Enum):
     FLEET_INCIDENT = "FLEET_INCIDENT"
     # Inventory
     MATERIAL_REQUEST = "MATERIAL_REQUEST"
+    ITEM = "ITEM"
+    PROJECT = "PROJECT"
+    ASSET = "ASSET"
 
 
 class TriggerEvent(str, enum.Enum):
@@ -94,6 +97,8 @@ class ActionType(str, enum.Enum):
     WEBHOOK = "WEBHOOK"
     BLOCK = "BLOCK"
     TRIGGER_RULE = "TRIGGER_RULE"
+    ASSIGN = "ASSIGN"
+    UPDATE_CUSTOM_FIELD = "UPDATE_CUSTOM_FIELD"
 
 
 class WorkflowRule(Base):

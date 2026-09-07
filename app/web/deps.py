@@ -2308,3 +2308,34 @@ def require_any_web_permission(permissions: list[str]):
         return auth
 
     return _require_any_permission
+
+
+def require_automation_access(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require the least automation permission needed by this request.
+
+    Automation is cross-module administration, so access is intentionally
+    independent of the Finance module gate.  Existing URLs remain stable while
+    permissions distinguish reading, authoring, publishing and testing.
+    """
+    permission = "automation:read"
+    if request.method.upper() != "GET":
+        path = request.url.path.rstrip("/")
+        if path.endswith("/test"):
+            permission = "automation:test"
+        elif path.endswith("/retry"):
+            permission = "automation:retry"
+        elif path.endswith(("/toggle", "/pause", "/resume", "/generate")):
+            permission = "automation:publish"
+        elif path.endswith("/new"):
+            permission = "automation:create"
+        else:
+            permission = "automation:update"
+
+    if not auth.has_permission(permission):
+        raise HTTPException(
+            status_code=403, detail=f"Permission '{permission}' required"
+        )
+    return auth

@@ -237,6 +237,42 @@ def handle_staff_access_projection_changed(db: Session, event: Any) -> None:
     )
 
 
+def handle_automation_workflow_requested(db: Session, event: Any) -> None:
+    """Execute one workflow action inside the outbox settlement transaction."""
+    payload = event.payload or {}
+    rule_raw = payload.get("rule_id")
+    context_payload = payload.get("context")
+    org_raw = payload.get("organization_id")
+    if not rule_raw or not isinstance(context_payload, dict) or not org_raw:
+        raise NonRetryableEventError(
+            f"automation event {event.event_id} has an invalid payload"
+        )
+
+    from app.services.finance.automation.workflow import (
+        TriggerContext,
+        workflow_service,
+    )
+
+    organization_id = UUID(str(org_raw))
+    rule = workflow_service.get(
+        db, UUID(str(rule_raw)), organization_id=organization_id
+    )
+    if rule is None:
+        raise NonRetryableEventError(
+            f"workflow rule {rule_raw} is unavailable for organization {org_raw}"
+        )
+
+    context = TriggerContext.from_dict(context_payload)
+    if context.organization_id != organization_id:
+        raise NonRetryableEventError(
+            "workflow context organization does not match rule"
+        )
+
+    execution = workflow_service.execute_action(db, rule, context)
+    if execution.status.value not in {"SUCCESS", "SKIPPED"}:
+        raise RuntimeError(execution.error_message or "workflow action failed")
+
+
 # Register built-in handlers
 register_handler("ledger.posting.completed", handle_ledger_posting_completed)
 register_handler(
@@ -247,6 +283,7 @@ register_handler(
     "hr.staff_account_status.changed",
     handle_staff_access_projection_changed,
 )
+register_handler("automation.workflow.requested", handle_automation_workflow_requested)
 
 
 # ---------------------------------------------------------------------------

@@ -215,6 +215,9 @@ def _workflow_entity_type_label(entity_type: WorkflowEntityType) -> str:
         WorkflowEntityType.FLEET_MAINTENANCE: "Fleet Maintenance",
         WorkflowEntityType.FLEET_INCIDENT: "Fleet Incident",
         WorkflowEntityType.MATERIAL_REQUEST: "Material Request",
+        WorkflowEntityType.ITEM: "Inventory Item",
+        WorkflowEntityType.PROJECT: "Project",
+        WorkflowEntityType.ASSET: "Fixed Asset",
     }
     return labels.get(entity_type, entity_type.value)
 
@@ -246,6 +249,8 @@ def _action_type_label(action_type: ActionType) -> str:
         ActionType.WEBHOOK: "Call Webhook",
         ActionType.BLOCK: "Block Action",
         ActionType.TRIGGER_RULE: "Trigger Rule",
+        ActionType.ASSIGN: "Assign Owner",
+        ActionType.UPDATE_CUSTOM_FIELD: "Update Custom Field",
     }
     return labels.get(action_type, action_type.value)
 
@@ -260,6 +265,8 @@ def _action_type_icon(action_type: ActionType) -> str:
         ActionType.WEBHOOK: "globe-alt",
         ActionType.BLOCK: "ban",
         ActionType.TRIGGER_RULE: "arrow-path",
+        ActionType.ASSIGN: "user-plus",
+        ActionType.UPDATE_CUSTOM_FIELD: "adjustments-horizontal",
     }
     return icons.get(action_type, "cog")
 
@@ -782,6 +789,11 @@ class AutomationWebService:
         start = (page - 1) * page_size
         paginated_items = items[start : start + page_size]
 
+        from app.services.finance.automation.entity_registry import (
+            registered_entity_types,
+        )
+
+        connected_types = set(registered_entity_types())
         return {
             "rules": paginated_items,
             "total": total_count,
@@ -792,6 +804,7 @@ class AutomationWebService:
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
                 for et in WorkflowEntityType
+                if et.value in connected_types
             ],
             "trigger_events": [
                 {"value": te.value, "label": _trigger_event_label(te)}
@@ -816,11 +829,17 @@ class AutomationWebService:
         rule_id: str | None = None,
     ) -> dict:
         """Get context for workflow rule form."""
+        from app.services.finance.automation.entity_registry import (
+            registered_entity_types,
+        )
+
+        connected_types = set(registered_entity_types())
         context: dict[str, Any] = {
             "rule": None,
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
                 for et in WorkflowEntityType
+                if et.value in connected_types
             ],
             "trigger_events": [
                 {"value": te.value, "label": _trigger_event_label(te)}
@@ -1415,6 +1434,15 @@ class AutomationWebService:
         )
         failures_last_day = db.execute(failures_query).scalar() or 0
 
+        total_executions = (
+            db.scalar(
+                select(func.count(WorkflowExecution.execution_id))
+                .join(WorkflowRule, WorkflowExecution.rule_id == WorkflowRule.rule_id)
+                .where(WorkflowRule.organization_id == org_id)
+            )
+            or 0
+        )
+
         failure_rate = (
             round(failures_last_day / executions_last_day * 100, 1)
             if executions_last_day > 0
@@ -1459,15 +1487,41 @@ class AutomationWebService:
             _execution_view(ex) for ex in db.execute(recent_query).scalars().all()
         ]
 
+        from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+
+        delivery_query = (
+            select(EventOutbox)
+            .where(
+                EventOutbox.event_name == "automation.workflow.requested",
+                EventOutbox.status.in_([EventStatus.FAILED, EventStatus.DEAD]),
+                EventOutbox.headers["organization_id"].astext == str(org_id),
+            )
+            .order_by(EventOutbox.occurred_at.desc())
+            .limit(20)
+        )
+        failed_deliveries = [
+            {
+                "event_id": str(event.event_id),
+                "status": event.status.value,
+                "rule_id": str((event.payload or {}).get("rule_id", "")),
+                "retry_count": event.retry_count,
+                "error": event.last_error or "Delivery failed",
+                "occurred_at": _format_datetime(event.occurred_at),
+            }
+            for event in db.scalars(delivery_query).all()
+        ]
+
         return {
             "total_rules": total_rules,
             "active_rules": active_rules,
             "executions_last_hour": executions_last_hour,
             "executions_last_day": executions_last_day,
             "failures_last_day": failures_last_day,
+            "total_executions": total_executions,
             "failure_rate": failure_rate,
             "top_failing": top_failing,
             "recent_executions": recent_executions,
+            "failed_deliveries": failed_deliveries,
         }
 
 

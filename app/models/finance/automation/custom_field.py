@@ -44,6 +44,26 @@ class CustomFieldEntityType(str, enum.Enum):
     ASSET = "ASSET"
     JOURNAL = "JOURNAL"
     PAYMENT = "PAYMENT"
+    BANK_TRANSACTION = "BANK_TRANSACTION"
+    RECONCILIATION = "RECONCILIATION"
+    CREDIT_NOTE = "CREDIT_NOTE"
+    CASH_ADVANCE = "CASH_ADVANCE"
+    ASSET_DISPOSAL = "ASSET_DISPOSAL"
+    EMPLOYEE = "EMPLOYEE"
+    ATTENDANCE = "ATTENDANCE"
+    LEAVE_REQUEST = "LEAVE_REQUEST"
+    DISCIPLINARY_CASE = "DISCIPLINARY_CASE"
+    PERFORMANCE_APPRAISAL = "PERFORMANCE_APPRAISAL"
+    PAYROLL_RUN = "PAYROLL_RUN"
+    PAYROLL_ENTRY = "PAYROLL_ENTRY"
+    SALARY_SLIP = "SALARY_SLIP"
+    LOAN = "LOAN"
+    RECRUITMENT = "RECRUITMENT"
+    FLEET_VEHICLE = "FLEET_VEHICLE"
+    FLEET_RESERVATION = "FLEET_RESERVATION"
+    FLEET_MAINTENANCE = "FLEET_MAINTENANCE"
+    FLEET_INCIDENT = "FLEET_INCIDENT"
+    MATERIAL_REQUEST = "MATERIAL_REQUEST"
 
 
 class CustomFieldType(str, enum.Enum):
@@ -68,8 +88,9 @@ class CustomFieldDefinition(Base):
     """
     Custom field definition.
 
-    Defines a custom field that can be added to entities.
-    Field values are stored in the entity's custom_fields JSONB column.
+    Defines a custom field that can be added to entities. Values are stored in
+    ``automation.custom_field_value`` so modules do not need bespoke JSONB
+    columns or schema changes for each field.
     """
 
     __tablename__ = "custom_field_definition"
@@ -329,6 +350,16 @@ class CustomFieldDefinition(Base):
                         f"{self.field_name} must be one of the allowed options",
                     )
 
+        elif self.field_type == CustomFieldType.MULTISELECT:
+            if not isinstance(value, list):
+                return False, f"{self.field_name} must be a list of options"
+            valid_values = {
+                opt.get("value")
+                for opt in (self.field_options or {}).get("options", [])
+            }
+            if any(str(item) not in valid_values for item in value):
+                return False, f"{self.field_name} contains an invalid option"
+
         # Regex validation
         if self.validation_regex:
             if not re.match(self.validation_regex, str(value)):
@@ -365,3 +396,58 @@ class CustomFieldDefinition(Base):
             except InvalidOperation:
                 pass
         return None
+
+
+class CustomFieldValue(Base):
+    """Typed, tenant-owned value for one field on one business entity."""
+
+    __tablename__ = "custom_field_value"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "field_id",
+            "entity_id",
+            name="uq_custom_field_value_entity",
+        ),
+        Index(
+            "idx_custom_field_value_entity",
+            "organization_id",
+            "entity_type",
+            "entity_id",
+        ),
+        Index("idx_custom_field_value_field", "organization_id", "field_id"),
+        {"schema": "automation"},
+    )
+
+    value_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
+        nullable=False,
+    )
+    field_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("automation.custom_field_definition.field_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    entity_type: Mapped[CustomFieldEntityType] = mapped_column(
+        Enum(CustomFieldEntityType, name="custom_field_entity_type", create_type=False),
+        nullable=False,
+    )
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    value: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now()
+    )
