@@ -130,6 +130,24 @@ class InvoiceSourceAccountingMismatchError(InvoiceSyncPermanentDataError):
 
     metric_reason = "source_accounting_mismatch"
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        dedupe_key: tuple[str, ...],
+        line_subtotal: Decimal,
+        line_tax: Decimal,
+        header_subtotal: Decimal,
+        header_tax: Decimal,
+        header_total: Decimal,
+    ) -> None:
+        super().__init__(message, dedupe_key=dedupe_key)
+        self.line_subtotal = line_subtotal
+        self.line_tax = line_tax
+        self.header_subtotal = header_subtotal
+        self.header_tax = header_tax
+        self.header_total = header_total
+
 
 class BaseSyncMixin:
     """Core utilities shared by all dotmac_sub sync mixins."""

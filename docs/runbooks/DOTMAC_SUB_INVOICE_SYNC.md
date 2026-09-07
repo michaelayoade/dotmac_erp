@@ -71,6 +71,14 @@ measure the unique invoice population by issue code, and use only an approved
 Self-Care owner repair command. ERP should resume a corrected row when the
 source `updated_at` changes.
 
+The legacy invoice consumer parks its cursor when it detects this mismatch. It
+may advance past that source revision only after a targeted v2 read returns the
+same invoice ID and `updated_at` with a `blocked` disposition, and the existing
+invoice outcome owner records that evidence in the caller's transaction. If
+the v2 evidence is absent, malformed, for a different revision, or not blocked,
+the cursor remains parked. The `quarantine_staged` log describes the pending
+transaction; the durable outcome ledger remains the authoritative evidence.
+
 ## Validation after deployment
 
 1. Run one bounded invoice phase in the named non-production environment.
@@ -85,6 +93,6 @@ source `updated_at` changes.
 6. Compare accepted invoice AR, revenue, output-tax, and total values with the
    source projection before enabling any v2 posting cutover.
 
-The durable issue ledger and cursor-advance behavior are a separate governed
-change. Until that lands, permanent failures are retried on later runs, but the
-attempt cap and log deduplication contain their operational impact.
+Tax-mapping configuration failures remain retryable because ERP configuration
+can resolve them without a new Self-Care invoice revision. Source-accounting
+mismatches use the durable blocked-outcome behavior above.
