@@ -94,6 +94,8 @@ class ActionType(str, enum.Enum):
     WEBHOOK = "WEBHOOK"
     BLOCK = "BLOCK"
     TRIGGER_RULE = "TRIGGER_RULE"
+    ASSIGN = "ASSIGN"
+    UPDATE_CUSTOM_FIELD = "UPDATE_CUSTOM_FIELD"
 
 
 class WorkflowRule(Base):

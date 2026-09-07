@@ -421,6 +421,41 @@
                     </div>
                 </div>
 
+                <div x-show="actionType === 'UPDATE_CUSTOM_FIELD'" x-cloak class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Custom field code *</label>
+                        <input type="text" x-model="customFieldCode" :required="actionType === 'UPDATE_CUSTOM_FIELD'" placeholder="service_tier" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Value *</label>
+                        <input type="text" x-model="customFieldValue" :required="actionType === 'UPDATE_CUSTOM_FIELD'" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+
+                <div x-show="actionType === 'ASSIGN'" x-cloak class="space-y-4">
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Assign by</label>
+                            <select x-model="assignmentSelector" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                <option value="person">Specific person</option>
+                                <option value="role">Role</option>
+                                <option value="entity_owner">Entity owner</option>
+                            </select>
+                        </div>
+                        <div x-show="assignmentSelector !== 'entity_owner'">
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300" x-text="assignmentSelector === 'role' ? 'Role name' : 'Person UUID'"></label>
+                            <input type="text" x-model="assignmentTarget" :required="actionType === 'ASSIGN' && assignmentSelector !== 'entity_owner'" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Strategy</label>
+                            <select x-model="assignmentStrategy" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                <option value="DIRECT">Direct</option>
+                                <option value="LEAST_LOADED">Least loaded</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <div x-show="actionType === 'CREATE_TASK'" x-cloak class="space-y-4">
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
@@ -670,6 +705,11 @@ function workflowForm(initial) {
         validationRules: validationRules,
         updateFieldName: actionConfig.field || "",
         updateFieldValue: actionConfig.value === undefined || actionConfig.value === null ? "" : String(actionConfig.value),
+        customFieldCode: actionConfig.field_code || "",
+        customFieldValue: actionConfig.value === undefined || actionConfig.value === null ? "" : String(actionConfig.value),
+        assignmentSelector: actionConfig.assignee_role ? "role" : (actionConfig.assignee === "entity_owner" ? "entity_owner" : "person"),
+        assignmentTarget: actionConfig.assignee_role || actionConfig.assignee_id || "",
+        assignmentStrategy: actionConfig.strategy || "DIRECT",
         taskProjectId: actionConfig.project_id || "",
         taskAssigneeId: actionConfig.assignee_id || "",
         taskPriority: actionConfig.priority || "MEDIUM",
@@ -820,6 +860,18 @@ function workflowForm(initial) {
             } else if (this.actionType === "UPDATE_FIELD") {
                 config.field = this.updateFieldName || "";
                 config.value = this.updateFieldValue || "";
+            } else if (this.actionType === "UPDATE_CUSTOM_FIELD") {
+                config.field_code = this.customFieldCode || "";
+                config.value = this.customFieldValue || "";
+            } else if (this.actionType === "ASSIGN") {
+                config.strategy = this.assignmentStrategy || "DIRECT";
+                if (this.assignmentSelector === "role") {
+                    config.assignee_role = this.assignmentTarget || "";
+                } else if (this.assignmentSelector === "entity_owner") {
+                    config.assignee = "entity_owner";
+                } else {
+                    config.assignee_id = this.assignmentTarget || "";
+                }
             } else if (this.actionType === "CREATE_TASK") {
                 config.project_id = this.taskProjectId || "";
                 if (this.taskAssigneeId) {

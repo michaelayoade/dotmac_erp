@@ -450,7 +450,7 @@ class WorkflowService:
             for cond in conditions_list:
                 if "field" in cond:
                     values = context.new_values or {}
-                    field_value = values.get(cond["field"])
+                    field_value = self._condition_value(values, cond["field"])
                     cond_op = cond.get("operator", "equals")
                     expected = cond.get("value")
                     results.append(self._compare_values(field_value, cond_op, expected))
@@ -471,7 +471,7 @@ class WorkflowService:
                         results.append(self._evaluate_condition_node(group, context))
                     elif "field" in group:
                         values = context.new_values or {}
-                        field_value = values.get(group["field"])
+                        field_value = self._condition_value(values, group["field"])
                         cond_op = group.get("operator", "equals")
                         expected = group.get("value")
                         results.append(
@@ -497,7 +497,7 @@ class WorkflowService:
         # Field comparisons
         field_conditions = conditions.get("fields", {})
         for field, condition in field_conditions.items():
-            field_value = values.get(field)
+            field_value = self._condition_value(values, field)
 
             if isinstance(condition, dict):
                 operator = condition.get("operator", "equals")
@@ -555,6 +555,19 @@ class WorkflowService:
                 return False
 
         return True
+
+    @staticmethod
+    def _condition_value(values: dict[str, Any], field: str) -> Any:
+        """Resolve dotted fields, including ``custom.<field_code>``."""
+        parts = field.split(".")
+        if parts[0] == "custom":
+            parts[0] = "custom_fields"
+        current: Any = values
+        for part in parts:
+            if not isinstance(current, dict) or part not in current:
+                return None
+            current = current[part]
+        return current
 
     @staticmethod
     def _matches_expected_value(value: Any, expected: Any) -> bool:
@@ -721,6 +734,10 @@ class WorkflowService:
                 context,
                 _depth=chain_depth,
             )
+        elif rule.action_type == ActionType.ASSIGN:
+            return self._action_assign(db, config, context)
+        elif rule.action_type == ActionType.UPDATE_CUSTOM_FIELD:
+            return self._action_update_custom_field(db, config, context)
         else:
             return ActionResult(
                 success=False,
@@ -837,6 +854,109 @@ class WorkflowService:
             ).all()
             recipients.extend(str(email).strip() for email in emails if email)
         return list(dict.fromkeys(recipients))
+
+    def _action_assign(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> ActionResult:
+        """Assign any workflow entity through the cross-module assignment store."""
+        from app.models.finance.automation import EntityAssignment
+        from app.models.person import Person
+
+        selector = {
+            "recipient_ids": [config.get("assignee_id")]
+            if config.get("assignee_id")
+            else [],
+            "recipient_role": config.get("assignee_role"),
+            "recipient": "entity_owner"
+            if str(config.get("assignee", "")).lower() == "entity_owner"
+            else "",
+        }
+        candidates = self._resolve_recipient_person_ids(db, selector, context)
+        if context.organization_id:
+            candidates = list(
+                db.scalars(
+                    select(Person.id).where(
+                        Person.organization_id == context.organization_id,
+                        Person.id.in_(candidates),
+                        Person.is_active.is_(True),
+                    )
+                ).all()
+            )
+        if not candidates:
+            return ActionResult(False, error_message="No eligible assignee resolved")
+
+        strategy = str(config.get("strategy", "DIRECT")).upper()
+        assignee_id = sorted(candidates, key=str)[0]
+        if strategy == "LEAST_LOADED" and len(candidates) > 1:
+            counts = dict(
+                db.execute(
+                    select(EntityAssignment.assignee_id, func.count())
+                    .where(
+                        EntityAssignment.organization_id == context.organization_id,
+                        EntityAssignment.assignee_id.in_(candidates),
+                        EntityAssignment.is_active.is_(True),
+                    )
+                    .group_by(EntityAssignment.assignee_id)
+                ).all()
+            )
+            assignee_id = min(candidates, key=lambda item: (counts.get(item, 0), str(item)))
+
+        assignment = db.scalar(
+            select(EntityAssignment).where(
+                EntityAssignment.organization_id == context.organization_id,
+                EntityAssignment.entity_type == context.entity_type,
+                EntityAssignment.entity_id == context.entity_id,
+                EntityAssignment.is_active.is_(True),
+            )
+        )
+        if assignment is None:
+            assignment = EntityAssignment(
+                organization_id=context.organization_id,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                assignee_id=assignee_id,
+                strategy=strategy,
+                created_by=context.user_id,
+            )
+            db.add(assignment)
+        else:
+            assignment.assignee_id = assignee_id
+            assignment.strategy = strategy
+        db.flush()
+        return ActionResult(
+            True,
+            result={"assignee_id": str(assignee_id), "strategy": strategy},
+        )
+
+    def _action_update_custom_field(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> ActionResult:
+        """Validate and update a custom value through its stable field code."""
+        from app.models.finance.automation import CustomFieldEntityType
+        from app.services.finance.automation.custom_fields import custom_fields_service
+
+        code = str(config.get("field_code", "")).strip()
+        if not code or context.organization_id is None:
+            return ActionResult(False, error_message="field_code and organization are required")
+        try:
+            entity_type = CustomFieldEntityType(context.entity_type)
+            values = custom_fields_service.save_values(
+                db,
+                context.organization_id,
+                entity_type,
+                context.entity_id,
+                {code: config.get("value")},
+                context.user_id,
+            )
+            return ActionResult(True, result={"field_code": code, "value": values[code]})
+        except Exception as exc:
+            return ActionResult(False, error_message=str(exc))
 
     def _action_send_email(
         self,

@@ -377,7 +377,7 @@ class CustomFieldsService:
         entity_type: CustomFieldEntityType,
         entity_id: UUID,
         field_values: dict[str, Any],
-        actor_id: UUID,
+        actor_id: UUID | None,
         *,
         replace: bool = False,
     ) -> dict[str, Any]:

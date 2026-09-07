@@ -116,6 +116,18 @@ class TestFlatConditionEvaluation:
     def test_empty_conditions_match(self, workflow_service, sample_context):
         assert workflow_service._evaluate_conditions({}, sample_context) is True
 
+    def test_custom_field_condition_uses_dotted_code(
+        self, workflow_service, sample_context
+    ):
+        sample_context.new_values = {
+            "status": "APPROVED",
+            "custom_fields": {"service_tier": "gold"},
+        }
+
+        assert workflow_service._evaluate_conditions(
+            {"fields": {"custom.service_tier": "gold"}}, sample_context
+        )
+
     def test_field_equality(self, workflow_service, sample_context):
         conditions = {"fields": {"status": "APPROVED"}}
         assert workflow_service._evaluate_conditions(conditions, sample_context) is True
@@ -721,6 +733,32 @@ class TestActionTriggerRule:
 
         assert result.success is False
         assert "trigger_event" in (result.error_message or "")
+
+
+class TestAssignmentActions:
+    def test_direct_assignment_is_persisted(self, workflow_service, sample_context):
+        assignee_id = uuid.uuid4()
+        db = MagicMock()
+        db.scalars.return_value.all.return_value = [assignee_id]
+        db.scalar.return_value = None
+
+        with patch.object(
+            workflow_service,
+            "_resolve_recipient_person_ids",
+            return_value=[assignee_id],
+        ):
+            result = workflow_service._action_assign(
+                db,
+                {"assignee_id": str(assignee_id), "strategy": "DIRECT"},
+                sample_context,
+            )
+
+        assert result.success is True
+        assert result.result == {
+            "assignee_id": str(assignee_id),
+            "strategy": "DIRECT",
+        }
+        db.add.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

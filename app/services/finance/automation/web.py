@@ -246,6 +246,8 @@ def _action_type_label(action_type: ActionType) -> str:
         ActionType.WEBHOOK: "Call Webhook",
         ActionType.BLOCK: "Block Action",
         ActionType.TRIGGER_RULE: "Trigger Rule",
+        ActionType.ASSIGN: "Assign Owner",
+        ActionType.UPDATE_CUSTOM_FIELD: "Update Custom Field",
     }
     return labels.get(action_type, action_type.value)
 
@@ -260,6 +262,8 @@ def _action_type_icon(action_type: ActionType) -> str:
         ActionType.WEBHOOK: "globe-alt",
         ActionType.BLOCK: "ban",
         ActionType.TRIGGER_RULE: "arrow-path",
+        ActionType.ASSIGN: "user-plus",
+        ActionType.UPDATE_CUSTOM_FIELD: "adjustments-horizontal",
     }
     return icons.get(action_type, "cog")
 

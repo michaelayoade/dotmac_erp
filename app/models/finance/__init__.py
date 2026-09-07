@@ -103,6 +103,7 @@ from app.models.finance.automation import (
     CustomFieldType,
     CustomFieldValue,
     DocumentTemplate,
+    EntityAssignment,
     ExecutionStatus,
     RecurringEntityType,
     RecurringFrequency,
@@ -581,6 +582,7 @@ __all__ = [
     "CustomFieldEntityType",
     "CustomFieldType",
     "CustomFieldValue",
+    "EntityAssignment",
     "DocumentTemplate",
     "TemplateType",
     # Payments
