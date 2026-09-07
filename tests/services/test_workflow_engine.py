@@ -22,6 +22,7 @@ from app.services.finance.automation import workflow as workflow_module
 from app.services.finance.automation.webhook_policy import WebhookCeiling
 from app.services.finance.automation.workflow import (
     TriggerContext,
+    WorkflowPolicyViolation,
     WorkflowService,
 )
 
@@ -573,6 +574,49 @@ class TestEventDispatcher:
         mock_trigger.assert_called_once()
         call_args = mock_trigger.call_args
         assert call_args[0][1] == org_id
+
+
+class TestReliableDispatch:
+    def test_async_rule_is_written_to_transactional_outbox(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(execute_async=True)
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(workflow_service, "_check_entity_rate_limit", return_value=False),
+            patch.object(workflow_service, "_is_throttled", return_value=False),
+            patch(
+                "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
+            ) as publish,
+        ):
+            workflow_service.trigger_event(
+                MagicMock(), sample_context.organization_id, sample_context
+            )
+
+        assert publish.call_args.kwargs["event_name"] == "automation.workflow.requested"
+        assert publish.call_args.kwargs["headers"]["organization_id"] == str(
+            sample_context.organization_id
+        )
+        assert publish.call_args.kwargs["idempotency_key"].startswith("automation:")
+
+    def test_blocking_rule_rejects_caller_synchronously(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(action_type=ActionType.BLOCK, execute_async=True)
+        blocked = MagicMock(
+            status=ExecutionStatus.BLOCKED,
+            error_message="Blocked by policy",
+        )
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(workflow_service, "_check_entity_rate_limit", return_value=False),
+            patch.object(workflow_service, "_is_throttled", return_value=False),
+            patch.object(workflow_service, "execute_action", return_value=blocked),
+        ):
+            with pytest.raises(WorkflowPolicyViolation, match="Blocked by policy"):
+                workflow_service.trigger_event(
+                    MagicMock(), sample_context.organization_id, sample_context
+                )
 
     def test_fire_unknown_event_is_noop(self):
         from app.services.finance.automation.event_dispatcher import (

@@ -265,6 +265,36 @@ class TestOutboxPublisher:
         assert mock_event.error_class == "UnsupportedEventError"
         mock_db_session.commit.assert_not_called()
 
+    def test_requeue_dead_event_resets_retry_state(
+        self, service, mock_db_session, mock_event_status
+    ):
+        event_id = uuid.uuid4()
+        mock_event = MockEventOutbox(
+            event_id=event_id,
+            status="DEAD",
+            retry_count=5,
+        )
+        mock_event.next_retry_at = object()
+        mock_event.last_error = "failure"
+        mock_event.error_class = "RuntimeError"
+        mock_event.terminal_reason = "max_retries_exceeded"
+        mock_db_session.get.return_value = mock_event
+
+        with (
+            patch("app.services.finance.platform.outbox_publisher.EventOutbox"),
+            patch(
+                "app.services.finance.platform.outbox_publisher.EventStatus",
+                mock_event_status,
+            ),
+        ):
+            service.requeue_dead_event(mock_db_session, event_id)
+
+        assert mock_event.status == "PENDING"
+        assert mock_event.retry_count == 0
+        assert mock_event.next_retry_at is None
+        assert mock_event.last_error is None
+        mock_db_session.flush.assert_called_once()
+
     def test_handle_retry_increments_retry_count(
         self, service, mock_db_session, mock_event_status
     ):

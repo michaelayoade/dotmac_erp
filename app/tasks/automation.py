@@ -116,6 +116,10 @@ def execute_workflow_action(
                 return result
 
             execution = workflow_service.execute_action(db, rule, context)
+            if execution.status.value not in {"SUCCESS", "SKIPPED"}:
+                raise RuntimeError(
+                    execution.error_message or "Workflow action execution failed"
+                )
             db.commit()
 
             result["status"] = execution.status.value

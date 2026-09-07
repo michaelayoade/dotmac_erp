@@ -1,25 +1,10 @@
 """
 Event Dispatcher for Workflow Automation.
 
-Provides ``fire_workflow_event()`` — the single entry point that all
-service-layer status-transition methods call after a state change.
-
-Usage::
-
-    try:
-        from app.services.finance.automation.event_dispatcher import fire_workflow_event
-        fire_workflow_event(
-            db=self.db,
-            organization_id=org_id,
-            entity_type="EXPENSE",
-            entity_id=claim.claim_id,
-            event="ON_APPROVAL",
-            old_values={"status": "SUBMITTED"},
-            new_values={"status": "APPROVED"},
-            user_id=approver_id,
-        )
-    except Exception:
-        pass  # Side effect — never breaks the main operation
+Provides ``fire_workflow_event()`` — the single entry point that service-layer
+writers call after a state change. Async actions are stored in the platform
+outbox in the same transaction. Validation and blocking actions execute
+synchronously and must not be swallowed by callers.
 """
 
 import logging
@@ -42,12 +27,12 @@ def fire_workflow_event(
     new_values: dict[str, Any] | None = None,
     changed_fields: list[str] | None = None,
     user_id: UUID | None = None,
-) -> None:
+) -> list[Any]:
     """Fire a workflow event, matching and executing any applicable rules.
 
-    This function is intentionally **fire-and-forget**: callers should
-    wrap it in ``try/except Exception: pass`` so that workflow failures
-    never break the primary business operation.
+    Async actions are persisted in the caller's transaction through the
+    platform outbox. Validation and blocking actions run synchronously and may
+    reject the caller's operation.
 
     Args:
         db: Active database session (same session as the calling service).
@@ -72,7 +57,7 @@ def fire_workflow_event(
         trigger_event = TriggerEvent(event)
     except ValueError:
         logger.debug("Unknown trigger event '%s', skipping", event)
-        return
+        return []
 
     context = TriggerContext(
         entity_type=entity_type,
@@ -85,4 +70,4 @@ def fire_workflow_event(
         user_id=user_id,
     )
 
-    workflow_service.trigger_event(db, organization_id, context)
+    return workflow_service.trigger_event(db, organization_id, context)

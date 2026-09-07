@@ -107,6 +107,46 @@ def test_handler_missing_batch_id_is_non_retryable(mock_update: MagicMock) -> No
     mock_update.assert_not_called()
 
 
+def test_automation_handler_executes_rule_in_delivery_transaction() -> None:
+    from app.tasks.outbox_relay import handle_automation_workflow_requested
+
+    organization_id = uuid4()
+    rule_id = uuid4()
+    entity_id = uuid4()
+    db = MagicMock()
+    rule = MagicMock()
+    execution = MagicMock()
+    execution.status.value = "SUCCESS"
+    event = SimpleNamespace(
+        event_id=uuid4(),
+        payload={
+            "rule_id": str(rule_id),
+            "organization_id": str(organization_id),
+            "context": {
+                "entity_type": "EXPENSE",
+                "entity_id": str(entity_id),
+                "event": "ON_APPROVAL",
+                "organization_id": str(organization_id),
+            },
+        },
+    )
+
+    with (
+        patch(
+            "app.services.finance.automation.workflow.workflow_service.get",
+            return_value=rule,
+        ) as get_rule,
+        patch(
+            "app.services.finance.automation.workflow.workflow_service.execute_action",
+            return_value=execution,
+        ) as execute,
+    ):
+        handle_automation_workflow_requested(db, event)
+
+    get_rule.assert_called_once_with(db, rule_id, organization_id=organization_id)
+    execute.assert_called_once()
+
+
 @patch(
     "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting"
 )

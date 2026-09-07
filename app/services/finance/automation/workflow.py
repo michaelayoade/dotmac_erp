@@ -5,7 +5,9 @@ Handles workflow rule evaluation and action execution.
 """
 
 import builtins
+import hashlib
 import ipaddress
+import json
 import logging
 import re
 import socket
@@ -271,6 +273,10 @@ class ActionResult:
     success: bool
     result: dict[str, Any] | None = None
     error_message: str | None = None
+
+
+class WorkflowPolicyViolation(RuntimeError):
+    """A synchronous validation or blocking rule rejected an operation."""
 
 
 class WorkflowService:
@@ -646,9 +652,12 @@ class WorkflowService:
         try:
             result = self._run_action(db, rule, context, chain_depth=chain_depth)
 
-            execution.status = (
-                ExecutionStatus.SUCCESS if result.success else ExecutionStatus.FAILED
-            )
+            if result.success:
+                execution.status = ExecutionStatus.SUCCESS
+            elif rule.action_type in {ActionType.BLOCK, ActionType.VALIDATE}:
+                execution.status = ExecutionStatus.BLOCKED
+            else:
+                execution.status = ExecutionStatus.FAILED
             execution.result = result.result
             execution.error_message = result.error_message
             execution.completed_at = datetime.utcnow()
@@ -1474,33 +1483,57 @@ class WorkflowService:
                 context.event.value,
             )
 
-            # Async dispatch via Celery if configured
-            if rule.execute_async:
-                try:
-                    from app.tasks.automation import execute_workflow_action
-
-                    execute_workflow_action.delay(str(rule.rule_id), context.to_dict())
-                    logger.info(
-                        "Dispatched async execution for rule %s entity %s",
-                        rule.rule_id,
-                        context.entity_id,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to dispatch async task for rule %s, "
-                        "falling back to sync execution",
-                        rule.rule_id,
-                    )
-                    execution = self.execute_action(db, rule, context)
-                    executions.append(execution)
+            must_run_synchronously = rule.action_type in {
+                ActionType.BLOCK,
+                ActionType.VALIDATE,
+            }
+            if rule.execute_async and not must_run_synchronously:
+                self._enqueue_action(db, rule, context)
             else:
                 execution = self.execute_action(db, rule, context)
                 executions.append(execution)
+                if execution.status == ExecutionStatus.BLOCKED:
+                    raise WorkflowPolicyViolation(
+                        execution.error_message or "Operation blocked by workflow rule"
+                    )
 
             if rule.stop_on_match:
                 break
 
         return executions
+
+    def _enqueue_action(
+        self,
+        db: Session,
+        rule: WorkflowRule,
+        context: TriggerContext,
+    ) -> None:
+        """Write an async action request into the transaction's outbox."""
+        from app.services.finance.platform.outbox_publisher import OutboxPublisher
+
+        payload = {
+            "rule_id": str(rule.rule_id),
+            "organization_id": str(rule.organization_id),
+            "context": context.to_dict(),
+        }
+        encoded = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+        durable_payload = json.loads(encoded)
+        digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        OutboxPublisher.publish_event(
+            db,
+            event_name="automation.workflow.requested",
+            aggregate_type=context.entity_type,
+            aggregate_id=str(context.entity_id),
+            payload=durable_payload,
+            headers={
+                "organization_id": str(rule.organization_id),
+                "user_id": str(context.user_id) if context.user_id else None,
+                "source": "workflow_engine",
+            },
+            producer_module="automation",
+            correlation_id=digest,
+            idempotency_key=f"automation:{rule.rule_id}:{digest}",
+        )
 
     def update_rule(
         self,
