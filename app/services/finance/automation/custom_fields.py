@@ -357,7 +357,10 @@ class CustomFieldsService:
         """Return values keyed by stable field code for one tenant entity."""
         rows = db.execute(
             select(CustomFieldDefinition.field_code, CustomFieldValue.value)
-            .join(CustomFieldValue, CustomFieldValue.field_id == CustomFieldDefinition.field_id)
+            .join(
+                CustomFieldValue,
+                CustomFieldValue.field_id == CustomFieldDefinition.field_id,
+            )
             .where(
                 CustomFieldValue.organization_id == organization_id,
                 CustomFieldValue.entity_type == entity_type,
@@ -461,7 +464,10 @@ class CustomFieldsService:
         """Support list/report filters through the indexed EAV store."""
         stmt = (
             select(CustomFieldValue.entity_id)
-            .join(CustomFieldDefinition, CustomFieldValue.field_id == CustomFieldDefinition.field_id)
+            .join(
+                CustomFieldDefinition,
+                CustomFieldValue.field_id == CustomFieldDefinition.field_id,
+            )
             .where(
                 CustomFieldValue.organization_id == organization_id,
                 CustomFieldValue.entity_type == entity_type,

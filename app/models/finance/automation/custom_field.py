@@ -333,7 +333,8 @@ class CustomFieldDefinition(Base):
             if not isinstance(value, list):
                 return False, f"{self.field_name} must be a list of options"
             valid_values = {
-                opt.get("value") for opt in (self.field_options or {}).get("options", [])
+                opt.get("value")
+                for opt in (self.field_options or {}).get("options", [])
             }
             if any(str(item) not in valid_values for item in value):
                 return False, f"{self.field_name} contains an invalid option"
@@ -387,14 +388,21 @@ class CustomFieldValue(Base):
             "entity_id",
             name="uq_custom_field_value_entity",
         ),
-        Index("idx_custom_field_value_entity", "organization_id", "entity_type", "entity_id"),
+        Index(
+            "idx_custom_field_value_entity",
+            "organization_id",
+            "entity_type",
+            "entity_id",
+        ),
         Index("idx_custom_field_value_field", "organization_id", "field_id"),
         {"schema": "automation"},
     )
 
     value_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
-        server_default=text("gen_random_uuid()")
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
     )
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
