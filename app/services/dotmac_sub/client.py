@@ -117,6 +117,36 @@ def _response_detail(response: httpx.Response) -> str:
     return ""
 
 
+def _staff_sync_error_context(response: httpx.Response) -> dict[str, str]:
+    """Extract only actionable, non-secret staff mapping error fields."""
+
+    try:
+        data = response.json()
+    except ValueError:
+        return {}
+    if not isinstance(data, dict) or not isinstance(data.get("detail"), dict):
+        return {}
+    detail = data["detail"]
+    context: dict[str, str] = {}
+    code = detail.get("code")
+    if isinstance(code, str) and code:
+        context["error_code"] = code
+    details = detail.get("details")
+    if not isinstance(details, dict):
+        return context
+    for key in (
+        "provider",
+        "account_scope",
+        "department_id",
+        "department_code",
+        "department_name",
+    ):
+        value = details.get(key)
+        if isinstance(value, str) and value:
+            context[key] = value
+    return context
+
+
 class DotmacSubError(Exception):
     """dotmac_sub API error."""
 
@@ -158,6 +188,16 @@ class DotmacSubRateLimitError(DotmacSubError):
 
 class DotmacSubPermanentSyncError(DotmacSubError):
     """A dotmac_sub rejection that needs data/configuration to be fixed."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        *,
+        context: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(message, status_code)
+        self.context = dict(context or {})
 
 
 class _TransientServerError(DotmacSubError):
@@ -1218,7 +1258,11 @@ class DotmacSubClient:
             )
             if detail:
                 message = f"{message} Self-Care detail: {detail}"
-            raise DotmacSubPermanentSyncError(message, status_code=status)
+            raise DotmacSubPermanentSyncError(
+                message,
+                status_code=status,
+                context=_staff_sync_error_context(response),
+            )
         if status == 401:
             raise DotmacSubAuthenticationError(
                 "Authentication failed for dotmac_sub.", status_code=status
@@ -1262,7 +1306,15 @@ class DotmacSubClient:
                 message = "Self-Care rejected the request."
             if detail:
                 message = f"{message} Self-Care detail: {detail}"
-            raise DotmacSubPermanentSyncError(message, status_code=status)
+            raise DotmacSubPermanentSyncError(
+                message,
+                status_code=status,
+                context=(
+                    _staff_sync_error_context(response)
+                    if endpoint.endswith("/erp-department")
+                    else None
+                ),
+            )
         if status >= 500:
             raise _TransientServerError(f"Server error: {status}", status_code=status)
         response.raise_for_status()
