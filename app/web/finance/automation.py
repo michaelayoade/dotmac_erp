@@ -45,6 +45,16 @@ def automation_dashboard(
     return templates.TemplateResponse(request, "finance/automation/index.html", context)
 
 
+@router.get("/capabilities")
+def automation_capability_catalog(
+    auth: WebAuthContext = Depends(require_automation_access),
+):
+    """Expose only entity/event combinations backed by a model connector."""
+    from app.services.finance.automation.capabilities import capabilities_payload
+
+    return {"entities": capabilities_payload()}
+
+
 # =============================================================================
 # Recurring Transactions
 # =============================================================================

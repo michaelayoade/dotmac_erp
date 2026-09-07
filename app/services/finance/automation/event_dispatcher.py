@@ -59,13 +59,33 @@ def fire_workflow_event(
         logger.debug("Unknown trigger event '%s', skipping", event)
         return []
 
+    # Module emitters and the automatic ORM connector share this de-duplication
+    # set, so an explicit semantic event is not fired twice at commit time.
+    fired = db.info.setdefault("automation_fired_events", set())
+    fired.add((entity_type, str(entity_id), trigger_event.value))
+
+    effective_new = dict(new_values or {})
+    effective_old = dict(old_values or {})
+    try:
+        from app.models.finance.automation import CustomFieldEntityType
+        from app.services.finance.automation.custom_fields import custom_fields_service
+
+        custom_entity_type = CustomFieldEntityType(entity_type)
+        custom_values = custom_fields_service.get_values(
+            db, organization_id, custom_entity_type, entity_id
+        )
+        effective_new["custom_fields"] = custom_values
+        effective_old.setdefault("custom_fields", custom_values)
+    except ValueError:
+        pass
+
     context = TriggerContext(
         entity_type=entity_type,
         entity_id=entity_id,
         event=trigger_event,
         organization_id=organization_id,
-        old_values=old_values,
-        new_values=new_values,
+        old_values=effective_old,
+        new_values=effective_new,
         changed_fields=changed_fields,
         user_id=user_id,
     )

@@ -24,6 +24,9 @@ from app.monitoring import setup_monitoring
 from app.telemetry import setup_otel
 
 from app.services.audit_listener import register_audit_listeners
+from app.services.finance.automation.model_event_connector import (
+    register_automation_model_connectors,
+)
 from app.services.scheduler_config import build_beat_schedule, get_celery_config
 
 logger = logging.getLogger(__name__)
@@ -63,6 +66,7 @@ def bootstrap_celery_observability() -> None:
     # ``event.listen`` only attaches in the process that called it — and
     # ``app/main.py`` is never imported by the worker or beat.
     register_audit_listeners()
+    register_automation_model_connectors()
     _runtime_bootstrapped_pid = pid
     logger.info("Celery observability initialized")
 

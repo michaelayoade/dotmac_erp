@@ -294,6 +294,13 @@ class WorkflowService:
         created_by: UUID,
     ) -> WorkflowRule:
         """Create a new workflow rule."""
+        self._validate_configuration(
+            input_data.entity_type,
+            input_data.trigger_event,
+            input_data.action_type,
+            input_data.action_config,
+            input_data.schedule_config,
+        )
         # Check for duplicate name
         existing = db.execute(
             select(WorkflowRule).where(
@@ -330,6 +337,54 @@ class WorkflowService:
         db.add(rule)
         db.flush()
         return rule
+
+    @staticmethod
+    def _validate_configuration(
+        entity_type: WorkflowEntityType,
+        trigger_event: TriggerEvent,
+        action_type: ActionType,
+        config: dict[str, Any],
+        schedule_config: dict[str, Any] | None,
+    ) -> None:
+        """Reject rules the runtime cannot execute before they are activated."""
+        from app.services.finance.automation.entity_registry import get_pk_field
+
+        if get_pk_field(entity_type.value) is None:
+            raise HTTPException(status_code=422, detail="Entity is not connected")
+        required_any = {
+            ActionType.SEND_EMAIL: ("recipients", "recipient", "recipient_role"),
+            ActionType.SEND_NOTIFICATION: (
+                "recipient_ids",
+                "recipient",
+                "recipient_role",
+            ),
+            ActionType.UPDATE_FIELD: ("field",),
+            ActionType.CREATE_TASK: ("project_id",),
+            ActionType.WEBHOOK: ("url",),
+            ActionType.TRIGGER_RULE: ("rule_id",),
+            ActionType.ASSIGN: ("assignee_id", "assignee_role", "assignee"),
+            ActionType.UPDATE_CUSTOM_FIELD: ("field_code",),
+        }
+        choices = required_any.get(action_type)
+        if choices and not any(config.get(key) for key in choices):
+            raise HTTPException(
+                status_code=422,
+                detail=(f"{action_type.value} requires one of: " + ", ".join(choices)),
+            )
+        if trigger_event in {
+            TriggerEvent.ON_SCHEDULE,
+            TriggerEvent.ON_DUE_DATE,
+            TriggerEvent.ON_OVERDUE,
+        }:
+            interval = (schedule_config or {}).get("interval_minutes", 60)
+            try:
+                valid_interval = int(interval) > 0
+            except (TypeError, ValueError):
+                valid_interval = False
+            if not valid_interval:
+                raise HTTPException(
+                    status_code=422, detail="Schedule interval must be positive"
+                )
 
     def get(
         self,
@@ -1734,6 +1789,15 @@ class WorkflowService:
         rule = db.get(WorkflowRule, rule_id)
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
+
+        if "action_config" in updates or updates.get("is_active") is True:
+            self._validate_configuration(
+                rule.entity_type,
+                rule.trigger_event,
+                rule.action_type,
+                updates.get("action_config", rule.action_config),
+                updates.get("schedule_config", rule.schedule_config),
+            )
 
         # Snapshot current state before applying changes
         self._create_version_snapshot(db, rule, updated_by)

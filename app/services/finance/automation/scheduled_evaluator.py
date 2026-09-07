@@ -51,10 +51,16 @@ class ScheduledRuleEvaluator:
             "errors": [],
         }
 
-        # Find all active ON_SCHEDULE rules
+        # Time-driven trigger types share the same bounded entity evaluator.
         stmt = select(WorkflowRule).where(
             WorkflowRule.is_active.is_(True),
-            WorkflowRule.trigger_event == TriggerEvent.ON_SCHEDULE,
+            WorkflowRule.trigger_event.in_(
+                [
+                    TriggerEvent.ON_SCHEDULE,
+                    TriggerEvent.ON_DUE_DATE,
+                    TriggerEvent.ON_OVERDUE,
+                ]
+            ),
         )
         rules = list(db.scalars(stmt).all())
         results["rules_checked"] = len(rules)
@@ -78,7 +84,7 @@ class ScheduledRuleEvaluator:
                     context = TriggerContext(
                         entity_type=rule.entity_type.value,
                         entity_id=entity_id,
-                        event=TriggerEvent.ON_SCHEDULE,
+                        event=rule.trigger_event,
                         organization_id=rule.organization_id,
                     )
 

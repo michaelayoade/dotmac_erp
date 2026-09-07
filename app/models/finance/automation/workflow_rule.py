@@ -65,6 +65,9 @@ class WorkflowEntityType(str, enum.Enum):
     FLEET_INCIDENT = "FLEET_INCIDENT"
     # Inventory
     MATERIAL_REQUEST = "MATERIAL_REQUEST"
+    ITEM = "ITEM"
+    PROJECT = "PROJECT"
+    ASSET = "ASSET"
 
 
 class TriggerEvent(str, enum.Enum):

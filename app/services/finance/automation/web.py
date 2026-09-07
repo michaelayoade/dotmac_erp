@@ -215,6 +215,9 @@ def _workflow_entity_type_label(entity_type: WorkflowEntityType) -> str:
         WorkflowEntityType.FLEET_MAINTENANCE: "Fleet Maintenance",
         WorkflowEntityType.FLEET_INCIDENT: "Fleet Incident",
         WorkflowEntityType.MATERIAL_REQUEST: "Material Request",
+        WorkflowEntityType.ITEM: "Inventory Item",
+        WorkflowEntityType.PROJECT: "Project",
+        WorkflowEntityType.ASSET: "Fixed Asset",
     }
     return labels.get(entity_type, entity_type.value)
 
@@ -786,6 +789,11 @@ class AutomationWebService:
         start = (page - 1) * page_size
         paginated_items = items[start : start + page_size]
 
+        from app.services.finance.automation.entity_registry import (
+            registered_entity_types,
+        )
+
+        connected_types = set(registered_entity_types())
         return {
             "rules": paginated_items,
             "total": total_count,
@@ -796,6 +804,7 @@ class AutomationWebService:
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
                 for et in WorkflowEntityType
+                if et.value in connected_types
             ],
             "trigger_events": [
                 {"value": te.value, "label": _trigger_event_label(te)}
@@ -820,11 +829,17 @@ class AutomationWebService:
         rule_id: str | None = None,
     ) -> dict:
         """Get context for workflow rule form."""
+        from app.services.finance.automation.entity_registry import (
+            registered_entity_types,
+        )
+
+        connected_types = set(registered_entity_types())
         context: dict[str, Any] = {
             "rule": None,
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
                 for et in WorkflowEntityType
+                if et.value in connected_types
             ],
             "trigger_events": [
                 {"value": te.value, "label": _trigger_event_label(te)}

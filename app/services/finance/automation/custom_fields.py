@@ -382,6 +382,14 @@ class CustomFieldsService:
         replace: bool = False,
     ) -> dict[str, Any]:
         """Validate and upsert values without requiring entity-table JSON columns."""
+        from app.services.finance.automation.entity_registry import resolve_entity
+
+        entity = resolve_entity(db, entity_type.value, entity_id)
+        if (
+            entity is None
+            or getattr(entity, "organization_id", None) != organization_id
+        ):
+            raise HTTPException(status_code=404, detail="Entity not found")
         current = self.get_values(db, organization_id, entity_type, entity_id)
         effective = self.merge_with_defaults(
             db, organization_id, entity_type, {} if replace else current
@@ -407,9 +415,11 @@ class CustomFieldsService:
                 )
             ).all()
         }
+        normalized_values: dict[str, Any] = {}
         for code, value in effective.items():
             definition = definitions[code]
             normalized = self._json_value(definition.field_type, value)
+            normalized_values[code] = normalized
             row = existing.get(definition.field_id)
             if row is None:
                 db.add(
@@ -432,7 +442,28 @@ class CustomFieldsService:
                 if field_id not in retained_ids:
                     db.delete(row)
         db.flush()
-        return effective
+        changed_codes = sorted(
+            code
+            for code in set(current) | set(normalized_values)
+            if current.get(code) != normalized_values.get(code)
+        )
+        if changed_codes:
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
+            fire_workflow_event(
+                db,
+                organization_id,
+                entity_type.value,
+                entity_id,
+                "ON_FIELD_CHANGE",
+                old_values={"custom_fields": current},
+                new_values={"custom_fields": normalized_values},
+                changed_fields=[f"custom.{code}" for code in changed_codes],
+                user_id=actor_id,
+            )
+        return normalized_values
 
     @staticmethod
     def _json_value(field_type: CustomFieldType, value: Any) -> Any:

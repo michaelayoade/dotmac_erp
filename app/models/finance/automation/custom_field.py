@@ -44,6 +44,26 @@ class CustomFieldEntityType(str, enum.Enum):
     ASSET = "ASSET"
     JOURNAL = "JOURNAL"
     PAYMENT = "PAYMENT"
+    BANK_TRANSACTION = "BANK_TRANSACTION"
+    RECONCILIATION = "RECONCILIATION"
+    CREDIT_NOTE = "CREDIT_NOTE"
+    CASH_ADVANCE = "CASH_ADVANCE"
+    ASSET_DISPOSAL = "ASSET_DISPOSAL"
+    EMPLOYEE = "EMPLOYEE"
+    ATTENDANCE = "ATTENDANCE"
+    LEAVE_REQUEST = "LEAVE_REQUEST"
+    DISCIPLINARY_CASE = "DISCIPLINARY_CASE"
+    PERFORMANCE_APPRAISAL = "PERFORMANCE_APPRAISAL"
+    PAYROLL_RUN = "PAYROLL_RUN"
+    PAYROLL_ENTRY = "PAYROLL_ENTRY"
+    SALARY_SLIP = "SALARY_SLIP"
+    LOAN = "LOAN"
+    RECRUITMENT = "RECRUITMENT"
+    FLEET_VEHICLE = "FLEET_VEHICLE"
+    FLEET_RESERVATION = "FLEET_RESERVATION"
+    FLEET_MAINTENANCE = "FLEET_MAINTENANCE"
+    FLEET_INCIDENT = "FLEET_INCIDENT"
+    MATERIAL_REQUEST = "MATERIAL_REQUEST"
 
 
 class CustomFieldType(str, enum.Enum):
@@ -68,8 +88,9 @@ class CustomFieldDefinition(Base):
     """
     Custom field definition.
 
-    Defines a custom field that can be added to entities.
-    Field values are stored in the entity's custom_fields JSONB column.
+    Defines a custom field that can be added to entities. Values are stored in
+    ``automation.custom_field_value`` so modules do not need bespoke JSONB
+    columns or schema changes for each field.
     """
 
     __tablename__ = "custom_field_definition"

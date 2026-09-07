@@ -274,8 +274,12 @@ if os.getenv("DOTMAC_DEFER_RUNTIME_OBSERVABILITY", "").strip().lower() not in {
 
 # Register automatic ORM audit listeners (captures all model changes)
 from app.services.audit_listener import register_audit_listeners  # noqa: E402
+from app.services.finance.automation.model_event_connector import (  # noqa: E402
+    register_automation_model_connectors,
+)
 
 register_audit_listeners()
+register_automation_model_connectors()
 
 # Register field-level change tracking (user-facing change history)
 from app.services.audit.field_tracker import register_field_tracking  # noqa: E402

@@ -97,6 +97,11 @@ _ENTITY_REGISTRY: dict[str, tuple[str, str, str]] = {
         "Employee",
         "employee_id",
     ),
+    "ATTENDANCE": (
+        "app.models.people.attendance.attendance",
+        "Attendance",
+        "attendance_id",
+    ),
     "LEAVE_REQUEST": (
         "app.models.people.leave.leave_application",
         "LeaveApplication",
@@ -149,6 +154,9 @@ _ENTITY_REGISTRY: dict[str, tuple[str, str, str]] = {
         "MaterialRequest",
         "request_id",
     ),
+    "ITEM": ("app.models.inventory.item", "Item", "item_id"),
+    "PROJECT": ("app.models.finance.core_org.project", "Project", "project_id"),
+    "ASSET": ("app.models.fixed_assets.asset", "Asset", "asset_id"),
     # Payroll
     "PAYROLL_RUN": (
         "app.models.people.payroll.payroll_entry",
@@ -215,6 +223,33 @@ def protected_fields(entity_type: str) -> frozenset[str]:
 
 # Cache resolved model classes to avoid repeated imports
 _resolved_models: dict[str, type[Any] | None] = {}
+
+
+def registered_entity_types() -> tuple[str, ...]:
+    """Return entity types with an implemented model connector."""
+    return tuple(_ENTITY_REGISTRY)
+
+
+def entity_type_for_instance(entity: Any) -> str | None:
+    """Resolve a mapped instance without importing every ERP model on each flush."""
+    matches = entity_types_for_instance(entity)
+    return matches[0] if matches else None
+
+
+def entity_types_for_instance(entity: Any) -> tuple[str, ...]:
+    """Resolve all aliases represented by a mapped instance."""
+    entity_class = type(entity)
+    matches = [
+        entity_type
+        for entity_type, (module_path, class_name, _) in _ENTITY_REGISTRY.items()
+        if entity_class.__module__ == module_path
+        and entity_class.__name__ == class_name
+    ]
+    if {"INVOICE", "CREDIT_NOTE"} <= set(matches):
+        invoice_type = getattr(entity, "invoice_type", None)
+        value = getattr(invoice_type, "value", invoice_type)
+        return ("CREDIT_NOTE",) if value == "CREDIT_NOTE" else ("INVOICE",)
+    return tuple(matches)
 
 
 def _get_model_class(entity_type: str) -> type[Any] | None:
