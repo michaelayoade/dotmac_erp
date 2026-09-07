@@ -187,6 +187,28 @@ class TestUpdateBalanceForPosting:
         mock_db.add.assert_called()
         mock_db.flush.assert_called()
 
+    def test_postgres_serializes_balance_key_before_row_lock(
+        self, mock_db, org_id, fiscal_period
+    ):
+        account_id = uuid4()
+        mock_db.get_bind.return_value.dialect.name = "postgresql"
+        mock_db.scalar.return_value = None
+
+        AccountBalanceService.update_balance_for_posting(
+            mock_db,
+            org_id,
+            account_id,
+            fiscal_period.fiscal_period_id,
+            Decimal("100.00"),
+            Decimal("0"),
+            "USD",
+        )
+
+        lock_statement = str(mock_db.execute.call_args.args[0])
+        assert "pg_advisory_xact_lock" in lock_statement
+        select_statement = str(mock_db.scalar.call_args.args[0])
+        assert "FOR UPDATE" in select_statement
+
 
 class TestGetBalance:
     """Tests for get_balance method."""

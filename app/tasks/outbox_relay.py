@@ -176,6 +176,19 @@ def handle_ledger_posting_completed(db: Session, event: Any) -> None:
         logger.info("No ledger lines for batch %s (may already be processed)", batch_id)
         return
 
+    # Every delivery acquires dimensional balance locks in the same order, so
+    # two batches with overlapping accounts cannot form a lock cycle.
+    lines.sort(
+        key=lambda line: (
+            str(line.account_id),
+            str(line.fiscal_period_id),
+            str(line.business_unit_id or ""),
+            str(line.cost_center_id or ""),
+            str(line.project_id or ""),
+            str(line.segment_id or ""),
+            str(line.ledger_line_id),
+        )
+    )
     for line in lines:
         # No per-line exception handling: a failed line fails the event.
         AccountBalanceService.update_balance_for_posting(
@@ -252,6 +265,19 @@ class _ClaimedEvent:
     organization_id: str | None
 
 
+def _log_outbox_final_status(claimed: _ClaimedEvent, status: str) -> None:
+    """Emit an event-specific receipt only after its status commit succeeds."""
+    logger.info(
+        "Outbox event reached final status",
+        extra={
+            "event": "finance_outbox_event_final_status",
+            "outbox_event_id": str(claimed.event_id),
+            "outbox_event_name": claimed.event_name,
+            "outbox_status": status,
+        },
+    )
+
+
 def _claim_batch(
     batch_size: int,
     max_retry_count: int,
@@ -321,6 +347,7 @@ def _settle_without_handler(
                     terminal_reason=TerminalReason.DECLARED_NO_CONSEQUENCE,
                 )
                 db.commit()
+                _log_outbox_final_status(claimed, "published_no_consequence")
                 counts["no_consequence"] += 1
                 observe_outbox_outcome("no_consequence")
             else:
@@ -336,6 +363,7 @@ def _settle_without_handler(
                     db, claimed.event_id, claim_token=claim_token
                 )
                 db.commit()
+                _log_outbox_final_status(claimed, "dead_unsupported")
                 counts["unsupported"] += 1
                 observe_outbox_outcome("unsupported")
         except StaleClaimError:
@@ -374,6 +402,7 @@ def _settle_failure(
                 terminal_reason=TerminalReason.INVALID_PAYLOAD,
             )
             db.commit()
+            _log_outbox_final_status(claimed, "dead")
             counts["dead"] += 1
             observe_outbox_outcome("dead")
         else:
@@ -386,6 +415,7 @@ def _settle_failure(
             )
             db.commit()
             if event.status == EventStatus.DEAD:
+                _log_outbox_final_status(claimed, "dead")
                 counts["dead"] += 1
                 observe_outbox_outcome("dead")
             else:
@@ -437,6 +467,7 @@ def _deliver_one(
                     terminal_reason=TerminalReason.MISSING_ORGANIZATION_CONTEXT,
                 )
                 db.commit()
+                _log_outbox_final_status(claimed, "dead_missing_organization")
                 counts["dead"] += 1
                 observe_outbox_outcome("missing_org")
             except (StaleClaimError, ValueError, SQLAlchemyError):
@@ -459,6 +490,7 @@ def _deliver_one(
                 db, claimed.event_id, claim_token=claim_token
             )
             db.commit()
+            _log_outbox_final_status(claimed, "published")
             counts["published"] += 1
             observe_outbox_outcome("published")
         except StaleClaimError:
