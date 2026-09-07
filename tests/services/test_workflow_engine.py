@@ -583,7 +583,9 @@ class TestReliableDispatch:
         rule = _make_mock_rule(execute_async=True)
         with (
             patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
-            patch.object(workflow_service, "_check_entity_rate_limit", return_value=False),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
             patch.object(workflow_service, "_is_throttled", return_value=False),
             patch(
                 "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
@@ -609,7 +611,9 @@ class TestReliableDispatch:
         )
         with (
             patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
-            patch.object(workflow_service, "_check_entity_rate_limit", return_value=False),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
             patch.object(workflow_service, "_is_throttled", return_value=False),
             patch.object(workflow_service, "execute_action", return_value=blocked),
         ):

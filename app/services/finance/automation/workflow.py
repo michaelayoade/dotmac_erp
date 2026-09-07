@@ -1516,7 +1516,9 @@ class WorkflowService:
             "organization_id": str(rule.organization_id),
             "context": context.to_dict(),
         }
-        encoded = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+        encoded = json.dumps(
+            payload, sort_keys=True, default=str, separators=(",", ":")
+        )
         durable_payload = json.loads(encoded)
         digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
         OutboxPublisher.publish_event(

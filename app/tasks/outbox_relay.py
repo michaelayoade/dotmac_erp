@@ -241,7 +241,9 @@ def handle_automation_workflow_requested(db: Session, event: Any) -> None:
     )
 
     organization_id = UUID(str(org_raw))
-    rule = workflow_service.get(db, UUID(str(rule_raw)), organization_id=organization_id)
+    rule = workflow_service.get(
+        db, UUID(str(rule_raw)), organization_id=organization_id
+    )
     if rule is None:
         raise NonRetryableEventError(
             f"workflow rule {rule_raw} is unavailable for organization {org_raw}"
@@ -249,7 +251,9 @@ def handle_automation_workflow_requested(db: Session, event: Any) -> None:
 
     context = TriggerContext.from_dict(context_payload)
     if context.organization_id != organization_id:
-        raise NonRetryableEventError("workflow context organization does not match rule")
+        raise NonRetryableEventError(
+            "workflow context organization does not match rule"
+        )
 
     execution = workflow_service.execute_action(db, rule, context)
     if execution.status.value not in {"SUCCESS", "SKIPPED"}:
