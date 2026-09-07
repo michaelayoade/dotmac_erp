@@ -2335,5 +2335,7 @@ def require_automation_access(
             permission = "automation:update"
 
     if not auth.has_permission(permission):
-        raise HTTPException(status_code=403, detail=f"Permission '{permission}' required")
+        raise HTTPException(
+            status_code=403, detail=f"Permission '{permission}' required"
+        )
     return auth

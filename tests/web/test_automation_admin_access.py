@@ -58,7 +58,9 @@ def test_automation_access_fails_closed() -> None:
 
 def test_admin_settings_owns_automation_navigation() -> None:
     automation = next(
-        section for section in ADMIN_SETTINGS_SECTIONS if section["title"] == "Automation"
+        section
+        for section in ADMIN_SETTINGS_SECTIONS
+        if section["title"] == "Automation"
     )
     assert automation["url"] == "/automation"
 
