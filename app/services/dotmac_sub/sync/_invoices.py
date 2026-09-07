@@ -29,6 +29,9 @@ from app.services.dotmac_sub.client import (
     InvoiceRecord,
     TaxApplication,
 )
+from app.services.dotmac_sub.invoice_sync_shadow import (
+    record_blocked_invoice_accounting_revision,
+)
 from app.services.finance.money_boundary import round_to_minor_units, to_boundary_money
 
 from ._base import (
@@ -192,15 +195,60 @@ class InvoiceSyncMixin:
                             self.db.rollback()
                     except Exception:  # noqa: BLE001
                         self.db.rollback()
-                    result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
                     observe_dotmac_sub_invoice_sync_row(e.metric_reason)
                     if isinstance(e, InvoiceSourceAccountingMismatchError):
+                        quarantine_savepoint = None
+                        try:
+                            if row_updated_at is None:
+                                raise ValueError(
+                                    "source revision has no updated_at watermark"
+                                )
+                            quarantine_savepoint = self.db.begin_nested()
+                            receipt = record_blocked_invoice_accounting_revision(
+                                self.db,
+                                self.client,
+                                self.organization_id,
+                                invoice_id=UUID(inv.id),
+                                expected_updated_at=row_updated_at,
+                            )
+                            quarantine_savepoint.commit()
+                        except Exception:  # noqa: BLE001
+                            if quarantine_savepoint is not None:
+                                try:
+                                    quarantine_savepoint.rollback()
+                                except Exception:  # noqa: BLE001
+                                    self.db.rollback()
+                            logger.exception(
+                                "Could not durably quarantine dotmac_sub invoice "
+                                "source revision %s; leaving the cursor parked",
+                                inv.id,
+                                extra={
+                                    "event": "dotmac_sub_invoice_quarantine_failed",
+                                    "error_code": (
+                                        "dotmac_sub_invoice_quarantine_evidence_unavailable"
+                                    ),
+                                    "source_invoice_id": inv.id,
+                                    "source_updated_at": (
+                                        row_updated_at.isoformat()
+                                        if row_updated_at is not None
+                                        else None
+                                    ),
+                                },
+                            )
+                            result.errors.append(
+                                f"Invoice {inv.invoice_number}: {e!s} "
+                                "(durable quarantine evidence unavailable)"
+                            )
+                            progress.record_failure(row_updated_at, inv.id)
+                            continue
                         logger.error(
-                            "Quarantined dotmac_sub invoice source revision: %s",
+                            "Staged durable quarantine for dotmac_sub invoice "
+                            "source revision: %s",
                             e,
                             extra={
-                                "event": "dotmac_sub_invoice_source_revision_quarantined",
+                                "event": "dotmac_sub_invoice_source_revision_quarantine_staged",
                                 "error_code": "dotmac_sub_invoice_source_accounting_mismatch",
+                                "outcome_id": str(receipt.outcome_id),
                                 "source_invoice_id": inv.id,
                                 "source_invoice_number": inv.invoice_number,
                                 "source_updated_at": (
@@ -216,11 +264,13 @@ class InvoiceSyncMixin:
                                 "header_total": str(e.header_total),
                             },
                         )
-                        # Quarantine this immutable source revision instead of
-                        # retrying it forever. A corrected revision has a later
-                        # updated_at and will be considered again normally.
+                        # The durable blocked outcome and cursor update share
+                        # the caller's transaction. A corrected source revision
+                        # has a later updated_at and will be considered again.
+                        result.skipped += 1
                         progress.record_success(row_updated_at, inv.id)
                         continue
+                    result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
                     if e.dedupe_key not in reported_permanent_errors:
                         reported_permanent_errors.add(e.dedupe_key)
                         logger.error(

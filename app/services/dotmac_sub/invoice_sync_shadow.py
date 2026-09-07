@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from itertools import islice
 from typing import Any
 from uuid import UUID
 
@@ -32,6 +33,7 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
     InvoiceSyncIssueEvidence,
     InvoiceSyncSourceKind,
     RecordInvoiceSyncOutcome,
+    InvoiceSyncOutcomeReceipt,
     record_invoice_sync_outcome,
 )
 
@@ -127,6 +129,60 @@ def _command(
         projection_fingerprint=invoice_projection_fingerprint(record),
         issues=issues,
     )
+
+
+def record_blocked_invoice_accounting_revision(
+    db: Session,
+    client: DotmacSubClient,
+    organization_id: UUID,
+    *,
+    invoice_id: UUID,
+    expected_updated_at: datetime,
+) -> InvoiceSyncOutcomeReceipt:
+    """Persist one exact blocked v2 revision through the durable outcome owner.
+
+    The legacy invoice consumer may use this only after its own source/header
+    validation rejects a row.  Cursor advancement is safe only when Self-Care's
+    authoritative v2 projection identifies that same revision as blocked.
+    """
+    if expected_updated_at.tzinfo is None:
+        raise InvoiceSyncShadowContractError(
+            "the rejected invoice revision has no timezone-aware updated_at"
+        )
+
+    parse_errors: list[DotmacSubParseError] = []
+    records = list(
+        islice(
+            client.get_invoice_accounting_sync_v2(
+                invoice_id=str(invoice_id),
+                on_parse_error=parse_errors.append,
+            ),
+            2,
+        )
+    )
+    if parse_errors:
+        raise InvoiceSyncShadowContractError(
+            f"targeted v2 feed rejected {len(parse_errors)} malformed record(s)"
+        )
+    if len(records) != 1:
+        raise InvoiceSyncShadowContractError(
+            "targeted v2 feed must return exactly one invoice revision"
+        )
+
+    command = _command(organization_id, records[0])
+    if command.source_invoice_id != invoice_id:
+        raise InvoiceSyncShadowContractError(
+            "targeted v2 feed returned a different invoice identity"
+        )
+    if command.source_updated_at != expected_updated_at:
+        raise InvoiceSyncShadowContractError(
+            "targeted v2 feed returned a different invoice revision"
+        )
+    if command.disposition is not InvoiceSyncDisposition.BLOCKED:
+        raise InvoiceSyncShadowContractError(
+            "legacy mismatch is not blocked by the authoritative v2 projection"
+        )
+    return record_invoice_sync_outcome(db, command)
 
 
 def observe_invoice_accounting_v2(
