@@ -272,7 +272,7 @@ rollback() {
             cp -a "$ENV_BACKUP" "$ENV_FILE"
         fi
     fi
-    docker compose up -d app worker beat || { docker stop dotmac_erp_app || true; docker start dotmac_erp_app || true; }
+    docker compose up -d app worker beat vmagent || { docker stop dotmac_erp_app || true; docker start dotmac_erp_app || true; }
     echo "!! Rolled back. NOTE: DB migrations were NOT reverted — restore from the"
     echo "!! pre-migration backup if the new revisions are not backward-compatible."
 }
@@ -435,7 +435,7 @@ if [[ "$quick_deploy" != "1" ]]; then
         echo "  .env synced: APP_IMAGE=${NEW_IMAGE} APP_VERSION=${NEW_APP_VERSION:-<unchanged>}"
     fi
 
-    docker compose pull app worker beat
+    docker compose pull app worker beat vmagent
 
     # The digest names bytes; this proves those bytes are the release the
     # descriptor says they are. The image carries
@@ -639,8 +639,8 @@ fi
 
 # Step 6: restart worker/beat (only on a healthy deploy)
 # Recreate (not just restart) so worker/beat pick up the newly-pinned image.
-echo "→ Recreating worker and beat on the pinned image..."
-docker compose up -d worker beat
+echo "→ Recreating worker, beat and the metrics scraper..."
+docker compose up -d worker beat vmagent
 echo "→ Admitting worker and Beat..."
 wait_for_worker_admission
 wait_for_beat_admission
