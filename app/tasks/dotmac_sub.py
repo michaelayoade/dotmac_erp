@@ -45,6 +45,9 @@ from app.services.dotmac_sub.invoice_sync_shadow import (
     InvoiceSyncShadowContractError,
     observe_invoice_accounting_v2,
 )
+from app.services.dotmac_sub.invoice_mismatch_report import (
+    log_invoice_mismatch_census,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,46 @@ _INCREMENTAL_ENTITY_TYPES = [
     "payments",
     "credit_notes",
 ]
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def report_dotmac_sub_invoice_mismatches(
+    self: Any,
+    organization_id: str | None = None,
+    max_records: int | None = None,
+) -> dict[str, Any]:
+    """Explicit, unscheduled, read-only invoice mismatch census."""
+    org_id = _resolve_org_id(organization_id)
+    if org_id is None:
+        return {"success": False, "error": "No valid organization ID configured"}
+    with session_for_org(org_id) as db:
+        config = DotmacSubConfig.for_org(db, org_id)
+        if not config.is_configured():
+            return {
+                "success": False,
+                "error": "dotmac_sub integration is not configured",
+            }
+        try:
+            with DotmacSubClient(config) as client:
+                result = log_invoice_mismatch_census(
+                    client,
+                    max_records=max_records,
+                )
+            db.rollback()
+            return {
+                "success": True,
+                "organization_id": str(org_id),
+                "inspected": result.inspected,
+                "mismatched_invoices": result.mismatched_invoices,
+                "mismatch_issues": result.mismatch_issues,
+                "truncated": result.truncated,
+            }
+        except DotmacSubAuthenticationError as exc:
+            db.rollback()
+            return {"success": False, "error": str(exc), "retryable": False}
+        except Exception as exc:
+            db.rollback()
+            raise self.retry(exc=exc)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
@@ -352,6 +395,7 @@ def _record_incremental_phase_result(
         "complete": complete,
     }
     db.commit()
+    _log_committed_sync_confirmations(result)
     return summary
 
 
@@ -395,7 +439,17 @@ def _finalize_sync(
         "error_count": history_fresh.error_count,
     }
     db.commit()
+    for result in sync_results:
+        _log_committed_sync_confirmations(result)
     return summary
+
+
+def _log_committed_sync_confirmations(result: Any) -> None:
+    """Emit trace events only after the transaction containing them commits."""
+    if result.entity_type == "credit_notes":
+        from app.services.dotmac_sub.sync._credit_notes import CreditNoteSyncMixin
+
+        CreditNoteSyncMixin._log_committed_credit_note_confirmations(result)
 
 
 def _handle_sync_failure(

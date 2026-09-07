@@ -4,6 +4,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+@dataclass(frozen=True)
+class SyncConfirmation:
+    """A committed source-to-ERP projection that is safe to log."""
+
+    source_id: str
+    local_id: str
+    journal_entry_id: str | None
+    action: str
+
+
 @dataclass
 class SyncResult:
     """Result of a single-entity sync operation."""
@@ -14,6 +24,7 @@ class SyncResult:
     updated: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
+    confirmations: list[SyncConfirmation] = field(default_factory=list)
     message: str = ""
 
     def to_dict(self) -> dict[str, Any]:

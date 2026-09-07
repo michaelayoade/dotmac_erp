@@ -366,17 +366,45 @@ def reconcile_staff_accounts(db: Session, organization_id: UUID) -> dict[str, An
     errors: list[str] = []
     with DotmacSubClient(config) as client:
         for emp_id, emp_code in rows:
+            department_context: dict[str, str | None] | None = None
             try:
                 prime_tenant_context(db, organization_id)
                 employee = db.get(Employee, emp_id)
                 if employee is None:
                     continue
+                department_context = _department_payload(db, employee)
                 result = sync_employee(db, employee, client=client)
                 db.commit()
                 counts[result["action"]] = counts.get(result["action"], 0) + 1
             except Exception as e:  # noqa: BLE001 — isolate per-employee failures
                 db.rollback()
                 errors.append(f"{emp_code}: {e}")
-                logger.exception("Staff sync failed for employee %s", emp_id)
+                log_context: dict[str, Any] = {
+                    "event": "dotmac_sub_staff_sync_failed",
+                    "organization_id": str(organization_id),
+                    "employee_id": str(emp_id),
+                    "employee_code": emp_code,
+                }
+                if department_context is not None:
+                    log_context.update(
+                        {
+                            "department_id": department_context.get("department_id"),
+                            "department_code": department_context.get(
+                                "department_code"
+                            ),
+                            "department_name": department_context.get(
+                                "department_name"
+                            ),
+                        }
+                    )
+                if isinstance(e, DotmacSubPermanentSyncError):
+                    log_context.update(
+                        {f"selfcare_{key}": value for key, value in e.context.items()}
+                    )
+                logger.exception(
+                    "Staff sync failed for employee %s",
+                    emp_id,
+                    extra=log_context,
+                )
 
     return {"success": not errors, "counts": counts, "errors": errors[:20]}

@@ -177,6 +177,23 @@ def test_handler_updates_balances(mock_update: MagicMock) -> None:
 
 
 @patch(
+    "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting"
+)
+def test_handler_acquires_balance_keys_in_deterministic_order(
+    mock_update: MagicMock,
+) -> None:
+    db = MagicMock()
+    later = _make_line(account_id="ffffffff-ffff-ffff-ffff-ffffffffffff")
+    earlier = _make_line(account_id="00000000-0000-0000-0000-000000000001")
+    db.scalars.return_value.all.return_value = [later, earlier]
+
+    handle_ledger_posting_completed(db, _make_event())
+
+    account_ids = [call.kwargs["account_id"] for call in mock_update.call_args_list]
+    assert account_ids == [earlier.account_id, later.account_id]
+
+
+@patch(
     "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting",
     side_effect=[RuntimeError("boom"), None],
 )
@@ -269,7 +286,7 @@ def test_relay_no_pending_events() -> None:
     assert result["errors"] == []
 
 
-def test_relay_dispatches_to_handler_and_settles_in_same_txn() -> None:
+def test_relay_dispatches_to_handler_and_settles_in_same_txn(caplog) -> None:
     from app.tasks.outbox_relay import relay_outbox_events
 
     db = MagicMock()
@@ -299,6 +316,13 @@ def test_relay_dispatches_to_handler_and_settles_in_same_txn() -> None:
     )
     # Settlement and handler mutations share one commit.
     db.commit.assert_called_once()
+    receipt = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "finance_outbox_event_final_status"
+    )
+    assert receipt.outbox_event_id == str(claimed.event_id)
+    assert receipt.outbox_status == "published"
 
 
 def test_relay_unknown_event_never_publishes() -> None:

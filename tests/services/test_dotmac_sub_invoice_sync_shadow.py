@@ -15,6 +15,7 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
 from app.services.dotmac_sub.invoice_sync_shadow import (
     InvoiceSyncShadowContractError,
     observe_invoice_accounting_v2,
+    record_blocked_invoice_accounting_revision,
 )
 
 ORG_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -103,3 +104,55 @@ def test_shadow_is_bounded(monkeypatch):
     assert result.observed == 1
     assert result.truncated is True
     recorder.assert_called_once()
+
+
+def test_targeted_blocked_revision_uses_durable_outcome_owner(monkeypatch):
+    db = Mock()
+    client = Mock()
+    record = object()
+    client.get_invoice_accounting_sync_v2.return_value = [record]
+    command = _command(InvoiceSyncDisposition.BLOCKED)
+    monkeypatch.setattr(
+        "app.services.dotmac_sub.invoice_sync_shadow._command",
+        lambda organization_id, observed: command,
+    )
+    receipt = SimpleNamespace(outcome_id=UUID(int=9))
+    recorder = Mock(return_value=receipt)
+    monkeypatch.setattr(
+        "app.services.dotmac_sub.invoice_sync_shadow.record_invoice_sync_outcome",
+        recorder,
+    )
+
+    result = record_blocked_invoice_accounting_revision(
+        db,
+        client,
+        ORG_ID,
+        invoice_id=INVOICE_ID,
+        expected_updated_at=UPDATED_AT,
+    )
+
+    assert result is receipt
+    recorder.assert_called_once_with(db, command)
+    client.get_invoice_accounting_sync_v2.assert_called_once_with(
+        invoice_id=str(INVOICE_ID),
+        on_parse_error=ANY,
+    )
+
+
+def test_targeted_revision_refuses_non_blocked_source(monkeypatch):
+    db = Mock()
+    client = Mock()
+    client.get_invoice_accounting_sync_v2.return_value = [object()]
+    monkeypatch.setattr(
+        "app.services.dotmac_sub.invoice_sync_shadow._command",
+        lambda organization_id, observed: _command(InvoiceSyncDisposition.READY),
+    )
+
+    with pytest.raises(InvoiceSyncShadowContractError, match="not blocked"):
+        record_blocked_invoice_accounting_revision(
+            db,
+            client,
+            ORG_ID,
+            invoice_id=INVOICE_ID,
+            expected_updated_at=UPDATED_AT,
+        )

@@ -176,13 +176,18 @@ def test_the_suppression_count_only_shrinks() -> None:
     precisely BECAUSE the descriptor refuses a mutable tag, so suppressing it is
     the cost of the stronger reference, not a concession.
 
-    Every entry above the reviewed 28 would be unexplained, and the reason check
+    29 admits one additional public integrity value: the schema-9 governance
+    fingerprint shared by the two Paystack relay retry tests. The profile and
+    conservation ledger name both symbols and bind the same reviewed source
+    bytes; the value authenticates nothing and grants no access.
+
+    Every entry above the reviewed 29 would be unexplained, and the reason check
     above only fires per FILE — a new finding in an already-listed file would
     otherwise slip in silently, which is exactly the shape this one had.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total <= 28, (
-        f"{total} suppressed findings, up from 28. Fix the finding, or lower "
+    assert total <= 29, (
+        f"{total} suppressed findings, up from 29. Fix the finding, or lower "
         "this number in the same change that explains the new entry."
     )
 

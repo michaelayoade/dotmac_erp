@@ -17,10 +17,16 @@ directory before Gunicorn preloads collectors. The worker entrypoint clears its
 directory before importing Celery or Prometheus. Live gauge files are retired
 when managed child processes exit.
 
-## Validation before enabling the observability profile
+## Production deployment and validation
 
-1. Set a high-entropy `METRICS_TOKEN` in deployment material and enable only
-   the intended observability profile.
+The production deploy script explicitly starts `vmagent` after the application
+health gate, together with the worker and Beat. Explicitly naming the profiled
+service activates it without relying on an operator-managed `COMPOSE_PROFILES`
+value. The deploy therefore starts the existing worker metrics entrypoint and
+the checked-in scraper that targets its private port on every release.
+
+1. Set a high-entropy `METRICS_TOKEN` and `VM_REMOTE_WRITE_URL` in deployment
+   material before running the deployment.
 2. Run `docker compose config` and confirm both targets remain on the private
    project network and no worker port is published.
 3. From vmagent, confirm both `dotmac-erp-app` and `dotmac-erp-worker` targets

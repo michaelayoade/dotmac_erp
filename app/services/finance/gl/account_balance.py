@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -107,25 +107,60 @@ class AccountBalanceService(ListResponseMixin):
         if not currency_code:
             currency_code = org_context_service.get_functional_currency(db, org_id)
 
+        dimension_ids = (
+            coerce_uuid(business_unit_id) if business_unit_id else None,
+            coerce_uuid(cost_center_id) if cost_center_id else None,
+            coerce_uuid(project_id) if project_id else None,
+            coerce_uuid(segment_id) if segment_id else None,
+        )
+        balance_type_value = (
+            balance_type.value
+            if isinstance(balance_type, BalanceType)
+            else str(balance_type)
+        )
+        # PostgreSQL cannot row-lock a balance that does not exist yet. A
+        # transaction-scoped advisory lock serializes both the create and
+        # update paths for one exact dimensional balance key. The row lock
+        # below then protects existing records from non-cooperating writers.
+        if db.get_bind().dialect.name == "postgresql":
+            lock_identity = ":".join(
+                (
+                    "gl.account_balance",
+                    str(org_id),
+                    str(acct_id),
+                    str(period_id),
+                    balance_type_value,
+                    currency_code,
+                    *(
+                        str(value) if value is not None else "-"
+                        for value in dimension_ids
+                    ),
+                )
+            )
+            db.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(:lock_identity, 0))"
+                ),
+                {"lock_identity": lock_identity},
+            )
+
         # Find existing balance
         balance = db.scalar(
-            select(AccountBalance).where(
+            select(AccountBalance)
+            .where(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.account_id == acct_id,
                     AccountBalance.fiscal_period_id == period_id,
                     AccountBalance.balance_type == balance_type,
                     AccountBalance.currency_code == currency_code,
-                    AccountBalance.business_unit_id
-                    == (coerce_uuid(business_unit_id) if business_unit_id else None),
-                    AccountBalance.cost_center_id
-                    == (coerce_uuid(cost_center_id) if cost_center_id else None),
-                    AccountBalance.project_id
-                    == (coerce_uuid(project_id) if project_id else None),
-                    AccountBalance.segment_id
-                    == (coerce_uuid(segment_id) if segment_id else None),
+                    AccountBalance.business_unit_id == dimension_ids[0],
+                    AccountBalance.cost_center_id == dimension_ids[1],
+                    AccountBalance.project_id == dimension_ids[2],
+                    AccountBalance.segment_id == dimension_ids[3],
                 )
             )
+            .with_for_update()
         )
 
         if balance:
