@@ -352,6 +352,7 @@ def _record_incremental_phase_result(
         "complete": complete,
     }
     db.commit()
+    _log_committed_sync_confirmations(result)
     return summary
 
 
@@ -395,7 +396,17 @@ def _finalize_sync(
         "error_count": history_fresh.error_count,
     }
     db.commit()
+    for result in sync_results:
+        _log_committed_sync_confirmations(result)
     return summary
+
+
+def _log_committed_sync_confirmations(result: Any) -> None:
+    """Emit trace events only after the transaction containing them commits."""
+    if result.entity_type == "credit_notes":
+        from app.services.dotmac_sub.sync._credit_notes import CreditNoteSyncMixin
+
+        CreditNoteSyncMixin._log_committed_credit_note_confirmations(result)
 
 
 def _handle_sync_failure(

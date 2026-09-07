@@ -26,7 +26,7 @@ from ._constants import (
     _PRE_CUTOFF_SENTINEL,
 )
 from ._progress import WatermarkProgress
-from ._types import SyncResult
+from ._types import SyncConfirmation, SyncResult
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,7 @@ class CreditNoteSyncMixin:
                     progress.record_success(row_updated_at)
                     if processed % 500 == 0:
                         self.db.commit()
+                        self._log_committed_credit_note_confirmations(result)
                         self._reprime_tenant_context()
                         self.db.expunge_all()
                 except DotmacSubAuthenticationError:
@@ -181,6 +182,16 @@ class CreditNoteSyncMixin:
             EntityType.CREDIT_NOTE, external_id, data_hash
         ):
             result.skipped += 1
+            local_id = self._get_synced_entity(EntityType.CREDIT_NOTE, external_id)
+            if local_id and local_id != _PRE_CUTOFF_SENTINEL:
+                existing = self.db.get(Invoice, local_id)
+                if existing is not None:
+                    self._record_credit_note_confirmation(
+                        result,
+                        cn,
+                        existing,
+                        action="unchanged",
+                    )
             return
 
         source_status = (cn.status or "").lower()
@@ -284,6 +295,12 @@ class CreditNoteSyncMixin:
             self._record_sync(
                 EntityType.CREDIT_NOTE, external_id, existing.invoice_id, data_hash
             )
+            self._record_credit_note_confirmation(
+                result,
+                cn,
+                existing,
+                action="updated",
+            )
             return
 
         credit_note = Invoice(
@@ -319,3 +336,47 @@ class CreditNoteSyncMixin:
         self._record_sync(
             EntityType.CREDIT_NOTE, external_id, credit_note.invoice_id, data_hash
         )
+
+        self._record_credit_note_confirmation(
+            result,
+            cn,
+            credit_note,
+            action="created",
+        )
+
+    @staticmethod
+    def _record_credit_note_confirmation(
+        result: SyncResult,
+        cn: CreditNoteRecord,
+        invoice: Invoice,
+        *,
+        action: str,
+    ) -> None:
+        result.confirmations.append(
+            SyncConfirmation(
+                source_id=cn.id,
+                local_id=str(invoice.invoice_id),
+                journal_entry_id=(
+                    str(invoice.journal_entry_id)
+                    if invoice.journal_entry_id is not None
+                    else None
+                ),
+                action=action,
+            )
+        )
+
+    @staticmethod
+    def _log_committed_credit_note_confirmations(result: SyncResult) -> None:
+        for confirmation in result.confirmations:
+            logger.info(
+                "dotmac_sub credit-note projection committed",
+                extra={
+                    "event": "dotmac_sub_credit_note_projection_committed",
+                    "source_credit_note_id": confirmation.source_id,
+                    "erp_credit_note_id": confirmation.local_id,
+                    "journal_entry_id": confirmation.journal_entry_id,
+                    "external_sync_mapping_recorded": True,
+                    "action": confirmation.action,
+                },
+            )
+        result.confirmations.clear()
