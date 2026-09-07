@@ -148,7 +148,9 @@ class TestFlatConditionEvaluation:
     ):
         conditions = {"changed_fields": ["status"]}
         sample_context.changed_fields = None
-        assert workflow_service._evaluate_conditions(conditions, sample_context) is False
+        assert (
+            workflow_service._evaluate_conditions(conditions, sample_context) is False
+        )
 
     def test_amount_condition_requires_target_field(
         self, workflow_service, sample_context
@@ -160,7 +162,9 @@ class TestFlatConditionEvaluation:
                 "value": 100,
             }
         }
-        assert workflow_service._evaluate_conditions(conditions, sample_context) is False
+        assert (
+            workflow_service._evaluate_conditions(conditions, sample_context) is False
+        )
 
     def test_amount_threshold(self, workflow_service, sample_context):
         conditions = {

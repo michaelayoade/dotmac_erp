@@ -555,7 +555,7 @@ class WorkflowService:
         """Match either one expected value or a legacy list of values."""
         if isinstance(expected, (list, tuple, set, frozenset)):
             return value in expected
-        return value == expected
+        return bool(value == expected)
 
     def _compare_values(self, value: Any, operator: str, expected: Any) -> bool:
         """Compare values using the specified operator."""
@@ -747,7 +747,7 @@ class WorkflowService:
         db: Session,
         config: dict[str, Any],
         context: TriggerContext,
-    ) -> list[UUID]:
+    ) -> builtins.list[UUID]:
         """Resolve explicit IDs and supported legacy recipient selectors."""
         resolved: list[UUID] = []
         configured_ids = config.get("recipient_ids", [])
@@ -807,15 +807,13 @@ class WorkflowService:
         db: Session,
         config: dict[str, Any],
         context: TriggerContext,
-    ) -> list[str]:
+    ) -> builtins.list[str]:
         """Resolve literal email addresses or person-based selectors."""
         configured_recipients = config.get("recipients", [])
         if not isinstance(configured_recipients, (list, tuple, set)):
             configured_recipients = [configured_recipients]
         recipients = [
-            str(value).strip()
-            for value in configured_recipients
-            if str(value).strip()
+            str(value).strip() for value in configured_recipients if str(value).strip()
         ]
         person_ids = self._resolve_recipient_person_ids(db, config, context)
         if person_ids and context.organization_id:
