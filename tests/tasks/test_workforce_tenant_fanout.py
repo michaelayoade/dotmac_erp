@@ -179,6 +179,8 @@ def test_scheduled_workflow_rules_runs_once_per_tenant(tenant_sessions):
         "rules_checked": 1,
         "rules_due": 0,
         "actions_fired": 0,
+        "actions_failed": 0,
+        "actions_throttled": 0,
         "errors": [],
     }
 

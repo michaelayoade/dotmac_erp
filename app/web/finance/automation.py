@@ -465,6 +465,43 @@ def workflow_monitoring(
     )
 
 
+@router.post("/workflows/deliveries/{event_id}/retry")
+async def retry_workflow_delivery(
+    request: Request,
+    event_id: UUID,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Requeue an automation outbox delivery owned by the current tenant."""
+    await request.form()
+    from app.models.finance.platform.event_outbox import EventOutbox
+    from app.services.finance.platform.outbox_publisher import OutboxPublisher
+
+    event = db.get(EventOutbox, event_id)
+    if (
+        event is None
+        or event.event_name != "automation.workflow.requested"
+        or str((event.headers or {}).get("organization_id"))
+        != str(auth.organization_id)
+    ):
+        return RedirectResponse(
+            "/automation/workflows/monitoring?error=delivery_not_found",
+            status_code=303,
+        )
+    try:
+        OutboxPublisher.requeue_dead_event(db, event_id)
+        db.commit()
+    except ValueError:
+        return RedirectResponse(
+            "/automation/workflows/monitoring?error=delivery_not_retryable",
+            status_code=303,
+        )
+    return RedirectResponse(
+        "/automation/workflows/monitoring?message=delivery_requeued",
+        status_code=303,
+    )
+
+
 @router.get("/workflows/{rule_id}", response_class=HTMLResponse)
 def view_workflow(
     request: Request,

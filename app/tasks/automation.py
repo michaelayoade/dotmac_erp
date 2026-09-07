@@ -202,6 +202,8 @@ def process_scheduled_workflow_rules() -> dict[str, Any]:
         "rules_checked": 0,
         "rules_due": 0,
         "actions_fired": 0,
+        "actions_failed": 0,
+        "actions_throttled": 0,
         "errors": [],
     }
     for org_id in _list_organization_ids():
@@ -214,6 +216,8 @@ def process_scheduled_workflow_rules() -> dict[str, Any]:
             results["rules_checked"] += org_results["rules_checked"]
             results["rules_due"] += org_results["rules_due"]
             results["actions_fired"] += org_results["actions_fired"]
+            results["actions_failed"] += org_results["actions_failed"]
+            results["actions_throttled"] += org_results["actions_throttled"]
             results["errors"].extend(org_results["errors"])
         except Exception as exc:
             logger.exception("Scheduled workflow evaluation failed for org %s", org_id)

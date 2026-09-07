@@ -1415,6 +1415,15 @@ class AutomationWebService:
         )
         failures_last_day = db.execute(failures_query).scalar() or 0
 
+        total_executions = (
+            db.scalar(
+                select(func.count(WorkflowExecution.execution_id))
+                .join(WorkflowRule, WorkflowExecution.rule_id == WorkflowRule.rule_id)
+                .where(WorkflowRule.organization_id == org_id)
+            )
+            or 0
+        )
+
         failure_rate = (
             round(failures_last_day / executions_last_day * 100, 1)
             if executions_last_day > 0
@@ -1459,15 +1468,41 @@ class AutomationWebService:
             _execution_view(ex) for ex in db.execute(recent_query).scalars().all()
         ]
 
+        from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+
+        delivery_query = (
+            select(EventOutbox)
+            .where(
+                EventOutbox.event_name == "automation.workflow.requested",
+                EventOutbox.status.in_([EventStatus.FAILED, EventStatus.DEAD]),
+                EventOutbox.headers["organization_id"].astext == str(org_id),
+            )
+            .order_by(EventOutbox.occurred_at.desc())
+            .limit(20)
+        )
+        failed_deliveries = [
+            {
+                "event_id": str(event.event_id),
+                "status": event.status.value,
+                "rule_id": str((event.payload or {}).get("rule_id", "")),
+                "retry_count": event.retry_count,
+                "error": event.last_error or "Delivery failed",
+                "occurred_at": _format_datetime(event.occurred_at),
+            }
+            for event in db.scalars(delivery_query).all()
+        ]
+
         return {
             "total_rules": total_rules,
             "active_rules": active_rules,
             "executions_last_hour": executions_last_hour,
             "executions_last_day": executions_last_day,
             "failures_last_day": failures_last_day,
+            "total_executions": total_executions,
             "failure_rate": failure_rate,
             "top_failing": top_failing,
             "recent_executions": recent_executions,
+            "failed_deliveries": failed_deliveries,
         }
 
 

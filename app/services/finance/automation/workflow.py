@@ -1461,10 +1461,26 @@ class WorkflowService:
                 context.entity_id,
                 context.event.value,
             )
+            overflow_rules = matching_rules[self.MAX_RULES_PER_EVENT :]
             matching_rules = matching_rules[: self.MAX_RULES_PER_EVENT]
+            for rule in overflow_rules:
+                executions.append(
+                    self._record_skipped(
+                        db,
+                        rule,
+                        context,
+                        "Per-event workflow rule limit exceeded",
+                    )
+                )
 
         # Per-entity rate limit check
         if self._check_entity_rate_limit(db, context.entity_id):
+            for rule in matching_rules:
+                executions.append(
+                    self._record_skipped(
+                        db, rule, context, "Per-entity workflow rate limit exceeded"
+                    )
+                )
             return executions
 
         for rule in matching_rules:
@@ -1480,6 +1496,9 @@ class WorkflowService:
                     rule.rule_id,
                     context.entity_id,
                     rule.cooldown_seconds,
+                )
+                executions.append(
+                    self._record_skipped(db, rule, context, "Rule cooldown is active")
                 )
                 continue
 
@@ -1510,6 +1529,36 @@ class WorkflowService:
                 break
 
         return executions
+
+    def _record_skipped(
+        self,
+        db: Session,
+        rule: WorkflowRule,
+        context: TriggerContext,
+        reason: str,
+    ) -> WorkflowExecution:
+        """Persist an operator-visible explanation for a rule not being run."""
+        now = datetime.utcnow()
+        execution = WorkflowExecution(
+            rule_id=rule.rule_id,
+            entity_type=context.entity_type,
+            entity_id=context.entity_id,
+            trigger_event=context.event.value,
+            trigger_data={
+                "old_values": context.old_values,
+                "new_values": context.new_values,
+                "changed_fields": context.changed_fields,
+            },
+            triggered_by=context.user_id,
+            status=ExecutionStatus.SKIPPED,
+            started_at=now,
+            completed_at=now,
+            duration_ms=0,
+            error_message=reason,
+        )
+        db.add(execution)
+        db.flush()
+        return execution
 
     def _enqueue_action(
         self,

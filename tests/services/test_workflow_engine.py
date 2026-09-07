@@ -761,6 +761,7 @@ class TestScheduledRules:
                 "app.services.finance.automation.workflow.workflow_service.execute_action"
             ) as mock_execute,
         ):
+            mock_execute.return_value.status.value = "SUCCESS"
             result = evaluator.evaluate_due_rules(mock_db)
 
         assert result["rules_checked"] == 1
@@ -802,6 +803,26 @@ class TestRateLimiting:
 
     def test_max_executions_per_minute_constant(self, workflow_service):
         assert workflow_service.MAX_EXECUTIONS_PER_MINUTE == 50
+
+    def test_throttled_rule_is_visible_as_skipped(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(cooldown_seconds=60)
+        db = MagicMock()
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
+            patch.object(workflow_service, "_is_throttled", return_value=True),
+        ):
+            executions = workflow_service.trigger_event(
+                db, rule.organization_id, sample_context
+            )
+
+        assert len(executions) == 1
+        assert executions[0].status == ExecutionStatus.SKIPPED
+        assert executions[0].error_message == "Rule cooldown is active"
 
     def test_check_entity_rate_limit_under_limit(self, workflow_service):
         mock_db = MagicMock()

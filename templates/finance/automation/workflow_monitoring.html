@@ -28,6 +28,7 @@
         <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
             <dt class="text-sm text-slate-500 dark:text-slate-400">Executions (1h)</dt>
             <dd class="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{{ executions_last_hour }}</dd>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ total_executions }} lifetime</p>
         </div>
         <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
             <dt class="text-sm text-slate-500 dark:text-slate-400">Executions (24h)</dt>
@@ -109,6 +110,29 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Failed async deliveries</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Dead-lettered and retryable workflow requests are retained here for review.</p>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for delivery in failed_deliveries %}
+            <div class="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Rule {{ delivery.rule_id[:8] }} · {{ delivery.status }}</p>
+                    <p class="truncate text-sm text-rose-600 dark:text-rose-400" title="{{ delivery.error }}">{{ delivery.error }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ delivery.occurred_at }} · {{ delivery.retry_count }} attempts</p>
+                </div>
+                <form method="post" action="/automation/workflows/deliveries/{{ delivery.event_id }}/retry">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Retry delivery</button>
+                </form>
+            </div>
+            {% else %}
+            <p class="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">No failed async deliveries.</p>
+            {% endfor %}
         </div>
     </div>
 </div>

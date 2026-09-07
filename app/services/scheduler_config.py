@@ -345,6 +345,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.automation.process_recurring_templates",
             "schedule": crontab(hour="*/6", minute=5),  # Every 6 hours at :05
         },
+        "scheduled-workflow-rules": {
+            "task": "app.tasks.automation.process_scheduled_workflow_rules",
+            "schedule": crontab(minute="*/5"),
+        },
         "staff-sync-reconcile": {
             "task": "app.tasks.staff_sync.run_staff_sync_reconcile",
             "schedule": crontab(hour=2, minute=30),
