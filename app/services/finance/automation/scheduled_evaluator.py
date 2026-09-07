@@ -87,7 +87,9 @@ class ScheduledRuleEvaluator:
                             workflow_service._enqueue_action(db, rule, context)
                             results["actions_fired"] += 1
                         else:
-                            execution = workflow_service.execute_action(db, rule, context)
+                            execution = workflow_service.execute_action(
+                                db, rule, context
+                            )
                             if execution.status.value == "SUCCESS":
                                 results["actions_fired"] += 1
                             else:
