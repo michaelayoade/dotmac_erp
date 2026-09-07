@@ -276,7 +276,7 @@ class ActionResult:
 
 
 class WorkflowPolicyViolation(RuntimeError):
-    """A synchronous validation or blocking rule rejected an operation."""
+    """A workflow policy or tenant invariant rejected an operation."""
 
 
 class WorkflowService:
@@ -1444,6 +1444,10 @@ class WorkflowService:
         # Ensure context carries org_id for downstream action handlers
         if context.organization_id is None:
             context.organization_id = organization_id
+        elif context.organization_id != organization_id:
+            raise WorkflowPolicyViolation(
+                "Workflow context organization does not match trigger scope"
+            )
 
         matching_rules = self.get_matching_rules(db, organization_id, context)
         executions: list[WorkflowExecution] = []
@@ -1464,6 +1468,11 @@ class WorkflowService:
             return executions
 
         for rule in matching_rules:
+            if rule.organization_id != organization_id:
+                raise WorkflowPolicyViolation(
+                    "Workflow rule organization does not match trigger scope"
+                )
+
             # Throttle check
             if self._is_throttled(db, rule, context.entity_id):
                 logger.info(

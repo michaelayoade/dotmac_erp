@@ -580,7 +580,10 @@ class TestReliableDispatch:
     def test_async_rule_is_written_to_transactional_outbox(
         self, workflow_service, sample_context
     ):
-        rule = _make_mock_rule(execute_async=True)
+        rule = _make_mock_rule(
+            execute_async=True,
+            organization_id=sample_context.organization_id,
+        )
         with (
             patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
             patch.object(
@@ -604,7 +607,11 @@ class TestReliableDispatch:
     def test_blocking_rule_rejects_caller_synchronously(
         self, workflow_service, sample_context
     ):
-        rule = _make_mock_rule(action_type=ActionType.BLOCK, execute_async=True)
+        rule = _make_mock_rule(
+            action_type=ActionType.BLOCK,
+            execute_async=True,
+            organization_id=sample_context.organization_id,
+        )
         blocked = MagicMock(
             status=ExecutionStatus.BLOCKED,
             error_message="Blocked by policy",
@@ -621,6 +628,29 @@ class TestReliableDispatch:
                 workflow_service.trigger_event(
                     MagicMock(), sample_context.organization_id, sample_context
                 )
+
+    def test_cross_org_rule_is_rejected_before_dispatch(
+        self, workflow_service, sample_context
+    ):
+        rule = _make_mock_rule(execute_async=True)
+        with (
+            patch.object(workflow_service, "get_matching_rules", return_value=[rule]),
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
+            patch(
+                "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
+            ) as publish,
+        ):
+            with pytest.raises(
+                WorkflowPolicyViolation,
+                match="rule organization does not match trigger scope",
+            ):
+                workflow_service.trigger_event(
+                    MagicMock(), sample_context.organization_id, sample_context
+                )
+
+        publish.assert_not_called()
 
     def test_fire_unknown_event_is_noop(self):
         from app.services.finance.automation.event_dispatcher import (
