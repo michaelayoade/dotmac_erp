@@ -543,6 +543,34 @@ class CustomFieldsService:
 
         return result
 
+    def parse_form_values(
+        self,
+        db: Session,
+        organization_id: UUID,
+        entity_type: CustomFieldEntityType,
+        form_values: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Coerce prefixed browser form values according to active definitions."""
+        result: dict[str, Any] = {}
+        for definition in self.list_for_entity(db, organization_id, entity_type):
+            key = f"custom_field__{definition.field_code}"
+            if key not in form_values:
+                if definition.field_type == CustomFieldType.BOOLEAN:
+                    result[definition.field_code] = False
+                continue
+            raw = form_values[key]
+            if definition.field_type == CustomFieldType.BOOLEAN:
+                result[definition.field_code] = str(raw).lower() in {
+                    "1", "true", "yes", "on"
+                }
+            elif definition.field_type == CustomFieldType.MULTISELECT:
+                result[definition.field_code] = (
+                    list(raw) if isinstance(raw, (list, tuple)) else [raw]
+                )
+            else:
+                result[definition.field_code] = raw
+        return result
+
     def update_field(
         self,
         db: Session,

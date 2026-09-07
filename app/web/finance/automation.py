@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.automation.custom_fields import custom_fields_service
+from app.models.finance.automation import CustomFieldEntityType
 from app.services.finance.automation.recurring import recurring_service
 from app.services.finance.automation.web import automation_web_service
 from app.services.finance.automation.workflow import workflow_service
@@ -843,6 +844,99 @@ def new_custom_field_form(
     return templates.TemplateResponse(
         request, "finance/automation/field_form.html", context
     )
+
+
+@router.get("/fields/render/{entity_type}", response_class=HTMLResponse)
+def render_custom_fields(
+    request: Request,
+    entity_type: CustomFieldEntityType,
+    entity_id: UUID | None = None,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Reusable HTMX fragment for any module create or edit form."""
+    values = (
+        custom_fields_service.get_values(
+            db, auth.organization_id, entity_type, entity_id
+        )
+        if entity_id
+        else custom_fields_service.merge_with_defaults(
+            db, auth.organization_id, entity_type
+        )
+    )
+    return templates.TemplateResponse(
+        request,
+        "finance/automation/_custom_fields.html",
+        {
+            "request": request,
+            "sections": custom_fields_service.get_form_schema(
+                db, auth.organization_id, entity_type
+            ),
+            "custom_field_values": values,
+            "entity_type": entity_type.value,
+        },
+    )
+
+
+@router.get("/fields/schema/{entity_type}")
+def custom_field_schema(
+    entity_type: CustomFieldEntityType,
+    entity_id: UUID | None = None,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Typed schema/value contract used by module forms and API clients."""
+    values = (
+        custom_fields_service.get_values(
+            db, auth.organization_id, entity_type, entity_id
+        )
+        if entity_id
+        else custom_fields_service.merge_with_defaults(
+            db, auth.organization_id, entity_type
+        )
+    )
+    return {
+        "entity_type": entity_type.value,
+        "sections": custom_fields_service.get_form_schema(
+            db, auth.organization_id, entity_type
+        ),
+        "values": values,
+    }
+
+
+@router.post("/fields/values/{entity_type}/{entity_id}")
+async def save_custom_field_values(
+    request: Request,
+    entity_type: CustomFieldEntityType,
+    entity_id: UUID,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Validate and save the reusable custom-field portion of a module form."""
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        payload = await request.json()
+        values = payload.get("values", payload)
+    else:
+        form = await request.form()
+        raw: dict[str, Any] = dict(form)
+        for key in form:
+            if key.startswith("custom_field__"):
+                items = form.getlist(key)
+                raw[key] = items if len(items) > 1 else items[0]
+        values = custom_fields_service.parse_form_values(
+            db, auth.organization_id, entity_type, raw
+        )
+    saved = custom_fields_service.save_values(
+        db,
+        auth.organization_id,
+        entity_type,
+        entity_id,
+        values,
+        auth.user_id,
+    )
+    db.commit()
+    return {"success": True, "entity_id": str(entity_id), "values": saved}
 
 
 @router.get("/fields/{field_id}", response_class=HTMLResponse)
