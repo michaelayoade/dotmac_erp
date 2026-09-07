@@ -513,31 +513,49 @@ class WorkflowService:
             )
             new_status = values.get("status")
 
-            if status_from and old_status != status_from:
+            if status_from and not self._matches_expected_value(
+                old_status, status_from
+            ):
                 return False
-            if status_to and new_status != status_to:
+            if status_to and not self._matches_expected_value(new_status, status_to):
                 return False
 
         # Changed fields check
         required_changes = conditions.get("changed_fields", [])
-        if required_changes and context.changed_fields:
-            if not any(f in context.changed_fields for f in required_changes):
+        if required_changes:
+            if not context.changed_fields or not any(
+                f in context.changed_fields for f in required_changes
+            ):
                 return False
 
         # Amount threshold check
         amount_threshold = conditions.get("amount_threshold")
         if amount_threshold:
             amount_field = amount_threshold.get("field", "total_amount")
-            threshold_value = Decimal(str(amount_threshold.get("value", 0)))
+            try:
+                threshold_value = Decimal(str(amount_threshold.get("value", 0)))
+            except (ArithmeticError, ValueError):
+                return False
             operator = amount_threshold.get("operator", "greater_than")
 
             amount_value = values.get(amount_field)
-            if amount_value is not None:
+            if amount_value is None:
+                return False
+            try:
                 amount_value = Decimal(str(amount_value))
-                if not self._compare_values(amount_value, operator, threshold_value):
-                    return False
+            except (ArithmeticError, ValueError):
+                return False
+            if not self._compare_values(amount_value, operator, threshold_value):
+                return False
 
         return True
+
+    @staticmethod
+    def _matches_expected_value(value: Any, expected: Any) -> bool:
+        """Match either one expected value or a legacy list of values."""
+        if isinstance(expected, (list, tuple, set, frozenset)):
+            return value in expected
+        return value == expected
 
     def _compare_values(self, value: Any, operator: str, expected: Any) -> bool:
         """Compare values using the specified operator."""
@@ -545,17 +563,29 @@ class WorkflowService:
             return operator == "is_null" or (operator == "equals" and expected is None)
 
         if operator == "equals":
-            return bool(value == expected)
+            return self._matches_expected_value(value, expected)
         elif operator == "not_equals":
-            return bool(value != expected)
+            return not self._matches_expected_value(value, expected)
         elif operator == "greater_than":
-            return bool(value > expected)
+            try:
+                return bool(value > expected)
+            except TypeError:
+                return False
         elif operator == "greater_than_or_equal":
-            return bool(value >= expected)
+            try:
+                return bool(value >= expected)
+            except TypeError:
+                return False
         elif operator == "less_than":
-            return bool(value < expected)
+            try:
+                return bool(value < expected)
+            except TypeError:
+                return False
         elif operator == "less_than_or_equal":
-            return bool(value <= expected)
+            try:
+                return bool(value <= expected)
+            except TypeError:
+                return False
         elif operator == "contains":
             return str(expected).lower() in str(value).lower()
         elif operator == "starts_with":
@@ -563,11 +593,24 @@ class WorkflowService:
         elif operator == "ends_with":
             return str(value).lower().endswith(str(expected).lower())
         elif operator == "matches":
-            return bool(re.match(str(expected), str(value), re.IGNORECASE))
+            pattern = str(expected)
+            candidate = str(value)
+            if len(pattern) > 512 or len(candidate) > 10_000:
+                return False
+            try:
+                return bool(re.match(pattern, candidate, re.IGNORECASE))
+            except re.error:
+                return False
         elif operator == "in":
-            return bool(value in expected)
+            try:
+                return bool(value in expected)
+            except TypeError:
+                return False
         elif operator == "not_in":
-            return bool(value not in expected)
+            try:
+                return bool(value not in expected)
+            except TypeError:
+                return False
         elif operator == "is_null":
             return bool(value is None)
         elif operator == "is_not_null":
@@ -675,6 +718,119 @@ class WorkflowService:
                 error_message=f"Unknown action type: {rule.action_type}",
             )
 
+    def _entity_employee_id(
+        self,
+        db: Session,
+        context: TriggerContext,
+    ) -> UUID | None:
+        """Return the employee represented by an HR workflow entity."""
+        from app.services.finance.automation.entity_registry import resolve_entity
+
+        entity = resolve_entity(db, context.entity_type, context.entity_id)
+        if entity is None:
+            return None
+        entity_org_id = getattr(entity, "organization_id", context.organization_id)
+        if context.organization_id and entity_org_id != context.organization_id:
+            return None
+        employee_id = (
+            getattr(entity, "employee_id", None)
+            if context.entity_type != "EMPLOYEE"
+            else context.entity_id
+        )
+        try:
+            return UUID(str(employee_id)) if employee_id else None
+        except (TypeError, ValueError):
+            return None
+
+    def _resolve_recipient_person_ids(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> list[UUID]:
+        """Resolve explicit IDs and supported legacy recipient selectors."""
+        resolved: list[UUID] = []
+        configured_ids = config.get("recipient_ids", [])
+        if not isinstance(configured_ids, (list, tuple, set)):
+            configured_ids = [configured_ids]
+        for recipient_id in configured_ids:
+            try:
+                resolved.append(UUID(str(recipient_id)))
+            except (TypeError, ValueError):
+                logger.warning("Invalid workflow recipient ID: %s", recipient_id)
+
+        selector = str(config.get("recipient", "")).strip().lower()
+        role_selector = str(config.get("recipient_role", "")).strip().lower()
+        employee_id = (
+            self._entity_employee_id(db, context)
+            if selector == "entity_owner" or role_selector == "manager"
+            else None
+        )
+
+        if selector == "entity_owner" and employee_id:
+            from app.models.people.hr.employee import Employee
+
+            employee = db.get(Employee, employee_id)
+            if employee and employee.organization_id == context.organization_id:
+                resolved.append(employee.person_id)
+
+        if role_selector == "manager" and employee_id and context.organization_id:
+            from app.services.people.hr.org_resolver import OrgResolver
+
+            manager = OrgResolver(db).get_manager(employee_id, context.organization_id)
+            if manager:
+                resolved.append(manager.person_id)
+        elif role_selector and context.organization_id:
+            from app.models.person import Person
+            from app.models.rbac import PersonRole, Role
+
+            normalized_role = role_selector.replace("_", " ")
+            role_people = db.scalars(
+                select(PersonRole.person_id)
+                .join(Role, Role.id == PersonRole.role_id)
+                .join(Person, Person.id == PersonRole.person_id)
+                .where(
+                    Person.organization_id == context.organization_id,
+                    Person.is_active.is_(True),
+                    Role.is_active.is_(True),
+                    func.lower(Role.name).in_({normalized_role, role_selector}),
+                )
+            ).all()
+            resolved.extend(role_people)
+
+        # Stable de-duplication avoids duplicate notifications when a user is
+        # both explicitly selected and resolved through a role.
+        return list(dict.fromkeys(resolved))
+
+    def _resolve_email_recipients(
+        self,
+        db: Session,
+        config: dict[str, Any],
+        context: TriggerContext,
+    ) -> list[str]:
+        """Resolve literal email addresses or person-based selectors."""
+        configured_recipients = config.get("recipients", [])
+        if not isinstance(configured_recipients, (list, tuple, set)):
+            configured_recipients = [configured_recipients]
+        recipients = [
+            str(value).strip()
+            for value in configured_recipients
+            if str(value).strip()
+        ]
+        person_ids = self._resolve_recipient_person_ids(db, config, context)
+        if person_ids and context.organization_id:
+            from app.models.person import Person
+
+            emails = db.scalars(
+                select(Person.email).where(
+                    Person.organization_id == context.organization_id,
+                    Person.id.in_(person_ids),
+                    Person.is_active.is_(True),
+                )
+            ).all()
+            recipients.extend(str(email).strip() for email in emails if email)
+        return list(dict.fromkeys(recipients))
+
     def _action_send_email(
         self,
         db: Session,
@@ -686,9 +842,9 @@ class WorkflowService:
         from app.services.finance.automation.template_renderer import render_template
 
         try:
-            recipients = config.get("recipients", [])
+            recipients = self._resolve_email_recipients(db, config, context)
             subject_tpl = config.get("subject", "Workflow Notification")
-            body_html_tpl = config.get("body_html", "")
+            body_html_tpl = config.get("body_html") or config.get("message", "")
             body_text_tpl = config.get("body_text")
 
             subject = render_template(
@@ -762,11 +918,11 @@ class WorkflowService:
         from app.services.notification import NotificationService
 
         try:
-            recipient_ids = config.get("recipient_ids", [])
+            recipient_ids = self._resolve_recipient_person_ids(db, config, context)
             if not recipient_ids:
                 return ActionResult(
                     success=False,
-                    error_message="No recipient_ids specified in action config",
+                    error_message="No notification recipients could be resolved",
                 )
 
             title_template = config.get("title", "Workflow Notification")

@@ -41,15 +41,23 @@ def _build_template_context(
         today, now — current date/datetime strings
         Any keys from *extra*
     """
+    old = _stringify_values(old_values or {})
+    new = _stringify_values(new_values or {})
     ctx: dict[str, Any] = {
         "entity_type": str(entity_type),
         "entity_id": str(entity_id) if entity_id else "",
-        "old": _stringify_values(old_values or {}),
-        "new": _stringify_values(new_values or {}),
+        "old": old,
+        "new": new,
         "user_id": str(user_id) if user_id else "",
         "today": date.today().isoformat(),
         "now": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
     }
+    # Early seeded rules used ``{{ field_name }}`` while the public builder
+    # documents ``{{ new.field_name }}``.  Keep both forms working, without
+    # allowing event data to replace reserved engine variables.
+    for key, value in new.items():
+        if key not in ctx:
+            ctx[key] = value
     if extra:
         ctx.update(extra)
     return ctx

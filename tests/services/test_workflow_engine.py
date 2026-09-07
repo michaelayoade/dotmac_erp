@@ -139,6 +139,29 @@ class TestFlatConditionEvaluation:
             workflow_service._evaluate_conditions(conditions, sample_context) is False
         )
 
+    def test_legacy_status_list_matches(self, workflow_service, sample_context):
+        conditions = {"status_to": ["APPROVED", "POSTED"]}
+        assert workflow_service._evaluate_conditions(conditions, sample_context) is True
+
+    def test_changed_field_condition_requires_change_context(
+        self, workflow_service, sample_context
+    ):
+        conditions = {"changed_fields": ["status"]}
+        sample_context.changed_fields = None
+        assert workflow_service._evaluate_conditions(conditions, sample_context) is False
+
+    def test_amount_condition_requires_target_field(
+        self, workflow_service, sample_context
+    ):
+        conditions = {
+            "amount_threshold": {
+                "field": "missing_amount",
+                "operator": "greater_than",
+                "value": 100,
+            }
+        }
+        assert workflow_service._evaluate_conditions(conditions, sample_context) is False
+
     def test_amount_threshold(self, workflow_service, sample_context):
         conditions = {
             "amount_threshold": {
@@ -245,6 +268,10 @@ class TestValueComparison:
         assert workflow_service._compare_values(None, "equals", None) is True
         assert workflow_service._compare_values(None, "equals", 5) is False
 
+    def test_type_mismatch_and_invalid_regex_fail_closed(self, workflow_service):
+        assert workflow_service._compare_values("ten", "greater_than", 5) is False
+        assert workflow_service._compare_values("abc", "matches", "[") is False
+
 
 class TestWebhookAllowlist:
     # The `webhook_allowlist_configured()` assertions that used to sit
@@ -302,6 +329,17 @@ class TestTemplateRenderer:
 
         assert render_template("", entity_type="X", entity_id=None) == ""
 
+    def test_legacy_flat_variables_use_new_values(self):
+        from app.services.finance.automation.template_renderer import render_template
+
+        result = render_template(
+            "Leave from {{ from_date }} to {{ to_date }}",
+            entity_type="LEAVE_REQUEST",
+            entity_id=uuid.uuid4(),
+            new_values={"from_date": "2026-09-10", "to_date": "2026-09-12"},
+        )
+        assert result == "Leave from 2026-09-10 to 2026-09-12"
+
     def test_invalid_syntax_falls_back(self):
         from app.services.finance.automation.template_renderer import render_template
 
@@ -352,7 +390,21 @@ class TestEntityRegistry:
         assert get_pk_field("INVOICE") == "invoice_id"
         assert get_pk_field("EXPENSE") == "claim_id"
         assert get_pk_field("PAYROLL_RUN") == "entry_id"
+        assert get_pk_field("JOURNAL") == "journal_entry_id"
+        assert get_pk_field("SALES_ORDER") == "so_id"
         assert get_pk_field("UNKNOWN_TYPE") is None
+
+    def test_every_registered_model_and_primary_key_resolves(self):
+        from app.services.finance.automation.entity_registry import (
+            _get_model_class,
+            get_pk_field,
+            get_registered_types,
+        )
+
+        for entity_type in get_registered_types():
+            model = _get_model_class(entity_type)
+            assert model is not None, entity_type
+            assert hasattr(model, get_pk_field(entity_type)), entity_type
 
 
 # ---------------------------------------------------------------------------

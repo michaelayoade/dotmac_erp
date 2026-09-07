@@ -34,7 +34,7 @@ _ENTITY_REGISTRY: dict[str, tuple[str, str, str]] = {
     "JOURNAL": (
         "app.models.finance.gl.journal_entry",
         "JournalEntry",
-        "entry_id",
+        "journal_entry_id",
     ),
     "PAYMENT": (
         "app.models.finance.ap.supplier_payment",
@@ -59,7 +59,7 @@ _ENTITY_REGISTRY: dict[str, tuple[str, str, str]] = {
     "SALES_ORDER": (
         "app.models.finance.ar.sales_order",
         "SalesOrder",
-        "order_id",
+        "so_id",
     ),
     "PURCHASE_ORDER": (
         "app.models.finance.ap.purchase_order",
@@ -87,7 +87,7 @@ _ENTITY_REGISTRY: dict[str, tuple[str, str, str]] = {
         "advance_id",
     ),
     "ASSET_DISPOSAL": (
-        "app.models.finance.fa.asset_disposal",
+        "app.models.fixed_assets.asset_disposal",
         "AssetDisposal",
         "disposal_id",
     ),
@@ -103,7 +103,7 @@ _ENTITY_REGISTRY: dict[str, tuple[str, str, str]] = {
         "application_id",
     ),
     "DISCIPLINARY_CASE": (
-        "app.models.people.discipline.disciplinary_case",
+        "app.models.people.discipline.case",
         "DisciplinaryCase",
         "case_id",
     ),
