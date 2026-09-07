@@ -69,4 +69,6 @@ def test_admin_settings_owns_automation_navigation() -> None:
     assert 'href="/automation"' in admin_base
 
     for template in (repo_root / "templates/finance/automation").glob("*.html"):
+        if template.name.startswith("_"):
+            continue
         assert '{% extends "admin/base_admin.html" %}' in template.read_text()
