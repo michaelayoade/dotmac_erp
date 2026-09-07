@@ -71,6 +71,24 @@ def upgrade() -> None:
         ["organization_id", "field_id"],
         schema="automation",
     )
+    op.execute("ALTER TABLE automation.custom_field_value ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE automation.custom_field_value FORCE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY custom_field_value_tenant_isolation
+        ON automation.custom_field_value
+        USING (
+            organization_id = NULLIF(
+                current_setting('app.current_organization_id', true), ''
+            )::uuid
+        )
+        WITH CHECK (
+            organization_id = NULLIF(
+                current_setting('app.current_organization_id', true), ''
+            )::uuid
+        )
+        """
+    )
 
 
 def downgrade() -> None:
