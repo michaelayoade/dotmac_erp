@@ -116,6 +116,13 @@ def test_vmagent_scrapes_authenticated_app_and_private_worker() -> None:
     assert "ports:" not in worker_block
 
 
+def test_production_deploy_starts_worker_metrics_scraper() -> None:
+    deploy = (ROOT / "scripts/deploy.sh").read_text(encoding="utf-8")
+
+    assert "docker compose pull app worker beat vmagent" in deploy
+    assert "docker compose up -d worker beat vmagent" in deploy
+
+
 def test_prometheus_callbacks_stay_in_reviewed_exporter_modules() -> None:
     reviewed = {ROOT / "app/metrics.py", ROOT / "app/middleware/metrics.py"}
     violations = []
