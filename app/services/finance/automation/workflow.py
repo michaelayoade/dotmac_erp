@@ -12,7 +12,7 @@ import logging
 import re
 import socket
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urlsplit
@@ -1886,7 +1886,7 @@ class WorkflowService:
             change_summary="Rule archived",
         )
         rule.is_active = False
-        rule.archived_at = datetime.now(UTC)
+        rule.archived_at = datetime.now(timezone.utc)
         rule.archived_by = archived_by
         rule.updated_by = archived_by
         db.flush()
