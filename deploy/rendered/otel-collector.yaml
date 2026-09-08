@@ -32,7 +32,7 @@ processors:
         value: render
         action: upsert
       - key: dotmac.git_sha
-        value: 54549c1da94422e9cef1a664996e224c8db7b18b
+        value: 54549c1da94422e9cef1a664996e224c8db7b18b # pragma: allowlist secret
         action: upsert
       - key: dotmac.host
         value: render

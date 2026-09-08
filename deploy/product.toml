@@ -60,7 +60,7 @@ reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:ac1bb2abdb2177fdfc6d7326bf5
 # The exact protected-main revision the bound image was built from. Changing
 # either this or the digest without the other breaks the pairing that makes the
 # image identifiable, so they move together or not at all.
-source_revision = "54549c1da94422e9cef1a664996e224c8db7b18b"
+source_revision = "54549c1da94422e9cef1a664996e224c8db7b18b" # pragma: allowlist secret
 
 # ─────────────────────────────────────────────────────────────────────────
 # Runtime materials — the exact env var NAMES ERP's app/worker/beat services
