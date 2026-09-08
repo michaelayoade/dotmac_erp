@@ -23,8 +23,8 @@ processing a deactivated tenant's work — a product decision wearing a
 refactor's clothes. ``test_every_converted_job_still_includes_inactive_tenants``
 is what stops that.
 
-Deliberately NOT covered: ``automation._resolve_workflow_rule_org`` and
-``performance``'s four ``cycle_id``-driven tasks. Those resolve which tenant
+Deliberately NOT covered: ``performance``'s four ``cycle_id``-driven tasks.
+Those resolve which tenant
 owns one named row rather than enumerating tenants, the catalogue definer
 returns identifiers only and cannot answer that, and they are held back for
 reclassification. ``test_the_resolution_seams_are_held_back_not_converted``
@@ -391,10 +391,10 @@ def test_project_sla_scans_every_tenant(tenant_sessions):
 
 
 @pytest.mark.parametrize(
-    "module", (fleet, license_task, project_sla), ids=lambda m: m.__name__
+    "module", (automation, fleet, license_task, project_sla), ids=lambda m: m.__name__
 )
 def test_the_fully_converted_modules_no_longer_reach_across_tenants(module):
-    """The retired seam is gone from these three, not merely unused.
+    """The retired seam is gone from these four, not merely unused.
 
     A re-import of ``cross_org_session`` is the regression this slice exists to
     prevent, and the architecture guard sees only the catalogue enumeration
@@ -407,7 +407,7 @@ def test_the_fully_converted_modules_no_longer_reach_across_tenants(module):
 
 
 def test_the_resolution_seams_are_held_back_not_converted():
-    """The five ``cross_org_session`` sites left in this slice are all resolution.
+    """The four ``cross_org_session`` sites left in this slice are all resolution.
 
     Each is handed one row's id from outside any tenant context and has to find
     the owning tenant before it can open a session. The catalogue definer
@@ -420,7 +420,6 @@ def test_the_resolution_seams_are_held_back_not_converted():
     site appearing, or one being converted without the contract landing.
     """
     resolution_sites = {
-        automation: {"_resolve_workflow_rule_org"},
         performance: {
             "generate_cycle_appraisals",
             "calculate_cycle_progress",

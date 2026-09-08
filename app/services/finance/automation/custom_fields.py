@@ -197,15 +197,15 @@ class CustomFieldsService:
         self,
         db: Session,
         field_id: UUID,
-        organization_id: UUID | None = None,
+        organization_id: UUID,
     ) -> CustomFieldDefinition | None:
-        """Get a field definition by ID."""
-        field = db.get(CustomFieldDefinition, field_id)
-        if not field:
-            return None
-        if organization_id is not None and field.organization_id != organization_id:
-            return None
-        return field
+        """Get one tenant-owned field definition by ID."""
+        return db.scalar(
+            select(CustomFieldDefinition).where(
+                CustomFieldDefinition.field_id == field_id,
+                CustomFieldDefinition.organization_id == organization_id,
+            )
+        )
 
     def get_by_code(
         self,
@@ -230,7 +230,7 @@ class CustomFieldsService:
         db: Session,
         organization_id: UUID,
         entity_type: CustomFieldEntityType,
-        is_active: bool = True,
+        is_active: bool | None = True,
     ) -> list[CustomFieldDefinition]:
         """List all custom fields for an entity type."""
         query = select(CustomFieldDefinition).where(
@@ -240,8 +240,8 @@ class CustomFieldsService:
             )
         )
 
-        if is_active:
-            query = query.where(CustomFieldDefinition.is_active == True)
+        if is_active is not None:
+            query = query.where(CustomFieldDefinition.is_active == is_active)
 
         query = query.order_by(
             CustomFieldDefinition.section_name,
@@ -390,21 +390,35 @@ class CustomFieldsService:
             or getattr(entity, "organization_id", None) != organization_id
         ):
             raise HTTPException(status_code=404, detail="Entity not found")
+        definitions = {
+            field.field_code: field
+            for field in self.list_for_entity(db, organization_id, entity_type)
+        }
+        unavailable_codes = sorted(set(field_values) - set(definitions))
+        if unavailable_codes:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "custom_fields": {
+                        code: "Field is inactive or unavailable"
+                        for code in unavailable_codes
+                    }
+                },
+            )
         current = self.get_values(db, organization_id, entity_type, entity_id)
         effective = self.merge_with_defaults(
             db, organization_id, entity_type, {} if replace else current
         )
         effective.update(field_values)
+        active_effective = {
+            code: value for code, value in effective.items() if code in definitions
+        }
         valid, errors = self.validate_custom_fields(
-            db, organization_id, entity_type, effective
+            db, organization_id, entity_type, active_effective
         )
         if not valid:
             raise HTTPException(status_code=422, detail={"custom_fields": errors})
 
-        definitions = {
-            field.field_code: field
-            for field in self.list_for_entity(db, organization_id, entity_type)
-        }
         existing = {
             row.field_id: row
             for row in db.scalars(
@@ -416,7 +430,7 @@ class CustomFieldsService:
             ).all()
         }
         normalized_values: dict[str, Any] = {}
-        for code, value in effective.items():
+        for code, value in active_effective.items():
             definition = definitions[code]
             normalized = self._json_value(definition.field_type, value)
             normalized_values[code] = normalized
@@ -437,15 +451,20 @@ class CustomFieldsService:
                 row.updated_by = actor_id
 
         if replace:
-            retained_ids = {definitions[code].field_id for code in effective}
+            active_field_ids = {field.field_id for field in definitions.values()}
+            retained_ids = {definitions[code].field_id for code in active_effective}
             for field_id, row in existing.items():
-                if field_id not in retained_ids:
+                if field_id in active_field_ids and field_id not in retained_ids:
                     db.delete(row)
         db.flush()
+        result_values = {
+            code: value for code, value in current.items() if code not in definitions
+        }
+        result_values.update(normalized_values)
         changed_codes = sorted(
             code
-            for code in set(current) | set(normalized_values)
-            if current.get(code) != normalized_values.get(code)
+            for code in set(current) | set(result_values)
+            if current.get(code) != result_values.get(code)
         )
         if changed_codes:
             from app.services.finance.automation.event_dispatcher import (
@@ -459,11 +478,11 @@ class CustomFieldsService:
                 entity_id,
                 "ON_FIELD_CHANGE",
                 old_values={"custom_fields": current},
-                new_values={"custom_fields": normalized_values},
+                new_values={"custom_fields": result_values},
                 changed_fields=[f"custom.{code}" for code in changed_codes],
                 user_id=actor_id,
             )
-        return normalized_values
+        return result_values
 
     @staticmethod
     def _json_value(field_type: CustomFieldType, value: Any) -> Any:
@@ -513,6 +532,8 @@ class CustomFieldsService:
         db: Session,
         organization_id: UUID,
         entity_type: CustomFieldEntityType,
+        *,
+        include_inactive_codes: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get field definitions formatted for form rendering.
@@ -520,13 +541,23 @@ class CustomFieldsService:
         Returns:
             List of field schemas suitable for dynamic form generation
         """
-        definitions = self.list_for_entity(db, organization_id, entity_type)
+        definitions = self.list_for_entity(
+            db,
+            organization_id,
+            entity_type,
+            is_active=None if include_inactive_codes else True,
+        )
 
         # Group by section
         sections: dict[str, list[dict[str, Any]]] = {}
 
         for defn in definitions:
-            if not defn.show_in_form:
+            is_historical = (
+                not defn.is_active
+                and include_inactive_codes is not None
+                and defn.field_code in include_inactive_codes
+            )
+            if not is_historical and (not defn.is_active or not defn.show_in_form):
                 continue
 
             section = defn.section_name or "Additional Information"
@@ -544,6 +575,8 @@ class CustomFieldsService:
                 "help_text": defn.help_text,
                 "css_class": defn.css_class,
                 "display_order": defn.display_order,
+                "is_active": defn.is_active,
+                "read_only": is_historical,
             }
 
             if defn.field_options:
@@ -609,11 +642,12 @@ class CustomFieldsService:
         self,
         db: Session,
         field_id: UUID,
+        organization_id: UUID,
         updates: dict[str, Any],
         updated_by: UUID,
     ) -> CustomFieldDefinition:
         """Update a custom field definition."""
-        field = db.get(CustomFieldDefinition, field_id)
+        field = self.get(db, field_id, organization_id)
         if not field:
             raise HTTPException(status_code=404, detail="Custom field not found")
 
@@ -634,26 +668,55 @@ class CustomFieldsService:
         db.flush()
         return field
 
-    def delete(self, db: Session, field_id: UUID) -> bool:
-        """Delete a custom field definition."""
-        field = db.get(CustomFieldDefinition, field_id)
+    def deactivate(
+        self,
+        db: Session,
+        field_id: UUID,
+        organization_id: UUID,
+        updated_by: UUID,
+    ) -> bool:
+        """Hide a field from new forms while retaining all stored values."""
+        field = self.get(db, field_id, organization_id)
         if not field:
             return False
 
-        # Soft delete - set inactive
         field.is_active = False
+        field.updated_by = updated_by
         db.flush()
         return True
 
-    def hard_delete(self, db: Session, field_id: UUID) -> bool:
+    def reactivate(
+        self,
+        db: Session,
+        field_id: UUID,
+        organization_id: UUID,
+        updated_by: UUID,
+    ) -> bool:
+        """Return a tenant-owned field definition to active form schemas."""
+        field = self.get(db, field_id, organization_id)
+        if not field:
+            return False
+
+        field.is_active = True
+        field.updated_by = updated_by
+        db.flush()
+        return True
+
+    def hard_delete(
+        self,
+        db: Session,
+        field_id: UUID,
+        organization_id: UUID,
+    ) -> bool:
         """Permanently delete a custom field definition."""
-        field = db.get(CustomFieldDefinition, field_id)
+        field = self.get(db, field_id, organization_id)
         if not field:
             return False
 
         value_count = db.scalar(
             select(func.count(CustomFieldValue.value_id)).where(
-                CustomFieldValue.field_id == field_id
+                CustomFieldValue.field_id == field_id,
+                CustomFieldValue.organization_id == organization_id,
             )
         )
         if value_count:

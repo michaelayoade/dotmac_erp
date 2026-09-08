@@ -115,6 +115,7 @@ class WorkflowRule(Base):
         Index("idx_workflow_rule_entity", "entity_type"),
         Index("idx_workflow_rule_trigger", "trigger_event"),
         Index("idx_workflow_rule_active", "is_active"),
+        Index("idx_workflow_rule_archived", "organization_id", "archived_at"),
         {"schema": "automation"},
     )
 
@@ -220,6 +221,16 @@ class WorkflowRule(Base):
         Boolean,
         nullable=False,
         default=True,
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When the rule was removed from active administration views",
+    )
+    archived_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Administrator who archived the rule",
     )
 
     # Audit

@@ -12,7 +12,7 @@ import logging
 import re
 import socket
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urlsplit
@@ -390,15 +390,18 @@ class WorkflowService:
         self,
         db: Session,
         rule_id: UUID,
-        organization_id: UUID | None = None,
+        organization_id: UUID,
+        *,
+        include_archived: bool = False,
     ) -> WorkflowRule | None:
-        """Get a rule by ID."""
-        rule = db.get(WorkflowRule, rule_id)
-        if not rule:
-            return None
-        if organization_id is not None and rule.organization_id != organization_id:
-            return None
-        return rule
+        """Get one tenant-owned rule, excluding archived rules by default."""
+        query = select(WorkflowRule).where(
+            WorkflowRule.rule_id == rule_id,
+            WorkflowRule.organization_id == organization_id,
+        )
+        if not include_archived:
+            query = query.where(WorkflowRule.archived_at.is_(None))
+        return db.scalar(query)
 
     def list(
         self,
@@ -407,12 +410,18 @@ class WorkflowService:
         entity_type: WorkflowEntityType | None = None,
         trigger_event: TriggerEvent | None = None,
         is_active: bool | None = True,
+        archived: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> list[WorkflowRule]:
         """List workflow rules."""
         query = select(WorkflowRule).where(
             WorkflowRule.organization_id == organization_id
+        )
+        query = query.where(
+            WorkflowRule.archived_at.is_not(None)
+            if archived
+            else WorkflowRule.archived_at.is_(None)
         )
 
         if entity_type:
@@ -1503,7 +1512,13 @@ class WorkflowService:
             )
 
         try:
-            target_rule = db.get(WorkflowRule, UUID(target_rule_id))
+            target_rule = db.scalar(
+                select(WorkflowRule).where(
+                    WorkflowRule.rule_id == UUID(target_rule_id),
+                    WorkflowRule.organization_id == context.organization_id,
+                    WorkflowRule.archived_at.is_(None),
+                )
+            )
             if not target_rule:
                 return ActionResult(
                     success=False,
@@ -1782,11 +1797,12 @@ class WorkflowService:
         self,
         db: Session,
         rule_id: UUID,
+        organization_id: UUID,
         updates: dict[str, Any],
         updated_by: UUID,
     ) -> WorkflowRule:
         """Update a workflow rule, snapshotting the previous state."""
-        rule = db.get(WorkflowRule, rule_id)
+        rule = self.get(db, rule_id, organization_id)
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
 
@@ -1815,6 +1831,7 @@ class WorkflowService:
         db: Session,
         rule: WorkflowRule,
         changed_by: UUID | None = None,
+        change_summary: str | None = None,
     ) -> None:
         """Create a version snapshot of the current rule state."""
         from app.models.finance.automation.workflow_rule_version import (
@@ -1845,17 +1862,63 @@ class WorkflowService:
             cooldown_seconds=rule.cooldown_seconds,
             schedule_config=rule.schedule_config,
             changed_by=changed_by,
+            change_summary=change_summary,
         )
         db.add(version)
         db.flush()
 
-    def delete(self, db: Session, rule_id: UUID) -> bool:
-        """Delete a workflow rule."""
-        rule = db.get(WorkflowRule, rule_id)
+    def archive(
+        self,
+        db: Session,
+        rule_id: UUID,
+        organization_id: UUID,
+        archived_by: UUID,
+    ) -> bool:
+        """Archive a tenant-owned rule without deleting its audit history."""
+        rule = self.get(db, rule_id, organization_id)
         if not rule:
             return False
 
-        db.delete(rule)
+        self._create_version_snapshot(
+            db,
+            rule,
+            archived_by,
+            change_summary="Rule archived",
+        )
+        rule.is_active = False
+        rule.archived_at = datetime.now(timezone.utc)
+        rule.archived_by = archived_by
+        rule.updated_by = archived_by
+        db.flush()
+        return True
+
+    def restore(
+        self,
+        db: Session,
+        rule_id: UUID,
+        organization_id: UUID,
+        restored_by: UUID,
+    ) -> bool:
+        """Restore an archived rule as inactive so activation stays explicit."""
+        rule = self.get(
+            db,
+            rule_id,
+            organization_id,
+            include_archived=True,
+        )
+        if not rule or rule.archived_at is None:
+            return False
+
+        self._create_version_snapshot(
+            db,
+            rule,
+            restored_by,
+            change_summary="Rule restored as inactive",
+        )
+        rule.archived_at = None
+        rule.archived_by = None
+        rule.is_active = False
+        rule.updated_by = restored_by
         db.flush()
         return True
 
@@ -1863,6 +1926,7 @@ class WorkflowService:
         self,
         db: Session,
         rule_id: UUID,
+        organization_id: UUID,
         sample_data: dict[str, Any],
     ) -> dict[str, Any]:
         """Test a rule against sample data without executing the action.
@@ -1876,7 +1940,7 @@ class WorkflowService:
         Returns:
             Dict describing whether conditions match and what would happen.
         """
-        rule = db.get(WorkflowRule, rule_id)
+        rule = self.get(db, rule_id, organization_id)
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
 
@@ -1934,6 +1998,7 @@ class WorkflowService:
         self,
         db: Session,
         rule_id: UUID,
+        organization_id: UUID,
         limit: int = 50,
         offset: int = 0,
     ) -> builtins.list[Any]:
@@ -1944,7 +2009,11 @@ class WorkflowService:
 
         stmt = (
             select(WorkflowRuleVersion)
-            .where(WorkflowRuleVersion.rule_id == rule_id)
+            .join(WorkflowRule, WorkflowRule.rule_id == WorkflowRuleVersion.rule_id)
+            .where(
+                WorkflowRuleVersion.rule_id == rule_id,
+                WorkflowRule.organization_id == organization_id,
+            )
             .order_by(WorkflowRuleVersion.version_number.desc())
             .offset(offset)
             .limit(limit)
@@ -1954,6 +2023,7 @@ class WorkflowService:
     def get_executions(
         self,
         db: Session,
+        organization_id: UUID,
         rule_id: UUID | None = None,
         entity_type: str | None = None,
         entity_id: UUID | None = None,
@@ -1962,7 +2032,11 @@ class WorkflowService:
         offset: int = 0,
     ) -> builtins.list[WorkflowExecution]:
         """Get workflow executions with filters."""
-        query = select(WorkflowExecution)
+        query = select(WorkflowExecution).join(
+            WorkflowRule,
+            WorkflowRule.rule_id == WorkflowExecution.rule_id,
+        )
+        query = query.where(WorkflowRule.organization_id == organization_id)
 
         if rule_id:
             query = query.where(WorkflowExecution.rule_id == rule_id)

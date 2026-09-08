@@ -40,6 +40,21 @@ Use `custom.<field_code>` in workflow conditions. The
 form, and automation writes behave consistently. Definitions with stored
 values can be deactivated but cannot be hard-deleted.
 
+Deactivation removes a definition from new forms. Existing records retain and
+display their saved value as read-only historical data. Reactivating the
+definition returns it to new and existing forms without rewriting that history.
+
+## Lifecycle and tenant isolation
+
+Workflow rules are archived rather than deleted. Archiving disables the rule
+and removes it from the active list while preserving its versions and execution
+history. Archived rules can be viewed and restored; restoration leaves the rule
+inactive until an administrator deliberately enables it.
+
+All workflow and custom-field reads and mutations are scoped by
+`organization_id`. PostgreSQL row-level security provides a second tenant
+boundary for definitions, rules, versions, and execution history.
+
 ## Assignment rules
 
 The `ASSIGN` action supports a specific person, the entity owner, or a role.

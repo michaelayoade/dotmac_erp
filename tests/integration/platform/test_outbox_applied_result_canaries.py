@@ -58,7 +58,7 @@ def _require_claim_columns(engine) -> None:
     if missing:
         pytest.skip(
             "platform.event_outbox is missing E3 columns "
-            f"{sorted(missing)} — run `alembic upgrade head` on the test DB"
+            f"{sorted(missing)} — run `alembic upgrade heads` on the test DB"
         )
 
 
