@@ -124,6 +124,7 @@ def test_update_field_to_select_without_options_is_rejected(db_session):
         service.update_field(
             db_session,
             field.field_id,
+            org_id,
             {"field_type": CustomFieldType.SELECT},
             uuid.uuid4(),
         )
@@ -146,7 +147,11 @@ def test_update_field_clearing_options_on_existing_select_is_rejected(db_session
 
     with pytest.raises(HTTPException):
         service.update_field(
-            db_session, field.field_id, {"field_options": None}, uuid.uuid4()
+            db_session,
+            field.field_id,
+            org_id,
+            {"field_options": None},
+            uuid.uuid4(),
         )
 
 
@@ -166,6 +171,7 @@ def test_update_field_adding_options_to_existing_select_succeeds(db_session):
     updated = service.update_field(
         db_session,
         field.field_id,
+        org_id,
         {"field_options": {"options": [{"value": "b", "label": "B"}]}},
         uuid.uuid4(),
     )

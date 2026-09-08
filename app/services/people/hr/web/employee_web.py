@@ -90,6 +90,9 @@ from app.web.deps import WebAuthContext, base_context
 logger = logging.getLogger(__name__)
 
 DEPARTMENT_MANAGE_ROLES = frozenset({"admin", "hr_director", "hr_manager"})
+EMPLOYEE_MOVEMENT_PERIOD_VALUES = frozenset(
+    {"last_6_months", "last_12_months", "this_year", "previous_year"}
+)
 
 
 def _can_manage_departments(auth: WebAuthContext) -> bool:
@@ -144,6 +147,26 @@ class HRWebService:
     """Service for HR web views."""
 
     FINAL_PAYROLL_EDITOR_ROLES = frozenset({"admin", "hr_director", "hr_manager"})
+
+    @staticmethod
+    def _employee_movement_period_bounds(
+        period: str,
+        today: date,
+    ) -> tuple[date, date]:
+        """Resolve an employee movement period to inclusive calendar dates."""
+        if period not in EMPLOYEE_MOVEMENT_PERIOD_VALUES:
+            raise ValueError(f"Unsupported employee movement period: {period}")
+
+        current_month = today.replace(day=1)
+        if period in {"last_6_months", "last_12_months"}:
+            months_back = 5 if period == "last_6_months" else 11
+            month_index = current_month.year * 12 + current_month.month - 1
+            start_index = month_index - months_back
+            start = date(start_index // 12, start_index % 12 + 1, 1)
+            return start, today
+        if period == "this_year":
+            return date(today.year, 1, 1), today
+        return date(today.year - 1, 1, 1), date(today.year - 1, 12, 31)
 
     EMPLOYEE_EXPORT_FIELDS: dict[
         str, tuple[str, Callable[[Employee], object] | None]
@@ -792,6 +815,37 @@ class HRWebService:
             request,
             "people/hr/employees.html",
             context,
+        )
+
+    def employee_movement_chart_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        period: str,
+    ) -> HTMLResponse:
+        """Render the tenant-scoped employee movement chart fragment."""
+        if period not in EMPLOYEE_MOVEMENT_PERIOD_VALUES:
+            raise HTTPException(status_code=400, detail="Invalid movement period")
+
+        org_id = coerce_uuid(auth.organization_id)
+        today = AttendanceService(db).get_org_today(org_id)
+        start_date, end_date = self._employee_movement_period_bounds(period, today)
+        movement = EmployeeService(db, org_id).get_employee_movement(
+            start_date,
+            end_date,
+        )
+        has_activity = any(
+            month["onboarded"] > 0 or month["offboarded"] > 0 for month in movement
+        )
+        return templates.TemplateResponse(
+            request,
+            "people/hr/_employee_movement_chart.html",
+            {
+                "movement": movement,
+                "has_activity": has_activity,
+                "period": period,
+            },
         )
 
     @staticmethod

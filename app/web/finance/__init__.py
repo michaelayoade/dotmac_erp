@@ -8,7 +8,6 @@ from fastapi import APIRouter
 
 from app.web.finance.ap import router as ap_router
 from app.web.finance.ar import router as ar_router
-from app.web.finance.automation import router as automation_router
 from app.web.finance.banking import router as banking_router
 from app.web.finance.dashboard import router as dashboard_router
 
@@ -32,7 +31,6 @@ router.include_router(dashboard_router)
 router.include_router(gl_router)
 router.include_router(ap_router)
 router.include_router(ar_router)
-router.include_router(automation_router)
 router.include_router(banking_router)
 router.include_router(tax_router)
 router.include_router(reports_router)

@@ -2,7 +2,7 @@
 
 {% from "components/macros.html" import status_badge, compact_filters, icon_svg, pagination %}
 
-{% block page_title %}Workflow Rules{% endblock %}
+{% block page_title %}{% if show_archived %}Archived Workflow Rules{% else %}Workflow Rules{% endif %}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -15,20 +15,36 @@
 {% endblock %}
 
 {% block header_actions %}
+<div class="flex flex-wrap items-center gap-2">
+{% if show_archived %}
+<a href="/automation/workflows"
+   class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+    {{ icon_svg("arrow-left", "h-4 w-4") }}
+    Active rules
+</a>
+{% else %}
+<a href="/automation/workflows/archived"
+   class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+    {{ icon_svg("archive", "h-4 w-4") }}
+    Archived rules
+</a>
 <a href="/automation/workflows/new"
-   class="inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow-lg">
+   class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-violet-700">
     {{ icon_svg("plus", "h-4 w-4") }}
     New Rule
 </a>
+{% endif %}
+</div>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
+    {% if not show_archived %}
     <!-- Filters -->
     <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
         {# Filters #}
         {% call(filter_attrs) compact_filters(
-            base_url="/finance/automation/workflow-list",
+            base_url="/automation/workflows",
             active_filters=active_filters | default([]),
             auto_submit=false,
             show_apply_button=true
@@ -61,6 +77,7 @@
         </div>
         {% endcall %}
     </div>
+    {% endif %}
 
     <div id="results-container">
     <!-- Rules Table -->
@@ -104,7 +121,7 @@
                             <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
                                 {% if rule.is_active %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
                                 {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                {% if rule.is_active %}Active{% else %}Inactive{% endif %}
+                            {% if rule.is_archived %}Archived{% elif rule.is_active %}Active{% else %}Inactive{% endif %}
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right">
@@ -114,6 +131,16 @@
                                    title="View" aria-label="View">
                                     {{ icon_svg("eye", "h-4 w-4") }}
                                 </a>
+                                {% if rule.is_archived %}
+                                <form method="post" action="/automation/workflows/{{ rule.rule_id }}/restore" class="inline">
+                                    {{ request.state.csrf_form | safe }}
+                                    <button type="submit"
+                                            class="min-h-11 rounded px-2 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                                            title="Restore as inactive" aria-label="Restore {{ rule.rule_name }} as inactive">
+                                        {{ icon_svg("refresh", "h-4 w-4") }}
+                                    </button>
+                                </form>
+                                {% else %}
                                 <a href="/automation/workflows/{{ rule.rule_id }}/edit"
                                    class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                                    title="Edit" aria-label="Edit">
@@ -132,6 +159,7 @@
                                         {% endif %}
                                     </button>
                                 </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -139,11 +167,13 @@
                     <tr>
                         <td colspan="7" class="px-6 py-12 text-center">
                             {{ icon_svg("lightning-bolt", "mx-auto h-12 w-12 text-slate-400") }}
-                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No workflow rules found</p>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{% if show_archived %}No archived workflow rules{% else %}No workflow rules found{% endif %}</p>
+                            {% if not show_archived %}
                             <a href="/automation/workflows/new" class="mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 dark:bg-violet-900/20 dark:text-violet-400">
                                 {{ icon_svg("plus", "h-4 w-4") }}
                                 Create Rule
                             </a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

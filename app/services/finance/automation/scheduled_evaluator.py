@@ -63,6 +63,19 @@ class ScheduledRuleEvaluator:
             ),
         )
         rules = list(db.scalars(stmt).all())
+        from app.services.finance.automation.entity_configuration import (
+            entity_configuration_service,
+        )
+
+        rules = [
+            rule
+            for rule in rules
+            if entity_configuration_service.is_enabled(
+                db,
+                rule.organization_id,
+                rule.entity_type.value,
+            )
+        ]
         results["rules_checked"] = len(rules)
 
         for rule in rules:

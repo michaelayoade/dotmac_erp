@@ -798,7 +798,10 @@ jobs:
   integration-test:
     name: Integration Tests (PostgreSQL)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Full isolated-database rehearsals reached only 55% in the former
+    # 15-minute budget on a hosted runner; retain every check and allow
+    # the migration/tenant-isolation suite to finish.
+    timeout-minutes: 40
     # No `continue-on-error`. Every PostgreSQL-only check lived behind it —
     # tenant isolation, the migration chain, and the RLS coverage ratchet — so
     # all of them reported and none of them gated: the suite could fail and the

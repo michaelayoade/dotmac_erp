@@ -455,7 +455,7 @@ UNDISPOSITIONED: Mapping[tuple[str, str], str] = {
 # being made — that is the whole point of asserting the distribution rather
 # than only the backlog.
 RESOLUTION_CENSUS: Mapping[str, int] = {
-    "fix": 117,
+    "fix": 116,
     "isolate": 18,
     "retire_with_domain_cutover": 2,
     "disable": 0,
@@ -553,7 +553,7 @@ def test_the_app_user_blocker_count_is_a_two_directional_ratchet() -> None:
     their rows too: both resolve WHICH tenant owns one given row, which is
     tenant resolution, not tenant enumeration.
     """
-    baseline = 49
+    baseline = 48
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

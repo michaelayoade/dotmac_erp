@@ -168,7 +168,7 @@ def check_organization_exists():
             if not result:
                 print(f"Warning: Default organization {DEFAULT_ORG_ID} does not exist.")
                 print(
-                    "Please run database migrations first: poetry run alembic upgrade head"
+                    "Please run database migrations first: poetry run alembic upgrade heads"
                 )
                 return False
             return True

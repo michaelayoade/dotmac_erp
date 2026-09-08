@@ -3,7 +3,6 @@ ar.customer_payment	denied-no-grant	true	true
 ar.invoice	denied-no-grant	true	true
 ar.payment_allocation	denied-no-grant	false	false
 audit.audit_log	denied-no-grant	true	true
-automation.workflow_rule	denied-no-grant	false	false
 banking.bank_accounts	denied-no-grant	false	false
 banking.bank_statement_lines	denied-no-grant	false	false
 core_org.organization	denied-no-grant	true	true

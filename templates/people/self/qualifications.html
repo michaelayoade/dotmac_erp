@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import status_badge %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 
 {% block page_title %}Qualifications{% endblock %}
 
@@ -86,7 +87,7 @@
         <input type="hidden" name="qualification_id" value="{{ edit_record.qualification_id }}">
         <div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Edit Qualification</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Updates are submitted one at a time for approval. Supporting evidence is optional.</p>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Updates are submitted one at a time for approval. Supporting evidence is required.</p>
         </div>
         <fieldset class="grid gap-4 md:grid-cols-2">
             <div>
@@ -109,7 +110,16 @@
             <div><label for="grade" class="form-label">Grade</label><input id="grade" name="grade" class="form-input w-full" value="{{ form_data.get('grade') if form_data else (edit_record.grade if edit_record and edit_record.grade else '') }}"></div>
             <div><label for="score" class="form-label">Score</label><input id="score" name="score" class="form-input w-full" value="{{ form_data.get('score') if form_data else (edit_record.score if edit_record and edit_record.score is not none else '') }}"></div>
             <div><label for="max_score" class="form-label">Max Score</label><input id="max_score" name="max_score" class="form-input w-full" value="{{ form_data.get('max_score') if form_data else (edit_record.max_score if edit_record and edit_record.max_score is not none else '') }}"></div>
-            <div class="md:col-span-2"><label for="supporting_file" class="form-label">Supporting File</label><input id="supporting_file" type="file" name="supporting_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="form-input w-full"><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Approved types only. Max 10 MB.</p></div>
+            <div class="md:col-span-2">
+                {{ file_upload_zone(
+                    name="supporting_file",
+                    label="Supporting File",
+                    hint="Required. Approved types only. Max 10 MB.",
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png",
+                    max_size_mb=10,
+                    required=true
+                ) }}
+            </div>
             <div class="md:col-span-2"><label for="notes" class="form-label">Notes</label><textarea id="notes" name="notes" rows="3" class="form-input w-full">{{ form_data.get('notes') if form_data else (edit_record.notes if edit_record and edit_record.notes else '') }}</textarea></div>
         </fieldset>
         <div class="flex justify-end gap-3">
@@ -222,9 +232,15 @@
                         </label>
                     </div>
                     <div class="md:col-span-2">
-                        <label class="form-label">Supporting File</label>
-                        <input type="file" class="form-input w-full" :name="`supporting_file_${index + 1}`" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Approved types only. Max 10 MB.</p>
+                        {{ file_upload_zone(
+                            name="supporting_file",
+                            name_expression="`supporting_file_${index + 1}`",
+                            label="Supporting File",
+                            hint="Required. Approved types only. Max 10 MB.",
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png",
+                            max_size_mb=10,
+                            required=true
+                        ) }}
                         <p class="mt-1 text-xs text-amber-700 dark:text-amber-400" x-show="row._upload_filename" x-text="`Please select ${row._upload_filename} again — your browser cannot keep a file across a failed submission.`"></p>
                         <p class="mt-1 text-xs text-rose-600 dark:text-rose-400" x-show="row._errors && row._errors.supporting_file" x-text="row._errors && row._errors.supporting_file"></p>
                     </div>

@@ -13,8 +13,8 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.finance.automation.custom_fields import custom_fields_service
 from app.models.finance.automation import CustomFieldEntityType
+from app.services.finance.automation.custom_fields import custom_fields_service
 from app.services.finance.automation.recurring import recurring_service
 from app.services.finance.automation.web import automation_web_service
 from app.services.finance.automation.workflow import workflow_service
@@ -27,6 +27,34 @@ from app.web.deps import (
 )
 
 router = APIRouter(prefix="/automation", tags=["automation-web"])
+legacy_router = APIRouter(
+    prefix="/finance/automation",
+    tags=["automation-legacy-redirects"],
+    include_in_schema=False,
+)
+
+
+def _legacy_automation_redirect(
+    request: Request, legacy_path: str = ""
+) -> RedirectResponse:
+    """Redirect legacy Finance bookmarks to the Admin-owned Automation URL."""
+    suffix = f"/{legacy_path}" if legacy_path else ""
+    target = f"/automation{suffix}"
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    return RedirectResponse(url=target, status_code=308)
+
+
+@legacy_router.get("")
+def legacy_automation_root(request: Request) -> RedirectResponse:
+    """Redirect the former Finance Automation root without rendering Finance UI."""
+    return _legacy_automation_redirect(request)
+
+
+@legacy_router.get("/{legacy_path:path}")
+def legacy_automation_path(request: Request, legacy_path: str) -> RedirectResponse:
+    """Redirect legacy Finance Automation GET links to their canonical paths."""
+    return _legacy_automation_redirect(request, legacy_path)
 
 
 # =============================================================================
@@ -42,7 +70,7 @@ def automation_dashboard(
 ):
     """Automation landing page."""
     context = base_context(request, auth, "Automation", "automation")
-    return templates.TemplateResponse(request, "finance/automation/index.html", context)
+    return templates.TemplateResponse(request, "admin/automation/index.html", context)
 
 
 @router.get("/capabilities")
@@ -81,7 +109,7 @@ def list_recurring(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_list.html", context
+        request, "admin/automation/recurring_list.html", context
     )
 
 
@@ -105,7 +133,7 @@ def new_recurring_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_form.html", context
+        request, "admin/automation/recurring_form.html", context
     )
 
 
@@ -126,7 +154,7 @@ def view_recurring(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_detail.html", context
+        request, "admin/automation/recurring_detail.html", context
     )
 
 
@@ -145,7 +173,7 @@ def edit_recurring_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_form.html", context
+        request, "admin/automation/recurring_form.html", context
     )
 
 
@@ -237,7 +265,7 @@ async def create_recurring(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/recurring_form.html", context
+            request, "admin/automation/recurring_form.html", context
         )
 
 
@@ -301,7 +329,7 @@ async def update_recurring(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/recurring_form.html", context
+            request, "admin/automation/recurring_form.html", context
         )
 
 
@@ -437,7 +465,32 @@ def list_workflows(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_list.html", context
+        request, "admin/automation/workflow_list.html", context
+    )
+
+
+@router.get("/workflows/archived", response_class=HTMLResponse)
+def list_archived_workflows(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Archived workflow rules and their restore actions."""
+    context = base_context(request, auth, "Archived Workflow Rules", "automation")
+    context.update(
+        automation_web_service.list_workflows_context(
+            db,
+            str(auth.organization_id),
+            is_active=None,
+            archived=True,
+            page=page,
+        )
+    )
+    return templates.TemplateResponse(
+        request,
+        "admin/automation/workflow_list.html",
+        context,
     )
 
 
@@ -454,7 +507,7 @@ def new_workflow_form(
         automation_web_service.workflow_form_context(db, str(auth.organization_id))
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_form.html", context
+        request, "admin/automation/workflow_form.html", context
     )
 
 
@@ -472,7 +525,7 @@ def workflow_monitoring(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_monitoring.html", context
+        request, "admin/automation/workflow_monitoring.html", context
     )
 
 
@@ -530,7 +583,7 @@ def view_workflow(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_detail.html", context
+        request, "admin/automation/workflow_detail.html", context
     )
 
 
@@ -549,7 +602,7 @@ def edit_workflow_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_form.html", context
+        request, "admin/automation/workflow_form.html", context
     )
 
 
@@ -600,7 +653,7 @@ async def create_workflow(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/workflow_form.html", context
+            request, "admin/automation/workflow_form.html", context
         )
 
 
@@ -670,6 +723,7 @@ async def update_workflow(
         rule = workflow_service.update_rule(
             db=db,
             rule_id=UUID(rule_id),
+            organization_id=auth.organization_id,
             updates=updates,
             updated_by=auth.user_id,
         )
@@ -698,7 +752,7 @@ async def update_workflow(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/workflow_form.html", context
+            request, "admin/automation/workflow_form.html", context
         )
 
 
@@ -711,21 +765,23 @@ def toggle_workflow(
 ):
     """Toggle workflow rule active status."""
     try:
-        rule = workflow_service.get(db, UUID(rule_id))
+        rule = workflow_service.get(db, UUID(rule_id), auth.organization_id)
         if not rule:
             return RedirectResponse(
                 url="/automation/workflows?error=Rule+not+found",
                 status_code=303,
             )
 
+        activate = not rule.is_active
         workflow_service.update_rule(
             db=db,
             rule_id=UUID(rule_id),
-            updates={"is_active": not rule.is_active},
+            organization_id=auth.organization_id,
+            updates={"is_active": activate},
             updated_by=auth.user_id,
         )
 
-        status = "activated" if not rule.is_active else "deactivated"
+        status = "activated" if activate else "deactivated"
         return RedirectResponse(
             url=f"/automation/workflows?success=Rule+{status}",
             status_code=303,
@@ -752,7 +808,7 @@ def workflow_versions(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_versions.html", context
+        request, "admin/automation/workflow_versions.html", context
     )
 
 
@@ -773,7 +829,12 @@ async def test_workflow(
         data = dict(form_data)
 
     try:
-        result = workflow_service.dry_run(db, UUID(rule_id), data)
+        result = workflow_service.dry_run(
+            db,
+            UUID(rule_id),
+            auth.organization_id,
+            data,
+        )
         return JSONResponse(content=result)
     except Exception as e:
         return JSONResponse(
@@ -782,23 +843,64 @@ async def test_workflow(
         )
 
 
-@router.post("/workflows/{rule_id}/delete")
-def delete_workflow(
+@router.post("/workflows/{rule_id}/archive")
+def archive_workflow(
     request: Request,
     rule_id: str,
     auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Delete a workflow rule."""
+    """Archive a workflow rule while preserving versions and executions."""
     try:
-        workflow_service.delete(db, UUID(rule_id))
+        archived = workflow_service.archive(
+            db,
+            UUID(rule_id),
+            auth.organization_id,
+            auth.user_id,
+        )
+        if not archived:
+            return RedirectResponse(
+                url="/automation/workflows?error=Rule+not+found",
+                status_code=303,
+            )
         return RedirectResponse(
-            url="/automation/workflows?success=Rule+deleted",
+            url="/automation/workflows?success=Rule+archived",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
             url=f"/automation/workflows/{rule_id}?error={str(e)}",
+            status_code=303,
+        )
+
+
+@router.post("/workflows/{rule_id}/restore")
+def restore_workflow(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Restore an archived workflow as inactive."""
+    try:
+        restored = workflow_service.restore(
+            db,
+            UUID(rule_id),
+            auth.organization_id,
+            auth.user_id,
+        )
+        if not restored:
+            return RedirectResponse(
+                url="/automation/workflows/archived?error=Rule+not+found",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url=f"/automation/workflows/{rule_id}?success=Rule+restored+as+inactive",
+            status_code=303,
+        )
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/automation/workflows/archived?error={str(e)}",
             status_code=303,
         )
 
@@ -835,7 +937,7 @@ def list_custom_fields(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/fields_list.html", context
+        request, "admin/automation/fields_list.html", context
     )
 
 
@@ -852,7 +954,7 @@ def new_custom_field_form(
         automation_web_service.custom_field_form_context(db, str(auth.organization_id))
     )
     return templates.TemplateResponse(
-        request, "finance/automation/field_form.html", context
+        request, "admin/automation/field_form.html", context
     )
 
 
@@ -876,11 +978,14 @@ def render_custom_fields(
     )
     return templates.TemplateResponse(
         request,
-        "finance/automation/_custom_fields.html",
+        "admin/automation/_custom_fields.html",
         {
             "request": request,
             "sections": custom_fields_service.get_form_schema(
-                db, auth.organization_id, entity_type
+                db,
+                auth.organization_id,
+                entity_type,
+                include_inactive_codes=set(values) if entity_id else None,
             ),
             "custom_field_values": values,
             "entity_type": entity_type.value,
@@ -908,7 +1013,10 @@ def custom_field_schema(
     return {
         "entity_type": entity_type.value,
         "sections": custom_fields_service.get_form_schema(
-            db, auth.organization_id, entity_type
+            db,
+            auth.organization_id,
+            entity_type,
+            include_inactive_codes=set(values) if entity_id else None,
         ),
         "values": values,
     }
@@ -966,7 +1074,7 @@ def view_custom_field(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/field_detail.html", context
+        request, "admin/automation/field_detail.html", context
     )
 
 
@@ -985,7 +1093,7 @@ def edit_custom_field_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/field_form.html", context
+        request, "admin/automation/field_form.html", context
     )
 
 
@@ -1038,7 +1146,7 @@ async def create_custom_field(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/field_form.html", context
+            request, "admin/automation/field_form.html", context
         )
 
 
@@ -1080,6 +1188,7 @@ async def update_custom_field(
         field = custom_fields_service.update_field(
             db=db,
             field_id=UUID(field_id),
+            organization_id=auth.organization_id,
             updates=updates,
             updated_by=auth.user_id,
         )
@@ -1108,22 +1217,63 @@ async def update_custom_field(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/field_form.html", context
+            request, "admin/automation/field_form.html", context
         )
 
 
-@router.post("/fields/{field_id}/delete")
-def delete_custom_field(
+@router.post("/fields/{field_id}/deactivate")
+def deactivate_custom_field(
     request: Request,
     field_id: str,
     auth: WebAuthContext = Depends(require_automation_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Delete (deactivate) a custom field."""
+    """Deactivate a custom field without deleting historical values."""
     try:
-        custom_fields_service.delete(db, UUID(field_id))
+        deactivated = custom_fields_service.deactivate(
+            db,
+            UUID(field_id),
+            auth.organization_id,
+            auth.user_id,
+        )
+        if not deactivated:
+            return RedirectResponse(
+                url="/automation/fields?error=Field+not+found",
+                status_code=303,
+            )
         return RedirectResponse(
-            url="/automation/fields?success=Field+deleted",
+            url=f"/automation/fields/{field_id}?success=Field+deactivated",
+            status_code=303,
+        )
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/automation/fields/{field_id}?error={str(e)}",
+            status_code=303,
+        )
+
+
+@router.post("/fields/{field_id}/reactivate")
+def reactivate_custom_field(
+    request: Request,
+    field_id: str,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Reactivate a custom field for future forms."""
+    try:
+        reactivated = custom_fields_service.reactivate(
+            db,
+            UUID(field_id),
+            auth.organization_id,
+            auth.user_id,
+        )
+        if not reactivated:
+            return RedirectResponse(
+                url="/automation/fields?error=Field+not+found",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url=f"/automation/fields/{field_id}?success=Field+reactivated",
             status_code=303,
         )
     except Exception as e:
@@ -1165,7 +1315,7 @@ def list_templates(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/templates_list.html", context
+        request, "admin/automation/templates_list.html", context
     )
 
 
@@ -1182,7 +1332,7 @@ def new_template_form(
         automation_web_service.template_form_context(db, str(auth.organization_id))
     )
     return templates.TemplateResponse(
-        request, "finance/automation/template_form.html", context
+        request, "admin/automation/template_form.html", context
     )
 
 
@@ -1203,7 +1353,7 @@ def view_template(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/template_detail.html", context
+        request, "admin/automation/template_detail.html", context
     )
 
 
@@ -1222,7 +1372,7 @@ def edit_template_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/template_form.html", context
+        request, "admin/automation/template_form.html", context
     )
 
 
@@ -1271,7 +1421,7 @@ async def create_template(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/template_form.html", context
+            request, "admin/automation/template_form.html", context
         )
 
 
@@ -1324,7 +1474,7 @@ async def update_template(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/template_form.html", context
+            request, "admin/automation/template_form.html", context
         )
 
 

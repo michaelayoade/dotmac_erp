@@ -39,6 +39,9 @@ from app.services.finance.automation.custom_fields import (
     CustomFieldInput,
     custom_fields_service,
 )
+from app.services.finance.automation.entity_configuration import (
+    entity_configuration_service,
+)
 from app.services.finance.automation.recurring import (
     RecurringTemplateInput,
     recurring_service,
@@ -285,6 +288,8 @@ def _workflow_list_view(rule: WorkflowRule) -> dict:
         "action_icon": _action_type_icon(rule.action_type),
         "priority": rule.priority,
         "is_active": rule.is_active,
+        "is_archived": rule.archived_at is not None,
+        "archived_at": _format_datetime(rule.archived_at),
         "execution_count": rule.execution_count,
         "success_count": rule.success_count,
         "failure_count": rule.failure_count,
@@ -320,6 +325,9 @@ def _workflow_detail_view(
         "cooldown_seconds": rule.cooldown_seconds,
         "schedule_config": rule.schedule_config,
         "is_active": rule.is_active,
+        "is_archived": rule.archived_at is not None,
+        "archived_at": _format_datetime(rule.archived_at),
+        "archived_by": str(rule.archived_by) if rule.archived_by else None,
         "execution_count": rule.execution_count,
         "success_count": rule.success_count,
         "failure_count": rule.failure_count,
@@ -743,6 +751,7 @@ class AutomationWebService:
         entity_type: str | None = None,
         trigger_event: str | None = None,
         is_active: bool | None = None,
+        archived: bool = False,
         page: int = 1,
         page_size: int = 50,
     ) -> dict:
@@ -771,6 +780,7 @@ class AutomationWebService:
             entity_type=et,
             trigger_event=te,
             is_active=is_active,
+            archived=archived,
         )
 
         items = [_workflow_list_view(r) for r in rules]
@@ -820,6 +830,7 @@ class AutomationWebService:
                 "is_active": is_active,
             },
             "active_filters": active_filters,
+            "show_archived": archived,
         }
 
     def workflow_form_context(
@@ -829,17 +840,16 @@ class AutomationWebService:
         rule_id: str | None = None,
     ) -> dict:
         """Get context for workflow rule form."""
-        from app.services.finance.automation.entity_registry import (
-            registered_entity_types,
+        org_id = coerce_uuid(organization_id)
+        enabled_types = set(
+            entity_configuration_service.enabled_entity_types(db, org_id)
         )
-
-        connected_types = set(registered_entity_types())
         context: dict[str, Any] = {
             "rule": None,
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
                 for et in WorkflowEntityType
-                if et.value in connected_types
+                if et.value in enabled_types
             ],
             "trigger_events": [
                 {"value": te.value, "label": _trigger_event_label(te)}
@@ -853,13 +863,22 @@ class AutomationWebService:
         }
 
         if rule_id:
-            org_id = coerce_uuid(organization_id)
             rule = workflow_service.get(
                 db, coerce_uuid(rule_id), organization_id=org_id
             )
             if rule:
+                if rule.entity_type.value not in enabled_types:
+                    context["entity_types"].append(
+                        {
+                            "value": rule.entity_type.value,
+                            "label": (
+                                f"{_workflow_entity_type_label(rule.entity_type)} "
+                                "(disabled)"
+                            ),
+                        }
+                    )
                 executions = workflow_service.get_executions(
-                    db, rule_id=rule.rule_id, limit=10
+                    db, org_id, rule_id=rule.rule_id, limit=10
                 )
                 context["rule"] = _workflow_detail_view(rule, executions)
                 context["is_edit"] = True
@@ -874,11 +893,21 @@ class AutomationWebService:
     ) -> dict:
         """Get context for workflow rule detail page."""
         org_id = coerce_uuid(organization_id)
-        rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
+        rule = workflow_service.get(
+            db,
+            coerce_uuid(rule_id),
+            organization_id=org_id,
+            include_archived=True,
+        )
         if not rule:
             return {"rule": None, "error": "Rule not found"}
 
-        executions = workflow_service.get_executions(db, rule_id=rule.rule_id, limit=20)
+        executions = workflow_service.get_executions(
+            db,
+            org_id,
+            rule_id=rule.rule_id,
+            limit=20,
+        )
 
         return {
             "rule": _workflow_detail_view(rule, executions),
@@ -1022,11 +1051,16 @@ class AutomationWebService:
         field_id: str | None = None,
     ) -> dict:
         """Get context for custom field form."""
+        org_id = coerce_uuid(organization_id)
+        enabled_types = set(
+            entity_configuration_service.enabled_entity_types(db, org_id)
+        )
         context: dict[str, Any] = {
             "field": None,
             "entity_types": [
                 {"value": et.value, "label": _custom_field_entity_type_label(et)}
                 for et in CustomFieldEntityType
+                if et.value in enabled_types
             ],
             "field_types": [
                 {"value": ft.value, "label": _field_type_label(ft)}
@@ -1036,11 +1070,20 @@ class AutomationWebService:
         }
 
         if field_id:
-            org_id = coerce_uuid(organization_id)
             field = custom_fields_service.get(
                 db, coerce_uuid(field_id), organization_id=org_id
             )
             if field:
+                if field.entity_type.value not in enabled_types:
+                    context["entity_types"].append(
+                        {
+                            "value": field.entity_type.value,
+                            "label": (
+                                f"{_custom_field_entity_type_label(field.entity_type)} "
+                                "(disabled)"
+                            ),
+                        }
+                    )
                 context["field"] = _custom_field_detail_view(field)
                 context["is_edit"] = True
 
@@ -1325,11 +1368,16 @@ class AutomationWebService:
     ) -> dict:
         """Get context for workflow rule version history page."""
         org_id = coerce_uuid(organization_id)
-        rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
+        rule = workflow_service.get(
+            db,
+            coerce_uuid(rule_id),
+            organization_id=org_id,
+            include_archived=True,
+        )
         if not rule:
             return {"rule": None, "error": "Rule not found"}
 
-        versions = workflow_service.get_rule_versions(db, rule.rule_id)
+        versions = workflow_service.get_rule_versions(db, rule.rule_id, org_id)
         version_items = []
         for v in versions:
             version_items.append(

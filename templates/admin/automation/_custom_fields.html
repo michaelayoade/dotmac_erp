@@ -1,0 +1,33 @@
+{% for section in sections %}
+<fieldset class="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+    <legend class="px-2 text-sm font-semibold text-slate-900 dark:text-white">{{ section.section_name }}</legend>
+    <div class="grid gap-4 sm:grid-cols-2">
+        {% for field in section.fields %}
+        {% set value = custom_field_values.get(field.field_code, field.default_value) %}
+        <div class="{% if field.field_type == 'TEXTAREA' or field.field_type == 'MULTISELECT' %}sm:col-span-2{% endif %}">
+            <label for="custom_field__{{ field.field_code }}" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                {{ field.field_name }}
+                {% if field.is_required and not field.read_only %}<span class="text-rose-500">*</span>{% endif %}
+                {% if field.read_only %}<span class="ms-1 text-xs font-normal text-slate-500 dark:text-slate-400">(Historical)</span>{% endif %}
+            </label>
+            {% if field.field_type == 'TEXTAREA' %}
+            <textarea id="custom_field__{{ field.field_code }}" name="custom_field__{{ field.field_code }}" {% if field.read_only %}disabled{% elif field.is_required %}required{% endif %} {% if field.max_length %}maxlength="{{ field.max_length }}"{% endif %} placeholder="{{ field.placeholder or '' }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:disabled:bg-slate-900/50 dark:disabled:text-slate-400">{{ value or '' }}</textarea>
+            {% elif field.field_type in ['SELECT', 'MULTISELECT'] %}
+            <select id="custom_field__{{ field.field_code }}" name="custom_field__{{ field.field_code }}" {% if field.field_type == 'MULTISELECT' %}multiple{% endif %} {% if field.read_only %}disabled{% elif field.is_required %}required{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:disabled:bg-slate-900/50 dark:disabled:text-slate-400">
+                {% if field.field_type == 'SELECT' %}<option value="">Select…</option>{% endif %}
+                {% for option in field.options %}<option value="{{ option.value }}" {% if option.value == value or (value is iterable and value is not string and option.value in value) %}selected{% endif %}>{{ option.label }}</option>{% endfor %}
+            </select>
+            {% elif field.field_type == 'BOOLEAN' %}
+            <input type="checkbox" id="custom_field__{{ field.field_code }}" name="custom_field__{{ field.field_code }}" value="true" {% if value %}checked{% endif %} {% if field.read_only %}disabled{% endif %} class="mt-2 h-4 w-4 rounded border-slate-300 text-teal-600 disabled:cursor-not-allowed disabled:opacity-60">
+            {% else %}
+            <input type="{% if field.field_type in ['NUMBER', 'DECIMAL', 'CURRENCY'] %}number{% elif field.field_type == 'DATE' %}date{% elif field.field_type == 'DATETIME' %}datetime-local{% elif field.field_type == 'EMAIL' %}email{% elif field.field_type == 'URL' %}url{% elif field.field_type == 'PHONE' %}tel{% else %}text{% endif %}" id="custom_field__{{ field.field_code }}" name="custom_field__{{ field.field_code }}" value="{{ value or '' }}" {% if field.read_only %}disabled{% elif field.is_required %}required{% endif %} {% if field.max_length %}maxlength="{{ field.max_length }}"{% endif %} {% if field.min_value %}min="{{ field.min_value }}"{% endif %} {% if field.max_value %}max="{{ field.max_value }}"{% endif %} {% if field.pattern %}pattern="{{ field.pattern }}"{% endif %} placeholder="{{ field.placeholder or '' }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:disabled:bg-slate-900/50 dark:disabled:text-slate-400">
+            {% endif %}
+            {% if field.read_only %}<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">This field is inactive. Its saved value is retained for this record and cannot be changed.</p>{% endif %}
+            {% if field.help_text %}<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ field.help_text }}</p>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</fieldset>
+{% else %}
+<p class="text-sm text-slate-500 dark:text-slate-400">No custom fields are configured for {{ entity_type | replace('_', ' ') | title }}.</p>
+{% endfor %}

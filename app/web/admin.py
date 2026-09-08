@@ -19,6 +19,7 @@ from app.services.admin.web import admin_web_service
 from app.services.branding_assets import delete_branding_asset, save_branding_asset
 from app.services.hooks.web import service_hook_web_service
 from app.templates import templates
+from app.web.admin_automation_entities import router as automation_entities_router
 from app.web.deps import (
     WebAuthContext,
     get_db,
@@ -38,6 +39,7 @@ router = APIRouter(
     tags=["admin-web"],
     dependencies=[Depends(require_admin_access)],
 )
+router.include_router(automation_entities_router)
 
 
 def _normalize_form(form: Any) -> dict[str, str]:

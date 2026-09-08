@@ -1,0 +1,101 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
+
+{% block page_title %}Automation Entities{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="transition-colors hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li><a href="/automation" class="transition-colors hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li class="font-medium text-slate-900 dark:text-white" aria-current="page">Entities</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 page-enter">
+    <section class="card p-6" aria-labelledby="entity-configuration-heading">
+        <div class="flex items-start gap-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                {{ icon_svg("cog", "h-5 w-5") }}
+            </div>
+            <div>
+                <h2 id="entity-configuration-heading" class="text-xl font-semibold text-slate-900 dark:text-white">Entity availability</h2>
+                <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">
+                    Enable only the ERP record types your organization automates. This catalog is limited to connectors implemented and verified by the application.
+                </p>
+            </div>
+        </div>
+        <div class="mt-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+            {{ icon_svg("information-circle", "mt-0.5 h-5 w-5 shrink-0") }}
+            <p>
+                Disabling an entity pauses immediate, queued, and scheduled workflow actions and removes it from new workflow and custom-field forms. Existing rules, definitions, assignments, and stored field values are retained and become available again when the entity is enabled.
+            </p>
+        </div>
+    </section>
+
+    {% if entity_groups %}
+        {% for group in entity_groups %}
+        <section class="card overflow-hidden" aria-labelledby="module-{{ loop.index }}">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 id="module-{{ loop.index }}" class="font-semibold text-slate-900 dark:text-white">{{ group.module }}</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ group.entities | length }} registered entities</p>
+            </div>
+            <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% for entity in group.entities %}
+                <div class="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h4 class="font-medium text-slate-900 dark:text-white">{{ entity.label }}</h4>
+                            {{ status_badge("Enabled" if entity.is_enabled else "Disabled", size="sm") }}
+                        </div>
+                        <p class="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{{ entity.entity_type }}</p>
+                        <div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600 dark:text-slate-300">
+                            <span>{{ entity.event_count }} workflow events</span>
+                            <span>{{ entity.workflow_count }} existing rules</span>
+                            {% if entity.supports_custom_fields %}
+                            <span>{{ entity.field_count }} custom fields</span>
+                            {% endif %}
+                            {% if entity.supports_assignment %}
+                            <span>Assignment supported</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="shrink-0">
+                        {% if entity.is_enabled %}
+                        <form method="post" action="/admin/automation/entities/{{ entity.entity_type }}/disable">
+                            {{ request.state.csrf_form | safe }}
+                            <button type="submit"
+                                    class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                                {{ icon_svg("pause-circle", "h-5 w-5") }}
+                                Disable
+                            </button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/admin/automation/entities/{{ entity.entity_type }}/enable">
+                            {{ request.state.csrf_form | safe }}
+                            <button type="submit"
+                                    class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400">
+                                {{ icon_svg("play", "h-5 w-5") }}
+                                Enable
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    {% else %}
+    <section class="card p-10 text-center">
+        {{ icon_svg("collection", "mx-auto h-10 w-10 text-slate-400") }}
+        <h3 class="mt-3 font-semibold text-slate-900 dark:text-white">No registered entities</h3>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No verified Automation connectors are available in this build.</p>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

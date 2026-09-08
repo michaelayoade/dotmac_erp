@@ -105,6 +105,7 @@ DEPARTMENT_DISCIPLINE_READ_PERMISSION = "discipline:department:read"
 # submit path. They never belong in template context — see
 # SelfServiceWebService._renderable_form_rows.
 TRANSPORT_ROW_KEYS = frozenset({"_upload"})
+SUPPORTING_FILE_REQUIRED_SECTIONS = frozenset({"qualifications", "certifications"})
 
 
 class SelfServiceWebService:
@@ -1801,12 +1802,14 @@ class SelfServiceWebService:
         pending_evidence = None
         upload_service = get_employee_document_upload()
         try:
-            if section in {"qualifications", "certifications"}:
+            if section in SUPPORTING_FILE_REQUIRED_SECTIONS:
                 pending_evidence = self._upload_pending_evidence(
                     org_id=org_id,
                     employee_id=employee_id,
                     upload=upload,
                 )
+                if pending_evidence is None:
+                    raise EmployeeExtendedDataError("Select a supporting file")
 
             validator_map = {
                 "qualifications": info_change_service._validate_qualification_payload,
@@ -1901,7 +1904,7 @@ class SelfServiceWebService:
                     row_errors = True
                     continue
                 pending_evidence = None
-                if section in {"qualifications", "certifications"}:
+                if section in SUPPORTING_FILE_REQUIRED_SECTIONS:
                     try:
                         pending_evidence = self._upload_pending_evidence(
                             org_id=org_id,
@@ -1912,8 +1915,11 @@ class SelfServiceWebService:
                         row["_errors"]["supporting_file"] = str(exc)
                         row_errors = True
                         continue
-                    if pending_evidence:
-                        uploaded.append(pending_evidence)
+                    if pending_evidence is None:
+                        row["_errors"]["supporting_file"] = "Select a supporting file"
+                        row_errors = True
+                        continue
+                    uploaded.append(pending_evidence)
                 prepared.append(
                     ExtendedBatchItemInput(
                         proposed_changes=normalized,

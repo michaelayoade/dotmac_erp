@@ -107,6 +107,18 @@ def configure_logging() -> None:
                 "formatter": "json",
             }
         },
+        "loggers": {
+            # Celery emits one INFO record for every successful task through
+            # this logger.  Task outcome and duration are captured separately
+            # by app.celery_app metrics, so retaining those records adds high
+            # volume without operational signal.  Keep warnings and failures
+            # visible on the normal JSON handler.
+            "celery.app.trace": {
+                "handlers": ["default"],
+                "level": "WARNING",
+                "propagate": False,
+            },
+        },
         "root": {"handlers": ["default"], "level": "INFO"},
     }
     logging.config.dictConfig(logging_config)
