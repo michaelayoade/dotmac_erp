@@ -14,10 +14,11 @@ inherited                   6   (no scope column; policy joins to a scoped paren
 global                     99
 ```
 
-The current ratchet state, after the CRM retirement protected
-`sync.source_correlation`, is 223 entries: 157 unprotected plus 66 unforced.
-Among the same 309 organization-scoped tables, 86 are now fully protected
-(27.8%). The dated block above remains the creation snapshot; current
+The current ratchet state, after Automation tenant isolation protected
+`automation.custom_field_definition` and `automation.workflow_rule`, is 221
+entries: 155 unprotected plus 66 unforced. Among the same 309
+organization-scoped tables, 88 are now fully protected (28.5%). The dated block
+above remains the creation snapshot; current
 enforcement reads the JSON baseline rather than copying that snapshot.
 
 ## What the file is for
@@ -27,7 +28,7 @@ It is a **ratchet, not a target**. `scripts/architecture/rls_coverage_audit.py
 is *not* in this file. So:
 
 - a **new** organization-scoped table without RLS fails immediately;
-- the 223 already here do not fail, because failing 223 times on day one would
+- the 221 already here do not fail, because failing 221 times on day one would
   get the gate switched off rather than the tables fixed;
 - a table that gets fixed must be **removed** from this file, and the audit
   prints which entries are now protected so it cannot silently return.

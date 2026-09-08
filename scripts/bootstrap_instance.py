@@ -640,7 +640,7 @@ def generate_setup_script(org_code: str) -> str:
 
         # Step 3: Run migrations
         echo "[3/4] Running database migrations..."
-        docker compose exec app alembic upgrade head
+        docker compose exec app alembic upgrade heads
 
         # Step 4: Bootstrap org + admin
         echo "[4/4] Bootstrapping organization and admin user..."
@@ -714,7 +714,7 @@ def generate_readme(org_code: str, org_name: str, app_port: int) -> str:
         # Pull latest code, rebuild, and migrate
         docker compose build app worker beat
         docker compose up -d
-        docker compose exec app alembic upgrade head
+        docker compose exec app alembic upgrade heads
         ```
     """)
 

@@ -41,7 +41,7 @@ def _require_currency_table(engine) -> None:
         pytest.skip(f"core_fx.currency not inspectable: {exc}")
     if not has_table:
         pytest.skip(
-            "core_fx.currency does not exist — run `alembic upgrade head` "
+            "core_fx.currency does not exist — run `alembic upgrade heads` "
             "on the test DB"
         )
 

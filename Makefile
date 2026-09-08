@@ -98,7 +98,7 @@ test-e2e: ## Run end-to-end browser tests
 # ─── Database ─────────────────────────────────────────────
 
 migrate: ## Apply all pending migrations + regenerate schema skill
-	poetry run alembic upgrade head
+	poetry run alembic upgrade heads
 	@echo "Regenerating schema skill..."
 	@poetry run python scripts/generate_schema_skill.py
 

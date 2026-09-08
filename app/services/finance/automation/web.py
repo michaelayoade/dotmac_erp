@@ -285,6 +285,8 @@ def _workflow_list_view(rule: WorkflowRule) -> dict:
         "action_icon": _action_type_icon(rule.action_type),
         "priority": rule.priority,
         "is_active": rule.is_active,
+        "is_archived": rule.archived_at is not None,
+        "archived_at": _format_datetime(rule.archived_at),
         "execution_count": rule.execution_count,
         "success_count": rule.success_count,
         "failure_count": rule.failure_count,
@@ -320,6 +322,9 @@ def _workflow_detail_view(
         "cooldown_seconds": rule.cooldown_seconds,
         "schedule_config": rule.schedule_config,
         "is_active": rule.is_active,
+        "is_archived": rule.archived_at is not None,
+        "archived_at": _format_datetime(rule.archived_at),
+        "archived_by": str(rule.archived_by) if rule.archived_by else None,
         "execution_count": rule.execution_count,
         "success_count": rule.success_count,
         "failure_count": rule.failure_count,
@@ -743,6 +748,7 @@ class AutomationWebService:
         entity_type: str | None = None,
         trigger_event: str | None = None,
         is_active: bool | None = None,
+        archived: bool = False,
         page: int = 1,
         page_size: int = 50,
     ) -> dict:
@@ -771,6 +777,7 @@ class AutomationWebService:
             entity_type=et,
             trigger_event=te,
             is_active=is_active,
+            archived=archived,
         )
 
         items = [_workflow_list_view(r) for r in rules]
@@ -820,6 +827,7 @@ class AutomationWebService:
                 "is_active": is_active,
             },
             "active_filters": active_filters,
+            "show_archived": archived,
         }
 
     def workflow_form_context(
@@ -859,7 +867,7 @@ class AutomationWebService:
             )
             if rule:
                 executions = workflow_service.get_executions(
-                    db, rule_id=rule.rule_id, limit=10
+                    db, org_id, rule_id=rule.rule_id, limit=10
                 )
                 context["rule"] = _workflow_detail_view(rule, executions)
                 context["is_edit"] = True
@@ -874,11 +882,21 @@ class AutomationWebService:
     ) -> dict:
         """Get context for workflow rule detail page."""
         org_id = coerce_uuid(organization_id)
-        rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
+        rule = workflow_service.get(
+            db,
+            coerce_uuid(rule_id),
+            organization_id=org_id,
+            include_archived=True,
+        )
         if not rule:
             return {"rule": None, "error": "Rule not found"}
 
-        executions = workflow_service.get_executions(db, rule_id=rule.rule_id, limit=20)
+        executions = workflow_service.get_executions(
+            db,
+            org_id,
+            rule_id=rule.rule_id,
+            limit=20,
+        )
 
         return {
             "rule": _workflow_detail_view(rule, executions),
@@ -1325,11 +1343,16 @@ class AutomationWebService:
     ) -> dict:
         """Get context for workflow rule version history page."""
         org_id = coerce_uuid(organization_id)
-        rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
+        rule = workflow_service.get(
+            db,
+            coerce_uuid(rule_id),
+            organization_id=org_id,
+            include_archived=True,
+        )
         if not rule:
             return {"rule": None, "error": "Rule not found"}
 
-        versions = workflow_service.get_rule_versions(db, rule.rule_id)
+        versions = workflow_service.get_rule_versions(db, rule.rule_id, org_id)
         version_items = []
         for v in versions:
             version_items.append(

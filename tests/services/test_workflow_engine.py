@@ -64,6 +64,8 @@ def _make_mock_rule(**overrides: Any) -> MagicMock:
     rule.execute_async = overrides.get("execute_async", False)
     rule.cooldown_seconds = overrides.get("cooldown_seconds")
     rule.is_active = overrides.get("is_active", True)
+    rule.archived_at = overrides.get("archived_at")
+    rule.archived_by = overrides.get("archived_by")
     rule.execution_count = 0
     rule.success_count = 0
     rule.failure_count = 0
@@ -522,12 +524,12 @@ class TestDryRun:
         rule = _make_mock_rule(
             trigger_conditions={"status_to": "APPROVED"},
         )
-        mock_db.get.return_value = rule
-        mock_db.scalar.return_value = 0  # not throttled
+        mock_db.scalar.side_effect = [rule, 0]  # tenant lookup, then throttle count
 
         result = workflow_service.dry_run(
             mock_db,
             rule.rule_id,
+            rule.organization_id,
             {
                 "entity_id": str(uuid.uuid4()),
                 "old_values": {"status": "SUBMITTED"},
@@ -543,11 +545,12 @@ class TestDryRun:
         rule = _make_mock_rule(
             trigger_conditions={"status_to": "REJECTED"},
         )
-        mock_db.get.return_value = rule
+        mock_db.scalar.return_value = rule
 
         result = workflow_service.dry_run(
             mock_db,
             rule.rule_id,
+            rule.organization_id,
             {
                 "entity_id": str(uuid.uuid4()),
                 "new_values": {"status": "APPROVED"},
@@ -693,7 +696,7 @@ class TestActionTriggerRule:
             action_type=ActionType.BLOCK,
         )
         mock_db = MagicMock()
-        mock_db.get.return_value = target_rule
+        mock_db.scalar.return_value = target_rule
 
         with (
             patch.object(
@@ -723,7 +726,7 @@ class TestActionTriggerRule:
             trigger_event=TriggerEvent.ON_REJECTION,
         )
         mock_db = MagicMock()
-        mock_db.get.return_value = target_rule
+        mock_db.scalar.return_value = target_rule
 
         result = workflow_service._action_trigger_rule(
             mock_db,
@@ -814,20 +817,88 @@ class TestScheduledRules:
 
 
 class TestRuleVersioning:
+    def test_rule_lookup_is_tenant_scoped(self, workflow_service):
+        mock_db = MagicMock()
+        rule_id = uuid.uuid4()
+        organization_id = uuid.uuid4()
+        mock_db.scalar.return_value = None
+
+        assert workflow_service.get(mock_db, rule_id, organization_id) is None
+
+        statement = mock_db.scalar.call_args.args[0]
+        sql = str(statement)
+        assert "workflow_rule.rule_id" in sql
+        assert "workflow_rule.organization_id" in sql
+        assert "workflow_rule.archived_at IS NULL" in sql
+
     def test_update_rule_creates_snapshot(self, workflow_service):
         mock_db = MagicMock()
         rule = _make_mock_rule()
-        mock_db.get.return_value = rule
+        mock_db.scalar.return_value = rule
 
         with patch.object(workflow_service, "_create_version_snapshot") as snapshot:
             workflow_service.update_rule(
                 mock_db,
                 rule.rule_id,
+                rule.organization_id,
                 {"priority": 10},
                 updated_by=uuid.uuid4(),
             )
 
         snapshot.assert_called_once()
+
+    def test_archive_disables_rule_and_preserves_snapshot(self, workflow_service):
+        mock_db = MagicMock()
+        actor_id = uuid.uuid4()
+        rule = _make_mock_rule(is_active=True)
+        mock_db.scalar.return_value = rule
+
+        with patch.object(workflow_service, "_create_version_snapshot") as snapshot:
+            archived = workflow_service.archive(
+                mock_db,
+                rule.rule_id,
+                rule.organization_id,
+                actor_id,
+            )
+
+        assert archived is True
+        assert rule.is_active is False
+        assert rule.archived_at is not None
+        assert rule.archived_by == actor_id
+        snapshot.assert_called_once_with(
+            mock_db,
+            rule,
+            actor_id,
+            change_summary="Rule archived",
+        )
+        mock_db.delete.assert_not_called()
+
+    def test_restore_keeps_rule_inactive_until_explicit_activation(
+        self, workflow_service
+    ):
+        mock_db = MagicMock()
+        actor_id = uuid.uuid4()
+        rule = _make_mock_rule(is_active=False, archived_at=MagicMock())
+        mock_db.scalar.return_value = rule
+
+        with patch.object(workflow_service, "_create_version_snapshot") as snapshot:
+            restored = workflow_service.restore(
+                mock_db,
+                rule.rule_id,
+                rule.organization_id,
+                actor_id,
+            )
+
+        assert restored is True
+        assert rule.is_active is False
+        assert rule.archived_at is None
+        assert rule.archived_by is None
+        snapshot.assert_called_once_with(
+            mock_db,
+            rule,
+            actor_id,
+            change_summary="Rule restored as inactive",
+        )
 
 
 # ---------------------------------------------------------------------------

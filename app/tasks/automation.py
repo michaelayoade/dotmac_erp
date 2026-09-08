@@ -14,9 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from sqlalchemy import select
-
-from app.db.session_context import cross_org_session, session_for_org
+from app.db.session_context import session_for_org
 from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
@@ -34,26 +32,6 @@ def _list_organization_ids() -> list[UUID]:
     makes.
     """
     return organization_ids(include_inactive=True)
-
-
-def _resolve_workflow_rule_org(rule_id: str) -> UUID | None:
-    """Resolve a workflow rule's organization before tenant-scoped execution.
-
-    This is resolution, not enumeration: it answers "which tenant owns this one
-    row", given an id that arrived from outside any tenant context. The
-    tenant-catalog definer deliberately returns identifiers and nothing else, so
-    it cannot answer that question, and there is no tenant-resolution contract
-    to use instead yet. The seam therefore stays as it is rather than being
-    converted into something that only looks converted.
-    """
-    from app.models.finance.automation import WorkflowRule
-
-    with cross_org_session() as db:
-        return db.scalar(
-            select(WorkflowRule.organization_id).where(
-                WorkflowRule.rule_id == UUID(rule_id)
-            )
-        )
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
@@ -82,28 +60,33 @@ def execute_workflow_action(
         "error": None,
     }
 
-    org_id = _resolve_workflow_rule_org(rule_id)
+    from app.services.finance.automation.workflow import TriggerContext
+
+    try:
+        context = TriggerContext.from_dict(context_dict)
+    except (KeyError, TypeError, ValueError) as exc:
+        result["status"] = "invalid_context"
+        result["error"] = f"Invalid workflow context: {exc}"
+        logger.warning("Workflow rule %s received invalid context", rule_id)
+        return result
+
+    org_id = context.organization_id
     if org_id is None:
-        result["status"] = "rule_not_found"
-        result["error"] = f"Rule {rule_id} not found"
-        logger.warning("Workflow rule %s not found", rule_id)
+        result["status"] = "invalid_context"
+        result["error"] = "Workflow context has no organization"
+        logger.warning("Workflow rule %s context has no organization", rule_id)
         return result
 
     try:
         with session_for_org(org_id) as db:
-            from app.services.finance.automation.workflow import (
-                TriggerContext,
-                workflow_service,
-            )
+            from app.services.finance.automation.workflow import workflow_service
 
-            rule = workflow_service.get(db, UUID(rule_id))
+            rule = workflow_service.get(db, UUID(rule_id), org_id)
             if not rule:
                 result["status"] = "rule_not_found"
                 result["error"] = f"Rule {rule_id} not found"
                 logger.warning("Workflow rule %s not found", rule_id)
                 return result
-
-            context = TriggerContext.from_dict(context_dict)
 
             # Check throttle before executing
             if workflow_service._is_throttled(db, rule, context.entity_id):
