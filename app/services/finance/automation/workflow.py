@@ -294,6 +294,19 @@ class WorkflowService:
         created_by: UUID,
     ) -> WorkflowRule:
         """Create a new workflow rule."""
+        from app.services.finance.automation.entity_configuration import (
+            entity_configuration_service,
+        )
+
+        if not entity_configuration_service.is_enabled(
+            db,
+            organization_id,
+            input_data.entity_type.value,
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Entity is disabled in Admin Automation settings",
+            )
         self._validate_configuration(
             input_data.entity_type,
             input_data.trigger_event,
@@ -447,6 +460,17 @@ class WorkflowService:
         try:
             entity_type = WorkflowEntityType(context.entity_type)
         except ValueError:
+            return []
+
+        from app.services.finance.automation.entity_configuration import (
+            entity_configuration_service,
+        )
+
+        if not entity_configuration_service.is_enabled(
+            db,
+            organization_id,
+            entity_type.value,
+        ):
             return []
 
         rules = self.list(
@@ -709,6 +733,22 @@ class WorkflowService:
         chain_depth: int = 0,
     ) -> WorkflowExecution:
         """Execute a workflow rule action."""
+        from app.services.finance.automation.entity_configuration import (
+            entity_configuration_service,
+        )
+
+        if not entity_configuration_service.is_enabled(
+            db,
+            rule.organization_id,
+            context.entity_type,
+        ):
+            return self._record_skipped(
+                db,
+                rule,
+                context,
+                "Entity is disabled in Admin Automation settings",
+            )
+
         execution = WorkflowExecution(
             rule_id=rule.rule_id,
             entity_type=context.entity_type,
@@ -1805,6 +1845,21 @@ class WorkflowService:
         rule = self.get(db, rule_id, organization_id)
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
+
+        if updates.get("is_active") is True:
+            from app.services.finance.automation.entity_configuration import (
+                entity_configuration_service,
+            )
+
+            if not entity_configuration_service.is_enabled(
+                db,
+                rule.organization_id,
+                rule.entity_type.value,
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Entity is disabled in Admin Automation settings",
+                )
 
         if "action_config" in updates or updates.get("is_active") is True:
             self._validate_configuration(

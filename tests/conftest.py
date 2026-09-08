@@ -429,6 +429,9 @@ from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (  # noqa: E40
 from app.models.finance.automation.custom_field import (  # noqa: E402
     CustomFieldDefinition,
 )
+from app.models.finance.automation.entity_configuration import (  # noqa: E402
+    AutomationEntityConfiguration,
+)
 from app.models.finance.platform.idempotency_record import (  # noqa: E402
     IdempotencyRecord,
 )
@@ -464,6 +467,7 @@ SQLITE_COMPATIBLE_TABLES = [
     DomainSetting.__table__,
     DomainSettingHistory.__table__,
     CustomFieldDefinition.__table__,
+    AutomationEntityConfiguration.__table__,
     ScheduledTask.__table__,
     ExpenseCategory.__table__,
     ExpenseClaim.__table__,

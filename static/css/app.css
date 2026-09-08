@@ -5765,6 +5765,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
          column-gap: 0.75rem;
 }
 
+.gap-x-5 {
+    -moz-column-gap: 1.25rem;
+         column-gap: 1.25rem;
+}
+
 .gap-x-6 {
     -moz-column-gap: 1.5rem;
          column-gap: 1.5rem;
@@ -7602,6 +7607,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
 .p-1\.5 {
     padding: 0.375rem;
+}
+
+.p-10 {
+    padding: 2.5rem;
 }
 
 .p-12 {
@@ -12235,6 +12244,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
     color: rgb(15 23 42 / var(--tw-text-opacity, 1));
 }
 
+.dark\:text-slate-950:is(.dark *) {
+    --tw-text-opacity: 1;
+    color: rgb(2 6 23 / var(--tw-text-opacity, 1));
+}
+
 .dark\:text-teal-100:is(.dark *) {
     --tw-text-opacity: 1;
     color: rgb(204 251 241 / var(--tw-text-opacity, 1));
@@ -12777,6 +12791,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
 .dark\:hover\:bg-teal-300:hover:is(.dark *) {
     --tw-bg-opacity: 1;
     background-color: rgb(94 234 212 / var(--tw-bg-opacity, 1));
+}
+
+.dark\:hover\:bg-teal-400:hover:is(.dark *) {
+    --tw-bg-opacity: 1;
+    background-color: rgb(45 212 191 / var(--tw-bg-opacity, 1));
 }
 
 .dark\:hover\:bg-teal-800:hover:is(.dark *) {

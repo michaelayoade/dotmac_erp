@@ -21,6 +21,22 @@ new roles.
 The `/automation/capabilities` endpoint is the source of truth for UI clients.
 Only entity types with a model registry entry are returned.
 
+## Entity configuration
+
+Organization administrators can enable or disable registered connectors in
+**Admin â†’ Automation â†’ Entity Configuration**. A missing configuration row
+means enabled, preserving existing behavior for every organization after the
+migration. Disabling an entity:
+
+- stops immediate, queued, and scheduled workflow actions for that entity;
+- removes it from new workflow and custom-field forms;
+- leaves rules, definitions, assignments, execution history, and stored custom
+  field values intact.
+
+Enabling the entity makes the retained configuration available again. The UI
+cannot register arbitrary models or table names: it only controls the
+application's verified entity registry.
+
 ## Custom fields
 
 Definitions are created in **Admin → Automation → Custom Fields**. Values live
@@ -72,5 +88,9 @@ all modules one ownership contract without bypassing their state machines.
    call the owning domain service instead of writing them generically.
 6. Update the connector parity tests before exposing the entity in Admin.
 
-Apply migrations through `20260910_automation_module_connectors` before
+Once deployed, each organization can enable or disable that supported entity
+without another migration. A genuinely new model connector still requires the
+code and enum steps above.
+
+Apply migrations through `20260911_automation_entity_configuration` before
 starting web or worker processes with this feature stack.
