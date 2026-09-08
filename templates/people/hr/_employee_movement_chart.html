@@ -1,0 +1,64 @@
+{% from "components/macros.html" import icon_svg %}
+
+{% if has_activity %}
+<div class="h-56 sm:h-64">
+    <canvas
+        id="employee-movement-chart"
+        role="img"
+        aria-label="Monthly employee onboarding and offboarding activity"
+        data-chart="groupedBar"
+        data-chart-config='{{ {
+            "labels": movement | map(attribute="month_label") | list,
+            "currency": false,
+            "format": "number",
+            "integer": true,
+            "maxTicksLimit": 6,
+            "indexedTooltip": true,
+            "datasets": [
+                {
+                    "label": "Onboarded",
+                    "data": movement | map(attribute="onboarded") | list,
+                    "color": "rgba(16, 185, 129, 0.85)"
+                },
+                {
+                    "label": "Offboarded",
+                    "data": movement | map(attribute="offboarded") | list,
+                    "color": "rgba(244, 63, 94, 0.85)"
+                }
+            ]
+        } | tojson }}'>
+        Employee movement chart. A text version is available immediately after
+        this chart.
+    </canvas>
+</div>
+
+<table class="sr-only">
+    <caption>Monthly employee movement</caption>
+    <thead>
+        <tr>
+            <th scope="col">Month</th>
+            <th scope="col">Onboarded</th>
+            <th scope="col">Offboarded</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for month in movement %}
+        <tr>
+            <th scope="row">{{ month.month_label }}</th>
+            <td>{{ month.onboarded }}</td>
+            <td>{{ month.offboarded }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3">No employee movement data available.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="flex min-h-56 flex-col items-center justify-center px-4 py-10 text-center">
+    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        {{ icon_svg("chart", "h-6 w-6") }}
+    </div>
+    <p class="mt-4 text-sm font-semibold text-slate-900 dark:text-white">No employee movement data available for this period.</p>
+    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Choose another period to review earlier activity.</p>
+</div>
+{% endif %}

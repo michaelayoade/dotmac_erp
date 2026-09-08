@@ -132,6 +132,74 @@
 
     </div>
 
+    <section class="card relative p-4 md:p-6" data-employee-movement>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Employee Movement</h2>
+                <p id="employee-movement-description" class="mt-1 text-sm text-slate-500 dark:text-slate-400">Monthly onboarding and offboarding activity</p>
+            </div>
+            <div class="w-full sm:w-44">
+                <label class="sr-only" for="employee-movement-period">Employee movement period</label>
+                <select
+                    id="employee-movement-period"
+                    name="period"
+                    class="form-select w-full text-sm"
+                    hx-get="/people/hr/employees/movement-chart"
+                    hx-trigger="change"
+                    hx-target="#employee-movement-body"
+                    hx-swap="innerHTML"
+                    hx-indicator="#employee-movement-loading"
+                    aria-describedby="employee-movement-description">
+                    <option value="last_6_months">Last 6 months</option>
+                    <option value="last_12_months" selected>Last 12 months</option>
+                    <option value="this_year">This year</option>
+                    <option value="previous_year">Previous year</option>
+                </select>
+            </div>
+        </div>
+
+        <div
+            id="employee-movement-loading"
+            class="htmx-indicator pointer-events-none absolute inset-x-4 top-20 z-10 flex items-center justify-center rounded-lg bg-white/80 py-3 text-sm font-medium text-slate-600 backdrop-blur-sm dark:bg-slate-900/80 dark:text-slate-300 md:inset-x-6"
+            role="status">
+            <svg class="mr-2 h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            Loading employee movement&hellip;
+        </div>
+
+        <div
+            id="employee-movement-body"
+            class="mt-5"
+            hx-get="/people/hr/employees/movement-chart"
+            hx-trigger="load"
+            hx-include="#employee-movement-period"
+            hx-target="this"
+            hx-swap="innerHTML"
+            hx-indicator="#employee-movement-loading"
+            aria-live="polite">
+            <div class="h-56 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800 sm:h-64"></div>
+        </div>
+
+        <div id="employee-movement-error" class="mt-5 hidden min-h-56 items-center justify-center rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-10 text-center dark:border-rose-800 dark:bg-rose-900/20" role="alert">
+            <div>
+                <p class="text-sm font-semibold text-rose-700 dark:text-rose-300">Employee movement could not be loaded.</p>
+                <p class="mt-1 text-xs text-rose-600 dark:text-rose-400">The rest of the employee page is still available.</p>
+                <button
+                    type="button"
+                    class="btn btn-secondary btn-sm mt-4"
+                    hx-get="/people/hr/employees/movement-chart"
+                    hx-include="#employee-movement-period"
+                    hx-target="#employee-movement-body"
+                    hx-swap="innerHTML"
+                    hx-indicator="#employee-movement-loading">
+                    Retry
+                </button>
+            </div>
+        </div>
+    </section>
+
     {% set saved_view = request.query_params.get('view') or 'all' %}
     {% set compact_active_filters = active_filters %}
     {% if saved_view != 'all' %}
@@ -540,6 +608,59 @@
     </div>
     </div>{# /results-container #}
 </div>
+
+<script>
+(() => {
+    const movementTarget = (event) => {
+        const target = event.detail.target || event.detail.requestConfig?.target;
+        return target && target.id === 'employee-movement-body' ? target : null;
+    };
+
+    const setMovementError = (show) => {
+        const body = document.getElementById('employee-movement-body');
+        const error = document.getElementById('employee-movement-error');
+        if (!body || !error) return;
+        body.classList.toggle('hidden', show);
+        error.classList.toggle('hidden', !show);
+        error.classList.toggle('flex', show);
+    };
+
+    const destroyMovementChart = (target) => {
+        const canvas = target.querySelector('[data-chart]');
+        if (canvas && window.Chart) {
+            window.Chart.getChart(canvas)?.destroy();
+        }
+    };
+
+    const initializeMovementChart = (target) => {
+        const canvas = target.querySelector('[data-chart]');
+        if (!canvas || !window.Charts) return;
+        const chartType = canvas.dataset.chart;
+        if (typeof window.Charts[chartType] !== 'function') return;
+        const config = JSON.parse(canvas.dataset.chartConfig || '{}');
+        window.Charts[chartType](canvas, config);
+    };
+
+    document.body.addEventListener('htmx:beforeRequest', (event) => {
+        if (movementTarget(event)) setMovementError(false);
+    });
+    document.body.addEventListener('htmx:beforeSwap', (event) => {
+        const target = movementTarget(event);
+        if (target && event.detail.xhr.status >= 200 && event.detail.xhr.status < 300) {
+            destroyMovementChart(target);
+        }
+    });
+    document.body.addEventListener('htmx:afterSwap', (event) => {
+        const target = movementTarget(event);
+        if (!target) return;
+        setMovementError(false);
+        initializeMovementChart(target);
+    });
+    document.body.addEventListener('htmx:responseError', (event) => {
+        if (movementTarget(event)) setMovementError(true);
+    });
+})();
+</script>
 
 <script>
 function employeeBulkActions() {

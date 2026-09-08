@@ -92,6 +92,22 @@ def employee_stats(
     return hr_web_service.employee_stats_response(auth, db)
 
 
+@router.get("/employees/movement-chart", response_class=HTMLResponse)
+def employee_movement_chart(
+    request: Request,
+    period: str = Query(default="last_12_months"),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+) -> HTMLResponse:
+    """Monthly employee onboarding and offboarding chart fragment."""
+    return hr_web_service.employee_movement_chart_response(
+        request,
+        auth,
+        db,
+        period,
+    )
+
+
 @router.get("/employees/position-options", response_class=HTMLResponse)
 def employee_position_options(
     selected_position_id: str | None = None,
