@@ -28,7 +28,7 @@
     <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
         {# Filters #}
         {% call(filter_attrs) compact_filters(
-            base_url="/finance/automation/fields-list",
+            base_url="/automation/fields",
             active_filters=active_filters | default([]),
             auto_submit=false,
             show_apply_button=true

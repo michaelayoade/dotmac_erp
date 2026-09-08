@@ -94,12 +94,13 @@ from app.templates import templates
 from app.web.admin import router as admin_web_router
 from app.web.admin_batch_operations import router as admin_batch_operations_router
 from app.web.admin_sla_policies import router as admin_sla_policies_web_router
+from app.web.automation import legacy_router as legacy_automation_web_router
+from app.web.automation import router as automation_web_router
 from app.web.auth import router as auth_web_router
 from app.web.careers import router as careers_web_router
 from app.web.careers import short_router as careers_short_web_router
 from app.web.coach import router as coach_web_router
 from app.web.csrf import csrf_middleware
-from app.web.finance import automation_router as automation_web_router
 from app.web.finance import expense_router as expense_web_router
 from app.web.finance import router as finance_web_router
 from app.web.finance import settings_router as finance_settings_web_router
@@ -717,6 +718,8 @@ app.include_router(auth_web_router)
 app.include_router(admin_web_router)
 app.include_router(admin_sla_policies_web_router)
 app.include_router(admin_batch_operations_router)
+app.include_router(automation_web_router)
+app.include_router(legacy_automation_web_router)
 app.include_router(profile_web_router)
 app.include_router(notifications_web_router)
 app.include_router(workflow_tasks_web_router)
@@ -752,7 +755,6 @@ if is_module_enabled("finance"):
     app.include_router(
         finance_settings_web_router
     )  # Has its own /settings prefix (finance)
-    app.include_router(automation_web_router)  # Has its own /automation prefix
     _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])

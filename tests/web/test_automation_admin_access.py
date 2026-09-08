@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException, Request
 
 from app.services.admin.settings_web import ADMIN_SETTINGS_SECTIONS
+from app.web.automation import legacy_automation_path
 from app.web.deps import require_automation_access
 
 
@@ -68,7 +69,40 @@ def test_admin_settings_owns_automation_navigation() -> None:
     admin_base = (repo_root / "templates/admin/base_admin.html").read_text()
     assert 'href="/automation"' in admin_base
 
-    for template in (repo_root / "templates/finance/automation").glob("*.html"):
+    automation_templates = repo_root / "templates/admin/automation"
+    assert automation_templates.is_dir()
+    assert not (repo_root / "templates/finance/automation").exists()
+
+    for template in automation_templates.glob("*.html"):
         if template.name.startswith("_"):
             continue
         assert '{% extends "admin/base_admin.html" %}' in template.read_text()
+
+
+def test_finance_router_does_not_mount_automation() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    finance_router_source = (repo_root / "app/web/finance/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "automation_router" not in finance_router_source
+    assert "app.web.finance.automation" not in finance_router_source
+
+
+def test_legacy_finance_automation_get_redirects_to_admin() -> None:
+    response = legacy_automation_path(
+        _request("GET", "/finance/automation/workflows"),
+        "workflows",
+    )
+
+    assert response.status_code == 308
+    assert response.headers["location"] == "/automation/workflows"
+
+
+def test_automation_router_is_core_not_finance_gated() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    main_source = (repo_root / "app/main.py").read_text()
+    core_mount = main_source.index("app.include_router(automation_web_router)")
+    finance_gate = main_source.index('if is_module_enabled("finance"):')
+
+    assert core_mount < finance_gate
