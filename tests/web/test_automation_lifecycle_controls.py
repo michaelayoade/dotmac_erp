@@ -31,9 +31,7 @@ def test_custom_field_controls_deactivate_and_reactivate() -> None:
 
 
 def test_mutation_routes_pass_current_organization_scope() -> None:
-    routes = (REPO_ROOT / "app" / "web" / "automation.py").read_text(
-        encoding="utf-8"
-    )
+    routes = (REPO_ROOT / "app" / "web" / "automation.py").read_text(encoding="utf-8")
 
     assert "workflow_service.archive(" in routes
     assert "workflow_service.restore(" in routes
