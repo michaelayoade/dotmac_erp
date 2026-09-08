@@ -352,8 +352,9 @@ const Charts = {
   },
 
   // Create grouped bar chart (cash flow style)
-  groupedBar(canvas, { labels, datasets, currency }) {
+  groupedBar(canvas, { labels, datasets, currency, format, integer, maxTicksLimit, indexedTooltip }) {
     const theme = this.getThemeColors();
+    const resolvedFormat = this.resolveFormat(currency, format);
     const defaultColors = ['rgba(16, 185, 129, 0.85)', 'rgba(239, 68, 68, 0.85)'];
 
     const chartDatasets = datasets.map((ds, i) => ({
@@ -371,13 +372,24 @@ const Charts = {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        ...(indexedTooltip ? { interaction: { mode: 'index', intersect: false } } : {}),
         scales: {
-          x: { grid: { display: false }, ticks: { color: theme.text } },
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: theme.text,
+              autoSkip: true,
+              maxRotation: maxTicksLimit ? 0 : undefined,
+              maxTicksLimit: maxTicksLimit || undefined,
+            }
+          },
           y: {
+            beginAtZero: true,
             grid: { color: theme.grid },
             ticks: {
               color: theme.text,
-              callback: (v) => Charts.formatCurrency(v, currency)
+              precision: integer ? 0 : undefined,
+              callback: (v) => Charts.formatValue(v, currency, resolvedFormat)
             }
           }
         },
@@ -386,7 +398,7 @@ const Charts = {
           tooltip: {
             ...this.getTooltipConfig(),
             callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${Charts.formatCurrency(ctx.raw, currency)}`
+              label: (ctx) => `${ctx.dataset.label}: ${Charts.formatValue(ctx.raw, currency, resolvedFormat)}`
             }
           }
         }

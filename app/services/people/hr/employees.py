@@ -14,15 +14,24 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, cast
+from datetime import date, datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 try:
     from datetime import UTC  # type: ignore
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from sqlalchemy import func, inspect as inspect_db, literal, or_, select, text, update
+from sqlalchemy import (
+    extract,
+    func,
+    inspect as inspect_db,
+    literal,
+    or_,
+    select,
+    text,
+    update,
+)
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, selectinload
 
@@ -76,6 +85,15 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class EmployeeMovementMonth(TypedDict):
+    """One calendar month of employee movement."""
+
+    month_start: date
+    month_label: str
+    onboarded: int
+    offboarded: int
 
 
 @dataclass(frozen=True)
@@ -494,6 +512,73 @@ class EmployeeService:
                 + status_counts.get(EmployeeStatus.RETIRED, 0)
             ),
         }
+
+    def get_employee_movement(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> list[EmployeeMovementMonth]:
+        """Return monthly onboarding and offboarding counts for a date range.
+
+        Employment dates are SQL ``DATE`` values, so calendar boundaries can be
+        applied directly without converting them through UTC. Missing leaving
+        dates are excluded naturally. Every calendar month in the requested
+        range is returned, including months where both counts are zero.
+        """
+        if end_date < start_date:
+            raise ValueError("end_date must be on or after start_date")
+
+        first_month = start_date.replace(day=1)
+        range_end_exclusive = end_date + timedelta(days=1)
+
+        def _counts_for(column: Any) -> dict[tuple[int, int], int]:
+            year_part = extract("year", column)
+            month_part = extract("month", column)
+            rows = self.db.execute(
+                select(
+                    year_part.label("year"),
+                    month_part.label("month"),
+                    func.count(Employee.employee_id).label("event_count"),
+                )
+                .where(
+                    Employee.organization_id == self.organization_id,
+                    column.is_not(None),
+                    column >= start_date,
+                    column < range_end_exclusive,
+                )
+                .group_by(year_part, month_part)
+            ).all()
+            return {
+                (
+                    int(row._mapping["year"]),
+                    int(row._mapping["month"]),
+                ): int(row._mapping["event_count"])
+                for row in rows
+            }
+
+        onboarded = _counts_for(Employee.date_of_joining)
+        offboarded = _counts_for(Employee.date_of_leaving)
+
+        movement: list[EmployeeMovementMonth] = []
+        month_start = first_month
+        final_month = end_date.replace(day=1)
+        while month_start <= final_month:
+            key = (month_start.year, month_start.month)
+            movement.append(
+                {
+                    "month_start": month_start,
+                    "month_label": month_start.strftime("%b %Y"),
+                    "onboarded": onboarded.get(key, 0),
+                    "offboarded": offboarded.get(key, 0),
+                }
+            )
+            month_start = (
+                date(month_start.year + 1, 1, 1)
+                if month_start.month == 12
+                else date(month_start.year, month_start.month + 1, 1)
+            )
+
+        return movement
 
     def get_employee(
         self,
