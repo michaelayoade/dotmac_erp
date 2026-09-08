@@ -7,7 +7,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _template(name: str) -> str:
-    return (REPO_ROOT / "templates" / "finance" / "automation" / name).read_text(
+    return (REPO_ROOT / "templates" / "admin" / "automation" / name).read_text(
         encoding="utf-8"
     )
 
@@ -32,7 +32,7 @@ def test_custom_field_controls_deactivate_and_reactivate() -> None:
 
 
 def test_mutation_routes_pass_current_organization_scope() -> None:
-    routes = (REPO_ROOT / "app" / "web" / "finance" / "automation.py").read_text(
+    routes = (REPO_ROOT / "app" / "web" / "automation.py").read_text(
         encoding="utf-8"
     )
 

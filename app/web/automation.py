@@ -489,7 +489,7 @@ def list_archived_workflows(
     )
     return templates.TemplateResponse(
         request,
-        "finance/automation/workflow_list.html",
+        "admin/automation/workflow_list.html",
         context,
     )
 
