@@ -25,6 +25,7 @@
     current_url — URL of existing file to show as preview
     remove_name — if set, shows a "remove current file" checkbox with this name
     required    — whether the browser must require a selected file
+    name_expression — optional Alpine expression for dynamic input names
 #}
 
 {% macro file_upload_zone(
@@ -36,7 +37,8 @@
     preview="none",
     current_url="",
     remove_name="",
-    required=false
+    required=false,
+    name_expression=""
 ) %}
 <div x-data='fileUpload({ maxSizeMB: {{ max_size_mb }}, accept: "{{ accept }}", preview: "{{ preview }}", inputName: "{{ name }}", label: "{{ label }}" })'>
     {# Label #}
@@ -117,7 +119,7 @@
     <input aria-label="Choose file to upload" type="file"
            x-ref="fileInput"
            x-on:change="onInputChange($event)"
-           name="{{ name }}"
+           {% if name_expression %}:name="{{ name_expression }}"{% else %}name="{{ name }}"{% endif %}
            {% if accept %}accept="{{ accept }}"{% endif %}
            {% if required %}required{% endif %}
            class="sr-only"

@@ -44,8 +44,19 @@ def test_qualification_error_reprime_happens_before_form_rerender(
     service = SelfServiceWebService()
     rerendered = object()
     events: list[str] = []
+    pending_evidence = MagicMock(path="qualifications/evidence.pdf")
 
     monkeypatch.setattr(service, "_get_employee_id", lambda *_args: employee_id)
+    monkeypatch.setattr(
+        service,
+        "_upload_pending_evidence",
+        lambda **_kwargs: pending_evidence,
+    )
+    monkeypatch.setattr(
+        self_service_web,
+        "get_employee_document_upload",
+        lambda: MagicMock(),
+    )
     monkeypatch.setattr(
         InfoChangeService,
         "submit_extended_change_request",
@@ -80,6 +91,7 @@ def test_qualification_error_reprime_happens_before_form_rerender(
             "start_date": "2018-09-01",
             "end_date": "2022-07-01",
         },
+        upload=MagicMock(filename="evidence.pdf"),
     )
 
     assert response is rerendered
