@@ -58,3 +58,22 @@ def test_extended_profile_templates_support_inline_document_page_workflow():
         assert 'hx-swap="outerHTML"' in template
         assert 'hx-push-url="false"' in template
         assert f'action="/people/self/{section}"' in template
+
+
+def test_qualification_and_certification_supporting_files_are_required_and_removable():
+    upload_component = Path("templates/components/_file_upload.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'aria-label="Remove file"' in upload_component
+    assert 'x-on:click="clearFile()"' in upload_component
+    assert ':name="{{ name_expression }}"' in upload_component
+
+    for section in ["qualifications", "certifications"]:
+        template = Path(f"templates/people/self/{section}.html").read_text(
+            encoding="utf-8"
+        )
+        assert "components/_file_upload.html" in template
+        assert template.count("required=true") == 2
+        assert 'name_expression="`supporting_file_${index + 1}`"' in template
+        assert "Supporting evidence is required." in template
+        assert "Optional. Approved types only." not in template
