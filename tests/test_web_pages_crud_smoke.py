@@ -93,13 +93,14 @@ def _build_web_app() -> FastAPI:
 
     # Admin
     from app.web.admin import router as admin_web_router
+    from app.web.automation import legacy_router as legacy_automation_web_router
+    from app.web.automation import router as automation_web_router
 
     app.include_router(admin_web_router)
+    app.include_router(automation_web_router)
+    app.include_router(legacy_automation_web_router)
 
     # Finance (main module + standalone routers)
-    from app.web.finance import (
-        automation_router as automation_web_router,
-    )
     from app.web.finance import (
         expense_router as expense_web_router,
     )
@@ -113,7 +114,6 @@ def _build_web_app() -> FastAPI:
     app.include_router(finance_web_router, prefix="/finance")
     app.include_router(expense_web_router)
     app.include_router(finance_settings_web_router)
-    app.include_router(automation_web_router)
 
     # People / HR
     from app.web.payroll_alias import router as payroll_alias_web_router
