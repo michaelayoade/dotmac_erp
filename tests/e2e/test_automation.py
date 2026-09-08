@@ -284,14 +284,14 @@ class TestCustomFieldsList:
 
     def test_custom_fields_list_page_loads(self, authenticated_page, base_url):
         """Test custom fields list page loads."""
-        response = authenticated_page.goto(f"{base_url}/automation/custom-fields")
+        response = authenticated_page.goto(f"{base_url}/automation/fields")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
             expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_custom_fields_has_new_button(self, authenticated_page, base_url):
         """Test custom fields has new button."""
-        authenticated_page.goto(f"{base_url}/automation/custom-fields")
+        authenticated_page.goto(f"{base_url}/automation/fields")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -307,7 +307,7 @@ class TestCustomFieldCreate:
 
     def test_custom_field_create_text(self, authenticated_page, base_url):
         """Test creating a text custom field."""
-        authenticated_page.goto(f"{base_url}/automation/custom-fields/new")
+        authenticated_page.goto(f"{base_url}/automation/fields/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for field type selection
@@ -325,7 +325,7 @@ class TestCustomFieldCreate:
 
     def test_custom_field_create_number(self, authenticated_page, base_url):
         """Test creating a number custom field."""
-        authenticated_page.goto(f"{base_url}/automation/custom-fields/new")
+        authenticated_page.goto(f"{base_url}/automation/fields/new")
         authenticated_page.wait_for_load_state("networkidle")
         reveal_filters(authenticated_page)
 
@@ -342,7 +342,7 @@ class TestCustomFieldCreate:
 
     def test_custom_field_create_dropdown(self, authenticated_page, base_url):
         """Test creating a dropdown custom field."""
-        authenticated_page.goto(f"{base_url}/automation/custom-fields/new")
+        authenticated_page.goto(f"{base_url}/automation/fields/new")
         authenticated_page.wait_for_load_state("networkidle")
         reveal_filters(authenticated_page)
 
@@ -359,7 +359,7 @@ class TestCustomFieldCreate:
 
     def test_custom_field_edit(self, authenticated_page, base_url):
         """Test editing a custom field."""
-        authenticated_page.goto(f"{base_url}/automation/custom-fields")
+        authenticated_page.goto(f"{base_url}/automation/fields")
         authenticated_page.wait_for_load_state("networkidle")
 
         field_link = authenticated_page.locator(

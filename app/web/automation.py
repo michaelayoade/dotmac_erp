@@ -13,8 +13,8 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.finance.automation.custom_fields import custom_fields_service
 from app.models.finance.automation import CustomFieldEntityType
+from app.services.finance.automation.custom_fields import custom_fields_service
 from app.services.finance.automation.recurring import recurring_service
 from app.services.finance.automation.web import automation_web_service
 from app.services.finance.automation.workflow import workflow_service
@@ -27,6 +27,34 @@ from app.web.deps import (
 )
 
 router = APIRouter(prefix="/automation", tags=["automation-web"])
+legacy_router = APIRouter(
+    prefix="/finance/automation",
+    tags=["automation-legacy-redirects"],
+    include_in_schema=False,
+)
+
+
+def _legacy_automation_redirect(
+    request: Request, legacy_path: str = ""
+) -> RedirectResponse:
+    """Redirect legacy Finance bookmarks to the Admin-owned Automation URL."""
+    suffix = f"/{legacy_path}" if legacy_path else ""
+    target = f"/automation{suffix}"
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    return RedirectResponse(url=target, status_code=308)
+
+
+@legacy_router.get("")
+def legacy_automation_root(request: Request) -> RedirectResponse:
+    """Redirect the former Finance Automation root without rendering Finance UI."""
+    return _legacy_automation_redirect(request)
+
+
+@legacy_router.get("/{legacy_path:path}")
+def legacy_automation_path(request: Request, legacy_path: str) -> RedirectResponse:
+    """Redirect legacy Finance Automation GET links to their canonical paths."""
+    return _legacy_automation_redirect(request, legacy_path)
 
 
 # =============================================================================
@@ -42,7 +70,7 @@ def automation_dashboard(
 ):
     """Automation landing page."""
     context = base_context(request, auth, "Automation", "automation")
-    return templates.TemplateResponse(request, "finance/automation/index.html", context)
+    return templates.TemplateResponse(request, "admin/automation/index.html", context)
 
 
 @router.get("/capabilities")
@@ -81,7 +109,7 @@ def list_recurring(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_list.html", context
+        request, "admin/automation/recurring_list.html", context
     )
 
 
@@ -105,7 +133,7 @@ def new_recurring_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_form.html", context
+        request, "admin/automation/recurring_form.html", context
     )
 
 
@@ -126,7 +154,7 @@ def view_recurring(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_detail.html", context
+        request, "admin/automation/recurring_detail.html", context
     )
 
 
@@ -145,7 +173,7 @@ def edit_recurring_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/recurring_form.html", context
+        request, "admin/automation/recurring_form.html", context
     )
 
 
@@ -237,7 +265,7 @@ async def create_recurring(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/recurring_form.html", context
+            request, "admin/automation/recurring_form.html", context
         )
 
 
@@ -301,7 +329,7 @@ async def update_recurring(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/recurring_form.html", context
+            request, "admin/automation/recurring_form.html", context
         )
 
 
@@ -437,7 +465,7 @@ def list_workflows(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_list.html", context
+        request, "admin/automation/workflow_list.html", context
     )
 
 
@@ -454,7 +482,7 @@ def new_workflow_form(
         automation_web_service.workflow_form_context(db, str(auth.organization_id))
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_form.html", context
+        request, "admin/automation/workflow_form.html", context
     )
 
 
@@ -472,7 +500,7 @@ def workflow_monitoring(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_monitoring.html", context
+        request, "admin/automation/workflow_monitoring.html", context
     )
 
 
@@ -530,7 +558,7 @@ def view_workflow(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_detail.html", context
+        request, "admin/automation/workflow_detail.html", context
     )
 
 
@@ -549,7 +577,7 @@ def edit_workflow_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_form.html", context
+        request, "admin/automation/workflow_form.html", context
     )
 
 
@@ -600,7 +628,7 @@ async def create_workflow(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/workflow_form.html", context
+            request, "admin/automation/workflow_form.html", context
         )
 
 
@@ -698,7 +726,7 @@ async def update_workflow(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/workflow_form.html", context
+            request, "admin/automation/workflow_form.html", context
         )
 
 
@@ -752,7 +780,7 @@ def workflow_versions(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/workflow_versions.html", context
+        request, "admin/automation/workflow_versions.html", context
     )
 
 
@@ -835,7 +863,7 @@ def list_custom_fields(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/fields_list.html", context
+        request, "admin/automation/fields_list.html", context
     )
 
 
@@ -852,7 +880,7 @@ def new_custom_field_form(
         automation_web_service.custom_field_form_context(db, str(auth.organization_id))
     )
     return templates.TemplateResponse(
-        request, "finance/automation/field_form.html", context
+        request, "admin/automation/field_form.html", context
     )
 
 
@@ -876,7 +904,7 @@ def render_custom_fields(
     )
     return templates.TemplateResponse(
         request,
-        "finance/automation/_custom_fields.html",
+        "admin/automation/_custom_fields.html",
         {
             "request": request,
             "sections": custom_fields_service.get_form_schema(
@@ -966,7 +994,7 @@ def view_custom_field(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/field_detail.html", context
+        request, "admin/automation/field_detail.html", context
     )
 
 
@@ -985,7 +1013,7 @@ def edit_custom_field_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/field_form.html", context
+        request, "admin/automation/field_form.html", context
     )
 
 
@@ -1038,7 +1066,7 @@ async def create_custom_field(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/field_form.html", context
+            request, "admin/automation/field_form.html", context
         )
 
 
@@ -1108,7 +1136,7 @@ async def update_custom_field(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/field_form.html", context
+            request, "admin/automation/field_form.html", context
         )
 
 
@@ -1165,7 +1193,7 @@ def list_templates(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/templates_list.html", context
+        request, "admin/automation/templates_list.html", context
     )
 
 
@@ -1182,7 +1210,7 @@ def new_template_form(
         automation_web_service.template_form_context(db, str(auth.organization_id))
     )
     return templates.TemplateResponse(
-        request, "finance/automation/template_form.html", context
+        request, "admin/automation/template_form.html", context
     )
 
 
@@ -1203,7 +1231,7 @@ def view_template(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/template_detail.html", context
+        request, "admin/automation/template_detail.html", context
     )
 
 
@@ -1222,7 +1250,7 @@ def edit_template_form(
         )
     )
     return templates.TemplateResponse(
-        request, "finance/automation/template_form.html", context
+        request, "admin/automation/template_form.html", context
     )
 
 
@@ -1271,7 +1299,7 @@ async def create_template(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/template_form.html", context
+            request, "admin/automation/template_form.html", context
         )
 
 
@@ -1324,7 +1352,7 @@ async def update_template(
         context["error"] = str(e)
         context["form_data"] = data
         return templates.TemplateResponse(
-            request, "finance/automation/template_form.html", context
+            request, "admin/automation/template_form.html", context
         )
 
 

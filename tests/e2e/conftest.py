@@ -770,7 +770,7 @@ def workflow_rules_page(authenticated_page, base_url):
 @pytest.fixture
 def custom_fields_page(authenticated_page, base_url):
     """Navigate to custom fields list and return the page."""
-    authenticated_page.goto(f"{base_url}/automation/custom-fields")
+    authenticated_page.goto(f"{base_url}/automation/fields")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
