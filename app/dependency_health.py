@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import threading
+import time
 
 import httpx
 from fastapi import HTTPException
@@ -33,6 +35,15 @@ from app.services.dotmac_sub import DotmacSubClient, DotmacSubConfig
 from app.services.storage import _get_client as _get_storage_client
 
 DEFAULT_REQUIRED_DEPENDENCIES = frozenset({"storage", "openbao"})
+# An external business integration must not remove ERP instances from service.
+# Its state remains visible in dependency health, but readiness is reserved for
+# the local dependencies needed to serve ERP traffic.
+READINESS_EXCLUDED_DEPENDENCIES = frozenset({"dotmac_sub"})
+_DOTMAC_SUB_HEALTH_CACHE: tuple[float, dict[str, object]] | None = None
+_DOTMAC_SUB_HEALTH_LOCK = threading.Lock()
+_DOTMAC_SUB_HEALTH_CACHE_DEFAULT_SECONDS = 300.0
+_DOTMAC_SUB_HEALTH_CACHE_MIN_SECONDS = 60.0
+_DOTMAC_SUB_HEALTH_CACHE_MAX_SECONDS = 3600.0
 
 
 def collect_dependency_health() -> dict[str, dict[str, object]]:
@@ -70,6 +81,9 @@ def _dependency_required(name: str, configured: bool) -> bool:
     if not configured:
         return False
 
+    if name in READINESS_EXCLUDED_DEPENDENCIES:
+        return False
+
     if os.getenv("READINESS_CHECK_ALL_CONFIGURED_DEPENDENCIES", "").strip().lower() in {
         "1",
         "true",
@@ -84,6 +98,19 @@ def _dependency_required(name: str, configured: bool) -> bool:
         if item.strip()
     }
     return name in DEFAULT_REQUIRED_DEPENDENCIES or name in required_names
+
+
+def _dotmac_sub_health_cache_seconds() -> float:
+    """Return a bounded per-process interval for external dependency probes."""
+    raw = os.getenv("DOTMAC_SUB_DEPENDENCY_HEALTH_CACHE_SECONDS", "")
+    try:
+        value = float(raw) if raw else _DOTMAC_SUB_HEALTH_CACHE_DEFAULT_SECONDS
+    except ValueError:
+        value = _DOTMAC_SUB_HEALTH_CACHE_DEFAULT_SECONDS
+    return min(
+        max(value, _DOTMAC_SUB_HEALTH_CACHE_MIN_SECONDS),
+        _DOTMAC_SUB_HEALTH_CACHE_MAX_SECONDS,
+    )
 
 
 def _result(
@@ -306,7 +333,31 @@ def _check_nextcloud(db: Session) -> dict[str, object]:
     )
 
 
+def _probe_dotmac_sub(config: DotmacSubConfig) -> dict[str, object]:
+    """Probe Dotmac Sub once using the short dependency-check policy."""
+    config.timeout = min(config.timeout, 5.0)
+    config.max_retries = 1
+    with DotmacSubClient(config) as client:
+        healthy = client.test_connection()
+    return _result(
+        configured=True,
+        healthy=healthy,
+        message="dotmac_sub API reachable"
+        if healthy
+        else "dotmac_sub API health check failed",
+    )
+
+
 def _check_dotmac_sub() -> dict[str, object]:
+    """Return a cached Dotmac Sub dependency result.
+
+    Health and readiness endpoints are often polled concurrently by multiple
+    callers.  A real subscriber-sync request for every poll amplifies an
+    upstream incident, so one process performs at most one probe per cache
+    interval.  The lock keeps concurrent callers from creating a probe burst.
+    """
+    global _DOTMAC_SUB_HEALTH_CACHE  # noqa: PLW0603
+
     config = DotmacSubConfig.from_settings()
     if not config.is_configured():
         return _result(
@@ -315,21 +366,22 @@ def _check_dotmac_sub() -> dict[str, object]:
             message="dotmac_sub is not configured",
         )
 
-    try:
-        config.timeout = min(config.timeout, 5.0)
-        config.max_retries = 1
-        with DotmacSubClient(config) as client:
-            healthy = client.test_connection()
-    except Exception as exc:
-        return _result(configured=True, healthy=False, message=str(exc)[:160])
+    with _DOTMAC_SUB_HEALTH_LOCK:
+        now = time.monotonic()
+        cache = _DOTMAC_SUB_HEALTH_CACHE
+        if cache and now - cache[0] < _dotmac_sub_health_cache_seconds():
+            cached_result = dict(cache[1])
+            cached_result["cached"] = True
+            return cached_result
 
-    return _result(
-        configured=True,
-        healthy=healthy,
-        message="dotmac_sub API reachable"
-        if healthy
-        else "dotmac_sub API health check failed",
-    )
+        try:
+            result = _probe_dotmac_sub(config)
+        except Exception as exc:
+            result = _result(configured=True, healthy=False, message=str(exc)[:160])
+
+        _DOTMAC_SUB_HEALTH_CACHE = (now, dict(result))
+        result["cached"] = False
+        return result
 
 
 def _check_remita() -> dict[str, object]:

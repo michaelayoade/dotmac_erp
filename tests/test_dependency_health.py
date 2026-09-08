@@ -231,3 +231,50 @@ def test_readiness_failures_only_include_required_unhealthy_dependencies() -> No
     )
 
     assert list(failures) == ["storage"]
+
+
+def test_dotmac_sub_is_never_a_readiness_dependency(monkeypatch) -> None:
+    monkeypatch.setenv("READINESS_CHECK_ALL_CONFIGURED_DEPENDENCIES", "true")
+    monkeypatch.setenv("READINESS_REQUIRED_DEPENDENCIES", "dotmac_sub")
+
+    assert dependency_health_module._dependency_required("dotmac_sub", True) is False
+    assert dependency_health_module._dependency_required("paystack", True) is True
+
+
+def test_dotmac_sub_dependency_probe_is_cached(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Config:
+        timeout = 60.0
+        max_retries = 3
+
+        def is_configured(self) -> bool:
+            return True
+
+    config = _Config()
+
+    monkeypatch.setattr(
+        dependency_health_module.DotmacSubConfig,
+        "from_settings",
+        lambda: config,
+    )
+    monkeypatch.setattr(
+        dependency_health_module,
+        "_probe_dotmac_sub",
+        lambda _config: calls.append("probe")
+        or {
+            "configured": True,
+            "healthy": True,
+            "status": "healthy",
+            "message": "ok",
+        },
+    )
+    monkeypatch.setattr(dependency_health_module.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(dependency_health_module, "_DOTMAC_SUB_HEALTH_CACHE", None)
+
+    first = dependency_health_module._check_dotmac_sub()
+    second = dependency_health_module._check_dotmac_sub()
+
+    assert calls == ["probe"]
+    assert first["cached"] is False
+    assert second["cached"] is True
