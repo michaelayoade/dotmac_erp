@@ -29,7 +29,7 @@ from app.services.finance.automation.workflow import (
 
 def test_missing_override_defaults_registered_entities_to_enabled() -> None:
     db = MagicMock()
-    db.scalars.return_value.all.return_value = []
+    db.execute.return_value.scalars.return_value.all.return_value = []
 
     enabled = AutomationEntityConfigurationService().enabled_entity_types(
         db,
@@ -42,7 +42,7 @@ def test_missing_override_defaults_registered_entities_to_enabled() -> None:
 
 def test_explicit_disable_is_tenant_scoped_and_excluded() -> None:
     db = MagicMock()
-    db.scalars.return_value.all.return_value = ["INVOICE"]
+    db.execute.return_value.scalars.return_value.all.return_value = ["INVOICE"]
     service = AutomationEntityConfigurationService()
 
     assert service.is_enabled(db, uuid.uuid4(), "INVOICE") is False

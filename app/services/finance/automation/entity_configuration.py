@@ -30,12 +30,16 @@ class AutomationEntityConfigurationService:
         organization_id: UUID,
     ) -> frozenset[str]:
         """Return explicit tenant disables; missing rows default to enabled."""
-        rows = db.scalars(
-            select(AutomationEntityConfiguration.entity_type).where(
-                AutomationEntityConfiguration.organization_id == organization_id,
-                AutomationEntityConfiguration.is_enabled.is_(False),
+        rows = (
+            db.execute(
+                select(AutomationEntityConfiguration.entity_type).where(
+                    AutomationEntityConfiguration.organization_id == organization_id,
+                    AutomationEntityConfiguration.is_enabled.is_(False),
+                )
             )
-        ).all()
+            .scalars()
+            .all()
+        )
         return frozenset(rows)
 
     def enabled_entity_types(

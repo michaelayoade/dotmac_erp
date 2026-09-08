@@ -45,6 +45,7 @@ audit	field_change_log	direct	false	false	app_admin	0	false	--	--
 automation	custom_field_definition	direct	false	false	app_admin	0	false	--	--
 automation	custom_field_value	direct	true	true	app_admin	1	false	--	--
 automation	entity_assignment	direct	true	true	app_admin	1	false	--	--
+automation	entity_configuration	direct	true	true	app_admin	1	false	--	--
 automation	document_template	direct	false	false	app_admin	0	false	--	--
 automation	generated_document	direct	false	false	app_admin	0	false	--	--
 automation	recurring_log	inherited	false	false	app_admin	0	false	--	--
