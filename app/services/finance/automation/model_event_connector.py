@@ -191,6 +191,11 @@ def register_automation_model_connectors() -> None:
     global _registered  # noqa: PLW0603
     if _registered:
         return
+    from app.services.finance.automation.entity_configuration import (
+        enforce_enabled_entity_writes,
+    )
+
+    event.listen(Session, "before_flush", enforce_enabled_entity_writes)
     event.listen(Session, "before_flush", _collect_model_events)
     event.listen(Session, "before_commit", _dispatch_before_commit)
     _registered = True

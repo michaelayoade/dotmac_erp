@@ -1,6 +1,9 @@
 """Truthful UI capabilities for cross-module automation."""
 
 from dataclasses import asdict, dataclass
+from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from app.models.finance.automation import CustomFieldEntityType, WorkflowEntityType
 from app.services.finance.automation.entity_registry import registered_entity_types
@@ -72,5 +75,22 @@ def automation_capabilities() -> list[EntityAutomationCapability]:
     ]
 
 
-def capabilities_payload() -> list[dict[str, object]]:
-    return [asdict(capability) for capability in automation_capabilities()]
+def capabilities_payload(
+    db: Session | None = None,
+    organization_id: UUID | None = None,
+) -> list[dict[str, object]]:
+    capabilities = automation_capabilities()
+    if db is not None and organization_id is not None:
+        from app.services.finance.automation.entity_configuration import (
+            entity_configuration_service,
+        )
+
+        enabled = set(
+            entity_configuration_service.enabled_entity_types(db, organization_id)
+        )
+        capabilities = [
+            capability
+            for capability in capabilities
+            if capability.entity_type in enabled
+        ]
+    return [asdict(capability) for capability in capabilities]

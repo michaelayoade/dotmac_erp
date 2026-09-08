@@ -39,6 +39,9 @@ from app.services.finance.automation.custom_fields import (
     CustomFieldInput,
     custom_fields_service,
 )
+from app.services.finance.automation.entity_configuration import (
+    entity_configuration_service,
+)
 from app.services.finance.automation.recurring import (
     RecurringTemplateInput,
     recurring_service,
@@ -829,17 +832,16 @@ class AutomationWebService:
         rule_id: str | None = None,
     ) -> dict:
         """Get context for workflow rule form."""
-        from app.services.finance.automation.entity_registry import (
-            registered_entity_types,
+        org_id = coerce_uuid(organization_id)
+        enabled_types = set(
+            entity_configuration_service.enabled_entity_types(db, org_id)
         )
-
-        connected_types = set(registered_entity_types())
         context: dict[str, Any] = {
             "rule": None,
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
                 for et in WorkflowEntityType
-                if et.value in connected_types
+                if et.value in enabled_types
             ],
             "trigger_events": [
                 {"value": te.value, "label": _trigger_event_label(te)}
@@ -853,11 +855,20 @@ class AutomationWebService:
         }
 
         if rule_id:
-            org_id = coerce_uuid(organization_id)
             rule = workflow_service.get(
                 db, coerce_uuid(rule_id), organization_id=org_id
             )
             if rule:
+                if rule.entity_type.value not in enabled_types:
+                    context["entity_types"].append(
+                        {
+                            "value": rule.entity_type.value,
+                            "label": (
+                                f"{_workflow_entity_type_label(rule.entity_type)} "
+                                "(disabled)"
+                            ),
+                        }
+                    )
                 executions = workflow_service.get_executions(
                     db, rule_id=rule.rule_id, limit=10
                 )
@@ -1022,11 +1033,16 @@ class AutomationWebService:
         field_id: str | None = None,
     ) -> dict:
         """Get context for custom field form."""
+        org_id = coerce_uuid(organization_id)
+        enabled_types = set(
+            entity_configuration_service.enabled_entity_types(db, org_id)
+        )
         context: dict[str, Any] = {
             "field": None,
             "entity_types": [
                 {"value": et.value, "label": _custom_field_entity_type_label(et)}
                 for et in CustomFieldEntityType
+                if et.value in enabled_types
             ],
             "field_types": [
                 {"value": ft.value, "label": _field_type_label(ft)}
@@ -1036,11 +1052,20 @@ class AutomationWebService:
         }
 
         if field_id:
-            org_id = coerce_uuid(organization_id)
             field = custom_fields_service.get(
                 db, coerce_uuid(field_id), organization_id=org_id
             )
             if field:
+                if field.entity_type.value not in enabled_types:
+                    context["entity_types"].append(
+                        {
+                            "value": field.entity_type.value,
+                            "label": (
+                                f"{_custom_field_entity_type_label(field.entity_type)} "
+                                "(disabled)"
+                            ),
+                        }
+                    )
                 context["field"] = _custom_field_detail_view(field)
                 context["is_edit"] = True
 

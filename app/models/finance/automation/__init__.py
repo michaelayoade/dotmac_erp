@@ -16,6 +16,9 @@ from app.models.finance.automation.document_template import (
     TemplateType,
 )
 from app.models.finance.automation.entity_assignment import EntityAssignment
+from app.models.finance.automation.entity_configuration import (
+    AutomationEntityConfiguration,
+)
 from app.models.finance.automation.generated_document import (
     DocumentStatus,
     GeneratedDocument,
@@ -66,6 +69,7 @@ __all__ = [
     "CustomFieldType",
     "CustomFieldValue",
     "EntityAssignment",
+    "AutomationEntityConfiguration",
     # Document Templates
     "DocumentTemplate",
     "TemplateType",

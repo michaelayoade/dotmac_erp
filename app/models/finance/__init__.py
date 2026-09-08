@@ -98,6 +98,7 @@ from app.models.finance.audit import (
 # Automation Schema
 from app.models.finance.automation import (
     ActionType,
+    AutomationEntityConfiguration,
     CustomFieldDefinition,
     CustomFieldEntityType,
     CustomFieldType,
@@ -573,6 +574,7 @@ __all__ = [
     "RecurringLog",
     "RecurringLogStatus",
     "WorkflowRule",
+    "AutomationEntityConfiguration",
     "WorkflowEntityType",
     "TriggerEvent",
     "ActionType",
