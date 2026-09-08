@@ -60,7 +60,7 @@ FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 # references, and a `sha-<short>` tag is one.
 IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
 IMAGE_SOURCE_REVISION = "54549c1da94422e9cef1a664996e224c8db7b18b"
-IMAGE_DIGEST = "sha256:0e16750393b6206f413edc0985680bf497e430cfabdea5133f6efd488d2a6724"
+IMAGE_DIGEST = "sha256:ac1bb2abdb2177fdfc6d7326bf5a1510324a28b19fad9882c8a19685fce62aea"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
