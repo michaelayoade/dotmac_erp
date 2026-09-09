@@ -495,6 +495,27 @@ def _construct_durable_shadow(
       (``compare_constructed_row`` refuses to compare two entities at
       different persistence stages), deterministically rather than relying
       on the savepoint rollback's own expunge behaviour.
+
+    ORDER MATTERS for that second point, and got it backwards on the first
+    attempt at this function: ``Session.rollback()`` -- including rolling
+    back a nested SAVEPOINT -- restores its snapshot by EXPIRING every
+    attribute of every object the session was still tracking as part of
+    that transaction, not merely detaching them with their last-known
+    values intact. Calling ``make_transient`` in a ``finally`` block AFTER
+    ``savepoint.rollback()`` ran was calling it on an entity whose instance
+    state had already been wiped back to column defaults -- every field,
+    not just the two normalized above, which is exactly what CI caught:
+    ``organization_id``, ``legal_name``, ``customer_code``, all of it
+    reading as blank/default rather than what the writer decided.
+    ``make_transient`` must run BEFORE the rollback, while ``entity`` is
+    still attached to ``db`` with its real, flushed values loaded: it fully
+    de-associates the object from the session (clears its identity, drops
+    it from the session's tracked collections) so the session's rollback
+    restoration walk no longer reaches it at all, and the values already in
+    its instance state survive untouched. The rollback then only has to
+    undo the actual database row and any other session-tracked mutation
+    (e.g. the numbering sequence's in-place increment) -- which is exactly
+    what a dry run needs undone.
     """
     run_timestamp_columns = tuple(
         name
@@ -502,7 +523,6 @@ def _construct_durable_shadow(
         if disposition is Disposition.RUN_TIMESTAMP
     )
     savepoint = db.begin_nested()
-    entity: Customer | None = None
     try:
         applied = port.apply(mapped_row)
         customer_id = UUID(str(applied["customer_id"]))
@@ -515,11 +535,12 @@ def _construct_durable_shadow(
         for name in run_timestamp_columns:
             if name in state_dict:
                 delattr(entity, name)
+        # Detach and freeze the entity's current values BEFORE the rollback
+        # below can expire them -- see the ORDER MATTERS note above.
+        make_transient(entity)
         return entity
     finally:
         savepoint.rollback()
-        if entity is not None:
-            make_transient(entity)
 
 
 def assert_legacy_customer_parity(
