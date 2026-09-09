@@ -110,6 +110,8 @@ def test_vmagent_scrapes_authenticated_app_and_private_worker() -> None:
     assert "targets: ['app:8002']" in config
     assert "targets: ['worker:8004']" in config
     assert "METRICS_TOKEN must be set for vmagent" in compose
+    assert "VM_REMOTE_WRITE_URL must be set for vmagent" in compose
+    assert "VM_REMOTE_WRITE_URL-is-unset.invalid" not in compose
     assert "PROMETHEUS_MULTIPROC_DIR: /tmp/dotmac-erp-prometheus" in compose
     worker_block = compose.split("  worker:", 1)[1].split("  beat:", 1)[0]
     assert "app.celery_worker_entrypoint" in worker_block

@@ -294,7 +294,10 @@ services:
     command:
     - -promscrape.config=/etc/vmagent/config.yml
     - -promscrape.config.strictParse=false
-    - -remoteWrite.url=${VM_REMOTE_WRITE_URL:-http://VM_REMOTE_WRITE_URL-is-unset.invalid/api/v1/write}
+    # Remote write is part of the production metrics contract. Refuse Compose
+    # interpolation when it is absent instead of starting an agent that retries
+    # a deliberately invalid sentinel forever and appears operational.
+    - -remoteWrite.url=${VM_REMOTE_WRITE_URL:?VM_REMOTE_WRITE_URL must be set for vmagent}
     # Buffer locally when the central endpoint is unreachable rather than
     # dropping samples and leaving an unexplained hole in the series.
     - -remoteWrite.tmpDataPath=/vmagent-data
