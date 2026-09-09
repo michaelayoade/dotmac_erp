@@ -198,10 +198,10 @@ class TestWorkflowRulesList:
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
-            "a[href*='/workflows/new'], button:has-text('New'), a:has-text('New Rule')"
-        )
-        if new_btn.count() > 0:
-            expect(new_btn.first).to_be_visible()
+            "a[href='/automation/workflows/new']"
+        ).first
+        expect(new_btn).to_be_visible()
+        expect(new_btn).to_contain_text("Create workflow rule")
 
 
 @pytest.mark.e2e
@@ -294,11 +294,9 @@ class TestCustomFieldsList:
         authenticated_page.goto(f"{base_url}/automation/fields")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator(
-            "a[href*='/custom-fields/new'], button:has-text('New'), a:has-text('Add Field')"
-        )
-        if new_btn.count() > 0:
-            expect(new_btn.first).to_be_visible()
+        new_btn = authenticated_page.locator("a[href='/automation/fields/new']").first
+        expect(new_btn).to_be_visible()
+        expect(new_btn).to_contain_text("Create custom field")
 
 
 @pytest.mark.e2e

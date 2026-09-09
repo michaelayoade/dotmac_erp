@@ -30,6 +30,22 @@ def test_custom_field_controls_deactivate_and_reactivate() -> None:
     assert "/fields/{{ field.field_id }}/delete" not in detail
 
 
+def test_admin_layout_renders_automation_header_actions() -> None:
+    admin_base = (REPO_ROOT / "templates/admin/base_admin.html").read_text(
+        encoding="utf-8"
+    )
+    workflows = _template("workflow_list.html")
+    fields = _template("fields_list.html")
+
+    assert "{% block header_actions %}" in admin_base
+    assert "{{ header_actions_html }}" in admin_base
+    assert 'data-testid="header-actions"' in admin_base
+    assert 'href="/automation/workflows/new"' in workflows
+    assert "Create workflow rule" in workflows
+    assert 'href="/automation/fields/new"' in fields
+    assert "Create custom field" in fields
+
+
 def test_mutation_routes_pass_current_organization_scope() -> None:
     routes = (REPO_ROOT / "app" / "web" / "automation.py").read_text(encoding="utf-8")
 
