@@ -372,3 +372,17 @@ def test_the_middleware_does_not_read_the_peer_address_directly():
         "the context creator must reach the trusted-origin resolver, not the "
         "peer address; ERP already had the resolver and bypassed it once"
     )
+
+
+def test_unmatched_404_path_uses_one_bounded_metrics_label():
+    request = _request()
+    request.scope["path"] = "/scanner-probe-with-arbitrary-attacker-text"
+
+    assert observability._request_path(request, 404) == "/__unmatched__"
+
+
+def test_middleware_intercepted_non_404_path_retains_normalized_fallback():
+    request = _request()
+    request.scope["path"] = "/api/items/123456"
+
+    assert observability._request_path(request, 403) == "/api/items/{id}"
