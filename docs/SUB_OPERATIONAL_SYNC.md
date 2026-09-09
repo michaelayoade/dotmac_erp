@@ -54,6 +54,27 @@ Finance verifies that every selection belongs to the current organization. A
 selected task must match the selected project and selected ticket. Selecting a
 task can also supply its project and ticket when those fields are omitted.
 
+### Field employee claims and reimbursement
+
+Sub publishes a Field technician claim at submission through
+`POST /api/v1/sync/sub/expense-claims`. ERP validates the claim and stores it as
+exactly `SUBMITTED`; it does not construct an ERP approval chain for this trusted
+source. The claimant's current ERP employee bank details are copied onto the
+claim so later reimbursement uses ERP-owned payment inputs.
+
+Sub remains authoritative for the Field manager decision and delivers its
+durable decision evidence to the claim-specific `/approve` or `/reject`
+endpoint. ERP verifies the manager's employee identity, monetary authority, and
+self-approval restriction before projecting the decision. These endpoints and
+claim status polling require the exact `sub:expense:write` service scope.
+
+An approved claim may be paid from the Field app. Sub only stages and delivers
+the command; ERP owns creation of the payment intent, Paystack transfer,
+webhook/poll reconciliation, accounting consequences, and final `PAID` fact.
+The payment endpoint requires the stronger exact `sub:expense:pay` scope. One
+Sub command ID maps idempotently to one payment intent. An unknown provider
+outcome is returned as `INDETERMINATE` and is never automatically retried.
+
 ## NCC regulatory projection
 
 Sub reads ERP-owned NCC Section F/G evidence through

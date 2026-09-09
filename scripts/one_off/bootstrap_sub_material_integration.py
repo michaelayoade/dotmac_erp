@@ -29,6 +29,7 @@ SCOPES = [
     "sub:po:write",
     "sub:ap:write",
     "sub:expense:write",
+    "sub:expense:pay",
 ]
 
 

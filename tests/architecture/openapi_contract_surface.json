@@ -8647,6 +8647,39 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/sync/sub/expense-claims/{source_claim_id}/approve": {
+   "params": [
+    "header:x-api-key!",
+    "path:source_claim_id!"
+   ],
+   "request": "8ab5c0e114c0",
+   "responses": {
+    "200": "5a36e7299db9",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/sync/sub/expense-claims/{source_claim_id}/payments": {
+   "params": [
+    "header:x-api-key!",
+    "path:source_claim_id!"
+   ],
+   "request": "d1952567f968",
+   "responses": {
+    "200": "9297bc426a56",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/sync/sub/expense-claims/{source_claim_id}/reject": {
+   "params": [
+    "header:x-api-key!",
+    "path:source_claim_id!"
+   ],
+   "request": "e58d85f3e712",
+   "responses": {
+    "200": "5a36e7299db9",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/sync/sub/material-requests": {
    "params": [
     "header:x-api-key!"
@@ -9750,10 +9783,14 @@
   "SubAvailableSerialRead": "5e22182e9288",
   "SubExpenseCategoriesResponse": "d2fa1a1bebde",
   "SubExpenseCategoryItem": "d005e565d191",
+  "SubExpenseClaimDecisionPayload": "23ab9b7004e7",
   "SubExpenseClaimItemPayload": "f3e8a2b0f9a2",
   "SubExpenseClaimPayload": "588dde1c48f5",
+  "SubExpenseClaimRejectionPayload": "459893975aeb",
   "SubExpenseClaimResponse": "5567fab6c2f5",
-  "SubExpenseClaimStatusResponse": "10d8c8211987",
+  "SubExpenseClaimStatusResponse": "4c5513489e36",
+  "SubExpensePaymentPayload": "8ed5cce44c03",
+  "SubExpensePaymentResponse": "91fb09c61a03",
   "SubMaterialRequestItemPayload": "b9286a24d0e6",
   "SubMaterialRequestItemRead": "abbdf2c168e4",
   "SubMaterialRequestPayload": "7eee87bdee45",
