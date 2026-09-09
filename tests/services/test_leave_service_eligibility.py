@@ -12,7 +12,7 @@ from app.services.people.leave.leave_service import (
 )
 
 
-def _leave_type(code: str, name: str) -> SimpleNamespace:
+def _leave_type(code: str, name: str, *, restricted: bool = False) -> SimpleNamespace:
     return SimpleNamespace(
         leave_type_code=code,
         leave_type_name=name,
@@ -47,6 +47,7 @@ def _submit_leave(
     db.add.side_effect = add_side_effect
     db.flush.side_effect = flush_side_effect
     db.scalar.return_value = None
+    db.get.return_value = SimpleNamespace(hr_probation_days=365)
 
     with (
         patch.object(service, "get_leave_type", return_value=leave_type),
@@ -78,7 +79,7 @@ def _submit_leave(
 def test_under_one_year_staff_cannot_submit_annual_leave():
     with pytest.raises(LeaveEligibilityError, match="Annual leave"):
         _submit_leave(
-            leave_type=_leave_type("ANNUAL", "Annual Leave"),
+            leave_type=_leave_type("ANNUAL", "Annual Leave", restricted=True),
             date_of_joining=date(2025, 9, 1),
             today=date(2026, 8, 20),
             total_days=Decimal("2"),
@@ -97,19 +98,20 @@ def test_under_one_year_staff_can_submit_sick_leave_up_to_two_days():
     assert application.total_leave_days == Decimal("2")
 
 
-def test_under_one_year_staff_cannot_submit_sick_leave_over_two_days():
-    with pytest.raises(LeaveEligibilityError, match="up to 2 days"):
-        _submit_leave(
-            leave_type=_leave_type("SICK", "Sick Leave"),
-            date_of_joining=date(2025, 9, 1),
-            today=date(2026, 8, 20),
-            total_days=Decimal("2.5"),
-        )
+def test_under_one_year_staff_can_submit_sick_leave_over_two_days():
+    application = _submit_leave(
+        leave_type=_leave_type("SICK", "Sick Leave"),
+        date_of_joining=date(2025, 9, 1),
+        today=date(2026, 8, 20),
+        total_days=Decimal("2.5"),
+    )
+
+    assert application.status.value == "SUBMITTED"
 
 
 def test_staff_at_one_year_can_submit_annual_leave():
     application = _submit_leave(
-        leave_type=_leave_type("ANNUAL", "Annual Leave"),
+        leave_type=_leave_type("ANNUAL", "Annual Leave", restricted=True),
         date_of_joining=date(2025, 8, 20),
         today=date(2026, 8, 20),
         total_days=Decimal("3"),

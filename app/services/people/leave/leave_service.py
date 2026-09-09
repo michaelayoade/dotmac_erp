@@ -326,23 +326,40 @@ class LeaveService:
         *,
         employee_id: UUID,
         leave_type: LeaveType,
-        total_days: Decimal,
+        from_date: date,
+        to_date: date,
     ) -> None:
-        """Enforce HR Manual leave eligibility for staff under one year."""
-        employee = self._get_application_employee(org_id, employee_id)
-        service_date = self._one_year_service_date(employee.date_of_joining)
-        if self.get_org_today(org_id) >= service_date:
+        """Enforce the configured probation restriction for a leave type."""
+        if not getattr(leave_type, "restricted_during_probation", False):
             return
 
-        if self._is_annual_leave_type(leave_type):
-            raise LeaveEligibilityError(
-                "Annual leave is only available after completing one year of service."
-            )
+        employee = self._get_application_employee(org_id, employee_id)
+        organization = self.db.get(Organization, org_id)
+        probation_days = organization.hr_probation_days if organization else None
+        if not probation_days or probation_days <= 0:
+            return
 
-        if self._is_sick_leave_type(leave_type) and total_days > Decimal("2"):
-            raise LeaveEligibilityError(
-                "Staff with less than one year of service may request up to 2 days of sick leave."
+        probation_end = employee.date_of_joining + timedelta(days=probation_days)
+        if from_date >= probation_end:
+            return
+
+        allocation = self.db.scalar(
+            select(LeaveAllocation).where(
+                LeaveAllocation.organization_id == org_id,
+                LeaveAllocation.employee_id == employee_id,
+                LeaveAllocation.leave_type_id == leave_type.leave_type_id,
+                LeaveAllocation.is_active.is_(True),
+                LeaveAllocation.from_date <= from_date,
+                LeaveAllocation.to_date >= to_date,
             )
+        )
+        if allocation:
+            return
+
+        raise LeaveEligibilityError(
+            "This leave type is restricted during probation. "
+            "HR must allocate leave before it can be requested."
+        )
 
     @staticmethod
     def _status_managed_by_leave(status: EmployeeStatus) -> bool:
@@ -1436,12 +1453,15 @@ class LeaveService:
             org_id,
             employee_id=employee_id,
             leave_type=leave_type,
-            total_days=total_days,
+            from_date=from_date,
+            to_date=to_date,
         )
 
         # Check balance (skip for LWP)
         if not leave_type.is_lwp:
-            balance = self.get_employee_balance(org_id, employee_id, leave_type_id)
+            balance = self.get_employee_balance(
+                org_id, employee_id, leave_type_id, as_of_date=from_date
+            )
             if balance < total_days:
                 raise InsufficientLeaveBalanceError(balance, total_days)
 
