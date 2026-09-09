@@ -594,8 +594,8 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label for="assigned_location_id" class="form-label">Assigned Branch</label>
-                        <select name="assigned_location_id" id="assigned_location_id" class="form-input w-full">
+                        <label for="assigned_location_id" class="form-label{% if not employee %} required{% endif %}">Assigned Branch{% if not employee %} <span class="text-red-500">*</span>{% endif %}</label>
+                        <select name="assigned_location_id" id="assigned_location_id" class="form-input w-full {% if errors.assigned_location_id %}border-red-500{% endif %}" data-tab="employment" {% if not employee %}required{% endif %}>
                             <option value="">Select assigned branch</option>
                             {% for loc in locations %}
                             <option value="{{ loc.location_id }}"
@@ -604,6 +604,9 @@
                             </option>
                             {% endfor %}
                         </select>
+                        {% if errors.assigned_location_id %}
+                        <p class="mt-1 text-sm text-red-500">{{ errors.assigned_location_id }}</p>
+                        {% endif %}
                     </div>
                     <div>
                         <label for="default_shift_type_id" class="form-label">Default Shift Type</label>
@@ -813,7 +816,17 @@
             } catch (e) {}
         }
 
-        form.addEventListener("submit", function() {
+        form.addEventListener("submit", function(event) {
+            const assignedBranch = form.querySelector("#assigned_location_id");
+            if (assignedBranch && assignedBranch.required && !assignedBranch.value) {
+                event.preventDefault();
+                activateTab("employment");
+                window.setTimeout(function() {
+                    assignedBranch.focus();
+                    assignedBranch.reportValidity();
+                }, 0);
+                return;
+            }
             persistState();
         });
 

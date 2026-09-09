@@ -369,8 +369,8 @@
 
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                        <label for="assigned_location_id" class="form-label">Assigned Branch</label>
-                        <select name="assigned_location_id" id="assigned_location_id" class="form-input w-full">
+                        <label for="assigned_location_id" class="form-label{% if not employee %} required{% endif %}">Assigned Branch{% if not employee %} <span class="text-red-500">*</span>{% endif %}</label>
+                        <select name="assigned_location_id" id="assigned_location_id" class="form-input w-full {% if errors.assigned_location_id %}border-red-500{% endif %}" {% if not employee %}required{% endif %}>
                             <option value="">Select Branch</option>
                             {% for loc in locations %}
                             <option value="{{ loc.location_id }}" {{ 'selected' if (employee and employee.assigned_location_id == loc.location_id) or (form_data.assigned_location_id == loc.location_id | string) }}>
@@ -378,6 +378,9 @@
                             </option>
                             {% endfor %}
                         </select>
+                        {% if errors.assigned_location_id %}
+                        <p class="mt-1 text-sm text-red-500">{{ errors.assigned_location_id }}</p>
+                        {% endif %}
                     </div>
                     <div>
                         <label for="default_shift_type_id" class="form-label">Default Shift Type</label>
