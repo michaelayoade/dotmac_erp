@@ -6,6 +6,7 @@ import logging
 from collections.abc import Sequence
 from datetime import date, datetime, timezone
 from functools import partial
+from typing import Any, cast
 from urllib.parse import urlencode
 
 try:
@@ -1165,10 +1166,12 @@ class ExpenseLimitWebService:
             .group_by(ExpenseClaim.approver_id)
             .order_by(func.max(ExpenseClaimAction.created_at).desc())
         ).all()
-        activity_map = {
-            row.approver_id: row for row in activity_rows if row.approver_id
+        activity_map: dict[UUID, Any] = {
+            cast(UUID, row.approver_id): row
+            for row in activity_rows
+            if row.approver_id is not None
         }
-        activity_approver_ids = list(activity_map)
+        activity_approver_ids: list[UUID] = list(activity_map)
 
         if not (parsed_from or parsed_to) and not activity_approver_ids:
             context = base_context(request, auth, "Expense Reviewer", "limits-review")
@@ -1216,17 +1219,25 @@ class ExpenseLimitWebService:
             .where(*paid_filters)
             .group_by(ExpenseClaim.approver_id)
         ).all()
-        paid_amount_map = {
-            row.approver_id: row.paid_amount or Decimal("0") for row in paid_amount_rows
+        paid_amount_map: dict[UUID, Decimal] = {
+            cast(UUID, row.approver_id): row.paid_amount or Decimal("0")
+            for row in paid_amount_rows
+            if row.approver_id is not None
         }
-        paid_count_map = {
-            row.approver_id: int(row.paid_count or 0) for row in paid_amount_rows
+        paid_count_map: dict[UUID, int] = {
+            cast(UUID, row.approver_id): int(row.paid_count or 0)
+            for row in paid_amount_rows
+            if row.approver_id is not None
         }
-        paid_approver_ids = [
-            row.approver_id for row in paid_amount_rows if row.approver_id
+        paid_approver_ids: list[UUID] = [
+            cast(UUID, row.approver_id)
+            for row in paid_amount_rows
+            if row.approver_id is not None
         ]
 
-        approver_ids = list(dict.fromkeys([*activity_approver_ids, *paid_approver_ids]))
+        approver_ids: list[UUID] = list(
+            dict.fromkeys([*activity_approver_ids, *paid_approver_ids])
+        )
         if not approver_ids:
             context = base_context(request, auth, "Expense Reviewer", "limits-review")
             context.update(
@@ -1272,7 +1283,9 @@ class ExpenseLimitWebService:
         def _last_action_sort_value(approver_id: UUID) -> datetime:
             if approver_id not in activity_map:
                 return datetime.min
-            last_action_at = activity_map[approver_id].last_action_at
+            last_action_at = cast(
+                datetime | None, activity_map[approver_id].last_action_at
+            )
             if last_action_at is None:
                 return datetime.min
             if last_action_at.tzinfo is not None:
