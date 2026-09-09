@@ -1,0 +1,97 @@
+{
+  "schema": "kernel-runtime-readiness.v1",
+  "product": "dotmac_erp",
+  "subject": "erp-requires-only-synchronous-database-runtime-composition-async-remains-transitional-product-owned",
+  "requirements": [
+    {
+      "id": "single-sync-engine-construction-site",
+      "statement": "ERP's synchronous database access has exactly one engine-construction site, app/db/__init__.py's get_engine(), which builds a plain SQLAlchemy Engine via create_engine(...) — the exact shape a Kernel-successor DatabaseRuntime constructor's `engine` parameter accepts. No second sync create_engine(...) call site exists anywhere else under app/, so ERP's synchronous session requirement is expressible against the Kernel successor without any new Kernel API.",
+      "satisfied": true,
+      "source_reference": "app/db/__init__.py:65"
+    },
+    {
+      "id": "async-database-paths-isolated-from-kernel",
+      "statement": "Every ERP symbol that constructs or depends on an async database engine/session (AsyncSession, get_async_engine, get_async_session_local, AsyncSessionLocal, create_async_engine, get_async_db, get_async_db_for_org) lives only in nine files — app/db/__init__.py, app/rls.py, app/services/finance/common/numbering.py, app/services/finance/settings_web.py, app/services/people/settings_web.py, app/web/deps.py, app/web/finance/settings.py, app/web/people/settings.py, app/web/settings.py — and none of those nine files imports dotmac_kernel. ERP's async database paths are therefore self-contained and product-owned, independent of which sync DatabaseRuntime ERP composes. Async support is explicitly TRANSITIONAL: this record declares that status as ERP's stated position, not as a completion or permanence claim, and does not assert that async is or will be required of the Kernel API.",
+      "satisfied": true,
+      "source_reference": "app/db/__init__.py:95"
+    },
+    {
+      "id": "fork-safety-hooks-owned-by-product",
+      "statement": "ERP owns explicit post-fork hook points independent of any Kernel disposal API — @worker_process_init.connect in app/celery_app.py (Celery prefork) and post_worker_init(worker) in gunicorn.conf.py (Gunicorn preload_app worker spawn). Fork safety for a composed Kernel-successor engine is satisfiable by calling runtime.engine.dispose() from these existing hooks; no fork-safety API needs to exist on the Kernel successor.",
+      "satisfied": true,
+      "source_reference": "app/celery_app.py:91"
+    },
+    {
+      "id": "no-runtime-bypassrls-credential-or-per-call-flag",
+      "statement": "MIGRATION_DATABASE_URL (the BYPASSRLS-capable credential) appears under app/ only as a named constant/docstring reference in app/runtime_admission.py and app/migration_credential_custody.py — never bound to a live engine or session in application runtime code — and no app/ call site passes a bypass_rls=True (or similarly named) flag to a session or engine constructor. ERP therefore has no runtime cross-tenant BYPASSRLS mechanism today; any future genuinely fleet-wide need is expressible as a separately bound engine (the Kernel successor's platform_engine constructor parameter shape), never a per-call session flag.",
+      "satisfied": true,
+      "source_reference": "app/migration_credential_custody.py:73"
+    },
+    {
+      "id": "statement-timeout-and-pool-tuning-set-at-construction",
+      "statement": "ERP applies statement_timeout and pool sizing via connect_args/pool kwargs at create_engine() call time inside app/db/__init__.py's _get_connect_args()/get_engine(), before any Kernel DatabaseRuntime would ever receive the resulting Engine object. This is satisfiable through the DatabaseRuntime constructor's existing engine: Engine parameter, with no new Kernel surface required.",
+      "satisfied": true,
+      "source_reference": "app/db/__init__.py:29"
+    },
+    {
+      "id": "legacy-tenant-guc-is-a-single-named-value",
+      "statement": "ERP's tree names exactly one legacy (pre-module-lineage) tenant GUC needing compatibility alongside the canonical app.current_tenant setting: app.current_organization_id, primed in app/rls.py's set_current_organization/set_current_organization_sync alongside app.current_tenant in the same transaction-local statement. This is a single, stable, named value — the shape a legacy_tenant_settings-style compatibility parameter would need to accept, not an open-ended or growing set.",
+      "satisfied": true,
+      "source_reference": "app/rls.py:48"
+    },
+    {
+      "id": "no-runtime-bypass-rls-guc-writer-remains",
+      "statement": "No app/ source file sets or reads a bypass_rls-named PostgreSQL GUC (app.bypass_rls or similar) at runtime; app/rls.py's own module docstring states plainly that 'runtime code cannot assert a PostgreSQL RLS bypass.' The GUC-based cross-tenant bypass mechanism this record's companion document (docs/architecture/erp-runtime-async-pid-fork-contract.md) describes as being retired has already been fully removed from app/ as of this record's revision — there is no live writer left to retire.",
+      "satisfied": true,
+      "source_reference": "app/rls.py:8-9"
+    },
+    {
+      "id": "sync-runtime-not-yet-composed",
+      "statement": "As of this revision, no file under app/ imports dotmac_kernel.session_runtime, DatabaseRuntime, bind_database_runtime, or resolve_database_runtime. This record states requirement EXPRESSIBILITY only — that ERP's synchronous session needs can be met by the Kernel successor's existing public surface — and makes no adoption or composition claim. A pin in pyproject.toml is installation, not adoption.",
+      "satisfied": true,
+      "source_reference": "pyproject.toml:60"
+    }
+  ],
+  "composition": [
+    {
+      "declaration": "dotmac-kernel is pinned at the exact version 0.1.0a98 from the forgejo private index (no range operator).",
+      "source_reference": "pyproject.toml:60"
+    },
+    {
+      "declaration": "Ten consume-pure dotmac_kernel modules are composed under app/: assembly, capabilities, features, licensing, money, planes, prerequisites, profiles, providers, testing.",
+      "source_reference": "tests/architecture/test_kernel_import_boundary.py:39-53"
+    },
+    {
+      "declaration": "One adopted persisted kernel symbol, dotmac_kernel.cache.TenantScope, is composed in app/tenancy.py.",
+      "source_reference": "app/tenancy.py:15"
+    },
+    {
+      "declaration": "One adopted persisted kernel symbol, dotmac_kernel.models.Tenant, is composed in app/services/tenant_projection.py.",
+      "source_reference": "app/services/tenant_projection.py:18"
+    },
+    {
+      "declaration": "dotmac_kernel.session_runtime.DatabaseRuntime is NOT composed anywhere under app/ — the sync-runtime successor is pinned but not adopted.",
+      "source_reference": "tests/architecture/test_kernel_import_boundary.py:58-63"
+    }
+  ],
+  "source_references": [
+    "app/db/__init__.py",
+    "app/rls.py",
+    "app/celery_app.py",
+    "gunicorn.conf.py",
+    "app/runtime_admission.py",
+    "app/migration_credential_custody.py",
+    "app/tenancy.py",
+    "app/services/tenant_projection.py",
+    "app/services/finance/common/numbering.py",
+    "app/services/finance/settings_web.py",
+    "app/services/people/settings_web.py",
+    "app/web/deps.py",
+    "app/web/finance/settings.py",
+    "app/web/people/settings.py",
+    "app/web/settings.py",
+    "pyproject.toml",
+    "tests/architecture/test_kernel_import_boundary.py",
+    "docs/architecture/erp-runtime-async-pid-fork-contract.md"
+  ]
+}
