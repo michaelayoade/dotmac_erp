@@ -12,11 +12,12 @@ from app.api.service_principal import require_explicit_service_scope
 from app.api.sync.sub_attendance import _enforce_punch_rate_limit
 from app.models.people.hr.employee import EmployeeStatus
 from app.schemas.sync.sub_attendance import SelfcareAttendanceLocation
+from app.services.common import ValidationError
+from app.services.people.attendance import CheckInRequirementError
 from app.services.people.attendance.selfcare_integration import (
     SelfcareAttendanceError,
     SelfcareAttendanceIntegrationService,
 )
-from app.services.common import ValidationError
 
 
 ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -106,6 +107,17 @@ def test_missing_geofenced_location_has_stable_error_code() -> None:
     )
 
     assert error.code == "location_required"
+    assert error.status_code == 422
+
+
+def test_dob_requirement_preserves_machine_readable_action() -> None:
+    error = SelfcareAttendanceIntegrationService._map_domain_error(
+        CheckInRequirementError()
+    )
+
+    assert error.code == "ERP_DOB_REQUIRED_FOR_CHECKIN"
+    assert error.message == "Your Date of Birth is required before you can check in."
+    assert error.action == "UPDATE_ERP_PROFILE"
     assert error.status_code == 422
 
 

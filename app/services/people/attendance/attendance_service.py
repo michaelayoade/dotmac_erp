@@ -37,7 +37,12 @@ from app.models.people.attendance import (
 )
 from app.models.people.hr.employee import Employee
 from app.services.common import PaginatedResult, PaginationParams, ValidationError
+from app.services.people import (
+    PEOPLE_SETTINGS_DOMAIN,
+    REQUIRE_DOB_FOR_CHECKIN_SETTING,
+)
 from app.services.people.scheduling.resolver import ScheduleResolver
+from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +58,25 @@ except ImportError:
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
 
-__all__ = ["AttendanceService"]
+__all__ = ["AttendanceService", "CheckInRequirementError"]
 
 
 class AttendanceServiceError(Exception):
     """Base error for attendance service."""
 
     pass
+
+
+class CheckInRequirementError(ValidationError):
+    """A configured employee check-in precondition was not satisfied."""
+
+    status_code = 422
+    code = "ERP_DOB_REQUIRED_FOR_CHECKIN"
+    action = "UPDATE_ERP_PROFILE"
+
+    def __init__(self) -> None:
+        super().__init__("Your Date of Birth is required before you can check in.")
+        self.details = {"action": self.action}
 
 
 class ShiftTypeNotFoundError(AttendanceServiceError):
@@ -359,6 +376,38 @@ class AttendanceService:
                     f"You're not within the allowed radius for {action_label}. "
                     f"Distance: {distance:.0f}m, Allowed: {radius:.0f}m"
                 )
+
+    def _validate_check_in_requirements(
+        self,
+        org_id: UUID,
+        employee_id: UUID,
+    ) -> None:
+        """Enforce tenant-configured requirements before a check-in mutation."""
+        require_dob = resolve_value(
+            self.db,
+            PEOPLE_SETTINGS_DOMAIN,
+            REQUIRE_DOB_FOR_CHECKIN_SETTING,
+            organization_id=org_id,
+        )
+        if require_dob is not True:
+            return
+
+        employee = self.db.scalar(
+            select(Employee)
+            .options(joinedload(Employee.person))
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == employee_id,
+            )
+        )
+        if employee is None:
+            raise AttendanceServiceError("Employee record not found.")
+        if employee.person is None:
+            raise AttendanceServiceError("Employee personal record is unavailable.")
+        if employee.person.date_of_birth is None:
+            raise CheckInRequirementError()
+        if not isinstance(employee.person.date_of_birth, date):
+            raise ValidationError("Employee Date of Birth is invalid.")
 
     # =========================================================================
     # Shift Types
@@ -816,6 +865,7 @@ class AttendanceService:
         marked_by: str = "MANUAL",
     ) -> Attendance:
         """Record employee check-in."""
+        self._validate_check_in_requirements(org_id, employee_id)
         now = (
             self._normalize_in_org_tz(org_id, check_in_time)
             if check_in_time
@@ -992,6 +1042,7 @@ class AttendanceService:
     ) -> Attendance:
         """Record check-in against an existing attendance record."""
         attendance = self.get_attendance(org_id, attendance_id)
+        self._validate_check_in_requirements(org_id, attendance.employee_id)
         if attendance.check_in:
             raise AttendanceServiceError(
                 f"Attendance already checked in at {attendance.check_in}"

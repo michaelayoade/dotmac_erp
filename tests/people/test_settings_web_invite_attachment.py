@@ -6,13 +6,73 @@ import pytest
 from sqlalchemy import select
 from starlette.datastructures import UploadFile
 
-from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
+from app.services.people import (
+    PEOPLE_SETTINGS_DOMAIN,
+    REQUIRE_DOB_FOR_CHECKIN_SETTING,
+)
 from app.services.people.hr.invite_attachment import (
     set_default_invite_attachment_metadata,
 )
+from app.services.people.settings_web import people_settings_web_service
+from app.services.settings_spec import get_spec
 from app.web.deps import WebAuthContext
 from app.web.people.settings import download_default_invite_attachment
-from app.services.people.settings_web import people_settings_web_service
+
+
+def test_dob_check_in_requirement_spec_defaults_off() -> None:
+    spec = get_spec(PEOPLE_SETTINGS_DOMAIN, REQUIRE_DOB_FOR_CHECKIN_SETTING)
+
+    assert spec is not None
+    assert spec.value_type == SettingValueType.boolean
+    assert spec.default is False
+    assert spec.label == "Require Date of Birth for ERP Check-In"
+
+
+def test_dob_check_in_requirement_persists_per_organization(db_session, person):
+    db_session.info["organization_id"] = person.organization_id
+
+    initial = people_settings_web_service.get_check_in_requirements_context(
+        db_session, person.organization_id
+    )
+    assert initial["require_dob_for_erp_checkin"] is False
+
+    people_settings_web_service.update_check_in_requirements(
+        db_session,
+        person.organization_id,
+        require_dob_for_erp_checkin=True,
+        changed_by_id=person.id,
+    )
+
+    stored = db_session.scalar(
+        select(DomainSetting).where(
+            DomainSetting.domain == PEOPLE_SETTINGS_DOMAIN,
+            DomainSetting.key == REQUIRE_DOB_FOR_CHECKIN_SETTING,
+            DomainSetting.organization_id == person.organization_id,
+        )
+    )
+    assert stored is not None
+    assert stored.value_type == SettingValueType.boolean
+    assert stored.value_text == "true"
+    assert (
+        people_settings_web_service.get_check_in_requirements_context(
+            db_session, person.organization_id
+        )["require_dob_for_erp_checkin"]
+        is True
+    )
+
+    people_settings_web_service.update_check_in_requirements(
+        db_session,
+        person.organization_id,
+        require_dob_for_erp_checkin=False,
+        changed_by_id=person.id,
+    )
+    assert (
+        people_settings_web_service.get_check_in_requirements_context(
+            db_session, person.organization_id
+        )["require_dob_for_erp_checkin"]
+        is False
+    )
 
 
 def test_employee_invite_email_context_matches_invite_flow(db_session, person):

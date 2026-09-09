@@ -24,6 +24,7 @@ from app.schemas.settings import (
     DomainSettingUpdate,
 )
 from app.services.common import coerce_uuid
+from app.services.people import PEOPLE_SETTINGS_DOMAIN
 from app.services.response import (
     ListResponseMixin,
     apply_ordering as _apply_ordering,
@@ -869,6 +870,7 @@ banking_settings = DomainSettings(SettingDomain.banking)
 coach_settings = DomainSettings(SettingDomain.coach)
 notifications_settings = DomainSettings(SettingDomain.notifications)
 expense_settings = DomainSettings(SettingDomain.expense)
+people_settings = DomainSettings(PEOPLE_SETTINGS_DOMAIN)
 
 
 # =============================================================================

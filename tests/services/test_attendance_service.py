@@ -6,8 +6,12 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.models.people.attendance import AttendanceStatus
-from app.services.people.attendance import AttendanceService
+from app.services.common import ValidationError
+from app.services.people.attendance import AttendanceService, CheckInRequirementError
+from app.services.people.attendance.attendance_service import AttendanceServiceError
 
 
 ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -34,6 +38,126 @@ def _attendance_record(
         late_entry=late_entry,
         early_exit=early_exit,
     )
+
+
+def test_dob_requirement_off_does_not_load_employee(monkeypatch) -> None:
+    service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: False,
+    )
+
+    service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+
+    db.scalar.assert_not_called()
+
+
+def test_dob_requirement_on_accepts_employee_with_dob(monkeypatch) -> None:
+    service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.return_value = SimpleNamespace(
+        person=SimpleNamespace(date_of_birth=date(1990, 1, 1))
+    )
+
+    service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+
+    db.scalar.assert_called_once()
+
+
+def test_dob_requirement_on_rejects_before_attendance_mutation(monkeypatch) -> None:
+    service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.return_value = SimpleNamespace(person=SimpleNamespace(date_of_birth=None))
+
+    with pytest.raises(CheckInRequirementError) as exc_info:
+        service.check_in(ORG_ID, EMPLOYEE_ID)
+
+    assert exc_info.value.code == "ERP_DOB_REQUIRED_FOR_CHECKIN"
+    assert exc_info.value.action == "UPDATE_ERP_PROFILE"
+    db.add.assert_not_called()
+    db.flush.assert_not_called()
+
+
+def test_dob_requirement_does_not_treat_missing_person_as_missing_dob(
+    monkeypatch,
+) -> None:
+    service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.return_value = SimpleNamespace(person=None)
+
+    with pytest.raises(AttendanceServiceError, match="personal record is unavailable"):
+        service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+
+
+def test_dob_requirement_does_not_treat_missing_employee_as_missing_dob(
+    monkeypatch,
+) -> None:
+    service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.return_value = None
+
+    with pytest.raises(AttendanceServiceError, match="Employee record not found"):
+        service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+
+
+def test_dob_requirement_reports_invalid_employee_data_separately(
+    monkeypatch,
+) -> None:
+    service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.return_value = SimpleNamespace(
+        person=SimpleNamespace(date_of_birth="not-a-date")
+    )
+
+    with pytest.raises(ValidationError, match="Date of Birth is invalid") as exc_info:
+        service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+
+    assert not isinstance(exc_info.value, CheckInRequirementError)
+
+
+def test_dob_requirement_propagates_employee_lookup_failure(monkeypatch) -> None:
+    service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.side_effect = RuntimeError("database unavailable")
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+
+
+def test_turning_dob_requirement_off_immediately_removes_restriction(
+    monkeypatch,
+) -> None:
+    service, db = _make_service()
+    enabled = iter((True, False))
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: next(enabled),
+    )
+    db.scalar.return_value = SimpleNamespace(person=SimpleNamespace(date_of_birth=None))
+
+    with pytest.raises(CheckInRequirementError):
+        service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+
+    service._validate_check_in_requirements(ORG_ID, EMPLOYEE_ID)
+    db.scalar.assert_called_once()
 
 
 def test_monthly_summary_excludes_leave_days_from_percentage() -> None:
@@ -135,6 +259,13 @@ def test_trends_report_excludes_leave_days_from_monthly_and_average_percentages(
 def test_check_in_resolves_employee_shift_and_marks_late_arrival(monkeypatch) -> None:
     service, db = _make_service()
     monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.return_value = SimpleNamespace(
+        person=SimpleNamespace(date_of_birth=date(1990, 1, 1))
+    )
+    monkeypatch.setattr(
         "app.services.people.attendance.attendance_service.ScheduleResolver",
         lambda db: SimpleNamespace(resolve_employee_shift=lambda *_args: None),
     )
@@ -171,8 +302,12 @@ def test_check_in_resolves_employee_shift_and_marks_late_arrival(monkeypatch) ->
     db.add.assert_called_once_with(attendance)
 
 
-def test_check_in_by_attendance_id_resolves_missing_shift() -> None:
+def test_check_in_by_attendance_id_resolves_missing_shift(monkeypatch) -> None:
     service, db = _make_service()
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: False,
+    )
     attendance_id = uuid.UUID("00000000-0000-0000-0000-000000000004")
     shift_id = uuid.UUID("00000000-0000-0000-0000-000000000003")
     attendance = SimpleNamespace(
@@ -205,6 +340,31 @@ def test_check_in_by_attendance_id_resolves_missing_shift() -> None:
     assert result.late_entry_minutes == 15
     assert result.status == AttendanceStatus.PRESENT
     db.flush.assert_called_once()
+
+
+def test_check_in_by_attendance_id_cannot_bypass_dob_requirement(
+    monkeypatch,
+) -> None:
+    service, db = _make_service()
+    attendance = SimpleNamespace(
+        employee_id=EMPLOYEE_ID,
+        check_in=None,
+    )
+    service.get_attendance = MagicMock(return_value=attendance)  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        "app.services.people.attendance.attendance_service.resolve_value",
+        lambda *_args, **_kwargs: True,
+    )
+    db.scalar.return_value = SimpleNamespace(person=SimpleNamespace(date_of_birth=None))
+
+    with pytest.raises(CheckInRequirementError):
+        service.check_in_by_attendance_id(
+            ORG_ID,
+            uuid.UUID("00000000-0000-0000-0000-000000000004"),
+        )
+
+    assert attendance.check_in is None
+    db.flush.assert_not_called()
 
 
 def test_duplicate_checkout_preserves_original_checkout_and_hours() -> None:

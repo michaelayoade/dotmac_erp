@@ -22,16 +22,25 @@ from app.services.common import ValidationError
 from app.services.people.attendance.attendance_service import (
     AttendanceService,
     AttendanceServiceError,
+    CheckInRequirementError,
 )
 
 logger = logging.getLogger(__name__)
 
 
 class SelfcareAttendanceError(Exception):
-    def __init__(self, code: str, message: str, *, status_code: int = 400) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        status_code: int = 400,
+        action: str | None = None,
+    ) -> None:
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.action = action
         super().__init__(message)
 
 
@@ -238,6 +247,13 @@ class SelfcareAttendanceIntegrationService:
 
     @staticmethod
     def _map_domain_error(exc: Exception) -> SelfcareAttendanceError:
+        if isinstance(exc, CheckInRequirementError):
+            return SelfcareAttendanceError(
+                exc.code,
+                exc.message,
+                status_code=exc.status_code,
+                action=exc.action,
+            )
         message = str(exc).lower()
         if "already checked in" in message:
             return SelfcareAttendanceError(

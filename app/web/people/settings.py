@@ -7,11 +7,12 @@ payroll settings, leave configuration, and attendance modes.
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from app.services.people import REQUIRE_DOB_FOR_CHECKIN_SETTING
 from app.services.people.hr.invite_attachment import (
     get_default_invite_attachment_metadata,
 )
@@ -81,6 +82,12 @@ async def hr_settings(
     result = await people_settings_web_service.get_hr_settings_context(
         db, auth.organization_id
     )
+    result.update(
+        people_settings_web_service.get_check_in_requirements_context(
+            sync_db, auth.organization_id
+        )
+    )
+    result["can_manage_check_in_requirements"] = auth.is_admin
     result["default_invite_attachment"] = (
         people_settings_web_service.get_default_invite_attachment_context(
             sync_db, auth.organization_id
@@ -109,9 +116,25 @@ async def update_hr_settings(
     form_data = await request.form()
     data = dict(form_data)
 
+    if REQUIRE_DOB_FOR_CHECKIN_SETTING in data and not auth.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Administrator access required to change check-in requirements",
+        )
+
     success, error = await people_settings_web_service.update_hr_settings(
         db, auth.organization_id, data
     )
+    if success and auth.is_admin:
+        people_settings_web_service.update_check_in_requirements(
+            sync_db,
+            auth.organization_id,
+            require_dob_for_erp_checkin=(
+                str(form_data.get(REQUIRE_DOB_FOR_CHECKIN_SETTING) or "").lower()
+                == "true"
+            ),
+            changed_by_id=auth.person_id,
+        )
     if success:
         success, error = (
             people_settings_web_service.update_employee_invite_email_template(
@@ -135,6 +158,12 @@ async def update_hr_settings(
         result = await people_settings_web_service.get_hr_settings_context(
             db, auth.organization_id
         )
+        result.update(
+            people_settings_web_service.get_check_in_requirements_context(
+                sync_db, auth.organization_id
+            )
+        )
+        result["can_manage_check_in_requirements"] = auth.is_admin
         result["default_invite_attachment"] = (
             people_settings_web_service.get_default_invite_attachment_context(
                 sync_db, auth.organization_id

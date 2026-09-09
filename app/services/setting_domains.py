@@ -74,6 +74,7 @@ SETTING_DOMAIN_OWNERS: tuple[str, ...] = (
     "app.services.fleet",
     "app.services.procurement",
     "app.services.settings",
+    "app.services.people",
     "app.services.people.payroll",
     "app.services.finance.banking",
     "app.services.coach",

@@ -15,9 +15,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
+from app.models.domain_settings import SettingValueType
 from app.models.finance.core_org import Organization
 from app.models.finance.core_org.location import Location
+from app.schemas.settings import DomainSettingUpdate
+from app.rls import tenant_context
+from app.services import domain_settings as domain_settings_service
 from app.services.file_upload import FileUploadError, get_hr_invite_attachment_upload
+from app.services.people import (
+    PEOPLE_SETTINGS_DOMAIN,
+    REQUIRE_DOB_FOR_CHECKIN_SETTING,
+)
 from app.services.people.hr.invite_attachment import (
     clear_default_invite_attachment_metadata,
     get_default_invite_attachment_metadata,
@@ -29,7 +37,7 @@ from app.services.people.hr.invite_email import (
     get_employee_invite_email_template,
     set_employee_invite_email_template,
 )
-from app.rls import tenant_context
+from app.services.settings_spec import resolve_value
 from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -142,6 +150,42 @@ class PeopleSettingsWebService:
         }
 
     # ========== HR Settings ==========
+
+    @staticmethod
+    def get_check_in_requirements_context(
+        db: Session,
+        organization_id: uuid.UUID,
+    ) -> dict[str, bool]:
+        """Return tenant-scoped employee check-in requirements."""
+        enabled = resolve_value(
+            db,
+            PEOPLE_SETTINGS_DOMAIN,
+            REQUIRE_DOB_FOR_CHECKIN_SETTING,
+            organization_id=organization_id,
+        )
+        return {"require_dob_for_erp_checkin": enabled is True}
+
+    @staticmethod
+    def update_check_in_requirements(
+        db: Session,
+        organization_id: uuid.UUID,
+        *,
+        require_dob_for_erp_checkin: bool,
+        changed_by_id: uuid.UUID | str | None,
+    ) -> None:
+        """Persist the tenant's DOB check-in rule through audited settings."""
+        domain_settings_service.people_settings.upsert_by_key(
+            db,
+            REQUIRE_DOB_FOR_CHECKIN_SETTING,
+            DomainSettingUpdate(
+                value_type=SettingValueType.boolean,
+                value_text="true" if require_dob_for_erp_checkin else "false",
+                is_active=True,
+            ),
+            changed_by_id=str(changed_by_id) if changed_by_id else None,
+            change_reason="Updated from People attendance settings",
+            organization_id=organization_id,
+        )
 
     async def get_hr_settings_context(
         self, db: AsyncSession, organization_id: uuid.UUID
