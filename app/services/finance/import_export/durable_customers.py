@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import BinaryIO, Protocol, cast
 from uuid import UUID
@@ -33,6 +34,7 @@ from dotmac_imports import (
     PartitionClaim,
     PartitionDescriptor,
     PreparedPartition,
+    RowRejected,
     RowSkipped,
     RowStatus,
     RunStatus,
@@ -50,8 +52,9 @@ from dotmac_imports import (
     register_partition_plan,
     validate_claimed_partition,
 )
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, make_transient
 
 from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
@@ -62,6 +65,16 @@ from app.services.finance.import_export.contacts import (
     CustomerImporter,
     customer_source_mappings,
     get_ar_control_account,
+)
+from app.services.finance.import_export.customer_column_disposition import (
+    CUSTOMER_FIELD_DISPOSITION,
+    CodeRegistry,
+    ColumnDispositionError,
+    ConstructedRow,
+    Disposition,
+    RunWindow,
+    assert_partition_agrees,
+    correlate_row,
 )
 from app.tenancy import OrganizationTenantContext
 
@@ -445,6 +458,70 @@ def settle_customer_partition(
         )
 
 
+def _construct_durable_shadow(
+    db: Session,
+    port: CustomerImportPort,
+    mapped_row: Mapping[str, str],
+) -> Customer:
+    """Build the durable entity through the real writer, then discard it.
+
+    ``CustomerService.create_customer`` is not forked or reimplemented here:
+    it runs for real, including its real row-locked numbering allocation and
+    its real duplicate-code uniqueness read, inside a SAVEPOINT this
+    function unconditionally rolls back -- the same construct-then-discard
+    idiom this codebase already uses elsewhere (``app/db/__init__.py``'s
+    ``atomic_operation``). Nothing added or mutated here -- including a
+    numbering sequence row the allocator advances in place -- survives past
+    this function, so a dry run stays a dry run.
+
+    Two normalizations correct for artifacts of running the REAL writer
+    rather than the disposition contract's own test stub (which answers
+    ``flush``/``refresh`` as no-ops and so never triggers either artifact):
+
+    - Every ``Disposition.RUN_TIMESTAMP`` column (``created_at``,
+      ``updated_at``) is deleted back out of instance state if the real
+      write populated it. ``CustomerImportPort.apply`` flushes twice --
+      once inside ``create_customer`` (materializing ``created_at`` off the
+      database's ``server_default`` via ``db.refresh``) and once more after
+      setting ``created_by_user_id`` (an UPDATE that fires ``updated_at``'s
+      ``onupdate``) -- and neither constructor actually decided either
+      value. Left alone, both would show as durable-decided and
+      legacy-undecided on every single row, which
+      ``customer_column_disposition`` correctly refuses as
+      ``TIMESTAMP_PROVENANCE_DIVERGED`` -- a false positive that would make
+      this function refuse every dry run.
+    - ``make_transient`` forces the entity back to the same TRANSIENT
+      stage the legacy path's ``construct_only`` entities are captured at
+      (``compare_constructed_row`` refuses to compare two entities at
+      different persistence stages), deterministically rather than relying
+      on the savepoint rollback's own expunge behaviour.
+    """
+    run_timestamp_columns = tuple(
+        name
+        for name, disposition in CUSTOMER_FIELD_DISPOSITION.items()
+        if disposition is Disposition.RUN_TIMESTAMP
+    )
+    savepoint = db.begin_nested()
+    entity: Customer | None = None
+    try:
+        applied = port.apply(mapped_row)
+        customer_id = UUID(str(applied["customer_id"]))
+        entity = db.get(Customer, customer_id)
+        if entity is None:
+            raise CustomerImportParityError(
+                "the durable writer reported a customer_id it did not persist"
+            )
+        state_dict = sa_inspect(entity).dict
+        for name in run_timestamp_columns:
+            if name in state_dict:
+                delattr(entity, name)
+        return entity
+    finally:
+        savepoint.rollback()
+        if entity is not None:
+            make_transient(entity)
+
+
 def assert_legacy_customer_parity(
     db: Session,
     prepared: PreparedPartition,
@@ -454,7 +531,27 @@ def assert_legacy_customer_parity(
     ar_control_account_id: UUID,
     skip_duplicates: bool,
 ) -> None:
-    """Refuse settlement if any row differs from the retiring dry-run path."""
+    """Refuse settlement if any row differs from the retiring dry-run path.
+
+    Comparison happens at two levels. First, the tri-state verdict (would
+    this row be constructed, skipped as a duplicate, or refused) must
+    agree -- this is the ONLY thing the pre-repair version of this function
+    checked, so two rows landing on the same verdict with different data
+    compared equal. Second, for every row BOTH paths would actually
+    construct, the APPROVED FIELD VECTOR --
+    ``customer_column_disposition.CUSTOMER_FIELD_DISPOSITION``, the closed,
+    already-merged contract classifying every mapped column of
+    ``ar.customer`` -- must agree too, via that module's own
+    ``assert_partition_agrees`` guard. That is what catches a same-status,
+    different-value divergence a bare status comparison cannot see.
+
+    The legacy entity is built under ``ImportConfig.construct_only`` (a
+    dry-run refinement that actually calls ``create_entity`` and keeps the
+    result, instead of the plain ``dry_run=True`` this function used to
+    pass, which never constructs anything at all). The durable entity is
+    built through the real writer inside a rolled-back SAVEPOINT -- see
+    ``_construct_durable_shadow``.
+    """
     run = get_run(db, tenant_id=tenant_id, run_id=prepared.claim.run_id)
     mapping = ColumnMapping(
         tuple((str(pair[0]), str(pair[1])) for pair in (run.column_mapping or []))
@@ -466,26 +563,32 @@ def assert_legacy_customer_parity(
         ar_control_account_id,
         skip_duplicates=skip_duplicates,
     )
-    for raw_pairs in prepared.rows:
+    registry = CodeRegistry()
+    window_started_at = datetime.now(UTC)
+    constructed_rows: list[ConstructedRow] = []
+    for offset, raw_pairs in enumerate(prepared.rows):
         raw = dict(raw_pairs)
-        legacy = CustomerImporter(
+        legacy_importer = CustomerImporter(
             db,
             ImportConfig(
                 organization_id=tenant_id,
                 user_id=created_by,
                 skip_duplicates=skip_duplicates,
                 dry_run=True,
+                construct_only=True,
             ),
             ar_control_account_id,
-        ).import_rows([raw])
+        )
+        legacy = legacy_importer.import_rows([raw])
         if legacy.error_count:
             old = RowStatus.ERROR
         elif legacy.skipped_count:
             old = RowStatus.SKIPPED
         else:
             old = RowStatus.OK
+        mapped_row = apply_mapping(raw, mapping)
         try:
-            issues = tuple(port.validate(apply_mapping(raw, mapping)))
+            issues = tuple(port.validate(mapped_row))
         except RowSkipped:
             new = RowStatus.SKIPPED
         else:
@@ -494,6 +597,40 @@ def assert_legacy_customer_parity(
             raise CustomerImportParityError(
                 "customer dry-run verdict differs from the retiring importer"
             )
+        if old is not RowStatus.OK:
+            continue
+        if len(legacy_importer.constructed) != 1:
+            raise CustomerImportParityError(
+                "the retiring importer reported OK without constructing a row"
+            )
+        try:
+            durable_entity = _construct_durable_shadow(db, port, mapped_row)
+        except (RowRejected, RowSkipped) as exc:
+            raise CustomerImportParityError(
+                "the durable validate step said this row would succeed, but "
+                f"constructing it for real disagreed: {exc}"
+            ) from exc
+        correlation = correlate_row(
+            source_file_sha256=prepared.claim.source_checksum_sha256,
+            partition_ordinal=prepared.claim.ordinal,
+            start_row=prepared.claim.start_row,
+            index=offset,
+            display_name=str(mapped_row.get("display_name", "") or ""),
+        )
+        constructed_rows.append(
+            ConstructedRow(
+                correlation=correlation,
+                legacy=legacy_importer.constructed[0],
+                durable=durable_entity,
+            )
+        )
+    if not constructed_rows:
+        return
+    window = RunWindow(started_at=window_started_at, finished_at=datetime.now(UTC))
+    try:
+        assert_partition_agrees(constructed_rows, window=window, registry=registry)
+    except ColumnDispositionError as exc:
+        raise CustomerImportParityError(str(exc)) from exc
 
 
 class CustomerImportPort:
