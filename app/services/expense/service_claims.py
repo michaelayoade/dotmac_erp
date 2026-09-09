@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import UUID
 
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 EXPENSE_ITEM_DESCRIPTION_MAX_LENGTH = 500
 
 
-class ExpenseClaimApprovalSource(StrEnum):
+class ExpenseClaimApprovalSource(str, Enum):
     """Authority that supplied a claim submission or review decision."""
 
     ERP_WORKFLOW = "erp_workflow"
