@@ -458,6 +458,15 @@ class LeaveWebService:
                 == "true",
                 include_holidays=LeaveWebService._get_form_str(form, "include_holidays")
                 == "true",
+                restricted_during_probation=(
+                    LeaveWebService._get_form_str(form, "restricted_during_probation")
+                    == "true"
+                    if LeaveWebService._get_form_str(
+                        form, "restricted_during_probation"
+                    )
+                    is not None
+                    else None
+                ),
                 applicable_after_days=int(applicable_after_days)
                 if applicable_after_days
                 else 0,
@@ -558,6 +567,15 @@ class LeaveWebService:
                 == "true",
                 include_holidays=LeaveWebService._get_form_str(form, "include_holidays")
                 == "true",
+                restricted_during_probation=(
+                    LeaveWebService._get_form_str(form, "restricted_during_probation")
+                    == "true"
+                    if LeaveWebService._get_form_str(
+                        form, "restricted_during_probation"
+                    )
+                    is not None
+                    else None
+                ),
                 applicable_after_days=int(applicable_after_days)
                 if applicable_after_days
                 else None,
