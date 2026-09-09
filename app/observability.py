@@ -96,7 +96,7 @@ _ID_SEGMENT_RE = re.compile(
 )
 
 
-def _request_path(request: Request) -> str:
+def _request_path(request: Request, status_code: int | None = None) -> str:
     """Return the route template path, or a normalized fallback.
 
     Starlette's ``request.scope["route"].path`` gives us the template
@@ -108,6 +108,12 @@ def _request_path(request: Request) -> str:
     route = request.scope.get("route")
     if route and hasattr(route, "path"):
         return str(route.path)
+    # An unmatched path is attacker-controlled and effectively unbounded.
+    # Keeping it verbatim created one Counter series and fifteen Histogram
+    # bucket series per scanner probe.  The raw path remains in ingress logs;
+    # metrics need only one stable bucket for this outcome.
+    if status_code == 404:
+        return "/__unmatched__"
     # Normalize UUIDs and long numeric IDs to a fixed placeholder
     return _ID_SEGMENT_RE.sub("/{id}", request.url.path)
 
@@ -221,7 +227,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             status_code = response.status_code
         except Exception:
             duration_ms = (time.monotonic() - start) * 1000.0
-            path = _request_path(request)
+            path = _request_path(request, status_code)
             REQUEST_COUNT.labels(request.method, path, str(status_code)).inc()
             REQUEST_LATENCY.labels(request.method, path, str(status_code)).observe(
                 duration_ms / 1000.0
@@ -240,7 +246,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             )
             raise
         duration_ms = (time.monotonic() - start) * 1000.0
-        path = _request_path(request)
+        path = _request_path(request, status_code)
         REQUEST_COUNT.labels(request.method, path, str(status_code)).inc()
         REQUEST_LATENCY.labels(request.method, path, str(status_code)).observe(
             duration_ms / 1000.0
