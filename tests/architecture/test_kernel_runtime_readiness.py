@@ -38,6 +38,11 @@ RECORD_PATH = PROJECT_ROOT / "docs" / "kernel-runtime-readiness.json"
 
 SCHEMA = "kernel-runtime-readiness.v1"
 PRODUCT = "dotmac_erp"
+#: Canonical, owned by Starter's `PRODUCT_SPECS` -- not a phrase this record
+#: coins. The richer semantics stay in `requirements[]`; encoding them into the
+#: subject makes one identifier answer two questions, which is how three
+#: repositories came to answer one question three different ways.
+SUBJECT = "erp-kernel-successor-readiness"
 
 # The nine files that legitimately construct/consume an async database
 # engine/session today (verified below by an independent, re-derived sweep —
@@ -108,7 +113,9 @@ def resolve_source_reference(root: Path, ref: str) -> None:
 def validate_envelope(record: dict[str, Any]) -> None:
     assert record.get("schema") == SCHEMA
     assert record.get("product") == PRODUCT
-    assert isinstance(record.get("subject"), str) and record["subject"]
+    assert record.get("subject") == SUBJECT, (
+        f"subject must be exactly {SUBJECT!r}, got {record.get('subject')!r}"
+    )
     assert isinstance(record.get("requirements"), list) and record["requirements"]
     assert isinstance(record.get("composition"), list)
     assert isinstance(record.get("source_references"), list)
