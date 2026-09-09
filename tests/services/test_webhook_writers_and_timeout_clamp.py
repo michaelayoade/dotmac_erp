@@ -8,7 +8,7 @@ made rather than only where the setting is read.
 Two properties are worth naming, because a test that only checked the happy
 path would pass against a broken version of each:
 
-* the finance automation-settings form skips PLATFORM specs *derived from the
+* the Admin Automation settings form skips PLATFORM specs *derived from the
   spec*, not from a literal key set — so the assertions below check that a
   tenant-owned key in the SAME submission still gets written. A blanket "write
   nothing" regression would otherwise look identical to a correct skip;
@@ -99,7 +99,7 @@ def recording_service():
 
 
 # ---------------------------------------------------------------------------
-# W1 — the finance automation-settings form
+# W1 — the Admin Automation settings form
 # ---------------------------------------------------------------------------
 
 

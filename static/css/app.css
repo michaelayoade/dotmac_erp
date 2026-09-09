@@ -10483,6 +10483,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
     --tw-ring-color: rgb(20 184 166 / 0.6);
 }
 
+.focus-visible\:ring-violet-500:focus-visible {
+    --tw-ring-opacity: 1;
+    --tw-ring-color: rgb(139 92 246 / var(--tw-ring-opacity, 1));
+}
+
 .focus-visible\:ring-offset-2:focus-visible {
     --tw-ring-offset-width: 2px;
 }

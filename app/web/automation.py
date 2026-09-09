@@ -18,6 +18,7 @@ from app.services.finance.automation.custom_fields import custom_fields_service
 from app.services.finance.automation.recurring import recurring_service
 from app.services.finance.automation.web import automation_web_service
 from app.services.finance.automation.workflow import workflow_service
+from app.services.finance.settings_web import settings_web_service
 from app.templates import templates
 from app.web.deps import (
     get_db_for_org,
@@ -71,6 +72,54 @@ def automation_dashboard(
     """Automation landing page."""
     context = base_context(request, auth, "Automation", "automation")
     return templates.TemplateResponse(request, "admin/automation/index.html", context)
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def automation_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Cross-module Automation settings page."""
+    context = base_context(request, auth, "Automation Settings", "automation", db=db)
+    context.update(
+        settings_web_service.get_admin_automation_settings_context(
+            db, auth.organization_id
+        )
+    )
+    context["is_admin"] = "admin" in auth.roles
+    return templates.TemplateResponse(
+        request, "admin/automation/settings.html", context
+    )
+
+
+@router.post("/settings", response_class=HTMLResponse)
+async def update_automation_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_automation_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Update organization-owned Automation settings."""
+    form_data = getattr(request.state, "csrf_form", None)
+    if form_data is None:
+        form_data = await request.form()
+    success, error = settings_web_service.update_admin_automation_settings(
+        db, auth.organization_id, dict(form_data)
+    )
+    if success:
+        return RedirectResponse(url="/automation/settings?saved=1", status_code=303)
+
+    context = base_context(request, auth, "Automation Settings", "automation", db=db)
+    context.update(
+        settings_web_service.get_admin_automation_settings_context(
+            db, auth.organization_id
+        )
+    )
+    context["is_admin"] = "admin" in auth.roles
+    context["error"] = error
+    return templates.TemplateResponse(
+        request, "admin/automation/settings.html", context
+    )
 
 
 @router.get("/capabilities")

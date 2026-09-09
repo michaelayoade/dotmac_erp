@@ -327,6 +327,7 @@
         <!-- Main Content -->
         <main id="main-content" class="app-main">
             {% set back_fallback_url %}{% block back_fallback %}/admin{% endblock %}{% endset %}
+            {% set header_actions_html %}{% block header_actions %}{% endblock %}{% endset %}
             <!-- Top Header -->
             <header class="sticky top-0 z-40 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                 <div class="app-header flex h-16 items-center justify-between gap-2">
@@ -389,6 +390,11 @@
     <!-- Page Content -->
     <div class="app-page">
         {% include "partials/_license_banner.html" %}
+        {% if header_actions_html | trim %}
+        <div data-testid="header-actions" class="mb-6 flex flex-wrap items-center justify-end gap-2">
+            {{ header_actions_html }}
+        </div>
+        {% endif %}
                 {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
         {% block content %}{% endblock %}
     </div>
