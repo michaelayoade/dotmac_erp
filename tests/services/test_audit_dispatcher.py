@@ -176,6 +176,27 @@ class TestFireAuditEvent:
         assert call_kwargs["user_id"] == self.user_id
 
     @patch(_SVC_PATCH)
+    @patch(_ACTOR_PATCH)
+    def test_anonymous_actor_does_not_discard_audit_event(
+        self, mock_actor_var: MagicMock, mock_service_cls: MagicMock
+    ) -> None:
+        """Explicit anonymous context is valid, but is not a person UUID."""
+        mock_actor_var.get.return_value = "anonymous"
+        mock_service_cls.log_change = MagicMock(return_value=uuid.uuid4())
+
+        fire_audit_event(
+            self.db,
+            self.org_id,
+            "expense",
+            "expense_claim",
+            str(uuid.uuid4()),
+            AuditAction.UPDATE,
+        )
+
+        call_kwargs = mock_service_cls.log_change.call_args.kwargs
+        assert call_kwargs["user_id"] is None
+
+    @patch(_SVC_PATCH)
     @patch(_REQ_PATCH)
     def test_correlation_id_from_context_var(
         self, mock_request_var: MagicMock, mock_service_cls: MagicMock
