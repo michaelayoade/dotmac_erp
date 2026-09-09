@@ -1268,13 +1268,20 @@ class ExpenseLimitWebService:
         total_paid_count = 0
         total_paid_amount = Decimal("0")
         summary_currency_code = ""
+
+        def _last_action_sort_value(approver_id: object) -> datetime:
+            if approver_id not in activity_map:
+                return datetime.min
+            last_action_at = activity_map[approver_id].last_action_at
+            if last_action_at is None:
+                return datetime.min
+            if last_action_at.tzinfo is not None:
+                return last_action_at.astimezone(UTC).replace(tzinfo=None)
+            return last_action_at
+
         ordered_approver_ids = sorted(
             approver_ids,
-            key=lambda approver_id: (
-                activity_map[approver_id].last_action_at
-                if approver_id in activity_map
-                else datetime.min.replace(tzinfo=UTC)
-            ),
+            key=_last_action_sort_value,
             reverse=True,
         )
         for approver_id in ordered_approver_ids:
