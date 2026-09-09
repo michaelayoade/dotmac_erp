@@ -117,10 +117,13 @@ def _capture_reviewer_context(monkeypatch):
 def _seed_reviewer_activity(db_session, engine):
     _ensure_reviewer_tables(engine)
     org_id = uuid4()
-    employee_person = _make_person(org_id, "employee@example.com")
-    approver_person = _make_person(org_id, "jane.approver@example.com")
-    other_person = _make_person(org_id, "other.approver@example.com")
-    payment_person = _make_person(org_id, "payment.approver@example.com")
+    email_suffix = org_id.hex
+    employee_person = _make_person(org_id, f"employee-{email_suffix}@example.com")
+    approver_person = _make_person(org_id, f"jane.approver-{email_suffix}@example.com")
+    other_person = _make_person(org_id, f"other.approver-{email_suffix}@example.com")
+    payment_person = _make_person(
+        org_id, f"payment.approver-{email_suffix}@example.com"
+    )
     employee = _make_employee(org_id, employee_person, "EMP-001")
     approver = _make_employee(org_id, approver_person, "APR-001")
     other_approver = _make_employee(org_id, other_person, "APR-002")
