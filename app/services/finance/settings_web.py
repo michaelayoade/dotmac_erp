@@ -47,18 +47,24 @@ RECURRING_TRANSACTION_SETTING_KEYS = frozenset(
     }
 )
 
-ADMIN_AUTOMATION_SETTING_KEYS = frozenset(
+ADMIN_AUTOMATION_TENANT_SETTING_KEYS = frozenset(
     {
         "workflow_max_actions_per_event",
         "workflow_async_timeout_seconds",
         "custom_fields_max_per_entity",
-        "webhook_allowed_hosts",
-        "webhook_allowed_domains",
-        "webhook_allow_insecure",
-        "webhook_allow_localhost",
         "webhook_timeout_seconds",
-        "openbao_allow_insecure",
     }
+)
+
+# Platform controls are derived from their authoritative specifications. Do not
+# duplicate their sensitive key literals here: the webhook/OpenBao reader
+# ledgers intentionally allow those names only at their declaration, seed, and
+# enforcement points. Admin displays the derived values read-only; the shared
+# writer still refuses organization-scoped writes for every PLATFORM spec.
+ADMIN_AUTOMATION_SETTING_KEYS = ADMIN_AUTOMATION_TENANT_SETTING_KEYS | frozenset(
+    spec.key
+    for spec in list_specs(SettingDomain.automation)
+    if spec.scope is SettingScopeAuthority.PLATFORM
 )
 
 
