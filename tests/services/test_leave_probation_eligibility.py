@@ -30,7 +30,11 @@ def test_unrestricted_leave_is_allowed_during_probation():
     service, leave_type = _service_for_eligibility(restricted=False)
 
     service._validate_probation_eligibility(
-        uuid4(), uuid4(), leave_type, date(2026, 1, 15), date(2026, 1, 16)
+        uuid4(),
+        employee_id=uuid4(),
+        leave_type=leave_type,
+        from_date=date(2026, 1, 15),
+        to_date=date(2026, 1, 16),
     )
 
     service.db.scalar.assert_not_called()
@@ -41,7 +45,11 @@ def test_restricted_leave_is_blocked_before_configured_probation_ends():
 
     with pytest.raises(LeaveEligibilityError, match="restricted during probation"):
         service._validate_probation_eligibility(
-            uuid4(), uuid4(), leave_type, date(2026, 1, 15), date(2026, 1, 16)
+            uuid4(),
+            employee_id=uuid4(),
+            leave_type=leave_type,
+            from_date=date(2026, 1, 15),
+            to_date=date(2026, 1, 16),
         )
 
 
@@ -52,7 +60,11 @@ def test_hr_allocation_overrides_probation_restriction():
     )
 
     service._validate_probation_eligibility(
-        uuid4(), uuid4(), leave_type, date(2026, 1, 15), date(2026, 1, 16)
+        uuid4(),
+        employee_id=uuid4(),
+        leave_type=leave_type,
+        from_date=date(2026, 1, 15),
+        to_date=date(2026, 1, 16),
     )
 
 
@@ -60,7 +72,11 @@ def test_restricted_leave_is_allowed_after_probation_ends():
     service, leave_type = _service_for_eligibility(restricted=True, probation_days=30)
 
     service._validate_probation_eligibility(
-        uuid4(), uuid4(), leave_type, date(2026, 2, 1), date(2026, 2, 2)
+        uuid4(),
+        employee_id=uuid4(),
+        leave_type=leave_type,
+        from_date=date(2026, 2, 1),
+        to_date=date(2026, 2, 2),
     )
 
     service.db.scalar.assert_called_once()

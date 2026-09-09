@@ -320,7 +320,7 @@ class LeaveService:
             raise LeaveServiceError("Employee not found")
         return employee
 
-    def _validate_service_eligibility(
+    def _validate_probation_eligibility(
         self,
         org_id: UUID,
         *,
@@ -663,6 +663,7 @@ class LeaveService:
         is_optional: bool = False,
         is_compensatory: bool = False,
         include_holidays: bool = False,
+        restricted_during_probation: bool = False,
         applicable_after_days: int = 0,
         max_optional_leaves: int | None = None,
         is_active: bool = True,
@@ -685,6 +686,7 @@ class LeaveService:
             is_lwp=is_lwp,
             is_compensatory=is_compensatory,
             include_holidays=include_holidays,
+            restricted_during_probation=restricted_during_probation,
             applicable_after_days=applicable_after_days,
             is_optional=is_optional,
             max_optional_leaves=max_optional_leaves,
@@ -1449,7 +1451,7 @@ class LeaveService:
             holiday_list_id=holiday_list_id,
         )
 
-        self._validate_service_eligibility(
+        self._validate_probation_eligibility(
             org_id,
             employee_id=employee_id,
             leave_type=leave_type,

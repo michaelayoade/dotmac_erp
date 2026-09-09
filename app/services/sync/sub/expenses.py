@@ -592,15 +592,17 @@ class _ExpenseSyncMixin(_SubSyncBase):
         )
         if not claim:
             return None
-        payment_intent = self.db.scalar(
-            select(PaymentIntent)
-            .where(
-                PaymentIntent.organization_id == org_id,
-                PaymentIntent.source_type == "EXPENSE_CLAIM",
-                PaymentIntent.source_id == claim.claim_id,
+        payment_intent = None
+        if claim.status in {ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID}:
+            payment_intent = self.db.scalar(
+                select(PaymentIntent)
+                .where(
+                    PaymentIntent.organization_id == org_id,
+                    PaymentIntent.source_type == "EXPENSE_CLAIM",
+                    PaymentIntent.source_id == claim.claim_id,
+                )
+                .order_by(PaymentIntent.created_at.desc())
             )
-            .order_by(PaymentIntent.created_at.desc())
-        )
         return SubExpenseClaimStatusResponse(
             claim_id=claim.claim_id,
             claim_number=claim.claim_number,

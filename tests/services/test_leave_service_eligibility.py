@@ -18,6 +18,7 @@ def _leave_type(code: str, name: str, *, restricted: bool = False) -> SimpleName
         leave_type_name=name,
         include_holidays=False,
         is_lwp=False,
+        restricted_during_probation=restricted,
     )
 
 
@@ -76,8 +77,8 @@ def _submit_leave(
         )
 
 
-def test_under_one_year_staff_cannot_submit_annual_leave():
-    with pytest.raises(LeaveEligibilityError, match="Annual leave"):
+def test_under_one_year_staff_cannot_submit_restricted_annual_leave():
+    with pytest.raises(LeaveEligibilityError, match="restricted during probation"):
         _submit_leave(
             leave_type=_leave_type("ANNUAL", "Annual Leave", restricted=True),
             date_of_joining=date(2025, 9, 1),

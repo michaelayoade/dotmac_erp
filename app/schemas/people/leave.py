@@ -48,7 +48,7 @@ class LeaveTypeBase(BaseModel):
 class LeaveTypeCreate(LeaveTypeBase):
     """Create leave type request."""
 
-    restricted_during_probation: bool | None = None
+    pass
 
 
 class LeaveTypeUpdate(BaseModel):
