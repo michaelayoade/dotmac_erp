@@ -195,18 +195,18 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Reports</span>
             </a>
 
-            <!-- Section Divider: Automation -->
+            <!-- Section Divider: Scheduled Transactions -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
-                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Automation</span>
+                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Scheduled</span>
             </div>
 
-            <!-- Automation Module -->
-            <a href="/automation"
-               :aria-current="activeModule === 'automation' ? 'page' : null"
-               :class="activeModule === 'automation' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
+            <!-- Recurring Transactions -->
+            <a href="/settings/recurring-transactions"
+               :aria-current="activeModule === 'recurring' ? 'page' : null"
+               :class="activeModule === 'recurring' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                {{ icon_svg("refresh", "h-5 w-5 flex-shrink-0 text-purple-500") }}
-                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Automation</span>
+                {{ icon_svg("refresh", "h-5 w-5 flex-shrink-0 text-teal-500") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Recurring Transactions</span>
             </a>
 
             {% with current_module="finance" %}

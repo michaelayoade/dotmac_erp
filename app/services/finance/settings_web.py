@@ -39,6 +39,28 @@ logger = logging.getLogger(__name__)
 
 SMTP_PASSWORD_FIELD = "password"  # noqa: S105  # nosec B105
 
+RECURRING_TRANSACTION_SETTING_KEYS = frozenset(
+    {
+        "recurring_default_frequency",
+        "recurring_max_occurrences",
+        "recurring_lookback_days",
+    }
+)
+
+ADMIN_AUTOMATION_SETTING_KEYS = frozenset(
+    {
+        "workflow_max_actions_per_event",
+        "workflow_async_timeout_seconds",
+        "custom_fields_max_per_entity",
+        "webhook_allowed_hosts",
+        "webhook_allowed_domains",
+        "webhook_allow_insecure",
+        "webhook_allow_localhost",
+        "webhook_timeout_seconds",
+        "openbao_allow_insecure",
+    }
+)
+
 
 class EmailModuleSetting(TypedDict):
     key: str
@@ -740,7 +762,19 @@ class SettingsWebService:
         self, db, organization_id: uuid.UUID
     ) -> dict[str, Any]:
         """Get automation settings for the form."""
+        return self._get_automation_settings_context(db, organization_id)
+
+    def _get_automation_settings_context(
+        self,
+        db,
+        organization_id: uuid.UUID,
+        *,
+        keys: frozenset[str] | None = None,
+    ) -> dict[str, Any]:
+        """Resolve the requested subset of Automation settings."""
         specs = list_specs(SettingDomain.automation)
+        if keys is not None:
+            specs = [spec for spec in specs if spec.key in keys]
         settings = {}
 
         for spec in specs:
@@ -766,19 +800,36 @@ class SettingsWebService:
 
         return {"settings": settings, "specs": specs}
 
+    def get_recurring_transaction_settings_context(
+        self, db, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get only the Finance-owned recurring transaction defaults."""
+        return self._get_automation_settings_context(
+            db,
+            organization_id,
+            keys=RECURRING_TRANSACTION_SETTING_KEYS,
+        )
+
+    def get_admin_automation_settings_context(
+        self, db, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get only the cross-module settings owned by Admin Automation."""
+        return self._get_automation_settings_context(
+            db,
+            organization_id,
+            keys=ADMIN_AUTOMATION_SETTING_KEYS,
+        )
+
     def update_automation_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
     ) -> tuple[bool, str | None]:
-        """Update THIS organization's automation settings.
+        """Shared writer for THIS organization's automation settings.
 
-        A PLATFORM-owned spec is skipped, not rejected: this form renders every
-        automation spec, including the read-only platform controls, so a normal
-        submission always carries them back and rejecting would make the page
-        unsaveable. The skip is derived from the spec rather than from a literal
-        key set in the route, so a new platform control is covered the day it is
-        declared. A write that reached the database anyway would still be
-        refused at the ORM boundary by ``_require_platform_scope``; this skip is
-        the friendly layer, not the enforcing one.
+        UI callers first filter to the keys owned by their surface. A
+        PLATFORM-owned spec is then skipped, not rejected, because Admin shows
+        those controls read-only for operational context. The skip is derived
+        from the spec, and the ORM boundary still refuses any tenant-scoped
+        platform write that reaches the database.
         """
         service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.automation)
         if not service:
@@ -803,6 +854,28 @@ class SettingsWebService:
 
         db.commit()
         return True, None
+
+    def update_recurring_transaction_settings(
+        self, db, organization_id: uuid.UUID, data: dict[str, Any]
+    ) -> tuple[bool, str | None]:
+        """Update recurring defaults without accepting other automation keys."""
+        recurring_data = {
+            key: value
+            for key, value in data.items()
+            if key in RECURRING_TRANSACTION_SETTING_KEYS
+        }
+        return self.update_automation_settings(db, organization_id, recurring_data)
+
+    def update_admin_automation_settings(
+        self, db, organization_id: uuid.UUID, data: dict[str, Any]
+    ) -> tuple[bool, str | None]:
+        """Update Admin Automation fields without accepting Finance defaults."""
+        admin_data = {
+            key: value
+            for key, value in data.items()
+            if key in ADMIN_AUTOMATION_SETTING_KEYS
+        }
+        return self.update_automation_settings(db, organization_id, admin_data)
 
     # ========== Feature Flags ==========
 
