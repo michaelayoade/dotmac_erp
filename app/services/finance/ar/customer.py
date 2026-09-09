@@ -174,8 +174,9 @@ class CustomerService(ListResponseMixin):
     def _validate_parent_customer(
         db: Session, org_id: UUID, input: CustomerInput
     ) -> None:
-        """Shared by ``create_customer`` and ``construct_customer_preview`` so
-        the two can never diverge on when a parent reference is refused."""
+        """Shared by ``create_customer`` (via ``prepare_customer``) so a
+        persisted customer and a previewed one can never diverge on when a
+        parent reference is refused."""
         if not input.parent_customer_id:
             return
         parent = get_org_scoped_entity(
@@ -196,10 +197,10 @@ class CustomerService(ListResponseMixin):
     ) -> Customer:
         """The one ``CustomerInput`` → ``Customer`` field mapping.
 
-        Shared by ``create_customer`` and ``construct_customer_preview`` --
-        a persisted customer and a previewed one must decide fields the
-        identical way, and a second copy of this mapping is exactly how
-        they would drift apart.
+        Called from ``prepare_customer``, which both ``create_customer`` and
+        the import adapter's preview consume -- a persisted customer and a
+        previewed one must decide fields the identical way, and a second
+        copy of this mapping is exactly how they would drift apart.
         """
         return Customer(
             organization_id=org_id,
@@ -234,6 +235,57 @@ class CustomerService(ListResponseMixin):
         )
 
     @staticmethod
+    def prepare_customer(
+        db: Session,
+        organization_id: UUID,
+        input: CustomerInput,
+    ) -> Customer:
+        """The ONE real preparation step for a candidate customer.
+
+        Consumed by BOTH ``create_customer`` (which additionally allocates a
+        generated code when none was given, then persists) and the customer
+        import adapter's parity preview
+        (``app.services.finance.import_export.durable_customers.
+        CustomerImportPort.preview``). A persisted customer and a previewed
+        one can no longer decide a field differently by construction: they
+        are one computation with two different endings, not two
+        implementations reconciled after the fact.
+
+        Performs the REAL duplicate-code observation (``validate_unique_code``,
+        a read) when an explicit ``customer_code`` was given, and the REAL
+        parent-customer validation (``_validate_parent_customer``, a read)
+        when a parent was given -- exactly what ``create_customer`` already
+        checked, now shared rather than duplicated.
+
+        Makes NO writes: no ``add``, ``flush``, ``begin_nested``, ``commit``
+        or ``rollback``. ``customer_code`` is left exactly as given, which is
+        EMPTY when ``input.customer_code`` is blank (the common case for a
+        CSV-driven import) -- allocating one is a real, row-locked,
+        sequence-mutating write that only ``create_customer`` may perform.
+
+        UNMEASURABLE WITHOUT PERSISTENCE: a caller comparing this result
+        against a real, persisted customer must NOT treat an empty
+        ``customer_code`` as a divergence -- the real value can only be
+        known by actually allocating one, which this function must never do.
+        ``assert_legacy_customer_parity`` names this explicitly and excludes
+        it from the field comparison rather than forcing it to satisfy an
+        invariant a preview cannot honestly satisfy.
+        """
+        org_id = coerce_uuid(organization_id)
+        explicit_code = (input.customer_code or "").strip()
+        if explicit_code:
+            validate_unique_code(
+                db=db,
+                model_class=Customer,
+                org_id=org_id,
+                code_value=explicit_code,
+                code_field_name="customer_code",
+                entity_name="Customer",
+            )
+        CustomerService._validate_parent_customer(db, org_id, input)
+        return CustomerService._build_customer_entity(org_id, explicit_code, input)
+
+    @staticmethod
     def create_customer(
         db: Session,
         organization_id: UUID,
@@ -252,111 +304,37 @@ class CustomerService(ListResponseMixin):
 
         Raises:
             HTTPException(400): If customer code already exists
+
+        Consumes ``prepare_customer``'s result rather than deciding fields
+        itself: this is the ONLY step that allocates a real ``customer_code``
+        (when none was given) and the ONLY writer (``add``/``flush``/
+        ``refresh``). Reordered from an earlier version of this method,
+        which generated a code BEFORE validating the parent reference --
+        an invalid parent then burned a real sequence number for a customer
+        that was never created. Preparation (including parent validation)
+        now runs first, so an invalid parent is refused before anything is
+        allocated.
         """
         org_id = coerce_uuid(organization_id)
 
-        customer_code = input.customer_code or ""
-        if not customer_code.strip():
-            customer_code = CustomerService._generate_customer_code(db, org_id)
+        customer = CustomerService.prepare_customer(db, org_id, input)
 
-        # Validate unique customer code
-        validate_unique_code(
-            db=db,
-            model_class=Customer,
-            org_id=org_id,
-            code_value=customer_code,
-            code_field_name="customer_code",
-            entity_name="Customer",
-        )
-
-        CustomerService._validate_parent_customer(db, org_id, input)
-
-        customer = CustomerService._build_customer_entity(org_id, customer_code, input)
+        if not customer.customer_code.strip():
+            customer.customer_code = CustomerService._generate_customer_code(db, org_id)
+            validate_unique_code(
+                db=db,
+                model_class=Customer,
+                org_id=org_id,
+                code_value=customer.customer_code,
+                code_field_name="customer_code",
+                entity_name="Customer",
+            )
 
         db.add(customer)
         db.flush()
         db.refresh(customer)
 
         return customer
-
-    @staticmethod
-    def _preview_customer_code(org_id: UUID, offset: int) -> str:
-        """A structurally valid, run-unique PREVIEW code -- never an allocation.
-
-        Real allocation (``_generate_customer_code`` /
-        ``SyncNumberingService``) is row-locked and persists a real
-        increment; running it from a preview would burn a real sequence
-        number on every dry run. The disposition contract's own invariants
-        for a generated code are non-emptiness, column length and
-        per-run uniqueness -- never equality with a real allocation (see
-        ``customer_column_disposition``'s module docstring) -- so this
-        formats a candidate using the CUSTOMER sequence type's default
-        configuration and the exact same pure ``format_number`` the real
-        allocator uses, entirely WITHOUT reading or writing the database.
-        This mirrors the retiring importer's ``create_entity``, which also
-        never touches the session under ``construct_only``. ``offset``
-        keeps multiple rows in one shadow run distinct.
-        """
-        from datetime import date
-
-        from app.models.finance.core_config.numbering_sequence import (
-            NumberingSequence,
-            SequenceType,
-        )
-        from app.services.finance.common.numbering import _default_sequence_kwargs
-        from app.services.finance.common.sequence_utils import (
-            format_number,
-            should_reset,
-        )
-
-        preview = NumberingSequence(
-            organization_id=org_id,
-            sequence_type=SequenceType.CUSTOMER,
-            current_year=None,
-            current_month=None,
-            **_default_sequence_kwargs(SequenceType.CUSTOMER),
-        )
-        reference_date = date.today()
-        if should_reset(preview, reference_date):
-            preview.current_number = 0
-            preview.current_year = reference_date.year
-            preview.current_month = reference_date.month
-        preview.current_number = (preview.current_number or 0) + 1 + offset
-        return format_number(preview, reference_date)
-
-    @staticmethod
-    def construct_customer_preview(
-        db: Session,
-        organization_id: UUID,
-        input: CustomerInput,
-        *,
-        sequence_offset: int = 0,
-    ) -> Customer:
-        """The ``construct_only`` counterpart to ``create_customer``.
-
-        Builds exactly the entity the real writer would build -- the same
-        field mapping (``_build_customer_entity``), the same parent-customer
-        validation (``_validate_parent_customer``) -- WITHOUT adding,
-        flushing or committing it. Nothing here is written, so there is
-        nothing for a caller to undo: unlike ``create_customer``, this never
-        needs a transaction a caller must own or discard, which is what lets
-        a parity/shadow comparison call it directly instead of owning a
-        SAVEPOINT of its own.
-
-        Not equivalent to ``create_customer`` on ``customer_code``: see
-        ``_preview_customer_code``.
-        """
-        org_id = coerce_uuid(organization_id)
-
-        customer_code = (input.customer_code or "").strip()
-        if not customer_code:
-            customer_code = CustomerService._preview_customer_code(
-                org_id, sequence_offset
-            )
-
-        CustomerService._validate_parent_customer(db, org_id, input)
-
-        return CustomerService._build_customer_entity(org_id, customer_code, input)
 
     @staticmethod
     def update_customer(

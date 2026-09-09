@@ -10,19 +10,26 @@ equal. The repair (a) switches to ``ImportConfig.construct_only``, which
 does construct and keep the entity, and (b) runs every row both paths would
 actually build through ``customer_column_disposition``'s already-merged,
 closed field-vector contract (``CUSTOMER_FIELD_DISPOSITION`` /
-``assert_partition_agrees``) instead of restating a second, driftable
-comparison.
+``compare_partition``) instead of restating a second, driftable comparison.
 
 The durable side is built through ``CustomerImportPort.preview``, which
-delegates to ``CustomerService.construct_customer_preview`` -- the owning
-service's own ``construct_only`` counterpart to ``create_customer``, sharing
-its exact field mapping (``_build_customer_entity``) and parent-customer
-validation. Nothing is added, flushed or committed, so this adapter never
-owns a transaction to discard
-(``tests/architecture/test_imports_adoption.py::
+delegates to ``CustomerService.prepare_customer`` -- the ONE real
+preparation step ``create_customer`` also consumes (Michael's ruled shape,
+2026-09-09), sharing its exact field mapping (``_build_customer_entity``)
+and parent-customer validation. Nothing is added, flushed, begun-nested,
+committed or rolled back, so this adapter never owns a transaction to
+discard (``tests/architecture/test_imports_adoption.py::
 test_customer_adapter_owns_no_transaction_or_session_factory`` forbids
 exactly that shape -- an earlier version of this repair built the durable
-entity inside a rolled-back SAVEPOINT and tripped it).
+entity inside a rolled-back SAVEPOINT and tripped it; a second attempt
+moved the SAVEPOINT into ``CustomerService`` instead of removing it, which
+was explicitly rejected).
+
+UNMEASURABLE FIELD: ``customer_code`` cannot be observed from a preview --
+see ``CustomerService.prepare_customer``'s and
+``assert_legacy_customer_parity``'s docstrings. This is named there, not
+tested here: nothing in this file plants a ``customer_code`` divergence,
+because there is no real value to diverge from.
 
 Runs under the Integration Tests (PostgreSQL) job, matching this directory's
 existing pattern (``test_reseller_promotion_match.py``), even though these

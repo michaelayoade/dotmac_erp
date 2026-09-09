@@ -67,10 +67,11 @@ from app.services.finance.import_export.contacts import (
 )
 from app.services.finance.import_export.customer_column_disposition import (
     CodeRegistry,
-    ColumnDispositionError,
     ConstructedRow,
+    DispositionFinding,
+    FindingKind,
     RunWindow,
-    assert_partition_agrees,
+    compare_partition,
     correlate_row,
 )
 from app.tenancy import OrganizationTenantContext
@@ -475,7 +476,7 @@ def assert_legacy_customer_parity(
     ``customer_column_disposition.CUSTOMER_FIELD_DISPOSITION``, the closed,
     already-merged contract classifying every mapped column of
     ``ar.customer`` -- must agree too, via that module's own
-    ``assert_partition_agrees`` guard. That is what catches a same-status,
+    ``compare_partition``. That is what catches a same-status,
     different-value divergence a bare status comparison cannot see.
 
     The legacy entity is built under ``ImportConfig.construct_only`` (a
@@ -483,13 +484,31 @@ def assert_legacy_customer_parity(
     result, instead of the plain ``dry_run=True`` this function used to
     pass, which never constructs anything at all). The durable entity is
     built through ``CustomerImportPort.preview``, which delegates to
-    ``CustomerService.construct_customer_preview`` -- the owning service's
-    own ``construct_only`` counterpart to ``create_customer``. Nothing here
-    is added, flushed or committed, so this adapter never owns a
-    transaction to discard (``test_customer_adapter_owns_no_transaction_
-    or_session_factory``) -- an earlier version of this function built the
+    ``CustomerService.prepare_customer`` -- the ONE real preparation step
+    ``create_customer`` also consumes, so a persisted customer and a
+    previewed one can never decide a field differently. Nothing here is
+    added, flushed, begun-nested, committed or rolled back, so this adapter
+    never owns a transaction to discard
+    (``tests/architecture/test_imports_adoption.py::
+    test_customer_adapter_owns_no_transaction_or_session_factory`` forbids
+    exactly that shape -- an earlier version of this function built the
     durable entity through the real writer inside a rolled-back SAVEPOINT,
-    which is exactly the shape that guard exists to forbid.
+    which tripped it).
+
+    UNMEASURABLE FIELD: ``customer_code`` (``Disposition.GENERATED_CODE``)
+    cannot be observed from a preview. The real value is only known by
+    ``_generate_customer_code`` actually allocating one -- a real,
+    row-locked, sequence-mutating write that ``prepare_customer`` must
+    never perform (see that method's docstring). Unlike
+    ``Disposition.SURROGATE_KEY`` and ``Disposition.RUN_TIMESTAMP``, which
+    both have an explicit "deferred" state the comparator already accepts
+    symmetrically on both sides (``DATABASE_ASSIGNED``, since neither
+    constructor is flushed at comparison time), ``GENERATED_CODE`` has
+    none: an empty code is unconditionally refused as
+    ``FindingKind.GENERATED_CODE_INVALID``. That ONE, always-expected
+    finding is named by ``_is_unmeasurable_in_preview`` below and excluded
+    from what can cause a refusal, rather than forced to satisfy an
+    invariant a preview cannot honestly satisfy.
     """
     run = get_run(db, tenant_id=tenant_id, run_id=prepared.claim.run_id)
     mapping = ColumnMapping(
@@ -543,7 +562,7 @@ def assert_legacy_customer_parity(
                 "the retiring importer reported OK without constructing a row"
             )
         try:
-            durable_entity = port.preview(mapped_row, sequence_offset=offset)
+            durable_entity = port.preview(mapped_row)
         except RowRejected as exc:
             raise CustomerImportParityError(
                 "the durable validate step said this row would succeed, but "
@@ -566,10 +585,30 @@ def assert_legacy_customer_parity(
     if not constructed_rows:
         return
     window = RunWindow(started_at=window_started_at, finished_at=datetime.now(UTC))
-    try:
-        assert_partition_agrees(constructed_rows, window=window, registry=registry)
-    except ColumnDispositionError as exc:
-        raise CustomerImportParityError(str(exc)) from exc
+    findings = compare_partition(constructed_rows, window=window, registry=registry)
+    blocking = tuple(f for f in findings if not _is_unmeasurable_in_preview(f))
+    if blocking:
+        raise CustomerImportParityError(_describe_blocking_findings(blocking))
+
+
+def _is_unmeasurable_in_preview(finding: DispositionFinding) -> bool:
+    """``customer_code`` cannot be observed from a never-persisted preview.
+
+    See ``assert_legacy_customer_parity``'s docstring, "UNMEASURABLE FIELD".
+    Narrowed to the SPECIFIC finding kind an empty preview code always
+    produces, rather than the whole field: a genuine
+    ``GENERATED_CODE_NOT_UNIQUE`` on ``customer_code`` (which would require
+    a real, non-empty code to even be reachable) stays a real refusal.
+    """
+    return (
+        finding.field == "customer_code"
+        and finding.kind is FindingKind.GENERATED_CODE_INVALID
+    )
+
+
+def _describe_blocking_findings(findings: tuple[DispositionFinding, ...]) -> str:
+    lines = [f"{item.kind.value} on {item.field}: {item.reason}" for item in findings]
+    return "customer column disposition refused this comparison:\n" + "\n".join(lines)
 
 
 class CustomerImportPort:
@@ -662,24 +701,25 @@ class CustomerImportPort:
         self.db.flush()
         return {"customer_id": str(customer.customer_id)}
 
-    def preview(self, row: Mapping[str, str], *, sequence_offset: int = 0) -> Customer:
+    def preview(self, row: Mapping[str, str]) -> Customer:
         """Build the entity ``apply`` would build, without persisting it.
 
-        Delegates to ``CustomerService.construct_customer_preview`` -- the
-        owning service's ``construct_only`` counterpart to
-        ``create_customer`` -- so this port stays a thin wrapper and the
-        caller never needs a transaction to discard: nothing here is added,
-        flushed or committed. ``customer.created_by_user_id`` is set to
-        match ``apply``'s post-construction step, since it is one of the
-        approved EXACT fields the comparison covers.
+        Delegates to ``CustomerService.prepare_customer`` -- the ONE real
+        preparation step ``create_customer`` also consumes -- so this port
+        stays a thin wrapper: map input, delegate, return. Nothing here is
+        added, flushed, begun-nested, committed or rolled back.
+        ``customer.created_by_user_id`` is set to match ``apply``'s
+        post-construction step, since it is one of the approved EXACT
+        fields the comparison covers; setting it on an entity that was
+        never added to the session is an ordinary attribute assignment,
+        not a session mutation, so it needs no flush here.
         """
         input_data = self._build_customer_input(row)
         try:
-            customer = customer_service.construct_customer_preview(
+            customer = customer_service.prepare_customer(
                 self.db,
                 self.organization_id,
                 input_data,
-                sequence_offset=sequence_offset,
             )
         except ValueError as exc:
             from dotmac_imports import RowRejected
