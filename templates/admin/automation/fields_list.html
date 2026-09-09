@@ -16,9 +16,9 @@
 
 {% block header_actions %}
 <a href="/automation/fields/new"
-   class="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 px-4 py-2 text-sm font-medium text-white shadow-lg">
+   class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
     {{ icon_svg("plus", "h-4 w-4") }}
-    New Field
+    Create custom field
 </a>
 {% endblock %}
 
@@ -129,7 +129,7 @@
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No custom fields found</p>
             <a href="/automation/fields/new" class="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400">
                 {{ icon_svg("plus", "h-4 w-4") }}
-                Create Field
+                Create custom field
             </a>
         </div>
     </div>

@@ -119,6 +119,7 @@ def create_leave_type(
         is_lwp=payload.is_lwp,
         is_compensatory=payload.is_compensatory,
         include_holidays=payload.include_holidays,
+        restricted_during_probation=payload.restricted_during_probation,
         applicable_after_days=payload.applicable_after_days,
         is_optional=payload.is_optional,
         max_optional_leaves=payload.max_optional_leaves,

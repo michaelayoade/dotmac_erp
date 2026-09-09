@@ -1065,6 +1065,8 @@ class HRWebService:
             required_employment_errors["salary_mode"] = "Required"
         elif not salary_mode:
             required_employment_errors["salary_mode"] = "Select a valid salary mode."
+        if not assigned_location_id:
+            required_employment_errors["assigned_location_id"] = "Required"
 
         if (
             not linked_person_id and (not first_name or not last_name or not email)
@@ -1149,9 +1151,8 @@ class HRWebService:
                 request,
                 auth,
                 db,
-                error=(
-                    "Contract type and salary mode must be selected for "
-                    "employee creation."
+                error=self._employee_create_required_employment_message(
+                    required_employment_errors
                 ),
                 form_data={
                     "first_name": first_name,
@@ -1760,6 +1761,22 @@ class HRWebService:
             url=f"/people/hr/employees/{employee_id}?{query}",
             status_code=303,
         )
+
+    @staticmethod
+    def _employee_create_required_employment_message(errors: dict[str, str]) -> str:
+        labels = {
+            "assigned_location_id": "Assigned branch",
+            "employment_type_id": "Contract type",
+            "salary_mode": "salary mode",
+        }
+        fields = [labels[field] for field in labels if field in errors]
+        if not fields:
+            return "Required employment details must be selected for employee creation."
+        if len(fields) == 1:
+            subject = fields[0]
+        else:
+            subject = f"{', '.join(fields[:-1])} and {fields[-1]}"
+        return f"{subject} must be selected for employee creation."
 
     async def update_employee_response(
         self,

@@ -143,6 +143,14 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
         comment="Count holidays within leave period",
     )
 
+    restricted_during_probation: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
+        comment="Employees must complete probation before requesting this leave",
+    )
+
     # Restrictions
     applicable_after_days: Mapped[int] = mapped_column(
         default=0,

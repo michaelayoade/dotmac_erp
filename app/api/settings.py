@@ -526,7 +526,7 @@ def _can_restore_history_entry(entry: object, auth: dict, db: Session) -> bool:
     could therefore roll ``webhook_allowed_hosts`` — or any other
     platform-owned control — back to any value it has ever held. That is a
     tenant-driven write to a platform-owned setting, arriving by a different
-    door from the automation-settings form, and closing only the form would
+    door from the Admin Automation settings form, and closing only the form would
     leave the boundary half-built.
 
     The repair is general: it protects every platform row's history, not only

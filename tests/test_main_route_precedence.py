@@ -31,6 +31,7 @@ def test_finance_settings_routes_precede_generic_settings_route():
     static_paths = [
         "/settings/numbering",
         "/settings/automation-settings",
+        "/settings/recurring-transactions",
         "/settings/payroll",
         "/settings/reports",
         "/settings/exchange-rates",

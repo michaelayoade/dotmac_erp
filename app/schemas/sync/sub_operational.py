@@ -518,6 +518,41 @@ class SubExpenseClaimResponse(BaseModel):
     source_claim_id: str
 
 
+class SubExpenseClaimDecisionPayload(BaseModel):
+    """A manager decision already made in Dotmac Sub."""
+
+    decision_id: UUID
+    decided_by_email: str = Field(..., min_length=3, max_length=255)
+    decided_at: datetime
+    notes: str | None = Field(None, max_length=2000)
+
+
+class SubExpenseClaimRejectionPayload(SubExpenseClaimDecisionPayload):
+    """A rejected Sub expense and its required reason."""
+
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class SubExpensePaymentPayload(BaseModel):
+    """A manager-authorized request to reimburse an approved Sub claim."""
+
+    command_id: UUID
+    initiated_by_email: str = Field(..., min_length=3, max_length=255)
+    initiated_at: datetime
+
+
+class SubExpensePaymentResponse(BaseModel):
+    """Current ERP payout fact after accepting a Sub payment command."""
+
+    claim_id: UUID
+    claim_number: str
+    claim_status: str
+    source_claim_id: str
+    payment_intent_id: UUID
+    payment_status: str
+    retryable: bool
+
+
 class SubExpenseClaimStatusResponse(BaseModel):
     """Expense claim status for Sub polling."""
 
@@ -528,6 +563,8 @@ class SubExpenseClaimStatusResponse(BaseModel):
     paid_on: date | None = None
     total_claimed_amount: Decimal
     total_approved_amount: Decimal | None = None
+    payment_intent_id: UUID | None = None
+    payment_status: str | None = None
     source_claim_id: str
 
 

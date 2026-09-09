@@ -2,7 +2,7 @@
 Finance Settings Web Routes.
 
 Configuration pages for Finance modules including numbering sequences,
-automation settings, and report configuration.
+recurring transaction defaults, and report configuration.
 
 Note: Org-wide settings (organization profile, branding, email, features,
 payments) have moved to Admin settings at /admin/settings/hub.
@@ -50,9 +50,9 @@ async def finance_settings_index(
                     "icon": "hashtag",
                 },
                 {
-                    "title": "Automation Settings",
-                    "description": "Configure recurring transactions, workflows, and custom fields.",
-                    "url": "/settings/automation-settings",
+                    "title": "Recurring Transactions",
+                    "description": "Configure defaults for scheduled finance transactions.",
+                    "url": "/settings/recurring-transactions",
                     "icon": "arrow-path",
                 },
                 {
@@ -181,68 +181,73 @@ async def reset_numbering_sequence(
     )
 
 
-# ========== Automation Settings ==========
+# ========== Recurring Transaction Settings ==========
 
 
-@router.get("/automation-settings", response_class=HTMLResponse)
-async def automation_settings(
+@router.get("/recurring-transactions", response_class=HTMLResponse)
+async def recurring_transaction_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Automation settings page."""
-    result = settings_web_service.get_automation_settings_context(
+    """Finance-owned recurring transaction defaults."""
+    result = settings_web_service.get_recurring_transaction_settings_context(
         db, auth.organization_id
     )
 
-    context = base_context(request, auth, "Automation Settings", "settings", db=db)
+    context = base_context(request, auth, "Recurring Transactions", "recurring", db=db)
     context.update(result)
-    context["is_admin"] = "admin" in auth.roles
+    context["can_read_automation"] = auth.has_permission("automation:read")
 
     return templates.TemplateResponse(
-        request, "finance/settings/automation_settings.html", context
+        request, "finance/settings/recurring_transactions.html", context
     )
 
 
-@router.post("/automation-settings", response_class=HTMLResponse)
-async def update_automation_settings(
+@router.post("/recurring-transactions", response_class=HTMLResponse)
+async def update_recurring_transaction_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Update automation settings."""
+    """Update Finance-owned recurring transaction defaults."""
     form_data = getattr(request.state, "csrf_form", None)
     if form_data is None:
         form_data = await request.form()
     data = dict(form_data)
-    is_admin = "admin" in auth.roles
-    # There is deliberately no literal key set here any more. Which automation
-    # keys an organization may own is declared on the spec
-    # (`SettingScopeAuthority.PLATFORM`), skipped by the service below, and
-    # refused outright at the ORM boundary — three layers a new platform
-    # control joins the day it is declared, rather than the day somebody
-    # remembers to edit a set inside one route handler. The old set was also
-    # skipped entirely for `is_admin`, so it never constrained the caller who
-    # could do the most damage.
-    success, error = settings_web_service.update_automation_settings(
+    success, error = settings_web_service.update_recurring_transaction_settings(
         db, auth.organization_id, data
     )
 
     if not success:
-        result = settings_web_service.get_automation_settings_context(
+        result = settings_web_service.get_recurring_transaction_settings_context(
             db, auth.organization_id
         )
-        context = base_context(request, auth, "Automation Settings", "settings", db=db)
+        context = base_context(
+            request, auth, "Recurring Transactions", "recurring", db=db
+        )
         context.update(result)
-        context["is_admin"] = is_admin
+        context["can_read_automation"] = auth.has_permission("automation:read")
         context["error"] = error
         return templates.TemplateResponse(
-            request, "finance/settings/automation_settings.html", context
+            request, "finance/settings/recurring_transactions.html", context
         )
 
     return RedirectResponse(
-        url="/settings/automation-settings?saved=1", status_code=303
+        url="/settings/recurring-transactions?saved=1", status_code=303
     )
+
+
+@router.api_route(
+    "/automation-settings",
+    methods=["GET", "POST"],
+    include_in_schema=False,
+)
+def legacy_automation_settings(
+    auth: WebAuthContext = Depends(require_finance_access),
+) -> RedirectResponse:
+    """Preserve old Finance bookmarks without retaining Automation ownership."""
+    return RedirectResponse(url="/settings/recurring-transactions", status_code=308)
 
 
 # ========== Payroll Settings ==========

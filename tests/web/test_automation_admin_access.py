@@ -9,6 +9,7 @@ from fastapi import HTTPException, Request
 from app.services.admin.settings_web import ADMIN_SETTINGS_SECTIONS
 from app.web.automation import legacy_automation_path
 from app.web.deps import require_automation_access
+from app.web.finance.settings import legacy_automation_settings
 
 
 def _request(method: str, path: str) -> Request:
@@ -30,7 +31,9 @@ def _request(method: str, path: str) -> Request:
     ("method", "path", "permission"),
     [
         ("GET", "/automation/workflows", "automation:read"),
+        ("GET", "/automation/settings", "automation:read"),
         ("POST", "/automation/workflows/new", "automation:create"),
+        ("POST", "/automation/settings", "automation:update"),
         ("POST", "/automation/workflows/123/edit", "automation:update"),
         ("POST", "/automation/workflows/123/toggle", "automation:publish"),
         ("POST", "/automation/workflows/123/test", "automation:test"),
@@ -89,6 +92,32 @@ def test_finance_router_does_not_mount_automation() -> None:
     assert "app.web.finance.automation" not in finance_router_source
 
 
+def test_finance_navigation_owns_recurring_transactions_not_automation() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    finance_base = (repo_root / "templates/finance/base_finance.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'href="/settings/recurring-transactions"' in finance_base
+    assert 'href="/automation"' not in finance_base
+    assert ">Recurring Transactions</span>" in finance_base
+
+
+def test_settings_templates_are_separated_by_owner() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    recurring = (
+        repo_root / "templates/finance/settings/recurring_transactions.html"
+    ).read_text(encoding="utf-8")
+    automation = (repo_root / "templates/admin/automation/settings.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "recurring_default_frequency" in recurring
+    assert "workflow_max_actions_per_event" not in recurring
+    assert "workflow_max_actions_per_event" in automation
+    assert "recurring_default_frequency" not in automation
+
+
 def test_legacy_finance_automation_get_redirects_to_admin() -> None:
     response = legacy_automation_path(
         _request("GET", "/finance/automation/workflows"),
@@ -97,6 +126,13 @@ def test_legacy_finance_automation_get_redirects_to_admin() -> None:
 
     assert response.status_code == 308
     assert response.headers["location"] == "/automation/workflows"
+
+
+def test_legacy_finance_settings_redirect_to_recurring_transactions() -> None:
+    response = legacy_automation_settings(MagicMock())
+
+    assert response.status_code == 308
+    assert response.headers["location"] == "/settings/recurring-transactions"
 
 
 def test_automation_router_is_core_not_finance_gated() -> None:

@@ -38,6 +38,7 @@ class LeaveTypeBase(BaseModel):
     is_lwp: bool = False
     is_compensatory: bool = False
     include_holidays: bool = False
+    restricted_during_probation: bool = False
     applicable_after_days: int = 0
     is_optional: bool = False
     max_optional_leaves: int | None = None
@@ -67,6 +68,7 @@ class LeaveTypeUpdate(BaseModel):
     is_lwp: bool | None = None
     is_compensatory: bool | None = None
     include_holidays: bool | None = None
+    restricted_during_probation: bool | None = None
     applicable_after_days: int | None = None
     is_optional: bool | None = None
     max_optional_leaves: int | None = None

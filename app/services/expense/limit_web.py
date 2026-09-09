@@ -6,6 +6,8 @@ import logging
 from collections.abc import Sequence
 from datetime import date, datetime, timezone
 from functools import partial
+from typing import Any, cast
+from urllib.parse import urlencode
 
 try:
     from datetime import UTC  # type: ignore
@@ -83,8 +85,8 @@ class ExpenseLimitWebService:
         db: Session,
     ) -> HTMLResponse:
         """Show expense limit categories."""
-        context = base_context(request, auth, "Expense Limit", "limits", db=db)
-        return templates.TemplateResponse(request, "expense/limits/list.html", context)
+        context = base_context(request, auth, "Spending Limits", "limits", db=db)
+        return templates.TemplateResponse(request, "expense/limits/index.html", context)
 
     @staticmethod
     def _get_approver_scope_id(form, scope_type: str) -> str:
@@ -1057,6 +1059,8 @@ class ExpenseLimitWebService:
         auth: WebAuthContext,
         db: Session,
         q: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
     ) -> HTMLResponse:
         """List approvers by actual approval activity for reviewer workflow."""
         from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -1064,7 +1068,71 @@ class ExpenseLimitWebService:
 
         org_id = coerce_uuid(auth.organization_id)
         search = (q or "").strip()
+        parsed_from: date | None = None
+        parsed_to: date | None = None
+        filter_errors: dict[str, str] = {}
+
+        if from_date:
+            try:
+                parsed_from = date.fromisoformat(from_date)
+            except ValueError:
+                filter_errors["from_date"] = "Invalid from date"
+        if to_date:
+            try:
+                parsed_to = date.fromisoformat(to_date)
+            except ValueError:
+                filter_errors["to_date"] = "Invalid to date"
+        if parsed_from and parsed_to and parsed_from > parsed_to:
+            filter_errors["date_range"] = "From date must be on or before To date"
+
         service = ExpenseLimitService(db)
+        filters = {
+            "q": search,
+            "from_date": from_date or "",
+            "to_date": to_date or "",
+        }
+        active_filters = build_active_filters(
+            params=filters,
+            labels={"q": "Approver", "from_date": "From", "to_date": "To"},
+        )
+
+        if filter_errors:
+            context = base_context(request, auth, "Expense Reviewer", "limits-review")
+            context.update(
+                {
+                    "approvers": [],
+                    "filters": filters,
+                    "active_filters": active_filters,
+                    "filter_errors": filter_errors,
+                    "summary": {
+                        "approved_count": 0,
+                        "rejected_count": 0,
+                        "paid_count": 0,
+                        "paid_amount": Decimal("0"),
+                        "currency_code": "",
+                    },
+                }
+            )
+            return templates.TemplateResponse(
+                request, "expense/limits/reviewer_approvers.html", context
+            )
+
+        activity_filters = [
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaim.approver_id.isnot(None),
+            ExpenseClaimAction.action_type.in_(
+                [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
+            ),
+            ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+        ]
+        if parsed_from:
+            activity_filters.append(
+                func.date(ExpenseClaimAction.created_at) >= parsed_from
+            )
+        if parsed_to:
+            activity_filters.append(
+                func.date(ExpenseClaimAction.created_at) <= parsed_to
+            )
 
         activity_rows = db.execute(
             select(
@@ -1094,26 +1162,31 @@ class ExpenseLimitWebService:
             .join(
                 ExpenseClaimAction, ExpenseClaimAction.claim_id == ExpenseClaim.claim_id
             )
-            .where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.approver_id.isnot(None),
-                ExpenseClaimAction.action_type.in_(
-                    [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
-                ),
-                ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
-            )
+            .where(*activity_filters)
             .group_by(ExpenseClaim.approver_id)
             .order_by(func.max(ExpenseClaimAction.created_at).desc())
         ).all()
+        activity_map: dict[UUID, Any] = {
+            cast(UUID, row.approver_id): row
+            for row in activity_rows
+            if row.approver_id is not None
+        }
+        activity_approver_ids: list[UUID] = list(activity_map)
 
-        approver_ids = [row.approver_id for row in activity_rows if row.approver_id]
-        if not approver_ids:
+        if not (parsed_from or parsed_to) and not activity_approver_ids:
             context = base_context(request, auth, "Expense Reviewer", "limits-review")
             context.update(
                 {
                     "approvers": [],
-                    "filters": {
-                        "q": search,
+                    "filters": filters,
+                    "active_filters": active_filters,
+                    "filter_errors": {},
+                    "summary": {
+                        "approved_count": 0,
+                        "rejected_count": 0,
+                        "paid_count": 0,
+                        "paid_amount": Decimal("0"),
+                        "currency_code": "",
                     },
                 }
             )
@@ -1121,25 +1194,70 @@ class ExpenseLimitWebService:
                 request, "expense/limits/reviewer_approvers.html", context
             )
 
+        paid_filters = [
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaim.approver_id.isnot(None),
+            ExpenseClaim.status == ExpenseClaimStatus.PAID,
+            ExpenseClaim.paid_on.isnot(None),
+        ]
+        if parsed_from:
+            paid_filters.append(ExpenseClaim.paid_on >= parsed_from)
+        if parsed_to:
+            paid_filters.append(ExpenseClaim.paid_on <= parsed_to)
+        if not (parsed_from or parsed_to) and activity_approver_ids:
+            paid_filters.append(ExpenseClaim.approver_id.in_(activity_approver_ids))
+
         paid_amount_rows = db.execute(
             select(
                 ExpenseClaim.approver_id.label("approver_id"),
                 func.coalesce(
-                    func.sum(ExpenseClaim.net_payable_amount),
+                    func.sum(ExpenseClaim.amount_paid),
                     Decimal("0"),
                 ).label("paid_amount"),
+                func.count(ExpenseClaim.claim_id).label("paid_count"),
             )
-            .where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.approver_id.in_(approver_ids),
-                ExpenseClaim.status == ExpenseClaimStatus.PAID,
-                ExpenseClaim.paid_on.isnot(None),
-            )
+            .where(*paid_filters)
             .group_by(ExpenseClaim.approver_id)
         ).all()
-        paid_amount_map = {
-            row.approver_id: row.paid_amount or Decimal("0") for row in paid_amount_rows
+        paid_amount_map: dict[UUID, Decimal] = {
+            cast(UUID, row.approver_id): row.paid_amount or Decimal("0")
+            for row in paid_amount_rows
+            if row.approver_id is not None
         }
+        paid_count_map: dict[UUID, int] = {
+            cast(UUID, row.approver_id): int(row.paid_count or 0)
+            for row in paid_amount_rows
+            if row.approver_id is not None
+        }
+        paid_approver_ids: list[UUID] = [
+            cast(UUID, row.approver_id)
+            for row in paid_amount_rows
+            if row.approver_id is not None
+        ]
+
+        approver_ids: list[UUID] = list(
+            dict.fromkeys([*activity_approver_ids, *paid_approver_ids])
+        )
+        if not approver_ids:
+            context = base_context(request, auth, "Expense Reviewer", "limits-review")
+            context.update(
+                {
+                    "approvers": [],
+                    "filters": filters,
+                    "active_filters": active_filters,
+                    "filter_errors": {},
+                    "summary": {
+                        "approved_count": 0,
+                        "rejected_count": 0,
+                        "paid_count": 0,
+                        "paid_amount": Decimal("0"),
+                        "currency_code": "",
+                    },
+                }
+            )
+            return templates.TemplateResponse(
+                request, "expense/limits/reviewer_approvers.html", context
+            )
 
         employees = list(
             db.scalars(
@@ -1156,8 +1274,31 @@ class ExpenseLimitWebService:
         employee_map = {employee.employee_id: employee for employee in employees}
 
         approver_rows: list[dict[str, object]] = []
-        for row in activity_rows:
-            employee = employee_map.get(row.approver_id)
+        total_approved_count = 0
+        total_rejected_count = 0
+        total_paid_count = 0
+        total_paid_amount = Decimal("0")
+        summary_currency_code = ""
+
+        def _last_action_sort_value(approver_id: UUID) -> datetime:
+            if approver_id not in activity_map:
+                return datetime.min
+            last_action_at = cast(
+                datetime | None, activity_map[approver_id].last_action_at
+            )
+            if last_action_at is None:
+                return datetime.min
+            if last_action_at.tzinfo is not None:
+                return last_action_at.astimezone(UTC).replace(tzinfo=None)
+            return last_action_at
+
+        ordered_approver_ids = sorted(
+            approver_ids,
+            key=_last_action_sort_value,
+            reverse=True,
+        )
+        for approver_id in ordered_approver_ids:
+            employee = employee_map.get(approver_id)
             if employee is None:
                 continue
 
@@ -1205,6 +1346,29 @@ class ExpenseLimitWebService:
                 if limit_id
                 else None
             )
+            activity_row = activity_map.get(approver_id)
+            approved_count = (
+                int(activity_row.approved_count or 0) if activity_row else 0
+            )
+            rejected_count = (
+                int(activity_row.rejected_count or 0) if activity_row else 0
+            )
+            last_action_at = activity_row.last_action_at if activity_row else None
+            paid_count = paid_count_map.get(approver_id, 0)
+            paid_amount = paid_amount_map.get(approver_id, Decimal("0"))
+            total_approved_count += approved_count
+            total_rejected_count += rejected_count
+            total_paid_count += paid_count
+            total_paid_amount += paid_amount
+            if not summary_currency_code:
+                summary_currency_code = currency_code
+
+            review_params = {}
+            if parsed_from:
+                review_params["from_date"] = parsed_from.isoformat()
+            if parsed_to:
+                review_params["to_date"] = parsed_to.isoformat()
+            review_query = f"?{urlencode(review_params)}" if review_params else ""
 
             approver_rows.append(
                 {
@@ -1216,10 +1380,15 @@ class ExpenseLimitWebService:
                     "max_approval_amount": max_approval_amount,
                     "currency_code": currency_code,
                     "last_reset_at": latest_reset.reset_at if latest_reset else None,
-                    "approved_count": int(row.approved_count or 0),
-                    "rejected_count": int(row.rejected_count or 0),
-                    "paid_amount": paid_amount_map.get(row.approver_id, Decimal("0")),
-                    "last_action_at": row.last_action_at,
+                    "approved_count": approved_count,
+                    "rejected_count": rejected_count,
+                    "paid_count": paid_count,
+                    "paid_amount": paid_amount,
+                    "last_action_at": last_action_at,
+                    "review_url": (
+                        f"/expense/limits/reviewer/approvers/{employee.employee_id}"
+                        f"{review_query}"
+                    ),
                 }
             )
 
@@ -1227,8 +1396,15 @@ class ExpenseLimitWebService:
         context.update(
             {
                 "approvers": approver_rows,
-                "filters": {
-                    "q": search,
+                "filters": filters,
+                "active_filters": active_filters,
+                "filter_errors": {},
+                "summary": {
+                    "approved_count": total_approved_count,
+                    "rejected_count": total_rejected_count,
+                    "paid_count": total_paid_count,
+                    "paid_amount": total_paid_amount,
+                    "currency_code": summary_currency_code,
                 },
             }
         )

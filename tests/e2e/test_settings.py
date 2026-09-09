@@ -1,8 +1,8 @@
 """
 E2E Tests for Settings Module.
 
-Tests for organization profile, email configuration, automation settings,
-report settings, feature flags, and numbering sequences.
+Tests for organization profile, email configuration, recurring transaction
+defaults, Admin Automation settings, reports, features, and numbering.
 """
 
 import re
@@ -54,13 +54,20 @@ class TestSettingsIndex:
         email_link = authenticated_page.locator("a[href*='/settings/email']")
         expect(email_link).to_be_visible()
 
-    def test_settings_has_automation_section(self, authenticated_page, base_url):
-        """Test that settings page has automation settings section."""
+    def test_settings_has_recurring_transactions_section(
+        self, authenticated_page, base_url
+    ):
+        """Finance settings exposes recurring transactions, not Automation."""
         goto_settings_page(authenticated_page, f"{base_url}/settings")
         authenticated_page.wait_for_load_state("networkidle")
 
-        automation_link = authenticated_page.locator("a[href*='/settings/automation']")
-        expect(automation_link).to_be_visible()
+        recurring_link = authenticated_page.locator(
+            "a[href='/settings/recurring-transactions']"
+        )
+        expect(recurring_link).to_be_visible()
+        expect(
+            authenticated_page.locator("a[href='/settings/automation-settings']")
+        ).to_have_count(0)
 
     def test_settings_has_reports_section(self, authenticated_page, base_url):
         """Test that settings page has report settings section."""
@@ -288,103 +295,86 @@ class TestEmailSettings:
 
 
 @pytest.mark.e2e
-class TestAutomationSettings:
-    """Tests for automation settings."""
+class TestRecurringTransactionSettings:
+    """Tests for Finance-owned recurring transaction defaults."""
 
-    def test_automation_page_loads(self, authenticated_page, base_url):
-        """Test that automation settings page loads."""
+    def test_recurring_settings_page_loads(self, authenticated_page, base_url):
         response = goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
+            authenticated_page, f"{base_url}/settings/recurring-transactions"
+        )
+        assert response.ok, f"Recurring settings failed: {response.status}"
+
+    @pytest.mark.parametrize(
+        "selector",
+        [
+            "#recurring_default_frequency",
+            "#recurring_max_occurrences",
+            "#recurring_lookback_days",
+        ],
+    )
+    def test_recurring_settings_fields_expected_fields(
+        self, authenticated_page, base_url, selector
+    ):
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/recurring-transactions"
+        )
+        expect(authenticated_page.locator(selector)).to_be_visible()
+
+    def test_recurring_settings_exclude_cross_module_controls(
+        self, authenticated_page, base_url
+    ):
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/recurring-transactions"
+        )
+        expect(
+            authenticated_page.locator("#workflow_max_actions_per_event")
+        ).to_have_count(0)
+        expect(
+            authenticated_page.locator("#custom_fields_max_per_entity")
+        ).to_have_count(0)
+
+    def test_recurring_settings_has_submit_button(self, authenticated_page, base_url):
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/recurring-transactions"
+        )
+        expect(authenticated_page.locator("button[type='submit']")).to_be_visible()
+
+
+@pytest.mark.e2e
+class TestAdminAutomationSettings:
+    """Tests for cross-module settings in the Admin Automation Center."""
+
+    def test_automation_settings_page_loads(self, authenticated_page, base_url):
+        response = goto_settings_page(
+            authenticated_page, f"{base_url}/automation/settings"
         )
         assert response.ok, f"Automation settings failed: {response.status}"
 
-        authenticated_page.wait_for_load_state("networkidle")
+    @pytest.mark.parametrize(
+        "selector",
+        [
+            "#workflow_max_actions_per_event",
+            "#workflow_async_timeout_seconds",
+            "#custom_fields_max_per_entity",
+        ],
+    )
+    def test_automation_settings_has_cross_module_controls(
+        self, authenticated_page, base_url, selector
+    ):
+        goto_settings_page(authenticated_page, f"{base_url}/automation/settings")
+        expect(authenticated_page.locator(selector)).to_be_visible()
 
-    def test_automation_has_recurring_frequency_field(
+    def test_automation_settings_excludes_recurring_defaults(
         self, authenticated_page, base_url
     ):
-        """Test that automation page has recurring frequency field."""
-        goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
-        )
-        authenticated_page.wait_for_load_state("networkidle")
+        goto_settings_page(authenticated_page, f"{base_url}/automation/settings")
+        expect(
+            authenticated_page.locator("#recurring_default_frequency")
+        ).to_have_count(0)
 
-        field = authenticated_page.locator(
-            "#recurring_default_frequency, select[name='recurring_default_frequency']"
-        )
-        expect(field).to_be_visible()
-
-    def test_automation_has_max_occurrences_field(self, authenticated_page, base_url):
-        """Test that automation page has max occurrences field."""
-        goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
-        )
-        authenticated_page.wait_for_load_state("networkidle")
-
-        field = authenticated_page.locator(
-            "#recurring_max_occurrences, input[name='recurring_max_occurrences']"
-        )
-        expect(field).to_be_visible()
-
-    def test_automation_has_lookback_days_field(self, authenticated_page, base_url):
-        """Test that automation page has lookback days field."""
-        goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
-        )
-        authenticated_page.wait_for_load_state("networkidle")
-
-        field = authenticated_page.locator(
-            "#recurring_lookback_days, input[name='recurring_lookback_days']"
-        )
-        expect(field).to_be_visible()
-
-    def test_automation_has_workflow_max_actions_field(
-        self, authenticated_page, base_url
-    ):
-        """Test that automation page has workflow max actions field."""
-        goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
-        )
-        authenticated_page.wait_for_load_state("networkidle")
-
-        field = authenticated_page.locator(
-            "#workflow_max_actions_per_event, input[name='workflow_max_actions_per_event']"
-        )
-        expect(field).to_be_visible()
-
-    def test_automation_has_async_timeout_field(self, authenticated_page, base_url):
-        """Test that automation page has async timeout field."""
-        goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
-        )
-        authenticated_page.wait_for_load_state("networkidle")
-
-        field = authenticated_page.locator(
-            "#workflow_async_timeout_seconds, input[name='workflow_async_timeout_seconds']"
-        )
-        expect(field).to_be_visible()
-
-    def test_automation_has_custom_fields_limit(self, authenticated_page, base_url):
-        """Test that automation page has custom fields limit field."""
-        goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
-        )
-        authenticated_page.wait_for_load_state("networkidle")
-
-        field = authenticated_page.locator(
-            "#custom_fields_max_per_entity, input[name='custom_fields_max_per_entity']"
-        )
-        expect(field).to_be_visible()
-
-    def test_automation_has_submit_button(self, authenticated_page, base_url):
-        """Test that automation page has submit button."""
-        goto_settings_page(
-            authenticated_page, f"{base_url}/settings/automation-settings"
-        )
-        authenticated_page.wait_for_load_state("networkidle")
-
-        submit = authenticated_page.locator("button[type='submit']")
-        expect(submit).to_be_visible()
+    def test_automation_settings_has_submit_button(self, authenticated_page, base_url):
+        goto_settings_page(authenticated_page, f"{base_url}/automation/settings")
+        expect(authenticated_page.locator("button[type='submit']")).to_be_visible()
 
 
 @pytest.mark.e2e

@@ -128,6 +128,9 @@ def _make_claim(
         total_claimed_amount=Decimal("50000.00"),
         claim_date=None,
         paid_on=None,
+        amount_paid=Decimal("50000.00")
+        if status == ExpenseClaimStatus.PAID
+        else Decimal("0"),
         payment_reference=None,
         created_by_id=uuid.uuid4(),
         reimbursement_journal_id=None,
@@ -906,6 +909,7 @@ class TestMarkTransferFailed:
 
         assert claim.status == ExpenseClaimStatus.APPROVED
         assert claim.paid_on is None
+        assert claim.amount_paid == Decimal("0")
 
     def test_approved_claim_not_touched(self) -> None:
         """If claim is still APPROVED, mark_transfer_failed doesn't change it."""
@@ -1540,6 +1544,7 @@ class TestProcessTransferReversal:
         assert intent.status == PaymentIntentStatus.REVERSED
         assert claim.status == ExpenseClaimStatus.APPROVED
         assert claim.paid_on is None
+        assert claim.amount_paid == Decimal("0")
         assert claim.payment_reference is None
 
     def test_already_reversed_is_noop(self) -> None:

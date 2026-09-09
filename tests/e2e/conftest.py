@@ -401,9 +401,9 @@ def email_settings_page(authenticated_page, base_url):
 
 
 @pytest.fixture
-def automation_settings_page(authenticated_page, base_url):
-    """Navigate to automation settings and return the page."""
-    authenticated_page.goto(f"{base_url}/settings/automation-settings")
+def recurring_transaction_settings_page(authenticated_page, base_url):
+    """Navigate to recurring transaction settings and return the page."""
+    authenticated_page.goto(f"{base_url}/settings/recurring-transactions")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
