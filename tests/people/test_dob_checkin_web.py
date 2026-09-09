@@ -146,13 +146,13 @@ def test_attendance_template_has_targeted_dob_error_action() -> None:
     template = Path("templates/people/self/attendance.html").read_text(encoding="utf-8")
 
     assert "{% if check_in_requirement_error %}" in template
-    assert "Date of Birth Required" in template
     assert "Update ERP Records" not in template
     assert "check_in_requirement_error.action_label" in template
     assert "check_in_requirement_error.action_url" in template
 
     error = build_check_in_requirement_error_context("ERP_DOB_REQUIRED_FOR_CHECKIN")
     assert error is not None
+    assert error["title"] == "Date of Birth Required"
     assert error["action_label"] == "Update ERP Records"
     assert error["action_url"] == ERP_PERSONAL_RECORDS_URL
 
