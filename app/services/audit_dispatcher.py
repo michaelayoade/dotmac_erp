@@ -96,7 +96,12 @@ def fire_audit_event(
             actor_str = actor_id_var.get()
             if actor_str:
                 try:
-                    resolved_user_id = coerce_uuid(actor_str)
+                    # Context explicitly records unauthenticated callers as
+                    # ``anonymous``.  This is an optional attribution lookup,
+                    # not an HTTP input boundary, so an unparseable actor must
+                    # remain ``None`` instead of raising HTTPException and
+                    # discarding the audit event itself.
+                    resolved_user_id = coerce_uuid(actor_str, raise_http=False)
                 except (ValueError, AttributeError):
                     pass
 
