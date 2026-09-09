@@ -665,3 +665,234 @@ class TestParentChildCustomer:
             result = CustomerService.create_customer(mock_db, org_id, inp)
 
         assert result.parent_customer_id is None
+
+
+class TestPrepareCustomer:
+    """``prepare_customer`` -- the ONE real preparation step ``create_customer``
+    also consumes (Michael's ruled shape, 2026-09-09): no SAVEPOINT, no
+    fabricated ``customer_code``, and ``create_customer`` calls this method
+    rather than duplicating its decisions
+    (``tests/architecture/test_imports_adoption.py::
+    test_customer_adapter_owns_no_transaction_or_session_factory`` forbids
+    the import adapter from owning a transaction; an earlier version of
+    this repair relocated that violation into a SAVEPOINT INSIDE this
+    service instead of removing it, which Michael explicitly rejected).
+    These tests are the sensitivity proof for the property that actually
+    has to hold: the guard is a static scan of one adapter file, so a
+    stray ``db.add``/``flush`` introduced HERE would be invisible to it.
+    """
+
+    def test_never_touches_the_session(self, mock_db, org_id):
+        """Zero session mutation, ever -- the property the guard cannot see.
+
+        If ``prepare_customer`` ever gained an ``add``/``flush``/``commit``/
+        ``refresh``/``begin_nested``/``rollback`` call, this is what would
+        catch it.
+        """
+        inp = CustomerInput(
+            customer_type=MockCustomer().customer_type,
+            customer_name="Preview Only Ltd",
+            default_receivable_account_id=uuid4(),
+        )
+
+        result = CustomerService.prepare_customer(mock_db, org_id, inp)
+
+        mock_db.add.assert_not_called()
+        mock_db.flush.assert_not_called()
+        mock_db.commit.assert_not_called()
+        mock_db.refresh.assert_not_called()
+        mock_db.begin_nested.assert_not_called()
+        mock_db.rollback.assert_not_called()
+        assert result.legal_name == "Preview Only Ltd"
+
+    def test_never_allocates_a_customer_code(self, mock_db, org_id):
+        """UNMEASURABLE FIELD, proven rather than merely documented.
+
+        ``customer_code`` can only be known by ``_generate_customer_code``
+        actually allocating one -- a real, row-locked, sequence-mutating
+        write. This asserts the allocator is never even reached from
+        preparation, and that the numbering state a real allocation would
+        touch stays exactly as it was: nothing here can have advanced it.
+        """
+        with patch.object(CustomerService, "_generate_customer_code") as generate_code:
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="No Code Yet Ltd",
+                default_receivable_account_id=uuid4(),
+            )
+
+            result = CustomerService.prepare_customer(mock_db, org_id, inp)
+
+            generate_code.assert_not_called()
+        assert result.customer_code == ""
+
+    def test_the_prepared_entity_is_transient(self, mock_db, org_id):
+        """The prepared entity must never have been added to a session.
+
+        This is what the retiring importer's ``construct_only`` entities are
+        also captured at (``test_legacy_construct_only.py``) -- a shadow
+        comparison refuses to compare two entities at different persistence
+        stages, so this has to hold for the comparison to mean anything.
+        """
+        from sqlalchemy import inspect as sa_inspect
+
+        inp = CustomerInput(
+            customer_type=MockCustomer().customer_type,
+            customer_name="Transient Co",
+            default_receivable_account_id=uuid4(),
+        )
+
+        result = CustomerService.prepare_customer(mock_db, org_id, inp)
+
+        state = sa_inspect(result)
+        assert state.transient is True
+        assert state.session is None
+
+    def test_an_explicit_customer_code_is_observed_for_real(self, mock_db, org_id):
+        """An explicit code is a REAL duplicate observation, not a preview.
+
+        Unlike the blank-code case, a caller-supplied code CAN be checked
+        for real -- it is a read, not an allocation -- so
+        ``validate_unique_code`` must actually run.
+        """
+        with patch(
+            "app.services.finance.ar.customer.validate_unique_code"
+        ) as validate_code:
+            inp = CustomerInput(
+                customer_code="CUST-EXPLICIT",
+                customer_type=MockCustomer().customer_type,
+                customer_name="Explicit Co",
+                default_receivable_account_id=uuid4(),
+            )
+
+            result = CustomerService.prepare_customer(mock_db, org_id, inp)
+
+            validate_code.assert_called_once()
+        assert result.customer_code == "CUST-EXPLICIT"
+
+    def test_with_valid_parent_reads_but_does_not_mutate(self, mock_db, org_id):
+        """A real parent-customer read still runs, and still touches nothing."""
+        parent = MockCustomer(organization_id=org_id, customer_code="PARENT-010")
+        parent_id = parent.customer_id
+
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=parent,
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Child Preview",
+                default_receivable_account_id=uuid4(),
+                parent_customer_id=parent_id,
+            )
+            result = CustomerService.prepare_customer(mock_db, org_id, inp)
+
+        assert result.parent_customer_id == parent_id
+        mock_db.add.assert_not_called()
+        mock_db.flush.assert_not_called()
+
+    def test_with_nonexistent_parent_raises(self, mock_db, org_id):
+        """The same refusal ``create_customer`` gives, via the shared rule."""
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=None,
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Orphan Preview",
+                default_receivable_account_id=uuid4(),
+                parent_customer_id=uuid4(),
+            )
+            with pytest.raises(ValueError, match="Parent customer not found"):
+                CustomerService.prepare_customer(mock_db, org_id, inp)
+
+
+class TestCreateCustomerConsumesPreparation:
+    """``create_customer`` consumes ``prepare_customer``'s result rather than
+    deciding fields itself -- point 3 of the ruled shape: "the actual
+    creation path consumes that same preparation result and remains the
+    only writer."
+    """
+
+    def test_matches_the_preview_on_every_shared_field(self, mock_db, org_id):
+        """One computation, two endings -- proven, not merely asserted.
+
+        Same organization, same explicit code, same input: the persisted
+        entity and the previewed one must decide every mapped business
+        field identically, because ``create_customer`` now calls
+        ``prepare_customer`` for that decision instead of re-deciding it.
+        A future edit that forked the two would be caught here.
+        """
+        shared_input = CustomerInput(
+            customer_code="CUST-SHARED-001",
+            customer_type=MockCustomer().customer_type,
+            customer_name="Shared Mapping Co",
+            default_receivable_account_id=uuid4(),
+            trading_name="Shared Co",
+            credit_limit=Decimal("12345.00"),
+            payment_terms_days=60,
+        )
+
+        with patch("app.services.finance.ar.customer.validate_unique_code"):
+            persisted = CustomerService.create_customer(mock_db, org_id, shared_input)
+            previewed = CustomerService.prepare_customer(mock_db, org_id, shared_input)
+
+        mapped_fields = (
+            "organization_id",
+            "customer_code",
+            "customer_type",
+            "legal_name",
+            "trading_name",
+            "credit_limit",
+            "credit_terms_days",
+            "ar_control_account_id",
+        )
+        for field in mapped_fields:
+            assert getattr(persisted, field) == getattr(previewed, field), field
+
+    def test_only_create_customer_allocates_a_code(self, mock_db, org_id):
+        """The allocator runs exactly once, and only on the writing path."""
+        with (
+            patch("app.services.finance.ar.customer.validate_unique_code"),
+            patch.object(
+                CustomerService, "_generate_customer_code", return_value="CUST-00042"
+            ) as generate_code,
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Allocated Co",
+                default_receivable_account_id=uuid4(),
+            )
+
+            result = CustomerService.create_customer(mock_db, org_id, inp)
+
+            generate_code.assert_called_once()
+        assert result.customer_code == "CUST-00042"
+
+    def test_an_invalid_parent_is_refused_before_any_code_is_allocated(
+        self, mock_db, org_id
+    ):
+        """The reordering this repair made: preparation (including parent
+        validation) now runs BEFORE code allocation, so a bad parent no
+        longer burns a real sequence number for a customer that is never
+        created. An earlier version of ``create_customer`` allocated a code
+        first and validated the parent second.
+        """
+        with (
+            patch(
+                "app.services.finance.ar.customer.get_org_scoped_entity",
+                return_value=None,
+            ),
+            patch.object(CustomerService, "_generate_customer_code") as generate_code,
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Orphan Co",
+                default_receivable_account_id=uuid4(),
+                parent_customer_id=uuid4(),
+            )
+
+            with pytest.raises(ValueError, match="Parent customer not found"):
+                CustomerService.create_customer(mock_db, org_id, inp)
+
+            generate_code.assert_not_called()

@@ -171,57 +171,38 @@ class CustomerService(ListResponseMixin):
         )
 
     @staticmethod
-    def create_customer(
-        db: Session,
-        organization_id: UUID,
-        input: CustomerInput,
-    ) -> Customer:
-        """
-        Create a new customer.
-
-        Args:
-            db: Database session
-            organization_id: Organization scope
-            input: Customer input data
-
-        Returns:
-            Created Customer
-
-        Raises:
-            HTTPException(400): If customer code already exists
-        """
-        org_id = coerce_uuid(organization_id)
-
-        customer_code = input.customer_code or ""
-        if not customer_code.strip():
-            customer_code = CustomerService._generate_customer_code(db, org_id)
-
-        # Validate unique customer code
-        validate_unique_code(
+    def _validate_parent_customer(
+        db: Session, org_id: UUID, input: CustomerInput
+    ) -> None:
+        """Shared by ``create_customer`` (via ``prepare_customer``) so a
+        persisted customer and a previewed one can never diverge on when a
+        parent reference is refused."""
+        if not input.parent_customer_id:
+            return
+        parent = get_org_scoped_entity(
             db=db,
             model_class=Customer,
+            entity_id=input.parent_customer_id,
             org_id=org_id,
-            code_value=customer_code,
-            code_field_name="customer_code",
-            entity_name="Customer",
+            entity_name="Parent customer",
         )
-
-        # Validate parent customer if set
-        if input.parent_customer_id:
-            parent = get_org_scoped_entity(
-                db=db,
-                model_class=Customer,
-                entity_id=input.parent_customer_id,
-                org_id=org_id,
-                entity_name="Parent customer",
+        if not parent:
+            raise ValueError(
+                "Parent customer not found or belongs to a different organization"
             )
-            if not parent:
-                raise ValueError(
-                    "Parent customer not found or belongs to a different organization"
-                )
 
-        # Map template-friendly names to model field names
-        customer = Customer(
+    @staticmethod
+    def _build_customer_entity(
+        org_id: UUID, customer_code: str, input: CustomerInput
+    ) -> Customer:
+        """The one ``CustomerInput`` → ``Customer`` field mapping.
+
+        Called from ``prepare_customer``, which both ``create_customer`` and
+        the import adapter's preview consume -- a persisted customer and a
+        previewed one must decide fields the identical way, and a second
+        copy of this mapping is exactly how they would drift apart.
+        """
+        return Customer(
             organization_id=org_id,
             customer_code=customer_code,
             customer_type=input.customer_type,
@@ -252,6 +233,102 @@ class CustomerService(ListResponseMixin):
             is_active=input.is_active,
             parent_customer_id=input.parent_customer_id,
         )
+
+    @staticmethod
+    def prepare_customer(
+        db: Session,
+        organization_id: UUID,
+        input: CustomerInput,
+    ) -> Customer:
+        """The ONE real preparation step for a candidate customer.
+
+        Consumed by BOTH ``create_customer`` (which additionally allocates a
+        generated code when none was given, then persists) and the customer
+        import adapter's parity preview
+        (``app.services.finance.import_export.durable_customers.
+        CustomerImportPort.preview``). A persisted customer and a previewed
+        one can no longer decide a field differently by construction: they
+        are one computation with two different endings, not two
+        implementations reconciled after the fact.
+
+        Performs the REAL duplicate-code observation (``validate_unique_code``,
+        a read) when an explicit ``customer_code`` was given, and the REAL
+        parent-customer validation (``_validate_parent_customer``, a read)
+        when a parent was given -- exactly what ``create_customer`` already
+        checked, now shared rather than duplicated.
+
+        Makes NO writes: no ``add``, ``flush``, ``begin_nested``, ``commit``
+        or ``rollback``. ``customer_code`` is left exactly as given, which is
+        EMPTY when ``input.customer_code`` is blank (the common case for a
+        CSV-driven import) -- allocating one is a real, row-locked,
+        sequence-mutating write that only ``create_customer`` may perform.
+
+        UNMEASURABLE WITHOUT PERSISTENCE: a caller comparing this result
+        against a real, persisted customer must NOT treat an empty
+        ``customer_code`` as a divergence -- the real value can only be
+        known by actually allocating one, which this function must never do.
+        ``assert_legacy_customer_parity`` names this explicitly and excludes
+        it from the field comparison rather than forcing it to satisfy an
+        invariant a preview cannot honestly satisfy.
+        """
+        org_id = coerce_uuid(organization_id)
+        explicit_code = (input.customer_code or "").strip()
+        if explicit_code:
+            validate_unique_code(
+                db=db,
+                model_class=Customer,
+                org_id=org_id,
+                code_value=explicit_code,
+                code_field_name="customer_code",
+                entity_name="Customer",
+            )
+        CustomerService._validate_parent_customer(db, org_id, input)
+        return CustomerService._build_customer_entity(org_id, explicit_code, input)
+
+    @staticmethod
+    def create_customer(
+        db: Session,
+        organization_id: UUID,
+        input: CustomerInput,
+    ) -> Customer:
+        """
+        Create a new customer.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            input: Customer input data
+
+        Returns:
+            Created Customer
+
+        Raises:
+            HTTPException(400): If customer code already exists
+
+        Consumes ``prepare_customer``'s result rather than deciding fields
+        itself: this is the ONLY step that allocates a real ``customer_code``
+        (when none was given) and the ONLY writer (``add``/``flush``/
+        ``refresh``). Reordered from an earlier version of this method,
+        which generated a code BEFORE validating the parent reference --
+        an invalid parent then burned a real sequence number for a customer
+        that was never created. Preparation (including parent validation)
+        now runs first, so an invalid parent is refused before anything is
+        allocated.
+        """
+        org_id = coerce_uuid(organization_id)
+
+        customer = CustomerService.prepare_customer(db, org_id, input)
+
+        if not customer.customer_code.strip():
+            customer.customer_code = CustomerService._generate_customer_code(db, org_id)
+            validate_unique_code(
+                db=db,
+                model_class=Customer,
+                org_id=org_id,
+                code_value=customer.customer_code,
+                code_field_name="customer_code",
+                entity_name="Customer",
+            )
 
         db.add(customer)
         db.flush()
