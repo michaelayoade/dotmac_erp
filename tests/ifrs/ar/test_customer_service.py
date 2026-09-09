@@ -665,3 +665,196 @@ class TestParentChildCustomer:
             result = CustomerService.create_customer(mock_db, org_id, inp)
 
         assert result.parent_customer_id is None
+
+
+class TestConstructCustomerPreview:
+    """``construct_customer_preview`` -- the ``construct_only`` counterpart
+    to ``create_customer``, added so a shadow/parity comparison can build the
+    entity the real writer would build without the CALLER owning a
+    transaction to discard (``tests/architecture/test_imports_adoption.py::
+    test_customer_adapter_owns_no_transaction_or_session_factory``).  These
+    tests are the sensitivity proof for that property: the guard forbids
+    ``commit``/``rollback``/``SessionLocal``/``sessionmaker`` calls in the
+    ADAPTER, but the property that actually has to hold is that this SERVICE
+    method never mutates the session at all -- a single missed ``db.add``
+    here would silently reintroduce the exact side effect the adapter-level
+    guard cannot see, since the guard is a static AST scan of one file and
+    this method lives in another.
+    """
+
+    def test_never_touches_the_session(self, mock_db, org_id):
+        """PLANT-equivalent admit control: zero session mutation, ever.
+
+        If ``construct_customer_preview`` ever gained an ``add``/``flush``/
+        ``commit``/``refresh`` call, this is what would catch it -- the
+        architecture guard only scans ``durable_customers.py`` and would
+        stay silent about a leak introduced here instead.
+        """
+        inp = CustomerInput(
+            customer_type=MockCustomer().customer_type,
+            customer_name="Preview Only Ltd",
+            default_receivable_account_id=uuid4(),
+        )
+
+        result = CustomerService.construct_customer_preview(mock_db, org_id, inp)
+
+        mock_db.add.assert_not_called()
+        mock_db.flush.assert_not_called()
+        mock_db.commit.assert_not_called()
+        mock_db.refresh.assert_not_called()
+        assert result.legal_name == "Preview Only Ltd"
+
+    def test_the_previewed_entity_is_transient(self, mock_db, org_id):
+        """The previewed entity must never have been added to a session.
+
+        This is what the retiring importer's ``construct_only`` entities are
+        also captured at (``test_legacy_construct_only.py``) -- a shadow
+        comparison refuses to compare two entities at different persistence
+        stages, so this has to hold for the comparison to mean anything.
+        """
+        from sqlalchemy import inspect as sa_inspect
+
+        inp = CustomerInput(
+            customer_type=MockCustomer().customer_type,
+            customer_name="Transient Co",
+            default_receivable_account_id=uuid4(),
+        )
+
+        result = CustomerService.construct_customer_preview(mock_db, org_id, inp)
+
+        state = sa_inspect(result)
+        assert state.transient is True
+        assert state.session is None
+
+    def test_matches_the_real_writers_field_mapping(self, mock_db, org_id):
+        """The shared ``_build_customer_entity`` really is shared.
+
+        Same organization, same explicit code, same input: ``create_customer``
+        (persisting) and ``construct_customer_preview`` (not) must decide
+        every mapped business field identically. If a future edit forked
+        the mapping instead of reusing it, this is what would catch the two
+        copies drifting apart.
+        """
+        shared_input = CustomerInput(
+            customer_code="CUST-SHARED-001",
+            customer_type=MockCustomer().customer_type,
+            customer_name="Shared Mapping Co",
+            default_receivable_account_id=uuid4(),
+            trading_name="Shared Co",
+            credit_limit=Decimal("12345.00"),
+            payment_terms_days=60,
+        )
+
+        with patch("app.services.finance.ar.customer.validate_unique_code"):
+            persisted = CustomerService.create_customer(mock_db, org_id, shared_input)
+        previewed = CustomerService.construct_customer_preview(
+            mock_db, org_id, shared_input
+        )
+
+        mapped_fields = (
+            "organization_id",
+            "customer_code",
+            "customer_type",
+            "legal_name",
+            "trading_name",
+            "credit_limit",
+            "credit_terms_days",
+            "ar_control_account_id",
+        )
+        for field in mapped_fields:
+            assert getattr(persisted, field) == getattr(previewed, field), field
+
+    def test_different_offsets_preview_different_codes(self, mock_db, org_id):
+        """PLANT: two rows in one shadow run must not collide on a preview code.
+
+        Nothing here reads a real, persisted sequence -- ``sequence_offset``
+        is the only thing keeping two previewed rows distinct, so it has to
+        actually change the result.
+        """
+        inp = CustomerInput(
+            customer_type=MockCustomer().customer_type,
+            customer_name="Row A",
+            default_receivable_account_id=uuid4(),
+        )
+
+        first = CustomerService.construct_customer_preview(
+            mock_db, org_id, inp, sequence_offset=0
+        )
+        second = CustomerService.construct_customer_preview(
+            mock_db, org_id, inp, sequence_offset=1
+        )
+
+        assert first.customer_code != second.customer_code
+        assert first.customer_code.startswith("CUST")
+        assert second.customer_code.startswith("CUST")
+
+    def test_the_same_offset_previews_the_same_code(self, mock_db, org_id):
+        """NEAR-MISS for the plant above: no hidden per-call state.
+
+        Two independent calls with the SAME offset must agree -- if this
+        failed, ``_preview_customer_code`` would be depending on some
+        mutable state between calls rather than on ``offset`` alone.
+        """
+        inp = CustomerInput(
+            customer_type=MockCustomer().customer_type,
+            customer_name="Row A",
+            default_receivable_account_id=uuid4(),
+        )
+
+        first = CustomerService.construct_customer_preview(
+            mock_db, org_id, inp, sequence_offset=3
+        )
+        second = CustomerService.construct_customer_preview(
+            mock_db, org_id, inp, sequence_offset=3
+        )
+
+        assert first.customer_code == second.customer_code
+
+    def test_an_explicit_customer_code_is_used_as_is(self, mock_db, org_id):
+        """NEAR-MISS: an explicit code skips the preview allocator entirely."""
+        inp = CustomerInput(
+            customer_code="CUST-EXPLICIT",
+            customer_type=MockCustomer().customer_type,
+            customer_name="Explicit Co",
+            default_receivable_account_id=uuid4(),
+        )
+
+        result = CustomerService.construct_customer_preview(mock_db, org_id, inp)
+
+        assert result.customer_code == "CUST-EXPLICIT"
+
+    def test_with_valid_parent_reads_but_does_not_mutate(self, mock_db, org_id):
+        """A real parent-customer read still runs, and still touches nothing."""
+        parent = MockCustomer(organization_id=org_id, customer_code="PARENT-010")
+        parent_id = parent.customer_id
+
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=parent,
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Child Preview",
+                default_receivable_account_id=uuid4(),
+                parent_customer_id=parent_id,
+            )
+            result = CustomerService.construct_customer_preview(mock_db, org_id, inp)
+
+        assert result.parent_customer_id == parent_id
+        mock_db.add.assert_not_called()
+        mock_db.flush.assert_not_called()
+
+    def test_with_nonexistent_parent_raises(self, mock_db, org_id):
+        """The same refusal ``create_customer`` gives, via the shared rule."""
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=None,
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Orphan Preview",
+                default_receivable_account_id=uuid4(),
+                parent_customer_id=uuid4(),
+            )
+            with pytest.raises(ValueError, match="Parent customer not found"):
+                CustomerService.construct_customer_preview(mock_db, org_id, inp)

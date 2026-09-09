@@ -52,9 +52,8 @@ from dotmac_imports import (
     register_partition_plan,
     validate_claimed_partition,
 )
-from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
-from sqlalchemy.orm import Session, make_transient
+from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
@@ -67,11 +66,9 @@ from app.services.finance.import_export.contacts import (
     get_ar_control_account,
 )
 from app.services.finance.import_export.customer_column_disposition import (
-    CUSTOMER_FIELD_DISPOSITION,
     CodeRegistry,
     ColumnDispositionError,
     ConstructedRow,
-    Disposition,
     RunWindow,
     assert_partition_agrees,
     correlate_row,
@@ -458,91 +455,6 @@ def settle_customer_partition(
         )
 
 
-def _construct_durable_shadow(
-    db: Session,
-    port: CustomerImportPort,
-    mapped_row: Mapping[str, str],
-) -> Customer:
-    """Build the durable entity through the real writer, then discard it.
-
-    ``CustomerService.create_customer`` is not forked or reimplemented here:
-    it runs for real, including its real row-locked numbering allocation and
-    its real duplicate-code uniqueness read, inside a SAVEPOINT this
-    function unconditionally rolls back -- the same construct-then-discard
-    idiom this codebase already uses elsewhere (``app/db/__init__.py``'s
-    ``atomic_operation``). Nothing added or mutated here -- including a
-    numbering sequence row the allocator advances in place -- survives past
-    this function, so a dry run stays a dry run.
-
-    Two normalizations correct for artifacts of running the REAL writer
-    rather than the disposition contract's own test stub (which answers
-    ``flush``/``refresh`` as no-ops and so never triggers either artifact):
-
-    - Every ``Disposition.RUN_TIMESTAMP`` column (``created_at``,
-      ``updated_at``) is deleted back out of instance state if the real
-      write populated it. ``CustomerImportPort.apply`` flushes twice --
-      once inside ``create_customer`` (materializing ``created_at`` off the
-      database's ``server_default`` via ``db.refresh``) and once more after
-      setting ``created_by_user_id`` (an UPDATE that fires ``updated_at``'s
-      ``onupdate``) -- and neither constructor actually decided either
-      value. Left alone, both would show as durable-decided and
-      legacy-undecided on every single row, which
-      ``customer_column_disposition`` correctly refuses as
-      ``TIMESTAMP_PROVENANCE_DIVERGED`` -- a false positive that would make
-      this function refuse every dry run.
-    - ``make_transient`` forces the entity back to the same TRANSIENT
-      stage the legacy path's ``construct_only`` entities are captured at
-      (``compare_constructed_row`` refuses to compare two entities at
-      different persistence stages), deterministically rather than relying
-      on the savepoint rollback's own expunge behaviour.
-
-    ORDER MATTERS for that second point, and got it backwards on the first
-    attempt at this function: ``Session.rollback()`` -- including rolling
-    back a nested SAVEPOINT -- restores its snapshot by EXPIRING every
-    attribute of every object the session was still tracking as part of
-    that transaction, not merely detaching them with their last-known
-    values intact. Calling ``make_transient`` in a ``finally`` block AFTER
-    ``savepoint.rollback()`` ran was calling it on an entity whose instance
-    state had already been wiped back to column defaults -- every field,
-    not just the two normalized above, which is exactly what CI caught:
-    ``organization_id``, ``legal_name``, ``customer_code``, all of it
-    reading as blank/default rather than what the writer decided.
-    ``make_transient`` must run BEFORE the rollback, while ``entity`` is
-    still attached to ``db`` with its real, flushed values loaded: it fully
-    de-associates the object from the session (clears its identity, drops
-    it from the session's tracked collections) so the session's rollback
-    restoration walk no longer reaches it at all, and the values already in
-    its instance state survive untouched. The rollback then only has to
-    undo the actual database row and any other session-tracked mutation
-    (e.g. the numbering sequence's in-place increment) -- which is exactly
-    what a dry run needs undone.
-    """
-    run_timestamp_columns = tuple(
-        name
-        for name, disposition in CUSTOMER_FIELD_DISPOSITION.items()
-        if disposition is Disposition.RUN_TIMESTAMP
-    )
-    savepoint = db.begin_nested()
-    try:
-        applied = port.apply(mapped_row)
-        customer_id = UUID(str(applied["customer_id"]))
-        entity = db.get(Customer, customer_id)
-        if entity is None:
-            raise CustomerImportParityError(
-                "the durable writer reported a customer_id it did not persist"
-            )
-        state_dict = sa_inspect(entity).dict
-        for name in run_timestamp_columns:
-            if name in state_dict:
-                delattr(entity, name)
-        # Detach and freeze the entity's current values BEFORE the rollback
-        # below can expire them -- see the ORDER MATTERS note above.
-        make_transient(entity)
-        return entity
-    finally:
-        savepoint.rollback()
-
-
 def assert_legacy_customer_parity(
     db: Session,
     prepared: PreparedPartition,
@@ -570,8 +482,14 @@ def assert_legacy_customer_parity(
     dry-run refinement that actually calls ``create_entity`` and keeps the
     result, instead of the plain ``dry_run=True`` this function used to
     pass, which never constructs anything at all). The durable entity is
-    built through the real writer inside a rolled-back SAVEPOINT -- see
-    ``_construct_durable_shadow``.
+    built through ``CustomerImportPort.preview``, which delegates to
+    ``CustomerService.construct_customer_preview`` -- the owning service's
+    own ``construct_only`` counterpart to ``create_customer``. Nothing here
+    is added, flushed or committed, so this adapter never owns a
+    transaction to discard (``test_customer_adapter_owns_no_transaction_
+    or_session_factory``) -- an earlier version of this function built the
+    durable entity through the real writer inside a rolled-back SAVEPOINT,
+    which is exactly the shape that guard exists to forbid.
     """
     run = get_run(db, tenant_id=tenant_id, run_id=prepared.claim.run_id)
     mapping = ColumnMapping(
@@ -625,8 +543,8 @@ def assert_legacy_customer_parity(
                 "the retiring importer reported OK without constructing a row"
             )
         try:
-            durable_entity = _construct_durable_shadow(db, port, mapped_row)
-        except (RowRejected, RowSkipped) as exc:
+            durable_entity = port.preview(mapped_row, sequence_offset=offset)
+        except RowRejected as exc:
             raise CustomerImportParityError(
                 "the durable validate step said this row would succeed, but "
                 f"constructing it for real disagreed: {exc}"
@@ -688,7 +606,10 @@ class CustomerImportPort:
             )
         return ()
 
-    def apply(self, row: Mapping[str, str]) -> Mapping[str, object]:
+    def _build_customer_input(self, row: Mapping[str, str]) -> CustomerInput:
+        """The one row -> ``CustomerInput`` decision, shared by ``apply`` and
+        ``preview`` so a persisted customer and a previewed one can never
+        decide the type/name split, transforms or defaults differently."""
         transformed = _transform_customer(row)
         display_name = str(transformed.get("display_name", "") or "").strip()
         company_name = str(transformed.get("company_name", "") or "").strip()
@@ -706,7 +627,7 @@ class CustomerImportPort:
             customer_type = CustomerType.COMPANY
             legal_name = display_name
             trading_name = None
-        input_data = CustomerInput(
+        return CustomerInput(
             customer_type=customer_type,
             customer_name=legal_name[:255],
             trading_name=trading_name[:255] if trading_name else None,
@@ -723,6 +644,9 @@ class CustomerImportPort:
             primary_contact=_primary_contact(transformed, display_name),
             is_active=bool(transformed.get("is_active", True)),
         )
+
+    def apply(self, row: Mapping[str, str]) -> Mapping[str, object]:
+        input_data = self._build_customer_input(row)
         try:
             customer = customer_service.create_customer(
                 self.db, self.organization_id, input_data
@@ -737,6 +661,35 @@ class CustomerImportPort:
         customer.created_by_user_id = self.user_id
         self.db.flush()
         return {"customer_id": str(customer.customer_id)}
+
+    def preview(self, row: Mapping[str, str], *, sequence_offset: int = 0) -> Customer:
+        """Build the entity ``apply`` would build, without persisting it.
+
+        Delegates to ``CustomerService.construct_customer_preview`` -- the
+        owning service's ``construct_only`` counterpart to
+        ``create_customer`` -- so this port stays a thin wrapper and the
+        caller never needs a transaction to discard: nothing here is added,
+        flushed or committed. ``customer.created_by_user_id`` is set to
+        match ``apply``'s post-construction step, since it is one of the
+        approved EXACT fields the comparison covers.
+        """
+        input_data = self._build_customer_input(row)
+        try:
+            customer = customer_service.construct_customer_preview(
+                self.db,
+                self.organization_id,
+                input_data,
+                sequence_offset=sequence_offset,
+            )
+        except ValueError as exc:
+            from dotmac_imports import RowRejected
+
+            raise RowRejected(
+                "customer_create_refused",
+                "Customer could not be constructed from this row",
+            ) from exc
+        customer.created_by_user_id = self.user_id
+        return customer
 
     def _duplicate(self, display_name: str) -> bool:
         return (

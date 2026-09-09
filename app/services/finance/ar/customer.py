@@ -171,6 +171,69 @@ class CustomerService(ListResponseMixin):
         )
 
     @staticmethod
+    def _validate_parent_customer(
+        db: Session, org_id: UUID, input: CustomerInput
+    ) -> None:
+        """Shared by ``create_customer`` and ``construct_customer_preview`` so
+        the two can never diverge on when a parent reference is refused."""
+        if not input.parent_customer_id:
+            return
+        parent = get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=input.parent_customer_id,
+            org_id=org_id,
+            entity_name="Parent customer",
+        )
+        if not parent:
+            raise ValueError(
+                "Parent customer not found or belongs to a different organization"
+            )
+
+    @staticmethod
+    def _build_customer_entity(
+        org_id: UUID, customer_code: str, input: CustomerInput
+    ) -> Customer:
+        """The one ``CustomerInput`` → ``Customer`` field mapping.
+
+        Shared by ``create_customer`` and ``construct_customer_preview`` --
+        a persisted customer and a previewed one must decide fields the
+        identical way, and a second copy of this mapping is exactly how
+        they would drift apart.
+        """
+        return Customer(
+            organization_id=org_id,
+            customer_code=customer_code,
+            customer_type=input.customer_type,
+            legal_name=input.customer_name,  # template: customer_name → model: legal_name
+            trading_name=input.trading_name,
+            tax_identification_number=input.tax_id,  # template: tax_id → model: tax_identification_number
+            registration_number=input.registration_number,
+            vat_category=input.vat_category,
+            credit_limit=input.credit_limit,
+            credit_terms_days=input.payment_terms_days,  # template: payment_terms_days → model: credit_terms_days
+            credit_hold=input.credit_hold,
+            payment_terms_id=input.payment_terms_id,
+            currency_code=input.currency_code,
+            price_list_id=input.price_list_id,
+            ar_control_account_id=input.default_receivable_account_id,  # template: default_receivable_account_id → model: ar_control_account_id
+            default_revenue_account_id=input.default_revenue_account_id,
+            default_tax_code_id=input.default_tax_code_id,
+            sales_rep_user_id=input.sales_rep_user_id,
+            customer_group_id=input.customer_group_id,
+            risk_category=input.risk_category,
+            is_related_party=input.is_related_party,
+            related_party_type=input.related_party_type,
+            related_party_relationship=input.related_party_relationship,
+            billing_address=input.billing_address,
+            shipping_address=input.shipping_address,
+            primary_contact=input.primary_contact,
+            bank_details=input.bank_details,
+            is_active=input.is_active,
+            parent_customer_id=input.parent_customer_id,
+        )
+
+    @staticmethod
     def create_customer(
         db: Session,
         organization_id: UUID,
@@ -206,58 +269,94 @@ class CustomerService(ListResponseMixin):
             entity_name="Customer",
         )
 
-        # Validate parent customer if set
-        if input.parent_customer_id:
-            parent = get_org_scoped_entity(
-                db=db,
-                model_class=Customer,
-                entity_id=input.parent_customer_id,
-                org_id=org_id,
-                entity_name="Parent customer",
-            )
-            if not parent:
-                raise ValueError(
-                    "Parent customer not found or belongs to a different organization"
-                )
+        CustomerService._validate_parent_customer(db, org_id, input)
 
-        # Map template-friendly names to model field names
-        customer = Customer(
-            organization_id=org_id,
-            customer_code=customer_code,
-            customer_type=input.customer_type,
-            legal_name=input.customer_name,  # template: customer_name → model: legal_name
-            trading_name=input.trading_name,
-            tax_identification_number=input.tax_id,  # template: tax_id → model: tax_identification_number
-            registration_number=input.registration_number,
-            vat_category=input.vat_category,
-            credit_limit=input.credit_limit,
-            credit_terms_days=input.payment_terms_days,  # template: payment_terms_days → model: credit_terms_days
-            credit_hold=input.credit_hold,
-            payment_terms_id=input.payment_terms_id,
-            currency_code=input.currency_code,
-            price_list_id=input.price_list_id,
-            ar_control_account_id=input.default_receivable_account_id,  # template: default_receivable_account_id → model: ar_control_account_id
-            default_revenue_account_id=input.default_revenue_account_id,
-            default_tax_code_id=input.default_tax_code_id,
-            sales_rep_user_id=input.sales_rep_user_id,
-            customer_group_id=input.customer_group_id,
-            risk_category=input.risk_category,
-            is_related_party=input.is_related_party,
-            related_party_type=input.related_party_type,
-            related_party_relationship=input.related_party_relationship,
-            billing_address=input.billing_address,
-            shipping_address=input.shipping_address,
-            primary_contact=input.primary_contact,
-            bank_details=input.bank_details,
-            is_active=input.is_active,
-            parent_customer_id=input.parent_customer_id,
-        )
+        customer = CustomerService._build_customer_entity(org_id, customer_code, input)
 
         db.add(customer)
         db.flush()
         db.refresh(customer)
 
         return customer
+
+    @staticmethod
+    def _preview_customer_code(org_id: UUID, offset: int) -> str:
+        """A structurally valid, run-unique PREVIEW code -- never an allocation.
+
+        Real allocation (``_generate_customer_code`` /
+        ``SyncNumberingService``) is row-locked and persists a real
+        increment; running it from a preview would burn a real sequence
+        number on every dry run. The disposition contract's own invariants
+        for a generated code are non-emptiness, column length and
+        per-run uniqueness -- never equality with a real allocation (see
+        ``customer_column_disposition``'s module docstring) -- so this
+        formats a candidate using the CUSTOMER sequence type's default
+        configuration and the exact same pure ``format_number`` the real
+        allocator uses, entirely WITHOUT reading or writing the database.
+        This mirrors the retiring importer's ``create_entity``, which also
+        never touches the session under ``construct_only``. ``offset``
+        keeps multiple rows in one shadow run distinct.
+        """
+        from datetime import date
+
+        from app.models.finance.core_config.numbering_sequence import (
+            NumberingSequence,
+            SequenceType,
+        )
+        from app.services.finance.common.numbering import _default_sequence_kwargs
+        from app.services.finance.common.sequence_utils import (
+            format_number,
+            should_reset,
+        )
+
+        preview = NumberingSequence(
+            organization_id=org_id,
+            sequence_type=SequenceType.CUSTOMER,
+            current_year=None,
+            current_month=None,
+            **_default_sequence_kwargs(SequenceType.CUSTOMER),
+        )
+        reference_date = date.today()
+        if should_reset(preview, reference_date):
+            preview.current_number = 0
+            preview.current_year = reference_date.year
+            preview.current_month = reference_date.month
+        preview.current_number = (preview.current_number or 0) + 1 + offset
+        return format_number(preview, reference_date)
+
+    @staticmethod
+    def construct_customer_preview(
+        db: Session,
+        organization_id: UUID,
+        input: CustomerInput,
+        *,
+        sequence_offset: int = 0,
+    ) -> Customer:
+        """The ``construct_only`` counterpart to ``create_customer``.
+
+        Builds exactly the entity the real writer would build -- the same
+        field mapping (``_build_customer_entity``), the same parent-customer
+        validation (``_validate_parent_customer``) -- WITHOUT adding,
+        flushing or committing it. Nothing here is written, so there is
+        nothing for a caller to undo: unlike ``create_customer``, this never
+        needs a transaction a caller must own or discard, which is what lets
+        a parity/shadow comparison call it directly instead of owning a
+        SAVEPOINT of its own.
+
+        Not equivalent to ``create_customer`` on ``customer_code``: see
+        ``_preview_customer_code``.
+        """
+        org_id = coerce_uuid(organization_id)
+
+        customer_code = (input.customer_code or "").strip()
+        if not customer_code:
+            customer_code = CustomerService._preview_customer_code(
+                org_id, sequence_offset
+            )
+
+        CustomerService._validate_parent_customer(db, org_id, input)
+
+        return CustomerService._build_customer_entity(org_id, customer_code, input)
 
     @staticmethod
     def update_customer(

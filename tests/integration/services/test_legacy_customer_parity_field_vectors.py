@@ -13,13 +13,26 @@ closed field-vector contract (``CUSTOMER_FIELD_DISPOSITION`` /
 ``assert_partition_agrees``) instead of restating a second, driftable
 comparison.
 
-Runs under the Integration Tests (PostgreSQL) job: the durable side now
-runs the real ``CustomerService.create_customer`` writer (real ``ar.customer``
-JSONB/``gen_random_uuid()`` columns, real row-locked numbering allocation)
-inside a rolled-back SAVEPOINT, which the SQLite unit suite cannot provide --
-the same limitation ``test_customer_column_disposition.py`` documents for
-itself. No real customer file, external target or personal data appears
-here: every row is a synthetic fixture, matching that module's own rule.
+The durable side is built through ``CustomerImportPort.preview``, which
+delegates to ``CustomerService.construct_customer_preview`` -- the owning
+service's own ``construct_only`` counterpart to ``create_customer``, sharing
+its exact field mapping (``_build_customer_entity``) and parent-customer
+validation. Nothing is added, flushed or committed, so this adapter never
+owns a transaction to discard
+(``tests/architecture/test_imports_adoption.py::
+test_customer_adapter_owns_no_transaction_or_session_factory`` forbids
+exactly that shape -- an earlier version of this repair built the durable
+entity inside a rolled-back SAVEPOINT and tripped it).
+
+Runs under the Integration Tests (PostgreSQL) job, matching this directory's
+existing pattern (``test_reseller_promotion_match.py``), even though these
+particular rows never reach the database: a real ``org_id``/``ar_control_
+account`` fixture pair keeps the comparison honest about the shape a real
+caller passes, and a future row exercising the parent-customer read would
+need the real ``ar.customer`` table this tier provides. No real customer
+file, external target or personal data appears here: every row is a
+synthetic fixture, matching ``test_customer_column_disposition.py``'s own
+rule.
 """
 
 from __future__ import annotations
@@ -180,9 +193,9 @@ def test_a_clean_row_passes_field_vector_comparison(
 ):
     """The baseline a real run must pass silently.
 
-    This also proves ``construct_only`` and the savepoint-backed durable
-    shadow construction really run end to end: if ``construct_only`` were
-    not wired in, the legacy importer would build nothing and this function
+    This also proves ``construct_only`` and ``CustomerService.construct_
+    customer_preview`` really run end to end: if ``construct_only`` were not
+    wired in, the legacy importer would build nothing and this function
     would refuse every call with "reported OK without constructing a row"
     rather than passing.
     """
