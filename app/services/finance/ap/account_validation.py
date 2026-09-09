@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -24,7 +25,7 @@ def require_ap_control_account(
         raise ValidationError(f"{field_name} is required.")
 
     org_id = coerce_uuid(organization_id)
-    resolved_account_id = coerce_uuid(account_id)
+    resolved_account_id = cast(UUID, coerce_uuid(account_id))
     account = db.execute(
         select(Account)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
