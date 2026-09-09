@@ -339,7 +339,7 @@ def register_error_handlers(app) -> None:
 
     @app.exception_handler(ValidationError)
     async def service_validation_error_handler(request: Request, exc: ValidationError):
-        """Handle service-level validation errors (400)."""
+        """Handle service-level validation errors, including structured rules."""
         logger.warning(
             "Validation error on %s %s: %s",
             request.method,
@@ -354,8 +354,12 @@ def register_error_handlers(app) -> None:
                 status_code=400,
             )
         return JSONResponse(
-            status_code=400,
-            content=_error_payload("validation_error", exc.message, None),
+            status_code=exc.status_code,
+            content=_error_payload(
+                getattr(exc, "code", "validation_error"),
+                exc.message,
+                getattr(exc, "details", None),
+            ),
         )
 
     @app.exception_handler(ConflictError)

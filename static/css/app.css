@@ -10807,6 +10807,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
     background-color: rgb(13 148 136 / var(--tw-bg-opacity, 1));
 }
 
+.peer:checked ~ .peer-checked\:bg-violet-600 {
+    --tw-bg-opacity: 1;
+    background-color: rgb(124 58 237 / var(--tw-bg-opacity, 1));
+}
+
 .peer:checked ~ .peer-checked\:after\:translate-x-full::after {
     content: var(--tw-content);
     --tw-translate-x: 100%;
@@ -10854,6 +10859,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
 .peer:focus ~ .peer-focus\:ring-teal-500 {
     --tw-ring-opacity: 1;
     --tw-ring-color: rgb(20 184 166 / var(--tw-ring-opacity, 1));
+}
+
+.peer:focus ~ .peer-focus\:ring-violet-500 {
+    --tw-ring-opacity: 1;
+    --tw-ring-color: rgb(139 92 246 / var(--tw-ring-opacity, 1));
 }
 
 .has-\[\:checked\]\:border-primary-500:has(:checked) {

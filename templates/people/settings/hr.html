@@ -262,6 +262,38 @@
                 </div>
             </div>
 
+            {% if can_manage_check_in_requirements %}
+            <div class="mt-6 border-t border-slate-200 pt-6 dark:border-slate-700">
+                <div class="flex items-start justify-between gap-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                    <div>
+                        <label for="require_dob_for_erp_checkin" class="text-sm font-semibold text-slate-900 dark:text-white">
+                            Require Date of Birth for ERP Check-In
+                        </label>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            When enabled, employees without a Date of Birth recorded on their ERP employee profile cannot check in until they update their records.
+                        </p>
+                    </div>
+                    <div class="flex flex-shrink-0 items-center gap-3">
+                        <input type="hidden" name="require_dob_for_erp_checkin" value="false">
+                        <label class="relative inline-flex cursor-pointer items-center">
+                            <input type="checkbox"
+                                   id="require_dob_for_erp_checkin"
+                                   name="require_dob_for_erp_checkin"
+                                   value="true"
+                                   class="peer sr-only"
+                                   role="switch"
+                                   aria-label="Require Date of Birth for ERP Check-In"
+                                   {{ 'checked' if require_dob_for_erp_checkin else '' }}>
+                            <span class="relative h-6 w-11 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-violet-600 peer-checked:after:translate-x-full peer-focus:ring-2 peer-focus:ring-violet-500 dark:bg-slate-700"></span>
+                        </label>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {{ 'On' if require_dob_for_erp_checkin else 'Off' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Geofencing Configuration (shown when GEOFENCED mode selected) -->
             <div x-show="attendanceMode === 'GEOFENCED'" x-transition class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
                 <div class="flex items-center justify-between mb-4">

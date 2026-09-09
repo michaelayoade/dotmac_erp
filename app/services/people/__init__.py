@@ -19,6 +19,13 @@ Integration services:
 
 from typing import TYPE_CHECKING, Any
 
+from app.models.domain_settings import SettingDomain
+from app.services.setting_domain_declaration import ModuleSettingDomains
+
+PEOPLE_SETTINGS_DOMAIN = SettingDomain("people")
+REQUIRE_DOB_FOR_CHECKIN_SETTING = "require_dob_for_erp_checkin"
+SETTING_DOMAINS = ModuleSettingDomains(setting_domains=(PEOPLE_SETTINGS_DOMAIN,))
+
 if TYPE_CHECKING:  # pragma: no cover
     from .attendance import AttendanceService
     from .expense import ExpenseService
@@ -29,6 +36,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from .training import TrainingService
 
 __all__ = [
+    "PEOPLE_SETTINGS_DOMAIN",
+    "REQUIRE_DOB_FOR_CHECKIN_SETTING",
+    "SETTING_DOMAINS",
     # HR Core
     "EmployeeService",
     "OrganizationService",

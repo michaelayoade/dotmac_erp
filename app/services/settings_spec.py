@@ -10,6 +10,10 @@ from uuid import UUID
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.services import domain_settings as settings_service
 from app.services.domain_settings import AMBIENT, _Ambient
+from app.services.people import (
+    PEOPLE_SETTINGS_DOMAIN,
+    REQUIRE_DOB_FOR_CHECKIN_SETTING,
+)
 from app.services.response import ListResponseMixin
 from app.services.setting_scopes import register_platform_owned
 
@@ -73,6 +77,18 @@ class SettingSpec(ListResponseMixin):
 
 
 SETTINGS_SPECS: list[SettingSpec] = [
+    SettingSpec(
+        domain=PEOPLE_SETTINGS_DOMAIN,
+        key=REQUIRE_DOB_FOR_CHECKIN_SETTING,
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=False,
+        label="Require Date of Birth for ERP Check-In",
+        description=(
+            "When enabled, employees without a Date of Birth recorded on their "
+            "ERP employee profile cannot check in until their records are updated."
+        ),
+    ),
     SettingSpec(
         domain=SettingDomain.auth,
         key="jwt_secret",
@@ -1291,6 +1307,7 @@ DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.coach: settings_service.coach_settings,
     SettingDomain.notifications: settings_service.notifications_settings,
     SettingDomain.expense: settings_service.expense_settings,
+    PEOPLE_SETTINGS_DOMAIN: settings_service.people_settings,
 }
 
 

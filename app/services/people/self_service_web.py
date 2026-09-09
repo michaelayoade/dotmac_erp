@@ -66,7 +66,7 @@ from app.services.expense.limit_service import (
 )
 from app.services.file_upload import FileUploadError, get_employee_document_upload
 from app.services.finance.banking.bank_directory import BankDirectoryService
-from app.services.people.attendance import AttendanceService
+from app.services.people.attendance import AttendanceService, CheckInRequirementError
 from app.services.people.attendance.attendance_service import AttendanceServiceError
 from app.services.people.expense import (
     ApproverAuthorityError,
@@ -98,6 +98,26 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
+
+ERP_PERSONAL_RECORDS_URL = "/people/self/tax-info?focus=personal-details"
+
+
+def build_check_in_requirement_error_context(
+    error_code: str | None,
+) -> dict[str, str] | None:
+    """Build the employee-facing action for a known check-in rule failure."""
+    if error_code != CheckInRequirementError.code:
+        return None
+    return {
+        "title": "Date of Birth Required",
+        "message": (
+            "Your Date of Birth is missing from your ERP employee record. "
+            "Your organization requires it before you can check in."
+        ),
+        "action_label": "Update ERP Records",
+        "action_url": ERP_PERSONAL_RECORDS_URL,
+    }
+
 
 DEPARTMENT_DISCIPLINE_READ_PERMISSION = "discipline:department:read"
 
@@ -2327,6 +2347,9 @@ class SelfServiceWebService:
                     for rec in recent.items
                 ],
                 "month": selected_month,
+                "check_in_requirement_error": build_check_in_requirement_error_context(
+                    request.query_params.get("checkin_error")
+                ),
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
@@ -2360,6 +2383,13 @@ class SelfServiceWebService:
                 notes=notes,
                 latitude=latitude,
                 longitude=longitude,
+            )
+        except CheckInRequirementError as exc:
+            return RedirectResponse(
+                url=(
+                    f"/people/self/attendance?{urlencode({'checkin_error': exc.code})}"
+                ),
+                status_code=303,
             )
         except ValidationError as exc:
             return RedirectResponse(

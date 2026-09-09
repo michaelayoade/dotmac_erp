@@ -149,6 +149,8 @@ def _punch(
         )
     except SelfcareAttendanceError as exc:
         body: dict[str, Any] = {"detail": {"code": exc.code, "message": exc.message}}
+        if exc.action:
+            body["detail"]["action"] = exc.action
         IdempotencyService.update_response(
             db,
             organization_id,
