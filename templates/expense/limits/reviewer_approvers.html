@@ -8,10 +8,50 @@
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Expense Reviewer</h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review approver decisions and reset weekly consumed budgets</p>
         </div>
-        <form method="get" class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input aria-label="Search approver" type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search approver">
-            <button class="btn btn-secondary" type="submit">Filter</button>
+    </div>
+
+    <div class="card p-4">
+        <form method="get" class="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div>
+                <label class="form-label text-xs" for="reviewer-approver-q">Approver</label>
+                <input id="reviewer-approver-q" aria-label="Search approver" type="text" name="q" value="{{ filters.q }}" class="form-input w-full" placeholder="Search approver">
+            </div>
+            <div>
+                <label class="form-label text-xs" for="reviewer-from-date">From</label>
+                <input id="reviewer-from-date" aria-label="From date" type="date" name="from_date" value="{{ filters.from_date }}" class="form-input w-full {% if filter_errors.from_date or filter_errors.date_range %}border-red-500{% endif %}">
+            </div>
+            <div>
+                <label class="form-label text-xs" for="reviewer-to-date">To</label>
+                <input id="reviewer-to-date" aria-label="To date" type="date" name="to_date" value="{{ filters.to_date }}" class="form-input w-full {% if filter_errors.to_date or filter_errors.date_range %}border-red-500{% endif %}">
+            </div>
+            <div class="flex flex-wrap items-end gap-2">
+                <button class="btn btn-secondary" type="submit">Apply Filters</button>
+                {% if filters.q or filters.from_date or filters.to_date %}
+                <a class="btn btn-ghost" href="/expense/limits/reviewer/approvers">Clear</a>
+                {% endif %}
+            </div>
+            {% if filter_errors %}
+            <div class="md:col-span-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+                {{ filter_errors.date_range or filter_errors.from_date or filter_errors.to_date }}
+            </div>
+            {% endif %}
         </form>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="card p-4">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Approved Decisions</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.approved_count }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Rejected Decisions</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.rejected_count }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Paid Amount</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ "{:,.2f}".format(summary.paid_amount) }}{% if summary.currency_code %} {{ summary.currency_code }}{% endif %}</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ summary.paid_count }} paid claims{% if filters.from_date or filters.to_date %} in selected period{% endif %}</p>
+        </div>
     </div>
 
     <div class="card overflow-hidden">
@@ -23,6 +63,7 @@
                         <th scope="col">Code</th>
                         <th scope="col" class="text-right">Approved Count</th>
                         <th scope="col" class="text-right">Rejected Count</th>
+                        <th scope="col" class="text-right">Paid Claims</th>
                         <th scope="col" class="text-right">Paid Amount</th>
                         <th scope="col" class="text-right">Weekly Budget</th>
                         <th scope="col" class="text-right">Max Per Claim</th>
@@ -38,6 +79,7 @@
                         <td class="font-mono text-slate-700 dark:text-slate-300">{{ approver.employee_code }}</td>
                         <td class="text-right font-mono">{{ approver.approved_count }}</td>
                         <td class="text-right font-mono">{{ approver.rejected_count }}</td>
+                        <td class="text-right font-mono">{{ approver.paid_count }}</td>
                         <td class="text-right font-mono">{{ "{:,.2f}".format(approver.paid_amount) }} {{ approver.currency_code }}</td>
                         <td class="text-right font-mono">
                             {% if approver.weekly_budget %}
@@ -62,13 +104,13 @@
                             {% endif %}
                         </td>
                         <td class="text-right">
-                            <a class="btn btn-sm btn-primary" href="/expense/limits/reviewer/approvers/{{ approver.employee_id }}">Review</a>
+                            <a class="btn btn-sm btn-primary" href="{{ approver.review_url }}">Review</a>
                         </td>
                     </tr>
                     {% endfor %}
                     {% if not approvers %}
                     <tr>
-                        <td colspan="10" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No approver activity found for selected filter.</td>
+                        <td colspan="11" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No approver activity found for selected filters.</td>
                     </tr>
                     {% endif %}
                 </tbody>
