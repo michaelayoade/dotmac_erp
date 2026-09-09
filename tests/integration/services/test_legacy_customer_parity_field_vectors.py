@@ -47,45 +47,88 @@ from __future__ import annotations
 import dataclasses
 import uuid
 from decimal import Decimal
-from typing import Any
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from dotmac_imports import PartitionClaim, PreparedPartition, SourceLayout, auto_map
 
-from app.services.finance.import_export import (
-    durable_customers as durable_customers_module,
-)
 from app.services.finance.import_export.base import FieldMapping
-from app.services.finance.import_export.durable_customers import (
-    CustomerImportParityError,
-    assert_legacy_customer_parity,
-    customer_field_set,
-    customer_source_mappings,
-)
+
+if TYPE_CHECKING:
+    from dotmac_imports import PreparedPartition
+
+# ---------------------------------------------------------------------------
+# `dotmac_imports` (and this file's own use of `durable_customers`, which
+# re-exports it) must NOT be imported at module scope in this file.
+#
+# `dotmac_imports.models.ImportRun.column_mapping`'s SQLAlchemy type
+# (`sa.JSON().with_variant(postgresql.JSONB(), "postgresql")`) is built
+# exactly ONCE, at `dotmac_imports.models` import time, by evaluating
+# `postgresql.JSONB()` against whatever `sqlalchemy.dialects.postgresql
+# .JSONB` currently is. `tests/conftest.py` replaces that attribute with a
+# SQLite-oriented `Text` shim (`PatchedJSONB`) before ANY test module is
+# imported, and `tests/integration/conftest.py::engine`'s
+# `_fix_patched_types()` only restores the real type from inside a fixture
+# -- i.e. at TEST-RUN time, never at collection time -- and only walks
+# `app.db.Base.metadata` (this app's own declarative base), never
+# `dotmac_kernel.models.Base` (what `dotmac_imports` builds its tables on).
+#
+# A bare `from dotmac_imports import ...` at module scope runs during
+# collection, before any fixture (including `engine`) has executed for ANY
+# test in the whole session, so it would permanently bake the SQLite shim
+# into `ImportRun.column_mapping` for the rest of the process (the module
+# body only executes once) -- every later real INSERT of an `ImportRun`,
+# anywhere in the session, then sends a JSON string where the live table
+# expects `jsonb` (`psycopg.errors.DatatypeMismatch: column "column_mapping"
+# is of type jsonb but expression is of type character varying`). That is
+# what broke `test_accounting_lineage_composition
+# .py::test_an_overlapping_transaction_does_not_reclaim_a_locked_partition`
+# and both cases in `test_imports_concurrent_partition_claims.py`: this
+# file collects before them (`services/` sorts before the top-level
+# `test_*.py` files under `tests/integration/`), and an earlier version of
+# this file imported `dotmac_imports` at the top, poisoning the type for
+# the rest of the session before either of those files' own (correctly
+# deferred) imports ever ran. Every import that reaches `dotmac_imports`
+# here is deferred into the functions below instead, matching the
+# discipline those two files already use.
+# ---------------------------------------------------------------------------
 
 USER = uuid.uuid4()
 
-# Captured before any monkeypatch can reach it -- the real, unperturbed
-# vocabulary both the plant and the near-miss perturb a copy of.
-_REAL_SOURCE_MAPPINGS = customer_source_mappings
-_REAL_HEADERS = tuple(item.source_field for item in _REAL_SOURCE_MAPPINGS())
+
+@lru_cache(maxsize=1)
+def _real_headers() -> tuple[str, ...]:
+    """The real, unperturbed header vocabulary.
+
+    Resolved on first call -- guaranteed (every test below requests ``db``,
+    and therefore ``engine``) to happen only after real PostgreSQL types are
+    restored for this session, and always before any test's ``monkeypatch``
+    can reach ``customer_source_mappings``.
+    """
+    from app.services.finance.import_export.durable_customers import (
+        customer_source_mappings,
+    )
+
+    return tuple(item.source_field for item in customer_source_mappings())
 
 
 def _raw_row(**values: str) -> dict[str, str]:
     """One full-width CSV row: every real header, blank unless named."""
-    row = dict.fromkeys(_REAL_HEADERS, "")
+    row = dict.fromkeys(_real_headers(), "")
     row.update(values)
     return row
 
 
-COMPANY_ROW = _raw_row(
-    **{
-        "Display Name": "Northwind Trading",
-        "Company Name": "Northwind Ltd",
-        "Billing City": "Abuja",
-        "Payment Terms": "45",
-    }
-)
+@lru_cache(maxsize=1)
+def _company_row() -> dict[str, str]:
+    return _raw_row(
+        **{
+            "Display Name": "Northwind Trading",
+            "Company Name": "Northwind Ltd",
+            "Billing City": "Abuja",
+            "Payment Terms": "45",
+        }
+    )
 
 
 def _mapping_pairs() -> tuple[tuple[str, str], ...]:
@@ -94,7 +137,13 @@ def _mapping_pairs() -> tuple[tuple[str, str], ...]:
     so this stays correct under whatever pair order ``dotmac_imports`` uses
     (same discipline as ``test_customer_column_disposition.py``'s
     ``_mapping_pairs``)."""
-    return tuple(auto_map(_REAL_HEADERS, customer_field_set()).pairs)
+    from dotmac_imports import auto_map
+
+    from app.services.finance.import_export.durable_customers import (
+        customer_field_set,
+    )
+
+    return tuple(auto_map(_real_headers(), customer_field_set()).pairs)
 
 
 class _StubbedRun:
@@ -116,6 +165,8 @@ class _StubbedRun:
 def _prepared_partition(
     rows: list[dict[str, str]], *, tenant_id: uuid.UUID
 ) -> PreparedPartition:
+    from dotmac_imports import PartitionClaim, PreparedPartition, SourceLayout
+
     claim = PartitionClaim(
         partition_id=uuid.uuid4(),
         run_id=uuid.uuid4(),
@@ -146,6 +197,13 @@ def _assert_parity(
     org_id: uuid.UUID,
     ar_control_account_id: uuid.UUID,
 ) -> None:
+    from app.services.finance.import_export import (
+        durable_customers as durable_customers_module,
+    )
+    from app.services.finance.import_export.durable_customers import (
+        assert_legacy_customer_parity,
+    )
+
     monkeypatch.setattr(
         durable_customers_module,
         "get_run",
@@ -175,13 +233,16 @@ def _perturb_legacy_default(
     ``test_customer_column_disposition.py::_perturb_legacy_default`` uses
     for the same purpose, against the same shared production mapping.
     """
+    from app.services.finance.import_export.durable_customers import (
+        customer_source_mappings,
+    )
 
     def _perturbed() -> list[FieldMapping]:
         return [
             dataclasses.replace(item, default=value)
             if item.source_field == source_field
             else item
-            for item in _REAL_SOURCE_MAPPINGS()
+            for item in customer_source_mappings()
         ]
 
     monkeypatch.setattr(
@@ -209,7 +270,7 @@ def test_a_clean_row_passes_field_vector_comparison(
     result = _assert_parity(
         monkeypatch,
         db,
-        [COMPANY_ROW],
+        [_company_row()],
         org_id=org_id,
         ar_control_account_id=ar_control_account.account_id,
     )
@@ -235,13 +296,17 @@ def test_a_same_status_different_value_divergence_is_caught(
     plus a status-only comparison) this row compared clean: the legacy side
     never even built an entity to disagree with.
     """
+    from app.services.finance.import_export.durable_customers import (
+        CustomerImportParityError,
+    )
+
     _perturb_legacy_default(monkeypatch, "Credit Limit", Decimal("999.00"))
 
     with pytest.raises(CustomerImportParityError, match="credit_limit"):
         _assert_parity(
             monkeypatch,
             db,
-            [COMPANY_ROW],
+            [_company_row()],
             org_id=org_id,
             ar_control_account_id=ar_control_account.account_id,
         )
@@ -265,7 +330,7 @@ def test_the_same_perturbation_on_a_field_no_constructor_uses_is_silent(
     result = _assert_parity(
         monkeypatch,
         db,
-        [COMPANY_ROW],
+        [_company_row()],
         org_id=org_id,
         ar_control_account_id=ar_control_account.account_id,
     )
