@@ -1269,7 +1269,7 @@ class ExpenseLimitWebService:
         total_paid_amount = Decimal("0")
         summary_currency_code = ""
 
-        def _last_action_sort_value(approver_id: object) -> datetime:
+        def _last_action_sort_value(approver_id: UUID) -> datetime:
             if approver_id not in activity_map:
                 return datetime.min
             last_action_at = activity_map[approver_id].last_action_at
