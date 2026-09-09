@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -71,8 +71,8 @@ def _submit_leave(
             org_id,
             employee_id=employee_id,
             leave_type_id=leave_type_id,
-            from_date=date(2026, 5, 4),
-            to_date=date(2026, 5, 6),
+            from_date=today,
+            to_date=today + timedelta(days=2),
             reason="Leave request",
         )
 

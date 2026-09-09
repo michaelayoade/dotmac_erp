@@ -326,6 +326,7 @@ class LeaveService:
         *,
         employee_id: UUID,
         leave_type: LeaveType,
+        leave_type_id: UUID | None = None,
         from_date: date,
         to_date: date,
     ) -> None:
@@ -347,7 +348,8 @@ class LeaveService:
             select(LeaveAllocation).where(
                 LeaveAllocation.organization_id == org_id,
                 LeaveAllocation.employee_id == employee_id,
-                LeaveAllocation.leave_type_id == leave_type.leave_type_id,
+                LeaveAllocation.leave_type_id
+                == (leave_type_id or leave_type.leave_type_id),
                 LeaveAllocation.is_active.is_(True),
                 LeaveAllocation.from_date <= from_date,
                 LeaveAllocation.to_date >= to_date,
@@ -359,6 +361,26 @@ class LeaveService:
         raise LeaveEligibilityError(
             "This leave type is restricted during probation. "
             "HR must allocate leave before it can be requested."
+        )
+
+    def _validate_service_eligibility(
+        self,
+        org_id: UUID,
+        *,
+        employee_id: UUID,
+        leave_type: LeaveType,
+        leave_type_id: UUID | None = None,
+        from_date: date,
+        to_date: date,
+    ) -> None:
+        """Retain the existing validation hook while delegating probation rules."""
+        self._validate_probation_eligibility(
+            org_id,
+            employee_id=employee_id,
+            leave_type=leave_type,
+            leave_type_id=leave_type_id,
+            from_date=from_date,
+            to_date=to_date,
         )
 
     @staticmethod
@@ -1451,10 +1473,11 @@ class LeaveService:
             holiday_list_id=holiday_list_id,
         )
 
-        self._validate_probation_eligibility(
+        self._validate_service_eligibility(
             org_id,
             employee_id=employee_id,
             leave_type=leave_type,
+            leave_type_id=leave_type_id,
             from_date=from_date,
             to_date=to_date,
         )
