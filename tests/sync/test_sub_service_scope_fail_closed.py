@@ -10,6 +10,7 @@ from app.api.sync.dotmac_sub import (
     require_sub_ap_scope,
     require_sub_domain_scope,
     require_sub_expense_scope,
+    require_sub_expense_payment_scope,
     require_sub_inventory_read_scope,
     require_sub_material_read_scope,
     require_sub_material_scope,
@@ -27,6 +28,7 @@ from app.api.sync.dotmac_sub import (
         require_sub_material_read_scope,
         require_sub_inventory_read_scope,
         require_sub_expense_scope,
+        require_sub_expense_payment_scope,
         require_sub_po_scope,
     ),
 )
@@ -43,6 +45,15 @@ def test_sub_guard_allows_only_an_explicit_accepted_scope():
     assert require_sub_material_scope(auth) is auth
 
 
+def test_expense_payment_requires_its_stronger_exact_scope():
+    with pytest.raises(HTTPException) as exc:
+        require_sub_expense_payment_scope({"scopes": ["sub:expense:write"]})
+    assert exc.value.status_code == 403
+
+    auth = {"scopes": ["sub:expense:pay"]}
+    assert require_sub_expense_payment_scope(auth) is auth
+
+
 def test_selfcare_bootstrap_key_has_complete_integration_scope_set():
     from scripts.one_off.bootstrap_sub_material_integration import SCOPES
 
@@ -57,5 +68,6 @@ def test_selfcare_bootstrap_key_has_complete_integration_scope_set():
         "sub:po:write",
         "sub:ap:write",
         "sub:expense:write",
+        "sub:expense:pay",
     }
     assert len(SCOPES) == len(set(SCOPES))

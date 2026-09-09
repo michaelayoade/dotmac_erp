@@ -29,9 +29,13 @@ from app.schemas.sync.sub_operational import (
     InventoryListResponse,
     SubAvailableSerialListResponse,
     SubExpenseCategoriesResponse,
+    SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
+    SubExpenseClaimRejectionPayload,
     SubExpenseClaimResponse,
     SubExpenseClaimStatusResponse,
+    SubExpensePaymentPayload,
+    SubExpensePaymentResponse,
     SubMaterialRequestPayload,
     SubMaterialRequestResponse,
     SubMaterialRequestStatusRead,
@@ -144,6 +148,12 @@ def require_sub_inventory_read_scope(
 
 def require_sub_expense_scope(auth: dict = Depends(require_service_auth)) -> dict:
     return _require_sub_flow_scope(auth, "sub:expense:write")
+
+
+def require_sub_expense_payment_scope(
+    auth: dict = Depends(require_service_auth),
+) -> dict:
+    return _require_sub_flow_scope(auth, "sub:expense:pay")
 
 
 def require_sub_po_scope(auth: dict = Depends(require_service_auth)) -> dict:
@@ -412,6 +422,61 @@ def create_sub_expense_claim(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     response.status_code = 200 if existed_before else 201
     return result
+
+
+@router.post(
+    "/expense-claims/{source_claim_id}/approve",
+    response_model=SubExpenseClaimResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def approve_sub_expense_claim(
+    source_claim_id: str,
+    payload: SubExpenseClaimDecisionPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseClaimResponse:
+    return DotMacSubSyncService(db).approve_expense_claim(
+        org_id=UUID(str(auth["organization_id"])),
+        source_claim_id=source_claim_id,
+        data=payload,
+    )
+
+
+@router.post(
+    "/expense-claims/{source_claim_id}/reject",
+    response_model=SubExpenseClaimResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def reject_sub_expense_claim(
+    source_claim_id: str,
+    payload: SubExpenseClaimRejectionPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseClaimResponse:
+    return DotMacSubSyncService(db).reject_expense_claim(
+        org_id=UUID(str(auth["organization_id"])),
+        source_claim_id=source_claim_id,
+        data=payload,
+    )
+
+
+@router.post(
+    "/expense-claims/{source_claim_id}/payments",
+    response_model=SubExpensePaymentResponse,
+    dependencies=[Depends(require_sub_expense_payment_scope)],
+)
+def initiate_sub_expense_payment(
+    source_claim_id: str,
+    payload: SubExpensePaymentPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpensePaymentResponse:
+    """Execute the payout; service scope is intentionally stronger than write."""
+    return DotMacSubSyncService(db).initiate_expense_payment(
+        org_id=UUID(str(auth["organization_id"])),
+        source_claim_id=source_claim_id,
+        data=payload,
+    )
 
 
 @router.get(

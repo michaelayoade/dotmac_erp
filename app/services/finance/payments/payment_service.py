@@ -1961,6 +1961,7 @@ class PaymentService:
             claim = self.db.get(ExpenseClaim, intent.source_id)
             if claim and claim.status == ExpenseClaimStatus.PAID:
                 claim.status = ExpenseClaimStatus.APPROVED
+                claim.amount_paid = Decimal("0")
                 claim.paid_on = None
                 claim.payment_reference = None
                 logger.info(
@@ -2742,6 +2743,7 @@ class PaymentService:
             claim = self.db.get(ExpenseClaim, intent.source_id)
             if claim and claim.status == ExpenseClaimStatus.PAID:
                 claim.status = ExpenseClaimStatus.APPROVED
+                claim.amount_paid = Decimal("0")
                 claim.paid_on = None
                 claim.payment_reference = None
                 # Clear reimbursement journal reference (will create reversal)

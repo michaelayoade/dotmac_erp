@@ -8,7 +8,7 @@ poll and category listing, and the 200/201 endpoint idempotency logic.
 
 import itertools
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -29,7 +29,9 @@ from app.models.people.hr.position_assignment import PositionAssignment
 from app.models.person import Person
 from app.schemas.sync.sub_operational import (
     SubExpenseClaimItemPayload,
+    SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
+    SubExpenseClaimRejectionPayload,
 )
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
 
@@ -86,6 +88,34 @@ def employee(db_session, org_id):
         person_id=person.id,
         employee_code=f"EMP-{uuid.uuid4().hex[:6].upper()}",
         date_of_joining=date(2025, 1, 1),
+        status=EmployeeStatus.ACTIVE,
+        bank_name="Test Bank",
+        bank_account_number="0123456789",
+        bank_account_name="Field Tech",
+        bank_branch_code="058",
+    )
+    db_session.add(employee)
+    db_session.flush()
+    return employee
+
+
+@pytest.fixture()
+def manager(db_session, org_id):
+    person = Person(
+        id=uuid.uuid4(),
+        organization_id=org_id,
+        first_name="Field",
+        last_name="Manager",
+        email=f"manager-{uuid.uuid4().hex[:10]}@example.com",
+    )
+    db_session.add(person)
+    db_session.flush()
+    employee = Employee(
+        employee_id=uuid.uuid4(),
+        organization_id=org_id,
+        person_id=person.id,
+        employee_code=f"MGR-{uuid.uuid4().hex[:6].upper()}",
+        date_of_joining=date(2024, 1, 1),
         status=EmployeeStatus.ACTIVE,
     )
     db_session.add(employee)
@@ -162,8 +192,7 @@ class TestCreateExpenseClaim:
 
         assert result.source_claim_id == payload.source_claim_id
         assert result.claim_number.startswith("EXP-2026-")
-        # No approval chain configured -> plain SUBMITTED (lowercase in response)
-        assert result.status in {"submitted", "pending_approval"}
+        assert result.status == "submitted"
 
         claim = (
             db_session.query(ExpenseClaim)
@@ -175,10 +204,7 @@ class TestCreateExpenseClaim:
         )
         assert claim is not None
         assert claim.claim_id == result.claim_id
-        assert claim.status in {
-            ExpenseClaimStatus.SUBMITTED,
-            ExpenseClaimStatus.PENDING_APPROVAL,
-        }
+        assert claim.status == ExpenseClaimStatus.SUBMITTED
         assert result.status == claim.status.value.lower()
         assert claim.employee_id == employee.employee_id
         assert claim.purpose == "Site survey expenses"
@@ -188,6 +214,10 @@ class TestCreateExpenseClaim:
         assert "EXP-REQ-00042" in (claim.notes or "")
         assert "Approved by supervisor on site" in (claim.notes or "")
         assert claim.total_claimed_amount == Decimal("6500.00")
+        assert claim.recipient_bank_name == "Test Bank"
+        assert claim.recipient_bank_code == "058"
+        assert claim.recipient_account_number == "0123456789"
+        assert claim.recipient_name == "Field Tech"
 
         items = sorted(claim.items, key=lambda item: item.sequence)
         assert len(items) == 2
@@ -403,6 +433,67 @@ class TestExpenseClaimStatusPoll:
             service.get_expense_claim_by_source_reference(org_id, str(uuid.uuid4()))
             is None
         )
+
+
+class TestFieldManagerDecision:
+    def test_trusted_sub_approval_skips_erp_approval_chain(
+        self,
+        service,
+        db_session,
+        org_id,
+        employee,
+        manager,
+        fuel_category,
+        numbering_patch,
+    ):
+        payload = _payload(employee)
+        created = service.create_expense_claim(org_id, payload, employee.person_id)
+
+        result = service.approve_expense_claim(
+            org_id,
+            payload.source_claim_id,
+            SubExpenseClaimDecisionPayload(
+                decision_id=uuid.uuid4(),
+                decided_by_email=manager.person.email,
+                decided_at=datetime.now(UTC),
+                notes="Approved in Field",
+            ),
+        )
+
+        claim = db_session.get(ExpenseClaim, created.claim_id)
+        assert result.status == "approved"
+        assert claim.status == ExpenseClaimStatus.APPROVED
+        assert claim.approver_id == manager.employee_id
+        assert claim.total_approved_amount == Decimal("6500.00")
+
+    def test_trusted_sub_rejection_is_projected_to_erp(
+        self,
+        service,
+        db_session,
+        org_id,
+        employee,
+        manager,
+        fuel_category,
+        numbering_patch,
+    ):
+        payload = _payload(employee)
+        created = service.create_expense_claim(org_id, payload, employee.person_id)
+
+        result = service.reject_expense_claim(
+            org_id,
+            payload.source_claim_id,
+            SubExpenseClaimRejectionPayload(
+                decision_id=uuid.uuid4(),
+                decided_by_email=manager.person.email,
+                decided_at=datetime.now(UTC),
+                reason="Receipt is unreadable",
+            ),
+        )
+
+        claim = db_session.get(ExpenseClaim, created.claim_id)
+        assert result.status == "rejected"
+        assert claim.status == ExpenseClaimStatus.REJECTED
+        assert claim.rejection_reason == "Receipt is unreadable"
 
 
 class TestListExpenseCategories:

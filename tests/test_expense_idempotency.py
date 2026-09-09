@@ -136,6 +136,7 @@ def test_double_mark_paid_is_idempotent(db_session):
 
     assert first.status == ExpenseClaimStatus.PAID
     assert second.status == ExpenseClaimStatus.PAID
+    assert second.amount_paid == Decimal("10000")
 
     actions = (
         db_session.query(ExpenseClaimAction)

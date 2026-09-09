@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -38,6 +39,14 @@ from app.services.expense.service_common import (
 logger = logging.getLogger(__name__)
 
 EXPENSE_ITEM_DESCRIPTION_MAX_LENGTH = 500
+
+
+class ExpenseClaimApprovalSource(StrEnum):
+    """Authority that supplied a claim submission or review decision."""
+
+    ERP_WORKFLOW = "erp_workflow"
+    TRUSTED_SUB_MANAGER = "trusted_sub_manager"
+
 
 try:
     from datetime import UTC  # type: ignore
@@ -451,6 +460,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         skip_receipt_validation: bool = False,
         notify_approvers: bool = True,
         actor_id: UUID | None = None,
+        approval_source: ExpenseClaimApprovalSource = (
+            ExpenseClaimApprovalSource.ERP_WORKFLOW
+        ),
     ) -> SubmitClaimResult:
         from app.models.expense import LimitResultType
         from app.services.expense.approval_service import ExpenseApprovalService
@@ -513,6 +525,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                         notify_approvers=notify_approvers,
                         requires_approval=True,
                         actor_id=actor_id,
+                        initialize_approval_chain=(
+                            approval_source is ExpenseClaimApprovalSource.ERP_WORKFLOW
+                        ),
                     )
                 if evaluation_result.result == LimitResultType.WARNING:
                     result = self._finalize_submitted_claim(
@@ -523,9 +538,13 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                         notify_approvers=notify_approvers,
                         requires_approval=False,
                         actor_id=actor_id,
+                        initialize_approval_chain=(
+                            approval_source is ExpenseClaimApprovalSource.ERP_WORKFLOW
+                        ),
                     )
                     result.requires_approval = (
-                        result.claim.status == ExpenseClaimStatus.PENDING_APPROVAL
+                        approval_source is ExpenseClaimApprovalSource.ERP_WORKFLOW
+                        and result.claim.status == ExpenseClaimStatus.PENDING_APPROVAL
                     )
                     return result
 
@@ -537,6 +556,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 notify_approvers=notify_approvers,
                 requires_approval=False,
                 actor_id=actor_id,
+                initialize_approval_chain=(
+                    approval_source is ExpenseClaimApprovalSource.ERP_WORKFLOW
+                ),
             )
         except Exception:
             self._set_action_status(
@@ -558,14 +580,20 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         notify_approvers: bool,
         requires_approval: bool,
         actor_id: UUID | None = None,
+        initialize_approval_chain: bool = True,
     ) -> SubmitClaimResult:
         from app.services.expense.approval_service import ExpenseApprovalService
 
-        approval_service = ExpenseApprovalService(self.db, self.ctx)
-        chain = approval_service.initialize_approval_chain(claim)
+        current_approvers: list[UUID] = []
+        has_approval_steps = False
+        if initialize_approval_chain:
+            approval_service = ExpenseApprovalService(self.db, self.ctx)
+            chain = approval_service.initialize_approval_chain(claim)
+            current_approvers = chain.current_approvers
+            has_approval_steps = bool(chain.steps)
         claim.status = (
             ExpenseClaimStatus.PENDING_APPROVAL
-            if chain.steps
+            if has_approval_steps
             else ExpenseClaimStatus.SUBMITTED
         )
         self._stamp_status_change(claim, actor_id)
@@ -582,8 +610,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             new_values={"status": claim.status.value},
         )
 
-        if notify_approvers and chain.current_approvers:
-            self._notify_approvers(claim, chain.current_approvers)
+        if notify_approvers and current_approvers:
+            self._notify_approvers(claim, current_approvers)
         self._notify_submission_confirmed(claim)
 
         try:
@@ -617,7 +645,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             claim=claim,
             evaluation_result=evaluation_result,
             requires_approval=requires_approval
-            or claim.status == ExpenseClaimStatus.PENDING_APPROVAL,
+            or claim.status == ExpenseClaimStatus.PENDING_APPROVAL
+            if initialize_approval_chain
+            else False,
             eligible_approvers=eligible_approvers or [],
             warning_message=warning_message,
         )
@@ -716,6 +746,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         create_supplier_invoice: bool = False,
         send_notification: bool = True,
         actor_id: UUID | None = None,
+        approval_source: ExpenseClaimApprovalSource = (
+            ExpenseClaimApprovalSource.ERP_WORKFLOW
+        ),
     ) -> ExpenseClaim:
         from app.models.people.hr.employee import Employee
         from app.services.expense.approval_service import ExpenseApprovalService
@@ -736,6 +769,13 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         }:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.APPROVED.value
+            )
+        if (
+            approval_source is ExpenseClaimApprovalSource.TRUSTED_SUB_MANAGER
+            and claim.source_system != "sub"
+        ):
+            raise ExpenseServiceError(
+                "Trusted Sub approval can only act on a Sub-originated claim"
             )
 
         try:
@@ -761,7 +801,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             ):
                 raise ExpenseServiceError("Cannot approve your own expense claim")
 
-            if approver_id is not None and isinstance(claim, ExpenseClaim):
+            if (
+                approver_id is not None
+                and isinstance(claim, ExpenseClaim)
+                and approval_source is ExpenseClaimApprovalSource.ERP_WORKFLOW
+            ):
                 chain = ExpenseApprovalService(
                     self.db, self.ctx
                 ).process_approval_decision(
@@ -1115,6 +1159,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         reason: str,
         send_notification: bool = True,
         actor_id: UUID | None = None,
+        approval_source: ExpenseClaimApprovalSource = (
+            ExpenseClaimApprovalSource.ERP_WORKFLOW
+        ),
     ) -> ExpenseClaim:
         from app.models.people.hr.employee import Employee
         from app.services.expense.approval_service import ExpenseApprovalService
@@ -1132,6 +1179,13 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.REJECTED.value
             )
+        if (
+            approval_source is ExpenseClaimApprovalSource.TRUSTED_SUB_MANAGER
+            and claim.source_system != "sub"
+        ):
+            raise ExpenseServiceError(
+                "Trusted Sub rejection can only act on a Sub-originated claim"
+            )
         try:
             approver = self.db.get(Employee, approver_id)
             claimant = (
@@ -1146,9 +1200,10 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             ):
                 raise ExpenseServiceError("Cannot reject your own expense claim")
 
-            ExpenseApprovalService(self.db, self.ctx).process_approval_decision(
-                claim, approver_id, "REJECTED", notes=reason
-            )
+            if approval_source is ExpenseClaimApprovalSource.ERP_WORKFLOW:
+                ExpenseApprovalService(self.db, self.ctx).process_approval_decision(
+                    claim, approver_id, "REJECTED", notes=reason
+                )
             if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.REJECT):
                 return claim
 
@@ -1548,6 +1603,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 )
 
             claim.status = ExpenseClaimStatus.PAID
+            claim.amount_paid = payable
             claim.paid_on = payment_date or date.today()
             claim.payment_reference = payment_reference
             self._stamp_status_change(claim, actor_id)
