@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import sqlalchemy as sa
 from alembic import op
 
 revision = "20260909_leave_probation_restriction"
-down_revision: str | Sequence[str] | None = (
-    "20260815_academy_course_projection",
-    "20260815_add_academy_learning_sync",
-)
+down_revision = "20260912_merge_automation"
 branch_labels = None
 depends_on = None
 
