@@ -25,6 +25,7 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.services.common import coerce_uuid
+from app.services.finance.ap.account_validation import require_ap_control_account
 from app.services.finance.ap.input_utils import resolve_currency_code
 from app.services.finance.common import (
     get_org_scoped_entity,
@@ -134,7 +135,7 @@ class SupplierService(ListResponseMixin):
             default_payable_account_id=(
                 coerce_uuid(payload.get("default_payable_account_id"))
                 if payload.get("default_payable_account_id")
-                else UUID("00000000-0000-0000-0000-000000000001")
+                else None
             ),
             default_expense_account_id=(
                 coerce_uuid(payload.get("default_expense_account_id"))
@@ -176,6 +177,12 @@ class SupplierService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
+        payable_account_id = require_ap_control_account(
+            db,
+            org_id,
+            input.default_payable_account_id,
+        )
+
         # Validate unique supplier code
         validate_unique_code(
             db=db,
@@ -198,7 +205,7 @@ class SupplierService(ListResponseMixin):
             payment_terms_days=input.payment_terms_days,
             currency_code=input.currency_code,
             default_expense_account_id=input.default_expense_account_id,
-            ap_control_account_id=input.default_payable_account_id,  # template: default_payable_account_id → model: ap_control_account_id
+            ap_control_account_id=payable_account_id,  # template: default_payable_account_id → model: ap_control_account_id
             supplier_group_id=input.supplier_group_id,
             is_related_party=input.is_related_party,
             related_party_relationship=input.related_party_relationship,
@@ -253,6 +260,12 @@ class SupplierService(ListResponseMixin):
         if not supplier:
             raise HTTPException(status_code=404, detail="Supplier not found")
 
+        payable_account_id = require_ap_control_account(
+            db,
+            org_id,
+            input.default_payable_account_id,
+        )
+
         # Validate unique supplier code (if changed)
         if supplier.supplier_code != input.supplier_code:
             validate_unique_code(
@@ -279,10 +292,7 @@ class SupplierService(ListResponseMixin):
         supplier.payment_terms_days = input.payment_terms_days
         supplier.currency_code = input.currency_code
         supplier.default_expense_account_id = input.default_expense_account_id
-        if input.default_payable_account_id is not None:
-            supplier.ap_control_account_id = (
-                input.default_payable_account_id
-            )  # template: default_payable_account_id → model: ap_control_account_id
+        supplier.ap_control_account_id = payable_account_id
         supplier.supplier_group_id = input.supplier_group_id
         supplier.is_related_party = input.is_related_party
         supplier.related_party_relationship = input.related_party_relationship
@@ -331,6 +341,13 @@ class SupplierService(ListResponseMixin):
         )
         if not supplier:
             raise HTTPException(status_code=404, detail="Supplier not found")
+
+        if "default_payable_account_id" in update_data:
+            update_data["default_payable_account_id"] = require_ap_control_account(
+                db,
+                org_id,
+                update_data["default_payable_account_id"],
+            )
 
         # Template field name → Model field name mapping
         field_mapping = {

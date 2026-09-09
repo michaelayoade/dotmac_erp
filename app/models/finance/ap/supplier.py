@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -45,6 +46,11 @@ class Supplier(Base, ERPNextSyncMixin):
     __tablename__ = "supplier"
     __table_args__ = (
         UniqueConstraint("organization_id", "supplier_code", name="uq_supplier_code"),
+        ForeignKeyConstraint(
+            ["organization_id", "ap_control_account_id"],
+            ["gl.account.organization_id", "gl.account.account_id"],
+            name="fk_supplier_organization_ap_control_account",
+        ),
         Index("idx_supplier_org", "organization_id", "is_active"),
         {"schema": "ap"},
     )

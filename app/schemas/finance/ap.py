@@ -56,7 +56,7 @@ class SupplierBase(BaseModel):
 class SupplierCreate(SupplierBase):
     """Create supplier request."""
 
-    pass
+    default_payable_account_id: UUID
 
 
 class SupplierUpdate(BaseModel):
@@ -66,6 +66,7 @@ class SupplierUpdate(BaseModel):
     trading_name: str | None = Field(default=None, max_length=255)
     tax_id: str | None = Field(default=None, max_length=50)
     payment_terms_days: int | None = None
+    default_payable_account_id: UUID | None = None
     is_active: bool | None = None
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=50)

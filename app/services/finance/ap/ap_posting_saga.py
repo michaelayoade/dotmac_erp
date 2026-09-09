@@ -32,7 +32,8 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
+from app.services.finance.ap.account_validation import require_ap_control_account
 from app.services.finance.common.source_types import AP_INVOICE_SOURCE
 from app.services.finance.ap.posting.helpers import determine_debit_account
 from app.services.finance.gl.journal import (
@@ -165,10 +166,27 @@ class APInvoicePostingSaga(SagaOrchestrator):
 
         # Load supplier
         supplier = db.get(Supplier, invoice.supplier_id)
-        if not supplier:
+        if not supplier or supplier.organization_id != org_id:
             return StepResult(
                 success=False,
                 error="Supplier not found",
+            )
+
+        try:
+            ap_control_account_id = require_ap_control_account(
+                db,
+                org_id,
+                invoice.ap_control_account_id,
+                field_name="Invoice AP control account",
+            )
+        except ValidationError:
+            return StepResult(
+                success=False,
+                error=(
+                    "Invoice AP control account is invalid. Select a valid default "
+                    "payable account on the supplier, then recreate or update this "
+                    "draft invoice before posting."
+                ),
             )
 
         # Load invoice lines
@@ -193,7 +211,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
                 "invoice_number": invoice.invoice_number,
                 "supplier_name": supplier.legal_name,
                 "supplier_id": str(supplier.supplier_id),
-                "ap_control_account_id": str(invoice.ap_control_account_id),
+                "ap_control_account_id": str(ap_control_account_id),
                 "invoice_type": invoice.invoice_type.value,
                 "currency_code": invoice.currency_code,
                 "exchange_rate": str(invoice.exchange_rate or "1.0"),

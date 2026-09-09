@@ -48,6 +48,7 @@ from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import CostingMethod, Item
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import NotFoundError, ValidationError, coerce_uuid
+from app.services.finance.ap.account_validation import require_ap_control_account
 from app.services.finance.ap.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -365,6 +366,12 @@ class SupplierInvoiceService(ListResponseMixin):
         if not supplier.is_active:
             raise ValidationError("Supplier is not active")
 
+        ap_control_account_id = require_ap_control_account(
+            db,
+            org_id,
+            supplier.ap_control_account_id,
+        )
+
         # IAS 21: an exchange rate is the ratio of exchange for two currencies,
         # so it must be positive. Reject zero/negative rates outright.
         if input.exchange_rate is not None and input.exchange_rate <= 0:
@@ -542,7 +549,7 @@ class SupplierInvoiceService(ListResponseMixin):
             total_amount=total_amount,
             functional_currency_amount=functional_amount,
             status=SupplierInvoiceStatus.DRAFT,
-            ap_control_account_id=supplier.ap_control_account_id,
+            ap_control_account_id=ap_control_account_id,
             is_prepayment=input.is_prepayment,
             auto_create_inventory_receipt=input.auto_create_inventory_receipt,
             inventory_receipt_mode=input.inventory_receipt_mode,
@@ -786,6 +793,12 @@ class SupplierInvoiceService(ListResponseMixin):
         supplier = db.get(Supplier, invoice.supplier_id)
         if not supplier or supplier.organization_id != org_id:
             raise NotFoundError("Supplier not found")
+
+        invoice.ap_control_account_id = require_ap_control_account(
+            db,
+            org_id,
+            supplier.ap_control_account_id,
+        )
 
         # Keep the invoice-level WHT snapshot in sync when a draft invoice is
         # edited.  Creation already applies the explicit selection (or the

@@ -45,6 +45,11 @@ class Account(Base, ERPNextSyncMixin):
     __tablename__ = "account"
     __table_args__ = (
         UniqueConstraint("organization_id", "account_code", name="uq_account_code"),
+        UniqueConstraint(
+            "organization_id",
+            "account_id",
+            name="uq_account_organization_account_id",
+        ),
         Index("idx_account_category", "category_id"),
         Index(
             "idx_account_active", "organization_id", "is_active", "is_posting_allowed"

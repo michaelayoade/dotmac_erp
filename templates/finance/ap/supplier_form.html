@@ -205,8 +205,14 @@
                 </div>
 
                 <div>
-                    <label class="form-label">Default Payable Account</label>
-                    <select aria-label="Default Payable Account" name="default_payable_account_id" class="form-select">
+                    <label class="form-label">
+                        Default Payable Account <span class="text-rose-500">*</span>
+                    </label>
+                    <select aria-label="Default Payable Account"
+                            aria-required="true"
+                            name="default_payable_account_id"
+                            required
+                            class="form-select">
                         <option value="">Select account</option>
                         {% for account in payable_accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if supplier and supplier.default_payable_account_id == account.account_id else '' }}>
@@ -214,6 +220,7 @@
                         </option>
                         {% endfor %}
                     </select>
+                    <p class="form-hint">Required for posting supplier invoices to the general ledger</p>
                 </div>
             </div>
         </div>

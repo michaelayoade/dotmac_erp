@@ -103,6 +103,38 @@ def test_create_invoice_requires_active_supplier_and_lines():
         )
 
 
+def test_create_invoice_rejects_supplier_without_valid_ap_control_account():
+    db = MagicMock()
+    org_id = uuid4()
+    supplier = _make_supplier(org_id)
+    db.get.return_value = supplier
+    db.execute.return_value.scalar_one_or_none.return_value = None
+
+    with pytest.raises(ValidationError, match="active AP liability account"):
+        SupplierInvoiceService.create_invoice(
+            db,
+            org_id,
+            SupplierInvoiceInput(
+                supplier_id=supplier.supplier_id,
+                invoice_type=SupplierInvoiceType.STANDARD,
+                invoice_date=date.today(),
+                received_date=date.today(),
+                due_date=date.today(),
+                currency_code="NGN",
+                lines=[
+                    InvoiceLineInput(
+                        description="A",
+                        quantity=Decimal("1"),
+                        unit_price=Decimal("10"),
+                    )
+                ],
+            ),
+            created_by_user_id=uuid4(),
+        )
+
+    db.add.assert_not_called()
+
+
 def test_create_standard_invoice_rejects_negative_total():
     """A STANDARD supplier invoice with a negative net must be rejected.
 

@@ -29,7 +29,8 @@ from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalType
 from app.models.finance.tax.tax_code import TaxCode, TaxType
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
+from app.services.finance.ap.account_validation import require_ap_control_account
 from app.services.finance.common.source_types import AP_INVOICE_SOURCE
 from app.services.finance.ap.posting.helpers import (
     create_assets_for_capitalizable_lines,
@@ -149,8 +150,25 @@ def post_invoice(
 
     # Load supplier for control account
     supplier = db.get(Supplier, invoice.supplier_id)
-    if not supplier:
+    if not supplier or supplier.organization_id != org_id:
         return APPostingResult(success=False, message="Supplier not found")
+
+    try:
+        ap_control_account_id = require_ap_control_account(
+            db,
+            org_id,
+            invoice.ap_control_account_id,
+            field_name="Invoice AP control account",
+        )
+    except ValidationError:
+        return APPostingResult(
+            success=False,
+            message=(
+                "Invoice AP control account is invalid. Select a valid default "
+                "payable account on the supplier, then recreate or update this "
+                "draft invoice before posting."
+            ),
+        )
 
     # Load invoice lines
     lines = list(
@@ -322,7 +340,7 @@ def post_invoice(
         # Credit note: debit AP (reduce liability)
         journal_lines.append(
             JournalLineInput(
-                account_id=invoice.ap_control_account_id,
+                account_id=ap_control_account_id,
                 debit_amount=abs(ap_amount),
                 credit_amount=Decimal("0"),
                 debit_amount_functional=abs(ap_functional),
@@ -334,7 +352,7 @@ def post_invoice(
         # Standard/Debit note: credit AP (increase liability)
         journal_lines.append(
             JournalLineInput(
-                account_id=invoice.ap_control_account_id,
+                account_id=ap_control_account_id,
                 debit_amount=Decimal("0"),
                 credit_amount=ap_amount,
                 debit_amount_functional=Decimal("0"),
