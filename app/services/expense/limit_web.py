@@ -1125,9 +1125,13 @@ class ExpenseLimitWebService:
             ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
         ]
         if parsed_from:
-            activity_filters.append(func.date(ExpenseClaimAction.created_at) >= parsed_from)
+            activity_filters.append(
+                func.date(ExpenseClaimAction.created_at) >= parsed_from
+            )
         if parsed_to:
-            activity_filters.append(func.date(ExpenseClaimAction.created_at) <= parsed_to)
+            activity_filters.append(
+                func.date(ExpenseClaimAction.created_at) <= parsed_to
+            )
 
         activity_rows = db.execute(
             select(
@@ -1161,7 +1165,9 @@ class ExpenseLimitWebService:
             .group_by(ExpenseClaim.approver_id)
             .order_by(func.max(ExpenseClaimAction.created_at).desc())
         ).all()
-        activity_map = {row.approver_id: row for row in activity_rows if row.approver_id}
+        activity_map = {
+            row.approver_id: row for row in activity_rows if row.approver_id
+        }
         activity_approver_ids = list(activity_map)
 
         if not (parsed_from or parsed_to) and not activity_approver_ids:
@@ -1321,8 +1327,12 @@ class ExpenseLimitWebService:
                 else None
             )
             activity_row = activity_map.get(approver_id)
-            approved_count = int(activity_row.approved_count or 0) if activity_row else 0
-            rejected_count = int(activity_row.rejected_count or 0) if activity_row else 0
+            approved_count = (
+                int(activity_row.approved_count or 0) if activity_row else 0
+            )
+            rejected_count = (
+                int(activity_row.rejected_count or 0) if activity_row else 0
+            )
             last_action_at = activity_row.last_action_at if activity_row else None
             paid_count = paid_count_map.get(approver_id, 0)
             paid_amount = paid_amount_map.get(approver_id, Decimal("0"))

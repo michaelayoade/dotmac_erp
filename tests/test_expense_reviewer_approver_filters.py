@@ -245,7 +245,9 @@ def test_reviewer_approvers_page_exposes_approver_and_date_filters():
     assert 'name="to_date"' in html
 
 
-def test_reviewer_approver_filter_still_matches_approver(db_session, engine, monkeypatch):
+def test_reviewer_approver_filter_still_matches_approver(
+    db_session, engine, monkeypatch
+):
     seeded = _seed_reviewer_activity(db_session, engine)
 
     context = _render_reviewer_list(
