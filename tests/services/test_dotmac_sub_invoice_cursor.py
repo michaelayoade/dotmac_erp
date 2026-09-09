@@ -254,6 +254,40 @@ def test_invoice_mismatch_is_logged_and_quarantined_by_source_revision(
     }
 
 
+def test_invoice_quarantine_evidence_work_is_bounded(monkeypatch) -> None:
+    import app.services.dotmac_sub.sync._invoices as invoices_module
+
+    rows = [
+        _invoice_record("20000000-0000-0000-0000-000000000001", _T0),
+        _invoice_record(
+            "20000000-0000-0000-0000-000000000002", _T0 + timedelta(minutes=1)
+        ),
+    ]
+    harness = _invoice_harness_for_cursor(rows, SyncWatermarkPosition(None, None))
+    harness._sync_single_invoice.side_effect = InvoiceSourceAccountingMismatchError(
+        "lines do not reconcile",
+        dedupe_key=("source_accounting_mismatch", "invoice"),
+        line_subtotal=100,
+        line_tax=7.5,
+        header_subtotal=100,
+        header_tax=0,
+        header_total=100,
+    )
+    quarantine = MagicMock(return_value=MagicMock(outcome_id=uuid.uuid4()))
+    monkeypatch.setattr(
+        invoices_module, "record_blocked_invoice_accounting_revision", quarantine
+    )
+    monkeypatch.setattr(invoices_module, "_QUARANTINE_EVIDENCE_LIMIT", 1)
+
+    result = harness.sync_invoices(batch_size=10)
+
+    assert quarantine.call_count == 1
+    assert result.skipped == 1
+    assert "invoice quarantine evidence work limit (1) reached" in result.message
+    advanced = harness._advance_sync_watermark_position.call_args.args[1]
+    assert advanced == SyncWatermarkPosition(_T0, rows[0].id)
+
+
 def test_invoice_mismatch_parks_cursor_without_durable_v2_evidence(
     monkeypatch,
 ) -> None:

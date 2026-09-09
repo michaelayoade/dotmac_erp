@@ -45,6 +45,13 @@ from ._types import SyncResult
 
 logger = logging.getLogger(__name__)
 
+# A mismatched legacy invoice requires an additional, rate-limited accounting-v2
+# lookup before its exact revision may be quarantined. Keep that remote evidence
+# work bounded independently of the general invoice batch so a mismatch cluster
+# cannot consume the Celery phase's entire soft-limit budget and roll back all
+# staged outcomes. Healthy invoice throughput retains the normal batch limit.
+_QUARANTINE_EVIDENCE_LIMIT = 50
+
 
 def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
     """Return every source field that can change the mirrored AR invoice."""
@@ -131,6 +138,7 @@ class InvoiceSyncMixin:
         result = SyncResult(success=True, entity_type="invoices")
         processed = 0
         attempted = 0
+        quarantined = 0
         reported_permanent_errors: set[tuple[str, ...]] = set()
         # Incremental pull: only when this is the unfiltered full sync (a
         # targeted account_id/status pull must not touch the global cursor).
@@ -148,6 +156,7 @@ class InvoiceSyncMixin:
             label="invoice",
         )
         limit_reached = False
+        quarantine_limit_reached = False
 
         try:
             for inv in self.client.get_invoices(
@@ -269,6 +278,10 @@ class InvoiceSyncMixin:
                         # has a later updated_at and will be considered again.
                         result.skipped += 1
                         progress.record_success(row_updated_at, inv.id)
+                        quarantined += 1
+                        if quarantined >= _QUARANTINE_EVIDENCE_LIMIT:
+                            quarantine_limit_reached = True
+                            break
                         continue
                     result.errors.append(f"Invoice {inv.invoice_number}: {e!s}")
                     if e.dedupe_key not in reported_permanent_errors:
@@ -319,13 +332,17 @@ class InvoiceSyncMixin:
             if use_watermark:
                 progress.conclude(self._advance_invoice_watermark_position)
             self.db.flush()
-            if limit_reached:
+            if limit_reached or quarantine_limit_reached:
                 observe_dotmac_sub_invoice_sync_limit()
-            suffix = (
-                f"; invoice work limit ({batch_size}) reached"
-                if limit_reached and batch_size
-                else ""
-            )
+            suffixes = []
+            if limit_reached and batch_size:
+                suffixes.append(f"invoice work limit ({batch_size}) reached")
+            if quarantine_limit_reached:
+                suffixes.append(
+                    "invoice quarantine evidence work limit "
+                    f"({_QUARANTINE_EVIDENCE_LIMIT}) reached"
+                )
+            suffix = f"; {'; '.join(suffixes)}" if suffixes else ""
             result.message = (
                 f"Synced {result.created} new, {result.updated} updated, "
                 f"{result.skipped} skipped invoices{suffix}"
