@@ -104,6 +104,30 @@ def test_approve_claim_response_surfaces_step_assignment_error():
     db.rollback.assert_called_once()
 
 
+def test_reject_claim_response_surfaces_expense_service_error():
+    db = MagicMock()
+    auth = _make_auth()
+    approver = MagicMock()
+    approver.employee_id = "00000000-0000-0000-0000-000000000099"
+    db.scalars.return_value.first.return_value = approver
+
+    err = ExpenseServiceError("Cannot reject your own expense claim")
+    with patch.object(ExpenseService, "reject_claim", side_effect=err):
+        response = ExpenseClaimsWebService.reject_claim_response(
+            claim_id="11111111-1111-1111-1111-111111111111",
+            reason="Not mine to approve",
+            auth=auth,
+            db=db,
+        )
+
+    assert response.status_code == 303
+    assert (
+        _extract_error_message(response.headers["location"])
+        == "Cannot reject your own expense claim"
+    )
+    db.rollback.assert_called_once()
+
+
 def test_team_expense_approve_redirects_with_budget_error_instead_of_json():
     db = MagicMock()
     auth = _make_auth()

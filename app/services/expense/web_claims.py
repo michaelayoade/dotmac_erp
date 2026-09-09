@@ -1197,7 +1197,7 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             return RedirectResponse(
                 f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
             )
-        except ValueError as exc:
+        except (ExpenseServiceError, ValueError) as exc:
             db.rollback()
             message = str(exc).strip() or "Rejection could not be completed."
             if message == "Approver is not assigned to the current approval step":
