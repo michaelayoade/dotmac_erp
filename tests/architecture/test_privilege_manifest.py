@@ -229,6 +229,14 @@ def test_relation_acl_default_uses_postgres_internal_char_type() -> None:
     assert "'r'::\"char\"" in relation_acl_sql
 
 
+def test_absent_retired_role_skips_legacy_privilege_probe() -> None:
+    """A dropped source role is retired safely, not a verifier error."""
+    source = VERIFIER_PATH.read_text(encoding="utf-8")
+    assert "source_role_exists = any(" in source
+    assert "if source_role_exists:" in source
+    assert "RETIRED ROLE ABSENT:" in source
+
+
 def test_generation_is_deterministic(census: dict) -> None:
     """Same census in, same bytes out -- twice, from a fresh parse each time."""
     first = manifest_to_json(manifest_from_census(census))

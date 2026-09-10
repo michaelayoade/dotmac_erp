@@ -797,9 +797,30 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
                     "it, and it reaches every login in the cluster."
                 )
 
+        # --- role posture (also establishes whether the retired role exists) ---
+        cursor.execute(POSTURE_SQL, {"roles": roles})
+        postures = tuple(
+            ObservedRolePosture(role, bool(bypass), bool(superuser))
+            for role, bypass, superuser in cursor.fetchall()
+        )
+
         # --- the legacy role's module access ---
-        cursor.execute(MODULE_RELATION_SQL, {"prefix": MODULE_SCHEMA_PREFIX})
-        module_relations = cursor.fetchall()
+        # A retired source role may already have been dropped. PostgreSQL's
+        # has_table_privilege(name, ...) raises UndefinedObject for that safe
+        # state, so only probe it while the role still exists. Absence means
+        # it holds no legacy module privileges.
+        source_role_exists = any(
+            posture.role == manifest.source_role for posture in postures
+        )
+        module_relations = []
+        if source_role_exists:
+            cursor.execute(MODULE_RELATION_SQL, {"prefix": MODULE_SCHEMA_PREFIX})
+            module_relations = cursor.fetchall()
+        else:
+            notes.append(
+                f"RETIRED ROLE ABSENT: {manifest.source_role} does not exist; "
+                "it cannot hold module privileges."
+            )
         legacy: list[ObservedPrivilege] = []
         if module_relations:
             wanted = [
@@ -827,12 +848,7 @@ def fetch_snapshot(connection, manifest: PrivilegeManifest) -> PrivilegeSnapshot
                     )
                 )
 
-        # --- role posture and membership ---
-        cursor.execute(POSTURE_SQL, {"roles": roles})
-        postures = tuple(
-            ObservedRolePosture(role, bool(bypass), bool(superuser))
-            for role, bypass, superuser in cursor.fetchall()
-        )
+        # --- role membership ---
         cursor.execute(MEMBERSHIP_SQL, {"roles": roles})
         memberships = {
             ObservedMembership(member, granted) for member, granted in cursor.fetchall()
