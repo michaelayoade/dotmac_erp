@@ -4236,6 +4236,27 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/sub/expense-approvers": {
+   "params": [
+    "header:x-api-key!",
+    "query:requested_by_email!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "f6a9904ce691",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/sync/sub/expense-banks": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "c137ebf66eb1",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/sync/sub/expense-categories": {
    "params": [
     "header:x-api-key!"
@@ -4254,6 +4275,17 @@
    "request": null,
    "responses": {
     "200": "f823752583f3",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/sync/sub/expense-payment-destinations/profile": {
+   "params": [
+    "header:x-api-key!",
+    "query:requested_by_email!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "a5e5a712aeae",
     "422": "a11c9d9b2af8"
    }
   },
@@ -8703,6 +8735,26 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/sync/sub/expense-payment-destinations/inspect": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "448690f971a4",
+   "responses": {
+    "200": "e44b1a6f2d4d",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/sync/sub/expense-payment-destinations/verify": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "5d3627d84aa8",
+   "responses": {
+    "200": "e44b1a6f2d4d",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/sync/sub/material-requests": {
    "params": [
     "header:x-api-key!"
@@ -9804,18 +9856,26 @@
   "StockBalanceRead": "a8b074040ca3",
   "SubAvailableSerialListResponse": "49709352abc9",
   "SubAvailableSerialRead": "5e22182e9288",
+  "SubExpenseApproverItem": "3aaf386b3f7e",
+  "SubExpenseApproversResponse": "cc65813b78be",
+  "SubExpenseBankItem": "a533929573fd",
+  "SubExpenseBanksResponse": "59c29d8e94cb",
   "SubExpenseCategoriesResponse": "d2fa1a1bebde",
   "SubExpenseCategoryItem": "d005e565d191",
   "SubExpenseClaimDecisionPayload": "23ab9b7004e7",
   "SubExpenseClaimDraftItemResponse": "47ab89e08a8c",
   "SubExpenseClaimDraftResponse": "1b409903701b",
   "SubExpenseClaimItemPayload": "4006fb7a5126",
-  "SubExpenseClaimPayload": "588dde1c48f5",
+  "SubExpenseClaimPayload": "494cbc91cdfe",
   "SubExpenseClaimRejectionPayload": "459893975aeb",
   "SubExpenseClaimResponse": "5567fab6c2f5",
-  "SubExpenseClaimStatusResponse": "b4f6f77027ff",
+  "SubExpenseClaimStatusResponse": "7aeef121767a",
+  "SubExpenseDestinationInspectPayload": "f54026c65579",
+  "SubExpenseDestinationVerifyPayload": "83f4c8d08915",
+  "SubExpenseDestinationVerifyResponse": "a76339dafc0a",
   "SubExpensePaymentPayload": "8ed5cce44c03",
   "SubExpensePaymentResponse": "91fb09c61a03",
+  "SubExpenseProfileDestinationResponse": "ae109952a7c2",
   "SubExpenseReceiptPayload": "841384c5c747",
   "SubExpenseReceiptResponse": "f19fd3c914e1",
   "SubMaterialRequestItemPayload": "b9286a24d0e6",
