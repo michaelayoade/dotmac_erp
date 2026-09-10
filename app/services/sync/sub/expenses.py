@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 try:
     from datetime import UTC  # type: ignore
@@ -16,11 +16,11 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -38,10 +38,17 @@ from app.models.finance.payments.payment_intent import (
     PaymentIntent,
     PaymentIntentStatus,
 )
-from app.models.people.hr.employee import Employee
+from app.models.finance.core_org.bank_directory import BankDirectory
+from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.person import Person
+from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.schemas.sync.sub_operational import (
     SubExpenseCategoriesResponse,
     SubExpenseCategoryItem,
+    SubExpenseApproverItem,
+    SubExpenseApproversResponse,
+    SubExpenseBankItem,
+    SubExpenseBanksResponse,
     SubExpenseClaimPayload,
     SubExpenseClaimDecisionPayload,
     SubExpenseClaimRejectionPayload,
@@ -49,8 +56,18 @@ from app.schemas.sync.sub_operational import (
     SubExpenseClaimStatusResponse,
     SubExpensePaymentPayload,
     SubExpensePaymentResponse,
+    SubExpenseProfileDestinationResponse,
+    SubExpenseDestinationVerifyPayload,
+    SubExpenseDestinationVerifyResponse,
+    SubExpenseDestinationInspectPayload,
 )
-from app.services.finance.payments.paystack_client import PaystackConfig, PaystackError
+from app.services.finance.payments.paystack_client import (
+    PaystackClient,
+    PaystackConfig,
+    PaystackError,
+    PaystackUnreachable,
+)
+from app.services.integration_config import decrypt_credential, encrypt_credential
 
 # Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
 # Re-imported here so the canonical import sites
@@ -60,6 +77,34 @@ from app.services.finance.payments.paystack_client import PaystackConfig, Paysta
 from app.services.sync.sub.base import _SubSyncBase
 
 logger = logging.getLogger(__name__)
+
+_DESTINATION_TOKEN_TTL = timedelta(minutes=30)
+_EXPENSE_APPROVAL_PERMISSIONS = (
+    "expense:claims:approve:tier1",
+    "expense:claims:approve:tier2",
+    "expense:claims:approve:tier3",
+)
+
+
+def _masked_account_number(account_number: str) -> str:
+    suffix = account_number[-4:]
+    return f"{'*' * max(2, len(account_number) - len(suffix))}{suffix}"
+
+
+def _normalized_name_tokens(value: str) -> set[str]:
+    return {
+        token
+        for token in "".join(
+            character.upper() if character.isalnum() else " " for character in value
+        ).split()
+        if len(token) > 1
+    }
+
+
+def _beneficiary_matches(entered: str, verified: str) -> bool:
+    entered_tokens = _normalized_name_tokens(entered)
+    verified_tokens = _normalized_name_tokens(verified)
+    return bool(entered_tokens) and entered_tokens == verified_tokens
 
 
 class _ExpenseSyncMixin(_SubSyncBase):
@@ -79,6 +124,262 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 ExpenseClaim.source_system == "sub",
                 ExpenseClaim.source_reference == source_claim_id,
             )
+        )
+
+    def list_expense_approvers(
+        self, org_id: UUID, *, requested_by_email: str
+    ) -> SubExpenseApproversResponse:
+        """Return active, permission-backed approvers visible to one requester."""
+        if self._resolve_employee_id(org_id, requested_by_email) is None:
+            raise HTTPException(
+                status_code=422,
+                detail="The requesting employee could not be matched in ERP",
+            )
+        rows = self.db.execute(
+            select(Employee, Person)
+            .join(Person, Person.id == Employee.person_id)
+            .join(PersonRole, PersonRole.person_id == Employee.person_id)
+            .join(Role, Role.id == PersonRole.role_id)
+            .outerjoin(RolePermission, RolePermission.role_id == Role.id)
+            .outerjoin(Permission, Permission.id == RolePermission.permission_id)
+            .where(
+                Employee.organization_id == org_id,
+                Person.organization_id == org_id,
+                Employee.status.in_((EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE)),
+                Role.is_active.is_(True),
+                or_(
+                    func.lower(Role.name) == "admin",
+                    and_(
+                        Permission.is_active.is_(True),
+                        Permission.key.in_(_EXPENSE_APPROVAL_PERMISSIONS),
+                    ),
+                ),
+            )
+            .order_by(Person.first_name, Person.last_name)
+        ).all()
+        unique: dict[UUID, SubExpenseApproverItem] = {}
+        for employee, _person in rows:
+            email = (employee.work_email or employee.personal_email or "").strip()
+            if not email:
+                continue
+            unique[employee.employee_id] = SubExpenseApproverItem(
+                employee_id=employee.employee_id,
+                display_name=employee.full_name or email,
+                email=email,
+            )
+        return SubExpenseApproversResponse(items=list(unique.values()))
+
+    def list_expense_banks(self) -> SubExpenseBanksResponse:
+        rows = self.db.scalars(
+            select(BankDirectory)
+            .where(BankDirectory.is_active.is_(True))
+            .order_by(BankDirectory.bank_name)
+        ).all()
+        return SubExpenseBanksResponse(
+            items=[
+                SubExpenseBankItem(
+                    bank_code=bank.bank_code,
+                    bank_name=bank.bank_name,
+                )
+                for bank in rows
+            ]
+        )
+
+    def get_expense_profile_destination(
+        self, org_id: UUID, *, requested_by_email: str
+    ) -> SubExpenseProfileDestinationResponse:
+        """Return only a masked view of the requester's ERP bank profile."""
+        employee = self._require_employee_by_email(org_id, requested_by_email)
+        bank_code = (employee.bank_branch_code or "").strip()
+        account_number = (employee.bank_account_number or "").strip()
+        beneficiary_name = (
+            employee.bank_account_name or employee.full_name or ""
+        ).strip()
+        bank = (
+            self.db.scalar(
+                select(BankDirectory).where(
+                    BankDirectory.bank_code == bank_code,
+                    BankDirectory.is_active.is_(True),
+                )
+            )
+            if bank_code
+            else None
+        )
+        if bank is None or not account_number or not beneficiary_name:
+            return SubExpenseProfileDestinationResponse(available=False)
+        return SubExpenseProfileDestinationResponse(
+            available=True,
+            bank_code=bank.bank_code,
+            bank_name=bank.bank_name,
+            masked_account_number=_masked_account_number(account_number),
+            beneficiary_name=beneficiary_name,
+        )
+
+    def verify_expense_destination(
+        self,
+        org_id: UUID,
+        data: SubExpenseDestinationVerifyPayload,
+    ) -> SubExpenseDestinationVerifyResponse:
+        """Verify a destination and return a claim-bound encrypted bearer token."""
+        employee = self._require_employee_by_email(org_id, data.requested_by_email)
+        if data.mode == "erp_profile":
+            bank_code = (employee.bank_branch_code or "").strip()
+            account_number = (employee.bank_account_number or "").strip()
+            beneficiary_name = (
+                employee.bank_account_name or employee.full_name or ""
+            ).strip()
+            if not bank_code or not account_number or not beneficiary_name:
+                raise HTTPException(
+                    status_code=422,
+                    detail="The ERP employee bank profile is incomplete",
+                )
+        else:
+            bank_code = str(data.bank_code or "").strip()
+            account_number = str(data.account_number or "").strip()
+            beneficiary_name = str(data.beneficiary_name or "").strip()
+
+        if not account_number.isdigit() or not 6 <= len(account_number) <= 30:
+            raise HTTPException(status_code=422, detail="Account number is invalid")
+        bank = self.db.scalar(
+            select(BankDirectory).where(
+                BankDirectory.bank_code == bank_code,
+                BankDirectory.is_active.is_(True),
+            )
+        )
+        if bank is None:
+            raise HTTPException(status_code=422, detail="Select an active ERP bank")
+
+        from app.services.finance.payments import PaymentService
+
+        config = self._require_transfer_config(PaymentService(self.db, org_id))
+        try:
+            with PaystackClient(config) as client:
+                resolved = client.resolve_account(
+                    account_number=account_number,
+                    bank_code=bank_code,
+                )
+        except PaystackUnreachable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Bank account verification is temporarily unavailable",
+            ) from exc
+        except PaystackError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="The bank account could not be verified",
+            ) from exc
+        if not _beneficiary_matches(beneficiary_name, resolved.account_name):
+            raise HTTPException(
+                status_code=422,
+                detail="Beneficiary name does not match the verified account name",
+            )
+
+        now = datetime.now(UTC)
+        expires_at = now + _DESTINATION_TOKEN_TTL
+        token_payload = {
+            "version": 1,
+            "organization_id": str(org_id),
+            "employee_id": str(employee.employee_id),
+            "source_claim_id": str(data.source_claim_id),
+            "mode": data.mode,
+            "bank_code": bank.bank_code,
+            "bank_name": bank.bank_name,
+            "account_number": account_number,
+            "verified_beneficiary_name": resolved.account_name,
+            "verified_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+        }
+        token = encrypt_credential(
+            json.dumps(token_payload, sort_keys=True, separators=(",", ":")),
+            self.db,
+        )
+        return SubExpenseDestinationVerifyResponse(
+            destination_token=token,
+            mode=data.mode,
+            bank_code=bank.bank_code,
+            bank_name=bank.bank_name,
+            masked_account_number=_masked_account_number(account_number),
+            verified_beneficiary_name=resolved.account_name,
+            verified_at=now,
+            expires_at=expires_at,
+        )
+
+    def _decode_expense_destination(
+        self,
+        *,
+        org_id: UUID,
+        employee_id: UUID,
+        source_claim_id: str,
+        token: str,
+        allow_expired: bool = False,
+    ) -> dict[str, str]:
+        if not token.startswith("enc:"):
+            raise HTTPException(
+                status_code=422, detail="Payment destination token is invalid"
+            )
+        try:
+            raw = decrypt_credential(token, self.db)
+            payload = json.loads(raw or "")
+            expires_at = datetime.fromisoformat(str(payload["expires_at"]))
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=422, detail="Payment destination token is invalid"
+            ) from exc
+        if (
+            str(payload.get("organization_id")) != str(org_id)
+            or str(payload.get("employee_id")) != str(employee_id)
+            or str(payload.get("source_claim_id")) != source_claim_id
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Payment destination token does not belong to this expense",
+            )
+        if payload.get("version") != 1 or payload.get("mode") not in {
+            "erp_profile",
+            "expense_override",
+        }:
+            raise HTTPException(
+                status_code=422, detail="Payment destination token is invalid"
+            )
+        if not allow_expired and expires_at <= datetime.now(UTC):
+            raise HTTPException(
+                status_code=422, detail="Payment destination token expired"
+            )
+        required = (
+            "mode",
+            "bank_code",
+            "bank_name",
+            "account_number",
+            "verified_beneficiary_name",
+            "verified_at",
+            "expires_at",
+        )
+        if any(not str(payload.get(key) or "").strip() for key in required):
+            raise HTTPException(
+                status_code=422, detail="Payment destination token is incomplete"
+            )
+        return {key: str(payload[key]) for key in required}
+
+    def inspect_expense_destination(
+        self, org_id: UUID, data: SubExpenseDestinationInspectPayload
+    ) -> SubExpenseDestinationVerifyResponse:
+        """Return authoritative masked fields for a still-valid opaque token."""
+        employee = self._require_employee_by_email(org_id, data.requested_by_email)
+        destination = self._decode_expense_destination(
+            org_id=org_id,
+            employee_id=employee.employee_id,
+            source_claim_id=str(data.source_claim_id),
+            token=data.destination_token,
+        )
+        return SubExpenseDestinationVerifyResponse(
+            destination_token=data.destination_token,
+            mode=cast(Literal["erp_profile", "expense_override"], destination["mode"]),
+            bank_code=destination["bank_code"],
+            bank_name=destination["bank_name"],
+            masked_account_number=_masked_account_number(destination["account_number"]),
+            verified_beneficiary_name=destination["verified_beneficiary_name"],
+            verified_at=datetime.fromisoformat(destination["verified_at"]),
+            expires_at=datetime.fromisoformat(destination["expires_at"]),
         )
 
     def create_expense_claim(
@@ -115,6 +416,48 @@ class _ExpenseSyncMixin(_SubSyncBase):
                     "cannot create expense claim."
                 ),
             )
+
+        approver_id = data.requested_approver_id
+        if approver_id is not None:
+            eligible_approvers = {
+                item.employee_id
+                for item in self.list_expense_approvers(
+                    org_id, requested_by_email=data.requested_by_email
+                ).items
+            }
+            if approver_id not in eligible_approvers:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Select an active ERP expense approver",
+                )
+
+        existing = self._find_claim_by_source_claim_id(org_id, data.source_claim_id)
+        destination: dict[str, str] | None = None
+        destination_fingerprint: str | None = None
+        if data.payment_destination_token:
+            destination = self._decode_expense_destination(
+                org_id=org_id,
+                employee_id=employee_id,
+                source_claim_id=data.source_claim_id,
+                token=data.payment_destination_token,
+                allow_expired=existing is not None,
+            )
+            destination_fingerprint = hashlib.sha256(
+                json.dumps(
+                    {
+                        key: destination[key]
+                        for key in (
+                            "mode",
+                            "bank_code",
+                            "bank_name",
+                            "account_number",
+                            "verified_beneficiary_name",
+                        )
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
 
         claim_date_val = self._parse_sub_date(data.claim_date, "claim_date")
 
@@ -163,10 +506,11 @@ class _ExpenseSyncMixin(_SubSyncBase):
             ticket_id=ticket_id,
             currency_code=effective_currency,
             notes=notes,
+            requested_approver_id=approver_id,
+            payment_destination_fingerprint=destination_fingerprint,
             items=resolved_items,
         )
 
-        existing = self._find_claim_by_source_claim_id(org_id, data.source_claim_id)
         if existing is not None:
             existing_fingerprint = self._build_expense_claim_fingerprint(
                 employee_id=existing.employee_id,
@@ -176,6 +520,10 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 ticket_id=existing.ticket_id,
                 currency_code=existing.currency_code,
                 notes=existing.notes,
+                requested_approver_id=existing.requested_approver_id,
+                payment_destination_fingerprint=(
+                    existing.payment_destination_fingerprint
+                ),
                 items=[
                     {
                         "sequence": line.sequence,
@@ -240,12 +588,37 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 currency_code=data.currency_code,
                 notes=notes,
                 items=resolved_items,
-                recipient_bank_code=employee.bank_branch_code,
-                recipient_bank_name=employee.bank_name,
-                recipient_account_number=employee.bank_account_number,
-                recipient_name=employee.bank_account_name or employee.full_name,
+                recipient_bank_code=(
+                    destination["bank_code"]
+                    if destination
+                    else employee.bank_branch_code
+                ),
+                recipient_bank_name=(
+                    destination["bank_name"] if destination else employee.bank_name
+                ),
+                recipient_account_number=(
+                    None if destination else employee.bank_account_number
+                ),
+                recipient_name=(
+                    destination["verified_beneficiary_name"]
+                    if destination
+                    else employee.bank_account_name or employee.full_name
+                ),
+                requested_approver_id=approver_id,
                 created_by_id=created_by_person_id,
             )
+            if destination:
+                account_number = destination["account_number"]
+                claim.recipient_account_number_encrypted = encrypt_credential(
+                    account_number, self.db
+                )
+                claim.recipient_account_number_last4 = account_number[-4:]
+                claim.recipient_account_name = destination["verified_beneficiary_name"]
+                claim.payment_destination_mode = destination["mode"]
+                claim.payment_destination_fingerprint = destination_fingerprint
+                claim.payment_destination_verified_at = datetime.fromisoformat(
+                    destination["verified_at"]
+                )
             claim.source_reference = data.source_claim_id
             claim.source_system = "sub"
             claim.last_synced_at = datetime.now(UTC)
@@ -314,6 +687,14 @@ class _ExpenseSyncMixin(_SubSyncBase):
 
         claim = self._require_sub_expense_claim(org_id, source_claim_id)
         approver = self._require_employee_by_email(org_id, data.decided_by_email)
+        if (
+            claim.requested_approver_id is not None
+            and approver.employee_id != claim.requested_approver_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the selected expense approver may decide this claim",
+            )
         evidence = self._decision_evidence(data.decision_id, data.decided_at)
         supplied_notes = (data.notes or "").strip()
         notes = f"{supplied_notes}\n{evidence}" if supplied_notes else evidence
@@ -342,6 +723,14 @@ class _ExpenseSyncMixin(_SubSyncBase):
 
         claim = self._require_sub_expense_claim(org_id, source_claim_id)
         approver = self._require_employee_by_email(org_id, data.decided_by_email)
+        if (
+            claim.requested_approver_id is not None
+            and approver.employee_id != claim.requested_approver_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the selected expense approver may decide this claim",
+            )
         evidence = self._decision_evidence(data.decision_id, data.decided_at)
         try:
             claim = ExpenseService(self.db).reject_claim(
@@ -540,6 +929,8 @@ class _ExpenseSyncMixin(_SubSyncBase):
         ticket_id: UUID | None,
         currency_code: str | None,
         notes: str | None,
+        requested_approver_id: UUID | None,
+        payment_destination_fingerprint: str | None,
         items: list[dict[str, Any]],
     ) -> str:
         """Deterministic fingerprint over effective claim values.
@@ -572,6 +963,10 @@ class _ExpenseSyncMixin(_SubSyncBase):
             "ticket_id": str(ticket_id) if ticket_id else None,
             "currency_code": currency_code or "",
             "notes": notes or "",
+            "requested_approver_id": (
+                str(requested_approver_id) if requested_approver_id else None
+            ),
+            "payment_destination_fingerprint": payment_destination_fingerprint,
             "items": items_payload,
         }
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -618,6 +1013,29 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 payment_intent.status.value.lower()
                 if payment_intent is not None
                 else None
+            ),
+            requested_approver_id=claim.requested_approver_id,
+            requested_approver_name=(
+                claim.requested_approver.full_name
+                if claim.requested_approver is not None
+                else None
+            ),
+            payment_destination_mode=cast(
+                Literal["erp_profile", "expense_override"] | None,
+                claim.payment_destination_mode,
+            ),
+            recipient_bank_name=claim.recipient_bank_name,
+            masked_account_number=(
+                _masked_account_number(claim.recipient_account_number)
+                if claim.recipient_account_number
+                else (
+                    f"******{claim.recipient_account_number_last4}"
+                    if claim.recipient_account_number_last4
+                    else None
+                )
+            ),
+            verified_beneficiary_name=(
+                claim.recipient_account_name or claim.recipient_name
             ),
             source_claim_id=source_claim_id,
         )
