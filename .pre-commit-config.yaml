@@ -26,9 +26,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^docs/kernel-runtime-(composition|readiness)\.json$
+        exclude: ^(docs/kernel-runtime-(composition|readiness)\.json|tests/architecture/composition_schema\.py)$
       - id: ruff-format
-        exclude: ^docs/kernel-runtime-(composition|readiness)\.json$
+        exclude: ^(docs/kernel-runtime-(composition|readiness)\.json|tests/architecture/composition_schema\.py)$
 
   # Strict-JSON evidence documents: composition/readiness records another
   # repository's gate reads as data. Runs AFTER the ruff block above (hook
@@ -139,20 +139,23 @@ repos:
         # This hook keeps the file types that guard cannot parse: YAML, JSON,
         # Markdown, HTML, SQL, .env.
         #
-        # docs/kernel-runtime-{composition,readiness}.json are excluded on
-        # the same "covered, not trusted" basis as .py above: PR #530's
-        # Pre-commit check actually failed here, not on formatting --
+        # docs/kernel-runtime-{composition,readiness}.json are DELIBERATELY
+        # NOT excluded here (a prior revision of this comment excluded them
+        # and that was wrong -- see below). Both evidence documents' own
+        # schema-ingestion contract (tests/architecture/composition_schema.py,
+        # the mirrored Starter contract) accepts and silently drops unknown
+        # payload keys rather than refusing them, and the JSON-validity check
+        # (scripts/check_evidence_json.py) only proves the file parses, not
+        # that it carries no secret. Excluding these two files from the one
+        # scanner that COULD catch a real value pasted into them (e.g. a
+        # planted `api_key` field) would leave that scanning gap
+        # unmonitored, not covered -- exactly the mistake this comment
+        # previously made. They must stay in scope.
+        #
         # `starter_catalogue_revision`'s full 40-character git SHA in
-        # kernel-runtime-composition.json reads as a "Hex High Entropy
-        # String" false positive under detect-secrets' entropy heuristic
-        # (confirmed: `detect-secrets scan docs/kernel-runtime-composition.json`
-        # flags exactly that value at line 4; the identical scan against
-        # kernel-runtime-readiness.json finds nothing today, excluded here
-        # anyway since both are the same category of document and a future
-        # readiness field could hit the same heuristic). Both documents are
-        # covered instead by tests/architecture/test_kernel_runtime_composition.py
-        # and test_kernel_runtime_readiness.py (schema/value validation
-        # against the real tree) and by the strict-json-evidence-documents
-        # hook below (JSON validity after formatting) -- decidable checks,
-        # not an entropy guess.
-        exclude: (\.env\.example|tests/|alembic/|scripts/|\.py$|docs/kernel-runtime-(composition|readiness)\.json$)
+        # kernel-runtime-composition.json is the ONE known, audited false
+        # positive (a "Hex High Entropy String" -- it is a public commit
+        # hash, not a secret) and is silenced narrowly by its entry in
+        # .secrets.baseline, exactly like every other baselined finding in
+        # this repository -- never by excluding the file it lives in.
+        exclude: (\.env\.example|tests/|alembic/|scripts/|\.py$)

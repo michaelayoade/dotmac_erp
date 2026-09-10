@@ -1,16 +1,3 @@
-# Mirrored, byte-for-byte, from dotmac_starter_mt's protected-main commit
-# 08a2dae1 ("Module registration means the booted product consumes the
-# manifest, not that an assembly object was built (#685)"),
-# tests/architecture/composition_schema.py. Not an import across
-# repositories -- ERP has no dependency on dotmac_starter_mt's Python
-# package, and never will; this is a frozen copy of a fleet-wide contract
-# this product's own composition record is checked against by
-# tests/architecture/test_kernel_runtime_composition.py in this repository.
-# Do not hand-edit: a contract change is a new mirror of a new pinned
-# Starter revision, reviewed the same way any other pinned cross-repository
-# contract is (AGENTS.md rule 15 / .dotmac/standards-profile.json's
-# pattern, applied here to this one schema file rather than the whole
-# engineering-standards pin).
 """The dimensional composition schema (frozen contract for cross-product reuse).
 
 Three product repositories each kept their own answer to "is distribution X
@@ -717,7 +704,7 @@ def derive_migration_lineage_applicability_from_manifest(
         tree = ast.parse(manifest_path.read_text())
     except SyntaxError as exc:
         raise ManifestDeclarationError(
-            f"{distribution}: {manifest_path} could not be parsed as Python — {exc}"
+            f"{distribution}: {manifest_path} could not be parsed as Python " f"— {exc}"
         ) from exc
 
     call = _find_module_manifest_call(tree)
@@ -1591,7 +1578,8 @@ def derive_distribution_universe(
             )
         if not toml_path.is_file():
             raise CatalogueDerivationError(
-                f"{package_dir} has no EXTRACTION.toml — refused, not silently skipped"
+                f"{package_dir} has no EXTRACTION.toml — refused, not "
+                "silently skipped"
             )
 
         data = tomllib.loads(toml_path.read_text())
