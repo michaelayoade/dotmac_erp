@@ -6,14 +6,19 @@ end-to-end through ExpenseService.create_claim + submit_claim, plus the status
 poll and category listing, and the 200/201 endpoint idempotency logic.
 """
 
+import base64
+import hashlib
 import itertools
+import sys
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, Response
+from sqlalchemy import select
 
 from app.models.expense import (
     ExpenseApproverLimit,
@@ -22,6 +27,7 @@ from app.models.expense import (
     ExpenseClaimStatus,
     ExpenseLimitRule,
 )
+from app.models.finance.common.attachment import Attachment
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.position import Position
@@ -32,8 +38,11 @@ from app.schemas.sync.sub_operational import (
     SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
     SubExpenseClaimRejectionPayload,
+    SubExpenseReceiptPayload,
 )
+from app.services.finance.common.numbering import SyncNumberingService
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
+from app.services.sync.sub.expenses import SubExpenseReceiptError
 
 
 def _ensure_hr_tables(engine) -> None:
@@ -45,6 +54,7 @@ def _ensure_hr_tables(engine) -> None:
         PositionAssignment.__table__,
         ExpenseApproverLimit.__table__,
         ExpenseLimitRule.__table__,
+        Attachment.__table__,
     ):
         for column in table.columns:
             default = column.server_default
@@ -57,6 +67,16 @@ def _ensure_hr_tables(engine) -> None:
 
 
 _claim_number_counter = itertools.count(1)
+
+
+def _dotmac_files_import_stub() -> SimpleNamespace:
+    """Keep the receipt-owner test isolated from the external storage package."""
+    return SimpleNamespace(
+        FilePolicy=MagicMock,
+        PreparedFile=object,
+        StorageProvider=object,
+        prepare_upload=MagicMock(),
+    )
 
 
 @pytest.fixture()
@@ -141,9 +161,9 @@ def fuel_category(db_session, org_id):
 @pytest.fixture()
 def numbering_patch():
     """Deterministic claim numbers without the core_config numbering tables."""
-    with patch(
-        "app.services.finance.common.numbering.SyncNumberingService"
-        ".generate_next_number",
+    with patch.object(
+        SyncNumberingService,
+        "generate_next_number",
         side_effect=lambda org_id, seq_type: (
             f"EXP-2026-{next(_claim_number_counter):05d}"
         ),
@@ -436,6 +456,157 @@ class TestExpenseClaimStatusPoll:
 
 
 class TestFieldManagerDecision:
+    def test_draft_receipt_delivery_precedes_trusted_approval(
+        self,
+        service,
+        db_session,
+        org_id,
+        employee,
+        manager,
+        numbering_patch,
+    ):
+        category = ExpenseCategory(
+            category_id=uuid.uuid4(),
+            organization_id=org_id,
+            category_code="HOTEL",
+            category_name="Accommodation",
+            requires_receipt=True,
+            is_active=True,
+        )
+        db_session.add(category)
+        db_session.flush()
+        source_line_id = uuid.uuid4()
+        payload = _payload(
+            employee,
+            items=[
+                SubExpenseClaimItemPayload(
+                    source_line_id=source_line_id,
+                    category_code="HOTEL",
+                    description="Overnight stay",
+                    claimed_amount=Decimal("20000"),
+                )
+            ],
+        )
+
+        draft = service.create_expense_claim_draft(org_id, payload, employee.person_id)
+        assert draft.status == "draft"
+        assert draft.items[0].source_line_id == source_line_id
+
+        content = b"%PDF-1.4\nreceipt"
+        source_attachment_id = uuid.uuid4()
+        receipt = SubExpenseReceiptPayload(
+            source_line_id=source_line_id,
+            source_attachment_id=source_attachment_id,
+            file_name="hotel.pdf",
+            mime_type="application/pdf",
+            size_bytes=len(content),
+            checksum_sha256=hashlib.sha256(content).hexdigest(),
+            content_base64=base64.b64encode(content).decode("ascii"),
+        )
+        key = (
+            f"expense-receipt.v1:{payload.source_claim_id}:"
+            f"{source_line_id}:{source_attachment_id}"
+        )
+        upload_service = MagicMock()
+        upload_service.save.return_value = SimpleNamespace(
+            s3_key=f"expense_receipts/{org_id}/receipt.pdf",
+            file_size=len(content),
+            checksum=hashlib.sha256(content).hexdigest(),
+        )
+        with patch.dict(sys.modules, {"dotmac_files": _dotmac_files_import_stub()}):
+            with patch(
+                "app.services.file_upload.get_expense_receipt_upload",
+                return_value=upload_service,
+            ):
+                first = service.attach_expense_receipt(
+                    org_id,
+                    source_claim_id=payload.source_claim_id,
+                    item_id=draft.items[0].item_id,
+                    payload=receipt,
+                    idempotency_key=key,
+                    uploaded_by_person_id=employee.person_id,
+                )
+                second = service.attach_expense_receipt(
+                    org_id,
+                    source_claim_id=payload.source_claim_id,
+                    item_id=draft.items[0].item_id,
+                    payload=receipt,
+                    idempotency_key=key,
+                    uploaded_by_person_id=employee.person_id,
+                )
+
+        assert first.created is True
+        assert second.created is False
+        assert second.attachment_id == first.attachment_id
+        assert upload_service.save.call_count == 1
+        attachments = list(
+            db_session.scalars(
+                select(Attachment).where(
+                    Attachment.organization_id == org_id,
+                    Attachment.entity_type == "EXPENSE_CLAIM_ITEM",
+                )
+            )
+        )
+        assert len(attachments) == 1
+
+        approved = service.approve_expense_claim(
+            org_id,
+            payload.source_claim_id,
+            SubExpenseClaimDecisionPayload(
+                decision_id=uuid.uuid4(),
+                decided_by_email=manager.person.email,
+                decided_at=datetime.now(UTC),
+            ),
+        )
+        assert approved.status == "approved"
+
+    def test_receipt_checksum_mismatch_is_safe_validation_error(
+        self,
+        service,
+        org_id,
+        employee,
+        fuel_category,
+        numbering_patch,
+    ):
+        source_line_id = uuid.uuid4()
+        payload = _payload(
+            employee,
+            items=[
+                SubExpenseClaimItemPayload(
+                    source_line_id=source_line_id,
+                    category_code="FUEL",
+                    description="Fuel",
+                    claimed_amount=Decimal("100"),
+                )
+            ],
+        )
+        draft = service.create_expense_claim_draft(org_id, payload, employee.person_id)
+        receipt = SubExpenseReceiptPayload(
+            source_line_id=source_line_id,
+            source_attachment_id=uuid.uuid4(),
+            file_name="fuel.pdf",
+            mime_type="application/pdf",
+            size_bytes=4,
+            checksum_sha256="0" * 64,
+            content_base64=base64.b64encode(b"%PDF").decode("ascii"),
+        )
+        key = (
+            f"expense-receipt.v1:{payload.source_claim_id}:"
+            f"{source_line_id}:{receipt.source_attachment_id}"
+        )
+
+        with patch.dict(sys.modules, {"dotmac_files": _dotmac_files_import_stub()}):
+            with pytest.raises(SubExpenseReceiptError) as exc:
+                service.attach_expense_receipt(
+                    org_id,
+                    source_claim_id=payload.source_claim_id,
+                    item_id=draft.items[0].item_id,
+                    payload=receipt,
+                    idempotency_key=key,
+                    uploaded_by_person_id=employee.person_id,
+                )
+        assert exc.value.code == "checksum_mismatch"
+
     def test_trusted_sub_approval_skips_erp_approval_chain(
         self,
         service,

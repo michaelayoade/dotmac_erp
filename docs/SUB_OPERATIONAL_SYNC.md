@@ -97,6 +97,32 @@ claim status polling require the exact `sub:expense:write` service scope.
 The selected employee is rechecked against current ERP approver eligibility,
 and only that employee may approve or reject the Sub-originated claim.
 
+The legacy `POST /api/v1/sync/sub/expense-claims` create-and-submit contract is
+retained for already-deployed callers. New Self-Care expense delivery begins
+only after the Field manager has approved the authoritative request. The worker
+creates or retrieves a receipt-capable `DRAFT` through
+`POST /api/v1/sync/sub/expense-claims/drafts`. Every line carries a stable
+`source_line_id`, and the response maps it to the ERP item identity without
+making the claim visible to ERP approval processing.
+
+Self-Care then uploads each private attachment through
+`POST /api/v1/sync/sub/expense-claims/{source_claim_id}/items/{item_id}/receipts`.
+The typed request supplies the source line and attachment identities, validated
+filename, MIME type, byte size, SHA-256 checksum, and base64 transport content.
+The same identities form the required `Idempotency-Key`. ERP validates the
+decoded bytes through its expense-receipt storage policy, records checksum and
+attachment evidence, and returns the existing attachment for an identical
+retry. Receipt content is never written to an outbox or log.
+
+Sub remains authoritative for the Field manager decision and delivers its
+durable decision evidence to the claim-specific `/approve` or `/reject`
+endpoint only after all mandatory receipt uploads succeed. Approval submits a
+receipt-complete draft and then projects the trusted manager decision. ERP
+verifies the manager's employee identity, monetary authority, self-approval
+restriction, and category receipt rules before acceptance. Draft creation,
+receipt upload, decision endpoints, and claim status polling require the exact
+`sub:expense:write` service scope.
+
 An approved claim may be paid from the Field app. Sub only stages and delivers
 the command; ERP owns creation of the payment intent, Paystack transfer,
 webhook/poll reconciliation, accounting consequences, and final `PAID` fact.
@@ -137,3 +163,6 @@ expense, and replays the request to prove idempotency.
   `erp.expense.form_context.v1` capability. Logs, errors, and operator evidence
   must redact account numbers, destination tokens, bank credentials, and
   private employee data.
+- Do not replay historical failed expense events automatically. A Self-Care
+  recovery owner must revalidate and explicitly create linked replacement
+  evidence before this contract is invoked.

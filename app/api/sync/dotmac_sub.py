@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from typing import TypeVar
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,7 @@ from app.schemas.sync.sub_operational import (
     SubExpenseCategoriesResponse,
     SubExpenseApproversResponse,
     SubExpenseBanksResponse,
+    SubExpenseClaimDraftResponse,
     SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
     SubExpenseClaimRejectionPayload,
@@ -42,6 +43,8 @@ from app.schemas.sync.sub_operational import (
     SubExpenseDestinationVerifyPayload,
     SubExpenseDestinationVerifyResponse,
     SubExpenseDestinationInspectPayload,
+    SubExpenseReceiptPayload,
+    SubExpenseReceiptResponse,
     SubMaterialRequestPayload,
     SubMaterialRequestResponse,
     SubMaterialRequestStatusRead,
@@ -59,6 +62,7 @@ from app.services.inventory.material_support import MaterialSupportService
 from app.services.finance.rpt.ncc_financials import ncc_financials_context
 from app.services.people.hr.ncc_staff_report import NccStaffReportService
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
+from app.services.sync.sub.expenses import SubExpenseReceiptError
 from app.services.sync.sub_purchase_invoice_status import (
     PurchaseInvoiceStatusNotFoundError,
     get_purchase_invoice_status,
@@ -72,6 +76,20 @@ _PayloadT = TypeVar("_PayloadT")
 
 def _sanitize_error(exc: Exception) -> str:
     return str(exc)[:_MAX_ERROR_LEN]
+
+
+def _sub_expense_error_status(code: str) -> int:
+    if code in {"claim_not_found", "item_not_found"}:
+        return 404
+    if code in {
+        "claim_not_draft",
+        "draft_line_mapping_ambiguous",
+        "idempotency_conflict",
+    }:
+        return 409
+    if code == "storage_unavailable":
+        return 503
+    return 422
 
 
 def _sync_operational_rows(
@@ -503,6 +521,65 @@ def get_sub_expense_profile_destination(
         UUID(str(auth["organization_id"])),
         requested_by_email=requested_by_email,
     )
+
+
+@router.post(
+    "/expense-claims/drafts",
+    response_model=SubExpenseClaimDraftResponse,
+    status_code=201,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def create_sub_expense_claim_draft(
+    payload: SubExpenseClaimPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseClaimDraftResponse:
+    """Create an idempotent ERP draft so Sub can attach private receipts."""
+    try:
+        return DotMacSubSyncService(db).create_expense_claim_draft(
+            UUID(str(auth["organization_id"])),
+            payload,
+            UUID(str(auth["person_id"])),
+        )
+    except SubExpenseReceiptError as exc:
+        raise HTTPException(
+            status_code=_sub_expense_error_status(exc.code),
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.post(
+    "/expense-claims/{source_claim_id}/items/{item_id}/receipts",
+    response_model=SubExpenseReceiptResponse,
+    status_code=201,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def upload_sub_expense_receipt(
+    source_claim_id: str,
+    item_id: UUID,
+    payload: SubExpenseReceiptPayload,
+    response: Response,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseReceiptResponse:
+    """Attach private receipt evidence before the trusted Sub decision."""
+    try:
+        result = DotMacSubSyncService(db).attach_expense_receipt(
+            UUID(str(auth["organization_id"])),
+            source_claim_id=source_claim_id,
+            item_id=item_id,
+            payload=payload,
+            idempotency_key=idempotency_key,
+            uploaded_by_person_id=UUID(str(auth["person_id"])),
+        )
+    except SubExpenseReceiptError as exc:
+        raise HTTPException(
+            status_code=_sub_expense_error_status(exc.code),
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    response.status_code = 201 if result.created else 200
+    return result
 
 
 @router.post(

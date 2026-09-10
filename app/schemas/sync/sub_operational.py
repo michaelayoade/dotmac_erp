@@ -473,6 +473,13 @@ class SubMaterialRequestStatusRead(BaseModel):
 class SubExpenseClaimItemPayload(BaseModel):
     """Single expense line in a Sub field-technician expense request."""
 
+    source_line_id: UUID | None = Field(
+        None,
+        description=(
+            "Stable Sub expense-line UUID. Required by the draft-and-receipt "
+            "delivery contract."
+        ),
+    )
     category_code: str = Field(..., min_length=1, max_length=30)
     description: str = Field(..., min_length=1, max_length=500)
     claimed_amount: Decimal = Field(..., gt=0)
@@ -529,6 +536,49 @@ class SubExpenseClaimResponse(BaseModel):
     claim_number: str
     status: str
     source_claim_id: str
+
+
+class SubExpenseClaimDraftItemResponse(BaseModel):
+    """Stable mapping from a Sub expense line to its ERP draft item."""
+
+    source_line_id: UUID
+    item_id: UUID
+
+
+class SubExpenseClaimDraftResponse(SubExpenseClaimResponse):
+    """Draft claim plus the line identities required for receipt upload."""
+
+    items: list[SubExpenseClaimDraftItemResponse]
+
+
+class SubExpenseReceiptPayload(BaseModel):
+    """Private receipt content delivered by the trusted Sub integration."""
+
+    contract_version: Literal["expense-receipt.v1"] = "expense-receipt.v1"
+    source_line_id: UUID
+    source_attachment_id: UUID
+    file_name: str = Field(..., min_length=1, max_length=255)
+    mime_type: Literal[
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+    ]
+    size_bytes: int = Field(..., gt=0, le=10 * 1024 * 1024)
+    checksum_sha256: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    content_base64: str = Field(..., min_length=1)
+
+
+class SubExpenseReceiptResponse(BaseModel):
+    """Idempotent ERP receipt-attachment evidence."""
+
+    attachment_id: UUID
+    source_claim_id: str
+    item_id: UUID
+    source_attachment_id: UUID
+    checksum_sha256: str
+    created: bool
 
 
 class SubExpenseClaimDecisionPayload(BaseModel):

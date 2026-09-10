@@ -139,7 +139,7 @@ def test_sub_routes_delegate_only_to_source_neutral_ports() -> None:
         assert forbidden not in source
     assert "MaterialSupportService" in source
     assert "get_purchase_invoice_status" in source
-    assert source.count("@router.") == 20
+    assert source.count("@router.") == 27
     assert '"/purchase-orders/variations"' not in source
 
 
@@ -316,5 +316,5 @@ def test_committed_openapi_surface_has_no_retired_crm_contract() -> None:
         for route in routes
         if "/api/v1/sync/sub/" in route and "/attendance/" not in route
     ]
-    assert len(material_and_operational_routes) == 21
+    assert len(material_and_operational_routes) == 28
     assert not [name for name in schemas if "CRM" in name or "Crm" in name]
