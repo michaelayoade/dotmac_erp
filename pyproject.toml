@@ -158,6 +158,21 @@ vulture = "^2.16"
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+# Strict-JSON evidence documents (docs/kernel-runtime-{composition,readiness}.json)
+# are read by another repository's gate as DATA and must never be
+# formatter-owned. `ruff format .`/`ruff check .` (how `make format`,
+# `make format-check`, `make lint` and CI's pre-commit job actually invoke
+# ruff) already skip non-.py files by extension, so this entry is the
+# config-level half of the fix; .pre-commit-config.yaml's `exclude:` on the
+# `ruff`/`ruff-format` hooks is the other half, for the one path that
+# reaches them regardless of extension -- `ruff format <path.json>` invoked
+# with the file named explicitly on the command line. See
+# scripts/check_evidence_json.py for the validator that runs after
+# formatting and fails on invalid JSON either way.
+extend-exclude = [
+    "docs/kernel-runtime-composition.json",
+    "docs/kernel-runtime-readiness.json",
+]
 
 [tool.ruff.lint]
 select = [

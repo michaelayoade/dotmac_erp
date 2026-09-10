@@ -70,6 +70,20 @@ jobs:
       - name: Ruff format check
         run: make format-check
 
+      # Same job, same runner, immediately after the format step -- the one
+      # place "the validator runs after formatting" is a guarantee rather
+      # than an accident of exclusion scope. A separate parallel job (e.g.
+      # an architecture-test job under `test:`) checks out the same commit
+      # independently and proves nothing about causal ordering relative to
+      # THIS job's formatter step; this step and the architecture-level
+      # tests/architecture/test_strict_json_evidence_documents.py are not
+      # redundant -- this one catches a formatter that mangled a document
+      # IN THIS RUN, the architecture test catches a document that arrived
+      # broken by any other route (a hand edit, a different job, a future
+      # tool). Keep both.
+      - name: Strict-JSON evidence documents parse after formatting
+        run: python3 scripts/check_evidence_json.py
+
       - name: Session-context guard (no raw SessionLocal() in tasks)
         run: python3 scripts/check_session_context.py
 

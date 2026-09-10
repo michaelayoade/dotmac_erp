@@ -2,12 +2,51 @@
 exclude: ^\.seabone/
 repos:
   # Ruff: fast linting + formatting (replaces flake8, isort, black)
+  #
+  # Both hooks carry an explicit `exclude:` naming the strict-JSON evidence
+  # documents (docs/kernel-runtime-{composition,readiness}.json), even
+  # though ruff-pre-commit's own hook manifest already restricts these hooks
+  # to `types_or: [python, pyi]` and neither `make format`/`make
+  # format-check`'s directory-wide `ruff format .` nor CI's `--all-files`
+  # run ever reaches a .json file today (verified directly: `ruff format
+  # --check .` from the repo root does not even mention either file). The
+  # explicit exclude is defense-in-depth against the one path that DOES
+  # reach them regardless of extension: `ruff format <path.json>` invoked
+  # directly with the file named on the command line (e.g. a future
+  # `pre-commit run --files docs/kernel-runtime-composition.json`, or a
+  # script that globs docs/*.json into a formatter call) rewrites the file
+  # into JSON5/JSONC shape — trailing commas — which is no longer strict
+  # JSON. These two files are read by another repository's gate as DATA,
+  # never as Python, and must stay parseable by `json.load` with zero
+  # tolerance; see the `strict-json-evidence-documents` local hook below,
+  # which runs AFTER this block specifically to catch a formatter that
+  # mangled one of them regardless of how it was invoked.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.0
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^docs/kernel-runtime-(composition|readiness)\.json$
       - id: ruff-format
+        exclude: ^docs/kernel-runtime-(composition|readiness)\.json$
+
+  # Strict-JSON evidence documents: composition/readiness records another
+  # repository's gate reads as data. Runs AFTER the ruff block above (hook
+  # execution follows this file's order) so it catches a formatter -- or
+  # anything else -- that has mangled one of them into invalid JSON, rather
+  # than running first and being silently masked by a later step. See
+  # scripts/check_evidence_json.py's own docstring for the full rationale
+  # and the sensitivity proof in
+  # tests/architecture/test_strict_json_evidence_documents.py.
+  - repo: local
+    hooks:
+      - id: strict-json-evidence-documents
+        name: strict JSON evidence documents parse after formatting
+        language: system
+        entry: python3 scripts/check_evidence_json.py
+        pass_filenames: false
+        files: ^docs/kernel-runtime-(composition|readiness)\.json$
+        always_run: true
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -99,4 +138,21 @@ repos:
         #
         # This hook keeps the file types that guard cannot parse: YAML, JSON,
         # Markdown, HTML, SQL, .env.
-        exclude: (\.env\.example|tests/|alembic/|scripts/|\.py$)
+        #
+        # docs/kernel-runtime-{composition,readiness}.json are excluded on
+        # the same "covered, not trusted" basis as .py above: PR #530's
+        # Pre-commit check actually failed here, not on formatting --
+        # `starter_catalogue_revision`'s full 40-character git SHA in
+        # kernel-runtime-composition.json reads as a "Hex High Entropy
+        # String" false positive under detect-secrets' entropy heuristic
+        # (confirmed: `detect-secrets scan docs/kernel-runtime-composition.json`
+        # flags exactly that value at line 4; the identical scan against
+        # kernel-runtime-readiness.json finds nothing today, excluded here
+        # anyway since both are the same category of document and a future
+        # readiness field could hit the same heuristic). Both documents are
+        # covered instead by tests/architecture/test_kernel_runtime_composition.py
+        # and test_kernel_runtime_readiness.py (schema/value validation
+        # against the real tree) and by the strict-json-evidence-documents
+        # hook below (JSON validity after formatting) -- decidable checks,
+        # not an entropy guess.
+        exclude: (\.env\.example|tests/|alembic/|scripts/|\.py$|docs/kernel-runtime-(composition|readiness)\.json$)
