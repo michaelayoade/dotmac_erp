@@ -89,6 +89,21 @@ REASONS = {
         "the released facility and the deployment descriptor test proves the "
         "fields stay identical to the descriptor they came from."
     ),
+    "docs/kernel-runtime-composition.json": (
+        "`Hex High Entropy String` on `starter_catalogue_revision`: a "
+        "40-character git commit SHA naming the dotmac_starter_mt "
+        "protected-main revision this record's dimensional-composition.v2 "
+        "catalogue and manifests were derived against. It is REQUIRED to "
+        "be 40 hex characters by its own contract "
+        "(tests/architecture/composition_schema.py's derive_distribution_"
+        "universe/manifest reading, and this file's own "
+        "test_envelope_starter_catalogue_revision_is_the_full_protected_"
+        "main_sha), which is exactly why the entropy heuristic fires. It "
+        "authenticates nothing: a git commit SHA is published in every "
+        "clone of dotmac_starter_mt, names a point in history rather than "
+        "granting access, and this specific value is independently pinned "
+        "and checked against by that same test."
+    ),
     "docs/paystack_chargebacks_investigation.md": (
         "Paystack transaction references from a written-up investigation. "
         "They identify transactions, not an actor — a reference authorises "
