@@ -81,6 +81,23 @@ jobs:
       # IN THIS RUN, the architecture test catches a document that arrived
       # broken by any other route (a hand edit, a different job, a future
       # tool). Keep both.
+      #
+      # DELIBERATELY CARRIES NO `if:` GUARD, and must never be made to
+      # inherit one from a neighbouring step. This workflow has no
+      # docs-only/changed-files classifier today (verified: no `paths:`
+      # filter on the `on:` triggers above, no separate "changes"-detection
+      # job, no job or step anywhere in this file conditions on one except
+      # `publish-image`'s unrelated main-branch-push check) -- but if one is
+      # ever added and neighbouring Python-linting steps are skipped under
+      # it on a docs-only change, THIS step must not be skipped along with
+      # them by a reflexive copy-paste of their guard. A pull request that
+      # changes only docs/kernel-runtime-composition.json -- the exact shape
+      # every future record update takes -- is a docs-only change by any
+      # such classifier's own definition, and is precisely the one case this
+      # step exists to catch. Uses plain `python3` with only the standard
+      # library (json, sys, pathlib in scripts/check_evidence_json.py) so it
+      # has nothing to do with the poetry/project environment a narrowed
+      # run would be the first thing to drop.
       - name: Strict-JSON evidence documents parse after formatting
         run: python3 scripts/check_evidence_json.py
 
