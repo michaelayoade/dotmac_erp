@@ -247,7 +247,11 @@ FROM pg_catalog.pg_class AS c,
        COALESCE(
          c.relacl,
          pg_catalog.acldefault(
-           CASE WHEN c.relkind = 'S' THEN 's' ELSE 'r' END, c.relowner
+           CASE
+             WHEN c.relkind = 'S' THEN 's'::"char"
+             ELSE 'r'::"char"
+           END,
+           c.relowner
          )
        )
      ) AS a
