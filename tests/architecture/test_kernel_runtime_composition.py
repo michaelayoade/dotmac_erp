@@ -34,6 +34,7 @@ distinguish the two, rather than reject everything.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -95,6 +96,98 @@ def test_a_v1_tagged_payload_is_refused_not_upgraded() -> None:
     v1_payload["schema_version"] = cs.LEGACY_SCHEMA_VERSION_V1
     with pytest.raises(cs.IncompatibleSchemaVersion):
         cs.composition_record_from_payload(v1_payload, FIXTURE_PACKAGES_ROOT)
+
+
+# ---------------------------------------------------------------------------
+# Cross-product envelope: the shape Starter's gate reads uniformly across
+# ERP, Sub, and Academy. `product` and `starter_catalogue_revision` are
+# mandatory top-level keys with a fixed meaning (repository directory name;
+# full 40-character protected-main SHA) so one reader can compare all three
+# products' records without per-product special-casing. There is
+# deliberately no stored count anywhere in the document -- `len(records)`
+# is re-derived by every test in this module that needs it, never carried
+# as a field that could drift from the records it claims to describe.
+# ---------------------------------------------------------------------------
+
+EXPECTED_PRODUCT = "dotmac_erp"
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+#: Key names anywhere in the document that would smuggle a stored count back
+#: in under a different name. Matched case-insensitively as a substring, not
+#: an exact set, because the defect is "any equivalent", not one literal
+#: spelling.
+_FORBIDDEN_COUNT_KEY_FRAGMENTS = ("count", "catalogue_size", "total")
+
+
+def test_envelope_has_exactly_the_four_required_top_level_keys() -> None:
+    doc = load_document()
+    assert set(doc.keys()) == {
+        "schema_version",
+        "product",
+        "starter_catalogue_revision",
+        "records",
+    }, f"unexpected top-level envelope shape: {sorted(doc.keys())}"
+
+
+def test_envelope_product_is_the_repository_directory_name() -> None:
+    doc = load_document()
+    assert doc["product"] == EXPECTED_PRODUCT
+
+
+def test_envelope_starter_catalogue_revision_is_the_full_protected_main_sha() -> None:
+    doc = load_document()
+    revision = doc["starter_catalogue_revision"]
+    assert isinstance(revision, str)
+    assert _FULL_SHA_RE.match(revision), (
+        f"starter_catalogue_revision must be a full 40-character SHA, got "
+        f"{revision!r} (len={len(revision)})"
+    )
+    assert revision == "08a2dae1b1f6510e9d1076ac9dbd6eca0db06137"
+
+
+def test_no_stored_count_key_anywhere_in_the_document() -> None:
+    """Sensitivity proof: a document carrying a `catalogue_size` (or any
+    count-shaped) key anywhere -- top level or nested inside a record -- is
+    refused. A record's own field names (`installation`, etc.) never match
+    a forbidden fragment, so this cannot false-positive on the real,
+    checked-in document; the corrupted-copy branch below proves it does
+    fire on the planted defect."""
+
+    def find_offending_keys(node: object, path: str) -> list[str]:
+        offending: list[str] = []
+        if isinstance(node, dict):
+            for key, value in node.items():
+                lowered = str(key).lower()
+                if any(
+                    fragment in lowered for fragment in _FORBIDDEN_COUNT_KEY_FRAGMENTS
+                ):
+                    offending.append(f"{path}.{key}")
+                offending.extend(find_offending_keys(value, f"{path}.{key}"))
+        elif isinstance(node, list):
+            for index, item in enumerate(node):
+                offending.extend(find_offending_keys(item, f"{path}[{index}]"))
+        return offending
+
+    doc = load_document()
+    assert find_offending_keys(doc, "$") == []
+
+    # Sensitivity proof: plant the exact defect (a stored count) and show
+    # the same scan names it.
+    corrupted = dict(doc)
+    corrupted["catalogue_size"] = len(doc["records"])
+    offending = find_offending_keys(corrupted, "$")
+    assert offending == ["$.catalogue_size"], offending
+
+
+def test_records_is_the_only_place_row_count_is_observable() -> None:
+    """Near-miss: `len(records)` itself is not a stored count -- it is the
+    list, not a field claiming to describe the list -- and must not be
+    flagged by the same guard that catches a planted `catalogue_size`. No
+    literal count is asserted here either -- re-derived from the fixture
+    glob, exactly like `test_catalogue_size_is_derived_never_hardcoded`."""
+    doc = load_document()
+    universe_count = sum(1 for p in FIXTURE_PACKAGES_ROOT.iterdir() if p.is_dir())
+    assert len(doc["records"]) == universe_count
 
 
 # ---------------------------------------------------------------------------

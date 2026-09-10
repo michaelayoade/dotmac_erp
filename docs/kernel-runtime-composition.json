@@ -1,16 +1,7 @@
 {
   "schema_version": "dimensional-composition.v2",
-  "product": "dotmac-erp",
-  "derived_against": {
-    "starter_repository": "dotmac_starter_mt",
-    "starter_revision": "08a2dae1",
-    "starter_revision_note": "protected main; contract commit \"Module registration means the booted product consumes the manifest, not that an assembly object was built (#685)\"",
-    "starter_contract_path": "tests/architecture/composition_schema.py",
-    "starter_contract_mirror": "tests/architecture/composition_schema.py",
-    "erp_base_revision": "74c26ef1e4fdfb6b3c1d0bfe01b76077e733704d",
-    "erp_base_branch": "origin/main",
-    "catalogue_source": "packages/*/EXTRACTION.toml at the Starter revision above; a frozen, verbatim mirror (dossiers + optional-module manifest.py files) is checked in at tests/architecture/fixtures/starter_packages_08a2dae1/ for the validator to re-derive against (Ruling 2) -- this repository does not import Starter's Python."
-  },
+  "product": "dotmac_erp",
+  "starter_catalogue_revision": "08a2dae1b1f6510e9d1076ac9dbd6eca0db06137",
   "records": [
     {
       "schema_version": "dimensional-composition.v2",
