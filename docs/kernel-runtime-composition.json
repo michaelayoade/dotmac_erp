@@ -1,0 +1,966 @@
+{
+  "schema_version": "dimensional-composition.v2",
+  "product": "dotmac-erp",
+  "derived_against": {
+    "starter_repository": "dotmac_starter_mt",
+    "starter_revision": "08a2dae1",
+    "starter_revision_note": "protected main; contract commit \"Module registration means the booted product consumes the manifest, not that an assembly object was built (#685)\"",
+    "starter_contract_path": "tests/architecture/composition_schema.py",
+    "starter_contract_mirror": "tests/architecture/composition_schema.py",
+    "erp_base_revision": "74c26ef1e4fdfb6b3c1d0bfe01b76077e733704d",
+    "erp_base_branch": "origin/main",
+    "catalogue_source": "packages/*/EXTRACTION.toml at the Starter revision above; a frozen, verbatim mirror (dossiers + optional-module manifest.py files) is checked in at tests/architecture/fixtures/starter_packages_08a2dae1/ for the validator to re-derive against (Ruling 2) -- this repository does not import Starter's Python."
+  },
+  "records": [
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-accounting",
+      "classification": "optional-module",
+      "installation": "true",
+      "module_registration": "false",
+      "migration_lineage": "true",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-ai-operations",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-analytics",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-app-sync",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-application-directory",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-approvals",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-assets",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-auth-oidc",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-banking",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-billing",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-brand-profiles",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-campaigns",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-collections",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-commercial-agreements",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-compliance-reporting",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-flutterwave",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-linkedin",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-meta-social",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-mono",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-nira",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-paystack",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-remita",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-connector-whatsapp",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-content",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-customers",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-deployment-control",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-deployment-foundation",
+      "classification": "universal-facility",
+      "installation": "true",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-document-rendering",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-documents",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-durable-timers",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-entitlement-allocation",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-expenses",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-fiber-plant",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-files",
+      "classification": "optional-module",
+      "installation": "true",
+      "module_registration": "false",
+      "migration_lineage": "true",
+      "runtime_consumption": "true"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-finance",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-forms",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-fulfillment",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-fx-policy",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-imports",
+      "classification": "optional-module",
+      "installation": "true",
+      "module_registration": "false",
+      "migration_lineage": "true",
+      "runtime_consumption": "true"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-inbox",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-inbox-operations",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-integration",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-inventory",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-ipam",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-kernel",
+      "classification": "universal-facility",
+      "installation": "true",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "true"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-licensing",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-media-observations",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-network-access",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-network-assurance",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-network-control",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-network-inventory",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-network-observability",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-network-topology",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-numbering",
+      "classification": "optional-module",
+      "installation": "true",
+      "module_registration": "false",
+      "migration_lineage": "true",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-operational-escalations",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-party",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-payables",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-payments",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-payroll",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-people",
+      "classification": "optional-module",
+      "installation": "true",
+      "module_registration": "false",
+      "migration_lineage": "true",
+      "runtime_consumption": "true"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-platform-health",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-pon-access",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-positioning",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-procurement",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-projects",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-publishing",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-qualification",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-records",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-referrals",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-release-catalog",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-remote-access",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-reseller-management",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-response-obligations",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-runner-transport",
+      "classification": "universal-facility",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-runner-transport-github-actions",
+      "classification": "stateless-protocol-adapter",
+      "installation": "false",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-sales",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-service-access-policy",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-service-catalog",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-service-changes",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-service-orders",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-services",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-sites",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-subscriptions",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-support-access",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-surveys",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-tax",
+      "classification": "optional-module",
+      "installation": "true",
+      "module_registration": "false",
+      "migration_lineage": "true",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-template-studio",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-ticketing",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-ui",
+      "classification": "presentation-foundation",
+      "installation": "true",
+      "module_registration": "not_applicable",
+      "migration_lineage": "not_applicable",
+      "runtime_consumption": "true"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-usage",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-usage-rating",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-web-analytics",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-work-orders",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-workflow-runtime",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    },
+    {
+      "schema_version": "dimensional-composition.v2",
+      "product": "dotmac-erp",
+      "distribution": "dotmac-workforce",
+      "classification": "optional-module",
+      "installation": "false",
+      "module_registration": "false",
+      "migration_lineage": "false",
+      "runtime_consumption": "false"
+    }
+  ]
+}
