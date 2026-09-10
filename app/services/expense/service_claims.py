@@ -335,7 +335,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         return item
 
     @staticmethod
-    def _append_receipt_url(existing: str | None, new_path: str) -> str:
+    def append_receipt_url(existing: str | None, new_path: str) -> str:
         """Append a receipt path to the single-or-JSON-array receipt_url
         convention used by the web self-service flow (see
         web_common._parse_receipt_urls)."""
@@ -353,6 +353,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 urls = [raw]
         urls.append(new_path)
         return urls[0] if len(urls) == 1 else json.dumps(urls)
+
+    _append_receipt_url = append_receipt_url
 
     def attach_receipt(
         self,

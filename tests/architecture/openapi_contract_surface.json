@@ -8647,6 +8647,16 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/sync/sub/expense-claims/drafts": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "5721526adb7c",
+   "responses": {
+    "201": "c3b5a56790b4",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/sync/sub/expense-claims/{source_claim_id}/approve": {
    "params": [
     "header:x-api-key!",
@@ -8655,6 +8665,19 @@
    "request": "8ab5c0e114c0",
    "responses": {
     "200": "5a36e7299db9",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/sync/sub/expense-claims/{source_claim_id}/items/{item_id}/receipts": {
+   "params": [
+    "header:Idempotency-Key!",
+    "header:x-api-key!",
+    "path:item_id!",
+    "path:source_claim_id!"
+   ],
+   "request": "8a3fbb5b1ae4",
+   "responses": {
+    "201": "b8b1be37fef2",
     "422": "a11c9d9b2af8"
    }
   },
@@ -9784,13 +9807,17 @@
   "SubExpenseCategoriesResponse": "d2fa1a1bebde",
   "SubExpenseCategoryItem": "d005e565d191",
   "SubExpenseClaimDecisionPayload": "23ab9b7004e7",
-  "SubExpenseClaimItemPayload": "f3e8a2b0f9a2",
+  "SubExpenseClaimDraftItemResponse": "47ab89e08a8c",
+  "SubExpenseClaimDraftResponse": "1b409903701b",
+  "SubExpenseClaimItemPayload": "4006fb7a5126",
   "SubExpenseClaimPayload": "588dde1c48f5",
   "SubExpenseClaimRejectionPayload": "459893975aeb",
   "SubExpenseClaimResponse": "5567fab6c2f5",
   "SubExpenseClaimStatusResponse": "b4f6f77027ff",
   "SubExpensePaymentPayload": "8ed5cce44c03",
   "SubExpensePaymentResponse": "91fb09c61a03",
+  "SubExpenseReceiptPayload": "841384c5c747",
+  "SubExpenseReceiptResponse": "f19fd3c914e1",
   "SubMaterialRequestItemPayload": "b9286a24d0e6",
   "SubMaterialRequestItemRead": "abbdf2c168e4",
   "SubMaterialRequestPayload": "7eee87bdee45",

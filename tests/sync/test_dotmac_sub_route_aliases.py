@@ -6,6 +6,11 @@ def test_sub_sync_router_covers_every_phase5_transport() -> None:
     expected = {
         ("POST", "/sync/sub/bulk"),
         ("POST", "/sync/sub/expense-claims"),
+        ("POST", "/sync/sub/expense-claims/drafts"),
+        (
+            "POST",
+            "/sync/sub/expense-claims/{source_claim_id}/items/{item_id}/receipts",
+        ),
         ("POST", "/sync/sub/expense-claims/{source_claim_id}/approve"),
         ("POST", "/sync/sub/expense-claims/{source_claim_id}/reject"),
         ("POST", "/sync/sub/expense-claims/{source_claim_id}/payments"),
