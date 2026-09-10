@@ -104,6 +104,7 @@ MANIFEST_PATH = (
 )
 ROUTINE_SQL_PATH = REPO_ROOT / "scripts/erp_identity_cutover_grants.sql"
 DENIAL_LEDGER_PATH = REPO_ROOT / "scripts/erp_identity_cutover_denied.sql"
+VERIFIER_PATH = REPO_ROOT / "scripts/verify_identity_cutover_privileges.py"
 
 #: The census's own headline numbers, restated here so the guard cannot pass
 #: by the census and the manifest drifting together. These are the frozen
@@ -216,6 +217,16 @@ def test_the_committed_sql_is_what_the_manifest_renders(census: dict) -> None:
     assert render_denial_ledger(
         built.denied(), DENIAL_LEDGER_TITLE
     ) == DENIAL_LEDGER_PATH.read_text(encoding="utf-8")
+
+
+def test_relation_acl_default_uses_postgres_internal_char_type() -> None:
+    """PostgreSQL 16 rejects a text CASE expression passed to acldefault."""
+    source = VERIFIER_PATH.read_text(encoding="utf-8")
+    relation_acl_sql = source.split('RELATION_ACL_SQL = """', 1)[1].split(
+        'FUNCTION_ACL_SQL = """', 1
+    )[0]
+    assert "'s'::\"char\"" in relation_acl_sql
+    assert "'r'::\"char\"" in relation_acl_sql
 
 
 def test_generation_is_deterministic(census: dict) -> None:
