@@ -164,15 +164,15 @@ def test_python_is_not_suppressed_here() -> None:
 
 
 def test_the_suppression_count_only_shrinks() -> None:
-    """A ceiling, not a target.
+    """An exact pin, not merely a ceiling.
 
     The prior floor was 18. Schema-9 conservation added seven public integrity
     fingerprints to the already-listed profile; ERP's required public source
     revision adds one descriptor finding and one deterministic telemetry
     projection, reaching 27.
 
-    28 admits exactly ONE more, and it is named rather than absorbed: the
-    published OCI image digest, projected into the rendered collector at
+    28 admitted exactly ONE more, named rather than absorbed: the published
+    OCI image digest, projected into the rendered collector at
     `deploy/rendered/otel-collector.yaml`. It appeared when the descriptor
     stopped carrying an all-zero sentinel and began binding the digest
     protected-main CI resolved for the image it built and tested. A digest is
@@ -181,19 +181,32 @@ def test_the_suppression_count_only_shrinks() -> None:
     precisely BECAUSE the descriptor refuses a mutable tag, so suppressing it is
     the cost of the stronger reference, not a concession.
 
-    29 admits one additional public integrity value: the schema-9 governance
-    fingerprint shared by the two Paystack relay retry tests. The profile and
-    conservation ledger name both symbols and bind the same reviewed source
-    bytes; the value authenticates nothing and grants no access.
+    29 is `docs/kernel-runtime-composition.json`'s single finding:
+    `Hex High Entropy String` on `starter_catalogue_revision`, a required
+    40-character git commit SHA (see this repository's `REASONS` entry for
+    that path for the full statement). It replaces an earlier, INCORRECT
+    account in this docstring naming a "schema-9 governance fingerprint
+    shared by the two Paystack relay retry tests" as the 29th slot — no such
+    entry exists in the current baseline, and a docstring whose prose no
+    longer accounts for the file's actual contents is exactly the kind of
+    unexamined narrative this guard exists to prevent elsewhere.
 
-    Every entry above the reviewed 29 would be unexplained, and the reason check
-    above only fires per FILE — a new finding in an already-listed file would
-    otherwise slip in silently, which is exactly the shape this one had.
+    Every entry above the reviewed 29 would be unexplained, and the reason
+    check above only fires per FILE — a new finding in an already-listed
+    file would otherwise slip in silently, which is exactly the shape this
+    one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
+    two-directional, and an UNEXPLAINED drop below 29 (a finding quietly
+    disappearing without its `REASONS` entry being removed by
+    `test_no_reason_outlives_its_finding`, or a finding merging into another
+    file's count) is exactly as worth surfacing as a rise -- either way,
+    someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total <= 29, (
-        f"{total} suppressed findings, up from 29. Fix the finding, or lower "
-        "this number in the same change that explains the new entry."
+    assert total == 29, (
+        f"{total} suppressed findings, expected exactly 29. A rise means fix "
+        "the finding or explain and pin the new total here; a drop means "
+        "correct this docstring's accounting and lower the pin in the same "
+        "change -- never leave a stale number unexamined either direction."
     )
 
 

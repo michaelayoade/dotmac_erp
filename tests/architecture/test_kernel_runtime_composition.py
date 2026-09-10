@@ -46,14 +46,19 @@ source on every run, the same way the mirrored schema's own
 `measure_starter_boot_assembly_consumption` re-derives Starter's positive
 control -- it is not a trusted literal.
 
-Sensitivity is proven, not assumed:
-`test_registration_boundary_sensitivity_proof_defect_is_named` plants the
-exact defect v1 recorded (`module_registration: true` for a distribution
-whose only call site is release metadata) and shows the cross-check names it;
-`test_registration_boundary_sensitivity_proof_near_miss_is_accepted` runs the
-real, checked-in `false` value for that same distribution through the
-identical cross-check and shows it is NOT flagged -- so the guard is proven to
-distinguish the two, rather than reject everything.
+Sensitivity is proven, not assumed, and proven by calling the REAL
+offender-finding function (`find_registration_mismatches`,
+`find_installation_mismatches`) over a corrupted in-memory copy of the
+record list -- never by re-deriving what that function "would" say and
+asserting the re-derivation against itself, which is vacuous (a prior
+revision's `test_registration_boundary_sensitivity_proof_defect_is_named`
+did exactly that: it asserted `DimensionValue.TRUE is not measured_value`
+where `measured_value` was `FALSE` by construction, which cannot fail
+regardless of whether the checker works).
+`test_registration_boundary_sensitivity_proof_defect_named_and_near_miss_accepted`
+plants v1's exact defect (`module_registration: true` for a distribution
+whose only call site is release metadata) and shows the real function names
+it, then shows the real, checked-in records produce zero offenders.
 """
 
 from __future__ import annotations
@@ -65,6 +70,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from packaging.utils import canonicalize_name
 
 from tests.architecture import composition_schema as cs
 from tests.architecture import import_graph as ig
@@ -89,15 +95,34 @@ STARTER_COMPOSITION_SCHEMA_BLOB_SHA = "f2d21f7552516226a104ae41ccc659604fbe00cc"
 
 #: ERP's declared production entry points for the AST import-reachability
 #: graph `runtime_consumption` is measured against: the web application
-#: (gunicorn boot target) and Celery (worker/beat boot target, whose
-#: `autodiscover_tasks([...])` call is itself AST-parsed for its string
-#: roots below -- never text-matched). No `[project.scripts]` /
-#: `[tool.poetry.scripts]` table exists in pyproject.toml and no other
-#: documented supported operator CLI entry point was found under this
-#: repository's tree (confirmed: `grep` for `console_scripts`,
-#: `[project.scripts]`, `[tool.poetry.scripts]` in pyproject.toml all
-#: return nothing) -- so these two are the complete, measured set today.
-PRODUCTION_ENTRY_POINT_MODULES = ("app.main", "app.celery_app")
+#: (`app.main`, the gunicorn boot target), Celery's actual worker process
+#: entry point (`app.celery_worker_entrypoint` -- `docker-compose.yml`'s
+#: `worker` service runs `python -m app.celery_worker_entrypoint`, which
+#: `os.execvp`s `celery -A app.celery_app`, not a bare `celery -A
+#: app.celery_app` invocation directly), and `app.celery_app` itself (the
+#: `-A` target that entry point execs into, and also Beat's declared
+#: scheduler target) -- plus whatever `autodiscover_tasks([...])`'s own AST
+#: `Call` node names as string roots (resolved below, never text-matched).
+#:
+#: This is NOT a claim of completeness over every way ERP code can run.
+#: `gunicorn.conf.py` (imports `app.prometheus_multiprocess` at boot) lives
+#: at the repository root, outside this module index's `app/` walk, and is
+#: not included as a root; its closure is a subset of `app.main`'s own
+#: reachable set regardless. `app/tools/` (nine one-off operator scripts,
+#: e.g. `fix_stuck_paid_expense_claims.py`) and `alembic/` (migration
+#: revisions) are REAL production-adjacent entry points this graph does not
+#: walk from and are left explicitly UNMONITORED for `runtime_consumption`
+#: purposes, per ADR-0018's framing (a stated gap, not a silently exempted
+#: one) -- `pyproject.toml` per-file-ignores already treats both as a
+#: different code-quality tier from `app/`'s own surface. No
+#: `[project.scripts]`/`[tool.poetry.scripts]` table exists in
+#: `pyproject.toml` (confirmed: `grep` returns nothing), so there is no
+#: additional installed-console-script entry point to add.
+PRODUCTION_ENTRY_POINT_MODULES = (
+    "app.main",
+    "app.celery_worker_entrypoint",
+    "app.celery_app",
+)
 
 #: The six real, real-`ModuleManifest` call sites in
 #: `app/product_assembly.py` (`COMPOSED_MODULE_MANIFESTS`) -- the only place
@@ -357,15 +382,24 @@ def measure_erp_boot_assembly_consumption(
     point) and `app/product_assembly.py` on every run, never a trusted
     literal.
 
-    `imported_by_boot_entry_point` is a definite, measured fact either way:
-    `app/main.py`'s source either names `app.product_assembly` (or
-    `app.product_assembly`'s exported `ERP_PRODUCT_ASSEMBLY`) or it does not
-    -- there is no dynamic/indirect import of it anywhere in this small,
-    single-file entry point, so `None` (indeterminate) is never returned
-    here as long as both files exist. When `app/main.py` does not reference
-    the module at all, `consumed_by_a_real_effect` is also a definite `False`
-    -- a real effect cannot consume an object the boot entry point never
-    reaches in the first place.
+    `imported_by_boot_entry_point` is derived by `ig.find_module_importers`
+    (real `Import`/`ImportFrom` AST nodes), never a substring match -- a
+    prior revision used `"product_assembly" in main_source`, which is
+    exactly the defect class this whole suite exists to retire ("a
+    substring is not a structure"). When `app/main.py` genuinely does not
+    import it, `consumed_by_a_real_effect` is also a definite `False` -- a
+    real effect cannot consume an object the boot entry point never
+    reaches. When it DOES import it, this function does not attempt to
+    prove whether the import is fed to a real effect (that would require
+    tracing the call graph, not just the import graph) and reports
+    `consumed_by_a_real_effect=None` -- an honest `INDETERMINATE`, never a
+    guessed `True`. This means `AssemblyConsumptionKind.BOOT_PATH_CONSUMED`
+    is NOT in this function's range today (it needs both facts `True`, and
+    this function can only ever prove the first) -- see
+    `test_measure_erp_boot_assembly_consumption_can_reach_indeterminate`,
+    which proves the `imported=True` branch is real and reachable, not dead
+    code, by pointing this function at a scratch tree that does import the
+    assembly.
     """
     main_path = repo_root / "app" / "main.py"
     assembly_path = repo_root / "app" / "product_assembly.py"
@@ -376,14 +410,38 @@ def measure_erp_boot_assembly_consumption(
             imported_by_boot_entry_point=None,
             consumed_by_a_real_effect=None,
         )
-    main_source = main_path.read_text()
-    imported = "product_assembly" in main_source
+    imported = bool(
+        ig.find_module_importers([main_path], repo_root, "app.product_assembly")
+    )
     consumed = False if not imported else None
     return cs.AssemblyConsumptionTrace(
         boot_entry_point=boot_entry_point,
         imported_by_boot_entry_point=imported,
         consumed_by_a_real_effect=consumed,
     )
+
+
+def test_measure_erp_boot_assembly_consumption_can_reach_indeterminate(
+    tmp_path: Path,
+) -> None:
+    """A checker with no reachable "yes" is the same defect class as a
+    checker that refuses everything. `measure_erp_boot_assembly_consumption`
+    can never return `BOOT_PATH_CONSUMED` (see its docstring); this proves
+    its other real branch -- `imported=True` -- is genuinely reachable and
+    correctly reports `INDETERMINATE` (not a guessed `RELEASE_METADATA_ONLY`
+    or a crash) rather than being dead code, by building a scratch tree
+    whose `app/main.py` does contain a real `import app.product_assembly`."""
+    scratch_app = tmp_path / "app"
+    scratch_app.mkdir()
+    (scratch_app / "product_assembly.py").write_text(
+        "ERP_PRODUCT_ASSEMBLY = object()\n"
+    )
+    (scratch_app / "main.py").write_text("import app.product_assembly\n")
+
+    trace = measure_erp_boot_assembly_consumption(tmp_path)
+    assert trace.imported_by_boot_entry_point is True
+    assert trace.consumed_by_a_real_effect is None
+    assert trace.classify() is cs.AssemblyConsumptionKind.INDETERMINATE
 
 
 def test_erp_boot_entry_point_does_not_reference_product_assembly() -> None:
@@ -454,11 +512,7 @@ def test_product_assembly_importers_are_test_and_release_tooling_only() -> None:
         assert importer.startswith(("tests/", "scripts/")), importer
 
 
-def test_registration_boundary_matches_measured_erp_boot_path() -> None:
-    """The core Ruling-1 cross-check: for every one of the six distributions
-    `app/product_assembly.py` actually passes as real `ModuleManifest`
-    values, independently re-derive `RegistrationEvidence` from ERP's
-    measured boot-path trace and assert it equals the recorded JSON value."""
+def measured_registration_value() -> cs.DimensionValue:
     trace = measure_erp_boot_assembly_consumption(PROJECT_ROOT)
     site = cs.RegistrationCallSite(
         callee="ProductAssemblySpec",
@@ -466,18 +520,37 @@ def test_registration_boundary_matches_measured_erp_boot_path() -> None:
         assembly_consumption=trace,
     )
     kind = cs.classify_registration_call_site(site)
-    evidence = cs.RegistrationEvidence(kind=kind, measured=True)
-    measured_value = evidence.as_dimension_value()
+    return cs.RegistrationEvidence(kind=kind, measured=True).as_dimension_value()
 
+
+def find_registration_mismatches(
+    records: list[dict[str, object]],
+    measured_value: cs.DimensionValue,
+    composed_modules: frozenset[str],
+) -> list[str]:
+    """The one function both the real check and its sensitivity proof call
+    -- see `find_installation_mismatches`'s docstring for why that matters."""
+    offenders = []
+    for row in records:
+        if row["distribution"] not in composed_modules:
+            continue
+        recorded = cs.DimensionValue(row["module_registration"])
+        if recorded is not measured_value:
+            offenders.append(row["distribution"])
+    return offenders
+
+
+def test_registration_boundary_matches_measured_erp_boot_path() -> None:
+    """The core Ruling-1 cross-check: for every one of the six distributions
+    `app/product_assembly.py` actually passes as real `ModuleManifest`
+    values, independently re-derive `RegistrationEvidence` from ERP's
+    measured boot-path trace and assert it equals the recorded JSON value."""
+    measured_value = measured_registration_value()
     doc = load_document()
-    by_name = {row["distribution"]: row for row in doc["records"]}
-    for distribution in COMPOSED_OPTIONAL_MODULES:
-        recorded_value = cs.DimensionValue(by_name[distribution]["module_registration"])
-        assert recorded_value is measured_value, (
-            f"{distribution}: recorded module_registration="
-            f"{recorded_value.value!r} but the measured ERP boot-path trace "
-            f"says {measured_value.value!r}"
-        )
+    offenders = find_registration_mismatches(
+        doc["records"], measured_value, COMPOSED_OPTIONAL_MODULES
+    )
+    assert offenders == [], offenders
 
 
 def test_registration_boundary_sensitivity_proof_positive_control() -> None:
@@ -502,50 +575,37 @@ def test_registration_boundary_sensitivity_proof_positive_control() -> None:
     assert evidence.as_dimension_value() is cs.DimensionValue.TRUE
 
 
-def test_registration_boundary_sensitivity_proof_defect_is_named() -> None:
-    """Plants v1's exact defect: a record claiming `module_registration:
-    true` for `dotmac-accounting`, whose only real call site
-    (`app/product_assembly.py`) is release metadata never reached from
-    `app/main.py`. The independent measurement must disagree and name the
-    distribution."""
-    trace = measure_erp_boot_assembly_consumption(PROJECT_ROOT)
-    site = cs.RegistrationCallSite(
-        callee="ProductAssemblySpec",
-        argument_kind="ModuleManifest_tuple",
-        assembly_consumption=trace,
-    )
-    measured_value = cs.RegistrationEvidence(
-        kind=cs.classify_registration_call_site(site), measured=True
-    ).as_dimension_value()
-
-    corrupted_value = cs.DimensionValue.TRUE
-    assert corrupted_value is not measured_value, (
-        "sensitivity proof failed to construct a genuine defect: the "
-        "corrupted value must disagree with the measured one"
-    )
-
-
-def test_registration_boundary_sensitivity_proof_near_miss_is_accepted() -> None:
-    """The near-miss: the REAL, checked-in `false` value for
-    `dotmac-accounting` (the legitimate, measured state) must NOT be flagged
-    by the same cross-check that names the planted defect above."""
+def test_registration_boundary_sensitivity_proof_defect_named_and_near_miss_accepted() -> (
+    None
+):
+    """Plants v1's exact defect: flips `dotmac-accounting`'s
+    `module_registration` to `true` in a corrupted in-memory copy of the
+    RECORD LIST (whose only real call site, `app/product_assembly.py`, is
+    release metadata never reached from `app/main.py`) and runs it through
+    the real offender-finder -- not a re-derivation of what that function
+    does, the function itself (a prior revision asserted `TRUE is not
+    FALSE` by construction and never called it at all). The near-miss: the
+    real, checked-in records produce zero offenders."""
+    measured_value = measured_registration_value()
     doc = load_document()
-    by_name = {row["distribution"]: row for row in doc["records"]}
-    recorded_value = cs.DimensionValue(
-        by_name["dotmac-accounting"]["module_registration"]
-    )
 
-    trace = measure_erp_boot_assembly_consumption(PROJECT_ROOT)
-    site = cs.RegistrationCallSite(
-        callee="ProductAssemblySpec",
-        argument_kind="ModuleManifest_tuple",
-        assembly_consumption=trace,
-    )
-    measured_value = cs.RegistrationEvidence(
-        kind=cs.classify_registration_call_site(site), measured=True
-    ).as_dimension_value()
+    assert (
+        find_registration_mismatches(
+            doc["records"], measured_value, COMPOSED_OPTIONAL_MODULES
+        )
+        == []
+    )  # near-miss
 
-    assert recorded_value is measured_value is cs.DimensionValue.FALSE
+    corrupted_records = [
+        {**row, "module_registration": cs.DimensionValue.TRUE.value}
+        if row["distribution"] == "dotmac-accounting"
+        else row
+        for row in doc["records"]
+    ]
+    offenders = find_registration_mismatches(
+        corrupted_records, measured_value, COMPOSED_OPTIONAL_MODULES
+    )
+    assert offenders == ["dotmac-accounting"], offenders
 
 
 # ---------------------------------------------------------------------------
@@ -581,14 +641,37 @@ def test_migration_lineage_matches_alembic_version_locations() -> None:
 
 
 def resolved_distributions_from_poetry_lock(project_root: Path) -> frozenset[str]:
-    """The full resolved dependency graph's distribution names, parsed with
-    `tomllib` -- no `grep`, no text scan. `poetry.lock`'s `[[package]]`
-    tables are the one place Poetry itself records what actually resolved,
-    across every dependency group (main + dev), which is why this reads the
-    lock file rather than `pyproject.toml`'s declared (not necessarily
-    resolved) version constraints."""
+    """The full resolved dependency graph's distribution names, PEP 503
+    canonicalized, parsed with `tomllib` -- no `grep`, no text scan.
+    `poetry.lock`'s `[[package]]` tables are the one place Poetry itself
+    records what actually resolved, across every dependency group (main +
+    dev), which is why this reads the lock file rather than
+    `pyproject.toml`'s declared (not necessarily resolved) version
+    constraints."""
     lock = tomllib.loads((project_root / "poetry.lock").read_text())
-    return frozenset(package["name"] for package in lock["package"])
+    return frozenset(canonicalize_name(package["name"]) for package in lock["package"])
+
+
+def find_installation_mismatches(
+    records: list[dict[str, object]], resolved: frozenset[str]
+) -> list[str]:
+    """The one function both `test_installation_matches_resolved_poetry_lock_graph`
+    and its sensitivity proof call -- never duplicated logic between "the
+    real check" and "the thing the sensitivity proof asserts about"; that
+    duplication is exactly how a prior revision's proof went vacuous (it
+    asserted `TRUE is not FALSE` by construction and never called this
+    function at all)."""
+    offenders = []
+    for row in records:
+        expected = (
+            cs.DimensionValue.TRUE
+            if canonicalize_name(str(row["distribution"])) in resolved
+            else cs.DimensionValue.FALSE
+        )
+        actual = cs.DimensionValue(row["installation"])
+        if actual is not expected:
+            offenders.append(row["distribution"])
+    return offenders
 
 
 def test_installation_matches_resolved_poetry_lock_graph() -> None:
@@ -597,46 +680,77 @@ def test_installation_matches_resolved_poetry_lock_graph() -> None:
     `poetry.lock` -- not just the six composed optional modules."""
     resolved = resolved_distributions_from_poetry_lock(PROJECT_ROOT)
     doc = load_document()
+    offenders = find_installation_mismatches(doc["records"], resolved)
+    assert offenders == [], offenders
+
+
+def test_installation_names_are_already_pep503_normalized() -> None:
+    """Pins the invariant `find_installation_mismatches` relies on: every
+    distribution name in the catalogue and every resolved poetry.lock name
+    is ALREADY its own canonical form (Dotmac's naming convention never
+    needed the underscore/dot/case folding PEP 503 exists to handle). If
+    that ever stops being true, canonicalization is silently doing real
+    work this test would otherwise never catch."""
+    resolved = resolved_distributions_from_poetry_lock(PROJECT_ROOT)
+    for name in resolved:
+        assert canonicalize_name(name) == name, name
+    doc = load_document()
     for row in doc["records"]:
-        expected = (
-            cs.DimensionValue.TRUE
-            if row["distribution"] in resolved
-            else cs.DimensionValue.FALSE
-        )
-        actual = cs.DimensionValue(row["installation"])
-        assert actual is expected, (
-            f"{row['distribution']}: recorded installation={actual.value!r} but "
-            f"poetry.lock resolution says {expected.value!r}"
-        )
+        distribution = str(row["distribution"])
+        assert canonicalize_name(distribution) == distribution, distribution
 
 
 def test_installation_sensitivity_proof_defect_is_named_and_near_miss_accepted() -> (
     None
 ):
     """Plants Michael's exact defect: flips an uninstalled distribution's
-    `installation` to `true` in a corrupted in-memory copy and shows the
-    poetry.lock cross-check disagrees, naming the distribution. The
-    near-miss: the real, checked-in `false` value for that same
-    distribution must NOT be flagged by the identical check."""
+    `installation` to `true` in a corrupted in-memory copy of the RECORD
+    LIST and runs it through the real offender-finder -- not a hand-copied
+    re-derivation of what that function does, the function itself. The
+    near-miss: the real, checked-in records produce zero offenders."""
     resolved = resolved_distributions_from_poetry_lock(PROJECT_ROOT)
     doc = load_document()
+
+    assert find_installation_mismatches(doc["records"], resolved) == []  # near-miss
+
     uninstalled_row = next(
-        row for row in doc["records"] if row["distribution"] not in resolved
+        row
+        for row in doc["records"]
+        if canonicalize_name(row["distribution"]) not in resolved
     )
     distribution = uninstalled_row["distribution"]
+    corrupted_records = [
+        {**row, "installation": cs.DimensionValue.TRUE.value}
+        if row["distribution"] == distribution
+        else row
+        for row in doc["records"]
+    ]
+    offenders = find_installation_mismatches(corrupted_records, resolved)
+    assert offenders == [distribution], offenders
 
-    real_value = cs.DimensionValue(uninstalled_row["installation"])
-    assert real_value is cs.DimensionValue.FALSE  # the near-miss: correctly recorded
 
-    corrupted_row = dict(uninstalled_row)
-    corrupted_row["installation"] = cs.DimensionValue.TRUE.value
-    corrupted_value = cs.DimensionValue(corrupted_row["installation"])
-    expected = (
-        cs.DimensionValue.TRUE if distribution in resolved else cs.DimensionValue.FALSE
-    )
-    assert corrupted_value is not expected, (
-        f"sensitivity proof failed to construct a genuine defect for {distribution}"
-    )
+def test_installation_row_shape_carries_exactly_the_declared_fields() -> None:
+    """D8: a planted extra key (e.g. `api_key`) on a record row is refused
+    here even though the mirrored Starter contract currently accepts and
+    silently drops unknown payload keys (Starter #686, merged as `b081ff73`,
+    closes that half of the contract; this closes ERP's half in the
+    meantime, and stays correct after the re-mirror since a stricter local
+    check is never invalidated by a stricter upstream one)."""
+    expected_keys = frozenset(cs.REQUIRED_PAYLOAD_FIELDS) | {"schema_version"}
+    doc = load_document()
+    for row in doc["records"]:
+        assert set(row) == expected_keys, (
+            f"{row['distribution']}: row keys {sorted(row)} != "
+            f"expected {sorted(expected_keys)}"
+        )
+
+
+def test_installation_row_shape_sensitivity_proof_extra_key_is_refused() -> None:
+    expected_keys = frozenset(cs.REQUIRED_PAYLOAD_FIELDS) | {"schema_version"}
+    doc = load_document()
+    planted = dict(doc["records"][0])
+    planted["api_key"] = "sk_live_not_a_real_secret_but_would_be_refused"
+    assert set(planted) != expected_keys
 
 
 # ---------------------------------------------------------------------------
@@ -653,8 +767,8 @@ def test_installation_sensitivity_proof_defect_is_named_and_near_miss_accepted()
 
 def erp_reachable_external_imports(app_root: Path) -> tuple[set[str], dict[str, str]]:
     """The one function every runtime_consumption test below calls -- never
-    duplicated. Roots: `app.main` (the gunicorn boot target) and
-    `app.celery_app` (the Celery boot target) plus whatever
+    duplicated. Roots: `PRODUCTION_ENTRY_POINT_MODULES` (see that constant's
+    docstring for exactly which entry points and why) plus whatever
     `celery_app.autodiscover_tasks([...])`'s own AST `Call` node names as
     string-literal package roots (currently `app.tasks`; AST-derived, not
     hand-copied from having read the file once)."""

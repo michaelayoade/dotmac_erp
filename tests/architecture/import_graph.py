@@ -115,23 +115,39 @@ def build_reachable_import_graph(
                         external_source.setdefault(top, module)
             elif isinstance(node, ast.ImportFrom):
                 if node.level and node.level > 0:
-                    target = _resolve_relative(module, node, is_package)
-                    if (
-                        target
-                        and target.split(".")[0] == "app"
-                        and target not in visited
-                    ):
-                        queue.append(target)
-                    continue
-                if node.module is None:
-                    continue
-                top = node.module.split(".")[0]
-                if top == "app":
-                    if node.module not in visited:
-                        queue.append(node.module)
+                    resolved = _resolve_relative(module, node, is_package)
                 else:
+                    resolved = node.module
+
+                if resolved is None:
+                    continue
+                top = resolved.split(".")[0]
+                if top != "app":
                     external.add(top)
                     external_source.setdefault(top, module)
+                    continue
+
+                # `from <resolved> import <alias>` -- Python resolves this to
+                # EITHER a name defined inside `<resolved>` (a function,
+                # class, constant: nothing further to walk) OR the submodule
+                # `<resolved>.<alias>` (e.g. `from app.services import
+                # storage` -> the real module `app.services.storage`, which
+                # owns its own imports the caller never re-exports). A prior
+                # revision of this graph queued only `resolved` itself and
+                # silently made every such submodule's entire closure
+                # invisible. Queue both the parent (still worth walking, in
+                # case its own `__init__.py` imports something directly) and
+                # every per-alias submodule candidate; the module index
+                # (built from real files on disk) decides which candidates
+                # are real modules -- `queue.append` on a name that turns out
+                # not to be a module is simply skipped when popped, never
+                # mistaken for a hit.
+                if resolved not in visited:
+                    queue.append(resolved)
+                for alias in node.names:
+                    candidate = f"{resolved}.{alias.name}"
+                    if candidate not in visited:
+                        queue.append(candidate)
 
     return external, external_source
 
@@ -183,9 +199,10 @@ def find_module_importers(
             elif isinstance(node, ast.ImportFrom):
                 if node.level and node.level > 0:
                     resolved_module = _resolve_relative(own_module, node, is_package)
-                    found = matches_target(resolved_module, node.names)
-                    continue
-                found = matches_target(node.module, node.names)
+                    if matches_target(resolved_module, node.names):
+                        found = True
+                elif matches_target(node.module, node.names):
+                    found = True
             if found:
                 break
 
