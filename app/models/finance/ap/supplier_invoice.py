@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Numeric,
     String,
@@ -94,6 +95,11 @@ class SupplierInvoice(Base, VersionedMixin):
     __table_args__ = (
         UniqueConstraint(
             "organization_id", "invoice_number", name="uq_supplier_invoice"
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "ap_control_account_id"],
+            ["gl.account.organization_id", "gl.account.account_id"],
+            name="fk_supplier_invoice_organization_ap_control_account",
         ),
         Index(
             "uq_supplier_invoice_source_correlation",
@@ -196,7 +202,6 @@ class SupplierInvoice(Base, VersionedMixin):
     # Accounting
     ap_control_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("gl.account.account_id"),
         nullable=False,
     )
     journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(

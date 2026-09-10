@@ -257,6 +257,7 @@ class ExpenseAPAdapter:
         from app.models.finance.ap.supplier import Supplier, SupplierType
         from app.services.finance.ap import SupplierInput
         from app.services.finance.ap.supplier import SupplierService
+        from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
 
         # Try to find existing internal supplier for this employee
         # Convention: internal supplier code = EMP-{employee_code}
@@ -275,6 +276,11 @@ class ExpenseAPAdapter:
         # Get employee's name from related person
         person = employee.person
         supplier_name = person.name if person else employee.employee_code
+        payable_account_id = ExpensePostingAdapter._get_employee_payable_account(
+            db, org_id
+        )
+        if not payable_account_id:
+            raise ValueError("Employee payable account is not configured")
 
         supplier_input = SupplierInput(
             supplier_code=supplier_code,
@@ -282,6 +288,7 @@ class ExpenseAPAdapter:
             supplier_type=SupplierType.RELATED_PARTY,
             email=person.email if person else None,
             payment_terms_days=0,  # Immediate payment
+            default_payable_account_id=payable_account_id,
         )
 
         supplier = SupplierService.create_supplier(db, org_id, supplier_input)

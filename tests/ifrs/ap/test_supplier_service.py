@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.services.common import ValidationError
 from app.services.finance.ap.supplier import (
     SupplierInput,
     SupplierService,
@@ -67,6 +68,37 @@ class TestCreateSupplier:
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called_once()
         mock_db.refresh.assert_called_once()
+
+    def test_create_supplier_requires_a_real_payable_account(
+        self, mock_db, org_id, sample_supplier_input
+    ):
+        """Missing and unknown account IDs fail before a supplier is inserted."""
+        sample_supplier_input.default_payable_account_id = None
+
+        with pytest.raises(ValidationError, match="payable account is required"):
+            SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
+
+        mock_db.add.assert_not_called()
+
+        sample_supplier_input.default_payable_account_id = uuid4()
+        mock_db.execute.return_value.scalar_one_or_none.return_value = None
+        with pytest.raises(ValidationError, match="active AP liability account"):
+            SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
+
+        mock_db.add.assert_not_called()
+
+    def test_form_payload_has_no_sentinel_account_fallback(self, mock_db, org_id):
+        """An omitted payable account remains missing instead of becoming a fake UUID."""
+        payload = {
+            "supplier_code": "SUP-001",
+            "supplier_type": "VENDOR",
+            "supplier_name": "Acme Corporation",
+            "currency_code": "NGN",
+        }
+
+        result = SupplierService.build_input_from_payload(mock_db, org_id, payload)
+
+        assert result.default_payable_account_id is None
 
     def test_create_duplicate_supplier_code_fails(
         self, mock_db, org_id, sample_supplier_input

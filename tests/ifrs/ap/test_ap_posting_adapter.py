@@ -397,6 +397,33 @@ class TestPostInvoice:
         assert result.success is False
         assert "no lines" in result.message.lower()
 
+    def test_post_invoice_rejects_invalid_ap_control_account(
+        self, mock_db, organization_id, user_id, mock_invoice, mock_supplier
+    ):
+        """Posting stops with remediation guidance before journal line creation."""
+
+        def get_side_effect(_model, record_id):
+            if record_id == mock_invoice.invoice_id:
+                return mock_invoice
+            if record_id == mock_invoice.supplier_id:
+                return mock_supplier
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+        mock_db.execute.return_value.scalar_one_or_none.return_value = None
+
+        result = APPostingAdapter.post_invoice(
+            db=mock_db,
+            organization_id=organization_id,
+            invoice_id=mock_invoice.invoice_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is False
+        assert "AP control account is invalid" in result.message
+        assert "supplier" in result.message
+
     def test_post_invoice_no_expense_account(
         self, mock_db, organization_id, user_id, mock_invoice, mock_supplier
     ):
