@@ -29,6 +29,8 @@ from app.schemas.sync.sub_operational import (
     InventoryListResponse,
     SubAvailableSerialListResponse,
     SubExpenseCategoriesResponse,
+    SubExpenseApproversResponse,
+    SubExpenseBanksResponse,
     SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
     SubExpenseClaimRejectionPayload,
@@ -36,6 +38,10 @@ from app.schemas.sync.sub_operational import (
     SubExpenseClaimStatusResponse,
     SubExpensePaymentPayload,
     SubExpensePaymentResponse,
+    SubExpenseProfileDestinationResponse,
+    SubExpenseDestinationVerifyPayload,
+    SubExpenseDestinationVerifyResponse,
+    SubExpenseDestinationInspectPayload,
     SubMaterialRequestPayload,
     SubMaterialRequestResponse,
     SubMaterialRequestStatusRead,
@@ -422,6 +428,81 @@ def create_sub_expense_claim(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     response.status_code = 200 if existed_before else 201
     return result
+
+
+@router.get(
+    "/expense-approvers",
+    response_model=SubExpenseApproversResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def list_sub_expense_approvers(
+    requested_by_email: str = Query(..., min_length=3, max_length=255),
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseApproversResponse:
+    return DotMacSubSyncService(db).list_expense_approvers(
+        UUID(str(auth["organization_id"])),
+        requested_by_email=requested_by_email,
+    )
+
+
+@router.get(
+    "/expense-banks",
+    response_model=SubExpenseBanksResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def list_sub_expense_banks(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseBanksResponse:
+    return DotMacSubSyncService(db).list_expense_banks()
+
+
+@router.post(
+    "/expense-payment-destinations/verify",
+    response_model=SubExpenseDestinationVerifyResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def verify_sub_expense_destination(
+    payload: SubExpenseDestinationVerifyPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseDestinationVerifyResponse:
+    """Verify only; this endpoint never creates a transfer or payment intent."""
+    return DotMacSubSyncService(db).verify_expense_destination(
+        UUID(str(auth["organization_id"])), payload
+    )
+
+
+@router.post(
+    "/expense-payment-destinations/inspect",
+    response_model=SubExpenseDestinationVerifyResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def inspect_sub_expense_destination(
+    payload: SubExpenseDestinationInspectPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseDestinationVerifyResponse:
+    return DotMacSubSyncService(db).inspect_expense_destination(
+        UUID(str(auth["organization_id"])), payload
+    )
+
+
+@router.get(
+    "/expense-payment-destinations/profile",
+    response_model=SubExpenseProfileDestinationResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def get_sub_expense_profile_destination(
+    requested_by_email: str = Query(..., min_length=3, max_length=255),
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseProfileDestinationResponse:
+    return DotMacSubSyncService(db).get_expense_profile_destination(
+        UUID(str(auth["organization_id"])),
+        requested_by_email=requested_by_email,
+    )
 
 
 @router.post(

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     Computed,
     Date,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -373,6 +374,31 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         String(20),
         nullable=True,
         comment="Paystack recipient account number",
+    )
+    recipient_account_number_encrypted: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Encrypted account number for a verified per-expense destination",
+    )
+    recipient_account_number_last4: Mapped[str | None] = mapped_column(
+        String(4),
+        nullable=True,
+        comment="Non-sensitive display suffix for a verified destination",
+    )
+    payment_destination_mode: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="erp_profile or expense_override for Sub-originated claims",
+    )
+    payment_destination_fingerprint: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Stable digest used to reject changed idempotent submissions",
+    )
+    payment_destination_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When ERP verified the snapshotted reimbursement destination",
     )
     recipient_account_name: Mapped[str | None] = mapped_column(
         String(100),
