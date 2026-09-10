@@ -60,13 +60,68 @@ Sub publishes a Field technician claim at submission through
 `POST /api/v1/sync/sub/expense-claims`. ERP validates the claim and stores it as
 exactly `SUBMITTED`; it does not construct an ERP approval chain for this trusted
 source. The claimant's current ERP employee bank details are copied onto the
-claim so later reimbursement uses ERP-owned payment inputs.
+claim for legacy callers. The current Sub contract instead selects one
+ERP-eligible approver and verifies either that masked profile destination or a
+one-expense override before submission.
+
+`GET /api/v1/sync/sub/expense-approvers` returns active employees with an
+expense-approval permission. `GET /api/v1/sync/sub/expense-banks` returns ERP's
+active bank directory, and
+`GET /api/v1/sync/sub/expense-payment-destinations/profile` returns only a
+masked employee profile.
+`POST /api/v1/sync/sub/expense-payment-destinations/verify` resolves the
+account with Paystack without creating a recipient, intent, or transfer.
+It returns an encrypted token bound to organization, employee, claim UUID, and
+a 30-minute expiry. No full stored profile account is returned to Sub.
+
+Validation failures use HTTP 422 with FastAPI's `detail` field. The detail
+identifies an unmatched ERP employee, incomplete profile, invalid account,
+inactive bank, failed account resolution, beneficiary mismatch, ineligible
+approver, invalid or expired token, or changed idempotent submission. Sub must
+store the detailed response in restricted delivery evidence, show a safe
+field-level message to the technician, and never log the account number or
+destination token. Provider/network unavailability uses HTTP 503 instead.
+
+On claim creation ERP decrypts and validates the token, encrypts the verified
+account snapshot at rest, stores only its last four digits for display, and
+records the selected approver and verification evidence. A one-expense
+override never changes the employee profile. Once approved, payment must use
+that snapshot; payment-time bank/account replacement is rejected. Legacy
+claims without the new token retain their existing behavior.
 
 Sub remains authoritative for the Field manager decision and delivers its
 durable decision evidence to the claim-specific `/approve` or `/reject`
 endpoint. ERP verifies the manager's employee identity, monetary authority, and
 self-approval restriction before projecting the decision. These endpoints and
 claim status polling require the exact `sub:expense:write` service scope.
+The selected employee is rechecked against current ERP approver eligibility,
+and only that employee may approve or reject the Sub-originated claim.
+
+The legacy `POST /api/v1/sync/sub/expense-claims` create-and-submit contract is
+retained for already-deployed callers. New Self-Care expense delivery begins
+only after the Field manager has approved the authoritative request. The worker
+creates or retrieves a receipt-capable `DRAFT` through
+`POST /api/v1/sync/sub/expense-claims/drafts`. Every line carries a stable
+`source_line_id`, and the response maps it to the ERP item identity without
+making the claim visible to ERP approval processing.
+
+Self-Care then uploads each private attachment through
+`POST /api/v1/sync/sub/expense-claims/{source_claim_id}/items/{item_id}/receipts`.
+The typed request supplies the source line and attachment identities, validated
+filename, MIME type, byte size, SHA-256 checksum, and base64 transport content.
+The same identities form the required `Idempotency-Key`. ERP validates the
+decoded bytes through its expense-receipt storage policy, records checksum and
+attachment evidence, and returns the existing attachment for an identical
+retry. Receipt content is never written to an outbox or log.
+
+Sub remains authoritative for the Field manager decision and delivers its
+durable decision evidence to the claim-specific `/approve` or `/reject`
+endpoint only after all mandatory receipt uploads succeed. Approval submits a
+receipt-complete draft and then projects the trusted manager decision. ERP
+verifies the manager's employee identity, monetary authority, self-approval
+restriction, and category receipt rules before acceptance. Draft creation,
+receipt upload, decision endpoints, and claim status polling require the exact
+`sub:expense:write` service scope.
 
 An approved claim may be paid from the Field app. Sub only stages and delivers
 the command; ERP owns creation of the payment intent, Paystack transfer,
@@ -104,3 +159,10 @@ expense, and replays the request to prove idempotency.
   Self-Care callers use only `/api/v1/sync/sub/bulk`.
 - Deploy ERP contract and migration changes before enabling the Self-Care sync
   worker. A failed or older response leaves Self-Care watermarks unchanged.
+- Deploy revision `20260910_sub_expense_destination` before enabling Sub's
+  `erp.expense.form_context.v1` capability. Logs, errors, and operator evidence
+  must redact account numbers, destination tokens, bank credentials, and
+  private employee data.
+- Do not replay historical failed expense events automatically. A Self-Care
+  recovery owner must revalidate and explicitly create linked replacement
+  evidence before this contract is invoked.

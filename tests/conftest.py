@@ -163,6 +163,7 @@ _test_engine = create_engine(
             "pm": None,
             "support": None,
             "automation": None,
+            "common": None,
         }
     },
 )

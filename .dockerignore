@@ -1,4 +1,6 @@
 .git
+.worktrees
+_worktrees
 .github
 .mypy_cache
 .pytest_cache

@@ -2,12 +2,51 @@
 exclude: ^\.seabone/
 repos:
   # Ruff: fast linting + formatting (replaces flake8, isort, black)
+  #
+  # Both hooks carry an explicit `exclude:` naming the strict-JSON evidence
+  # documents (docs/kernel-runtime-{composition,readiness}.json), even
+  # though ruff-pre-commit's own hook manifest already restricts these hooks
+  # to `types_or: [python, pyi]` and neither `make format`/`make
+  # format-check`'s directory-wide `ruff format .` nor CI's `--all-files`
+  # run ever reaches a .json file today (verified directly: `ruff format
+  # --check .` from the repo root does not even mention either file). The
+  # explicit exclude is defense-in-depth against the one path that DOES
+  # reach them regardless of extension: `ruff format <path.json>` invoked
+  # directly with the file named on the command line (e.g. a future
+  # `pre-commit run --files docs/kernel-runtime-composition.json`, or a
+  # script that globs docs/*.json into a formatter call) rewrites the file
+  # into JSON5/JSONC shape — trailing commas — which is no longer strict
+  # JSON. These two files are read by another repository's gate as DATA,
+  # never as Python, and must stay parseable by `json.load` with zero
+  # tolerance; see the `strict-json-evidence-documents` local hook below,
+  # which runs AFTER this block specifically to catch a formatter that
+  # mangled one of them regardless of how it was invoked.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.0
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(docs/kernel-runtime-(composition|readiness)\.json|tests/architecture/composition_schema\.py)$
       - id: ruff-format
+        exclude: ^(docs/kernel-runtime-(composition|readiness)\.json|tests/architecture/composition_schema\.py)$
+
+  # Strict-JSON evidence documents: composition/readiness records another
+  # repository's gate reads as data. Runs AFTER the ruff block above (hook
+  # execution follows this file's order) so it catches a formatter -- or
+  # anything else -- that has mangled one of them into invalid JSON, rather
+  # than running first and being silently masked by a later step. See
+  # scripts/check_evidence_json.py's own docstring for the full rationale
+  # and the sensitivity proof in
+  # tests/architecture/test_strict_json_evidence_documents.py.
+  - repo: local
+    hooks:
+      - id: strict-json-evidence-documents
+        name: strict JSON evidence documents parse after formatting
+        language: system
+        entry: python3 scripts/check_evidence_json.py
+        pass_filenames: false
+        files: ^docs/kernel-runtime-(composition|readiness)\.json$
+        always_run: true
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -99,4 +138,24 @@ repos:
         #
         # This hook keeps the file types that guard cannot parse: YAML, JSON,
         # Markdown, HTML, SQL, .env.
+        #
+        # docs/kernel-runtime-{composition,readiness}.json are DELIBERATELY
+        # NOT excluded here (a prior revision of this comment excluded them
+        # and that was wrong -- see below). Both evidence documents' own
+        # schema-ingestion contract (tests/architecture/composition_schema.py,
+        # the mirrored Starter contract) accepts and silently drops unknown
+        # payload keys rather than refusing them, and the JSON-validity check
+        # (scripts/check_evidence_json.py) only proves the file parses, not
+        # that it carries no secret. Excluding these two files from the one
+        # scanner that COULD catch a real value pasted into them (e.g. a
+        # planted `api_key` field) would leave that scanning gap
+        # unmonitored, not covered -- exactly the mistake this comment
+        # previously made. They must stay in scope.
+        #
+        # `starter_catalogue_revision`'s full 40-character git SHA in
+        # kernel-runtime-composition.json is the ONE known, audited false
+        # positive (a "Hex High Entropy String" -- it is a public commit
+        # hash, not a secret) and is silenced narrowly by its entry in
+        # .secrets.baseline, exactly like every other baselined finding in
+        # this repository -- never by excluding the file it lives in.
         exclude: (\.env\.example|tests/|alembic/|scripts/|\.py$)

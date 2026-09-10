@@ -473,6 +473,13 @@ class SubMaterialRequestStatusRead(BaseModel):
 class SubExpenseClaimItemPayload(BaseModel):
     """Single expense line in a Sub field-technician expense request."""
 
+    source_line_id: UUID | None = Field(
+        None,
+        description=(
+            "Stable Sub expense-line UUID. Required by the draft-and-receipt "
+            "delivery contract."
+        ),
+    )
     category_code: str = Field(..., min_length=1, max_length=30)
     description: str = Field(..., min_length=1, max_length=500)
     claimed_amount: Decimal = Field(..., gt=0)
@@ -506,6 +513,19 @@ class SubExpenseClaimPayload(BaseModel):
     reference_number: str | None = Field(
         None, max_length=50, description="Sub expense request number"
     )
+    requested_approver_id: UUID | None = Field(
+        None,
+        description="ERP employee selected to make the trusted Sub decision",
+    )
+    payment_destination_token: str | None = Field(
+        None,
+        min_length=20,
+        max_length=4096,
+        description=(
+            "Opaque ERP-issued token for the verified, expense-only reimbursement "
+            "destination. The token contains no Sub-readable bank credentials."
+        ),
+    )
     items: list[SubExpenseClaimItemPayload] = Field(..., min_length=1)
 
 
@@ -516,6 +536,49 @@ class SubExpenseClaimResponse(BaseModel):
     claim_number: str
     status: str
     source_claim_id: str
+
+
+class SubExpenseClaimDraftItemResponse(BaseModel):
+    """Stable mapping from a Sub expense line to its ERP draft item."""
+
+    source_line_id: UUID
+    item_id: UUID
+
+
+class SubExpenseClaimDraftResponse(SubExpenseClaimResponse):
+    """Draft claim plus the line identities required for receipt upload."""
+
+    items: list[SubExpenseClaimDraftItemResponse]
+
+
+class SubExpenseReceiptPayload(BaseModel):
+    """Private receipt content delivered by the trusted Sub integration."""
+
+    contract_version: Literal["expense-receipt.v1"] = "expense-receipt.v1"
+    source_line_id: UUID
+    source_attachment_id: UUID
+    file_name: str = Field(..., min_length=1, max_length=255)
+    mime_type: Literal[
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+    ]
+    size_bytes: int = Field(..., gt=0, le=10 * 1024 * 1024)
+    checksum_sha256: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    content_base64: str = Field(..., min_length=1)
+
+
+class SubExpenseReceiptResponse(BaseModel):
+    """Idempotent ERP receipt-attachment evidence."""
+
+    attachment_id: UUID
+    source_claim_id: str
+    item_id: UUID
+    source_attachment_id: UUID
+    checksum_sha256: str
+    created: bool
 
 
 class SubExpenseClaimDecisionPayload(BaseModel):
@@ -565,6 +628,12 @@ class SubExpenseClaimStatusResponse(BaseModel):
     total_approved_amount: Decimal | None = None
     payment_intent_id: UUID | None = None
     payment_status: str | None = None
+    requested_approver_id: UUID | None = None
+    requested_approver_name: str | None = None
+    payment_destination_mode: Literal["erp_profile", "expense_override"] | None = None
+    recipient_bank_name: str | None = None
+    masked_account_number: str | None = None
+    verified_beneficiary_name: str | None = None
     source_claim_id: str
 
 
@@ -581,6 +650,89 @@ class SubExpenseCategoriesResponse(BaseModel):
     """Response with active expense categories for Sub."""
 
     items: list[SubExpenseCategoryItem] = Field(default_factory=list)
+
+
+class SubExpenseApproverItem(BaseModel):
+    """One active ERP employee eligible to approve a Sub expense."""
+
+    employee_id: UUID
+    display_name: str
+    email: str
+
+
+class SubExpenseApproversResponse(BaseModel):
+    items: list[SubExpenseApproverItem] = Field(default_factory=list)
+
+
+class SubExpenseBankItem(BaseModel):
+    """One active bank from ERP's canonical Nigerian bank directory."""
+
+    bank_code: str
+    bank_name: str
+
+
+class SubExpenseBanksResponse(BaseModel):
+    items: list[SubExpenseBankItem] = Field(default_factory=list)
+
+
+class SubExpenseProfileDestinationResponse(BaseModel):
+    """Masked ERP employee payment profile; never exposes the account number."""
+
+    available: bool
+    bank_code: str | None = None
+    bank_name: str | None = None
+    masked_account_number: str | None = None
+    beneficiary_name: str | None = None
+
+
+class SubExpenseDestinationVerifyPayload(BaseModel):
+    """Verify and tokenize a reimbursement destination without initiating payment."""
+
+    requested_by_email: str = Field(..., min_length=3, max_length=255)
+    source_claim_id: UUID
+    mode: Literal["erp_profile", "expense_override"]
+    bank_code: str | None = Field(None, min_length=2, max_length=20)
+    account_number: str | None = Field(None, min_length=6, max_length=30)
+    beneficiary_name: str | None = Field(None, min_length=2, max_length=150)
+
+    @model_validator(mode="after")
+    def validate_destination_inputs(self) -> SubExpenseDestinationVerifyPayload:
+        override_values = (self.bank_code, self.account_number, self.beneficiary_name)
+        if self.mode == "expense_override" and any(
+            not str(value or "").strip() for value in override_values
+        ):
+            raise ValueError(
+                "bank_code, account_number, and beneficiary_name are required "
+                "for an expense override"
+            )
+        if self.mode == "erp_profile" and any(
+            value is not None for value in override_values
+        ):
+            raise ValueError(
+                "ERP profile mode does not accept replacement bank details"
+            )
+        return self
+
+
+class SubExpenseDestinationVerifyResponse(BaseModel):
+    """Masked result plus an opaque, short-lived ERP destination token."""
+
+    destination_token: str
+    mode: Literal["erp_profile", "expense_override"]
+    bank_code: str
+    bank_name: str
+    masked_account_number: str
+    verified_beneficiary_name: str
+    verified_at: datetime
+    expires_at: datetime
+
+
+class SubExpenseDestinationInspectPayload(BaseModel):
+    """Revalidate an opaque token when Sub accepts the final submission."""
+
+    requested_by_email: str = Field(..., min_length=3, max_length=255)
+    source_claim_id: UUID
+    destination_token: str = Field(..., min_length=20, max_length=4096)
 
 
 # ============ Purchase Order Sync (Sub → ERP) ============

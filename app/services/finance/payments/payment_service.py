@@ -149,6 +149,11 @@ def is_unobserved(error: BaseException) -> bool:
     return not isinstance(error, PaystackError)
 
 
+def _masked_account_number(account_number: str) -> str:
+    suffix = account_number[-4:]
+    return f"{'*' * max(2, len(account_number) - len(suffix))}{suffix}"
+
+
 @dataclass(frozen=True)
 class TransferPollResult:
     """Result of reconciling one transfer intent.
@@ -1023,7 +1028,32 @@ class PaymentService:
                 status_code=400, detail="No amount payable for this claim"
             )
 
-        # Extract bank details from claim if not provided by caller
+        # Extract bank details from the immutable claim snapshot when the Sub
+        # destination contract is present. Only the payment owner decrypts the
+        # account number; callers and normal claim projections receive last4.
+        destination_is_encrypted = bool(
+            getattr(claim, "recipient_account_number_encrypted", None)
+        )
+        if destination_is_encrypted and (
+            recipient_bank_code is not None or recipient_account_number is not None
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Verified per-expense payment details are locked and cannot "
+                    "be replaced during payment."
+                ),
+            )
+        if destination_is_encrypted:
+            from app.services.integration_config import decrypt_credential
+
+            recipient_bank_code = claim.recipient_bank_code
+            recipient_account_number = decrypt_credential(
+                claim.recipient_account_number_encrypted,
+                self.db,
+            )
+
+        # Legacy/manual claims continue to use their existing snapshot fields.
         if not recipient_bank_code:
             recipient_bank_code = claim.recipient_bank_code
         if not recipient_account_number:
@@ -1127,7 +1157,11 @@ class PaymentService:
             source_id=claim_id,
             transfer_recipient_code=recipient.recipient_code,
             recipient_bank_code=recipient_bank_code,
-            recipient_account_number=recipient_account_number,
+            recipient_account_number=(
+                _masked_account_number(recipient_account_number)
+                if destination_is_encrypted
+                else recipient_account_number
+            ),
             recipient_account_name=account_info.account_name,
             status=PaymentIntentStatus.PENDING,
             intent_metadata=intent_metadata,
