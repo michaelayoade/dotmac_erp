@@ -3,7 +3,7 @@
 Validates ERP's dimensional composition record against the mirrored
 `dimensional-composition.v2` contract (`tests/architecture/composition_schema.py`,
 verified byte-for-byte identical to `dotmac_starter_mt`'s protected-main
-`tests/architecture/composition_schema.py` at revision `08a2dae1` by a real
+`tests/architecture/composition_schema.py` at revision `a9dc45ec` by a real
 git-blob-digest comparison, not a prose claim -- see
 `test_mirror_is_byte_for_byte_identical_to_pinned_starter_blob`. That file
 is excluded from this repository's own ruff ownership (`pyproject.toml`
@@ -14,19 +14,42 @@ carried one undetected). ERP does not import Starter's Python; the
 catalogue universe Ruling 2 requires is re-derived here from a frozen,
 checked-in mirror of Starter's `packages/*/EXTRACTION.toml` (and, for
 `optional-module` distributions, their `manifest.py`) at that same revision:
-`tests/architecture/fixtures/starter_packages_08a2dae1/`.
+`tests/architecture/fixtures/starter_packages_a9dc45ec/` (measured
+byte-for-byte identical in content to the prior `..._08a2dae1` mirror --
+Starter made no commit touching any `packages/*/EXTRACTION.toml` or
+`manifest.py` between the two revisions -- so this is a rename for
+provenance honesty, not a re-derivation).
 
-`installation` and `runtime_consumption` are each derived MECHANICALLY, not
-asserted: `installation` from the resolved `poetry.lock` dependency graph
-(`tomllib`, no `grep`), `runtime_consumption` from a real AST
-`Import`/`ImportFrom` reachability graph (`tests/architecture/import_graph.py`)
-walked from ERP's declared production entry points to the actual external
-package import -- never from an intermediary "one file imports another
-file" needle, which a prior revision of this suite used and which kept
-passing after the real `from dotmac_files import ...` statement was
-deleted. `test_runtime_consumption_sensitivity_proof_...` reproduces that
-exact deletion against a scratch copy and shows the corrected test fails,
-then restores it and shows the test passes again.
+Every product's envelope (this document's top-level
+`{schema_version, product, starter_catalogue_revision, records}` shape) is
+now read through the ONE shared reader Starter's contract exports,
+`cs.composition_records_from_envelope` -- this module keeps no local
+envelope-shape logic of its own (no hand-rolled "exactly these four keys",
+no hand-rolled duplicate-distribution or product-mismatch check). That
+reader's own closed-shape refusal, duplicate-distribution refusal, and
+row-product-mismatch refusal are exercised directly by
+`test_shared_envelope_reader_ingests_the_real_document_without_refusal` and
+the sensitivity proofs immediately below it -- not re-implemented here.
+
+`installation` is derived MECHANICALLY from the contract's own lock-group
+and install-recipe primitives -- `cs.derive_lock_group_membership` (read
+from `poetry.lock`), `cs.derive_group_optionality` (read from
+`pyproject.toml`), and `cs.parse_install_command` applied to the COMPLETE
+logical `RUN` instruction of every `poetry install`/`poetry sync` recipe
+found in ERP's own checked-in Dockerfiles (`Dockerfile`,
+`Dockerfile.hardened` -- the latter carries two independent build stages,
+each with its own recipe) -- never asserted, never grep'd, and never a
+hand-built flag tuple (`InstallRecipe` has no public constructor; the only
+way to get one is `cs.parse_install_command`). `runtime_consumption` is
+derived from a real AST `Import`/`ImportFrom` reachability graph
+(`tests/architecture/import_graph.py`) walked from ERP's declared production
+entry points to the actual external package import -- never from an
+intermediary "one file imports another file" needle, which a prior
+revision of this suite used and which kept passing after the real
+`from dotmac_files import ...` statement was deleted.
+`test_runtime_consumption_sensitivity_proof_...` reproduces that exact
+deletion against a scratch copy and shows the corrected test fails, then
+restores it and shows the test passes again.
 
 `test_product_assembly_is_never_imported_by_production_code` uses the same
 AST classification, not a substring/text match on file contents and not a
@@ -50,15 +73,14 @@ Sensitivity is proven, not assumed, and proven by calling the REAL
 offender-finding function (`find_registration_mismatches`,
 `find_installation_mismatches`) over a corrupted in-memory copy of the
 record list -- never by re-deriving what that function "would" say and
-asserting the re-derivation against itself, which is vacuous (a prior
-revision's `test_registration_boundary_sensitivity_proof_defect_is_named`
-did exactly that: it asserted `DimensionValue.TRUE is not measured_value`
-where `measured_value` was `FALSE` by construction, which cannot fail
-regardless of whether the checker works).
-`test_registration_boundary_sensitivity_proof_defect_named_and_near_miss_accepted`
-plants v1's exact defect (`module_registration: true` for a distribution
-whose only call site is release metadata) and shows the real function names
-it, then shows the real, checked-in records produce zero offenders.
+asserting the re-derivation against itself, which is vacuous. The
+`installation` sensitivity proof additionally mutates a REAL Dockerfile
+(copied to a scratch path, never the checked-in file) to select a different
+dependency profile and proves `cs.derive_installation_dimension` -- the
+exact function the real check calls -- disagrees with the unchanged,
+checked-in record; the companion near-miss proves the unmutated tree still
+derives `false` for `dotmac-deployment-foundation` and `true` for
+`dotmac-kernel`, so the check can say yes as well as refuse.
 """
 
 from __future__ import annotations
@@ -78,20 +100,20 @@ from tests.architecture import import_graph as ig
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RECORD_PATH = PROJECT_ROOT / "docs" / "kernel-runtime-composition.json"
 FIXTURE_PACKAGES_ROOT = (
-    Path(__file__).resolve().parent / "fixtures" / "starter_packages_08a2dae1"
+    Path(__file__).resolve().parent / "fixtures" / "starter_packages_a9dc45ec"
 )
 COMPOSITION_SCHEMA_MIRROR_PATH = (
     Path(__file__).resolve().parent / "composition_schema.py"
 )
 
 #: The git blob SHA of `tests/architecture/composition_schema.py` at
-#: Starter protected-main `08a2dae1` (`git hash-object` / `git rev-parse
-#: 08a2dae1:tests/architecture/composition_schema.py`) -- the actual
+#: Starter protected-main `a9dc45ec` (`git hash-object` / `git rev-parse
+#: a9dc45ec:tests/architecture/composition_schema.py`) -- the actual
 #: cryptographic proof the mirror is byte-for-byte, not a prose claim. A
 #: prior revision of this mirror carried a local header comment and two
 #: ruff-format reflows and still claimed "byte-for-byte" in its own
 #: docstring; only a real digest comparison catches that.
-STARTER_COMPOSITION_SCHEMA_BLOB_SHA = "f2d21f7552516226a104ae41ccc659604fbe00cc"
+STARTER_COMPOSITION_SCHEMA_BLOB_SHA = "5e253827deea454bf9870f5900043010d43a5f71"
 
 #: ERP's declared production entry points for the AST import-reachability
 #: graph `runtime_consumption` is measured against: the web application
@@ -139,6 +161,24 @@ COMPOSED_OPTIONAL_MODULES = frozenset(
     }
 )
 
+#: ERP's checked-in build recipes, read directly -- never a hand-copied
+#: install-line literal. `Dockerfile.hardened` carries two independent
+#: `poetry install` stages (the Nuitka compiler stage and the production
+#: runtime stage); both are real, deployed recipes and both are read.
+DOCKERFILES = (
+    PROJECT_ROOT / "Dockerfile",
+    PROJECT_ROOT / "Dockerfile.hardened",
+)
+
+#: A RUN instruction invoking Poetry's installer, anywhere in the logical
+#: (continuation-joined) instruction text -- used only to SELECT which of a
+#: Dockerfile's many `RUN` instructions are handed to
+#: `cs.parse_install_command` at all; every other `RUN` (`apt-get update`,
+#: `npm ci`, ...) is not a recognised install-recipe shape and would be
+#: refused outright by that parser's own grammar, so it is never offered to
+#: it in the first place.
+_POETRY_INSTALL_RUN_RE = re.compile(r"\bpoetry\s+(install|sync)\b")
+
 
 # ---------------------------------------------------------------------------
 # Envelope / schema-version loading
@@ -147,6 +187,16 @@ COMPOSED_OPTIONAL_MODULES = frozenset(
 
 def load_document() -> dict[str, object]:
     return json.loads(RECORD_PATH.read_text())
+
+
+def load_envelope_records() -> tuple[cs.CompositionRecord, ...]:
+    """The one ingestion path this module uses: the shared contract reader,
+    never a local envelope check. Exercises the closed envelope shape, the
+    duplicate-distribution refusal, and the row/envelope product-agreement
+    refusal on every real test run, because those are exactly what
+    `cs.composition_records_from_envelope` itself enforces before returning
+    a single record."""
+    return cs.composition_records_from_envelope(load_document(), FIXTURE_PACKAGES_ROOT)
 
 
 def test_record_file_exists_and_is_valid_json() -> None:
@@ -168,7 +218,7 @@ def test_mirror_is_byte_for_byte_identical_to_pinned_starter_blob() -> None:
     (`sha1("blob " + len + "\\0" + content)`, the same algorithm `git
     hash-object` uses) of the checked-in mirror and compares it to the
     known digest of `tests/architecture/composition_schema.py` at Starter
-    protected-main `08a2dae1`. A local header comment or a formatter reflow
+    protected-main `a9dc45ec`. A local header comment or a formatter reflow
     changes this digest immediately; a prose "byte-for-byte" claim in a
     docstring does not catch either."""
     content = COMPOSITION_SCHEMA_MIRROR_PATH.read_bytes()
@@ -181,7 +231,7 @@ def test_mirror_is_byte_for_byte_identical_to_pinned_starter_blob() -> None:
     ).hexdigest()
     assert digest == STARTER_COMPOSITION_SCHEMA_BLOB_SHA, (
         f"tests/architecture/composition_schema.py has drifted from Starter "
-        f"08a2dae1's blob {STARTER_COMPOSITION_SCHEMA_BLOB_SHA} (got {digest}) "
+        f"a9dc45ec's blob {STARTER_COMPOSITION_SCHEMA_BLOB_SHA} (got {digest}) "
         "-- re-mirror from the pinned revision, do not hand-edit or reformat"
     )
 
@@ -199,95 +249,70 @@ def test_a_v1_tagged_payload_is_refused_not_upgraded() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Cross-product envelope: the shape Starter's gate reads uniformly across
-# ERP, Sub, and Academy. `product` and `starter_catalogue_revision` are
-# mandatory top-level keys with a fixed meaning (repository directory name;
-# full 40-character protected-main SHA) so one reader can compare all three
-# products' records without per-product special-casing. There is
-# deliberately no stored count anywhere in the document -- `len(records)`
-# is re-derived by every test in this module that needs it, never carried
-# as a field that could drift from the records it claims to describe.
+# Cross-product envelope: ingested ENTIRELY through the shared contract
+# reader, `cs.composition_records_from_envelope`. No local envelope-shape
+# logic lives in this module -- the closed-shape check, the duplicate-
+# distribution refusal, and the row/envelope product-agreement check are
+# all that reader's own, exercised here by calling it over the real
+# document and over deliberately corrupted copies.
 # ---------------------------------------------------------------------------
 
 EXPECTED_PRODUCT = "dotmac_erp"
-_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-
-#: Key names anywhere in the document that would smuggle a stored count back
-#: in under a different name. Matched case-insensitively as a substring, not
-#: an exact set, because the defect is "any equivalent", not one literal
-#: spelling.
-_FORBIDDEN_COUNT_KEY_FRAGMENTS = ("count", "catalogue_size", "total")
+EXPECTED_STARTER_CATALOGUE_REVISION = "a9dc45ecd00d5a0163b6544278888220082e2e75"
 
 
-def test_envelope_has_exactly_the_four_required_top_level_keys() -> None:
-    doc = load_document()
-    assert set(doc.keys()) == {
-        "schema_version",
-        "product",
-        "starter_catalogue_revision",
-        "records",
-    }, f"unexpected top-level envelope shape: {sorted(doc.keys())}"
+def test_shared_envelope_reader_ingests_the_real_document_without_refusal() -> None:
+    """The real, checked-in document parses cleanly through the one shared
+    reader every product routes through -- the near-miss half of the
+    sensitivity proofs below."""
+    records = load_envelope_records()
+    assert len(records) == 95
+    by_distribution = {r.distribution: r for r in records}
+    assert by_distribution["dotmac-deployment-foundation"].product == EXPECTED_PRODUCT
+    assert by_distribution["dotmac-kernel"].product == EXPECTED_PRODUCT
 
 
-def test_envelope_product_is_the_repository_directory_name() -> None:
+def test_envelope_product_and_revision_match_the_expected_values() -> None:
     doc = load_document()
     assert doc["product"] == EXPECTED_PRODUCT
+    assert doc["starter_catalogue_revision"] == EXPECTED_STARTER_CATALOGUE_REVISION
+    assert re.match(r"^[0-9a-f]{40}$", doc["starter_catalogue_revision"])
 
 
-def test_envelope_starter_catalogue_revision_is_the_full_protected_main_sha() -> None:
+def test_envelope_reader_sensitivity_proof_unknown_top_level_key_is_refused() -> None:
+    """Plants the exact defect `cs.composition_records_from_envelope`'s own
+    closed-shape check exists to catch: a stored count smuggled in under an
+    unrecognized top-level key. Calls the REAL reader, not a re-derivation
+    of what it would do."""
     doc = load_document()
-    revision = doc["starter_catalogue_revision"]
-    assert isinstance(revision, str)
-    assert _FULL_SHA_RE.match(revision), (
-        f"starter_catalogue_revision must be a full 40-character SHA, got "
-        f"{revision!r} (len={len(revision)})"
-    )
-    assert revision == "08a2dae1b1f6510e9d1076ac9dbd6eca0db06137"
-
-
-def test_no_stored_count_key_anywhere_in_the_document() -> None:
-    """Sensitivity proof: a document carrying a `catalogue_size` (or any
-    count-shaped) key anywhere -- top level or nested inside a record -- is
-    refused. A record's own field names (`installation`, etc.) never match
-    a forbidden fragment, so this cannot false-positive on the real,
-    checked-in document; the corrupted-copy branch below proves it does
-    fire on the planted defect."""
-
-    def find_offending_keys(node: object, path: str) -> list[str]:
-        offending: list[str] = []
-        if isinstance(node, dict):
-            for key, value in node.items():
-                lowered = str(key).lower()
-                if any(
-                    fragment in lowered for fragment in _FORBIDDEN_COUNT_KEY_FRAGMENTS
-                ):
-                    offending.append(f"{path}.{key}")
-                offending.extend(find_offending_keys(value, f"{path}.{key}"))
-        elif isinstance(node, list):
-            for index, item in enumerate(node):
-                offending.extend(find_offending_keys(item, f"{path}[{index}]"))
-        return offending
-
-    doc = load_document()
-    assert find_offending_keys(doc, "$") == []
-
-    # Sensitivity proof: plant the exact defect (a stored count) and show
-    # the same scan names it.
     corrupted = dict(doc)
     corrupted["catalogue_size"] = len(doc["records"])
-    offending = find_offending_keys(corrupted, "$")
-    assert offending == ["$.catalogue_size"], offending
+    with pytest.raises(cs.IncompatibleSchemaVersion):
+        cs.composition_records_from_envelope(corrupted, FIXTURE_PACKAGES_ROOT)
 
 
-def test_records_is_the_only_place_row_count_is_observable() -> None:
-    """Near-miss: `len(records)` itself is not a stored count -- it is the
-    list, not a field claiming to describe the list -- and must not be
-    flagged by the same guard that catches a planted `catalogue_size`. No
-    literal count is asserted here either -- re-derived from the fixture
-    glob, exactly like `test_catalogue_size_is_derived_never_hardcoded`."""
+def test_envelope_reader_sensitivity_proof_duplicate_distribution_is_refused() -> None:
     doc = load_document()
-    universe_count = sum(1 for p in FIXTURE_PACKAGES_ROOT.iterdir() if p.is_dir())
-    assert len(doc["records"]) == universe_count
+    corrupted = dict(doc)
+    corrupted["records"] = [*doc["records"], doc["records"][0]]
+    with pytest.raises(cs.EnvelopeIncoherence):
+        cs.composition_records_from_envelope(corrupted, FIXTURE_PACKAGES_ROOT)
+
+
+def test_envelope_reader_sensitivity_proof_row_product_mismatch_is_refused() -> None:
+    """Near-miss companion to
+    `test_shared_envelope_reader_ingests_the_real_document_without_refusal`:
+    the real document's rows all agree with the envelope's `product` (this
+    was NOT always true -- see the module's history of the
+    `dotmac-erp`/`dotmac_erp` product-field defect, fixed directly in
+    `docs/kernel-runtime-composition.json`); a planted disagreement on one
+    row is refused by the real reader."""
+    doc = load_document()
+    records = [dict(r) for r in doc["records"]]
+    records[0] = {**records[0], "product": "some-other-product"}
+    corrupted = {**doc, "records": records}
+    with pytest.raises(cs.EnvelopeIncoherence):
+        cs.composition_records_from_envelope(corrupted, FIXTURE_PACKAGES_ROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -334,20 +359,19 @@ def test_every_record_classification_matches_its_starter_dossier() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Every record must parse and cohere against the mirrored schema
+# Every record must parse and cohere via the shared envelope reader
 # ---------------------------------------------------------------------------
 
 
-def test_every_record_parses_and_coheres_via_the_mirrored_schema() -> None:
-    """Exercises `composition_record_from_payload` (classification-match
-    check, the classification/NOT_APPLICABLE coherence invariants, and
-    Ruling 1's manifest-derived lineage applicability for every
-    `optional-module` row) and `derive_composition_state` for all 95 rows.
-    A structurally incoherent record raises here rather than being written
-    to the JSON at all."""
-    doc = load_document()
-    for row in doc["records"]:
-        record = cs.composition_record_from_payload(row, FIXTURE_PACKAGES_ROOT)
+def test_every_record_parses_and_coheres_via_the_shared_envelope_reader() -> None:
+    """Exercises `cs.composition_records_from_envelope` end to end
+    (envelope closed shape, every row's classification-match check, the
+    classification/NOT_APPLICABLE coherence invariants, and Ruling 1's
+    manifest-derived lineage applicability) and `derive_composition_state`
+    for all 95 rows. A structurally incoherent record raises here rather
+    than being written to the JSON at all."""
+    records = load_envelope_records()
+    for record in records:
         cs.derive_composition_state(record)  # never raises for a coherent record
 
 
@@ -356,16 +380,6 @@ def test_no_record_carries_a_derived_only_field() -> None:
     for row in doc["records"]:
         for forbidden in cs._DERIVED_ONLY_FIELDS:
             assert forbidden not in row, f"{row['distribution']} authors {forbidden!r}"
-
-
-def test_no_scalar_total_anywhere_in_this_document() -> None:
-    """The document has no top-level count field derived by summing
-    per-state or per-dimension values -- states/totals are computed by
-    Starter's own tooling from the dimensions, never carried here."""
-    doc = load_document()
-    assert "state" not in doc
-    assert "total" not in doc
-    assert "fully_composed_count" not in doc
 
 
 # ---------------------------------------------------------------------------
@@ -631,42 +645,109 @@ def test_migration_lineage_matches_alembic_version_locations() -> None:
 
 
 # ---------------------------------------------------------------------------
-# installation: derived MECHANICALLY from the resolved poetry.lock
-# dependency graph -- never asserted or trusted from the JSON's own claim.
-# A prior revision of this suite checked only the record's internal
-# coherence against itself and never compared to poetry.lock at all; a
-# distribution flipped to installation:true in the JSON with nothing in
-# poetry.lock to back it would have passed every existing test.
+# installation: derived MECHANICALLY through the shared contract's own
+# lock-group, group-optionality and install-recipe primitives -- never
+# asserted, never grep'd, and never a hand-built flag tuple. `installation`
+# now means the PRODUCTION PROFILE: a dependency resolved only into a dev or
+# tooling group and excluded from the deployed artifact is `false` even
+# though it appears in `poetry.lock` (Michael's ruling -- see module
+# docstring). A prior revision of this suite checked only whether a
+# distribution resolved ANYWHERE in `poetry.lock`, main or dev alike, which
+# is exactly the defect this derivation corrects.
 # ---------------------------------------------------------------------------
 
 
-def resolved_distributions_from_poetry_lock(project_root: Path) -> frozenset[str]:
-    """The full resolved dependency graph's distribution names, PEP 503
-    canonicalized, parsed with `tomllib` -- no `grep`, no text scan.
-    `poetry.lock`'s `[[package]]` tables are the one place Poetry itself
-    records what actually resolved, across every dependency group (main +
-    dev), which is why this reads the lock file rather than
-    `pyproject.toml`'s declared (not necessarily resolved) version
-    constraints."""
-    lock = tomllib.loads((project_root / "poetry.lock").read_text())
-    return frozenset(canonicalize_name(package["name"]) for package in lock["package"])
+def _extract_run_instructions(dockerfile_text: str) -> list[str]:
+    """Split a Dockerfile's raw text into complete logical `RUN`
+    instructions -- each returned string is the FULL multi-line instruction,
+    backslash continuations and all, exactly as `cs.parse_install_command`
+    itself expects (it joins continuations internally; this function's only
+    job is finding where one instruction ends and the next begins, never
+    pre-joining or pre-trimming the text it returns)."""
+    lines = dockerfile_text.splitlines(keepends=True)
+    instructions: list[str] = []
+    current: list[str] | None = None
+    for line in lines:
+        stripped = line.rstrip("\n")
+        if current is None:
+            if stripped.lstrip().startswith("RUN"):
+                current = [line]
+                if not stripped.rstrip().endswith("\\"):
+                    instructions.append("".join(current))
+                    current = None
+            continue
+        current.append(line)
+        if not stripped.rstrip().endswith("\\"):
+            instructions.append("".join(current))
+            current = None
+    return instructions
+
+
+def find_poetry_install_recipes(dockerfile_path: Path) -> tuple[cs.InstallRecipe, ...]:
+    """Every `poetry install`/`poetry sync` recipe in one Dockerfile, as
+    COMPLETE logical `RUN` instructions handed to `cs.parse_install_command`
+    -- never a single hand-picked line out of a longer instruction.
+    `_POETRY_INSTALL_RUN_RE` selects WHICH `RUN` instructions are offered to
+    the parser at all; every other `RUN` (`apt-get update`, `npm ci`, ...)
+    would be refused by the parser's own grammar and is never offered to
+    it."""
+    text = dockerfile_path.read_text()
+    recipes = []
+    for index, instruction in enumerate(_extract_run_instructions(text)):
+        if not _POETRY_INSTALL_RUN_RE.search(instruction):
+            continue
+        recipes.append(
+            cs.parse_install_command(
+                instruction, source=f"{dockerfile_path.name}#{index}"
+            )
+        )
+    return tuple(recipes)
+
+
+def all_deployed_install_recipes(
+    dockerfiles: tuple[Path, ...] = DOCKERFILES,
+) -> tuple[cs.InstallRecipe, ...]:
+    """Every real, checked-in install recipe across every one of ERP's
+    Dockerfiles -- `cs.derive_installation_group_universe` unions their
+    selected groups; a dependency reaching only one of several deployed
+    profiles is still installed (Michael's ruling)."""
+    recipes: list[cs.InstallRecipe] = []
+    for dockerfile in dockerfiles:
+        recipes.extend(find_poetry_install_recipes(dockerfile))
+    assert recipes, f"no poetry install/sync recipe found in {dockerfiles}"
+    return tuple(recipes)
+
+
+def load_lock_group_membership(project_root: Path) -> cs.LockGroupMembership | None:
+    lock_document = tomllib.loads((project_root / "poetry.lock").read_text())
+    return cs.derive_lock_group_membership(lock_document)
+
+
+def load_group_optionality(project_root: Path) -> dict[str, bool] | None:
+    pyproject_document = tomllib.loads((project_root / "pyproject.toml").read_text())
+    return cs.derive_group_optionality(pyproject_document)
 
 
 def find_installation_mismatches(
-    records: list[dict[str, object]], resolved: frozenset[str]
+    records: list[dict[str, object]],
+    *,
+    lock_membership: cs.LockGroupMembership | None,
+    recipes: tuple[cs.InstallRecipe, ...],
+    group_optionality: dict[str, bool] | None,
 ) -> list[str]:
-    """The one function both `test_installation_matches_resolved_poetry_lock_graph`
-    and its sensitivity proof call -- never duplicated logic between "the
-    real check" and "the thing the sensitivity proof asserts about"; that
-    duplication is exactly how a prior revision's proof went vacuous (it
-    asserted `TRUE is not FALSE` by construction and never called this
-    function at all)."""
+    """The one function both `test_installation_matches_derived_production_
+    profile` and its sensitivity proof call -- never duplicated logic
+    between "the real check" and "the thing the sensitivity proof asserts
+    about"; that duplication is exactly how a prior revision's proof went
+    vacuous (it asserted `TRUE is not FALSE` by construction and never
+    called this function at all)."""
     offenders = []
     for row in records:
-        expected = (
-            cs.DimensionValue.TRUE
-            if canonicalize_name(str(row["distribution"])) in resolved
-            else cs.DimensionValue.FALSE
+        expected = cs.derive_installation_dimension(
+            distribution=str(row["distribution"]),
+            lock_membership=lock_membership,
+            recipes=recipes,
+            group_optionality=group_optionality,
         )
         actual = cs.DimensionValue(row["installation"])
         if actual is not expected:
@@ -674,59 +755,41 @@ def find_installation_mismatches(
     return offenders
 
 
-def test_installation_matches_resolved_poetry_lock_graph() -> None:
+def test_installation_matches_derived_production_profile() -> None:
     """Every one of the 95 catalogue rows' `installation` value, compared
-    directly against whether that exact distribution name resolved in
-    `poetry.lock` -- not just the six composed optional modules."""
-    resolved = resolved_distributions_from_poetry_lock(PROJECT_ROOT)
+    directly against `cs.derive_installation_dimension`'s PRODUCTION-PROFILE
+    derivation -- the lock's group membership, `pyproject.toml`'s group
+    optionality, and the union of every deployed Dockerfile's install
+    recipe -- not whether the distribution merely resolved anywhere in
+    `poetry.lock`."""
+    lock_membership = load_lock_group_membership(PROJECT_ROOT)
+    group_optionality = load_group_optionality(PROJECT_ROOT)
+    recipes = all_deployed_install_recipes()
     doc = load_document()
-    offenders = find_installation_mismatches(doc["records"], resolved)
+    offenders = find_installation_mismatches(
+        doc["records"],
+        lock_membership=lock_membership,
+        recipes=recipes,
+        group_optionality=group_optionality,
+    )
     assert offenders == [], offenders
 
 
 def test_installation_names_are_already_pep503_normalized() -> None:
-    """Pins the invariant `find_installation_mismatches` relies on: every
-    distribution name in the catalogue and every resolved poetry.lock name
-    is ALREADY its own canonical form (Dotmac's naming convention never
-    needed the underscore/dot/case folding PEP 503 exists to handle). If
-    that ever stops being true, canonicalization is silently doing real
-    work this test would otherwise never catch."""
-    resolved = resolved_distributions_from_poetry_lock(PROJECT_ROOT)
-    for name in resolved:
+    """Pins the invariant the derivation relies on: every distribution name
+    in the catalogue and every resolved `poetry.lock` name is ALREADY its
+    own canonical form (Dotmac's naming convention never needed the
+    underscore/dot/case folding PEP 503 exists to handle). If that ever
+    stops being true, canonicalization is silently doing real work this
+    test would otherwise never catch."""
+    lock_membership = load_lock_group_membership(PROJECT_ROOT)
+    assert lock_membership is not None
+    for name in lock_membership.groups_by_distribution:
         assert canonicalize_name(name) == name, name
     doc = load_document()
     for row in doc["records"]:
         distribution = str(row["distribution"])
         assert canonicalize_name(distribution) == distribution, distribution
-
-
-def test_installation_sensitivity_proof_defect_is_named_and_near_miss_accepted() -> (
-    None
-):
-    """Plants Michael's exact defect: flips an uninstalled distribution's
-    `installation` to `true` in a corrupted in-memory copy of the RECORD
-    LIST and runs it through the real offender-finder -- not a hand-copied
-    re-derivation of what that function does, the function itself. The
-    near-miss: the real, checked-in records produce zero offenders."""
-    resolved = resolved_distributions_from_poetry_lock(PROJECT_ROOT)
-    doc = load_document()
-
-    assert find_installation_mismatches(doc["records"], resolved) == []  # near-miss
-
-    uninstalled_row = next(
-        row
-        for row in doc["records"]
-        if canonicalize_name(row["distribution"]) not in resolved
-    )
-    distribution = uninstalled_row["distribution"]
-    corrupted_records = [
-        {**row, "installation": cs.DimensionValue.TRUE.value}
-        if row["distribution"] == distribution
-        else row
-        for row in doc["records"]
-    ]
-    offenders = find_installation_mismatches(corrupted_records, resolved)
-    assert offenders == [distribution], offenders
 
 
 def test_installation_row_shape_carries_exactly_the_declared_fields() -> None:
@@ -735,7 +798,12 @@ def test_installation_row_shape_carries_exactly_the_declared_fields() -> None:
     silently drops unknown payload keys (Starter #686, merged as `b081ff73`,
     closes that half of the contract; this closes ERP's half in the
     meantime, and stays correct after the re-mirror since a stricter local
-    check is never invalidated by a stricter upstream one)."""
+    check is never invalidated by a stricter upstream one) -- and is, in
+    fact, now REDUNDANT with the mirrored contract's own closed-shape
+    refusal in `cs.composition_record_from_payload` (exercised end to end by
+    `load_envelope_records` above), which is exactly the intended outcome:
+    this check was a temporary local patch pending the upstream fix, not a
+    permanent second authority."""
     expected_keys = frozenset(cs.REQUIRED_PAYLOAD_FIELDS) | {"schema_version"}
     doc = load_document()
     for row in doc["records"]:
@@ -751,6 +819,105 @@ def test_installation_row_shape_sensitivity_proof_extra_key_is_refused() -> None
     planted = dict(doc["records"][0])
     planted["api_key"] = "sk_live_not_a_real_secret_but_would_be_refused"
     assert set(planted) != expected_keys
+
+    # The mirrored contract's OWN closed-shape refusal independently catches
+    # the identical plant -- not just this module's local check.
+    with pytest.raises(cs.IncompatibleSchemaVersion):
+        cs.composition_record_from_payload(planted, FIXTURE_PACKAGES_ROOT)
+
+
+def test_installation_near_miss_unmutated_tree_derives_expected_foundation_and_kernel() -> (
+    None
+):
+    """The near-miss half of the sensitivity proof below: over the REAL,
+    unmutated Dockerfiles, `dotmac-deployment-foundation` (resolves only
+    into the `dev` group in `poetry.lock`) derives `false`, and
+    `dotmac-kernel` (resolves into `main`) derives `true` -- proving the
+    derivation can say yes as well as refuse."""
+    lock_membership = load_lock_group_membership(PROJECT_ROOT)
+    group_optionality = load_group_optionality(PROJECT_ROOT)
+    recipes = all_deployed_install_recipes()
+
+    foundation = cs.derive_installation_dimension(
+        distribution="dotmac-deployment-foundation",
+        lock_membership=lock_membership,
+        recipes=recipes,
+        group_optionality=group_optionality,
+    )
+    kernel = cs.derive_installation_dimension(
+        distribution="dotmac-kernel",
+        lock_membership=lock_membership,
+        recipes=recipes,
+        group_optionality=group_optionality,
+    )
+    assert foundation is cs.DimensionValue.FALSE
+    assert kernel is cs.DimensionValue.TRUE
+
+    doc = load_document()
+    by_name = {row["distribution"]: row for row in doc["records"]}
+    assert by_name["dotmac-deployment-foundation"]["installation"] == "false"
+    assert by_name["dotmac-kernel"]["installation"] == "true"
+
+
+def test_installation_sensitivity_proof_a_mutated_recipe_disagrees_with_the_unchanged_record(
+    tmp_path: Path,
+) -> None:
+    """The provenance plant: copy the REAL `Dockerfile` to a scratch path,
+    rewrite its install line to select a different profile (`--with dev`
+    instead of `--only main` -- now installing `dotmac-deployment-
+    foundation`'s `dev` group too), and show the REAL function the real
+    check calls (`cs.derive_installation_dimension`) disagrees with the
+    checked-in, UNCHANGED record. This is the honest form of the proof: the
+    record on disk is never touched, only the Dockerfile copy is -- proving
+    the validator would catch stale evidence, not merely that two different
+    inputs produce two different outputs."""
+    real_dockerfile = PROJECT_ROOT / "Dockerfile"
+    original_text = real_dockerfile.read_text()
+    assert "poetry install --only main --no-root --no-ansi" in original_text
+
+    mutated_text = original_text.replace(
+        "poetry install --only main --no-root --no-ansi",
+        "poetry install --with dev --no-root --no-ansi",
+    )
+    assert mutated_text != original_text
+
+    scratch_dockerfile = tmp_path / "Dockerfile"
+    scratch_dockerfile.write_text(mutated_text)
+
+    lock_membership = load_lock_group_membership(PROJECT_ROOT)
+    group_optionality = load_group_optionality(PROJECT_ROOT)
+    mutated_recipes = find_poetry_install_recipes(scratch_dockerfile)
+    assert mutated_recipes, "the mutated recipe must still parse"
+
+    mutated_value = cs.derive_installation_dimension(
+        distribution="dotmac-deployment-foundation",
+        lock_membership=lock_membership,
+        recipes=mutated_recipes,
+        group_optionality=group_optionality,
+    )
+    assert mutated_value is cs.DimensionValue.TRUE, (
+        "sensitivity proof failed: --with dev must select dotmac-deployment-"
+        "foundation's dev group"
+    )
+
+    doc = load_document()
+    recorded_row = next(
+        row
+        for row in doc["records"]
+        if row["distribution"] == "dotmac-deployment-foundation"
+    )
+    recorded_value = cs.DimensionValue(recorded_row["installation"])
+    assert recorded_value is cs.DimensionValue.FALSE  # the checked-in record, untouched
+
+    # The actual proof: the real offender-finder, called over the mutated
+    # recipe, names the checked-in record as a mismatch.
+    offenders = find_installation_mismatches(
+        [recorded_row],
+        lock_membership=lock_membership,
+        recipes=mutated_recipes,
+        group_optionality=group_optionality,
+    )
+    assert offenders == ["dotmac-deployment-foundation"], offenders
 
 
 # ---------------------------------------------------------------------------
@@ -907,6 +1074,10 @@ def test_dotmac_deployment_foundation_is_dev_only_never_ships_in_the_runtime_ima
     by_name = {row["distribution"]: row for row in doc["records"]}
     assert (
         by_name["dotmac-deployment-foundation"]["runtime_consumption"]
+        == cs.DimensionValue.FALSE.value
+    )
+    assert (
+        by_name["dotmac-deployment-foundation"]["installation"]
         == cs.DimensionValue.FALSE.value
     )
     pyproject = (PROJECT_ROOT / "pyproject.toml").read_text()
