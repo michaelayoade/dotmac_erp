@@ -524,6 +524,7 @@ class ExpenseReportingMixin(ExpenseServiceBase):
 
         filters = [
             ExpenseClaim.organization_id == org_id,
+            ExpenseClaimApprovalStep.organization_id == org_id,
             ExpenseClaimApprovalStep.approver_id == approver_id,
             or_(*decision_conditions),
         ]
@@ -562,6 +563,7 @@ class ExpenseReportingMixin(ExpenseServiceBase):
                 ExpenseClaim.employee_id,
                 Person.name_expr().label("claimant_name"),
             )
+            .select_from(ExpenseClaimApprovalStep)
             .join(
                 ExpenseClaim,
                 ExpenseClaim.claim_id == ExpenseClaimApprovalStep.claim_id,
@@ -570,6 +572,7 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             .outerjoin(Person, Person.id == Employee.person_id)
             .where(
                 ExpenseClaim.organization_id == org_id,
+                ExpenseClaimApprovalStep.organization_id == org_id,
                 ExpenseClaimApprovalStep.approver_id == approver_id,
                 or_(*decision_conditions),
             )
@@ -599,6 +602,7 @@ class ExpenseReportingMixin(ExpenseServiceBase):
                 ExpenseClaim.total_approved_amount,
                 Person.name_expr().label("claimant_name"),
             )
+            .select_from(ExpenseClaimApprovalStep)
             .join(
                 ExpenseClaim,
                 ExpenseClaim.claim_id == ExpenseClaimApprovalStep.claim_id,
