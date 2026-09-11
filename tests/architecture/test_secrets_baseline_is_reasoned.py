@@ -89,21 +89,6 @@ REASONS = {
         "the released facility and the deployment descriptor test proves the "
         "fields stay identical to the descriptor they came from."
     ),
-    "docs/kernel-runtime-composition.json": (
-        "`Hex High Entropy String` on `starter_catalogue_revision`: a "
-        "40-character git commit SHA naming the dotmac_starter_mt "
-        "protected-main revision this record's dimensional-composition.v2 "
-        "catalogue and manifests were derived against. It is REQUIRED to "
-        "be 40 hex characters by its own contract "
-        "(tests/architecture/composition_schema.py's derive_distribution_"
-        "universe/manifest reading, and this file's own "
-        "test_envelope_starter_catalogue_revision_is_the_full_protected_"
-        "main_sha), which is exactly why the entropy heuristic fires. It "
-        "authenticates nothing: a git commit SHA is published in every "
-        "clone of dotmac_starter_mt, names a point in history rather than "
-        "granting access, and this specific value is independently pinned "
-        "and checked against by that same test."
-    ),
     "docs/paystack_chargebacks_investigation.md": (
         "Paystack transaction references from a written-up investigation. "
         "They identify transactions, not an actor — a reference authorises "
@@ -181,17 +166,13 @@ def test_the_suppression_count_only_shrinks() -> None:
     precisely BECAUSE the descriptor refuses a mutable tag, so suppressing it is
     the cost of the stronger reference, not a concession.
 
-    29 is `docs/kernel-runtime-composition.json`'s single finding:
-    `Hex High Entropy String` on `starter_catalogue_revision`, a required
-    40-character git commit SHA (see this repository's `REASONS` entry for
-    that path for the full statement). It replaces an earlier, INCORRECT
-    account in this docstring naming a "schema-9 governance fingerprint
-    shared by the two Paystack relay retry tests" as the 29th slot — no such
-    entry exists in the current baseline, and a docstring whose prose no
-    longer accounts for the file's actual contents is exactly the kind of
-    unexamined narrative this guard exists to prevent elsewhere.
+    The v3 composition record no longer consumes a baseline slot: it is a
+    closed digest-only envelope whose SHA-pinned verifier independently
+    derives every public hash and refuses unknown fields. Scanning those
+    expected digests with an entropy heuristic would add eleven findings
+    without increasing secret coverage.
 
-    Every entry above the reviewed 29 would be unexplained, and the reason
+    Every entry above the reviewed 28 would be unexplained, and the reason
     check above only fires per FILE — a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
@@ -202,8 +183,8 @@ def test_the_suppression_count_only_shrinks() -> None:
     someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total == 29, (
-        f"{total} suppressed findings, expected exactly 29. A rise means fix "
+    assert total == 28, (
+        f"{total} suppressed findings, expected exactly 28. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
         "change -- never leave a stale number unexamined either direction."

@@ -169,20 +169,9 @@ target-version = "py311"
 # with the file named explicitly on the command line. See
 # scripts/check_evidence_json.py for the validator that runs after
 # formatting and fails on invalid JSON either way.
-#
-# tests/architecture/composition_schema.py is ALSO excluded here even
-# though it is a .py file ruff would otherwise reach by extension under
-# the directory-wide `ruff format .`/`ruff check .` invocations `make
-# format`/`make lint`/CI actually use: it is a byte-for-byte mirror of
-# dotmac_starter_mt's protected-main file at the pinned revision (verified
-# by git-blob-digest comparison in
-# tests/architecture/test_kernel_runtime_composition.py), and reformatting
-# it locally is exactly the defect that made an earlier version of this
-# mirror not byte-for-byte despite claiming to be.
 extend-exclude = [
     "docs/kernel-runtime-composition.json",
     "docs/kernel-runtime-readiness.json",
-    "tests/architecture/composition_schema.py",
 ]
 
 [tool.ruff.lint]

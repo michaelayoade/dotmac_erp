@@ -46,7 +46,7 @@ def test_a_trailing_comma_document_is_rejected(tmp_path: Path) -> None:
     hypothetical shape)."""
     corrupted = tmp_path / "docs" / "kernel-runtime-composition.json"
     corrupted.parent.mkdir(parents=True)
-    corrupted.write_text('{\n  "schema_version": "dimensional-composition.v2",\n}\n')
+    corrupted.write_text('{\n  "schema_version": "dimensional-composition.v3",\n}\n')
     result = check_document(corrupted)
     assert result is not None
     assert "invalid JSON" in result
@@ -59,7 +59,7 @@ def test_a_document_with_only_trailing_whitespace_is_accepted(tmp_path: Path) ->
     and must not be flagged."""
     benign = tmp_path / "docs" / "kernel-runtime-composition.json"
     benign.parent.mkdir(parents=True)
-    benign.write_text('{\n  "schema_version": "dimensional-composition.v2"\n}\n\n')
+    benign.write_text('{\n  "schema_version": "dimensional-composition.v3"\n}\n\n')
     assert check_document(benign) is None
 
 
