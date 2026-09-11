@@ -34,6 +34,7 @@ from app.models.finance.core_org.organization import Organization
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.sync import SyncHistory, SyncJobStatus, SyncType
+from app.metrics import observe_dotmac_sub_incremental_lock_contention
 from app.services.dotmac_sub import (
     SYSTEM_USER_ID,
     DotmacSubConfig,
@@ -786,6 +787,7 @@ def run_dotmac_sub_incremental_sync_phase(
     with session_for_org(org_id) as db:
         lock_acquired = _try_acquire_incremental_sync_lock(db, org_id)
         if not lock_acquired:
+            observe_dotmac_sub_incremental_lock_contention()
             raise self.retry(
                 exc=RuntimeError(
                     f"dotmac_sub incremental phase lock is held for org {org_id}"

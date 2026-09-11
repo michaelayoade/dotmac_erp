@@ -26,6 +26,7 @@ from app.config import settings
 from app.db.session_context import prime_tenant_context
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.metrics import observe_dotmac_sub_staff_sync_row
 from app.services.dotmac_sub.client import (
     DotmacSubClient,
     DotmacSubConfig,
@@ -376,9 +377,15 @@ def reconcile_staff_accounts(db: Session, organization_id: UUID) -> dict[str, An
                 result = sync_employee(db, employee, client=client)
                 db.commit()
                 counts[result["action"]] = counts.get(result["action"], 0) + 1
+                observe_dotmac_sub_staff_sync_row("success")
             except Exception as e:  # noqa: BLE001 — isolate per-employee failures
                 db.rollback()
                 errors.append(f"{emp_code}: {e}")
+                observe_dotmac_sub_staff_sync_row(
+                    "permanent_failure"
+                    if isinstance(e, DotmacSubPermanentSyncError)
+                    else "transient_failure"
+                )
                 log_context: dict[str, Any] = {
                     "event": "dotmac_sub_staff_sync_failed",
                     "organization_id": str(organization_id),
