@@ -176,7 +176,7 @@ def test_the_suppression_count_only_shrinks() -> None:
     check above only fires per FILE — a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
-    two-directional, and an UNEXPLAINED drop below 29 (a finding quietly
+    two-directional, and an UNEXPLAINED drop below 28 (a finding quietly
     disappearing without its `REASONS` entry being removed by
     `test_no_reason_outlives_its_finding`, or a finding merging into another
     file's count) is exactly as worth surfacing as a rise -- either way,
