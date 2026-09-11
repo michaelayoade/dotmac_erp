@@ -113,6 +113,31 @@ COMPOSITION_SCHEMA_MIRROR_PATH = (
 #: prior revision of this mirror carried a local header comment and two
 #: ruff-format reflows and still claimed "byte-for-byte" in its own
 #: docstring; only a real digest comparison catches that.
+#:
+#: PROVENANCE -- checked in here so both this constant and
+#: `EXPECTED_STARTER_CATALOGUE_REVISION` below are RE-DERIVABLE from a
+#: `dotmac_starter_mt` checkout, not merely asserted. Commands run directly
+#: against Starter's own git history (never against this mirror computing
+#: its own digest and comparing it to itself -- that would pass identically
+#: whether the mirror was current or silently drifted):
+#:
+#:     $ git -C <starter-checkout> rev-parse a9dc45ec
+#:     a9dc45ecd00d5a0163b6544278888220082e2e75
+#:     $ git -C <starter-checkout> log --oneline -1 a9dc45ec
+#:     a9dc45ec installation means the production profile, derived from
+#:     lock groups and the recipe that selects them (#687)
+#:     $ git -C <starter-checkout> merge-base --is-ancestor a9dc45ec origin/main
+#:     $ echo $?
+#:     0   # a9dc45ec is an ancestor of (at the time of this mirror, IS)
+#:         # Starter's protected main
+#:     $ git -C <starter-checkout> rev-parse \
+#:         a9dc45ec:tests/architecture/composition_schema.py
+#:     5e253827deea454bf9870f5900043010d43a5f71
+#:
+#: If this mirror is ever re-pinned to a newer Starter revision, update this
+#: comment block, `STARTER_COMPOSITION_SCHEMA_BLOB_SHA`, and
+#: `EXPECTED_STARTER_CATALOGUE_REVISION` together -- the three must always
+#: name the same Starter commit.
 STARTER_COMPOSITION_SCHEMA_BLOB_SHA = "5e253827deea454bf9870f5900043010d43a5f71"
 
 #: ERP's declared production entry points for the AST import-reachability
@@ -146,20 +171,29 @@ PRODUCTION_ENTRY_POINT_MODULES = (
     "app.celery_app",
 )
 
-#: The six real, real-`ModuleManifest` call sites in
-#: `app/product_assembly.py` (`COMPOSED_MODULE_MANIFESTS`) -- the only place
-#: in this repository a `ModuleManifest` value is passed into an
-#: assembly-shaped object at all.
-COMPOSED_OPTIONAL_MODULES = frozenset(
-    {
-        "dotmac-accounting",
-        "dotmac-files",
-        "dotmac-imports",
-        "dotmac-numbering",
-        "dotmac-people",
-        "dotmac-tax",
-    }
-)
+
+def composed_optional_modules() -> frozenset[str]:
+    """The distributions `app/product_assembly.py` actually passes as real
+    `ModuleManifest` values (`COMPOSED_MODULE_MANIFESTS`) -- the only place
+    in this repository a `ModuleManifest` value is passed into an
+    assembly-shaped object at all. DERIVED from that module's own
+    `COMPOSED_MODULE_DISTRIBUTIONS` mapping, never a hand-maintained literal:
+    a prior revision of this constant hard-coded the six distribution names,
+    which meant a seventh composed module would be silently unmonitored on
+    both `module_registration` and `migration_lineage` until someone
+    remembered to update the set by hand.
+
+    Imported LOCALLY, not at module scope, matching this repository's own
+    convention (`test_accounting_composition.py`,
+    `test_files_composition.py`) for reading `app.*` modules whose import
+    graph reaches every composed distribution's real package -- doing that
+    at module scope would make every test in THIS file collection-time
+    dependent on all six being installed, rather than only the tests that
+    actually need the derived set."""
+    from app.product_assembly import COMPOSED_MODULE_DISTRIBUTIONS
+
+    return frozenset(COMPOSED_MODULE_DISTRIBUTIONS.values())
+
 
 #: ERP's checked-in build recipes, read directly -- never a hand-copied
 #: install-line literal. `Dockerfile.hardened` carries two independent
@@ -258,6 +292,11 @@ def test_a_v1_tagged_payload_is_refused_not_upgraded() -> None:
 # ---------------------------------------------------------------------------
 
 EXPECTED_PRODUCT = "dotmac_erp"
+
+#: Same Starter commit as `STARTER_COMPOSITION_SCHEMA_BLOB_SHA` above --
+#: see that constant's PROVENANCE comment for the re-derivable `git`
+#: commands (`rev-parse`, `log`, `merge-base --is-ancestor`) that produced
+#: both this value and the blob digest from Starter's own history.
 EXPECTED_STARTER_CATALOGUE_REVISION = "a9dc45ecd00d5a0163b6544278888220082e2e75"
 
 
@@ -562,7 +601,7 @@ def test_registration_boundary_matches_measured_erp_boot_path() -> None:
     measured_value = measured_registration_value()
     doc = load_document()
     offenders = find_registration_mismatches(
-        doc["records"], measured_value, COMPOSED_OPTIONAL_MODULES
+        doc["records"], measured_value, composed_optional_modules()
     )
     assert offenders == [], offenders
 
@@ -605,7 +644,7 @@ def test_registration_boundary_sensitivity_proof_defect_named_and_near_miss_acce
 
     assert (
         find_registration_mismatches(
-            doc["records"], measured_value, COMPOSED_OPTIONAL_MODULES
+            doc["records"], measured_value, composed_optional_modules()
         )
         == []
     )  # near-miss
@@ -617,7 +656,7 @@ def test_registration_boundary_sensitivity_proof_defect_named_and_near_miss_acce
         for row in doc["records"]
     ]
     offenders = find_registration_mismatches(
-        corrupted_records, measured_value, COMPOSED_OPTIONAL_MODULES
+        corrupted_records, measured_value, composed_optional_modules()
     )
     assert offenders == ["dotmac-accounting"], offenders
 
@@ -637,7 +676,7 @@ def test_migration_lineage_matches_alembic_version_locations() -> None:
     )
     doc = load_document()
     by_name = {row["distribution"]: row for row in doc["records"]}
-    for distribution in COMPOSED_OPTIONAL_MODULES:
+    for distribution in composed_optional_modules():
         import_pkg = distribution.replace("-", "_")
         present = f"{import_pkg}.migrations:versions" in version_locations_line
         recorded = cs.DimensionValue(by_name[distribution]["migration_lineage"])
@@ -704,17 +743,47 @@ def find_poetry_install_recipes(dockerfile_path: Path) -> tuple[cs.InstallRecipe
     return tuple(recipes)
 
 
+#: The exact number of `poetry install`/`poetry sync` recipes checked-in
+#: across every Dockerfile this validator reads -- one from `Dockerfile`'s
+#: dependency-builder stage, and two from `Dockerfile.hardened`'s
+#: independent nuitka-compiler and production stages. Pinned TWO-
+#: DIRECTIONALLY (`==`, never `>=`) because `all_deployed_install_recipes`
+#: previously only asserted the union was non-empty: since all three real
+#: recipes happen to select the identical group set (`{"main"}`), silently
+#: dropping `Dockerfile.hardened` from `DOCKERFILES` entirely -- or losing
+#: one of its two stages -- left every test in this module green. This
+#: constant, plus the per-Dockerfile assertion below, is what makes that an
+#: observed fact rather than an asserted one: a dropped file/stage lowers
+#: the total, a silently added one raises it, and either fails here before
+#: any derivation runs.
+EXPECTED_INSTALL_RECIPE_COUNT = 3
+
+
 def all_deployed_install_recipes(
     dockerfiles: tuple[Path, ...] = DOCKERFILES,
 ) -> tuple[cs.InstallRecipe, ...]:
     """Every real, checked-in install recipe across every one of ERP's
     Dockerfiles -- `cs.derive_installation_group_universe` unions their
     selected groups; a dependency reaching only one of several deployed
-    profiles is still installed (Michael's ruling)."""
+    profiles is still installed (Michael's ruling). Asserts PER-DOCKERFILE
+    that each named file yields at least one recipe (a file present in
+    `dockerfiles` but contributing zero recipes is named, not silently
+    absorbed into the union), and pins the TOTAL at
+    `EXPECTED_INSTALL_RECIPE_COUNT` so a dropped file/stage or a silently
+    added one is caught even when every recipe happens to select the same
+    groups."""
     recipes: list[cs.InstallRecipe] = []
     for dockerfile in dockerfiles:
-        recipes.extend(find_poetry_install_recipes(dockerfile))
-    assert recipes, f"no poetry install/sync recipe found in {dockerfiles}"
+        found = find_poetry_install_recipes(dockerfile)
+        assert found, f"no poetry install/sync recipe found in {dockerfile}"
+        recipes.extend(found)
+    assert len(recipes) == EXPECTED_INSTALL_RECIPE_COUNT, (
+        f"expected exactly {EXPECTED_INSTALL_RECIPE_COUNT} checked-in poetry "
+        f"install/sync recipes across {dockerfiles}, found {len(recipes)} -- "
+        "a dropped Dockerfile/stage changes which production profile "
+        "installation is derived against, even when the surviving recipes "
+        "happen to select the same groups as before"
+    )
     return tuple(recipes)
 
 
@@ -870,7 +939,13 @@ def test_installation_sensitivity_proof_a_mutated_recipe_disagrees_with_the_unch
     checked-in, UNCHANGED record. This is the honest form of the proof: the
     record on disk is never touched, only the Dockerfile copy is -- proving
     the validator would catch stale evidence, not merely that two different
-    inputs produce two different outputs."""
+    inputs produce two different outputs.
+
+    This mutates `Dockerfile` ONLY -- see
+    `test_installation_sensitivity_proof_a_mutated_hardened_recipe_disagrees_
+    with_the_unchanged_record` immediately below for the equivalent proof
+    against `Dockerfile.hardened`, the file `EXPECTED_INSTALL_RECIPE_COUNT`
+    exists to keep from being silently dropped."""
     real_dockerfile = PROJECT_ROOT / "Dockerfile"
     original_text = real_dockerfile.read_text()
     assert "poetry install --only main --no-root --no-ansi" in original_text
@@ -911,6 +986,71 @@ def test_installation_sensitivity_proof_a_mutated_recipe_disagrees_with_the_unch
 
     # The actual proof: the real offender-finder, called over the mutated
     # recipe, names the checked-in record as a mismatch.
+    offenders = find_installation_mismatches(
+        [recorded_row],
+        lock_membership=lock_membership,
+        recipes=mutated_recipes,
+        group_optionality=group_optionality,
+    )
+    assert offenders == ["dotmac-deployment-foundation"], offenders
+
+
+def test_installation_sensitivity_proof_a_mutated_hardened_recipe_disagrees_with_the_unchanged_record(
+    tmp_path: Path,
+) -> None:
+    """Companion to the `Dockerfile` provenance plant above, exercised
+    against `Dockerfile.hardened` -- the file whose "two independent build
+    stages, each with its own recipe" this module's constants claim as
+    covered fact and `EXPECTED_INSTALL_RECIPE_COUNT` now enforces. Copies
+    the REAL file, rewrites its FIRST (`nuitka-compiler` stage) `poetry
+    install --only main --no-interaction --no-ansi` occurrence to select
+    `--with dev` too, and shows the same disagreement the `Dockerfile` proof
+    shows -- proving this file's coverage is exercised, not merely asserted
+    in a docstring."""
+    real_dockerfile = PROJECT_ROOT / "Dockerfile.hardened"
+    original_text = real_dockerfile.read_text()
+    target = "poetry install --only main --no-interaction --no-ansi"
+    assert original_text.count(target) == 2, (
+        "Dockerfile.hardened's two build-stage recipes have drifted from "
+        "the exact shape this proof mutates -- update the target string"
+    )
+
+    mutated_text = original_text.replace(
+        target, "poetry install --with dev --no-interaction --no-ansi", 1
+    )
+    assert mutated_text != original_text
+    assert mutated_text.count(target) == 1, (
+        "exactly one of the two occurrences must remain unmutated"
+    )
+
+    scratch_dockerfile = tmp_path / "Dockerfile.hardened"
+    scratch_dockerfile.write_text(mutated_text)
+
+    lock_membership = load_lock_group_membership(PROJECT_ROOT)
+    group_optionality = load_group_optionality(PROJECT_ROOT)
+    mutated_recipes = find_poetry_install_recipes(scratch_dockerfile)
+    assert len(mutated_recipes) == 2, "both build-stage recipes must still parse"
+
+    mutated_value = cs.derive_installation_dimension(
+        distribution="dotmac-deployment-foundation",
+        lock_membership=lock_membership,
+        recipes=mutated_recipes,
+        group_optionality=group_optionality,
+    )
+    assert mutated_value is cs.DimensionValue.TRUE, (
+        "sensitivity proof failed: --with dev on one Dockerfile.hardened "
+        "stage must select dotmac-deployment-foundation's dev group"
+    )
+
+    doc = load_document()
+    recorded_row = next(
+        row
+        for row in doc["records"]
+        if row["distribution"] == "dotmac-deployment-foundation"
+    )
+    recorded_value = cs.DimensionValue(recorded_row["installation"])
+    assert recorded_value is cs.DimensionValue.FALSE  # the checked-in record, untouched
+
     offenders = find_installation_mismatches(
         [recorded_row],
         lock_membership=lock_membership,
@@ -1070,6 +1210,15 @@ def test_runtime_consumption_sensitivity_proof_deleting_the_dotmac_files_import_
 def test_dotmac_deployment_foundation_is_dev_only_never_ships_in_the_runtime_image() -> (
     None
 ):
+    """Three independent, STRUCTURED facts, each measured by the function
+    that actually owns it -- never a raw-substring position check. A prior
+    revision tested "dev-only" by asserting the distribution's name did not
+    appear in `pyproject.toml`'s text BEFORE the `[tool.poetry.group.dev.
+    dependencies]` header string -- which proves only "not declared above
+    that header" (a second group declared AFTER `dev` would pass the same
+    check while genuinely not being dev-only) and reads no Dockerfile and no
+    lock at all, so it could not have proven "never ships in the runtime
+    image" either, despite the test's own name."""
     doc = load_document()
     by_name = {row["distribution"]: row for row in doc["records"]}
     assert (
@@ -1080,8 +1229,11 @@ def test_dotmac_deployment_foundation_is_dev_only_never_ships_in_the_runtime_ima
         by_name["dotmac-deployment-foundation"]["installation"]
         == cs.DimensionValue.FALSE.value
     )
-    pyproject = (PROJECT_ROOT / "pyproject.toml").read_text()
-    assert (
+
+    # "dev-only": the structured fact, straight from poetry.lock's own
+    # group membership -- exactly, never a superset or a subset.
+    lock_membership = load_lock_group_membership(PROJECT_ROOT)
+    assert lock_membership is not None
+    assert lock_membership.groups_by_distribution[
         "dotmac-deployment-foundation"
-        not in pyproject.split("[tool.poetry.group.dev.dependencies]")[0]
-    )
+    ] == frozenset({"dev"})
