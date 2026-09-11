@@ -26,9 +26,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^(docs/kernel-runtime-(composition|readiness)\.json|tests/architecture/composition_schema\.py)$
+        exclude: ^docs/kernel-runtime-(composition|readiness)\.json$
       - id: ruff-format
-        exclude: ^(docs/kernel-runtime-(composition|readiness)\.json|tests/architecture/composition_schema\.py)$
+        exclude: ^docs/kernel-runtime-(composition|readiness)\.json$
 
   # Strict-JSON evidence documents: composition/readiness records another
   # repository's gate reads as data. Runs AFTER the ruff block above (hook
@@ -139,23 +139,11 @@ repos:
         # This hook keeps the file types that guard cannot parse: YAML, JSON,
         # Markdown, HTML, SQL, .env.
         #
-        # docs/kernel-runtime-{composition,readiness}.json are DELIBERATELY
-        # NOT excluded here (a prior revision of this comment excluded them
-        # and that was wrong -- see below). Both evidence documents' own
-        # schema-ingestion contract (tests/architecture/composition_schema.py,
-        # the mirrored Starter contract) accepts and silently drops unknown
-        # payload keys rather than refusing them, and the JSON-validity check
-        # (scripts/check_evidence_json.py) only proves the file parses, not
-        # that it carries no secret. Excluding these two files from the one
-        # scanner that COULD catch a real value pasted into them (e.g. a
-        # planted `api_key` field) would leave that scanning gap
-        # unmonitored, not covered -- exactly the mistake this comment
-        # previously made. They must stay in scope.
-        #
-        # `starter_catalogue_revision`'s full 40-character git SHA in
-        # kernel-runtime-composition.json is the ONE known, audited false
-        # positive (a "Hex High Entropy String" -- it is a public commit
-        # hash, not a secret) and is silenced narrowly by its entry in
-        # .secrets.baseline, exactly like every other baselined finding in
-        # this repository -- never by excluding the file it lives in.
-        exclude: (\.env\.example|tests/|alembic/|scripts/|\.py$)
+        # The v3 composition record is a closed digest-only envelope. The
+        # SHA-pinned verifier rejects unknown keys, invalid digests, changed
+        # source bytes, and changed selected bytes. Its expected public hashes
+        # deliberately trigger the entropy heuristic eleven times, while no
+        # arbitrary value can pass the envelope verifier. Exclude exactly that
+        # machine record from this heuristic; readiness.json and every other
+        # JSON/YAML/Markdown file remain scanned.
+        exclude: (\.env\.example|tests/|alembic/|scripts/|docs/kernel-runtime-composition\.json|\.py$)
