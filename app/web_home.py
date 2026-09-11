@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -91,7 +93,10 @@ def help_center(
     """App-wide help center with module manuals and end-to-end journeys."""
     context = base_context(request, auth, "Help & Training", "help", db=db)
     content_overrides = resolve_value(
-        db, SettingDomain.settings, "help_center_content_json"
+        db,
+        SettingDomain.settings,
+        "help_center_content_json",
+        organization_id=UUID(str(auth.organization_id)),
     )
     payload = build_help_center_payload(
         accessible_modules=auth.accessible_modules,

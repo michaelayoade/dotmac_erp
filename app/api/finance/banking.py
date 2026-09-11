@@ -856,8 +856,9 @@ def link_mono_account(
     from app.services.finance.banking.mono_sync import MonoSyncService
 
     try:
-        return MonoSyncService(db).link_account(
-            _get_org_id(auth),
+        organization_id = _get_org_id(auth)
+        return MonoSyncService(db, organization_id).link_account(
+            organization_id,
             account_id,
             payload.code,
         )
@@ -904,8 +905,9 @@ def sync_mono_account(
     from app.services.finance.banking.mono_sync import MonoSyncService
 
     try:
-        return MonoSyncService(db).sync_account_by_id(
-            _get_org_id(auth),
+        organization_id = _get_org_id(auth)
+        return MonoSyncService(db, organization_id).sync_account_by_id(
+            organization_id,
             account_id,
             user_id=_get_user_id(auth),
         )
@@ -930,8 +932,9 @@ def refresh_mono_account(
     from app.services.finance.banking.mono_sync import MonoSyncService
 
     try:
-        return MonoSyncService(db).trigger_data_refresh(
-            _get_org_id(auth),
+        organization_id = _get_org_id(auth)
+        return MonoSyncService(db, organization_id).trigger_data_refresh(
+            organization_id,
             account_id,
         )
     except (LookupError, PermissionError, RuntimeError, ValueError) as exc:
@@ -956,7 +959,7 @@ async def mono_webhook(
     from app.services.finance.banking.mono_sync import MonoSyncService
 
     try:
-        result = MonoSyncService(db).process_webhook(
+        result = MonoSyncService(db, None).process_webhook(
             request.headers.get("mono-webhook-secret", ""),
             await request.body(),
         )
