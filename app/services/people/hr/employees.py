@@ -1622,7 +1622,7 @@ class EmployeeService:
             return
         employee.mailcow_provisioning_requested_at = datetime.now(UTC)
         try:
-            from app.tasks.hr import run_employee_mailcow_provisioning
+            from app.tasks.email import run_employee_mailcow_provisioning
 
             run_employee_mailcow_provisioning.apply_async(
                 args=[str(employee.employee_id), str(employee.organization_id)],
