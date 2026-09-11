@@ -201,6 +201,35 @@ class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
         nullable=True,
         comment="Personal email (separate from work email on Person)",
     )
+    mailcow_mailbox_provisioned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When ERP successfully created this employee Mailcow mailbox",
+    )
+    mailcow_provisioning_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When employee creation requested ERP-owned mailbox provisioning",
+    )
+    mailcow_activation_token_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="SHA-256 hash of the current one-time mailbox activation token",
+    )
+    mailcow_activation_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    mailcow_activation_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    mailcow_activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     dotmac_sub_account_id: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,

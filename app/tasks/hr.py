@@ -15,6 +15,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import httpx
 from celery import shared_task
 from sqlalchemy import extract, func, select
 
@@ -70,6 +71,63 @@ def _get_hr_manager_recipients(db, org_id: uuid.UUID) -> list[Person]:
 
 @shared_task(
     bind=True,
+    max_retries=5,
+    autoretry_for=(httpx.TransportError, RuntimeError),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+)
+def run_employee_mailcow_provisioning(
+    self,
+    employee_id: str,
+    organization_id: str,
+) -> dict[str, Any]:
+    """Create an employee work mailbox if it does not already exist."""
+    from app.services.people.hr.mailbox_provisioning import (
+        EmployeeMailboxProvisioningService,
+    )
+
+    org_uuid = uuid.UUID(organization_id)
+    employee_uuid = uuid.UUID(employee_id)
+    with session_for_org(org_uuid) as db:
+        provisioning_service = EmployeeMailboxProvisioningService(db)
+        result = provisioning_service.ensure_mailbox(
+            org_uuid,
+            employee_uuid,
+        )
+        db.commit()
+        if result.activation_token:
+            from app.services.email import send_mailbox_activation_email
+
+            employee = db.get(Employee, employee_uuid)
+            try:
+                send_mailbox_activation_email(
+                    db,
+                    result.personal_email or "",
+                    result.email or "",
+                    result.activation_token,
+                    employee.person.name if employee and employee.person else None,
+                    org_uuid,
+                    raise_on_error=True,
+                )
+            except Exception as exc:
+                raise RuntimeError("Could not send mailbox activation email") from exc
+            provisioning_service.mark_activation_sent(
+                employee_uuid,
+                result.activation_token,
+            )
+            db.commit()
+        return {
+            "employee_id": result.employee_id,
+            "email": result.email,
+            "created": result.created,
+            "already_exists": result.already_exists,
+            "skipped": result.skipped,
+        }
+
+
+@shared_task(
+    bind=True,
     max_retries=3,
     autoretry_for=(ConnectionError, TimeoutError),
     retry_backoff=True,
@@ -117,6 +175,45 @@ def run_employee_mailcow_offboarding(
             "skipped": result.skipped,
             "errors": result.errors,
         }
+
+
+@shared_task
+def reconcile_employee_mailcow_provisioning() -> dict[str, Any]:
+    """Queue idempotent Mailcow provisioning for every current employee."""
+    from app.config import settings
+
+    if not settings.mailcow_provisioning_enabled:
+        return {"queued": 0, "errors": [], "skipped": "integration disabled"}
+
+    queued = 0
+    errors: list[dict[str, str]] = []
+    excluded_statuses = (
+        EmployeeStatus.RESIGNED,
+        EmployeeStatus.TERMINATED,
+        EmployeeStatus.RETIRED,
+    )
+    for org_id in _list_organization_ids():
+        with session_for_org(org_id) as db:
+            employee_ids = db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.status.notin_(excluded_statuses),
+                )
+            ).all()
+        for employee_id in employee_ids:
+            try:
+                run_employee_mailcow_provisioning.delay(
+                    str(employee_id),
+                    str(org_id),
+                )
+                queued += 1
+            except Exception as exc:  # noqa: BLE001 -- continue the repair sweep
+                logger.exception(
+                    "Could not queue Mailcow reconciliation for employee %s",
+                    employee_id,
+                )
+                errors.append({"employee_id": str(employee_id), "error": str(exc)})
+    return {"queued": queued, "errors": errors}
 
 
 @shared_task

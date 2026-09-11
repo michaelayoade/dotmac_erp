@@ -8,6 +8,21 @@ from app.config import settings
 
 
 @dataclass(frozen=True)
+class MailcowProvisioningConfig:
+    enabled: bool
+    base_url: str
+    api_key: str | None
+    request_timeout: float
+    domain: str
+    quota_mb: int
+    activation_ttl_hours: int = 24
+
+    @property
+    def mailcow_api_configured(self) -> bool:
+        return bool(self.base_url and self.api_key)
+
+
+@dataclass(frozen=True)
 class MailcowOffboardingConfig:
     enabled: bool
     base_url: str
@@ -71,4 +86,16 @@ def get_mailcow_offboarding_config() -> MailcowOffboardingConfig:
         sogo_db_password=settings.mailcow_sogo_db_password,
         sogo_cleanup_url=settings.mailcow_sogo_cleanup_url,
         sogo_cleanup_token=settings.mailcow_sogo_cleanup_token,
+    )
+
+
+def get_mailcow_provisioning_config() -> MailcowProvisioningConfig:
+    return MailcowProvisioningConfig(
+        enabled=settings.mailcow_provisioning_enabled,
+        base_url=settings.mailcow_base_url,
+        api_key=settings.mailcow_api_key,
+        request_timeout=settings.mailcow_request_timeout,
+        domain=settings.mailcow_provisioning_domain,
+        quota_mb=settings.mailcow_provisioning_quota_mb,
+        activation_ttl_hours=settings.mailcow_activation_ttl_hours,
     )

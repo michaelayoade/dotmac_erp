@@ -85,6 +85,14 @@ def reset_password_page(
     return auth_web_service.reset_password_response(request, token, auth, next_url=next)
 
 
+@router.get("/mailbox-activation", response_class=HTMLResponse)
+def mailbox_activation_page(
+    request: Request,
+    token: str = Query(...),
+):
+    return auth_web_service.mailbox_activation_response(request, token)
+
+
 @router.get("/reset-password-required", response_class=HTMLResponse)
 def reset_password_required_page(
     request: Request,

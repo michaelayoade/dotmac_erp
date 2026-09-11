@@ -820,6 +820,7 @@ def create_employee(
         bank_sort_code=payload.bank_branch_code,
         bank_account_name=payload.bank_account_name,
         notes=payload.notes,
+        personal_email=str(payload.personal_email) if payload.personal_email else None,
     )
     emp = svc.create_employee(payload.person_id, data)
     employee_id = emp.employee_id
