@@ -26,6 +26,7 @@ from app.services.people.leave.leave_service import (
     InsufficientLeaveBalanceError,
     LeaveAllocationNotFoundError,
     LeaveApplicationNotFoundError,
+    LeaveEligibilityError,
     LeaveServiceError,
     LeaveTypeNotFoundError,
 )
@@ -1085,6 +1086,22 @@ class LeaveWebService:
             context["error"] = (
                 f"Insufficient leave balance. Available: {e.available}, Requested: {e.requested}"
             )
+            context["form_data"] = dict(form)
+            context["employees"] = self._get_employees(db, org_id)
+            context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
+            return templates.TemplateResponse(
+                request, "people/leave/application_form.html", context
+            )
+        except LeaveEligibilityError as e:
+            logger.warning(
+                "Leave application rejected by eligibility policy",
+                extra={"event": "leave_application_ineligible"},
+            )
+            db.rollback()
+            context = base_context(
+                request, auth, "New Leave Application", "leave", db=db
+            )
+            context["error"] = str(e)
             context["form_data"] = dict(form)
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
