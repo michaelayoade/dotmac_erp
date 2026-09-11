@@ -513,9 +513,10 @@ class TestInvTransactionWebService:
 
         mock_create_receipt.assert_not_called()
         assert response.status_code == 303
-        assert (
-            "Use%20either%20manual%20serial%20numbers" in response.headers["location"]
+        assert response.headers["location"] == (
+            "/inventory/transactions?error=transaction_failed"
         )
+        assert "serial" not in response.headers["location"]
         mock_db.commit.assert_not_called()
         mock_db.rollback.assert_called_once()
 
@@ -682,7 +683,10 @@ class TestInvTransactionWebService:
         mock_db.commit.assert_not_called()
         mock_db.rollback.assert_called_once()
         assert response.status_code == 303
-        assert "receipt%20failed" in response.headers["location"]
+        assert response.headers["location"] == (
+            "/inventory/transactions?error=transaction_failed"
+        )
+        assert "receipt%20failed" not in response.headers["location"]
 
     def test_create_adjustment_response_commits_successful_write(self):
         """Adjustment adapter should commit successful manual stock adjustments."""
