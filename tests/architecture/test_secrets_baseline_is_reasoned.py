@@ -156,15 +156,10 @@ def test_the_suppression_count_only_shrinks() -> None:
     revision adds one descriptor finding and one deterministic telemetry
     projection, reaching 27.
 
-    28 admitted exactly ONE more, named rather than absorbed: the published
-    OCI image digest, projected into the rendered collector at
-    `deploy/rendered/otel-collector.yaml`. It appeared when the descriptor
-    stopped carrying an all-zero sentinel and began binding the digest
-    protected-main CI resolved for the image it built and tested. A digest is
-    the NAME of publicly published bytes and authorises nothing; it is long hex,
-    which is the whole reason the entropy heuristic fires on it. It is here
-    precisely BECAUSE the descriptor refuses a mutable tag, so suppressing it is
-    the cost of the stronger reference, not a concession.
+    The published OCI digest remains projected into the rendered collector,
+    but this release's 12-character projection does not cross the entropy
+    detector's threshold. The full digest is recognized as an indirect public
+    reference, so the reviewed suppression total returns to 27.
 
     The v3 composition record no longer consumes a baseline slot: it is a
     closed digest-only envelope whose SHA-pinned verifier independently
@@ -172,19 +167,19 @@ def test_the_suppression_count_only_shrinks() -> None:
     expected digests with an entropy heuristic would add eleven findings
     without increasing secret coverage.
 
-    Every entry above the reviewed 28 would be unexplained, and the reason
+    Every entry above the reviewed 27 would be unexplained, and the reason
     check above only fires per FILE — a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
-    two-directional, and an UNEXPLAINED drop below 28 (a finding quietly
+    two-directional, and an UNEXPLAINED drop below 27 (a finding quietly
     disappearing without its `REASONS` entry being removed by
     `test_no_reason_outlives_its_finding`, or a finding merging into another
     file's count) is exactly as worth surfacing as a rise -- either way,
     someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total == 28, (
-        f"{total} suppressed findings, expected exactly 28. A rise means fix "
+    assert total == 27, (
+        f"{total} suppressed findings, expected exactly 27. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
         "change -- never leave a stale number unexamined either direction."
