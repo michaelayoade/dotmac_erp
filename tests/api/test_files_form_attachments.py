@@ -9,6 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.files import download_form_attachment
+from app.services.storage import StorageReadUnavailable
 
 
 def test_download_form_attachment_streams_org_scoped_s3_key() -> None:
@@ -53,3 +54,24 @@ def test_download_form_attachment_rejects_path_filename() -> None:
         )
 
     assert exc_info.value.status_code == 400
+
+
+def test_download_form_attachment_reports_storage_outage_as_retryable() -> None:
+    org_id = uuid.uuid4()
+    storage = MagicMock()
+    storage.exists.side_effect = StorageReadUnavailable(
+        "Object storage is temporarily unavailable"
+    )
+
+    with (
+        patch("app.api.files.get_storage", return_value=storage),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        download_form_attachment(
+            org_id,
+            "resume.pdf",
+            organization_id=org_id,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.headers == {"Retry-After": "5"}

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import io
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime
 from typing import IO, TYPE_CHECKING, Any, BinaryIO, Protocol, cast
 from urllib.parse import urlparse
@@ -27,6 +27,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MISSING_OBJECT_CODES = frozenset({"NoSuchKey", "NoSuchObject", "NotFound"})
+_READ_ATTEMPTS = 2
+
+
+class StorageObjectMissing(FileNotFoundError):
+    """Raised when object storage authoritatively reports that a key is absent."""
+
+
+class StorageReadUnavailable(RuntimeError):
+    """Raised when an object read cannot start because its provider is unavailable."""
 
 
 def _is_missing_object_error(exc: Exception) -> bool:
@@ -130,6 +139,32 @@ class S3StorageService:
     def _bucket(self) -> str:
         return settings.s3_bucket_name
 
+    def _read_with_retry(self, operation: Callable[[], Any]) -> Any:
+        """Run an idempotent pre-stream read with one bounded retry."""
+        for attempt in range(1, _READ_ATTEMPTS + 1):
+            try:
+                return operation()
+            except Exception as exc:
+                if isinstance(exc, self._s3_error) and _is_missing_object_error(exc):
+                    raise StorageObjectMissing from None
+                if not isinstance(
+                    exc,
+                    (self._s3_error, urllib3.exceptions.HTTPError, OSError),
+                ):
+                    raise
+                if attempt == _READ_ATTEMPTS:
+                    raise StorageReadUnavailable(
+                        "Object storage is temporarily unavailable"
+                    ) from None
+                logger.warning(
+                    "Transient object storage read failed; retrying",
+                    extra={
+                        "event": "object_storage_read_retry",
+                        "attempt": attempt,
+                    },
+                )
+        raise AssertionError("unreachable")
+
     # -- Upload -------------------------------------------------------------
 
     def upload(
@@ -179,11 +214,15 @@ class S3StorageService:
                                      headers={"Content-Length": str(cl)})
         """
         # stat to get metadata without downloading body
-        stat = self._client.stat_object(self._bucket, key)
+        stat = self._read_with_retry(
+            lambda: self._client.stat_object(self._bucket, key)
+        )
         content_type = stat.content_type
         content_length = stat.size
 
-        response = self._client.get_object(self._bucket, key)
+        response = self._read_with_retry(
+            lambda: self._client.get_object(self._bucket, key)
+        )
 
         def _iter() -> Iterator[bytes]:
             try:
@@ -206,11 +245,9 @@ class S3StorageService:
     def exists(self, key: str) -> bool:
         """Check whether an object exists."""
         try:
-            self._client.stat_object(self._bucket, key)
-        except self._s3_error as exc:
-            if _is_missing_object_error(exc):
-                return False
-            raise
+            self._read_with_retry(lambda: self._client.stat_object(self._bucket, key))
+        except StorageObjectMissing:
+            return False
         return True
 
     @property
