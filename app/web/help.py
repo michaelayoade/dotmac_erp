@@ -24,8 +24,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/help", tags=["help-web"])
 
 
-def _help_overrides(db: Session) -> dict | None:
-    value = resolve_value(db, SettingDomain.settings, "help_center_content_json")
+def _help_overrides(db: Session, organization_id: UUID) -> dict | None:
+    value = resolve_value(
+        db,
+        SettingDomain.settings,
+        "help_center_content_json",
+        organization_id=organization_id,
+    )
     return value if isinstance(value, dict) else None
 
 
@@ -36,7 +41,7 @@ def _help_experience(auth: WebAuthContext, db: Session) -> dict:
         roles=auth.roles,
         scopes=auth.scopes,
         is_admin=auth.is_admin,
-        overrides=_help_overrides(db),
+        overrides=_help_overrides(db, UUID(str(auth.organization_id))),
     )
     payload["help_tracks"] = payload.get("tracks", [])
     return payload
@@ -171,7 +176,7 @@ def search_page(
         query=q,
         module_key=module,
         content_type=content_type,
-        overrides=_help_overrides(db),
+        overrides=_help_overrides(db, UUID(str(auth.organization_id))),
     )
     context.update(search_results)
     context["help_tracks"] = search_results.get("tracks", [])
@@ -216,7 +221,7 @@ def article_detail(
         scopes=auth.scopes,
         is_admin=auth.is_admin,
         slug=slug,
-        overrides=_help_overrides(db),
+        overrides=_help_overrides(db, UUID(str(auth.organization_id))),
     )
     if not article:
         return RedirectResponse(url="/help?error=Article+not+found", status_code=303)
@@ -287,7 +292,7 @@ def module_hub(
         scopes=auth.scopes,
         is_admin=auth.is_admin,
         module_key=module_key,
-        overrides=_help_overrides(db),
+        overrides=_help_overrides(db, UUID(str(auth.organization_id))),
     )
     if not payload:
         return RedirectResponse(
@@ -344,7 +349,7 @@ def track_detail(
         scopes=auth.scopes,
         is_admin=auth.is_admin,
         slug=slug,
-        overrides=_help_overrides(db),
+        overrides=_help_overrides(db, UUID(str(auth.organization_id))),
     )
     if not track:
         return RedirectResponse(

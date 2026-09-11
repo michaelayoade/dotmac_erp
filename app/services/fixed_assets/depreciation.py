@@ -500,20 +500,26 @@ class DepreciationService(ListResponseMixin):
         return result
 
     @staticmethod
-    def automation_enabled(db: Session) -> bool:
+    def automation_enabled(db: Session, organization_id: UUID) -> bool:
         """Return whether monthly FA depreciation automation is enabled."""
         return bool(
             resolve_value(
-                db, SettingDomain.automation, "fa_depreciation_auto_run_enabled"
+                db,
+                SettingDomain.automation,
+                "fa_depreciation_auto_run_enabled",
+                organization_id=organization_id,
             )
         )
 
     @staticmethod
-    def automation_auto_post_enabled(db: Session) -> bool:
+    def automation_auto_post_enabled(db: Session, organization_id: UUID) -> bool:
         """Return whether automated runs should post immediately."""
         return bool(
             resolve_value(
-                db, SettingDomain.automation, "fa_depreciation_auto_post_enabled"
+                db,
+                SettingDomain.automation,
+                "fa_depreciation_auto_post_enabled",
+                organization_id=organization_id,
             )
         )
 

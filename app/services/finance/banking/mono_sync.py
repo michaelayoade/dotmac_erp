@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.domain_settings import SettingDomain
+from app.services.domain_settings import AMBIENT
 from app.models.finance.banking import (
     BankAccount,
     BankAccountStatus,
@@ -158,15 +159,33 @@ class MonoSyncService:
     BankStatementLine entries for reconciliation.
     """
 
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        organization_id: UUID | None | Any = AMBIENT,
+    ) -> None:
         self.db = db
+        self.organization_id = organization_id
 
     def _get_mono_config(self) -> MonoConfig:
         """Get Mono configuration from domain settings."""
-        secret_key = resolve_value(self.db, SettingDomain.banking, "mono_secret_key")
-        public_key = resolve_value(self.db, SettingDomain.banking, "mono_public_key")
+        secret_key = resolve_value(
+            self.db,
+            SettingDomain.banking,
+            "mono_secret_key",
+            organization_id=self.organization_id,
+        )
+        public_key = resolve_value(
+            self.db,
+            SettingDomain.banking,
+            "mono_public_key",
+            organization_id=self.organization_id,
+        )
         webhook_secret = resolve_value(
-            self.db, SettingDomain.banking, "mono_webhook_secret"
+            self.db,
+            SettingDomain.banking,
+            "mono_webhook_secret",
+            organization_id=self.organization_id,
         )
 
         if not secret_key or not public_key:
@@ -180,7 +199,12 @@ class MonoSyncService:
 
     def is_configured(self) -> bool:
         """Check if Mono Connect is enabled and configured."""
-        enabled = resolve_value(self.db, SettingDomain.banking, "mono_enabled")
+        enabled = resolve_value(
+            self.db,
+            SettingDomain.banking,
+            "mono_enabled",
+            organization_id=self.organization_id,
+        )
         if not enabled:
             return False
         try:
@@ -384,6 +408,7 @@ class MonoSyncService:
                 self.db,
                 SettingDomain.banking,
                 "mono_webhook_secret",
+                organization_id=None,
             )
         if not configured_secret:
             raise RuntimeError("Mono webhook secret not configured")
