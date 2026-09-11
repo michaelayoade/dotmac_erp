@@ -21,7 +21,11 @@ from app.api.deps import get_db_with_org, require_organization_id
 from app.models.finance.automation.generated_document import GeneratedDocument
 from app.services.careers.resume_service import ResumeService
 from app.services.finance.common.attachment import attachment_service
-from app.services.storage import get_storage
+from app.services.storage import (
+    StorageObjectMissing,
+    StorageReadUnavailable,
+    get_storage,
+)
 
 # Characters unsafe in Content-Disposition filenames
 _UNSAFE_FILENAME_RE = re.compile(r'[\x00-\x1f\x7f"\\]')
@@ -45,11 +49,20 @@ def _stream_s3_file(
     disposition: Literal["attachment", "inline", "auto"] = "attachment",
 ) -> StreamingResponse:
     """Stream a file from S3 as a FastAPI response."""
-    storage = get_storage()
-    if not storage.exists(s3_key):
-        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        storage = get_storage()
+        if not storage.exists(s3_key):
+            raise HTTPException(status_code=404, detail="File not found")
 
-    chunks, content_type, content_length = storage.stream(s3_key)
+        chunks, content_type, content_length = storage.stream(s3_key)
+    except StorageObjectMissing:
+        raise HTTPException(status_code=404, detail="File not found")
+    except StorageReadUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="File storage is temporarily unavailable",
+            headers={"Retry-After": "5"},
+        ) from None
     effective_type = media_type or content_type or "application/octet-stream"
 
     headers: dict[str, str] = {}
