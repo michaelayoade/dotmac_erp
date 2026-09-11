@@ -51,6 +51,8 @@ from app.services.finance.ap.supplier_invoice import (
 )
 from app.services.finance.ap.web.base import (
     InvoiceStats,
+    ap_safe_error_message,
+    can_record_payment_for_invoice_status,
     format_currency,
     format_date,
     format_file_size,
@@ -216,6 +218,9 @@ class InvoiceWebService:
                     ),
                     "balance": format_currency(balance, invoice.currency_code),
                     "status": invoice_status_label(invoice.status),
+                    "can_record_payment": can_record_payment_for_invoice_status(
+                        invoice.status
+                    ),
                     "is_overdue": (
                         invoice.due_date < today
                         and invoice.status
@@ -830,9 +835,9 @@ class InvoiceWebService:
             return None
         except HTTPException as exc:
             return exc.detail
-        except Exception as e:
+        except Exception:
             logger.exception("delete_invoice: failed for org %s", org_id)
-            return f"Failed to delete invoice: {str(e)}"
+            return "Unable to delete invoice. Please try again."
 
     # =====================================================================
     # HTTP Response Methods
@@ -1161,7 +1166,7 @@ class InvoiceWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception(
                 "create_invoice_response failed for org %s", auth.organization_id
@@ -1169,12 +1174,14 @@ class InvoiceWebService:
             if "application/json" in content_type:
                 return JSONResponse(
                     status_code=400,
-                    content={"detail": str(e)},
+                    content={"detail": "Unable to save invoice"},
                 )
 
             context = base_context(request, auth, "New AP Invoice", "ap")
             context.update(self.invoice_form_context(db, str(auth.organization_id)))
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to save invoice. Please check the details and try again."
+            )
             context["form_data"] = data
             return templates.TemplateResponse(
                 request, "finance/ap/invoice_form.html", context
@@ -1224,15 +1231,20 @@ class InvoiceWebService:
                 url=f"/finance/ap/invoices/{updated_invoice_id}?success=Invoice+updated+successfully",
                 status_code=303,
             )
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("update_invoice_response: failed")
             if "application/json" in content_type:
-                return JSONResponse(status_code=400, content={"detail": str(e)})
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Unable to update invoice"},
+                )
 
             context = base_context(request, auth, "Edit AP Invoice", "ap")
             context.update(self.invoice_form_context(db, str(auth.organization_id)))
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to update invoice. Please check the details and try again."
+            )
             context["form_data"] = data
             return templates.TemplateResponse(
                 request, "finance/ap/invoice_form.html", context
@@ -1315,8 +1327,12 @@ class InvoiceWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("submit_invoice_response failed for %s", invoice_id)
             return RedirectResponse(
-                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/invoices/{invoice_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+submit+invoice')}"
+                ),
                 status_code=303,
             )
 
@@ -1342,8 +1358,12 @@ class InvoiceWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("approve_invoice_response failed for %s", invoice_id)
             return RedirectResponse(
-                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/invoices/{invoice_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+approve+invoice')}"
+                ),
                 status_code=303,
             )
 
@@ -1392,8 +1412,12 @@ class InvoiceWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("reject_invoice_response failed for %s", invoice_id)
             return RedirectResponse(
-                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/invoices/{invoice_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+reject+invoice')}"
+                ),
                 status_code=303,
             )
 
@@ -1419,8 +1443,12 @@ class InvoiceWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("post_invoice_response failed for %s", invoice_id)
             return RedirectResponse(
-                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/invoices/{invoice_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+post+invoice')}"
+                ),
                 status_code=303,
             )
 
@@ -1447,8 +1475,12 @@ class InvoiceWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("void_invoice_response failed for %s", invoice_id)
             return RedirectResponse(
-                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/invoices/{invoice_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+void+invoice')}"
+                ),
                 status_code=303,
             )
 
@@ -1636,10 +1668,17 @@ class InvoiceWebService:
             )
 
         except ValueError as e:
+            logger.warning("upload_invoice_attachment_response rejected file: %s", e)
             if wants_json:
-                return JSONResponse(status_code=400, content={"detail": str(e)})
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Attachment could not be uploaded"},
+                )
             return RedirectResponse(
-                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/invoices/{invoice_id}"
+                    "?error=Attachment+could+not+be+uploaded"
+                ),
                 status_code=303,
             )
         except Exception:

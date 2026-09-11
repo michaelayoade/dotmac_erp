@@ -102,9 +102,7 @@
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-3 flex-wrap">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white" title="{{ ticket.subject }}">{{ ticket.display_subject or ticket.subject }}</h2>
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ ticket.status_badge }}">
-                        {{ ticket.status_label }}
-                    </span>
+                    {{ status_badge(ticket.status_label, 'sm') }}
                     <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ ticket.priority_badge }}">
                         {{ ticket.priority_label }}
                     </span>

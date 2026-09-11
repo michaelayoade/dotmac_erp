@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from html import escape
 from typing import Any
 from uuid import UUID
 
@@ -41,7 +40,9 @@ from app.services.finance.ap.supplier_payment import (
     supplier_payment_service,
 )
 from app.services.finance.ap.web.base import (
+    AP_PAYMENT_ELIGIBLE_INVOICE_STATUSES,
     allocation_view,
+    ap_safe_error_message,
     format_currency,
     format_date,
     format_file_size,
@@ -273,11 +274,7 @@ class PaymentWebService:
             )
         ]
 
-        open_statuses = [
-            SupplierInvoiceStatus.APPROVED,
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
+        open_statuses = AP_PAYMENT_ELIGIBLE_INVOICE_STATUSES
 
         stmt = (
             select(SupplierInvoice, Supplier)
@@ -526,9 +523,9 @@ class PaymentWebService:
             return None
         except HTTPException as exc:
             return exc.detail
-        except Exception as e:
+        except Exception:
             logger.exception("delete_payment: failed for org %s", org_id)
-            return f"Failed to delete payment: {str(e)}"
+            return "Unable to delete payment. Please try again."
 
     @staticmethod
     def aging_context(
@@ -782,7 +779,7 @@ class PaymentWebService:
                 return htmx_response(redirect=redirect_url)
             return RedirectResponse(url=redirect_url, status_code=303)
 
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception(
                 "create_payment_response failed for org %s", auth.organization_id
@@ -790,7 +787,7 @@ class PaymentWebService:
             if "application/json" in content_type:
                 return JSONResponse(
                     status_code=400,
-                    content={"detail": str(e)},
+                    content={"detail": "Unable to save payment"},
                 )
             if is_htmx_request(request):
                 return htmx_response(
@@ -800,7 +797,7 @@ class PaymentWebService:
                         '<div class="flex items-center gap-2 text-rose-700 '
                         'dark:text-rose-400">'
                         '<span class="text-sm font-medium">'
-                        f"{escape(str(e))}"
+                        "Unable to save payment. Please check the details and try again."
                         "</span></div></div>"
                     ),
                     status_code=400,
@@ -808,7 +805,9 @@ class PaymentWebService:
 
             context = base_context(request, auth, "New AP Payment", "ap")
             context.update(self.payment_form_context(db, str(auth.organization_id)))
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to save payment. Please check the details and try again."
+            )
             context["form_data"] = data
             return templates.TemplateResponse(
                 request, "finance/ap/payment_form.html", context
@@ -857,7 +856,7 @@ class PaymentWebService:
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
             return RedirectResponse(
-                url="/finance/ap/payments?success=Record+updated+successfully",
+                url="/finance/ap/payments?error=Payment+not+found",
                 status_code=303,
             )
 
@@ -905,19 +904,23 @@ class PaymentWebService:
 
         try:
             return RedirectResponse(
-                url=f"/finance/ap/payments/{payment_id}?error=Payment+update+not+yet+implemented",
+                url=(
+                    f"/finance/ap/payments/{payment_id}"
+                    "?error=Payment+editing+is+not+available"
+                ),
                 status_code=303,
             )
-        except Exception as e:
+        except Exception:
+            logger.exception("update_payment_response failed for %s", payment_id)
             if "application/json" in content_type:
                 return JSONResponse(
                     status_code=400,
-                    content={"detail": str(e)},
+                    content={"detail": "Unable to update payment"},
                 )
 
             context = base_context(request, auth, "Edit AP Payment", "ap")
             context.update(self.payment_form_context(db, str(auth.organization_id)))
-            context["error"] = str(e)
+            context["error"] = "Unable to update payment"
             context["form_data"] = data
             return templates.TemplateResponse(
                 request, "finance/ap/payment_form.html", context
@@ -945,8 +948,12 @@ class PaymentWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("approve_payment_response failed for %s", payment_id)
             return RedirectResponse(
-                url=f"/finance/ap/payments/{payment_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/payments/{payment_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+approve+payment')}"
+                ),
                 status_code=303,
             )
 
@@ -972,8 +979,12 @@ class PaymentWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("post_payment_response failed for %s", payment_id)
             return RedirectResponse(
-                url=f"/finance/ap/payments/{payment_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/payments/{payment_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+post+payment')}"
+                ),
                 status_code=303,
             )
 
@@ -1000,8 +1011,12 @@ class PaymentWebService:
             )
         except Exception as e:
             db.rollback()
+            logger.exception("void_payment_response failed for %s", payment_id)
             return RedirectResponse(
-                url=f"/finance/ap/payments/{payment_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/payments/{payment_id}?error="
+                    f"{ap_safe_error_message(e, 'Unable+to+void+payment')}"
+                ),
                 status_code=303,
             )
 
@@ -1240,7 +1255,9 @@ class PaymentWebService:
             if isinstance(e, HTTPException):
                 context["error"] = e.detail
             else:
-                context["error"] = str(e)
+                context["error"] = (
+                    "Unable to create payment batch. Please check the details and try again."
+                )
             return templates.TemplateResponse(
                 request, "finance/ap/payment_batch_form.html", context
             )
@@ -1291,8 +1308,12 @@ class PaymentWebService:
             )
 
         except ValueError as e:
+            logger.warning("upload_payment_attachment_response rejected file: %s", e)
             return RedirectResponse(
-                url=f"/finance/ap/payments/{payment_id}?error={str(e)}",
+                url=(
+                    f"/finance/ap/payments/{payment_id}"
+                    "?error=Attachment+could+not+be+uploaded"
+                ),
                 status_code=303,
             )
         except Exception:

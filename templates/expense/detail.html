@@ -24,6 +24,31 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
+    {% set expense_success_messages = {
+        "submitted": "Expense submitted for approval.",
+        "approved": "Expense approved.",
+        "rejected": "Expense rejected.",
+        "posted": "Expense posted to GL.",
+        "voided": "Expense voided."
+    } %}
+    {% set expense_error_messages = {
+        "submit_failed": "The expense could not be submitted. Please check the expense and try again.",
+        "approve_failed": "The expense could not be approved. Please try again.",
+        "reject_failed": "The expense could not be rejected. Please try again.",
+        "post_failed": "The expense could not be posted. Please check the fiscal period and try again.",
+        "void_failed": "The expense could not be voided. Please try again."
+    } %}
+    {% if request.query_params.get('success') in expense_success_messages %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        {{ expense_success_messages[request.query_params.get('success')] }}
+    </div>
+    {% endif %}
+    {% if request.query_params.get('error') in expense_error_messages %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ expense_error_messages[request.query_params.get('error')] }}
+    </div>
+    {% endif %}
+
     {% if not expense %}
     <div class="card p-12">
         <div class="empty-state">

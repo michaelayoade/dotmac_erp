@@ -15,7 +15,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="{ rejectOpen: false, rejectAction: '' }">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Team Leave Requests</h2>
@@ -74,11 +74,11 @@
                                     {{ request.state.csrf_form | safe }}
                                     <button type="submit" class="text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 dark:hover:text-emerald-200">Approve</button>
                                 </form>
-                                <form method="post" action="/people/self/team/leave/{{ app.application_id }}/reject">
-                                    {{ request.state.csrf_form | safe }}
-                                    <input type="hidden" name="reason" value="Rejected">
-                                    <button type="submit" class="text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200">Reject</button>
-                                </form>
+                                <button type="button"
+                                        class="text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200"
+                                        @click="rejectAction = '/people/self/team/leave/{{ app.application_id }}/reject'; rejectOpen = true">
+                                    Reject
+                                </button>
                             </div>
                             {% else %}
                             <span class="text-slate-400">-</span>
@@ -98,5 +98,31 @@
         <p class="text-slate-500 dark:text-slate-400">No team leave requests.</p>
     </div>
     {% endif %}
+
+    <div x-show="rejectOpen"
+         x-cloak
+         x-trap="rejectOpen"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="team-leave-reject-title"
+         @keydown.escape.window="rejectOpen = false">
+        <div class="fixed inset-0 bg-slate-900/50" @click="rejectOpen = false"></div>
+        <div class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-2xl dark:bg-slate-800">
+            <h3 id="team-leave-reject-title" class="text-lg font-semibold text-slate-900 dark:text-white">Reject Leave Request</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Provide the reason the employee should see for this rejection.</p>
+            <form method="post" :action="rejectAction" class="mt-5 space-y-4">
+                {{ request.state.csrf_form | safe }}
+                <div>
+                    <label for="team-leave-rejection-reason" class="form-label">Rejection Reason</label>
+                    <textarea id="team-leave-rejection-reason" name="reason" rows="3" class="form-input w-full" required></textarea>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" class="btn btn-secondary" @click="rejectOpen = false">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Reject Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}

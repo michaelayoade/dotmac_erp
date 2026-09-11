@@ -14,26 +14,39 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6" x-data='{ reviewMode: false, withdrawModal: false }'>
+<div class="space-y-6" x-data='{ reviewMode: false, withdrawModal: false, rejectModal: false, actionsOpen: false }'>
+    {% set action_messages = {
+        "submitted": ("emerald", "Claim submitted for approval."),
+        "resubmitted": ("emerald", "Claim resubmitted for approval."),
+        "approved": ("emerald", "Claim approved."),
+        "approval_recorded": ("emerald", "Your approval was recorded. Additional approval steps may still be pending."),
+        "rejected": ("amber", "Claim rejected."),
+        "approval_withdrawn": ("slate", "Approval withdrawn. This claim is no longer eligible for payment."),
+        "cancelled": ("slate", "Claim cancelled."),
+        "comment_added": ("emerald", "Comment added.")
+    } %}
+    {% set error_messages = {
+        "permission": "You do not have permission to perform that claim action.",
+        "submit_in_progress": "This claim is already being submitted. Please refresh before trying again.",
+        "submit_failed": "The claim could not be submitted. Please check the claim and try again.",
+        "invalid_status": "This claim is not in a status that supports that action.",
+        "reject_in_progress": "This claim is already being rejected. Please refresh before trying again.",
+        "reject_failed": "The claim could not be rejected. Please try again.",
+        "withdraw_in_progress": "This approval withdrawal is already being processed. Please refresh before trying again.",
+        "withdraw_failed": "The approval could not be withdrawn. Please try again.",
+        "cancel_in_progress": "This claim is already being cancelled. Please refresh before trying again.",
+        "cancel_failed": "The claim could not be cancelled. Please try again.",
+        "resubmit_failed": "The claim could not be resubmitted. Please check the claim and try again.",
+        "delete_failed": "The draft claim could not be deleted. Please try again."
+    } %}
     {% if error %}
     <div class="card p-4 border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
-        {{ error }}
+        {{ error_messages.get(error, error) }}
     </div>
-    {% elif action == "approved" %}
-    <div class="card p-4 border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
-        Claim approved.
-    </div>
-    {% elif action == "rejected" %}
-    <div class="card p-4 border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
-        Claim rejected.
-    </div>
-    {% elif action == "approval_withdrawn" %}
-    <div class="card p-4 border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-        Approval withdrawn. This claim is no longer eligible for payment.
-    </div>
-    {% elif action == "comment_added" %}
-    <div class="card p-4 border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
-        Comment added.
+    {% elif action in action_messages %}
+    {% set action_tone = action_messages[action][0] %}
+    <div class="card p-4 border {% if action_tone == 'emerald' %}border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400{% elif action_tone == 'amber' %}border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400{% else %}border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+        {{ action_messages[action][1] }}
     </div>
     {% endif %}
 
@@ -61,21 +74,10 @@
                     Proceed to Payment
                 </a>
                 {% endif %}
-                {% if can_withdraw_approval %}
-                <button type="button" class="btn btn-danger-outline" @click="withdrawModal = true">
-                    Withdraw Approval
-                </button>
-                {% endif %}
                 {% if can_submit %}
                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/submit">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-primary">Submit for Approval</button>
-                </form>
-                {% endif %}
-                {% if can_delete %}
-                <form method="post" action="/expense/claims/{{ claim.claim_id }}/delete" onsubmit="return confirm('Delete this draft claim permanently? This cannot be undone.');">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <button type="submit" class="btn btn-secondary">Delete Draft</button>
                 </form>
                 {% endif %}
                 {% if can_approve and can_act %}
@@ -89,11 +91,28 @@
                 </button>
                 {% endif %}
                 {% if can_reject and can_act %}
-                <form method="post" action="/expense/claims/{{ claim.claim_id }}/reject" class="flex items-center gap-2" x-show="!reviewMode">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <input aria-label="Rejection reason" type="text" name="reason" class="form-input w-48" placeholder="Rejection reason" required>
-                    <button type="submit" class="btn btn-secondary">Reject</button>
-                </form>
+                <button type="button" class="btn btn-secondary text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200" x-show="!reviewMode" @click="rejectModal = true">Reject</button>
+                {% endif %}
+                {% if can_withdraw_approval or can_delete %}
+                <div class="relative" x-show="!reviewMode">
+                    <button type="button" class="btn btn-secondary" @click="actionsOpen = !actionsOpen" @click.away="actionsOpen = false" :aria-expanded="actionsOpen">
+                        {{ icon_svg("chevron-down", "h-4 w-4") }}
+                        More
+                    </button>
+                    <div x-show="actionsOpen" x-cloak x-transition class="absolute right-0 top-full z-40 mt-2 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                        {% if can_withdraw_approval %}
+                        <button type="button" class="flex w-full items-center px-4 py-2.5 text-left text-sm text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-900/20" @click="actionsOpen = false; withdrawModal = true">
+                            Withdraw Approval
+                        </button>
+                        {% endif %}
+                        {% if can_delete %}
+                        <form method="post" action="/expense/claims/{{ claim.claim_id }}/delete" onsubmit="return confirm('Delete this draft claim permanently? This cannot be undone.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="flex w-full items-center px-4 py-2.5 text-left text-sm text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-900/20">Delete Draft</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -165,6 +184,30 @@
                 <div class="flex justify-end gap-3">
                     <button type="button" class="btn btn-secondary" @click="withdrawModal = false">Cancel</button>
                     <button type="submit" class="btn btn-danger">Withdraw Approval</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if can_reject and can_act %}
+    <div x-show="rejectModal" x-cloak x-trap="rejectModal" role="dialog" aria-modal="true"
+         aria-labelledby="reject-claim-title"
+         @keydown.escape.window="rejectModal = false"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-slate-900/50" @click="rejectModal = false"></div>
+        <div class="relative card w-full max-w-lg p-6">
+            <h3 id="reject-claim-title" class="text-lg font-semibold text-slate-900 dark:text-white">Reject claim?</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Provide the reason the claimant should see for this rejection.</p>
+            <form method="post" action="/expense/claims/{{ claim.claim_id }}/reject" class="mt-5 space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div>
+                    <label for="claim-rejection-reason" class="form-label">Rejection reason <span class="text-rose-500">*</span></label>
+                    <textarea id="claim-rejection-reason" name="reason" class="form-input min-h-24 w-full" required></textarea>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" class="btn btn-secondary" @click="rejectModal = false">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Reject Claim</button>
                 </div>
             </form>
         </div>

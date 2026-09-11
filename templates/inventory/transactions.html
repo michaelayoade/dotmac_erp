@@ -5,6 +5,25 @@
 
 {% block content %}
 <div class="space-y-6">
+    {% set tx_error = request.query_params.get('error') %}
+    {% if tx_error %}
+    {% set tx_error_messages = {
+        "no_fiscal_period": "No open fiscal period is available for the selected transaction date.",
+        "item_not_found": "The selected inventory item could not be found.",
+        "transaction_failed": "The inventory transaction could not be saved. Please check the details and try again.",
+        "transfer_failed": "The inventory transfer could not be saved. Please check the details and try again.",
+        "adjustment_failed": "The inventory adjustment could not be saved. Please check the details and try again."
+    } %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ tx_error_messages.get(tx_error, "The inventory action could not be completed. Please try again.") }}
+    </div>
+    {% endif %}
+    {% if request.query_params.get('success') %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        {{ request.query_params.get('success') }}
+    </div>
+    {% endif %}
+
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <p class="text-sm text-slate-500 dark:text-slate-400">Track stock movements and adjustments</p>
         <div class="flex flex-wrap gap-2">
