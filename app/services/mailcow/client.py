@@ -24,6 +24,38 @@ class MailcowClient:
     def _headers(self) -> dict[str, str]:
         return {"X-API-Key": self.api_key}
 
+    @staticmethod
+    def _error_message(response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+        except ValueError:
+            return response.text[:300] or "empty response"
+        if isinstance(payload, dict):
+            return str(payload.get("msg") or payload.get("message") or payload)
+        return str(payload)[:300]
+
+    @classmethod
+    def _raise_for_http_error(cls, response: httpx.Response) -> None:
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise MailcowClientError(
+                f"Mailcow API returned HTTP {response.status_code}: "
+                f"{cls._error_message(response)}"
+            ) from exc
+
+    @staticmethod
+    def _raise_for_api_failure(result: object, operation: str) -> None:
+        items = result if isinstance(result, list) else [result]
+        failures = [
+            item
+            for item in items
+            if isinstance(item, dict)
+            and str(item.get("type", "")).lower() not in {"success", "info"}
+        ]
+        if failures:
+            raise MailcowClientError(f"Mailbox {operation} failed: {failures}")
+
     def get_mailbox(self, email: str) -> dict | None:
         with httpx.Client(timeout=self.timeout) as client:
             response = client.get(
@@ -32,7 +64,7 @@ class MailcowClient:
             )
             if response.status_code == 404:
                 return None
-            response.raise_for_status()
+            self._raise_for_http_error(response)
         payload = response.json()
         if isinstance(payload, list):
             return payload[0] if payload else None
@@ -46,11 +78,46 @@ class MailcowClient:
             endpoint = f"{endpoint}/{domain}"
         with httpx.Client(timeout=self.timeout) as client:
             response = client.get(endpoint, headers=self._headers())
-            response.raise_for_status()
+            self._raise_for_http_error(response)
         payload = response.json()
         if isinstance(payload, list):
             return [item for item in payload if isinstance(item, dict)]
         return []
+
+    def create_mailbox(
+        self,
+        email: str,
+        *,
+        name: str,
+        password: str,
+        quota_mb: int,
+        force_password_update: bool = True,
+    ) -> None:
+        local_part, separator, domain = email.strip().lower().partition("@")
+        if not separator or not local_part or not domain:
+            raise ValueError("A valid mailbox email address is required")
+        payload = {
+            "active": "1",
+            "domain": domain,
+            "local_part": local_part,
+            "name": name,
+            "password": password,
+            "password2": password,
+            "quota": quota_mb,
+            "force_pw_update": "1" if force_password_update else "0",
+        }
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(
+                f"{self.base_url}/add/mailbox",
+                headers=self._headers(),
+                json=payload,
+            )
+            self._raise_for_http_error(response)
+        try:
+            result = response.json()
+        except ValueError as exc:
+            raise MailcowClientError("Mailbox creation returned invalid JSON") from exc
+        self._raise_for_api_failure(result, "creation")
 
     def update_mailbox_password(
         self,
@@ -75,7 +142,7 @@ class MailcowClient:
                 headers=self._headers(),
                 json=payload,
             )
-            response.raise_for_status()
+            self._raise_for_http_error(response)
         result = response.json()
         if isinstance(result, list):
             failures = [

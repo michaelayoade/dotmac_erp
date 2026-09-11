@@ -10,6 +10,8 @@ from app.schemas.auth_flow import (
     ForgotPasswordResponse,
     LoginRequest,
     LoginResponse,
+    MailboxActivationRequest,
+    MailboxActivationResponse,
     LogoutRequest,
     LogoutResponse,
     MeResponse,
@@ -381,3 +383,28 @@ def reset_password_endpoint(
     """
     reset_at = auth_flow_api_service.reset_password(payload, db)
     return ResetPasswordResponse(reset_at=reset_at)
+
+
+@router.post(
+    "/mailbox-activation",
+    response_model=MailboxActivationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def activate_mailbox_endpoint(payload: MailboxActivationRequest):
+    from app.services.people.hr.mailbox_provisioning import activate_employee_mailbox
+
+    try:
+        mailbox, activated_at = activate_employee_mailbox(
+            payload.token,
+            payload.new_password,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mailbox activation is temporarily unavailable",
+        ) from exc
+    return MailboxActivationResponse(mailbox=mailbox, activated_at=activated_at)

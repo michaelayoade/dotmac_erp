@@ -538,6 +538,52 @@ def send_password_reset_email(
     )
 
 
+def send_mailbox_activation_email(
+    db: Session,
+    to_email: str,
+    work_email: str,
+    activation_token: str,
+    person_name: str | None,
+    organization_id: UUID,
+    *,
+    raise_on_error: bool = False,
+) -> bool:
+    name = person_name or "there"
+    app_url = _env_value("APP_URL") or "http://localhost:8000"
+    base_url = app_url.rstrip("/")
+    encoded_token = quote(activation_token, safe="")
+    activation_link = f"{base_url}/mailbox-activation?token={encoded_token}"
+    subject = "Set up your Dotmac work email"
+    body_text = (
+        f"Dear {name},\n\n"
+        f"Your Dotmac work email, {work_email}, is ready. "
+        "Use the one-time link below to choose your password. "
+        "The link expires in 24 hours.\n\n"
+        f"{activation_link}\n\n"
+        "For your security, no temporary password is included in this email. "
+        "If you did not expect this message, contact HR."
+    )
+    body_html = (
+        f"<p>Dear {name},</p>"
+        f"<p>Your Dotmac work email, <strong>{work_email}</strong>, is ready.</p>"
+        "<p>Use this one-time link to choose your password. "
+        "The link expires in 24 hours.</p>"
+        f"<p><a href={activation_link}>Activate work email</a></p>"
+        "<p>For your security, no temporary password is included in this email. "
+        "If you did not expect this message, contact HR.</p>"
+    )
+    return send_email(
+        db,
+        to_email,
+        subject,
+        body_html,
+        body_text,
+        raise_on_error=raise_on_error,
+        module=EmailModule.PEOPLE_PAYROLL,
+        organization_id=organization_id,
+    )
+
+
 # Async email sending convenience function
 def queue_email(
     to_email: str,

@@ -318,7 +318,7 @@
                 <div class="card-body space-y-4 px-6 pb-6" x-show="expanded" x-collapse>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Personal contact info separate from work email/phone on Person record.</p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label for="personal_email" class="form-label">Personal Email</label><input type="email" name="personal_email" id="personal_email" value="{{ personal_email_value }}" class="form-input w-full" placeholder="personal@example.com"></div>
+                        <div><label for="personal_email" class="form-label form-label-required">Personal Email</label><input type="email" name="personal_email" id="personal_email" value="{{ personal_email_value }}" class="form-input w-full" placeholder="personal@example.com" required><p class="form-hint">Used only to deliver the one-time work-email activation link.</p></div>
                         <div><label for="personal_phone" class="form-label">Personal Phone</label><input type="text" name="personal_phone" id="personal_phone" value="{{ personal_phone_value }}" class="form-input w-full" placeholder="+234 xxx xxx xxxx"></div>
                     </div>
                     <div class="pt-2 border-t border-slate-200 dark:border-slate-700">

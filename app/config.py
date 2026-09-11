@@ -222,7 +222,7 @@ class Settings:
     )
 
     # ==========================================================================
-    # Mailcow Employee Offboarding
+    # Mailcow Employee Lifecycle
     # ==========================================================================
     mailcow_offboarding_enabled: bool = (
         os.getenv("MAILCOW_OFFBOARDING_ENABLED", "false").lower() == "true"
@@ -230,6 +230,21 @@ class Settings:
     mailcow_base_url: str = os.getenv("MAILCOW_BASE_URL", "").rstrip("/")
     mailcow_api_key: str | None = os.getenv("MAILCOW_API_KEY") or None
     mailcow_request_timeout: float = float(os.getenv("MAILCOW_REQUEST_TIMEOUT", "20.0"))
+    mailcow_provisioning_enabled: bool = (
+        os.getenv("MAILCOW_PROVISIONING_ENABLED", "false").lower() == "true"
+    )
+    mailcow_provisioning_domain: str = (
+        os.getenv("MAILCOW_PROVISIONING_DOMAIN", "dotmac.ng").strip().lower()
+    )
+    mailcow_provisioning_quota_mb: int = int(
+        os.getenv("MAILCOW_PROVISIONING_QUOTA_MB", "1024")
+    )
+    mailcow_activation_ttl_hours: int = int(
+        os.getenv("MAILCOW_ACTIVATION_TTL_HOURS", "24")
+    )
+    mailcow_webmail_url: str = os.getenv(
+        "MAILCOW_WEBMAIL_URL", "https://mail.dotmac.ng/SOGo/"
+    )
     mailcow_inactive_forward_to: str = os.getenv(
         "MAILCOW_INACTIVE_FORWARD_TO", "inactives@dotmac.ng"
     )
