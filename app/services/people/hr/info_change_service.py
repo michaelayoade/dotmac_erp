@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.config import settings
 from app.models.email_profile import EmailModule
@@ -1172,8 +1172,8 @@ class InfoChangeService:
         batch = self.db.scalar(
             select(EmployeeInfoChangeBatch)
             .options(
-                joinedload(EmployeeInfoChangeBatch.employee),
-                joinedload(EmployeeInfoChangeBatch.items).joinedload(
+                selectinload(EmployeeInfoChangeBatch.employee),
+                selectinload(EmployeeInfoChangeBatch.items).selectinload(
                     EmployeeInfoChangeRequest.employee
                 ),
             )
@@ -1191,6 +1191,7 @@ class InfoChangeService:
                 EmployeeInfoChangeRequest.organization_id == organization_id,
                 EmployeeInfoChangeRequest.batch_id == batch_id,
             )
+            .order_by(EmployeeInfoChangeRequest.request_id)
             .with_for_update()
         ).all()
         return batch
