@@ -39,6 +39,8 @@ def test_my_approvals_report_anchors_queries_on_approval_steps() -> None:
                 compile_kwargs={"literal_binds": True},
             )
         )
-        assert "FROM expense_claim_approval_step JOIN expense_claim" in sql
+        assert (
+            "FROM expense.expense_claim_approval_step JOIN expense.expense_claim"
+        ) in sql
         assert "expense_claim_approval_step.organization_id" in sql
         assert "expense_claim.organization_id" in sql

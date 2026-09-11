@@ -11,7 +11,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-import urllib3
 from dotmac_files import StorageConflict, StorageUnavailable
 
 from app.services import storage as storage_mod
@@ -162,7 +161,7 @@ class TestExists:
 
     def test_exists_retries_a_transport_failure_once(self, svc, mock_minio_client):
         mock_minio_client.stat_object.side_effect = [
-            urllib3.exceptions.ProtocolError("connection closed"),
+            ConnectionError("connection closed"),
             MagicMock(),
         ]
 

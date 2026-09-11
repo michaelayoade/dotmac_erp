@@ -54,4 +54,4 @@ def test_batch_lock_does_not_lock_nullable_eager_joins() -> None:
     assert "FOR UPDATE" in request_sql
     assert "employee_info_change_request.organization_id" in request_sql
     assert "employee_info_change_request.batch_id" in request_sql
-    assert "ORDER BY employee_info_change_request.request_id" in request_sql
+    assert "ORDER BY hr.employee_info_change_request.request_id" in request_sql
