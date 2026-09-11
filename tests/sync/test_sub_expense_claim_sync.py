@@ -9,9 +9,10 @@ poll and category listing, and the 200/201 endpoint idempotency logic.
 import base64
 import hashlib
 import itertools
+import json
 import sys
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -42,6 +43,7 @@ from app.schemas.sync.sub_operational import (
 )
 from app.services.finance.common.numbering import SyncNumberingService
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
+from app.services.sync.sub import expenses as sub_expenses
 from app.services.sync.sub.expenses import SubExpenseReceiptError
 
 
@@ -456,6 +458,94 @@ class TestExpenseClaimStatusPoll:
 
 
 class TestFieldManagerDecision:
+    def test_draft_maps_category_refusal_to_safe_stable_code(
+        self,
+        service,
+        org_id,
+        employee,
+        numbering_patch,
+    ):
+        payload = _payload(
+            employee,
+            items=[
+                SubExpenseClaimItemPayload(
+                    source_line_id=uuid.uuid4(),
+                    category_code="MISSING",
+                    description="Unmapped expense category",
+                    claimed_amount=Decimal("100.00"),
+                )
+            ],
+        )
+
+        with pytest.raises(SubExpenseReceiptError) as exc:
+            service.create_expense_claim_draft(org_id, payload, employee.person_id)
+
+        assert exc.value.code == "expense_category_unknown"
+        assert exc.value.message == "An expense category is not available in ERP."
+
+    def test_verified_destination_draft_persists_only_encrypted_account(
+        self,
+        service,
+        db_session,
+        org_id,
+        employee,
+        fuel_category,
+        numbering_patch,
+        monkeypatch,
+    ):
+        """Exercise the destination-bearing v2 draft used by current Sub clients."""
+        source_claim_id = str(uuid.uuid4())
+        source_line_id = uuid.uuid4()
+        verified_at = datetime.now(UTC)
+        token_payload = {
+            "version": 1,
+            "organization_id": str(org_id),
+            "employee_id": str(employee.employee_id),
+            "source_claim_id": source_claim_id,
+            "mode": "erp_profile",
+            "bank_code": "058",
+            "bank_name": "Test Bank",
+            "account_number": "0123456789",
+            "verified_beneficiary_name": "Field Tech",
+            "verified_at": verified_at.isoformat(),
+            "expires_at": (verified_at + timedelta(minutes=30)).isoformat(),
+        }
+        monkeypatch.setattr(
+            sub_expenses,
+            "decrypt_credential",
+            lambda _token, _db: json.dumps(token_payload),
+        )
+        monkeypatch.setattr(
+            sub_expenses,
+            "encrypt_credential",
+            lambda value, _db: f"enc:test:{value[-4:]}",
+        )
+        payload = _payload(
+            employee,
+            source_claim_id=source_claim_id,
+            payment_destination_token="enc:verified-destination-token",
+            items=[
+                SubExpenseClaimItemPayload(
+                    source_line_id=source_line_id,
+                    category_code="FUEL",
+                    description="Fuel for site visit",
+                    claimed_amount=Decimal("5000.00"),
+                )
+            ],
+        )
+
+        draft = service.create_expense_claim_draft(org_id, payload, employee.person_id)
+
+        claim = db_session.get(ExpenseClaim, draft.claim_id)
+        assert draft.status == "draft"
+        assert draft.items[0].source_line_id == source_line_id
+        assert claim.recipient_account_number is None
+        assert claim.recipient_account_number_encrypted == "enc:test:6789"
+        assert claim.recipient_account_number_last4 == "6789"
+        assert claim.recipient_account_name == "Field Tech"
+        assert claim.payment_destination_mode == "erp_profile"
+        assert claim.payment_destination_fingerprint is not None
+
     def test_draft_receipt_delivery_precedes_trusted_approval(
         self,
         service,
