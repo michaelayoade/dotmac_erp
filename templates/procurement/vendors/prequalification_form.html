@@ -15,6 +15,7 @@
 
 {% block content %}
 <div class="max-w-3xl">
+    {% set fd = form_data | default({}, true) %}
     {% if error %}
     <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
         <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
@@ -38,7 +39,7 @@
                         <select id="supplier_id" name="supplier_id" class="form-select w-full" required>
                             <option value="">Select supplier</option>
                             {% for supplier in suppliers %}
-                            <option value="{{ supplier.supplier_id }}">
+                            <option value="{{ supplier.supplier_id }}" {% if fd.supplier_id == supplier.supplier_id|string %}selected{% endif %}>
                                 {{ supplier.trading_name or supplier.legal_name }}
                             </option>
                             {% endfor %}
@@ -46,7 +47,7 @@
                     </div>
                     <div>
                         <label for="application_date" class="form-label required">Application Date</label>
-                        <input type="date" id="application_date" name="application_date" class="form-input w-full" required>
+                        <input type="date" id="application_date" name="application_date" class="form-input w-full" required value="{{ fd.application_date | default('', true) }}">
                     </div>
                 </div>
 
@@ -58,7 +59,7 @@
                     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 pt-3">
                         {% for category in prequalification_categories %}
                         <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" name="categories" value="{{ category }}" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500">
+                            <input type="checkbox" name="categories" value="{{ category }}" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500" {% if category in (fd.categories | default([], true)) %}checked{% endif %}>
                             {{ category }}
                         </label>
                         {% endfor %}
@@ -72,23 +73,23 @@
                     </div>
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2 pt-3">
                         <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" name="documents_verified" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500">
+                            <input type="checkbox" name="documents_verified" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500" {% if fd.documents_verified %}checked{% endif %}>
                             Documents verified
                         </label>
                         <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" name="tax_clearance_valid" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500">
+                            <input type="checkbox" name="tax_clearance_valid" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500" {% if fd.tax_clearance_valid %}checked{% endif %}>
                             Tax clearance valid
                         </label>
                         <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" name="pension_compliance" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500">
+                            <input type="checkbox" name="pension_compliance" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500" {% if fd.pension_compliance %}checked{% endif %}>
                             Pension compliance
                         </label>
                         <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" name="itf_compliance" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500">
+                            <input type="checkbox" name="itf_compliance" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500" {% if fd.itf_compliance %}checked{% endif %}>
                             ITF compliance
                         </label>
                         <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" name="nsitf_compliance" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500">
+                            <input type="checkbox" name="nsitf_compliance" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500" {% if fd.nsitf_compliance %}checked{% endif %}>
                             NSITF compliance
                         </label>
                     </div>

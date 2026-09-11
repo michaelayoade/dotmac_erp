@@ -1035,6 +1035,23 @@ class InventoryWebService:
                 limit=limit,
             )
         )
+        context.update(
+            {
+                "can_create_item": auth.is_admin
+                or auth.has_permission("inventory:items:create"),
+                "can_update_item": auth.is_admin
+                or auth.has_permission("inventory:items:update"),
+                "can_delete_item": auth.is_admin
+                or auth.has_permission("inventory:items:delete"),
+                "can_export_item": auth.is_admin
+                or auth.has_permission("inventory:items:read"),
+            }
+        )
+        context["can_bulk_items"] = (
+            context["can_export_item"]
+            or context["can_update_item"]
+            or context["can_delete_item"]
+        )
         return templates.TemplateResponse(request, "inventory/items.html", context)
 
     def item_new_form_response(
@@ -1120,10 +1137,13 @@ class InventoryWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
+            logger.exception("item_create_response failed")
             context = base_context(request, auth, "New Item", "items")
             context.update(self.item_form_context(db, str(auth.organization_id)))
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to save item. Please check the details and try again."
+            )
             return templates.TemplateResponse(
                 request, "inventory/item_form.html", context
             )
@@ -1231,12 +1251,15 @@ class InventoryWebService:
                 url=f"/inventory/items/{item_id}?saved=1", status_code=303
             )
 
-        except Exception as e:
+        except Exception:
+            logger.exception("item_update_response failed for %s", item_id)
             context = base_context(request, auth, "Edit Item", "items")
             context.update(
                 self.item_form_context(db, str(auth.organization_id), item_id)
             )
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to update item. Please check the details and try again."
+            )
             return templates.TemplateResponse(
                 request, "inventory/item_form.html", context
             )
@@ -1484,10 +1507,13 @@ class InventoryWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
+            logger.exception("create_category_response failed")
             context = base_context(request, auth, "New Category", "categories")
             context.update(self.category_form_context(db, str(auth.organization_id)))
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to save category. Please check the details and try again."
+            )
             return templates.TemplateResponse(
                 request, "inventory/category_form.html", context
             )
@@ -1541,12 +1567,15 @@ class InventoryWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
+            logger.exception("update_category_response failed for %s", category_id)
             context = base_context(request, auth, "Edit Category", "categories")
             context.update(
                 self.category_form_context(db, str(auth.organization_id), category_id)
             )
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to update category. Please check the details and try again."
+            )
             return templates.TemplateResponse(
                 request, "inventory/category_form.html", context
             )
@@ -1834,10 +1863,13 @@ class InventoryWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
+            logger.exception("create_warehouse_response failed")
             context = base_context(request, auth, "New Warehouse", "warehouses")
             context.update(self.warehouse_form_context(db, str(auth.organization_id)))
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to save warehouse. Please check the details and try again."
+            )
             return templates.TemplateResponse(
                 request, "inventory/warehouse_form.html", context
             )
@@ -1900,12 +1932,15 @@ class InventoryWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
+            logger.exception("update_warehouse_response failed for %s", warehouse_id)
             context = base_context(request, auth, "Edit Warehouse", "warehouses")
             context.update(
                 self.warehouse_form_context(db, str(auth.organization_id), warehouse_id)
             )
-            context["error"] = str(e)
+            context["error"] = (
+                "Unable to update warehouse. Please check the details and try again."
+            )
             return templates.TemplateResponse(
                 request, "inventory/warehouse_form.html", context
             )
@@ -2331,10 +2366,12 @@ class InventoryTransactionWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
             db.rollback()
+            logger.exception("create_transaction_response failed")
             return RedirectResponse(
-                url=f"/inventory/transactions?error={str(e)}", status_code=303
+                url="/inventory/transactions?error=transaction_failed",
+                status_code=303,
             )
 
     @staticmethod
@@ -2424,10 +2461,12 @@ class InventoryTransactionWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
             db.rollback()
+            logger.exception("create_transfer_response failed")
             return RedirectResponse(
-                url=f"/inventory/transactions?error={str(e)}", status_code=303
+                url="/inventory/transactions?error=transfer_failed",
+                status_code=303,
             )
 
     @staticmethod
@@ -2503,10 +2542,12 @@ class InventoryTransactionWebService:
                 status_code=303,
             )
 
-        except Exception as e:
+        except Exception:
             db.rollback()
+            logger.exception("create_adjustment_response failed")
             return RedirectResponse(
-                url=f"/inventory/transactions?error={str(e)}", status_code=303
+                url="/inventory/transactions?error=adjustment_failed",
+                status_code=303,
             )
 
 

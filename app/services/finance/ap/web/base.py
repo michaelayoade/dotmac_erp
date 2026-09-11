@@ -13,8 +13,10 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from urllib.parse import quote_plus
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only
 
@@ -40,6 +42,14 @@ from app.services.finance.common import (
 from app.services.recent_activity import get_recent_activity
 
 logger = logging.getLogger(__name__)
+
+AP_PAYMENT_ELIGIBLE_INVOICE_STATUSES = frozenset(
+    {
+        SupplierInvoiceStatus.APPROVED,
+        SupplierInvoiceStatus.POSTED,
+        SupplierInvoiceStatus.PARTIALLY_PAID,
+    }
+)
 
 
 # ==============================================================================
@@ -112,6 +122,18 @@ def payment_status_label(status: APPaymentStatus) -> str:
     if status == APPaymentStatus.VOID:
         return "VOIDED"
     return str(status.value)
+
+
+def can_record_payment_for_invoice_status(status: SupplierInvoiceStatus) -> bool:
+    """Return whether the AP payment form accepts an invoice in this status."""
+    return status in AP_PAYMENT_ELIGIBLE_INVOICE_STATUSES
+
+
+def ap_safe_error_message(exc: Exception, fallback: str) -> str:
+    """Return a stable user-safe message while keeping details in server logs."""
+    if isinstance(exc, HTTPException) and isinstance(exc.detail, str):
+        return quote_plus(exc.detail)
+    return fallback
 
 
 # ==============================================================================
@@ -288,6 +310,7 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> 
         if invoice.withholding_tax_amount
         else None,
         "status": invoice_status_label(invoice.status),
+        "can_record_payment": can_record_payment_for_invoice_status(invoice.status),
         "comments": getattr(invoice, "comments", None),
         "is_overdue": (
             invoice.due_date < today

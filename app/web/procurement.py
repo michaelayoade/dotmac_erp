@@ -6,6 +6,7 @@ Server-rendered HTML routes for procurement management.
 
 import csv
 import json
+import logging
 import math
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -53,6 +54,8 @@ from app.web.deps import (
     require_procurement_access,
     templates,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/procurement", tags=["procurement-web"])
 
@@ -732,7 +735,8 @@ async def plan_import(
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
     except (ValidationError, ValueError) as exc:
-        msg = quote(f"Import failed: {str(exc)}")
+        logger.warning("Procurement plan import failed validation: %s", exc)
+        msg = quote("Import failed. Please check the file and try again.")
         return RedirectResponse(url=f"/procurement/plans?error={msg}", status_code=303)
 
     return RedirectResponse(
@@ -1230,7 +1234,8 @@ async def requisition_import(
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
     except (ValidationError, ValueError) as exc:
-        msg = quote(f"Import failed: {str(exc)}")
+        logger.warning("Procurement requisition import failed validation: %s", exc)
+        msg = quote("Import failed. Please check the file and try again.")
         return RedirectResponse(
             url=f"/procurement/requisitions?error={msg}", status_code=303
         )
@@ -1685,7 +1690,8 @@ async def rfq_import(
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
     except (ValidationError, ValueError) as exc:
-        msg = quote(f"Import failed: {str(exc)}")
+        logger.warning("Procurement RFQ import failed validation: %s", exc)
+        msg = quote("Import failed. Please check the file and try again.")
         return RedirectResponse(url=f"/procurement/rfqs?error={msg}", status_code=303)
 
     return RedirectResponse(
@@ -2250,7 +2256,8 @@ async def contract_import(
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
     except (ValidationError, ValueError) as exc:
-        msg = quote(f"Import failed: {str(exc)}")
+        logger.warning("Procurement contract import failed validation: %s", exc)
+        msg = quote("Import failed. Please check the file and try again.")
         return RedirectResponse(
             url=f"/procurement/contracts?error={msg}", status_code=303
         )
@@ -2286,6 +2293,17 @@ async def contract_create(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    form_data = {key: str(value) for key, value in form.items()}
+
+    def _contract_form_error(message: str) -> HTMLResponse:
+        context = base_context(request, auth, "New Contract", "procurement", db=db)
+        web_service = ProcurementWebService(db)
+        context.update(web_service.contract_form_context(auth.organization_id))
+        context["error"] = message
+        context["form_data"] = form_data
+        return templates.TemplateResponse(
+            request, "procurement/contracts/form.html", context, status_code=400
+        )
 
     try:
         contract_number = str(form.get("contract_number") or "").strip()
@@ -2360,9 +2378,9 @@ async def contract_create(
         ValueError,
         PydanticValidationError,
     ) as exc:
-        return RedirectResponse(
-            url=f"/procurement/contracts/new?error={quote(str(exc))}",
-            status_code=303,
+        logger.warning("Procurement contract form validation failed: %s", exc)
+        return _contract_form_error(
+            "Contract could not be saved. Please check the details and try again."
         )
     except IntegrityError as exc:
         message = str(getattr(exc, "orig", exc))
@@ -2370,20 +2388,12 @@ async def contract_create(
             msg = "Contract number already exists. Please choose a different number."
         else:
             msg = "Contract could not be saved due to a data conflict."
-        return RedirectResponse(
-            url=f"/procurement/contracts/new?error={quote(msg)}",
-            status_code=303,
-        )
+        return _contract_form_error(msg)
     except DataError:
-        return RedirectResponse(
-            url="/procurement/contracts/new?error=Some+fields+have+invalid+values",
-            status_code=303,
-        )
+        return _contract_form_error("Some fields have invalid values.")
     except Exception:
-        return RedirectResponse(
-            url="/procurement/contracts/new?error=Unable+to+save+contract",
-            status_code=303,
-        )
+        logger.exception("Failed to create procurement contract")
+        return _contract_form_error("Unable to save contract. Please try again.")
 
 
 @router.get("/contracts/{contract_id}", response_class=HTMLResponse)
@@ -2517,6 +2527,33 @@ def prequalification_create(
     db: Session = Depends(get_db_for_org),
 ):
     """Create a new vendor prequalification record."""
+    form_data = {
+        "supplier_id": supplier_id,
+        "application_date": application_date,
+        "categories": categories or [],
+        "categories_json": categories_json or "",
+        "documents_verified": documents_verified,
+        "tax_clearance_valid": tax_clearance_valid,
+        "pension_compliance": pension_compliance,
+        "itf_compliance": itf_compliance,
+        "nsitf_compliance": nsitf_compliance,
+    }
+
+    def _prequalification_form_error(message: str) -> HTMLResponse:
+        context = base_context(
+            request, auth, "Prequalify Vendor", "proc_prequalification", db=db
+        )
+        web_service = ProcurementWebService(db)
+        context.update(web_service.prequalification_form_context(auth.organization_id))
+        context["error"] = message
+        context["form_data"] = form_data
+        return templates.TemplateResponse(
+            request,
+            "procurement/vendors/prequalification_form.html",
+            context,
+            status_code=400,
+        )
+
     if not auth.user_id:
         return RedirectResponse(
             url="/procurement/vendors/prequalification?error=Missing+user+context",
@@ -2580,17 +2617,10 @@ def prequalification_create(
         nsitf_compliance_val = False
 
     if errors:
-        msg = quote("; ".join(errors))
-        return RedirectResponse(
-            url=f"/procurement/vendors/prequalification/new?error={msg}",
-            status_code=303,
-        )
+        return _prequalification_form_error("; ".join(errors))
 
     if supplier_uuid is None:
-        return RedirectResponse(
-            url="/procurement/vendors/prequalification/new?error=Missing+supplier",
-            status_code=303,
-        )
+        return _prequalification_form_error("Missing supplier")
 
     service = VendorPrequalificationService(db)
     try:
@@ -2606,10 +2636,9 @@ def prequalification_create(
         )
         service.create(auth.organization_id, data)
     except ValidationError as exc:
-        msg = quote(str(exc))
-        return RedirectResponse(
-            url=f"/procurement/vendors/prequalification/new?error={msg}",
-            status_code=303,
+        logger.warning("Vendor prequalification validation failed: %s", exc)
+        return _prequalification_form_error(
+            "Prequalification could not be saved. Please check the details and try again."
         )
 
     return RedirectResponse(

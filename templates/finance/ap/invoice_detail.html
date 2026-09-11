@@ -96,8 +96,8 @@
     </form>
     {% endif %}
 
-    {# APPROVED/POSTED/PARTIALLY_PAID/OVERDUE status actions #}
-    {% if invoice.status in ['APPROVED', 'POSTED', 'PARTIALLY_PAID', 'OVERDUE'] %}
+    {# Keep payment CTA aligned with the AP payment form eligibility. #}
+    {% if invoice.can_record_payment %}
     <a href="/finance/ap/payments/new?invoice_id={{ invoice.invoice_id }}" class="btn btn-success">
         {{ icon_svg("currency", "h-4 w-4") }}
         Record Payment

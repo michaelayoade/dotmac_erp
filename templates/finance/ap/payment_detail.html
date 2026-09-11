@@ -23,13 +23,6 @@
         {{ icon_svg("plus", "h-4 w-4") }}
         Generate RRR
     </a>
-    {% if payment.status_raw == 'DRAFT' and auth is defined and auth.has_permission('ap:payments:update') %}
-    <a href="/finance/ap/payments/{{ payment.payment_id }}/edit"
-       class="btn btn-secondary">
-        {{ icon_svg("edit", "h-4 w-4") }}
-        Edit
-    </a>
-    {% endif %}
     {% if payment.status_raw == 'DRAFT' and auth is defined and auth.has_any_permission(['ap:payments:approve:tier1', 'ap:payments:approve:tier2', 'ap:payments:approve:tier3']) %}
     <form method="POST" action="/finance/ap/payments/{{ payment.payment_id }}/approve" class="inline">
         {{ request.state.csrf_form | safe }}

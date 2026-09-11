@@ -25,15 +25,11 @@
             Approve
         </button>
     </form>
-    <form method="post" action="/people/leave/applications/{{ application.application_id }}/reject" class="inline"
-        onsubmit="return promptRejection(this)">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input type="hidden" name="reason" id="rejection_reason">
-        <button type="submit" class="btn btn-secondary text-red-600 hover:text-red-700">
-            {{ icon_svg("x-mark", "h-4 w-4 mr-1") }}
-            Reject
-        </button>
-    </form>
+    <button type="button" class="btn btn-secondary text-red-600 hover:text-red-700"
+            @click="window.dispatchEvent(new CustomEvent('leave-reject-open'))">
+        {{ icon_svg("x-mark", "h-4 w-4 mr-1") }}
+        Reject
+    </button>
 </div>
 {% elif application.status.value in ['DRAFT', 'SUBMITTED'] %}
 <a href="/people/leave/applications/{{ application.application_id }}/edit" class="btn btn-secondary">
@@ -246,21 +242,33 @@
         {% endif %}
     </div>
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-function promptRejection(form) {
-    const reason = prompt('Please provide a reason for rejection:');
-    if (reason === null) {
-        return false;
-    }
-    if (reason.trim() === '') {
-        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Rejection reason is required', type: 'error' } }));
-        return false;
-    }
-    document.getElementById('rejection_reason').value = reason;
-    return true;
-}
-</script>
+{% if application.status.value == 'SUBMITTED' %}
+<div x-data="{ rejectOpen: false }"
+     x-on:leave-reject-open.window="rejectOpen = true"
+     x-show="rejectOpen"
+     x-cloak
+     x-trap="rejectOpen"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="reject-application-title"
+     @keydown.escape.window="rejectOpen = false">
+    <div class="fixed inset-0 bg-slate-900/50" @click="rejectOpen = false"></div>
+    <div class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-2xl dark:bg-slate-800">
+        <h3 id="reject-application-title" class="text-lg font-semibold text-slate-900 dark:text-white">Reject Application</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Provide the reason the employee should see for this rejection.</p>
+        <form method="post" action="/people/leave/applications/{{ application.application_id }}/reject" class="mt-5 space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div>
+                <label for="rejection_reason" class="form-label">Rejection Reason</label>
+                <textarea name="reason" id="rejection_reason" rows="3" class="form-input w-full" required></textarea>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" @click="rejectOpen = false" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-danger">Reject Application</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
