@@ -38,6 +38,11 @@ from app.web.deps import WebAuthContext, base_context
 logger = logging.getLogger(__name__)
 
 
+def _progress_context(onboarding: EmployeeOnboarding) -> dict[str, int]:
+    """Return the mapping consumed by onboarding progress templates."""
+    return {"percentage": OnboardingService.calculate_progress(onboarding)}
+
+
 class OnboardingAdminWebService:
     """Web service for HR onboarding admin routes."""
 
@@ -591,8 +596,7 @@ class OnboardingAdminWebService:
             categories[cat].append(activity)
 
         # Calculate progress
-        svc = OnboardingService(db)
-        progress = svc.calculate_progress(onboarding)
+        progress = _progress_context(onboarding)
 
         context = base_context(
             request, auth, "Onboarding Progress", "onboarding", db=db
