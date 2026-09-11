@@ -34,6 +34,7 @@ from sqlalchemy import inspect as inspect_db
 from sqlalchemy.orm import Session
 
 from app.models.finance.audit.audit_log import AuditAction
+from app.metrics import observe_audit_dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,9 @@ def fire_audit_event(
                 correlation_id=correlation_id,
                 reason=reason,
             )
+        observe_audit_dispatch("success")
     except Exception:
+        observe_audit_dispatch("failure")
         if getattr(db, "is_active", True) is False:
             db.rollback()
         logger.warning(

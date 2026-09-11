@@ -80,6 +80,20 @@ DOTMAC_SUB_INVOICE_SYNC_LIMITS = Counter(
     "dotmac_sub_invoice_sync_limits_total",
     "ERP invoice sync runs that reached the attempted-row work limit",
 )
+DOTMAC_SUB_STAFF_SYNC_ROWS = Counter(
+    "dotmac_sub_staff_sync_rows_total",
+    "ERP staff sync row outcomes sent to Self-Care",
+    ["outcome"],  # success | permanent_failure | transient_failure
+)
+DOTMAC_SUB_INCREMENTAL_LOCK_CONTENTION = Counter(
+    "dotmac_sub_incremental_lock_contention_total",
+    "ERP incremental sync phase attempts delayed by the per-organization lock",
+)
+AUDIT_DISPATCH_EVENTS = Counter(
+    "audit_dispatch_events_total",
+    "Immutable audit-log dispatch outcomes",
+    ["outcome"],  # success | failure
+)
 
 # ── Finance event outbox (claim/deliver/settle relay) ──────────────────
 # Outcome labels: published, no_consequence, retried, dead, unsupported,
@@ -247,6 +261,24 @@ def observe_dotmac_sub_invoice_sync_row(outcome: str) -> None:
 
 def observe_dotmac_sub_invoice_sync_limit() -> None:
     DOTMAC_SUB_INVOICE_SYNC_LIMITS.inc()
+
+
+def observe_dotmac_sub_staff_sync_row(outcome: str) -> None:
+    normalized = normalize_metric_label(outcome)
+    if normalized not in {"success", "permanent_failure", "transient_failure"}:
+        normalized = "unknown"
+    DOTMAC_SUB_STAFF_SYNC_ROWS.labels(outcome=normalized).inc()
+
+
+def observe_dotmac_sub_incremental_lock_contention() -> None:
+    DOTMAC_SUB_INCREMENTAL_LOCK_CONTENTION.inc()
+
+
+def observe_audit_dispatch(outcome: str) -> None:
+    normalized = normalize_metric_label(outcome)
+    if normalized not in {"success", "failure"}:
+        normalized = "unknown"
+    AUDIT_DISPATCH_EVENTS.labels(outcome=normalized).inc()
 
 
 def categorize_http_status(status_code: int) -> str:
