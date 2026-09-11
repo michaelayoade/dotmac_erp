@@ -15,6 +15,7 @@
 
 {% block content %}
 <div class="max-w-3xl">
+    {% set fd = form_data | default({}, true) %}
     {% if error %}
     <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
         <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
@@ -42,18 +43,19 @@
                             required
                             class="form-input w-full"
                             placeholder="CTR-2026-001"
+                            value="{{ fd.contract_number | default('', true) }}"
                         >
                     </div>
                     <div>
-                        <label for="supplier_id" class="form-label required">Supplier ID</label>
-                        <input
-                            type="text"
-                            id="supplier_id"
-                            name="supplier_id"
-                            required
-                            class="form-input w-full"
-                            placeholder="Supplier UUID"
-                        >
+                        <label for="supplier_id" class="form-label required">Supplier</label>
+                        <select id="supplier_id" name="supplier_id" required class="form-select w-full">
+                            <option value="">Select supplier</option>
+                            {% for supplier in suppliers | default([], true) %}
+                            <option value="{{ supplier.supplier_id }}" {% if fd.supplier_id == supplier.supplier_id|string %}selected{% endif %}>
+                                {{ supplier.trading_name or supplier.legal_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
 
@@ -66,21 +68,22 @@
                         required
                         class="form-input w-full"
                         placeholder="Supply of Office Equipment"
+                        value="{{ fd.title | default('', true) }}"
                     >
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label for="contract_date" class="form-label required">Contract Date</label>
-                        <input type="date" id="contract_date" name="contract_date" required class="form-input w-full">
+                        <input type="date" id="contract_date" name="contract_date" required class="form-input w-full" value="{{ fd.contract_date | default('', true) }}">
                     </div>
                     <div>
                         <label for="start_date" class="form-label required">Start Date</label>
-                        <input type="date" id="start_date" name="start_date" required class="form-input w-full">
+                        <input type="date" id="start_date" name="start_date" required class="form-input w-full" value="{{ fd.start_date | default('', true) }}">
                     </div>
                     <div>
                         <label for="end_date" class="form-label required">End Date</label>
-                        <input type="date" id="end_date" name="end_date" required class="form-input w-full">
+                        <input type="date" id="end_date" name="end_date" required class="form-input w-full" value="{{ fd.end_date | default('', true) }}">
                     </div>
                 </div>
 
@@ -95,6 +98,7 @@
                             required
                             class="form-input w-full"
                             placeholder="0.00"
+                            value="{{ fd.contract_value | default('', true) }}"
                         >
                     </div>
                     <div>
@@ -105,6 +109,7 @@
                             name="currency_code"
                             class="form-input w-full"
                             placeholder="{{ default_currency_code }}"
+                            value="{{ fd.currency_code | default('', true) }}"
                         >
                     </div>
                     <div>
@@ -116,6 +121,7 @@
                             name="retention_percentage"
                             class="form-input w-full"
                             placeholder="0.00"
+                            value="{{ fd.retention_percentage | default('', true) }}"
                         >
                     </div>
                 </div>
@@ -129,11 +135,12 @@
                             name="bpp_clearance_number"
                             class="form-input w-full"
                             placeholder="BPP-0001"
+                            value="{{ fd.bpp_clearance_number | default('', true) }}"
                         >
                     </div>
                     <div>
                         <label for="bpp_clearance_date" class="form-label">BPP Clearance Date</label>
-                        <input type="date" id="bpp_clearance_date" name="bpp_clearance_date" class="form-input w-full">
+                        <input type="date" id="bpp_clearance_date" name="bpp_clearance_date" class="form-input w-full" value="{{ fd.bpp_clearance_date | default('', true) }}">
                     </div>
                 </div>
 
@@ -141,7 +148,7 @@
                     <div>
                         <label class="form-label">Performance Bond</label>
                         <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                            <input type="checkbox" name="performance_bond_required" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            <input type="checkbox" name="performance_bond_required" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500" {% if fd.performance_bond_required %}checked{% endif %}>
                             Required
                         </label>
                     </div>
@@ -154,6 +161,7 @@
                             name="performance_bond_amount"
                             class="form-input w-full"
                             placeholder="0.00"
+                            value="{{ fd.performance_bond_amount | default('', true) }}"
                         >
                     </div>
                 </div>
@@ -166,7 +174,7 @@
                         rows="3"
                         class="form-input w-full"
                         placeholder="Specify payment schedule or terms..."
-                    ></textarea>
+                    >{{ fd.payment_terms | default('', true) }}</textarea>
                 </div>
 
                 <div>
@@ -177,7 +185,7 @@
                         rows="4"
                         class="form-input w-full"
                         placeholder="Add contract terms and conditions..."
-                    ></textarea>
+                    >{{ fd.terms_and_conditions | default('', true) }}</textarea>
                 </div>
             </div>
         </div>

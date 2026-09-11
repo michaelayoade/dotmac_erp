@@ -131,7 +131,7 @@ class ProcurementWebService:
         contract_service = ContractService(self.db)
 
         plan_summary = plan_service.get_summary(org_id)
-        pending_reqs, _ = req_service.list_requisitions(
+        pending_reqs, pending_req_count = req_service.list_requisitions(
             org_id,
             status="SUBMITTED",
             limit=5,
@@ -150,7 +150,7 @@ class ProcurementWebService:
         return {
             "plan_summary": plan_summary,
             "pending_requisitions": pending_reqs,
-            "pending_req_count": len(pending_reqs),
+            "pending_req_count": pending_req_count,
             "open_rfqs": open_rfqs,
             "open_rfq_count": open_rfq_count,
             "active_contracts": active_contracts,
@@ -193,6 +193,8 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "page": (offset // limit) + 1 if limit else 1,
+            "total_pages": max(1, (total + limit - 1) // limit) if limit else 1,
             "search": search or "",
             "filter_status": status,
             "filter_fiscal_year": fiscal_year,
@@ -584,7 +586,15 @@ class ProcurementWebService:
         organization_id: UUID,
     ) -> dict[str, Any]:
         """Build context for contract create/edit form."""
-        return {}
+        from app.models.finance.ap.supplier import Supplier
+
+        suppliers = self.db.scalars(
+            select(Supplier)
+            .where(Supplier.organization_id == organization_id)
+            .order_by(Supplier.legal_name.asc())
+            .limit(200)
+        ).all()
+        return {"suppliers": suppliers}
 
     # ─────────────────────────────────────────────────────────────
     # Vendors
@@ -744,7 +754,10 @@ class ProcurementWebService:
         from app.models.finance.ap.supplier import Supplier
 
         suppliers = self.db.scalars(
-            select(Supplier).order_by(Supplier.legal_name.asc()).limit(200)
+            select(Supplier)
+            .where(Supplier.organization_id == organization_id)
+            .order_by(Supplier.legal_name.asc())
+            .limit(200)
         ).all()
         return {
             "suppliers": suppliers,

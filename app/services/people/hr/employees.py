@@ -34,6 +34,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, selectinload
+from pydantic import EmailStr, TypeAdapter, ValidationError as PydanticValidationError
 
 from app.db.session_context import session_for_org
 from app.models.auth import AuthProvider, UserCredential
@@ -176,6 +177,48 @@ class EmployeeService:
         self.db = db
         self.organization_id = organization_id
         self.principal = principal
+
+    def _validate_mailbox_personal_email(
+        self,
+        personal_email: str | None,
+        work_email: str | None,
+    ) -> str | None:
+        from app.config import settings as app_settings
+
+        if not app_settings.mailcow_provisioning_enabled:
+            return personal_email.strip().lower() if personal_email else None
+        if not personal_email:
+            raise ValidationError(
+                "Personal email is required when Mailcow provisioning is enabled"
+            )
+        try:
+            normalized = str(TypeAdapter(EmailStr).validate_python(personal_email))
+        except PydanticValidationError as exc:
+            raise ValidationError("A valid personal email is required") from exc
+        normalized = normalized.strip().lower()
+        work_email_normalized = (work_email or "").strip().lower()
+        if normalized == work_email_normalized:
+            raise ValidationError("Personal email must differ from the work email")
+        if normalized.rpartition("@")[2] == app_settings.mailcow_provisioning_domain:
+            raise ValidationError(
+                "Personal email must be external to the managed work-mail domain"
+            )
+        duplicate = self.db.scalar(
+            select(Employee.employee_id).where(
+                Employee.organization_id == self.organization_id,
+                func.lower(Employee.personal_email) == normalized,
+                Employee.status.notin_(
+                    (
+                        EmployeeStatus.RESIGNED,
+                        EmployeeStatus.TERMINATED,
+                        EmployeeStatus.RETIRED,
+                    )
+                ),
+            )
+        )
+        if duplicate:
+            raise ValidationError("Personal email is already used by another employee")
+        return normalized
 
     # =========================================================================
     # Validation Helpers
@@ -750,6 +793,11 @@ class EmployeeService:
                 f"Person {person_id} not found for organization {self.organization_id}"
             )
 
+        data.personal_email = self._validate_mailbox_personal_email(
+            data.personal_email,
+            person.email,
+        )
+
         # Check if person already has an employee record
         existing = self.get_employee_by_person(person_id)
         if existing:
@@ -885,6 +933,7 @@ class EmployeeService:
         )
 
         self._refresh_staff_access_projection(employee)
+        self._enqueue_mailcow_provisioning(employee)
         if employee.dotmac_sub_access_enabled:
             self._enqueue_staff_sync(employee)
 
@@ -1561,6 +1610,27 @@ class EmployeeService:
         except Exception:  # noqa: BLE001 — broker down must not block HR writes
             logger.warning(
                 "Could not enqueue staff sync for employee %s",
+                employee.employee_id,
+                exc_info=True,
+            )
+
+    def _enqueue_mailcow_provisioning(self, employee: Employee) -> None:
+        """Queue idempotent mailbox creation after the employee transaction."""
+        from app.config import settings as app_settings
+
+        if not getattr(app_settings, "mailcow_provisioning_enabled", False):
+            return
+        employee.mailcow_provisioning_requested_at = datetime.now(UTC)
+        try:
+            from app.tasks.email import run_employee_mailcow_provisioning
+
+            run_employee_mailcow_provisioning.apply_async(
+                args=[str(employee.employee_id), str(employee.organization_id)],
+                countdown=10,
+            )
+        except Exception:  # noqa: BLE001 -- broker failure must not roll back HR
+            logger.warning(
+                "Could not enqueue Mailcow provisioning for employee %s",
                 employee.employee_id,
                 exc_info=True,
             )

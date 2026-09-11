@@ -100,6 +100,11 @@ async def test_create_payment_response_returns_fragment_for_htmx_failures(monkey
     response = await PaymentWebService().create_payment_response(request, auth, db)
 
     assert response.status_code == 400
-    assert "bad &lt;input&gt;" in response.body.decode()
+    response_body = response.body.decode()
+    assert (
+        "Unable to save payment. Please check the details and try again."
+        in response_body
+    )
+    assert "bad &lt;input&gt;" not in response_body
     db.rollback.assert_called_once()
     template_response.assert_not_called()

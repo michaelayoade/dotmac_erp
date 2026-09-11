@@ -15,6 +15,7 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto">
+    {% set fd = form_data | default({}, true) %}
     {% if error %}
     <div class="mb-6 p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
         <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
@@ -28,13 +29,14 @@
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label required">Expense Date</label>
-                <input aria-label="Expense Date" type="date" name="expense_date" value="{{ expense.expense_date if expense else today }}" required class="form-input">
+                <input aria-label="Expense Date" type="date" name="expense_date" value="{{ fd.expense_date if fd.expense_date is defined else (expense.expense_date if expense else today) }}" required class="form-input">
             </div>
             <div>
                 <label class="form-label required">Payment Method</label>
                 <select aria-label="Payment Method" name="payment_method" required class="form-input form-select">
                     {% for method in payment_methods %}
-                    <option value="{{ method }}" {% if expense and expense.payment_method == method %}selected{% endif %}>{{ method }}</option>
+                    {% set selected_payment_method = fd.payment_method if fd.payment_method is defined else (expense.payment_method if expense else '') %}
+                    <option value="{{ method }}" {% if selected_payment_method == method %}selected{% endif %}>{{ method }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -43,7 +45,7 @@
         <!-- Description -->
         <div>
             <label class="form-label required">Description</label>
-            <input aria-label="What was this expense for?" type="text" name="description" value="{{ expense.description if expense else '' }}" required maxlength="500" class="form-input" placeholder="What was this expense for?">
+            <input aria-label="What was this expense for?" type="text" name="description" value="{{ fd.description if fd.description is defined else (expense.description if expense else '') }}" required maxlength="500" class="form-input" placeholder="What was this expense for?">
         </div>
 
         <!-- Accounts -->
@@ -53,7 +55,8 @@
                 <select aria-label="Expense Account" name="expense_account_id" required class="form-input form-select">
                     <option value="">Select expense account...</option>
                     {% for acct in expense_accounts %}
-                    <option value="{{ acct.account_id }}" {% if expense and expense.expense_account_id == acct.account_id %}selected{% endif %}>
+                    {% set selected_expense_account_id = fd.expense_account_id if fd.expense_account_id is defined else (expense.expense_account_id|string if expense and expense.expense_account_id else '') %}
+                    <option value="{{ acct.account_id }}" {% if selected_expense_account_id == acct.account_id|string %}selected{% endif %}>
                         {{ acct.account_code }} - {{ acct.account_name }}
                     </option>
                     {% endfor %}
@@ -64,7 +67,8 @@
                 <select aria-label="Payment Account" name="payment_account_id" class="form-input form-select">
                     <option value="">Select payment source...</option>
                     {% for acct in payment_accounts %}
-                    <option value="{{ acct.account_id }}" {% if expense and expense.payment_account_id == acct.account_id %}selected{% endif %}>
+                    {% set selected_payment_account_id = fd.payment_account_id if fd.payment_account_id is defined else (expense.payment_account_id|string if expense and expense.payment_account_id else '') %}
+                    <option value="{{ acct.account_id }}" {% if selected_payment_account_id == acct.account_id|string %}selected{% endif %}>
                         {{ acct.account_code }} - {{ acct.account_name }}
                     </option>
                     {% endfor %}
@@ -77,14 +81,15 @@
         <div class="grid gap-6 sm:grid-cols-3">
             <div>
                 <label class="form-label required">Amount</label>
-                <input aria-label="0.00" type="number" name="amount" value="{{ expense.amount if expense else '' }}" required step="0.01" min="0" class="form-input font-mono" placeholder="0.00">
+                <input aria-label="0.00" type="number" name="amount" value="{{ fd.amount if fd.amount is defined else (expense.amount if expense else '') }}" required step="0.01" min="0" class="form-input font-mono" placeholder="0.00">
             </div>
             <div>
                 <label class="form-label">Tax Code</label>
                 <select aria-label="Tax Code" name="tax_code_id" id="tax_code_select" class="form-input form-select" onchange="updateTax()">
                     <option value="" data-rate="0">No tax</option>
                     {% for tax in tax_codes %}
-                    <option value="{{ tax.tax_code_id }}" data-rate="{{ tax.rate }}" {% if expense and expense.tax_code_id == tax.tax_code_id %}selected{% endif %}>
+                    {% set selected_tax_code_id = fd.tax_code_id if fd.tax_code_id is defined else (expense.tax_code_id|string if expense and expense.tax_code_id else '') %}
+                    <option value="{{ tax.tax_code_id }}" data-rate="{{ tax.rate }}" {% if selected_tax_code_id == tax.tax_code_id|string %}selected{% endif %}>
                         {{ tax.tax_code }} ({{ tax.rate }}%)
                     </option>
                     {% endfor %}
@@ -92,7 +97,7 @@
             </div>
             <div>
                 <label class="form-label">Tax Amount</label>
-                <input aria-label="Tax Amount" type="number" name="tax_amount" id="tax_amount" value="{{ expense.tax_amount if expense else '0' }}" step="0.01" min="0" class="form-input font-mono" placeholder="0.00">
+                <input aria-label="Tax Amount" type="number" name="tax_amount" id="tax_amount" value="{{ fd.tax_amount if fd.tax_amount is defined else (expense.tax_amount if expense else '0') }}" step="0.01" min="0" class="form-input font-mono" placeholder="0.00">
             </div>
         </div>
 
@@ -101,7 +106,7 @@
             <div>
                 <label class="form-label">Currency</label>
                 <select aria-label="Currency" name="currency_code" class="form-input form-select">
-                    {% set selected_currency = expense.currency_code if expense else default_currency_code %}
+                    {% set selected_currency = fd.currency_code if fd.currency_code is defined and fd.currency_code else (expense.currency_code if expense else default_currency_code) %}
                     {% for currency in currencies %}
                     <option value="{{ currency.code }}" {% if currency.code == selected_currency %}selected{% endif %}>
                         {{ currency.code }} - {{ currency.name }}
@@ -111,11 +116,11 @@
             </div>
             <div>
                 <label class="form-label">Payee</label>
-                <input aria-label="Payee" type="text" name="payee" value="{{ expense.payee if expense else '' }}" maxlength="200" class="form-input" placeholder="Who was paid?">
+                <input aria-label="Payee" type="text" name="payee" value="{{ fd.payee if fd.payee is defined else (expense.payee if expense else '') }}" maxlength="200" class="form-input" placeholder="Who was paid?">
             </div>
             <div>
                 <label class="form-label">Receipt Reference</label>
-                <input aria-label="Receipt Reference" type="text" name="receipt_reference" value="{{ expense.receipt_reference if expense else '' }}" maxlength="100" class="form-input" placeholder="Receipt #">
+                <input aria-label="Receipt Reference" type="text" name="receipt_reference" value="{{ fd.receipt_reference if fd.receipt_reference is defined else (expense.receipt_reference if expense else '') }}" maxlength="100" class="form-input" placeholder="Receipt #">
             </div>
         </div>
 
@@ -126,7 +131,8 @@
                 <select id="project_select" aria-label="Project" name="project_id" class="form-input form-select">
                     <option value="">No project</option>
                     {% for proj in projects %}
-                    <option value="{{ proj.project_id }}" {% if expense and expense.project_id == proj.project_id %}selected{% endif %}>
+                    {% set selected_project_id = fd.project_id if fd.project_id is defined else (expense.project_id|string if expense and expense.project_id else '') %}
+                    <option value="{{ proj.project_id }}" {% if selected_project_id == proj.project_id|string %}selected{% endif %}>
                         {{ proj.project_code }} - {{ proj.project_name }}
                     </option>
                     {% endfor %}
@@ -137,7 +143,8 @@
                 <select id="ticket_select" aria-label="Ticket" name="ticket_id" class="form-input form-select">
                     <option value="">No ticket</option>
                     {% for ticket in tickets %}
-                    <option value="{{ ticket.ticket_id }}" {% if expense and expense.ticket_id == ticket.ticket_id %}selected{% endif %}>
+                    {% set selected_ticket_id = fd.ticket_id if fd.ticket_id is defined else (expense.ticket_id|string if expense and expense.ticket_id else '') %}
+                    <option value="{{ ticket.ticket_id }}" {% if selected_ticket_id == ticket.ticket_id|string %}selected{% endif %}>
                         {{ ticket.ticket_number }} - {{ ticket.subject }}
                     </option>
                     {% endfor %}
@@ -148,7 +155,8 @@
                 <select id="task_select" aria-label="Task" name="task_id" class="form-input form-select">
                     <option value="">No task</option>
                     {% for task in tasks %}
-                    <option value="{{ task.task_id }}" data-project-id="{{ task.project_id }}" data-ticket-id="{{ task.ticket_id }}" {% if expense and expense.task_id == task.task_id %}selected{% endif %}>
+                    {% set selected_task_id = fd.task_id if fd.task_id is defined else (expense.task_id|string if expense and expense.task_id else '') %}
+                    <option value="{{ task.task_id }}" data-project-id="{{ task.project_id }}" data-ticket-id="{{ task.ticket_id }}" {% if selected_task_id == task.task_id|string %}selected{% endif %}>
                         {{ task.task_code }} - {{ task.task_name }}
                     </option>
                     {% endfor %}
@@ -163,7 +171,8 @@
                 <select aria-label="Cost Center" name="cost_center_id" class="form-input form-select">
                     <option value="">No cost center</option>
                     {% for cc in cost_centers %}
-                    <option value="{{ cc.cost_center_id }}" {% if expense and expense.cost_center_id == cc.cost_center_id %}selected{% endif %}>
+                    {% set selected_cost_center_id = fd.cost_center_id if fd.cost_center_id is defined else (expense.cost_center_id|string if expense and expense.cost_center_id else '') %}
+                    <option value="{{ cc.cost_center_id }}" {% if selected_cost_center_id == cc.cost_center_id|string %}selected{% endif %}>
                         {{ cc.cost_center_code }} - {{ cc.cost_center_name }}
                     </option>
                     {% endfor %}
@@ -174,7 +183,8 @@
                 <select aria-label="Business Unit" name="business_unit_id" class="form-input form-select">
                     <option value="">No business unit</option>
                     {% for bu in business_units %}
-                    <option value="{{ bu.business_unit_id }}" {% if expense and expense.business_unit_id == bu.business_unit_id %}selected{% endif %}>
+                    {% set selected_business_unit_id = fd.business_unit_id if fd.business_unit_id is defined else (expense.business_unit_id|string if expense and expense.business_unit_id else '') %}
+                    <option value="{{ bu.business_unit_id }}" {% if selected_business_unit_id == bu.business_unit_id|string %}selected{% endif %}>
                         {{ bu.business_unit_code }} - {{ bu.business_unit_name }}
                     </option>
                     {% endfor %}
@@ -185,7 +195,7 @@
         <!-- Notes -->
         <div>
             <label class="form-label">Notes</label>
-            <textarea aria-label="Notes" name="notes" rows="3" class="form-input" placeholder="Additional notes...">{{ expense.notes if expense else '' }}</textarea>
+            <textarea aria-label="Notes" name="notes" rows="3" class="form-input" placeholder="Additional notes...">{{ fd.notes if fd.notes is defined else (expense.notes if expense else '') }}</textarea>
         </div>
 
         <!-- Actions -->

@@ -201,3 +201,18 @@ class ResetPasswordRequest(BaseModel):
 
 class ResetPasswordResponse(BaseModel):
     reset_at: datetime
+
+
+class MailboxActivationRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=512)
+    new_password: str = Field(min_length=8, max_length=255)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return validate_password_strength(value)
+
+
+class MailboxActivationResponse(BaseModel):
+    mailbox: EmailStr
+    activated_at: datetime

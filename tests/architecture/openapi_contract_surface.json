@@ -5523,6 +5523,14 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/auth/mailbox-activation": {
+   "params": [],
+   "request": "cf01c3a1da90",
+   "responses": {
+    "200": "add0d12857a7",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/auth/me/avatar": {
    "params": [
     "cookie:access_token",
@@ -9636,6 +9644,8 @@
   "MFAMethodRead": "f15a83c7cd32",
   "MFAMethodType": "7eb08d5473d8",
   "MFAMethodUpdate": "1ae675b36a6f",
+  "MailboxActivationRequest": "141410147bf9",
+  "MailboxActivationResponse": "76e19b0e133e",
   "MaintenanceBrief": "b9033462f4a4",
   "MaintenanceComplete": "c3766c59a80e",
   "MaintenanceCreate": "f67347f80ddc",

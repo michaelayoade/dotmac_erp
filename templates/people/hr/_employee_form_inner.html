@@ -442,9 +442,9 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400">Personal contact info separate from work email/phone on Person record.</p>
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                        <label for="personal_email" class="form-label">Personal Email</label>
+                        <label for="personal_email" class="form-label form-label-required">Personal Email</label>
                         <input type="email" name="personal_email" id="personal_email"
-                            value="{{ employee.personal_email if employee else form_data.personal_email | default('', true) }}"
+                            value="{{ employee.personal_email if employee else form_data.personal_email | default('', true) }}" required
                             class="form-input w-full"
                             placeholder="personal@example.com">
                     </div>

@@ -11,8 +11,10 @@ import base64
 import logging
 import smtplib
 import socket
+import uuid
 from typing import Any
 
+import httpx
 from celery import shared_task
 
 from app.db.session_context import cross_org_session, session_for_org
@@ -113,6 +115,61 @@ def classify_email_error(exc: Exception) -> type[Exception]:
 
     # Default: treat unknown errors as transient (safer to retry)
     return TransientEmailError
+
+
+@shared_task(
+    name="app.tasks.hr.run_employee_mailcow_provisioning",
+    bind=True,
+    max_retries=5,
+    autoretry_for=(httpx.TransportError, RuntimeError),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+)
+def run_employee_mailcow_provisioning(
+    self,
+    employee_id: str,
+    organization_id: str,
+) -> dict[str, Any]:
+    """Create an employee work mailbox and deliver its activation link."""
+    from app.models.people.hr.employee import Employee
+    from app.services.email import send_mailbox_activation_email
+    from app.services.people.hr.mailbox_provisioning import (
+        EmployeeMailboxProvisioningService,
+    )
+
+    org_uuid = uuid.UUID(organization_id)
+    employee_uuid = uuid.UUID(employee_id)
+    with session_for_org(org_uuid) as db:
+        provisioning_service = EmployeeMailboxProvisioningService(db)
+        result = provisioning_service.ensure_mailbox(org_uuid, employee_uuid)
+        db.commit()
+        if result.activation_token:
+            employee = db.get(Employee, employee_uuid)
+            try:
+                send_mailbox_activation_email(
+                    db,
+                    result.personal_email or "",
+                    result.email or "",
+                    result.activation_token,
+                    employee.person.name if employee and employee.person else None,
+                    org_uuid,
+                    raise_on_error=True,
+                )
+            except Exception as exc:
+                raise RuntimeError("Could not send mailbox activation email") from exc
+            provisioning_service.mark_activation_sent(
+                employee_uuid,
+                result.activation_token,
+            )
+            db.commit()
+        return {
+            "employee_id": result.employee_id,
+            "email": result.email,
+            "created": result.created,
+            "already_exists": result.already_exists,
+            "skipped": result.skipped,
+        }
 
 
 @shared_task(

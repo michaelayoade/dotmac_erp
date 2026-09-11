@@ -335,6 +335,25 @@ class AuthWebService:
             },
         )
 
+    def mailbox_activation_response(
+        self,
+        request: Request,
+        token: str,
+    ) -> HTMLResponse:
+        response = templates.TemplateResponse(
+            request,
+            "mailbox_activation.html",
+            {
+                "title": "Activate Work Email",
+                "brand": brand_context(),
+                "token": token,
+                "webmail_url": settings.mailcow_webmail_url,
+                "app_version": settings.app_version,
+            },
+        )
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return _apply_no_cache_headers(response)
+
     def reset_password_required_response(
         self,
         request: Request,

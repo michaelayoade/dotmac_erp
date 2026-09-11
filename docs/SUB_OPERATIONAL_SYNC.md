@@ -82,6 +82,13 @@ store the detailed response in restricted delivery evidence, show a safe
 field-level message to the technician, and never log the account number or
 destination token. Provider/network unavailability uses HTTP 503 instead.
 
+The draft endpoint returns validation detail as an allowlisted object with a
+stable `code` and safe `message`. Codes distinguish requester, approver,
+destination, category, amount, and date refusals. ERP logs only the source claim
+identity and stable code; it does not log employee email, bank data, provider
+text, or the destination token. This contract lets Sub present an actionable
+delivery state while keeping arbitrary validation payloads private.
+
 On claim creation ERP decrypts and validates the token, encrypts the verified
 account snapshot at rest, stores only its last four digits for display, and
 records the selected approver and verification evidence. A one-expense

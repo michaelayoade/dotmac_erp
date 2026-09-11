@@ -14,7 +14,11 @@ import pytest
 from dotmac_files import StorageConflict, StorageUnavailable
 
 from app.services import storage as storage_mod
-from app.services.storage import DotmacFilesS3Provider, S3StorageService
+from app.services.storage import (
+    DotmacFilesS3Provider,
+    S3StorageService,
+    StorageReadUnavailable,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -132,7 +136,7 @@ class TestExists:
         with patch.object(storage_mod, "_get_client", return_value=mock_minio_client):
             assert svc.exists("avatars/missing.jpg") is False
 
-    def test_exists_does_not_turn_provider_failure_into_absence(
+    def test_exists_retries_provider_failure_without_turning_it_into_absence(
         self, svc, mock_minio_client
     ):
         S3Error = svc._s3_error
@@ -148,11 +152,23 @@ class TestExists:
 
         with (
             patch.object(storage_mod, "_get_client", return_value=mock_minio_client),
-            pytest.raises(S3Error) as raised,
+            pytest.raises(StorageReadUnavailable) as raised,
         ):
             svc.exists("avatars/photo.jpg")
 
-        assert raised.value is failure
+        assert str(raised.value) == "Object storage is temporarily unavailable"
+        assert mock_minio_client.stat_object.call_count == 2
+
+    def test_exists_retries_a_transport_failure_once(self, svc, mock_minio_client):
+        mock_minio_client.stat_object.side_effect = [
+            ConnectionError("connection closed"),
+            MagicMock(),
+        ]
+
+        with patch.object(storage_mod, "_get_client", return_value=mock_minio_client):
+            assert svc.exists("avatars/photo.jpg") is True
+
+        assert mock_minio_client.stat_object.call_count == 2
 
 
 class TestEnsureBucket:

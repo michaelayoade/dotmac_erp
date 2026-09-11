@@ -637,11 +637,33 @@ def create_expense(
             business_unit_id=business_unit_id,
         )
         return RedirectResponse(f"/expense/{expense.expense_id}", status_code=303)
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to create expense")
         context = base_context(request, auth, "New Expense", "expenses", db=db)
         context.update(expense_web_service.form_context(db, str(auth.organization_id)))
         context["return_to"] = return_to or _safe_return_to(request)
-        context["error"] = str(e)
+        context["error"] = (
+            "Unable to create expense. Please check the details and try again."
+        )
+        context["form_data"] = {
+            "expense_date": expense_date,
+            "expense_account_id": expense_account_id,
+            "amount": amount,
+            "description": description,
+            "payment_method": payment_method,
+            "payment_account_id": payment_account_id,
+            "tax_code_id": tax_code_id,
+            "tax_amount": tax_amount,
+            "currency_code": currency_code,
+            "payee": payee,
+            "receipt_reference": receipt_reference,
+            "notes": notes,
+            "project_id": project_id,
+            "ticket_id": ticket_id,
+            "task_id": task_id,
+            "cost_center_id": cost_center_id,
+            "business_unit_id": business_unit_id,
+        }
         return templates.TemplateResponse(request, "expense/form.html", context)
 
 
@@ -759,11 +781,16 @@ def submit_expense(
         expense_service.submit(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
+        return RedirectResponse(
+            f"/expense/{expense_id}?success=submitted", status_code=303
+        )
     except ValueError as e:
         logger.warning("Failed to submit expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to submit expense %s", expense_id)
-    return RedirectResponse(f"/expense/{expense_id}", status_code=303)
+    return RedirectResponse(
+        f"/expense/{expense_id}?error=submit_failed", status_code=303
+    )
 
 
 @router.post("/{expense_id}/approve", response_class=HTMLResponse)
@@ -778,11 +805,16 @@ def approve_expense(
         expense_service.approve(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
+        return RedirectResponse(
+            f"/expense/{expense_id}?success=approved", status_code=303
+        )
     except ValueError as e:
         logger.warning("Failed to approve expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to approve expense %s", expense_id)
-    return RedirectResponse(f"/expense/{expense_id}", status_code=303)
+    return RedirectResponse(
+        f"/expense/{expense_id}?error=approve_failed", status_code=303
+    )
 
 
 @router.post("/{expense_id}/reject", response_class=HTMLResponse)
@@ -797,11 +829,16 @@ def reject_expense(
         expense_service.reject(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
+        return RedirectResponse(
+            f"/expense/{expense_id}?success=rejected", status_code=303
+        )
     except ValueError as e:
         logger.warning("Failed to reject expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to reject expense %s", expense_id)
-    return RedirectResponse(f"/expense/{expense_id}", status_code=303)
+    return RedirectResponse(
+        f"/expense/{expense_id}?error=reject_failed", status_code=303
+    )
 
 
 @router.post("/{expense_id}/post", response_class=HTMLResponse)
@@ -821,11 +858,14 @@ def post_expense(
             str(auth.user_id),
             fiscal_period_id,
         )
+        return RedirectResponse(
+            f"/expense/{expense_id}?success=posted", status_code=303
+        )
     except ValueError as e:
         logger.warning("Failed to post expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to post expense %s", expense_id)
-    return RedirectResponse(f"/expense/{expense_id}", status_code=303)
+    return RedirectResponse(f"/expense/{expense_id}?error=post_failed", status_code=303)
 
 
 @router.post("/{expense_id}/void", response_class=HTMLResponse)
@@ -840,11 +880,14 @@ def void_expense(
         expense_service.void(
             db, expense_id, str(auth.user_id), organization_id=str(auth.organization_id)
         )
+        return RedirectResponse(
+            f"/expense/{expense_id}?success=voided", status_code=303
+        )
     except ValueError as e:
         logger.warning("Failed to void expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to void expense %s", expense_id)
-    return RedirectResponse(f"/expense/{expense_id}", status_code=303)
+    return RedirectResponse(f"/expense/{expense_id}?error=void_failed", status_code=303)
 
 
 @router.get("/reports/summary", response_class=HTMLResponse)

@@ -13,7 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.auth import AuthProvider
 from app.models.people.hr import EmployeeStatus
@@ -238,6 +238,7 @@ class EmployeeCreate(EmployeeBase):
     """
 
     person_id: UUID
+    personal_email: EmailStr | None = None
 
 
 class EmployeeUpdate(BaseModel):
@@ -310,6 +311,7 @@ class EmployeeRead(BaseModel):
     employee_id: UUID
     organization_id: UUID
     person_id: UUID
+    personal_email: str | None = None
     employee_code: str
     department_id: UUID | None = None
     designation_id: UUID | None = None

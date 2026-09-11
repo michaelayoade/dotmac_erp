@@ -91,6 +91,20 @@ _EXPENSE_APPROVAL_PERMISSIONS = (
     "expense:claims:approve:tier3",
 )
 
+_DRAFT_VALIDATION_MESSAGES: dict[str, str] = {
+    "expense_requester_unmatched": "The requesting employee could not be matched in ERP.",
+    "expense_approver_ineligible": "The selected ERP expense approver is no longer eligible.",
+    "expense_destination_invalid": "The verified payment destination is invalid.",
+    "expense_destination_mismatch": "The verified payment destination does not belong to this expense.",
+    "expense_destination_expired": "The verified payment destination has expired.",
+    "expense_destination_incomplete": "The verified payment destination is incomplete.",
+    "expense_category_unknown": "An expense category is not available in ERP.",
+    "expense_category_limit_exceeded": "The expense amount exceeds the ERP category limit.",
+    "expense_line_amount_invalid": "An expense line amount must be greater than zero.",
+    "expense_date_invalid": "An expense date is invalid.",
+    "expense_draft_validation_failed": "ERP rejected the expense draft validation.",
+}
+
 
 def _masked_account_number(account_number: str) -> str:
     suffix = account_number[-4:]
@@ -120,6 +134,35 @@ class SubExpenseReceiptError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+def _draft_validation_error(detail: object) -> SubExpenseReceiptError:
+    """Map legacy validation text to a stable, non-sensitive integration code."""
+    text = detail if isinstance(detail, str) else ""
+    if (
+        text.startswith("No ERP employee matches email")
+        or text == "ERP employee was not found"
+    ):
+        code = "expense_requester_unmatched"
+    elif text == "Select an active ERP expense approver":
+        code = "expense_approver_ineligible"
+    elif text == "Payment destination token does not belong to this expense":
+        code = "expense_destination_mismatch"
+    elif text == "Payment destination token expired":
+        code = "expense_destination_expired"
+    elif text == "Payment destination token is incomplete":
+        code = "expense_destination_incomplete"
+    elif text.startswith("Payment destination token is invalid"):
+        code = "expense_destination_invalid"
+    elif text.startswith("Unknown expense category code(s):"):
+        code = "expense_category_unknown"
+    elif text == "Claimed amount exceeds category limit":
+        code = "expense_category_limit_exceeded"
+    elif text == "Line amount must be greater than zero.":
+        code = "expense_line_amount_invalid"
+    else:
+        code = "expense_draft_validation_failed"
+    return SubExpenseReceiptError(code=code, message=_DRAFT_VALIDATION_MESSAGES[code])
 
 
 class _ExpenseSyncMixin(_SubSyncBase):
@@ -435,12 +478,34 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 message="Draft expense source_line_id values must be unique",
             )
         validated_line_ids = tuple(cast(UUID, line_id) for line_id in source_line_ids)
-        result = self._create_expense_claim(
-            org_id,
-            data,
-            created_by_person_id=created_by_person_id,
-            submit=False,
-        )
+        try:
+            result = self._create_expense_claim(
+                org_id,
+                data,
+                created_by_person_id=created_by_person_id,
+                submit=False,
+            )
+        except HTTPException as exc:
+            if exc.status_code != 422:
+                raise
+            error = _draft_validation_error(exc.detail)
+            logger.warning(
+                "Sub expense draft rejected (source_claim_id=%s, code=%s)",
+                data.source_claim_id,
+                error.code,
+            )
+            raise error from exc
+        except ValueError as exc:
+            error = SubExpenseReceiptError(
+                code="expense_date_invalid",
+                message=_DRAFT_VALIDATION_MESSAGES["expense_date_invalid"],
+            )
+            logger.warning(
+                "Sub expense draft rejected (source_claim_id=%s, code=%s)",
+                data.source_claim_id,
+                error.code,
+            )
+            raise error from exc
         claim = self._find_claim_by_source_claim_id(org_id, data.source_claim_id)
         if claim is None:
             raise RuntimeError("Created Sub expense draft could not be reloaded")

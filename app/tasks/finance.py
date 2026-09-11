@@ -528,7 +528,7 @@ def process_monthly_depreciation_runs(
     # `DepreciationService.list_active_organization_ids`, which filtered
     # `Organization.is_active`. A deactivated tenant does not start new runs.
     for organization_id, db in for_each_organization():
-        if not DepreciationService.automation_enabled(db):
+        if not DepreciationService.automation_enabled(db, organization_id):
             logger.info(
                 "Monthly FA depreciation automation is disabled for org %s",
                 organization_id,
@@ -538,7 +538,7 @@ def process_monthly_depreciation_runs(
         effective_auto_post = (
             auto_post
             if auto_post is not None
-            else DepreciationService.automation_auto_post_enabled(db)
+            else DepreciationService.automation_auto_post_enabled(db, organization_id)
         )
         results["automation_enabled"] = True
         results["auto_post"] = effective_auto_post
@@ -1554,7 +1554,7 @@ def sync_mono_account(
         from app.services.finance.banking.mono_client import MonoError
         from app.services.finance.banking.mono_sync import MonoSyncService
 
-        sync_svc = MonoSyncService(db)
+        sync_svc = MonoSyncService(db, owning_org_id)
         if not sync_svc.is_configured():
             logger.info("Mono Connect not configured, skipping webhook sync")
             return {"success": True, "skipped": True}

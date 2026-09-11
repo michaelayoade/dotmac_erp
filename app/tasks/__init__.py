@@ -60,7 +60,7 @@ from app.tasks.dotmac_sub import (
     run_dotmac_sub_incremental_sync,
     run_dotmac_sub_incremental_sync_phase,
 )
-from app.tasks.email import send_email_async
+from app.tasks.email import run_employee_mailcow_provisioning, send_email_async
 from app.tasks.expense import (
     calculate_expense_analytics,
     expire_old_expense_claims,
@@ -101,6 +101,7 @@ from app.tasks.hr import (
     process_contract_expiry_notifications,
     process_performance_review_reminders,
     process_probation_ending_notifications,
+    reconcile_employee_mailcow_provisioning,
     run_employee_mailcow_offboarding,
     process_work_anniversary_notifications,
     send_hr_birthday_morning_email,
@@ -167,6 +168,8 @@ __all__ = [
     "process_certification_expiry_notifications",
     "calculate_hr_analytics",
     "run_employee_mailcow_offboarding",
+    "run_employee_mailcow_provisioning",
+    "reconcile_employee_mailcow_provisioning",
     # Fleet module tasks
     "process_document_expiry_notifications",
     # Performance module tasks
