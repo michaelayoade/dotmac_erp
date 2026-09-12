@@ -156,10 +156,10 @@ def test_the_suppression_count_only_shrinks() -> None:
     revision adds one descriptor finding and one deterministic telemetry
     projection, reaching 27.
 
-    The published OCI digest remains projected into the rendered collector,
-    but this release's 12-character projection does not cross the entropy
-    detector's threshold. The full digest is recognized as an indirect public
-    reference, so the reviewed suppression total returns to 27.
+    The published OCI digest remains projected into the rendered collector.
+    This release's 12-character projection crosses the entropy detector's
+    threshold, while the full digest is recognized as an indirect public
+    reference, so the reviewed suppression total is 28.
 
     The v3 composition record no longer consumes a baseline slot: it is a
     closed digest-only envelope whose SHA-pinned verifier independently
@@ -167,7 +167,7 @@ def test_the_suppression_count_only_shrinks() -> None:
     expected digests with an entropy heuristic would add eleven findings
     without increasing secret coverage.
 
-    Every entry above the reviewed 27 would be unexplained, and the reason
+    Every entry above the reviewed 28 would be unexplained, and the reason
     check above only fires per FILE — a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
@@ -178,8 +178,8 @@ def test_the_suppression_count_only_shrinks() -> None:
     someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total == 27, (
-        f"{total} suppressed findings, expected exactly 27. A rise means fix "
+    assert total == 28, (
+        f"{total} suppressed findings, expected exactly 28. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
         "change -- never leave a stale number unexamined either direction."
