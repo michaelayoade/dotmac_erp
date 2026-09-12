@@ -81,6 +81,10 @@ projection independently. A changed ERP request identifier fails closed.
 6. Replaying an ERP outcome is safe and does not duplicate work-order material.
 7. Neither a cache nor the compatibility external identifier is the only copy
    of the source request identity.
+8. ERP callback bootstrap accepts only Sub's mounted
+   `/api/v1/webhooks/erp-material/{capability_binding_id}` route. The signed
+   payload carries `source_request_id`; the retired `omni_id` spelling is not a
+   compatibility contract.
 
 ## Authority migration and cutover
 

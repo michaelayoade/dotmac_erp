@@ -250,7 +250,10 @@ class TestHookRegistry:
         hook = _hook(
             handler_type=HookHandlerType.WEBHOOK,
             handler_config={
-                "url": "https://selfcare.dotmac.io/webhooks/erp-material/binding",
+                "url": (
+                    "https://selfcare.dotmac.io/api/v1/webhooks/"
+                    "erp-material/00000000-0000-0000-0000-000000000123"
+                ),
                 "method": "POST",
                 "payload_only": True,
                 "signing_secret_env": "ERP_SUB_WEBHOOK_SECRET",
