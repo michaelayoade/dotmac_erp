@@ -139,7 +139,7 @@ def test_sub_routes_delegate_only_to_source_neutral_ports() -> None:
         assert forbidden not in source
     assert "MaterialSupportService" in source
     assert "get_purchase_invoice_status" in source
-    assert source.count("@router.") == 27
+    assert source.count("@router.") == 28
     assert '"/purchase-orders/variations"' not in source
 
 
@@ -154,7 +154,7 @@ def test_sub_wire_contract_uses_only_source_neutral_references() -> None:
     )
     material = SubMaterialRequestPayload.model_validate(
         {
-            "source_request_id": "material-1",
+            "source_request_id": "00000000-0000-4000-8000-000000000001",
             "request_type": "ISSUE",
             "status": "submitted",
             "project_source_reference": "project-1",
@@ -316,5 +316,5 @@ def test_committed_openapi_surface_has_no_retired_crm_contract() -> None:
         for route in routes
         if "/api/v1/sync/sub/" in route and "/attendance/" not in route
     ]
-    assert len(material_and_operational_routes) == 28
+    assert len(material_and_operational_routes) == 29
     assert not [name for name in schemas if "CRM" in name or "Crm" in name]
