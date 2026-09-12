@@ -40,6 +40,7 @@ from app.services.expense.expense_service import (
     ExpenseService,
     ExpenseServiceError,
 )
+from app.services.expense.service_common import VISIBLE_EXPENSE_CLAIM_FILTER
 from app.services.expense.limit_service import (
     ApproverWeeklyBudgetExhaustedError,
     ExpenseLimitServiceError,
@@ -115,7 +116,10 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         start = ExpenseClaimsWebMixin._parse_claim_filter_date(start_date)
         end = ExpenseClaimsWebMixin._parse_claim_filter_date(end_date)
 
-        stmt = select(ExpenseClaim).where(ExpenseClaim.organization_id == org_id)
+        stmt = select(ExpenseClaim).where(
+            ExpenseClaim.organization_id == org_id,
+            VISIBLE_EXPENSE_CLAIM_FILTER,
+        )
         if filter_view == "submitted_to_me":
             if auth_employee_id:
                 latest_round = (
@@ -414,7 +418,10 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
 
         status_rows = db.execute(
             select(ExpenseClaim.status, func.count())
-            .where(ExpenseClaim.organization_id == org_id)
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                VISIBLE_EXPENSE_CLAIM_FILTER,
+            )
             .group_by(ExpenseClaim.status)
         ).all()
         counts = {
@@ -645,6 +652,7 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 .where(
                     ExpenseClaim.organization_id == org_id,
                     ExpenseClaim.claim_id == claim_uuid,
+                    VISIBLE_EXPENSE_CLAIM_FILTER,
                 )
             )
             .unique()
@@ -781,6 +789,7 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             select(ExpenseClaim).where(
                 ExpenseClaim.organization_id == org_id,
                 ExpenseClaim.claim_id == claim_uuid,
+                VISIBLE_EXPENSE_CLAIM_FILTER,
             )
         )
         if not claim:

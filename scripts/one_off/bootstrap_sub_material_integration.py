@@ -11,6 +11,7 @@ import os
 import secrets
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -18,6 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 LABEL = "dotmac-sub-material-integration"
 SERVICE_EMAIL = "service-dotmac-sub-material@dotmac.io"
 EVENT_NAME = "sub.material_request.status_changed"
+SELFCARE_ORIGIN = "https://selfcare.dotmac.io"
+SUB_MATERIAL_CALLBACK_PREFIX = "/api/v1/webhooks/erp-material/"
 SCOPES = [
     "sub:inventory:read",
     "sub:material:read",
@@ -46,14 +49,40 @@ def _args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def validate_callback_url(value: str) -> str:
+    """Return the canonical Sub material callback or reject contract drift."""
+    parsed = urlsplit(value.strip())
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "selfcare.dotmac.io"
+        or parsed.query
+        or parsed.fragment
+        or not parsed.path.startswith(SUB_MATERIAL_CALLBACK_PREFIX)
+    ):
+        raise ValueError(
+            "Callback must match "
+            f"{SELFCARE_ORIGIN}{SUB_MATERIAL_CALLBACK_PREFIX}<binding-uuid>"
+        )
+    binding_value = parsed.path.removeprefix(SUB_MATERIAL_CALLBACK_PREFIX)
+    if not binding_value or "/" in binding_value:
+        raise ValueError("Callback must end with exactly one capability binding UUID")
+    try:
+        binding_id = UUID(binding_value)
+    except ValueError as exc:
+        raise ValueError("Callback capability binding must be a UUID") from exc
+    return f"{SELFCARE_ORIGIN}{SUB_MATERIAL_CALLBACK_PREFIX}{binding_id}"
+
+
 def main() -> int:
     args = _args()
-    if not args.callback_url.startswith("https://selfcare.dotmac.io/"):
-        raise SystemExit("Callback must use the production selfcare HTTPS origin")
+    try:
+        callback_url = validate_callback_url(args.callback_url)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     if not args.apply:
         print(f"DRY RUN organization={args.organization_id}")
         print(f"Would grant only: {', '.join(SCOPES)}")
-        print(f"Would configure signed callback: {args.callback_url}")
+        print(f"Would configure signed callback: {callback_url}")
         return 0
     if not os.getenv("ERP_SUB_WEBHOOK_SECRET"):
         raise SystemExit("ERP_SUB_WEBHOOK_SECRET must be present")
@@ -135,7 +164,7 @@ def main() -> int:
             )
         )
         config = {
-            "url": args.callback_url,
+            "url": callback_url,
             "method": "POST",
             "timeout_seconds": 15,
             "payload_only": True,

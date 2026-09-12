@@ -512,8 +512,10 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "REPAIR-FIRST (ledger finding 9): the #118 money-bug "
                     "class lives on this edge; no extraction or convergence "
                     "until closed. Sub material requests enter through "
-                    "inventory.material_support; external delivery belongs to "
-                    "Integrator, not this service."
+                    "inventory.material_support; signed status payloads correlate "
+                    "only by source_request_id and target Sub's mounted /api/v1/"
+                    "webhooks/erp-material capability route. External delivery "
+                    "belongs to Integrator, not this service."
                 ),
             ),
         ),

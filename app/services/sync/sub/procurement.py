@@ -40,6 +40,8 @@ from app.schemas.sync.sub_operational import (
     SubMaterialRequestPayload,
     SubMaterialRequestResponse,
     SubMaterialRequestStatusRead,
+    SubMaterialStatusWebhook,
+    SubMaterialStatusWebhookLine,
     SubPurchaseOrderPayload,
     SubPurchaseOrderResponse,
     SubPurchaseInvoicePayload,
@@ -89,6 +91,7 @@ class _ProcurementMixin(_SubSyncBase):
         from app.services.finance.common.numbering import SyncNumberingService
 
         now = datetime.now(UTC)
+        source_request_id = str(data.source_request_id)
 
         # Resolve cross-references
         project_id = self._resolve_project_id(org_id, data.project_source_reference)
@@ -106,9 +109,10 @@ class _ProcurementMixin(_SubSyncBase):
             MaterialRequestStatus.DRAFT,
             MaterialRequestStatus.SUBMITTED,
             MaterialRequestStatus.ISSUED,
+            MaterialRequestStatus.CANCELLED,
         }:
             raise ValueError(
-                "This endpoint accepts only status=draft, submitted, or issued."
+                "This endpoint accepts only status=draft, submitted, issued, or cancelled."
             )
 
         # Parse schedule date
@@ -207,7 +211,7 @@ class _ProcurementMixin(_SubSyncBase):
             .where(
                 MaterialRequest.organization_id == org_id,
                 MaterialRequest.source_system == "sub",
-                MaterialRequest.source_reference == data.source_request_id,
+                MaterialRequest.source_reference == source_request_id,
             )
         )
         mr = self.db.scalar(existing_stmt)
@@ -262,14 +266,14 @@ class _ProcurementMixin(_SubSyncBase):
                 )
             logger.info(
                 "Sub material request duplicate accepted unchanged (source_request_id=%s, request_number=%s)",
-                data.source_request_id,
+                source_request_id,
                 mr.request_number,
             )
             return SubMaterialRequestResponse(
                 request_id=mr.request_id,
                 request_number=mr.request_number,
                 status=mr.status.value,
-                source_request_id=data.source_request_id,
+                source_request_id=source_request_id,
             )
 
         has_sufficient_stock = True
@@ -304,7 +308,7 @@ class _ProcurementMixin(_SubSyncBase):
             project_id=project_id,
             ticket_id=ticket_id,
             remarks=data.remarks,
-            source_reference=data.source_request_id,
+            source_reference=source_request_id,
             source_system=source_system,
             created_by_id=actor_person_id,
         )
@@ -367,7 +371,7 @@ class _ProcurementMixin(_SubSyncBase):
         logger.info(
             "Sub material request %s created (source_request_id=%s, status=%s, items=%d)",
             mr.request_number,
-            data.source_request_id,
+            source_request_id,
             mr.status.value,
             len(current_line_snapshots),
         )
@@ -375,7 +379,7 @@ class _ProcurementMixin(_SubSyncBase):
             request_id=mr.request_id,
             request_number=mr.request_number,
             status=mr.status.value,
-            source_request_id=data.source_request_id,
+            source_request_id=source_request_id,
         )
 
     def _build_material_request_payload_fingerprint(
@@ -535,7 +539,10 @@ class _ProcurementMixin(_SubSyncBase):
         from app.models.inventory.material_request import MaterialRequestStatus
 
         old_status = request.status
-        if request.status == MaterialRequestStatus.ISSUED:
+        if request.status in {
+            MaterialRequestStatus.ISSUED,
+            MaterialRequestStatus.CANCELLED,
+        }:
             return SubMaterialRequestResponse(
                 request_id=request.request_id,
                 request_number=request.request_number,
@@ -588,9 +595,11 @@ class _ProcurementMixin(_SubSyncBase):
                 target_status = MaterialRequestStatus.ISSUED
             else:
                 target_status = MaterialRequestStatus.PENDING_STOCK
+        elif requested_status == MaterialRequestStatus.CANCELLED:
+            target_status = MaterialRequestStatus.CANCELLED
         else:
             raise ValueError(
-                "This endpoint accepts only status=draft, submitted, or issued."
+                "This endpoint accepts only status=draft, submitted, issued, or cancelled."
             )
 
         request.status = target_status
@@ -926,25 +935,20 @@ class _ProcurementMixin(_SubSyncBase):
         from app.services.hooks import emit_hook_event
         from app.services.hooks.events import SUB_MATERIAL_REQUEST_STATUS_CHANGED
 
-        try:
-            emit_hook_event(
-                self.db,
-                event_name=SUB_MATERIAL_REQUEST_STATUS_CHANGED,
-                organization_id=org_id,
-                entity_type="MaterialRequest",
-                entity_id=request.request_id,
-                actor_user_id=actor_person_id,
-                payload=self._build_sub_material_request_status_event_payload(
-                    request,
-                    old_status=old_status,
-                    new_status=new_status,
-                ),
-            )
-        except Exception:
-            logger.exception(
-                "Failed to emit Sub material request status hook event for %s",
-                request.request_number,
-            )
+        payload = self._build_sub_material_request_status_event_payload(
+            request,
+            old_status=old_status,
+            new_status=new_status,
+        )
+        emit_hook_event(
+            self.db,
+            event_name=SUB_MATERIAL_REQUEST_STATUS_CHANGED,
+            organization_id=org_id,
+            entity_type="MaterialRequest",
+            entity_id=request.request_id,
+            actor_user_id=actor_person_id,
+            payload=payload.model_dump(mode="json", exclude_none=True),
+        )
 
     def _build_sub_material_request_status_event_payload(
         self,
@@ -952,38 +956,25 @@ class _ProcurementMixin(_SubSyncBase):
         *,
         old_status,
         new_status,
-    ) -> dict[str, Any]:
+    ) -> SubMaterialStatusWebhook:
         """Build Sub-facing status event payload for material requests."""
-        return {
-            "source_request_id": request.source_reference,
-            "request_id": str(request.request_id),
-            "request_number": request.request_number,
-            "old_status": old_status.value if old_status else None,
-            "new_status": new_status.value,
-            "status": new_status.value,
-            "request_type": request.request_type.value,
-            "items": [
-                {
-                    "line_id": str(line.item_id),
-                    "item_id": str(line.inventory_item_id),
-                    "warehouse_id": str(line.warehouse_id)
-                    if line.warehouse_id
-                    else None,
-                    "requested_qty": str(line.requested_qty),
-                    "ordered_qty": str(line.ordered_qty),
-                    "uom": line.uom,
-                    "sequence": line.sequence,
-                    "serial_numbers": self._material_request_line_serial_numbers(line),
-                }
+        return SubMaterialStatusWebhook(
+            source_request_id=UUID(str(request.source_reference)),
+            request_id=str(request.request_id),
+            request_number=request.request_number,
+            old_status=old_status.value if old_status else None,
+            new_status=new_status.value,
+            items=tuple(
+                SubMaterialStatusWebhookLine(
+                    sequence=line.sequence,
+                    serial_numbers=tuple(
+                        self._material_request_line_serial_numbers(line)
+                    ),
+                )
                 for line in sorted(request.items, key=lambda item: item.sequence)
-            ],
-            "created_at": request.created_at.isoformat()
-            if request.created_at
-            else None,
-            "updated_at": request.updated_at.isoformat()
-            if request.updated_at
-            else None,
-        }
+            ),
+            updated_at=request.updated_at,
+        )
 
     def get_material_request_by_source_reference(
         self,

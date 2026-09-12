@@ -213,6 +213,13 @@ validity, fiscal-period eligibility, stock issue, and the material-support
 outcome. The neutral `/sync/sub/material-requests` routes delegate to this owner;
 they do not call a provider-named route adapter.
 
+ERP delivers an accepted material outcome through the asynchronous service-hook
+transport to Sub's exact mounted
+`/api/v1/webhooks/erp-material/{capability_binding_id}` admission boundary. The
+payload correlation is the immutable `source_request_id`; hook configuration and
+delivery do not become an alternative owner of inventory or service-workflow
+state.
+
 `sync.sub_procurement` is a provider-neutral adapter over ERP-owned procurement
 and inventory decisions. The retired CRM runtime cannot originate an ERP write.
 The full request, outcome, reconciliation, cutover, rollback, and retirement

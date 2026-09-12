@@ -409,18 +409,15 @@ class SubMaterialRequestItemPayload(BaseModel):
 class SubMaterialRequestPayload(BaseModel):
     """Material request from Dotmac Sub."""
 
-    source_request_id: str = Field(
-        ..., max_length=36, description="Sub-side unique ID for idempotency"
+    model_config = ConfigDict(extra="forbid")
+
+    source_request_id: UUID = Field(
+        ..., description="Sub-side material request UUID for idempotency"
     )
-    request_type: str = Field(
-        "ISSUE", description="PURCHASE, TRANSFER, ISSUE, MANUFACTURE"
-    )
-    status: str = Field(
+    request_type: Literal["ISSUE"] = "ISSUE"
+    status: Literal["draft", "submitted", "issued", "cancelled"] = Field(
         ...,
-        description=(
-            "Sub request status mapped to local MaterialRequest status "
-            "(e.g. submitted, issued)"
-        ),
+        description="Sub command status: create/advance or request ERP cancellation",
     )
     items: list[SubMaterialRequestItemPayload] = Field(..., min_length=1)
     project_source_reference: str | None = Field(
@@ -465,6 +462,29 @@ class SubMaterialRequestStatusRead(BaseModel):
     request_type: str
     items: list[SubMaterialRequestItemRead] = Field(default_factory=list)
     created_at: datetime
+
+
+class SubMaterialStatusWebhookLine(BaseModel):
+    """Serial outcome for one line in an ERP-to-Sub status event."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sequence: int = Field(ge=1)
+    serial_numbers: tuple[str, ...] = ()
+
+
+class SubMaterialStatusWebhook(BaseModel):
+    """Exact signed ERP status callback accepted by Dotmac Sub."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_request_id: UUID
+    request_id: str = Field(min_length=1, max_length=120)
+    request_number: str | None = Field(default=None, max_length=120)
+    old_status: str | None = Field(default=None, max_length=40)
+    new_status: str = Field(min_length=1, max_length=40)
+    updated_at: datetime | None = None
+    items: tuple[SubMaterialStatusWebhookLine, ...] = ()
 
 
 # ============ Expense Claim Sync (Sub → ERP) ============
@@ -535,6 +555,15 @@ class SubExpenseClaimResponse(BaseModel):
     claim_id: UUID
     claim_number: str
     status: str
+    source_claim_id: str
+
+
+class SubExpenseClaimTransitionResponse(BaseModel):
+    """Accepted explicit lifecycle transition for a Sub-owned claim."""
+
+    claim_id: UUID
+    claim_number: str
+    status: Literal["submitted", "approved", "rejected"]
     source_claim_id: str
 
 
