@@ -58,6 +58,7 @@ from app.schemas.sync.sub_operational import (
     SubExpenseClaimRejectionPayload,
     SubExpenseClaimResponse,
     SubExpenseClaimStatusResponse,
+    SubExpenseClaimTransitionResponse,
     SubExpensePaymentPayload,
     SubExpensePaymentResponse,
     SubExpenseProfileDestinationResponse,
@@ -799,6 +800,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
                     notify_approvers=True,
                     actor_id=created_by_person_id,
                     approval_source=ExpenseClaimApprovalSource.TRUSTED_SUB_MANAGER,
+                    include_hidden_sub_draft=True,
                 )
             savepoint.commit()
         except (ExpenseServiceError, ValidationError) as exc:
@@ -1005,7 +1007,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
         org_id: UUID,
         source_claim_id: str,
         data: SubExpenseClaimDecisionPayload,
-    ) -> SubExpenseClaimResponse:
+    ) -> SubExpenseClaimTransitionResponse:
         """Apply a manager approval already authorized and recorded by Sub."""
         from app.services.expense import ExpenseService, ExpenseServiceError
         from app.services.expense.service_claims import ExpenseClaimApprovalSource
@@ -1024,15 +1026,12 @@ class _ExpenseSyncMixin(_SubSyncBase):
         supplied_notes = (data.notes or "").strip()
         notes = f"{supplied_notes}\n{evidence}" if supplied_notes else evidence
         service = ExpenseService(self.db)
+        if claim.status == ExpenseClaimStatus.DRAFT:
+            raise HTTPException(
+                status_code=409,
+                detail="Expense claim must be submitted before manager approval",
+            )
         try:
-            if claim.status == ExpenseClaimStatus.DRAFT:
-                claim = service.submit_claim(
-                    org_id,
-                    claim.claim_id,
-                    notify_approvers=False,
-                    actor_id=approver.person_id,
-                    approval_source=ExpenseClaimApprovalSource.TRUSTED_SUB_MANAGER,
-                ).claim
             claim = service.approve_claim(
                 org_id,
                 claim.claim_id,
@@ -1043,14 +1042,16 @@ class _ExpenseSyncMixin(_SubSyncBase):
             )
         except ExpenseServiceError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return self._claim_response(claim, source_claim_id)
+        return SubExpenseClaimTransitionResponse(
+            **self._claim_response(claim, source_claim_id).model_dump()
+        )
 
     def reject_expense_claim(
         self,
         org_id: UUID,
         source_claim_id: str,
         data: SubExpenseClaimRejectionPayload,
-    ) -> SubExpenseClaimResponse:
+    ) -> SubExpenseClaimTransitionResponse:
         """Apply a manager rejection already authorized and recorded by Sub."""
         from app.services.expense import ExpenseService, ExpenseServiceError
         from app.services.expense.service_claims import ExpenseClaimApprovalSource
@@ -1079,7 +1080,63 @@ class _ExpenseSyncMixin(_SubSyncBase):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         claim.approval_notes = evidence
         self.db.flush()
-        return self._claim_response(claim, source_claim_id)
+        return SubExpenseClaimTransitionResponse(
+            **self._claim_response(claim, source_claim_id).model_dump()
+        )
+
+    def submit_expense_claim(
+        self,
+        org_id: UUID,
+        source_claim_id: str,
+        *,
+        idempotency_key: str,
+        submitted_by_person_id: UUID,
+    ) -> SubExpenseClaimTransitionResponse:
+        """Publish a receipt-complete hidden Sub draft as exactly SUBMITTED."""
+        expected_key = f"exp-{source_claim_id}-submitted-v3"
+        if idempotency_key != expected_key:
+            raise HTTPException(
+                status_code=409,
+                detail="Expense submission idempotency key is invalid",
+            )
+        claim = self._find_claim_by_source_claim_id(org_id, source_claim_id, lock=True)
+        if claim is None:
+            raise HTTPException(status_code=404, detail="Expense claim was not found")
+        if claim.status != ExpenseClaimStatus.DRAFT:
+            if claim.status != ExpenseClaimStatus.SUBMITTED:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Expense claim cannot be submitted from {claim.status.value}",
+                )
+            return SubExpenseClaimTransitionResponse(
+                **self._claim_response(claim, source_claim_id).model_dump()
+            )
+        from app.services.expense import ExpenseService, ExpenseServiceError
+        from app.services.expense.service_claims import ExpenseClaimApprovalSource
+
+        try:
+            claim = (
+                ExpenseService(self.db)
+                .submit_claim(
+                    org_id,
+                    claim.claim_id,
+                    notify_approvers=False,
+                    actor_id=submitted_by_person_id,
+                    approval_source=ExpenseClaimApprovalSource.TRUSTED_SUB_MANAGER,
+                    include_hidden_sub_draft=True,
+                )
+                .claim
+            )
+        except ExpenseServiceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if claim.status != ExpenseClaimStatus.SUBMITTED:
+            raise HTTPException(
+                status_code=422,
+                detail="Expense submission did not produce SUBMITTED status",
+            )
+        return SubExpenseClaimTransitionResponse(
+            **self._claim_response(claim, source_claim_id).model_dump()
+        )
 
     def initiate_expense_payment(
         self,

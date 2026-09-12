@@ -37,6 +37,7 @@ from app.schemas.sync.sub_operational import (
     SubExpenseClaimRejectionPayload,
     SubExpenseClaimResponse,
     SubExpenseClaimStatusResponse,
+    SubExpenseClaimTransitionResponse,
     SubExpensePaymentPayload,
     SubExpensePaymentResponse,
     SubExpenseProfileDestinationResponse,
@@ -583,8 +584,27 @@ def upload_sub_expense_receipt(
 
 
 @router.post(
+    "/expense-claims/{source_claim_id}/submit",
+    response_model=SubExpenseClaimTransitionResponse,
+    dependencies=[Depends(require_sub_expense_scope)],
+)
+def submit_sub_expense_claim(
+    source_claim_id: str,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubExpenseClaimTransitionResponse:
+    return DotMacSubSyncService(db).submit_expense_claim(
+        UUID(str(auth["organization_id"])),
+        source_claim_id,
+        idempotency_key=idempotency_key,
+        submitted_by_person_id=UUID(str(auth["person_id"])),
+    )
+
+
+@router.post(
     "/expense-claims/{source_claim_id}/approve",
-    response_model=SubExpenseClaimResponse,
+    response_model=SubExpenseClaimTransitionResponse,
     dependencies=[Depends(require_sub_expense_scope)],
 )
 def approve_sub_expense_claim(
@@ -592,7 +612,7 @@ def approve_sub_expense_claim(
     payload: SubExpenseClaimDecisionPayload,
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
-) -> SubExpenseClaimResponse:
+) -> SubExpenseClaimTransitionResponse:
     return DotMacSubSyncService(db).approve_expense_claim(
         org_id=UUID(str(auth["organization_id"])),
         source_claim_id=source_claim_id,
@@ -602,7 +622,7 @@ def approve_sub_expense_claim(
 
 @router.post(
     "/expense-claims/{source_claim_id}/reject",
-    response_model=SubExpenseClaimResponse,
+    response_model=SubExpenseClaimTransitionResponse,
     dependencies=[Depends(require_sub_expense_scope)],
 )
 def reject_sub_expense_claim(
@@ -610,7 +630,7 @@ def reject_sub_expense_claim(
     payload: SubExpenseClaimRejectionPayload,
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
-) -> SubExpenseClaimResponse:
+) -> SubExpenseClaimTransitionResponse:
     return DotMacSubSyncService(db).reject_expense_claim(
         org_id=UUID(str(auth["organization_id"])),
         source_claim_id=source_claim_id,

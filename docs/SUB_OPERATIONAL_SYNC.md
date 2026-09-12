@@ -56,11 +56,13 @@ task can also supply its project and ticket when those fields are omitted.
 
 ### Field employee claims and reimbursement
 
-Sub publishes a Field technician claim at submission through
-`POST /api/v1/sync/sub/expense-claims`. ERP validates the claim and stores it as
-exactly `SUBMITTED`; it does not construct an ERP approval chain for this trusted
-source. The claimant's current ERP employee bank details are copied onto the
-claim for legacy callers. The current Sub contract instead selects one
+The legacy `POST /api/v1/sync/sub/expense-claims` create-and-submit contract is
+retained only for already-deployed callers. The v3 Field lifecycle creates a
+hidden draft, uploads receipts, and invokes
+`POST /api/v1/sync/sub/expense-claims/{source_claim_id}/submit`. ERP returns
+exactly `SUBMITTED` and only then exposes the claim to normal ERP users. It
+does not construct an ERP approval chain for this trusted source. The current
+Sub contract selects one
 ERP-eligible approver and verifies either that masked profile destination or a
 one-expense override before submission.
 
@@ -104,13 +106,10 @@ claim status polling require the exact `sub:expense:write` service scope.
 The selected employee is rechecked against current ERP approver eligibility,
 and only that employee may approve or reject the Sub-originated claim.
 
-The legacy `POST /api/v1/sync/sub/expense-claims` create-and-submit contract is
-retained for already-deployed callers. New Self-Care expense delivery begins
-only after the Field manager has approved the authoritative request. The worker
-creates or retrieves a receipt-capable `DRAFT` through
+The worker creates or retrieves a receipt-capable hidden `DRAFT` through
 `POST /api/v1/sync/sub/expense-claims/drafts`. Every line carries a stable
 `source_line_id`, and the response maps it to the ERP item identity without
-making the claim visible to ERP approval processing.
+making the claim visible to ERP users or approval processing.
 
 Self-Care then uploads each private attachment through
 `POST /api/v1/sync/sub/expense-claims/{source_claim_id}/items/{item_id}/receipts`.
@@ -121,14 +120,22 @@ decoded bytes through its expense-receipt storage policy, records checksum and
 attachment evidence, and returns the existing attachment for an identical
 retry. Receipt content is never written to an outbox or log.
 
-Sub remains authoritative for the Field manager decision and delivers its
-durable decision evidence to the claim-specific `/approve` or `/reject`
-endpoint only after all mandatory receipt uploads succeed. Approval submits a
-receipt-complete draft and then projects the trusted manager decision. ERP
+After all mandatory receipt uploads succeed, Sub explicitly submits the draft
+and requires the typed response to contain the same `source_claim_id`, claim
+identity, and `status="submitted"`. Sub remains authoritative for the Field
+manager decision and delivers its separate, ordered durable decision evidence
+to the claim-specific `/approve` or `/reject` endpoint. ERP
 verifies the manager's employee identity, monetary authority, self-approval
 restriction, and category receipt rules before acceptance. Draft creation,
-receipt upload, decision endpoints, and claim status polling require the exact
+receipt upload, submit, decision endpoints, and claim status polling require the exact
 `sub:expense:write` service scope.
+
+Destination verification, draft creation, submission, manager decisions, and
+status polling all use the same source UUID. A token bound to another
+`source_claim_id` fails closed. Submit is idempotent under
+`exp-{expense_id}-submitted-v3`; decisions use
+`exp-{expense_id}-approved-{decision_id}-v3` or
+`exp-{expense_id}-rejected-{decision_id}-v3`.
 
 An approved claim may be paid from the Field app. Sub only stages and delivers
 the command; ERP owns creation of the payment intent, Paystack transfer,

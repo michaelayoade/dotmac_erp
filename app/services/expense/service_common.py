@@ -13,7 +13,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -45,6 +45,7 @@ __all__ = [
     "ExpenseServiceBase",
     "ExpenseServiceError",
     "REPORTABLE_EXPENSE_CLAIM_STATUSES",
+    "VISIBLE_EXPENSE_CLAIM_FILTER",
     "STALE_ACTION_MINUTES",
     "SubmitClaimResult",
 ]
@@ -178,6 +179,14 @@ REPORTABLE_EXPENSE_CLAIM_STATUSES = (
     ExpenseClaimStatus.PENDING_APPROVAL,
     ExpenseClaimStatus.APPROVED,
     ExpenseClaimStatus.PAID,
+)
+
+# Sub builds a claim privately before its explicit submit transition.  Every
+# normal ERP read surface must share this predicate so that the transport draft
+# cannot leak through counts, dashboards, reports, or direct claim views.
+VISIBLE_EXPENSE_CLAIM_FILTER = ~and_(
+    ExpenseClaim.source_system == "sub",
+    ExpenseClaim.status == ExpenseClaimStatus.DRAFT,
 )
 
 

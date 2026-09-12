@@ -42,6 +42,8 @@ from app.schemas.sync.sub_operational import (
     SubExpenseReceiptPayload,
 )
 from app.services.finance.common.numbering import SyncNumberingService
+from app.services.expense import ExpenseService
+from app.services.expense.service_common import ExpenseClaimNotFoundError
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
 from app.services.sync.sub import expenses as sub_expenses
 from app.services.sync.sub.expenses import SubExpenseReceiptError
@@ -581,6 +583,10 @@ class TestFieldManagerDecision:
         draft = service.create_expense_claim_draft(org_id, payload, employee.person_id)
         assert draft.status == "draft"
         assert draft.items[0].source_line_id == source_line_id
+        normal_expense_service = ExpenseService(db_session)
+        assert normal_expense_service.list_claims(org_id).items == []
+        with pytest.raises(ExpenseClaimNotFoundError):
+            normal_expense_service.get_claim(org_id, draft.claim_id)
 
         content = b"%PDF-1.4\nreceipt"
         source_attachment_id = uuid.uuid4()
@@ -639,6 +645,16 @@ class TestFieldManagerDecision:
         )
         assert len(attachments) == 1
 
+        submitted = service.submit_expense_claim(
+            org_id,
+            payload.source_claim_id,
+            idempotency_key=f"exp-{payload.source_claim_id}-submitted-v3",
+            submitted_by_person_id=employee.person_id,
+        )
+        assert submitted.status == "submitted"
+        assert [
+            claim.claim_id for claim in normal_expense_service.list_claims(org_id).items
+        ] == [draft.claim_id]
         approved = service.approve_expense_claim(
             org_id,
             payload.source_claim_id,

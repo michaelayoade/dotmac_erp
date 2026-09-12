@@ -14,6 +14,7 @@ from app.models.expense.cash_advance import CashAdvance, CashAdvanceStatus
 from app.models.expense.corporate_card import CardTransaction
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.services.expense.dashboard_common import _format_currency
+from app.services.expense.service_common import VISIBLE_EXPENSE_CLAIM_FILTER
 
 
 class ExpenseDashboardStatsMixin:
@@ -23,7 +24,10 @@ class ExpenseDashboardStatsMixin:
         today = date.today()
         month_start = today.replace(day=1)
 
-        base_filter = [ExpenseClaim.organization_id == org_id]
+        base_filter = [
+            ExpenseClaim.organization_id == org_id,
+            VISIBLE_EXPENSE_CLAIM_FILTER,
+        ]
         if start_date:
             base_filter.append(ExpenseClaim.claim_date >= start_date)
 
@@ -96,6 +100,7 @@ class ExpenseDashboardStatsMixin:
                 select(func.count(ExpenseClaim.claim_id)).where(
                     and_(
                         ExpenseClaim.organization_id == org_id,
+                        VISIBLE_EXPENSE_CLAIM_FILTER,
                         ExpenseClaim.claim_date >= month_start,
                     )
                 )
@@ -136,7 +141,10 @@ class ExpenseDashboardStatsMixin:
         today = date.today()
         month_start = today.replace(day=1)
 
-        base_filter = [ExpenseClaim.organization_id == org_id]
+        base_filter = [
+            ExpenseClaim.organization_id == org_id,
+            VISIBLE_EXPENSE_CLAIM_FILTER,
+        ]
         if start_date:
             base_filter.append(ExpenseClaim.claim_date >= start_date)
 
@@ -188,6 +196,7 @@ class ExpenseDashboardStatsMixin:
                 select(func.count(ExpenseClaim.claim_id)).where(
                     and_(
                         ExpenseClaim.organization_id == org_id,
+                        VISIBLE_EXPENSE_CLAIM_FILTER,
                         ExpenseClaim.status.in_(pending_statuses),
                     )
                 )
@@ -246,6 +255,7 @@ class ExpenseDashboardStatsMixin:
                 select(func.count(ExpenseClaim.claim_id)).where(
                     and_(
                         ExpenseClaim.organization_id == org_id,
+                        VISIBLE_EXPENSE_CLAIM_FILTER,
                         ExpenseClaim.status == ExpenseClaimStatus.APPROVED,
                     )
                 )
