@@ -167,13 +167,17 @@ def execute_async_hook(
         hook = db.get(ServiceHook, UUID(hook_id))
 
         if execution is None or hook is None:
-            logger.error(
-                "Async hook references missing entities after tenant scoping "
+            error = RuntimeError(
+                "Async hook entities are not visible yet after enqueue"
+            )
+            logger.warning(
+                "Async hook references entities not visible after tenant scoping; "
+                "retrying because the enqueue transaction may still be committing "
                 "(execution=%s, hook=%s)",
                 execution_id,
                 hook_id,
             )
-            return {"ok": False, "error": "missing entities"}
+            raise self.retry(exc=error, countdown=5)
 
         started = time.monotonic()
         payload = dict(execution.event_payload or {})

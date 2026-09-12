@@ -398,7 +398,7 @@ def create_sub_material_request(
     dependencies=[Depends(require_sub_material_read_scope)],
 )
 def get_sub_material_request_status(
-    source_request_id: str,
+    source_request_id: UUID,
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
 ) -> SubMaterialRequestStatusRead:

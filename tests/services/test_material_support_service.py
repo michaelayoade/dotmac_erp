@@ -35,7 +35,7 @@ def test_accept_sub_request_reports_create_and_replay() -> None:
         request_id=uuid4(),
         request_number="MR-0001",
         status="submitted",
-        source_request_id=payload.source_request_id,
+        source_request_id=str(payload.source_request_id),
     )
     service = MaterialSupportService(db)
 
@@ -65,7 +65,7 @@ def test_accept_sub_request_reports_create_and_replay() -> None:
 def test_get_sub_outcome_uses_source_request_identity() -> None:
     service = MaterialSupportService(MagicMock())
     org_id = uuid4()
-    source_request_id = str(uuid4())
+    source_request_id = uuid4()
 
     with patch.object(
         service,
@@ -80,7 +80,7 @@ def test_get_sub_outcome_uses_source_request_identity() -> None:
             is None
         )
 
-    get_status.assert_called_once_with(org_id, source_request_id)
+    get_status.assert_called_once_with(org_id, str(source_request_id))
 
 
 def test_sub_status_lookup_is_qualified_against_legacy_collision() -> None:
@@ -91,7 +91,7 @@ def test_sub_status_lookup_is_qualified_against_legacy_collision() -> None:
     assert (
         service.get_sub_outcome(
             organization_id=uuid4(),
-            source_request_id="same-reference",
+            source_request_id=uuid4(),
         )
         is None
     )
