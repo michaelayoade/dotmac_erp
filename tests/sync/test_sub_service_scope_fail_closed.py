@@ -71,3 +71,34 @@ def test_selfcare_bootstrap_key_has_complete_integration_scope_set():
         "sub:expense:pay",
     }
     assert len(SCOPES) == len(set(SCOPES))
+
+
+def test_selfcare_bootstrap_accepts_only_the_mounted_material_callback():
+    from scripts.one_off.bootstrap_sub_material_integration import (
+        validate_callback_url,
+    )
+
+    callback = (
+        "https://selfcare.dotmac.io/api/v1/webhooks/erp-material/"
+        "00000000-0000-0000-0000-000000000123"
+    )
+    assert validate_callback_url(callback) == callback
+
+
+@pytest.mark.parametrize(
+    "callback",
+    (
+        "https://selfcare.dotmac.io/webhooks/erp-material/"
+        "00000000-0000-0000-0000-000000000123",
+        "https://selfcare.dotmac.io/api/v1/webhooks/erp-material/not-a-uuid",
+        "https://other.example/api/v1/webhooks/erp-material/"
+        "00000000-0000-0000-0000-000000000123",
+    ),
+)
+def test_selfcare_bootstrap_rejects_material_callback_contract_drift(callback):
+    from scripts.one_off.bootstrap_sub_material_integration import (
+        validate_callback_url,
+    )
+
+    with pytest.raises(ValueError, match="Callback"):
+        validate_callback_url(callback)

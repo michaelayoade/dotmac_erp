@@ -12,6 +12,13 @@ After both applications are deployed but before enabling traffic:
 4. Capture the one-time service token and expose it to Sub as `ERP_SUB_SERVICE_TOKEN`.
 5. Re-run the Sub bootstrap with `--apply` to validate bindings and perform the first catalogue import.
 
+The callback must have the exact shape
+`https://selfcare.dotmac.io/api/v1/webhooks/erp-material/<capability-binding-uuid>`.
+The ERP bootstrap rejects the retired unprefixed `/webhooks/erp-material/...`
+path, foreign origins, non-UUID bindings, query strings, and fragments. Rerun
+the idempotent ERP bootstrap with the corrected URL to repair an existing hook;
+it updates the named hook rather than creating a parallel delivery path.
+
 The ERP script creates a non-human API key with `sub:inventory:read`,
 `sub:material:write`, `sub:material:read`, `sub:domain:write`,
 `sub:expense:write`, and the separately enforced `sub:expense:pay`. The domain
@@ -33,3 +40,8 @@ Confirm that a submitted Sub request is created once, can be issued only in ERP,
 and produces an HMAC-signed callback whose `source_request_id` is the Sub UUID. Confirm the
 17 `/sync/sub` operations expose only the source-neutral contract and no
 retired CRM route is mounted.
+
+After correcting an existing hook, issue a staging canary and verify its
+`ServiceHookExecution` reaches `SUCCESS` with an HTTP 2xx response. Historical
+outcomes are repaired by Sub's bounded status reconciler; do not replay an ERP
+inventory transition or substitute the retired `omni_id` field.
