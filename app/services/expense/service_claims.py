@@ -34,6 +34,7 @@ from app.services.expense.service_common import (
     ExpenseServiceBase,
     ExpenseServiceError,
     SubmitClaimResult,
+    VISIBLE_EXPENSE_CLAIM_FILTER,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,10 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseClaim]:
         self._ensure_org_context(org_id)
-        query = select(ExpenseClaim).where(ExpenseClaim.organization_id == org_id)
+        query = select(ExpenseClaim).where(
+            ExpenseClaim.organization_id == org_id,
+            VISIBLE_EXPENSE_CLAIM_FILTER,
+        )
 
         if employee_id:
             query = query.where(ExpenseClaim.employee_id == employee_id)
@@ -138,9 +142,15 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             limit=pagination.limit if pagination else len(items),
         )
 
-    def get_claim(self, org_id: UUID, claim_id: UUID) -> ExpenseClaim:
+    def get_claim(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        *,
+        include_hidden_sub_draft: bool = False,
+    ) -> ExpenseClaim:
         self._ensure_org_context(org_id)
-        claim = self.db.scalar(
+        query = (
             select(ExpenseClaim)
             .options(joinedload(ExpenseClaim.items))
             .where(
@@ -148,6 +158,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 ExpenseClaim.organization_id == org_id,
             )
         )
+        if not include_hidden_sub_draft:
+            query = query.where(VISIBLE_EXPENSE_CLAIM_FILTER)
+        claim = self.db.scalar(query)
         if not claim:
             raise ExpenseClaimNotFoundError(claim_id)
         return claim
@@ -465,12 +478,17 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         approval_source: ExpenseClaimApprovalSource = (
             ExpenseClaimApprovalSource.ERP_WORKFLOW
         ),
+        include_hidden_sub_draft: bool = False,
     ) -> SubmitClaimResult:
         from app.models.expense import LimitResultType
         from app.services.expense.approval_service import ExpenseApprovalService
         from app.services.expense.limit_service import ExpenseLimitService
 
-        claim = self.get_claim(org_id, claim_id)
+        claim = self.get_claim(
+            org_id,
+            claim_id,
+            include_hidden_sub_draft=include_hidden_sub_draft,
+        )
         if claim.status in {
             ExpenseClaimStatus.SUBMITTED,
             ExpenseClaimStatus.APPROVED,

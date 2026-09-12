@@ -8704,7 +8704,7 @@
    ],
    "request": "8ab5c0e114c0",
    "responses": {
-    "200": "5a36e7299db9",
+    "200": "f52e00276bfd",
     "422": "a11c9d9b2af8"
    }
   },
@@ -8739,7 +8739,19 @@
    ],
    "request": "e58d85f3e712",
    "responses": {
-    "200": "5a36e7299db9",
+    "200": "f52e00276bfd",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/sync/sub/expense-claims/{source_claim_id}/submit": {
+   "params": [
+    "header:Idempotency-Key!",
+    "header:x-api-key!",
+    "path:source_claim_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "f52e00276bfd",
     "422": "a11c9d9b2af8"
    }
   },
@@ -9879,6 +9891,7 @@
   "SubExpenseClaimPayload": "494cbc91cdfe",
   "SubExpenseClaimRejectionPayload": "459893975aeb",
   "SubExpenseClaimResponse": "5567fab6c2f5",
+  "SubExpenseClaimTransitionResponse": "0058b093834e",
   "SubExpenseClaimStatusResponse": "7aeef121767a",
   "SubExpenseDestinationInspectPayload": "f54026c65579",
   "SubExpenseDestinationVerifyPayload": "83f4c8d08915",

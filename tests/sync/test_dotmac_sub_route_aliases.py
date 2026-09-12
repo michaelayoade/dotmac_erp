@@ -12,6 +12,7 @@ def test_sub_sync_router_covers_every_phase5_transport() -> None:
         ("POST", "/sync/sub/expense-payment-destinations/inspect"),
         ("GET", "/sync/sub/expense-payment-destinations/profile"),
         ("POST", "/sync/sub/expense-claims/drafts"),
+        ("POST", "/sync/sub/expense-claims/{source_claim_id}/submit"),
         (
             "POST",
             "/sync/sub/expense-claims/{source_claim_id}/items/{item_id}/receipts",

@@ -20,6 +20,7 @@ from app.models.people.hr import Department, Employee
 from app.models.person import Person
 from app.services.expense.dashboard_common import _format_currency
 from app.services.expense.expense_service import REPORTABLE_EXPENSE_CLAIM_STATUSES
+from app.services.expense.service_common import VISIBLE_EXPENSE_CLAIM_FILTER
 
 
 class ExpenseDashboardChartsMixin:
@@ -127,7 +128,10 @@ class ExpenseDashboardChartsMixin:
             select(ExpenseClaim, Person)
             .join(Employee, Employee.employee_id == ExpenseClaim.employee_id)
             .join(Person, Person.id == Employee.person_id)
-            .where(ExpenseClaim.organization_id == org_id)
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                VISIBLE_EXPENSE_CLAIM_FILTER,
+            )
             .order_by(ExpenseClaim.created_at.desc())
             .limit(limit)
         ).all()
@@ -319,7 +323,10 @@ class ExpenseDashboardChartsMixin:
             select(ExpenseClaim, Person)
             .join(Employee, Employee.employee_id == ExpenseClaim.employee_id)
             .join(Person, Person.id == Employee.person_id)
-            .where(ExpenseClaim.organization_id == org_id)
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                VISIBLE_EXPENSE_CLAIM_FILTER,
+            )
             .order_by(ExpenseClaim.created_at.desc())
             .limit(limit)
         ).all()

@@ -558,6 +558,15 @@ class SubExpenseClaimResponse(BaseModel):
     source_claim_id: str
 
 
+class SubExpenseClaimTransitionResponse(BaseModel):
+    """Accepted explicit lifecycle transition for a Sub-owned claim."""
+
+    claim_id: UUID
+    claim_number: str
+    status: Literal["submitted", "approved", "rejected"]
+    source_claim_id: str
+
+
 class SubExpenseClaimDraftItemResponse(BaseModel):
     """Stable mapping from a Sub expense line to its ERP draft item."""
 
