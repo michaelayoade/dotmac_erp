@@ -67,16 +67,23 @@ def test_an_async_hook_scopes_its_session_to_the_organization_on_the_message():
 
     db = MagicMock()
     db.get.side_effect = [None, None]
-    with patch("app.tasks.hooks.session_for_org") as mock_session:
+    retry_error = RuntimeError("retry requested")
+    with (
+        patch("app.tasks.hooks.session_for_org") as mock_session,
+        patch.object(
+            execute_async_hook, "retry", side_effect=retry_error
+        ) as mock_retry,
+    ):
         mock_session.return_value.__enter__ = MagicMock(return_value=db)
         mock_session.return_value.__exit__ = MagicMock(return_value=False)
-        result = execute_async_hook.run(
-            execution_id=str(uuid.uuid4()),
-            hook_id=str(uuid.uuid4()),
-            organization_id=str(ORG_A),
-        )
-    assert result == {"ok": False, "error": "missing entities"}
+        with pytest.raises(RuntimeError, match="retry requested"):
+            execute_async_hook.run(
+                execution_id=str(uuid.uuid4()),
+                hook_id=str(uuid.uuid4()),
+                organization_id=str(ORG_A),
+            )
     mock_session.assert_called_once_with(ORG_A)
+    assert mock_retry.call_args.kwargs["countdown"] == 5
 
 
 def test_the_registry_puts_the_event_organization_on_the_message():

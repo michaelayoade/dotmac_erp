@@ -17,6 +17,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from app.schemas.sync.sub_operational import (
     SubMaterialRequestItemPayload,
@@ -1074,8 +1075,9 @@ class TestCreateMaterialRequest:
         # item lookup -> warehouse lookup -> existing MR lookup
         mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
 
+        source_request_id = uuid.uuid4()
         payload = SubMaterialRequestPayload(
-            source_request_id="sub-mr-123",
+            source_request_id=source_request_id,
             request_type="ISSUE",
             status="issued",
             items=[
@@ -1091,7 +1093,7 @@ class TestCreateMaterialRequest:
 
         assert result.request_id == existing_mr.request_id
         assert result.request_number == "MAT-MR-2026-00001"
-        assert result.source_request_id == "sub-mr-123"
+        assert result.source_request_id == str(source_request_id)
         mock_db.add.assert_not_called()
 
     def test_create_material_request_happy_path(self, service, org_id, mock_db):
@@ -1105,7 +1107,15 @@ class TestCreateMaterialRequest:
         # item lookup -> warehouse lookup -> existing MR lookup
         fiscal_period = MagicMock()
         fiscal_period.fiscal_period_id = uuid.uuid4()
-        mock_db.scalar.side_effect = [mock_item, wh_id, None, fiscal_period]
+        mock_db.scalar.side_effect = [
+            mock_item,
+            wh_id,
+            None,
+            fiscal_period,
+            None,
+            None,
+            None,
+        ]
 
         # Simulate flush() populating request_id on added MR objects
         added_objects: list = []
@@ -1126,8 +1136,9 @@ class TestCreateMaterialRequest:
             mock_numbering.generate_next_number.return_value = "MAT-MR-2026-00001"
             mock_numbering_cls.return_value = mock_numbering
 
+            source_request_id = uuid.uuid4()
             payload = SubMaterialRequestPayload(
-                source_request_id="sub-mr-new-456",
+                source_request_id=source_request_id,
                 request_type="ISSUE",
                 status="issued",
                 items=[
@@ -1151,7 +1162,7 @@ class TestCreateMaterialRequest:
 
         assert result.request_number == "MAT-MR-2026-00001"
         assert result.status == "ISSUED"
-        assert result.source_request_id == "sub-mr-new-456"
+        assert result.source_request_id == str(source_request_id)
         assert result.request_id is not None
         # Header is explicitly added; lines are attached through relationship append
         assert mock_db.add.call_count >= 1
@@ -1161,7 +1172,7 @@ class TestCreateMaterialRequest:
         mock_db.scalar.return_value = None
 
         payload = SubMaterialRequestPayload(
-            source_request_id="sub-mr-bad-item",
+            source_request_id=uuid.uuid4(),
             request_type="ISSUE",
             status="issued",
             items=[
@@ -1180,21 +1191,19 @@ class TestCreateMaterialRequest:
         """Should raise ValueError for unknown request_type."""
         mock_db.scalar.return_value = None  # No existing MR
 
-        payload = SubMaterialRequestPayload(
-            source_request_id="sub-mr-bad-type",
-            request_type="UNKNOWN",
-            status="issued",
-            items=[
-                SubMaterialRequestItemPayload(
-                    item_code="ITEM001",
-                    quantity=Decimal("1"),
-                    from_warehouse_code="Stores - DT",
-                )
-            ],
-        )
-
-        with pytest.raises(ValueError, match="Invalid request_type"):
-            service.create_material_request(org_id, payload)
+        with pytest.raises(ValidationError, match="request_type"):
+            SubMaterialRequestPayload(
+                source_request_id=uuid.uuid4(),
+                request_type="UNKNOWN",
+                status="issued",
+                items=[
+                    SubMaterialRequestItemPayload(
+                        item_code="ITEM001",
+                        quantity=Decimal("1"),
+                        from_warehouse_code="Stores - DT",
+                    )
+                ],
+            )
 
     def test_create_material_request_project_ticket_linking(
         self, service, org_id, mock_db
@@ -1209,7 +1218,15 @@ class TestCreateMaterialRequest:
         wh_id = uuid.uuid4()
         fiscal_period = MagicMock()
         fiscal_period.fiscal_period_id = uuid.uuid4()
-        mock_db.scalar.side_effect = [mock_item, wh_id, None, fiscal_period]
+        mock_db.scalar.side_effect = [
+            mock_item,
+            wh_id,
+            None,
+            fiscal_period,
+            None,
+            None,
+            None,
+        ]
 
         # Simulate flush() populating request_id on added MR objects
         added_objects: list = []
@@ -1239,7 +1256,7 @@ class TestCreateMaterialRequest:
                         mock_numbering_cls.return_value = mock_numbering
 
                         payload = SubMaterialRequestPayload(
-                            source_request_id="sub-mr-linked",
+                            source_request_id=uuid.uuid4(),
                             request_type="ISSUE",
                             status="issued",
                             items=[
@@ -1278,7 +1295,15 @@ class TestCreateMaterialRequest:
         wh_id = uuid.uuid4()
 
         # item lookup -> warehouse lookup -> existing MR lookup -> fiscal period lookup
-        mock_db.scalar.side_effect = [mock_item, wh_id, None, fiscal_period]
+        mock_db.scalar.side_effect = [
+            mock_item,
+            wh_id,
+            None,
+            fiscal_period,
+            None,
+            None,
+            None,
+        ]
 
         added_objects: list = []
         mock_db.add.side_effect = lambda obj: added_objects.append(obj)
@@ -1314,7 +1339,7 @@ class TestCreateMaterialRequest:
                     service, "_post_sub_issue_transaction"
                 ) as mock_issue_post:
                     payload = SubMaterialRequestPayload(
-                        source_request_id="sub-mr-issued-001",
+                        source_request_id=uuid.uuid4(),
                         request_type="ISSUE",
                         status="issued",
                         items=[
@@ -1394,7 +1419,7 @@ class TestCreateMaterialRequest:
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
         wh_id = uuid.uuid4()
-        mock_db.scalar.side_effect = [mock_item, wh_id, None]
+        mock_db.scalar.side_effect = [mock_item, wh_id, None, None, None, None]
 
         added_objects: list = []
         mock_db.add.side_effect = lambda obj: added_objects.append(obj)
@@ -1418,7 +1443,7 @@ class TestCreateMaterialRequest:
             ):
                 with patch.object(service, "_post_sub_issue_transaction") as mock_issue:
                     payload = SubMaterialRequestPayload(
-                        source_request_id="sub-mr-pending-stock-001",
+                        source_request_id=uuid.uuid4(),
                         request_type="ISSUE",
                         status="issued",
                         items=[
@@ -1446,7 +1471,7 @@ class TestCreateMaterialRequest:
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
         wh_id = uuid.uuid4()
-        mock_db.scalar.side_effect = [mock_item, wh_id, None]
+        mock_db.scalar.side_effect = [mock_item, wh_id, None, None, None, None]
 
         added_objects: list = []
         mock_db.add.side_effect = lambda obj: added_objects.append(obj)
@@ -1469,7 +1494,7 @@ class TestCreateMaterialRequest:
                 return_value=Decimal("0"),
             ):
                 payload = SubMaterialRequestPayload(
-                    source_request_id="sub-mr-pending-stock-002",
+                    source_request_id=uuid.uuid4(),
                     request_type="ISSUE",
                     status="submitted",
                     items=[
@@ -1523,7 +1548,7 @@ class TestCreateMaterialRequest:
         mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
 
         payload = SubMaterialRequestPayload(
-            source_request_id="sub-mr-issued-002",
+            source_request_id=uuid.uuid4(),
             request_type="ISSUE",
             status="issued",
             items=[
@@ -1539,6 +1564,81 @@ class TestCreateMaterialRequest:
             service.create_material_request(org_id, payload)
 
         assert exc.value.status_code == 409
+
+    def test_pending_stock_request_accepts_status_only_cancellation(
+        self, service, org_id
+    ):
+        from app.models.inventory.material_request import MaterialRequestStatus
+
+        request = MagicMock(
+            request_id=uuid.uuid4(),
+            request_number="MAT-MR-2026-00020",
+            source_reference=str(uuid.uuid4()),
+            status=MaterialRequestStatus.PENDING_STOCK,
+        )
+
+        with patch.object(
+            service, "_emit_sub_material_request_status_changed"
+        ) as emit_status:
+            result = service._advance_sub_material_request_status(
+                org_id=org_id,
+                request=request,
+                requested_status=MaterialRequestStatus.CANCELLED,
+                actor_person_id=None,
+            )
+
+        assert result.status == MaterialRequestStatus.CANCELLED.value
+        assert request.status == MaterialRequestStatus.CANCELLED
+        emit_status.assert_called_once()
+
+    def test_issued_request_is_not_reversed_by_late_cancellation(self, service, org_id):
+        from app.models.inventory.material_request import MaterialRequestStatus
+
+        request = MagicMock(
+            request_id=uuid.uuid4(),
+            request_number="MAT-MR-2026-00021",
+            source_reference=str(uuid.uuid4()),
+            status=MaterialRequestStatus.ISSUED,
+        )
+
+        result = service._advance_sub_material_request_status(
+            org_id=org_id,
+            request=request,
+            requested_status=MaterialRequestStatus.CANCELLED,
+            actor_person_id=None,
+        )
+
+        assert result.status == MaterialRequestStatus.ISSUED.value
+
+    def test_status_webhook_payload_matches_sub_contract_exactly(self, service):
+        from app.models.inventory.material_request import MaterialRequestStatus
+
+        line = MagicMock(sequence=1, serial_numbers=["SN-001"])
+        request = MagicMock(
+            source_reference=str(uuid.uuid4()),
+            request_id=uuid.uuid4(),
+            request_number="MAT-MR-2026-00022",
+            updated_at=datetime.now(UTC),
+            items=[line],
+        )
+
+        payload = service._build_sub_material_request_status_event_payload(
+            request,
+            old_status=MaterialRequestStatus.PENDING_STOCK,
+            new_status=MaterialRequestStatus.CANCELLED,
+        ).model_dump(mode="json", exclude_none=True)
+
+        assert set(payload) == {
+            "source_request_id",
+            "request_id",
+            "request_number",
+            "old_status",
+            "new_status",
+            "updated_at",
+            "items",
+        }
+        assert set(payload["items"][0]) == {"sequence", "serial_numbers"}
+        assert payload["new_status"] == "CANCELLED"
 
 
 class TestPendingStockMaterialRequestAutomation:

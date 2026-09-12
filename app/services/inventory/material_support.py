@@ -54,7 +54,7 @@ class MaterialSupportService(_ProcurementMixin):
                 select(MaterialRequest.request_id).where(
                     MaterialRequest.organization_id == organization_id,
                     MaterialRequest.source_system == "sub",
-                    MaterialRequest.source_reference == payload.source_request_id,
+                    MaterialRequest.source_reference == str(payload.source_request_id),
                 )
             )
         )
@@ -69,10 +69,10 @@ class MaterialSupportService(_ProcurementMixin):
         self,
         *,
         organization_id: UUID,
-        source_request_id: str,
+        source_request_id: UUID,
     ) -> SubMaterialRequestStatusRead | None:
         """Return ERP's authoritative outcome for a Sub material request."""
         return self.get_material_request_by_source_reference(
             organization_id,
-            source_request_id,
+            str(source_request_id),
         )
