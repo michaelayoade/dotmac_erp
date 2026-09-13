@@ -52,6 +52,24 @@ real call sites only ever see names already shaped like valid identifiers,
 so the raise is not expected to fire there, and this module stays
 dependency-free by raising a plain `ValueError` rather than importing
 either caller's exception type).
+
+## `normalise_name` validates the INPUT charset, not just the output shape
+
+Only refusing a leading/trailing separator in the OUTPUT was not enough: a
+distribution name may contain only ASCII letters, digits, `.`, `_`, and
+`-`. Without checking the INPUT for that charset, a caller-controlled
+string containing a path separator (`/tmp/bundle-escape`) or any other
+character outside that set passed straight through unchanged (a forward or
+backward slash is not touched by the `[-_.]+` collapse), came back equal
+to itself,
+and was accepted anywhere a caller compared its input to its own
+normalised output as proof of "this key is already a valid PEP 503 name"
+(`dependency_bundle.build_local_index` did exactly that). A package-name
+key that is actually a filesystem path escapes a staging directory the
+moment it is joined with `Path.__truediv__`, because an absolute
+right-hand operand REPLACES the left side entirely. `normalise_name` now
+refuses any input containing a character outside `[A-Za-z0-9._-]` before
+doing anything else with it.
 """
 
 from __future__ import annotations
@@ -61,15 +79,28 @@ import urllib.parse
 
 _NAME_RUNS = re.compile(r"[-_.]+")
 
+#: The only characters a distribution name may ever contain (PEP 503 /
+#: packaging's name grammar). Checked on the INPUT, before normalisation —
+#: this is what makes a path separator, a null byte, or any other
+#: unexpected character a refusal rather than a value that normalises to
+#: itself and is silently trusted as "already valid".
+_VALID_NAME_CHARACTERS = re.compile(r"\A[A-Za-z0-9._-]+\Z")
+
 
 def normalise_name(name: str) -> str:
     """PEP 503 normalisation: runs of `-`, `_`, `.` collapse to one `-`,
-    lower-cased. Raises `ValueError` if the result starts or ends with `-`
-    — see this module's docstring, "`normalise_name` does not strip — an
-    edge separator is REFUSED", for why that case is a refusal rather than
-    a silent strip.
+    lower-cased. Raises `ValueError` if `name` contains any character
+    outside `[A-Za-z0-9._-]` (see this module's docstring, "`normalise_name`
+    validates the INPUT charset"), or if the normalised result starts or
+    ends with `-` (see "`normalise_name` does not strip — an edge separator
+    is REFUSED").
     """
 
+    if not name or not _VALID_NAME_CHARACTERS.match(name):
+        raise ValueError(
+            f"{name!r} is not a valid distribution name; only ASCII "
+            "letters, digits, '.', '_', and '-' are permitted"
+        )
     normalised = _NAME_RUNS.sub("-", name).lower()
     if normalised.startswith("-") or normalised.endswith("-"):
         raise ValueError(

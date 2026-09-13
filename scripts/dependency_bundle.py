@@ -109,6 +109,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import html
 import json
 import os
 import re
@@ -2190,9 +2191,32 @@ def build_local_index(
                     f"package key {normalised_pkg_name!r} is not PEP-503-normalised"
                 )
             pkg_dir = root_dir / normalised_pkg_name
+            resolved_pkg_dir = pkg_dir.resolve()
+            if not _is_within(root_dir.resolve(), resolved_pkg_dir):
+                raise BundleVerificationError(
+                    f"package key {normalised_pkg_name!r} resolves outside "
+                    "the index directory"
+                )
             pkg_dir.mkdir(parents=True, exist_ok=True)
             anchors = []
             for filename, digest_hex, source_path in sorted(files, key=lambda t: t[0]):
+                # A caller-controlled filename must be a bare filename: no
+                # path separator, not absolute, not `.`/`..`. Without this,
+                # `pkg_dir / filename` can write outside `pkg_dir` the same
+                # way an unvalidated package-name key can write outside
+                # `root_dir` -- and `Path.__truediv__` REPLACES the left
+                # side entirely when the right side is absolute.
+                if (
+                    not filename
+                    or "/" in filename
+                    or "\\" in filename
+                    or filename in (".", "..")
+                    or Path(filename).is_absolute()
+                ):
+                    raise BundleVerificationError(
+                        f"filename {filename!r} is not a safe bare filename "
+                        "(no path separators, not absolute, not '.' or '..')"
+                    )
                 if not _SHA256_HEX.match(digest_hex):
                     raise BundleVerificationError(
                         f"{filename!r} carries a malformed sha256 {digest_hex!r}"
@@ -2208,8 +2232,14 @@ def build_local_index(
                     raise BundleVerificationError(
                         f"cannot stage {filename!r}: {exc}"
                     ) from exc
+                # Escaped before ever reaching a resolver-facing anchor: a
+                # filename is caller-controlled and this HTML is served to
+                # a real package resolver.
+                safe_filename = html.escape(filename, quote=True)
+                safe_digest = html.escape(digest_hex, quote=True)
                 anchors.append(
-                    f'<a href="{filename}#sha256={digest_hex}">{filename}</a><br/>'
+                    f'<a href="{safe_filename}#sha256={safe_digest}">'
+                    f"{safe_filename}</a><br/>"
                 )
             (pkg_dir / "index.html").write_text(
                 "<!DOCTYPE html><html><body>\n"
@@ -2218,7 +2248,11 @@ def build_local_index(
                 encoding="utf-8",
             )
         package_names = sorted(p.name for p in root_dir.iterdir() if p.is_dir())
-        root_anchors = [f'<a href="{name}/">{name}</a><br/>' for name in package_names]
+        root_anchors = [
+            f'<a href="{html.escape(name, quote=True)}/">'
+            f"{html.escape(name, quote=True)}</a><br/>"
+            for name in package_names
+        ]
         (root_dir / "index.html").write_text(
             "<!DOCTYPE html><html><body>\n"
             + "\n".join(root_anchors)

@@ -1238,6 +1238,81 @@ def test_build_local_index_refuses_an_invalid_pep503_key_rather_than_crashing(
         db.build_local_index(index_root, {"-dotmac-kernel-": []})
 
 
+def test_build_local_index_refuses_a_package_key_that_is_a_filesystem_path(
+    tmp_path: Path,
+) -> None:
+    """Finding 3: a key like `/tmp/bundle-escape` used to pass the
+    "already normalised" check (normalise_name did not validate the input
+    charset, so `/` passed straight through and the key compared equal to
+    itself), then escape the staging directory entirely when joined via
+    `Path.__truediv__` -- an absolute right-hand operand replaces the left
+    side."""
+
+    index_root = tmp_path / "index"
+    escape_target = tmp_path / "escaped"
+    with pytest.raises(
+        db.BundleVerificationError, match="not a valid distribution name"
+    ):
+        db.build_local_index(index_root, {str(escape_target): []})
+    assert not escape_target.exists()
+    assert not index_root.exists()
+
+
+def test_build_local_index_refuses_a_filename_containing_a_path_separator(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    evil_target = tmp_path / "evil-escaped-file"
+    wheel_path = source_dir / "wheel.whl"
+    wheel_path.write_bytes(b"wheel bytes")
+    index_root = tmp_path / "index"
+    packages = {
+        "dotmac-kernel": [
+            (str(evil_target), db.sha256_hex(b"wheel bytes"), wheel_path),
+        ]
+    }
+    with pytest.raises(db.BundleVerificationError, match="not a safe bare filename"):
+        db.build_local_index(index_root, packages)
+    assert not evil_target.exists()
+    assert not index_root.exists()
+
+
+def test_build_local_index_refuses_a_dotdot_filename(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    wheel_path = source_dir / "wheel.whl"
+    wheel_path.write_bytes(b"wheel bytes")
+    index_root = tmp_path / "index"
+    packages = {"dotmac-kernel": [("..", db.sha256_hex(b"wheel bytes"), wheel_path)]}
+    with pytest.raises(db.BundleVerificationError, match="not a safe bare filename"):
+        db.build_local_index(index_root, packages)
+
+
+def test_build_local_index_escapes_html_metacharacters_in_anchors(
+    tmp_path: Path,
+) -> None:
+    """Finding 3: a caller-controlled filename reaches a resolver-facing
+    HTML page; without escaping, `<`/`>`/`&`/`"` in a filename would inject
+    markup into that page."""
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    filename = 'inject"><script>alert(1)</script>.whl'
+    wheel_path = source_dir / "wheel.whl"
+    wheel_path.write_bytes(b"wheel bytes")
+    index_root = tmp_path / "index"
+    packages = {
+        "dotmac-kernel": [(filename, db.sha256_hex(b"wheel bytes"), wheel_path)]
+    }
+    db.build_local_index(index_root, packages)
+    html_text = (index_root / "simple" / "dotmac-kernel" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "<script>" not in html_text
+    assert "&lt;script&gt;" in html_text
+
+
 # ── item 7: strong local run-metadata validation ─────────────────────
 
 
