@@ -377,7 +377,7 @@ def test_the_repositorys_own_manifest_is_declared_exactly_once_each() -> None:
 
     with (ROOT / "pyproject.toml").open("rb") as handle:
         manifest = tomllib.load(handle)
-    assert movement_problems(manifest, OLDS) == []
+    assert movement_problems(manifest, TARGETS) == []
 
 
 def test_a_second_declaration_of_a_moved_package_is_refused() -> None:

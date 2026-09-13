@@ -124,7 +124,7 @@ def test_erp_selects_exactly_the_numbering_tenant_plane() -> None:
         if selection.module == "numbering"
     ]
     assert numbering_selections == [EXPECTED_SELECTION]
-    assert validate_module_plane_selections((module,), ASSEMBLY_MODULE_PLANES) == (
+    assert validate_module_plane_selections((module,), numbering_selections) == (
         EXPECTED_SELECTION,
     )
     assert ModulePlane.PLATFORM not in EXPECTED_SELECTION.planes

@@ -1241,7 +1241,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
         kernel_floor="0.1.0a98",
         schema="mod_files",
         lineage_branch="files",
-        lineage_head="fi_0001_stored_files",
+        lineage_head="fi_0002_selectable_planes",
         requires_effects=(_TENANT, _ROLES),
     ),
     CompositionStep(
