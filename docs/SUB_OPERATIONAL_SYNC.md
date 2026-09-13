@@ -69,7 +69,8 @@ one-expense override before submission.
 `GET /api/v1/sync/sub/expense-approvers` returns active employees with an
 expense-approval permission, excluding the requesting employee so an expense
 cannot select its own requester as approver.
-`GET /api/v1/sync/sub/expense-banks` returns ERP's active bank directory, and
+`GET /api/v1/sync/sub/expense-banks` returns the authenticated organization's
+active reimbursement bank directory from `settings.org_bank_directory`, and
 `GET /api/v1/sync/sub/expense-payment-destinations/profile` returns only a
 masked employee profile.
 `POST /api/v1/sync/sub/expense-payment-destinations/verify` resolves the

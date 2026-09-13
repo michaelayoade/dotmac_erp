@@ -164,6 +164,7 @@ _test_engine = create_engine(
             "support": None,
             "automation": None,
             "common": None,
+            "settings": None,
         }
     },
 )

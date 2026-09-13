@@ -34,6 +34,23 @@ class OrgBankDirectoryService:
         )
         return list(self.db.scalars(stmt).all())
 
+    def get_active_bank_by_sort_code(
+        self,
+        organization_id: UUID,
+        bank_sort_code: str,
+    ) -> OrgBankDirectory | None:
+        """Resolve one active reimbursement bank within an organization."""
+        normalized_code = bank_sort_code.strip()
+        if not normalized_code:
+            return None
+        return self.db.scalar(
+            select(OrgBankDirectory).where(
+                OrgBankDirectory.organization_id == organization_id,
+                OrgBankDirectory.bank_sort_code == normalized_code,
+                OrgBankDirectory.is_active.is_(True),
+            )
+        )
+
     def seed_defaults(self, organization_id: UUID) -> int:
         """
         Seed default banks for an organization from app/data/bank_names.csv.
