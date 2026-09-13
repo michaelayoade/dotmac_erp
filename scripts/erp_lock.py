@@ -276,6 +276,7 @@ def off_index_lock_problems(lock: dict[str, Any]) -> list[str]:
             problems.append(
                 f"the lock resolved {name} as {source.get('type')!r}, not git"
             )
+            continue
         declared = _normalised_repository_url(str(source.get("url", "")))
         if declared != _normalised_repository_url(pin.url):
             problems.append(
@@ -828,7 +829,12 @@ def approved_artifact_url(href: str, page_url: str) -> str:
     refuses `..` segments that only appear after percent-decoding (once or
     twice), because `urlsplit` never decodes and a literal-only check is
     satisfied by an encoded or double-encoded traversal segment that the
-    server itself will decode."""
+    server itself will decode; it refuses a literal backslash anywhere in
+    the resolved path (raw or decoded), since a PEP 503 artifact path never
+    legitimately carries one and whether the origin treats it as a
+    separator is not ours to assume; and it refuses a percent-escape that
+    does not decode as valid UTF-8, since our decode semantics are not
+    proven to match the origin's."""
 
     if not href.strip():
         raise Refusal("the index page carries an empty href")
@@ -855,6 +861,23 @@ def approved_artifact_url(href: str, page_url: str) -> str:
         )
     if ".." in parts.path.split("/"):
         raise Refusal(f"index link {href!r} still traverses after resolution")
+    if "\\" in parts.path:
+        raise Refusal(
+            f"index link {href!r} contains a literal backslash in its path; a "
+            "PEP 503 index artifact path never legitimately contains one, and "
+            "whether the origin treats `\\` as a path separator is not ours "
+            "to assume either way — refusing outright rather than guessing"
+        )
+    try:
+        urllib.parse.unquote(parts.path, errors="strict")
+    except UnicodeDecodeError as exc:
+        raise Refusal(
+            f"index link {href!r} carries a percent-escape that does not "
+            f"decode as valid UTF-8 ({exc}); our decode semantics are not "
+            "proven to match the origin's, so a percent-escape a differently"
+            "-behaved decoder could read as `.` or `/` is refused rather "
+            "than guessed at"
+        ) from exc
     decoded_once = urllib.parse.unquote(parts.path)
     if ".." in decoded_once.split("/"):
         raise Refusal(
@@ -863,6 +886,12 @@ def approved_artifact_url(href: str, page_url: str) -> str:
             "satisfied by an encoded traversal segment that the server will "
             "decode when curl sends it"
         )
+    if "\\" in decoded_once:
+        raise Refusal(
+            f"index link {href!r} decodes to a literal backslash "
+            f"({decoded_once!r}); a PEP 503 index artifact path never "
+            "legitimately contains one, encoded or not"
+        )
     decoded_twice = urllib.parse.unquote(decoded_once)
     if ".." in decoded_twice.split("/"):
         raise Refusal(
@@ -870,6 +899,12 @@ def approved_artifact_url(href: str, page_url: str) -> str:
             f"decoding ({decoded_twice!r}); a proxy or server in front of the "
             "index may decode once before the application decodes again, so "
             "single-decoding is not a sufficient premise"
+        )
+    if "\\" in decoded_twice:
+        raise Refusal(
+            f"index link {href!r} decodes to a literal backslash after "
+            f"DOUBLE decoding ({decoded_twice!r}); a PEP 503 index artifact "
+            "path never legitimately contains one, encoded or not"
         )
     if not parts.path.startswith(ARTIFACT_PATH_PREFIX):
         raise Refusal(

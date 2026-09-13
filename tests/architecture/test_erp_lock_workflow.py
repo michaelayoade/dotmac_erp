@@ -589,8 +589,15 @@ def test_an_index_controlled_link_that_is_not_approved_refuses(
         "%2E%2E/%2E%2E/dotmac_files-1.whl",
         "%252e%252e/%252e%252e/dotmac_files-1.whl",
         ".%2e/.%2e/dotmac_files-1.whl",
+        "..%2f..%2f..%2fetc/passwd",
     ],
-    ids=["lower-encoded", "upper-encoded", "double-encoded", "mixed-encoded"],
+    ids=[
+        "lower-encoded",
+        "upper-encoded",
+        "double-encoded",
+        "mixed-encoded",
+        "encoded-slash-literal-dots",
+    ],
 )
 def test_an_encoded_traversal_segment_is_refused(href: str) -> None:
     with pytest.raises(Refusal):
@@ -610,6 +617,52 @@ def test_a_percent_encoded_href_that_is_not_traversal_is_still_accepted(
 ) -> None:
     url = approved_artifact_url(href, _PAGE)
     assert url.startswith(f"{ARTIFACT_ORIGIN}/api/packages/dotmac/pypi/files/")
+
+
+def test_a_literal_backslash_in_the_resolved_path_is_refused() -> None:
+    """`..\\..\\etc\\passwd` contains no `/` at all, so it is one opaque
+    segment that survives every `..`-in-`split("/")` check and still starts
+    with ARTIFACT_PATH_PREFIX. Whether the origin treats `\\` as a separator
+    is not ours to assume either way, so a literal backslash is refused
+    outright rather than reasoned about."""
+
+    with pytest.raises(Refusal):
+        approved_artifact_url("..\\..\\etc\\passwd", _PAGE)
+
+
+def test_an_ordinary_path_with_no_backslash_still_passes() -> None:
+    """POSITIVE CONTROL for the backslash refusal above."""
+
+    url = approved_artifact_url("../../files/dotmac_files-1.whl#sha256=ab", _PAGE)
+    assert url.startswith(f"{ARTIFACT_ORIGIN}/api/packages/dotmac/pypi/files/")
+
+
+@pytest.mark.parametrize(
+    "href",
+    ["%c0%ae%c0%ae/etc/passwd", "%c0%af"],
+    ids=["overlong-dot", "overlong-slash"],
+)
+def test_a_percent_escape_that_is_not_valid_utf8_is_refused(href: str) -> None:
+    """`unquote` defaults to `errors='replace'`, so an overlong sequence like
+    `%c0%ae` becomes U+FFFD on our side and can never reveal `..` here --
+    while a differently-behaved decoder at the origin might read it as `.`
+    or `/`. Our decode semantics are not proven to match the origin's, so
+    what cannot be read unambiguously is refused rather than guessed at."""
+
+    with pytest.raises(Refusal):
+        approved_artifact_url(href, _PAGE)
+
+
+def test_an_ordinary_percent_escape_still_decodes_and_passes() -> None:
+    """POSITIVE CONTROL for the strict-UTF-8 refusal above -- an ordinary,
+    valid percent-escape must still be accepted."""
+
+    for href in (
+        "../../files/dotmac_files-1.0%2Bbuild.5.whl#sha256=ab",
+        "../../files/dotmac%7Efiles-1.whl#sha256=ab",
+    ):
+        url = approved_artifact_url(href, _PAGE)
+        assert url.startswith(f"{ARTIFACT_ORIGIN}/api/packages/dotmac/pypi/files/")
 
 
 def test_a_redirect_is_refused_rather_than_followed() -> None:
@@ -1609,6 +1662,20 @@ def test_the_lock_half_of_the_premise_is_enforced(
     problems = erp_lock.off_index_lock_problems(_lock_with(**overrides))
     assert problems, label
     assert any(expected in problem for problem in problems), problems
+
+
+def test_a_lock_entry_with_no_source_table_at_all_is_refused() -> None:
+    """`source` entirely absent (not merely a wrong shape) must be caught by
+    the same `isinstance(source, dict)` guard as an explicitly non-dict
+    `source` -- `dict.get` returns `None` for a missing key, and `None` is
+    not a `dict` either."""
+
+    lock = {
+        "package": [{"name": _CLIENT, "version": "0.2.0"}]
+    }  # no "source" key at all
+    problems = erp_lock.off_index_lock_problems(lock)
+    assert problems
+    assert any("no source table" in problem for problem in problems), problems
 
 
 def test_a_pep508_requirement_cannot_express_the_pinned_form() -> None:
