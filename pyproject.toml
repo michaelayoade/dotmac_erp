@@ -95,11 +95,13 @@ dotmac-imports = {version = "0.1.0a2", source = "forgejo"}
 # deploy path. Acceptance is "exactly the expected branch heads and no
 # unintended ones", never "one global head".
 #
-# The kernel repin above (a83 -> a85) is DEMANDED by this pin, not bundled with
-# it: `dotmac-accounting 0.1.0a1` floors at `dotmac-kernel >= 0.1.0a85`, so the
-# lock cannot resolve at a83. This accounting pin does not move `dotmac-files`;
-# that module's own pin, immediately above, moves independently and on its own
-# schedule.
+# Historical: when this accounting pin was introduced, it DEMANDED a kernel
+# repin (a83 -> a85), not bundled with it, because `dotmac-accounting 0.1.0a1`
+# floors at `dotmac-kernel >= 0.1.0a85` and the lock could not resolve below
+# that floor. The kernel has since moved further for unrelated reasons — the
+# pin above is the current value, this paragraph is not. This accounting pin
+# does not move `dotmac-files`; that module's own pin, immediately above,
+# moves independently and on its own schedule.
 dotmac-accounting = {version = "0.1.0a1", source = "forgejo"}
 
 # Concurrency-safe document-series allocation and immutable allocation evidence.
