@@ -1,7 +1,20 @@
-# Resolve ERP's two pending private-index repins — `dotmac-files` 0.1.0a2 ->
-# 0.1.0a4 and `dotmac-tax` 0.1.0a3 -> 0.1.0a4 — against the private Forgejo
-# index, and prove the bytes it names are the bytes the index actually
-# publishes.
+# Resolve a private-index repin against the private Forgejo index, and prove
+# the bytes it names are the bytes the index actually publishes.
+#
+# ── THIS WORKFLOW'S ONE MOVEMENT HAS BEEN PERFORMED ─────────────────────────
+#
+# `ALLOWED_MOVEMENTS` is a CLOSED, one-shot allowlist: `dotmac-files`
+# 0.1.0a2 -> 0.1.0a4 and `dotmac-tax` 0.1.0a3 -> 0.1.0a4. Protected run
+# 34768603169 performed exactly that movement and its resolved pair was
+# applied to the tree, so this workflow now has nothing left to move: a
+# re-dispatch fails the "moving from the currently declared version" check,
+# by design rather than by accident, because the tree no longer declares the
+# old versions.
+#
+# A FUTURE repin is a reviewed code change to `ALLOWED_MOVEMENTS`, never a
+# re-dispatch of this one. Keep this notice truthful: a header describing a
+# pending move that has already happened sends an operator to a workflow
+# that is guaranteed to refuse them.
 #
 # This exists for exactly the reason `dotmac_vendor_control_plane`'s
 # `kernel-lock.yml` exists: a lock entry for a privately-published
