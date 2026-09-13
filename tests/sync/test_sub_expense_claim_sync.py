@@ -35,7 +35,9 @@ from app.models.people.hr.position import Position
 from app.models.people.hr.position_assignment import PositionAssignment
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
+from app.models.settings.org_bank_directory import OrgBankDirectory
 from app.schemas.sync.sub_operational import (
+    SubExpenseDestinationVerifyPayload,
     SubExpenseClaimItemPayload,
     SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
@@ -43,6 +45,7 @@ from app.schemas.sync.sub_operational import (
     SubExpenseReceiptPayload,
 )
 from app.services.finance.common.numbering import SyncNumberingService
+from app.services.finance.payments.paystack_client import ResolveAccountResponse
 from app.services.expense import ExpenseService
 from app.services.expense.service_common import ExpenseClaimNotFoundError
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
@@ -60,6 +63,7 @@ def _ensure_hr_tables(engine) -> None:
         ExpenseApproverLimit.__table__,
         ExpenseLimitRule.__table__,
         Attachment.__table__,
+        OrgBankDirectory.__table__,
     ):
         for column in table.columns:
             default = column.server_default
@@ -174,6 +178,20 @@ def numbering_patch():
         ),
     ):
         yield
+
+
+@pytest.fixture()
+def opay_bank(db_session, org_id, service):
+    bank = OrgBankDirectory(
+        org_bank_id=uuid.uuid4(),
+        organization_id=org_id,
+        bank_name="Paycom (opay)",
+        bank_sort_code="999992",
+        is_active=True,
+    )
+    db_session.add(bank)
+    db_session.flush()
+    return bank
 
 
 def _payload(employee, source_claim_id=None, **overrides) -> SubExpenseClaimPayload:
@@ -515,6 +533,113 @@ class TestExpenseClaimStatusPoll:
             service.get_expense_claim_by_source_reference(org_id, str(uuid.uuid4()))
             is None
         )
+
+
+class TestSubExpenseBankDirectory:
+    def test_list_uses_only_the_organizations_active_reimbursement_banks(
+        self,
+        service,
+        db_session,
+        org_id,
+        opay_bank,
+    ):
+        db_session.add_all(
+            [
+                OrgBankDirectory(
+                    org_bank_id=uuid.uuid4(),
+                    organization_id=org_id,
+                    bank_name="Inactive Bank",
+                    bank_sort_code="000000",
+                    is_active=False,
+                ),
+                OrgBankDirectory(
+                    org_bank_id=uuid.uuid4(),
+                    organization_id=uuid.uuid4(),
+                    bank_name="Other Organization Bank",
+                    bank_sort_code="111111",
+                    is_active=True,
+                ),
+            ]
+        )
+        db_session.flush()
+
+        result = service.list_expense_banks(org_id)
+
+        assert [(item.bank_name, item.bank_code) for item in result.items] == [
+            (opay_bank.bank_name, "999992")
+        ]
+
+    def test_profile_and_verification_use_the_same_organization_bank_code(
+        self,
+        service,
+        employee,
+        opay_bank,
+        monkeypatch,
+    ):
+        employee.bank_name = "OPay"
+        employee.bank_branch_code = opay_bank.bank_sort_code
+        paystack = MagicMock()
+        paystack.resolve_account.return_value = ResolveAccountResponse(
+            account_number=employee.bank_account_number,
+            account_name=employee.bank_account_name,
+            bank_id=1,
+        )
+        paystack_context = MagicMock()
+        paystack_context.__enter__.return_value = paystack
+        monkeypatch.setattr(
+            service,
+            "_require_transfer_config",
+            lambda _payment_service: MagicMock(),
+        )
+        monkeypatch.setattr(
+            sub_expenses,
+            "PaystackClient",
+            lambda _config: paystack_context,
+        )
+        monkeypatch.setattr(
+            sub_expenses,
+            "encrypt_credential",
+            lambda _value, _db: "enc:" + "x" * 32,
+        )
+
+        profile = service.get_expense_profile_destination(
+            employee.organization_id,
+            requested_by_email=employee.person.email,
+        )
+        verified = service.verify_expense_destination(
+            employee.organization_id,
+            SubExpenseDestinationVerifyPayload(
+                requested_by_email=employee.person.email,
+                source_claim_id=uuid.uuid4(),
+                mode="erp_profile",
+            ),
+        )
+
+        assert profile.available is True
+        assert profile.bank_code == "999992"
+        assert profile.bank_name == opay_bank.bank_name
+        assert verified.bank_code == "999992"
+        paystack.resolve_account.assert_called_once_with(
+            account_number=employee.bank_account_number,
+            bank_code="999992",
+        )
+
+    def test_legacy_code_fails_closed_until_employee_reselects_the_bank(
+        self,
+        service,
+        employee,
+        opay_bank,
+    ):
+        employee.bank_name = "OPay"
+        employee.bank_branch_code = "305"
+
+        profile = service.get_expense_profile_destination(
+            employee.organization_id,
+            requested_by_email=employee.person.email,
+        )
+
+        assert opay_bank.bank_sort_code == "999992"
+        assert profile.available is False
 
 
 class TestFieldManagerDecision:
