@@ -1238,7 +1238,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     CompositionStep(
         distribution="dotmac-files",
         tranche=0,
-        kernel_floor="0.1.0a61",
+        kernel_floor="0.1.0a98",
         schema="mod_files",
         lineage_branch="files",
         lineage_head="fi_0001_stored_files",
@@ -1265,7 +1265,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     CompositionStep(
         distribution="dotmac-tax",
         tranche=0,
-        kernel_floor="0.1.0a85",
+        kernel_floor="0.1.0a98",
         schema="mod_tax",
         lineage_branch="tax",
         lineage_head="tx_0003_result_fingerprint",
