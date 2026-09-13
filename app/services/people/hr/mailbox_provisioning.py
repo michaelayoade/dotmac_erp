@@ -85,6 +85,9 @@ class EmployeeMailboxProvisioningService:
             return result
         if not self.config.mailcow_api_configured:
             raise RuntimeError("Mailcow provisioning API is not configured")
+        if employee.mailcow_provisioning_requested_at is None:
+            result.skipped.append("employee has no forward provisioning request")
+            return result
         if employee.status in {
             EmployeeStatus.RESIGNED,
             EmployeeStatus.TERMINATED,
@@ -117,6 +120,12 @@ class EmployeeMailboxProvisioningService:
         mailcow = self._get_mailcow_client()
         if mailcow.get_mailbox(email):
             result.already_exists = True
+            # A prior attempt may have created the mailbox and failed before
+            # committing its local checkpoint. The explicit request marker
+            # proves this is part of the forward-only ERP flow, so repairing
+            # the checkpoint is safe and lets the downstream relay continue.
+            if employee.mailcow_mailbox_provisioned_at is None:
+                employee.mailcow_mailbox_provisioned_at = datetime.now(timezone.utc)
             self._issue_activation_if_needed(employee, result)
             return result
 

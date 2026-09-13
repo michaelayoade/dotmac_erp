@@ -34,6 +34,10 @@ from app.services.mailcow.sieve import (
     remove_redirect_from_sieve,
 )
 from app.services.mailcow.sogo import SogoProfileService
+from app.services.nextcloud.client import (
+    NextcloudProvisioningConfig,
+    NextcloudTalkClient,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +55,8 @@ class EmployeeOffboardingResult:
     mailcow_enabled: bool = False
     mailcow_mailbox_found: bool | None = None
     mailcow_password_reset: bool = False
+    nextcloud_user_id: str | None = None
+    nextcloud_account_disabled: bool = False
     sieve_offboarding_script_updated: bool = False
     sogo_inactive_forward_updated: bool = False
     sogo_cleanup_request_queued: bool = False
@@ -79,6 +85,8 @@ class EmployeeOffboardingService:
         sieve_client: ManageSieveClient | None = None,
         sogo_service: SogoProfileService | None = None,
         sogo_cleanup_client: SogoCleanupQueueClient | None = None,
+        nextcloud_config: NextcloudProvisioningConfig | None = None,
+        nextcloud_client: NextcloudTalkClient | None = None,
     ) -> None:
         self.db = db
         self.config = config or get_mailcow_offboarding_config()
@@ -86,6 +94,10 @@ class EmployeeOffboardingService:
         self._sieve_client = sieve_client
         self._sogo_service = sogo_service
         self._sogo_cleanup_client = sogo_cleanup_client
+        self.nextcloud_config = (
+            nextcloud_config or NextcloudProvisioningConfig.from_settings()
+        )
+        self._nextcloud_client = nextcloud_client
 
     def offboard_employee(
         self, organization_id: UUID, employee_id: UUID
@@ -125,6 +137,7 @@ class EmployeeOffboardingService:
             self.db, str(person.id)
         )
         result.person_deactivated = self._deactivate_person(person)
+        self._disable_nextcloud_account(person, result)
 
         if not self.config.enabled:
             result.skipped.append("mailcow offboarding integration disabled")
@@ -157,6 +170,39 @@ class EmployeeOffboardingService:
         person.status = PersonStatus.inactive
         person.updated_at = datetime.now(UTC)
         return changed
+
+    def _disable_nextcloud_account(
+        self,
+        person: Person,
+        result: EmployeeOffboardingResult,
+    ) -> None:
+        user_id = (person.nextcloud_user_id or "").strip()
+        result.nextcloud_user_id = user_id or None
+        if not user_id:
+            result.skipped.append("employee has no ERP-bound Nextcloud account")
+            return
+        if not self.nextcloud_config.enabled:
+            result.skipped.append("nextcloud provisioning integration disabled")
+            return
+        if not self.nextcloud_config.configured:
+            result.errors.append("Nextcloud provisioning API is not configured")
+            return
+
+        try:
+            nextcloud = self._get_nextcloud_client()
+            account = nextcloud.get_user(user_id)
+            if account is None:
+                result.skipped.append("ERP-bound Nextcloud account was not found")
+                return
+            if account.get("enabled") is not False:
+                nextcloud.disable_user(user_id)
+            result.nextcloud_account_disabled = True
+        except Exception as exc:  # noqa: BLE001 -- continue remaining offboarding
+            logger.exception(
+                "Nextcloud account disable failed for employee person %s",
+                person.id,
+            )
+            result.errors.append(f"nextcloud account disable failed: {exc}")
 
     def _run_mailcow_steps(
         self,
@@ -277,6 +323,11 @@ class EmployeeOffboardingService:
             timeout=self.config.request_timeout,
         )
         return self._mailcow_client
+
+    def _get_nextcloud_client(self) -> NextcloudTalkClient:
+        if self._nextcloud_client is None:
+            self._nextcloud_client = NextcloudTalkClient(self.nextcloud_config)
+        return self._nextcloud_client
 
     def _get_sieve_client(self) -> ManageSieveClient:
         if self._sieve_client:

@@ -14,6 +14,7 @@ from app.services.mailcow.sogo import (
     remove_forward_address,
     set_forward_to_inactive,
 )
+from app.services.nextcloud.client import NextcloudProvisioningConfig
 from app.services.people.hr.offboarding import (
     EmployeeOffboardingResult,
     EmployeeOffboardingService,
@@ -50,11 +51,65 @@ def _mailcow_config(
     )
 
 
+def _nextcloud_config(*, enabled: bool = True) -> NextcloudProvisioningConfig:
+    return NextcloudProvisioningConfig(
+        enabled=enabled,
+        server_url="https://next.dotmac.ng",
+        username="erp-provisioning",
+        app_password="app-password",
+        group="erp-employees",
+        quota="1 GB",
+        timeout=20.0,
+    )
+
+
 def test_offboarding_statuses_only_include_resigned_and_terminated() -> None:
     assert should_offboard_status(EmployeeStatus.RESIGNED)
     assert should_offboard_status(EmployeeStatus.TERMINATED)
     assert not should_offboard_status(EmployeeStatus.ACTIVE)
     assert not should_offboard_status(EmployeeStatus.ON_LEAVE)
+
+
+def test_offboarding_disables_erp_bound_nextcloud_account() -> None:
+    nextcloud = Mock()
+    nextcloud.get_user.return_value = {
+        "email": "john@dotmac.ng",
+        "enabled": True,
+    }
+    service = EmployeeOffboardingService(
+        Mock(),
+        config=_mailcow_config(),
+        nextcloud_config=_nextcloud_config(),
+        nextcloud_client=nextcloud,
+    )
+    person = Mock()
+    person.id = "person-1"
+    person.nextcloud_user_id = "john@dotmac.ng"
+    result = EmployeeOffboardingResult(employee_id="employee-1")
+
+    service._disable_nextcloud_account(person, result)
+
+    assert result.nextcloud_user_id == "john@dotmac.ng"
+    assert result.nextcloud_account_disabled
+    nextcloud.disable_user.assert_called_once_with("john@dotmac.ng")
+
+
+def test_offboarding_does_not_guess_an_unbound_nextcloud_identity() -> None:
+    nextcloud = Mock()
+    service = EmployeeOffboardingService(
+        Mock(),
+        config=_mailcow_config(),
+        nextcloud_config=_nextcloud_config(),
+        nextcloud_client=nextcloud,
+    )
+    person = Mock()
+    person.nextcloud_user_id = None
+    result = EmployeeOffboardingResult(employee_id="employee-1")
+
+    service._disable_nextcloud_account(person, result)
+
+    assert "employee has no ERP-bound Nextcloud account" in result.skipped
+    nextcloud.get_user.assert_not_called()
 
 
 @patch("app.services.mailcow.cleanup_queue.httpx.Client")

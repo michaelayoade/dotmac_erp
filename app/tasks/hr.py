@@ -108,6 +108,8 @@ def run_employee_mailcow_offboarding(
             "mailcow_enabled": result.mailcow_enabled,
             "mailcow_mailbox_found": result.mailcow_mailbox_found,
             "mailcow_password_reset": result.mailcow_password_reset,
+            "nextcloud_user_id": result.nextcloud_user_id,
+            "nextcloud_account_disabled": result.nextcloud_account_disabled,
             "sieve_offboarding_script_updated": (
                 result.sieve_offboarding_script_updated
             ),
@@ -121,7 +123,7 @@ def run_employee_mailcow_offboarding(
 
 @shared_task
 def reconcile_employee_mailcow_provisioning() -> dict[str, Any]:
-    """Queue idempotent Mailcow provisioning for every current employee."""
+    """Repair only explicit forward provisioning requests; never backfill."""
     from app.config import settings
     from app.tasks.email import run_employee_mailcow_provisioning
 
@@ -141,6 +143,7 @@ def reconcile_employee_mailcow_provisioning() -> dict[str, Any]:
                 select(Employee.employee_id).where(
                     Employee.organization_id == org_id,
                     Employee.status.notin_(excluded_statuses),
+                    Employee.mailcow_provisioning_requested_at.isnot(None),
                 )
             ).all()
         for employee_id in employee_ids:

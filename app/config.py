@@ -290,6 +290,30 @@ class Settings:
         os.getenv("MAILCOW_SOGO_CLEANUP_TOKEN") or None
     )
 
+    # Dedicated Nextcloud employee-provisioning identity. Keep this separate
+    # from the lower-privilege Talk notification bot credentials.
+    nextcloud_provisioning_enabled: bool = (
+        os.getenv("NEXTCLOUD_PROVISIONING_ENABLED", "false").lower() == "true"
+    )
+    nextcloud_provisioning_server_url: str = os.getenv(
+        "NEXTCLOUD_PROVISIONING_SERVER_URL", ""
+    ).rstrip("/")
+    nextcloud_provisioning_username: str = os.getenv(
+        "NEXTCLOUD_PROVISIONING_USERNAME", ""
+    ).strip()
+    nextcloud_provisioning_app_password: str | None = (
+        os.getenv("NEXTCLOUD_PROVISIONING_APP_PASSWORD") or None
+    )
+    nextcloud_provisioning_group: str = os.getenv(
+        "NEXTCLOUD_PROVISIONING_GROUP", "erp-employees"
+    ).strip()
+    nextcloud_provisioning_quota: str = os.getenv(
+        "NEXTCLOUD_PROVISIONING_QUOTA", "1 GB"
+    ).strip()
+    nextcloud_provisioning_timeout: float = float(
+        os.getenv("NEXTCLOUD_PROVISIONING_TIMEOUT", "20.0")
+    )
+
     # ==========================================================================
     # Analytics (pre-computed metric snapshots)
     # ==========================================================================

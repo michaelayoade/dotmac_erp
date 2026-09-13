@@ -163,13 +163,34 @@ def run_employee_mailcow_provisioning(
                 result.activation_token,
             )
             db.commit()
-        return {
+        task_result: dict[str, Any] = {
             "employee_id": result.employee_id,
             "email": result.email,
             "created": result.created,
             "already_exists": result.already_exists,
             "skipped": result.skipped,
         }
+        employee = db.get(Employee, employee_uuid)
+        if employee and employee.mailcow_mailbox_provisioned_at is not None:
+            from app.config import settings
+
+            if settings.nextcloud_provisioning_enabled:
+                from app.services.people.hr.nextcloud_provisioning import (
+                    EmployeeNextcloudProvisioningService,
+                )
+
+                nextcloud_result = EmployeeNextcloudProvisioningService(
+                    db
+                ).ensure_account(org_uuid, employee_uuid)
+                db.commit()
+                task_result["nextcloud"] = {
+                    "user_id": nextcloud_result.user_id,
+                    "created": nextcloud_result.created,
+                    "already_exists": nextcloud_result.already_exists,
+                    "enabled": nextcloud_result.enabled,
+                    "skipped": nextcloud_result.skipped,
+                }
+        return task_result
 
 
 @shared_task(
