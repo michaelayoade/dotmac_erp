@@ -40,7 +40,6 @@ from app.models.finance.payments.payment_intent import (
     PaymentIntent,
     PaymentIntentStatus,
 )
-from app.models.finance.core_org.bank_directory import BankDirectory
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
@@ -75,6 +74,7 @@ from app.services.finance.payments.paystack_client import (
     PaystackUnreachable,
 )
 from app.services.integration_config import decrypt_credential, encrypt_credential
+from app.services.settings.bank_directory import OrgBankDirectoryService
 
 # Sub → ERP translation policy lives in sub_mappings (pure, side-effect-free).
 # Re-imported here so the canonical import sites
@@ -235,16 +235,13 @@ class _ExpenseSyncMixin(_SubSyncBase):
             )
         return SubExpenseApproversResponse(items=list(unique.values()))
 
-    def list_expense_banks(self) -> SubExpenseBanksResponse:
-        rows = self.db.scalars(
-            select(BankDirectory)
-            .where(BankDirectory.is_active.is_(True))
-            .order_by(BankDirectory.bank_name)
-        ).all()
+    def list_expense_banks(self, org_id: UUID) -> SubExpenseBanksResponse:
+        """Return the organization's active reimbursement bank directory."""
+        rows = OrgBankDirectoryService(self.db).list_active_banks(org_id)
         return SubExpenseBanksResponse(
             items=[
                 SubExpenseBankItem(
-                    bank_code=bank.bank_code,
+                    bank_code=bank.bank_sort_code,
                     bank_name=bank.bank_name,
                 )
                 for bank in rows
@@ -262,11 +259,9 @@ class _ExpenseSyncMixin(_SubSyncBase):
             employee.bank_account_name or employee.full_name or ""
         ).strip()
         bank = (
-            self.db.scalar(
-                select(BankDirectory).where(
-                    BankDirectory.bank_code == bank_code,
-                    BankDirectory.is_active.is_(True),
-                )
+            OrgBankDirectoryService(self.db).get_active_bank_by_sort_code(
+                org_id,
+                bank_code,
             )
             if bank_code
             else None
@@ -275,7 +270,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
             return SubExpenseProfileDestinationResponse(available=False)
         return SubExpenseProfileDestinationResponse(
             available=True,
-            bank_code=bank.bank_code,
+            bank_code=bank.bank_sort_code,
             bank_name=bank.bank_name,
             masked_account_number=_masked_account_number(account_number),
             beneficiary_name=beneficiary_name,
@@ -306,11 +301,9 @@ class _ExpenseSyncMixin(_SubSyncBase):
 
         if not account_number.isdigit() or not 6 <= len(account_number) <= 30:
             raise HTTPException(status_code=422, detail="Account number is invalid")
-        bank = self.db.scalar(
-            select(BankDirectory).where(
-                BankDirectory.bank_code == bank_code,
-                BankDirectory.is_active.is_(True),
-            )
+        bank = OrgBankDirectoryService(self.db).get_active_bank_by_sort_code(
+            org_id,
+            bank_code,
         )
         if bank is None:
             raise HTTPException(status_code=422, detail="Select an active ERP bank")
@@ -348,7 +341,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
             "employee_id": str(employee.employee_id),
             "source_claim_id": str(data.source_claim_id),
             "mode": data.mode,
-            "bank_code": bank.bank_code,
+            "bank_code": bank.bank_sort_code,
             "bank_name": bank.bank_name,
             "account_number": account_number,
             "verified_beneficiary_name": resolved.account_name,
@@ -362,7 +355,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
         return SubExpenseDestinationVerifyResponse(
             destination_token=token,
             mode=data.mode,
-            bank_code=bank.bank_code,
+            bank_code=bank.bank_sort_code,
             bank_name=bank.bank_name,
             masked_account_number=_masked_account_number(account_number),
             verified_beneficiary_name=resolved.account_name,

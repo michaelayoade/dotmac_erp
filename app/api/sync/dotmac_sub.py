@@ -474,7 +474,9 @@ def list_sub_expense_banks(
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
 ) -> SubExpenseBanksResponse:
-    return DotMacSubSyncService(db).list_expense_banks()
+    return DotMacSubSyncService(db).list_expense_banks(
+        UUID(str(auth["organization_id"]))
+    )
 
 
 @router.post(

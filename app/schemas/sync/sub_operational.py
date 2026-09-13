@@ -694,7 +694,7 @@ class SubExpenseApproversResponse(BaseModel):
 
 
 class SubExpenseBankItem(BaseModel):
-    """One active bank from ERP's canonical Nigerian bank directory."""
+    """One active bank from the organization's reimbursement directory."""
 
     bank_code: str
     bank_name: str
