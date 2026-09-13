@@ -83,15 +83,23 @@ on:
       dotmac_files_version:
         description: >-
           The dotmac-files version to move to. The only value this workflow
-          accepts is 0.1.0a4 (moving from the currently declared 0.1.0a2);
-          anything else is refused by name.
+          accepts is 0.1.0a4; anything else is refused by name. This
+          specific movement (from 0.1.0a2) was already performed by
+          protected run 34768603169 and applied to the tree — a re-dispatch
+          against a tree that no longer declares 0.1.0a2 fails the "moving
+          from the currently declared version" check by design, not by
+          accident.
         required: true
         type: string
       dotmac_tax_version:
         description: >-
           The dotmac-tax version to move to. The only value this workflow
-          accepts is 0.1.0a4 (moving from the currently declared 0.1.0a3);
-          anything else is refused by name.
+          accepts is 0.1.0a4; anything else is refused by name. This
+          specific movement (from 0.1.0a3) was already performed by
+          protected run 34768603169 and applied to the tree — a re-dispatch
+          against a tree that no longer declares 0.1.0a3 fails the "moving
+          from the currently declared version" check by design, not by
+          accident.
         required: true
         type: string
 
