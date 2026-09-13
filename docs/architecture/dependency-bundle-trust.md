@@ -8,10 +8,18 @@ consumes this contract yet. `scripts/dependency_bundle.py`,
 `docs/architecture/dependency-bundle-duplication-inventory.json` are the
 mechanics and canonical policy for the end state; no workflow, Dockerfile,
 `pyproject.toml`, or `poetry.lock` changed in this slice.
-`scripts/erp_lock.py` changed in exactly one narrow way: it now imports
-`dependency_normalisation.normalise_name` instead of defining its own copy
-(see "Named duplication debt" below) — its credentialed acquisition
-orchestration is untouched.
+`scripts/erp_lock.py` changed in exactly two narrow ways, both import-only
+(verified against the real diff, not asserted): it now imports
+`dependency_normalisation` and its `_normalised` and
+`_normalised_repository_url` names each became a one-line alias to
+`dependency_normalisation.normalise_name` /
+`.normalise_repository_url` in place of a locally-defined function (see
+"Named duplication debt" below) — its credentialed acquisition
+orchestration is otherwise untouched. A third comparison — the LOCK-level
+off-index package NAME match — was also converged onto PEP 503
+normalisation, but entirely on the `dependency_bundle.py` side:
+`erp_lock.off_index_lock_problems` already normalised both sides of that
+comparison, so no further `erp_lock.py` change was needed there.
 
 **The 1a repair.** An adversarial cross-model review of the original slice
 found six corrections to the contract this document claims, not scope
@@ -55,8 +63,12 @@ this document is entitled to just assert away.
   only sanctioned entry point);
 - contained-file hash verification;
 - local PEP 503 index materialisation;
-- candidate-specific rebinding (binding a verified bundle to one candidate
-  commit whose own recomputed plan digest matches it).
+- candidate-specific rebinding (`bind_bundle_to_candidate`): binding a
+  verified bundle to one candidate commit whose own recomputed plan digest
+  matches it AND whose own commit SHA — read from `candidate_root`'s `.git`
+  refs, never accepted as a parameter — matches too, consuming an
+  ALREADY-VERIFIED `RunMetadata` (from a prior `verify_run_metadata` call)
+  rather than re-deriving one from unvalidated `bundle_manifest` fields.
 
 `scripts/dependency_normalisation.py` owns PEP 503 package-name
 normalisation — the ONE place that logic lives, imported by both
@@ -151,41 +163,51 @@ to, always moves the digest.
 
 1. Parse `pyproject.toml` and `poetry.lock` with `tomllib`.
 2. Refuse: an unknown dependency table (`[tool.poetry.dev-dependencies]`,
-   PEP 621 `[project.dependencies]`/`[project.optional-dependencies]`);
-   `[tool.poetry.requires-plugins]` (Poetry loads and imports plugins
-   BEFORE it resolves anything — arbitrary candidate-controlled code in a
-   future credential-bearing producer step, refused for the identical
-   reason `erp_lock.py` refuses it); a duplicate dependency declaration; a
-   present `poetry.toml`; an alternate URL on the `forgejo`-named source, or
-   any other named source pointing at the same host; a direct registry URL
-   bypassing the named source; an off-index dependency form that is not the
-   policy's exact pinned identity; a version range (any operator, not an
-   exact pin) on a `source = "forgejo"` dependency; and any manifest/lock
-   disagreement (a declared forgejo pin or off-index pin with no matching
-   lock entry, a different resolved version, or a lock `resolved_reference`
-   that disagrees with the pinned commit).
+   PEP 621 `[project.dependencies]`/`[project.optional-dependencies]`, PEP
+   735 `[dependency-groups]` — refused outright because it holds plain PEP
+   508 requirement strings that can express a direct reference bypassing
+   total classification, and this module has no PEP 508 classifier to
+   examine one with); `[tool.poetry.requires-plugins]` (Poetry loads and
+   imports plugins BEFORE it resolves anything — arbitrary
+   candidate-controlled code in a future credential-bearing producer step,
+   refused for the identical reason `erp_lock.py` refuses it); a duplicate
+   dependency declaration; a present `poetry.toml`; an alternate URL (any
+   spelling other than the exact canonical one, including a missing
+   trailing slash) on the `forgejo`-named source, or any other named source
+   pointing at the same host; a direct registry URL bypassing the named
+   source; an off-index dependency form that is not the policy's exact
+   pinned identity; a version range (any operator, not an exact pin) on a
+   `source = "forgejo"` dependency; and any manifest/lock disagreement (a
+   declared forgejo pin or off-index pin with no matching lock entry, a
+   different resolved version, or a lock `resolved_reference` that
+   disagrees with the pinned commit).
 3. Extract: the normalised `forgejo` source URL; every Poetry dependency
    (across `[tool.poetry.dependencies]` and every
    `[tool.poetry.group.<name>.dependencies]`) that declares
-   `source = "forgejo"`, including its group, PEP-503-normalised name, exact
-   version, markers, extras, `optional`, and per-dependency `python`
-   constraint; every approved off-index dependency's group, url, tag, and
-   resolved commit; every `poetry.lock` `[[package]]` entry whose
+   `source = "forgejo"`, including its group, the OWNING GROUP's own
+   `optional` flag, PEP-503-normalised name, exact version, markers,
+   extras, its OWN `optional` key, and per-dependency `python` constraint;
+   every approved off-index dependency's group, group-optional flag, url,
+   tag, and resolved commit; every `poetry.lock` `[[package]]` entry whose
    `source.reference == "forgejo"` — direct OR transitive — including its
    normalised name, version, groups, `optional`, `python-versions`,
-   dependencies, full source record, and every `(file, hash)` pair; and the
-   schema/policy version plus target Python constraint and platform.
+   `markers`, `extras`, dependencies, full source record, and every `(file,
+   hash)` pair; the lock's own `[metadata].lock-version` and
+   `.python-versions`; and the schema/policy version plus target Python
+   constraint and platform.
 4. Serialise as canonical UTF-8 JSON: `json.dumps(doc, sort_keys=True,
    separators=(",", ":"))` plus a trailing newline.
 5. Hash: `SHA256(b"dotmac.erp-dependency-plan.v1\0" + canonical_json_bytes)`.
 
 **What changes the digest:** any private pin version, any private
 transitive dependency's presence/version/hash, the forgejo source URL, a
-group assignment, a marker, an extra, `optional`, a per-dependency `python`
-constraint, a lock package's `python-versions`, a wheel/sdist filename, a
-published hash, or an approved off-index dependency's pinned URL/tag/commit.
-Every one of these is proven by a dedicated before/after mutation test in
-`tests/architecture/test_dependency_bundle.py`.
+group assignment, a group's own `optional` flag, a marker, an extra, a
+dependency's own `optional` key, a per-dependency `python` constraint, a
+lock package's `python-versions`/`markers`/`extras`, a wheel/sdist
+filename, a published hash, the lock's own format version or
+resolution-wide Python constraint, or an approved off-index dependency's
+pinned URL/tag/commit. Every one of these is proven by a dedicated
+before/after mutation test in `tests/architecture/test_dependency_bundle.py`.
 
 **What does not:** TOML comments, whitespace, or key order; the
 application's own `[tool.poetry].version`; and any public (non-forgejo,
@@ -231,30 +253,47 @@ impossibility rather than something every individual check happens to miss.
 }
 ```
 
-**`create_bundle_manifest` COMPUTES every binding rather than accepting it
-as an independent scalar.** It takes a `DependencySurface` and a mapping of
-`AcquiredMember`s (what the producer job actually downloaded and hashed) —
-never a bare `plan_digest` string or `member_hashes` dict. `plan_digest` is
-derived by calling `compute_plan_digest(surface)` internally; `members` is
-built by requiring EXACT closure between `planned_artifacts(surface)` and
-the acquired members in BOTH directions — every planned `(filename,
-sha256)` must be present in `acquired_members` with an agreeing digest
-(`missing` refuses), and every acquired member must be named by the plan
+**`create_bundle_manifest` COMPUTES every binding from the SURFACE and the
+REAL FILES on disk — it does not accept any of `plan_digest`,
+`archive_sha256`, a member's hash, or a member's size as an independent,
+caller-reported scalar.** Its parameters are a `DependencySurface`,
+`acquired_files` (a plain `filename -> Path` mapping to what the producer
+actually downloaded), `archive_path` (the real outer archive file), and an
+already-verified `RunMetadata`. It reads and hashes every acquired file
+itself (`sha256_hex(path.read_bytes())`) and compares that AGAINST the
+plan's own required digest — a caller's claim about a file's hash or size
+is never trusted, only what this function measures directly. `archive_sha256`
+is likewise computed from `archive_path`'s real bytes, never accepted as a
+scalar. `plan_digest` is derived by calling `compute_plan_digest(surface)`
+internally; `members` is built by requiring EXACT closure between
+`planned_artifacts(surface)` and `acquired_files` in BOTH directions —
+every planned filename must be present in `acquired_files` (`missing`
+refuses), and every acquired file must be named by the plan
 (`extra`/unaccounted-for refuses). Because there is only one `surface`
-input, there is no seam at which a second plan's identity could be
-substituted for a different file set — this is what closes the "plan A's
-digest attached to plan B's files" gap the original schema had (proven in
+input and every byte is independently re-read, there is no seam at which a
+second plan's identity, or an unrelated archive, could be substituted for
+the real artifacts — this is what closes the "plan A's digest attached to
+plan B's files" gap the original schema had (proven in
 `test_mixing_one_plans_digest_with_a_different_plans_files_is_refused`).
 
-Every field is independently required; `create_bundle_manifest` and
-`verify_run_metadata` refuse a missing repository, candidate SHA, trusted
-workflow SHA, run id, run attempt, plan digest, archive digest, or member
-hash independently of every other field's presence — a caller cannot supply
-"most of it" and have the rest silently defaulted. Member `size` is now
-part of the schema (it was previously required by `safe_extract_zip` but
-never actually recorded anywhere), which is what lets extraction assert
-exact size AND set equality entirely FROM the manifest, with no
-side-channel input.
+Every field is independently required, but `create_bundle_manifest` and
+`verify_run_metadata` do NOT check the same fields — neither of them takes
+a candidate SHA at all (that is `bind_bundle_to_candidate`'s job, and it
+derives that SHA from `candidate_root`'s own `.git` refs rather than
+accepting one; see "Ownership" above). `create_bundle_manifest` refuses a
+missing/mismatched acquired file, a missing/empty archive, a schema_version
+other than `MANIFEST_SCHEMA_VERSION`, and a `RunMetadata` that is not
+already a validated instance (its own `__post_init__` refuses an
+out-of-shape field even for a hand-built one). `verify_run_metadata`
+independently refuses a missing repository (name or numeric ID), workflow
+path, run id, run attempt, trusted workflow SHA (including the all-zero
+null SHA), artifact id, artifact name (must match the pattern for the
+CALLER's own recomputed candidate digest), artifact run ownership, and
+environment name — a caller cannot supply "most of it" and have the rest
+silently defaulted. Member `size` is part of the schema (it was previously
+required by extraction's private zip-member reader but never actually
+recorded anywhere), which is what lets extraction assert exact size AND
+set equality entirely FROM the manifest, with no side-channel input.
 
 ## Trust chain (end state; the producer/binder workflows themselves are a
 later slice)
@@ -270,19 +309,23 @@ later slice)
    from ITS OWN trusted checkout (the workflow file's commit, which for a
    push-triggered or centrally-defined reusable workflow is not
    candidate-controlled the way `workflow_dispatch`'s `github.sha` is),
-   computes the CANDIDATE's own plan digest from the PR's checked-out
-   `pyproject.toml`/`poetry.lock` FIRST, fetches the bundle manifest and
-   archive via the GitHub API, `verify_run_metadata`s the run against
-   policy with that candidate digest as `expected_plan_digest` (repository
-   full name AND numeric ID, the PRODUCER workflow path specifically,
-   positive run/attempt/artifact coordinates, a non-null commit SHA, the
-   artifact's own run ownership, the required environment, and an artifact
-   name matching the candidate's plan digest — see "Refusal behaviour" for
-   what this step does NOT prove), `verify_archive_digest`s the outer ZIP,
+   `verify_run_metadata`s the run against policy, passing the CANDIDATE's
+   own checked-out tree as `candidate_root` so the function derives the
+   expected plan digest itself (repository full name AND numeric ID, the
+   PRODUCER workflow path specifically, positive run/attempt/artifact
+   coordinates, a non-null commit SHA, the artifact's own run ownership,
+   the required environment, and an artifact name matching the
+   self-derived candidate plan digest — see "Refusal behaviour" for what
+   this step does NOT prove), `verify_archive_digest`s the outer ZIP,
    `extract_verified_bundle`s it (staged, verified, and published
-   atomically — see "Extraction is private, safe, and atomic" below), and
-   `bind_bundle_to_candidate`s the result — which refuses unless the
-   candidate's own digest equals the bundle's.
+   atomically, with a stated narrow race — see "Extraction is private,
+   safe, and atomic" below), and `bind_bundle_to_candidate`s the result —
+   passing the same `candidate_root` (so the candidate's plan digest AND
+   its actual git-derived commit SHA are both derived, never asserted) and
+   the already-verified `RunMetadata` `verify_run_metadata` returned —
+   which refuses unless the candidate's own digest equals the bundle's and
+   that `RunMetadata` actually corresponds to this same bundle manifest's
+   own run record.
 4. On success, `build_local_index` materialises a local PEP 503 index the
    candidate's `poetry install` points at instead of
    `registry.dotmac.io` — no credential involved anywhere in PR CI.
@@ -316,7 +359,42 @@ through verification. It:
   `dest_dir`, which must not already exist. On ANY failure the staging
   directory is removed and NOTHING is written to `dest_dir` — a caller
   never observes a partially-extracted destination (proven in
-  `test_extraction_is_atomic_on_failure_nothing_is_published`).
+  `test_extraction_is_atomic_on_failure_nothing_is_published`). This is
+  atomic against SEQUENTIAL failure, not a mutual-exclusion primitive: see
+  "Publication has a stated, narrow race" below for the one honestly-named
+  gap.
+
+`build_local_index` (local PEP 503 index materialisation) has the
+identical shape and the identical stated race: it also builds the WHOLE
+index in a fresh staging directory and publishes with one atomic rename,
+refusing a pre-existing `index_root`, refusing a package key or filename
+that is not a safe bare name (no path separators, not absolute, not
+`.`/`..` — a caller-controlled key or filename previously could escape the
+staging tree entirely, since `Path.__truediv__` REPLACES the left operand
+when the right is absolute), and HTML-escaping every filename before it
+reaches a resolver-facing anchor.
+
+## Publication has a stated, narrow race
+
+Both `extract_verified_bundle` and `build_local_index` check destination
+existence, then call `os.rename`. There is no portable, dependency-free
+"rename unless the destination exists" primitive for a directory target in
+the Python standard library (POSIX `renameat2(..., RENAME_NOREPLACE)` is
+Linux-only and is not exposed by `os`). Both functions re-check existence
+a second time immediately before the rename, which narrows the window from
+"the whole function's duration" to "the gap between that second check and
+the syscall" — but does NOT close it: a concurrent process that creates an
+EMPTY destination in that gap would have it silently replaced, because
+POSIX `rename(2)` replacing an empty directory target is not an OS-level
+error. This is deliberately not overstated as "atomic against concurrent
+writers" anywhere in this document or the code: both functions are atomic
+against sequential failure (a caller never observes a partial result), and
+neither is a mutual-exclusion primitive against a concurrent, uncooperating
+writer targeting the identical destination path. The intended usage — each
+destination named for its own bundle/plan identity — makes two callers
+targeting the same path an operational precondition violation rather than
+an expected scenario; external locking is the caller's responsibility if
+that assumption does not hold.
 
 ## Environment settings
 
@@ -346,19 +424,40 @@ expected, is refused by an explicit type check rather than left to raise a
 raw `AttributeError`/`TypeError` when something later calls `.get(...)` on
 it. `verify_run_metadata` refuses a non-dict `metadata` or `policy`
 outright rather than raising `AttributeError` on the first `.get(...)`.
+`normalise_repository_url` catches the raw `ValueError` a malformed
+authority (e.g. unbalanced IPv6 brackets) makes `urllib.parse.urlsplit`
+itself raise, and returns the input unchanged — exactly like any other
+spelling it does not recognise — rather than propagating it.
+`load_permitted_off_index_dependencies` refuses a non-string `url`/`tag`
+field at the point the policy is read, instead of failing later, far from
+the cause. `load_policy`'s `artifact_name_pattern` check proves
+`.format(plan_digest=...)` actually succeeds, not merely that the pattern
+contains the substring `{plan_digest}` — a pattern with an extra field, a
+bad conversion, or unbalanced braces used to reach
+`verify_run_metadata`'s own `.format(...)` call as a raw
+`KeyError`/`ValueError`/`IndexError`.
 
 **Stated boundary, not silently assumed:** `policy` (the return value of
-`load_policy`) and a `RunMetadata` instance are treated as validated ONCE,
-at their own construction (`load_policy`'s checks; `RunMetadata
-.__post_init__`), not re-validated at every downstream use — the same
-posture `extract_verified_bundle` and `bind_bundle_to_candidate` already
-took toward a `bundle_manifest` dict, which they DO fully shape-check
-before use (every `members[...]` and `run[...]` access is behind an
-`isinstance`/key-presence check, never a bare index). None of them falls
-back to fetching from the registry on a verification failure — see that
-module's "No registry fallback" docstring section. A caller that hits a
-refusal must obtain a new, independently verifiable bundle; there is no
-degraded-trust path.
+`load_policy`) is fully validated once, at `load_policy` itself;
+`verify_run_metadata` additionally performs a LIGHT defensive check on its
+own `metadata`/`policy` parameters (refusing a non-dict outright) without
+re-running `load_policy`'s full schema validation — a caller is expected
+to have already called `load_policy`, and this is a guard against a
+grossly wrong-shaped argument, not a second full validation pass. A
+`RunMetadata` instance is validated once, at its own construction
+(`__post_init__`); `bind_bundle_to_candidate` additionally refuses a `run`
+argument that is not a `RunMetadata` instance at all, and cross-checks
+that its `run_id`/`artifact_id` actually correspond to the SAME values
+inside `bundle_manifest`'s own `run` record — refusing to mix a validly-
+shaped `RunMetadata` verified against a DIFFERENT bundle into this one. A
+`bundle_manifest` dict is fully shape-checked at every point it is read in
+both `extract_verified_bundle` and `bind_bundle_to_candidate` (every
+`members[...]`/`run[...]` access is behind an `isinstance`/key-presence
+check, never a bare index). None of these functions falls back to fetching
+from the registry on a verification failure — see that module's "No
+registry fallback" docstring section. A caller that hits a refusal must
+obtain a new, independently verifiable bundle; there is no degraded-trust
+path.
 
 **`verify_run_metadata` is LOCAL validation only — this is a deliberate,
 stated limit, not an oversight.** It proves that a metadata dict, IF
