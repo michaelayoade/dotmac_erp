@@ -146,32 +146,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: The requested ref is reachable from a branch of this repository
+      - name: Require the protected main source and exact current main tip
         env:
           REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
-          # Defence in depth, with a stated premise. This excludes a commit
-          # that exists in this repository's object store but is on no
-          # branch — a fork pull request's head, which `actions/checkout`
-          # will happily resolve by SHA. It does NOT establish that anyone
-          # reviewed the commit: a branch here can be attacker-authored, and
-          # the pin change this workflow serves arrives as one.
           git fetch --quiet --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
-          if ! git rev-parse --quiet --verify "${REF}^{commit}" > /dev/null; then
-            echo "::error::${REF} is not present in this repository after fetching"
-            echo "::error::every branch head. It is either not a commit here at all, or"
-            echo "::error::reachable only as a pull-request head — neither is dispatchable."
-            exit 1
-          fi
-          BRANCHES=$(git branch --remotes --contains "${REF}" --format='%(refname:short)')
-          if [ -z "${BRANCHES}" ]; then
-            echo "::error::${REF} is on no branch of this repository. A commit"
-            echo "::error::reachable only as a pull-request head is not dispatchable here."
-            exit 1
-          fi
-          echo "reachable from:"
-          printf '  %s\n' ${BRANCHES}
+          MAIN_SHA=$(git rev-parse refs/remotes/origin/main)
+          python scripts/erp_lock.py protected-main \
+            --ref "${REF}" \
+            --main-sha "${MAIN_SHA}" \
+            --workflow-ref "${GITHUB_REF}" \
+            --workflow-sha "${GITHUB_SHA}"
 
       # THE UNTRUSTED CHECKOUT. Data, beside the tooling — never above it.
       - name: Check out the ref under resolution, beside the tooling
@@ -272,6 +258,14 @@ jobs:
             exit 1
           fi
           echo "the bundle is clean"
+
+      - name: Record secret-free credential attestation
+        env:
+          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/erp_lock.py credential-scan \
+            --root work --root /tmp/bundle --out /tmp/bundle
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -501,9 +495,13 @@ jobs:
           name: erp-lock-pair-${{ github.run_id }}-${{ github.run_attempt }}
           path: /tmp/pair
 
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: erp-lock-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/bundle
+
       - name: Assemble the evidence — the manifest and the lock, bound together
         env:
-          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
           REF: ${{ inputs.ref }}
           FILES_VERSION: ${{ inputs.dotmac_files_version }}
           TAX_VERSION: ${{ inputs.dotmac_tax_version }}
@@ -512,8 +510,8 @@ jobs:
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          # Every coordinate crosses as a shell variable, never as a
-          # `${{ }}` interpolation into this script. Both inputs are
+          # Every coordinate crosses as a shell variable, never as a GitHub
+          # Actions expression interpolated into this script. Both inputs are
           # validated in the first job, but a sink whose safety rests on a
           # check elsewhere is a sink.
           #
@@ -524,6 +522,7 @@ jobs:
             --out /tmp/evidence \
             --manifest /tmp/pair/pyproject.toml \
             --lock /tmp/pair/poetry.lock \
+            --credential-proof /tmp/bundle/credential-scan.ok \
             --coordinate "ref=${REF}" \
             --coordinate "dotmac_files_version=${FILES_VERSION}" \
             --coordinate "dotmac_tax_version=${TAX_VERSION}" \
