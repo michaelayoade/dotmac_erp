@@ -26,6 +26,7 @@ workflow.
 
 from __future__ import annotations
 
+import ast
 import base64
 import json
 import re
@@ -574,6 +575,94 @@ def test_an_index_controlled_link_that_is_not_approved_refuses(
 ) -> None:
     with pytest.raises(Refusal):
         approved_artifact_url(href, _PAGE)
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        # Each of these resolves to a raw path that still starts with
+        # ARTIFACT_PATH_PREFIX (so the existing prefix check alone would
+        # accept it) and carries no LITERAL `..` segment (so the existing
+        # literal check alone would accept it too) — only decoding the path
+        # reveals the traversal, which is exactly what the server does.
+        "%2e%2e/%2e%2e/dotmac_files-1.whl",
+        "%2E%2E/%2E%2E/dotmac_files-1.whl",
+        "%252e%252e/%252e%252e/dotmac_files-1.whl",
+        ".%2e/.%2e/dotmac_files-1.whl",
+        "..%2f..%2f..%2fetc/passwd",
+    ],
+    ids=[
+        "lower-encoded",
+        "upper-encoded",
+        "double-encoded",
+        "mixed-encoded",
+        "encoded-slash-literal-dots",
+    ],
+)
+def test_an_encoded_traversal_segment_is_refused(href: str) -> None:
+    with pytest.raises(Refusal):
+        approved_artifact_url(href, _PAGE)
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "../../files/dotmac_files-1.0%2Bbuild.5.whl#sha256=ab",
+        "../../files/dotmac%7Efiles-1.whl#sha256=ab",
+    ],
+    ids=["encoded-plus-in-version", "encoded-tilde"],
+)
+def test_a_percent_encoded_href_that_is_not_traversal_is_still_accepted(
+    href: str,
+) -> None:
+    url = approved_artifact_url(href, _PAGE)
+    assert url.startswith(f"{ARTIFACT_ORIGIN}/api/packages/dotmac/pypi/files/")
+
+
+def test_a_literal_backslash_in_the_resolved_path_is_refused() -> None:
+    """`..\\..\\etc\\passwd` contains no `/` at all, so it is one opaque
+    segment that survives every `..`-in-`split("/")` check and still starts
+    with ARTIFACT_PATH_PREFIX. Whether the origin treats `\\` as a separator
+    is not ours to assume either way, so a literal backslash is refused
+    outright rather than reasoned about."""
+
+    with pytest.raises(Refusal):
+        approved_artifact_url("..\\..\\etc\\passwd", _PAGE)
+
+
+def test_an_ordinary_path_with_no_backslash_still_passes() -> None:
+    """POSITIVE CONTROL for the backslash refusal above."""
+
+    url = approved_artifact_url("../../files/dotmac_files-1.whl#sha256=ab", _PAGE)
+    assert url.startswith(f"{ARTIFACT_ORIGIN}/api/packages/dotmac/pypi/files/")
+
+
+@pytest.mark.parametrize(
+    "href",
+    ["%c0%ae%c0%ae/etc/passwd", "%c0%af"],
+    ids=["overlong-dot", "overlong-slash"],
+)
+def test_a_percent_escape_that_is_not_valid_utf8_is_refused(href: str) -> None:
+    """`unquote` defaults to `errors='replace'`, so an overlong sequence like
+    `%c0%ae` becomes U+FFFD on our side and can never reveal `..` here --
+    while a differently-behaved decoder at the origin might read it as `.`
+    or `/`. Our decode semantics are not proven to match the origin's, so
+    what cannot be read unambiguously is refused rather than guessed at."""
+
+    with pytest.raises(Refusal):
+        approved_artifact_url(href, _PAGE)
+
+
+def test_an_ordinary_percent_escape_still_decodes_and_passes() -> None:
+    """POSITIVE CONTROL for the strict-UTF-8 refusal above -- an ordinary,
+    valid percent-escape must still be accepted."""
+
+    for href in (
+        "../../files/dotmac_files-1.0%2Bbuild.5.whl#sha256=ab",
+        "../../files/dotmac%7Efiles-1.whl#sha256=ab",
+    ):
+        url = approved_artifact_url(href, _PAGE)
+        assert url.startswith(f"{ARTIFACT_ORIGIN}/api/packages/dotmac/pypi/files/")
 
 
 def test_a_redirect_is_refused_rather_than_followed() -> None:
@@ -1230,6 +1319,48 @@ def test_demoting_the_gate_to_an_after_the_fact_report_is_named() -> None:
     ], problems
 
 
+def _off_index_lock_gate_problems(steps: list[str]) -> list[str]:
+    commands = [_commands(step) for step in steps]
+    gates = [i for i, c in enumerate(commands) if "erp_lock.py off-index-lock" in c]
+    resolutions = [
+        i for i, c in enumerate(commands) if re.search(r"^\s*poetry lock\b", c, re.M)
+    ]
+    problems: list[str] = []
+    if not gates:
+        problems.append("no step runs the off-index-lock gate at all")
+    if not resolutions:
+        problems.append("no step runs `poetry lock`")
+    if not gates or not resolutions:
+        return problems
+    if not any(g < min(resolutions) for g in gates):
+        problems.append(
+            "every off-index-lock check runs AFTER `poetry lock`, so an "
+            "already-wrong pin is never caught before resolution"
+        )
+    if not any(g > max(resolutions) for g in gates):
+        problems.append(
+            "nothing re-checks the resolved lock, so resolution could have "
+            "changed the off-index pin's identity unnoticed"
+        )
+    return problems
+
+
+def test_the_off_index_lock_gate_runs_before_and_after_poetry_lock() -> None:
+    assert _off_index_lock_gate_problems(_jobs()["resolve"]) == []
+
+
+def test_removing_the_off_index_lock_gate_entirely_is_named() -> None:
+    steps = [
+        s
+        for s in _jobs()["resolve"]
+        if "erp_lock.py off-index-lock" not in _commands(s)
+    ]
+    assert len(steps) == len(_jobs()["resolve"]) - 2, "the plant removed nothing"
+    assert _off_index_lock_gate_problems(steps) == [
+        "no step runs the off-index-lock gate at all"
+    ]
+
+
 def test_every_checkout_refuses_to_persist_the_token() -> None:
     checkouts = [s for s in _steps() if "actions/checkout@" in s]
     assert len(checkouts) == 5, len(checkouts)
@@ -1533,6 +1664,20 @@ def test_the_lock_half_of_the_premise_is_enforced(
     assert any(expected in problem for problem in problems), problems
 
 
+def test_a_lock_entry_with_no_source_table_at_all_is_refused() -> None:
+    """`source` entirely absent (not merely a wrong shape) must be caught by
+    the same `isinstance(source, dict)` guard as an explicitly non-dict
+    `source` -- `dict.get` returns `None` for a missing key, and `None` is
+    not a `dict` either."""
+
+    lock = {
+        "package": [{"name": _CLIENT, "version": "0.2.0"}]
+    }  # no "source" key at all
+    problems = erp_lock.off_index_lock_problems(lock)
+    assert problems
+    assert any("no source table" in problem for problem in problems), problems
+
+
 def test_a_pep508_requirement_cannot_express_the_pinned_form() -> None:
     """A requirement string has nowhere to put a tag or a resolved commit, so a
     pinned dependency appearing in that form is not the pinned dependency."""
@@ -1553,3 +1698,555 @@ def test_the_real_erp_manifest_and_lock_satisfy_the_premise() -> None:
     declared = manifest["tool"]["poetry"]["dependencies"][_CLIENT]
     assert erp_lock.off_index_pin_problems("t.d." + _CLIENT, declared, _PIN) == []
     assert erp_lock.off_index_lock_problems(lock) == []
+
+
+# ── every `*_problems` validator this module defines is reachable from the
+#    command line — a validator with a `def` and zero call sites is an
+#    unmonitored region, not a control (this is what `off_index_lock_problems`
+#    actually was, before the CLI subcommand above wired it) ────────────────
+
+#: A validator named here is DELIBERATELY defined but not reachable from any
+#: CLI subcommand. Empty after this repair: every `*_problems` function
+#: `erp_lock.py` defines is reachable from `_run`'s dispatch, directly or
+#: through another function it calls. A name may only be added here with a
+#: comment stating why it is correct for that validator to be unwired --
+#: "not yet wired" is not such a reason.
+UNWIRED_PROBLEMS_EXEMPTIONS: dict[str, str] = {}
+
+
+#: Both `FunctionDef` node types — `async def` is a DISTINCT AST node
+#: (`ast.AsyncFunctionDef`), not a `FunctionDef` with a flag, so a check
+#: gated on `FunctionDef` alone lets an `async def foo_problems` — dead or
+#: alive — through without ever being seen, let alone required to be
+#: reachable. Every walk that enumerates function definitions below matches
+#: both node types.
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+
+
+def _problems_function_names(source: str) -> set[str]:
+    """Every function this source defines whose name ends `_problems`."""
+
+    tree = ast.parse(source, filename="erp_lock.py")
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, _FUNCTION_DEF_TYPES) and node.name.endswith("_problems")
+    }
+
+
+#: Scopes whose body does NOT execute merely because the enclosing function
+#: runs -- a call inside one of these is only made if and when that scope is
+#: itself separately invoked/consumed, exactly like a nested `def`.
+#:
+#: `ast.Lambda` is the function-definition case with no name of its own: a
+#: `lambda: foo()` assigned to a variable creates a callable, it does not
+#: CALL `foo`. `ast.GeneratorExp` is the same shape for a different reason --
+#: its body is a suspended coroutine-like iterator; `(foo(x) for x in xs)`
+#: calls nothing until something iterates the generator, which may never
+#: happen (Python evaluates only the OUTERMOST iterable, `xs`, eagerly; the
+#: element expression and any nested `for`/`if` clauses are lazy).
+#:
+#: `ast.ListComp`/`ast.SetComp`/`ast.DictComp` are deliberately NOT included
+#: here even though they are also, technically, their own scope: unlike a
+#: generator expression, a list/set/dict comprehension is fully evaluated —
+#: eagerly, in full — the moment control reaches it, so `[foo(x) for x in
+#: xs]` really does call `foo` every time this line runs. Excluding them too
+#: would be excluding something that provably always executes, which is not
+#: "failing closed" but simply wrong; a real call there must stay credited.
+_LAZY_SCOPE_TYPES = (ast.Lambda, ast.GeneratorExp)
+
+
+def _own_calls(node: ast.AST) -> set[str]:
+    """Bare-name calls made directly in `node`'s own body -- NOT descending
+    into a nested function definition's body, nor into a lazy scope's.
+
+    A call inside a nested `def` is only made if and when that nested
+    function is itself called; crediting it unconditionally to the
+    ENCLOSING function would manufacture a reachability edge that does not
+    exist statically (the enclosing function might never call the nested
+    one, or might pass it around instead of calling it). The same is true,
+    for the same reason, of a call written inside a `lambda` or a generator
+    expression that this scope merely CREATES rather than invokes/consumes
+    -- see `_LAZY_SCOPE_TYPES` for why those two specifically, and not an
+    eager list/set/dict comprehension. `ast.walk` over the whole subtree
+    does not distinguish any of these cases, so this walks by hand and
+    stops at every nested-def and lazy-scope boundary; `ast.walk(tree)` at
+    the top level still visits a nested `def` as its own node, so ITS own
+    calls are still counted -- just only credited to ITS name, not to every
+    function that happens to contain it. A `lambda`/generator expression has
+    no name to credit calls to at all, so its calls are simply dropped,
+    exactly as "not reachable through this scope" requires.
+    """
+
+    found: set[str] = set()
+    _skip_types = _FUNCTION_DEF_TYPES + _LAZY_SCOPE_TYPES
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, _skip_types):
+            continue
+        if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
+            found.add(child.func.id)
+        found |= _own_calls(child)
+    return found
+
+
+def _call_graph(source: str) -> dict[str, set[str]]:
+    """name -> the set of names it calls, by static AST inspection.
+
+    Only bare `ast.Name` call targets count. An `ast.Attribute` call
+    (`self.x()`, `module.x()`) is deliberately NOT credited by its final
+    attribute name: crediting it would let an unrelated object's
+    same-named method (`foo.off_index_lock_problems()`) or a shadowing
+    local rebound to the name manufacture FALSE reachability for a real
+    validator that is not actually called. Every validator in this module
+    is in fact called as a bare name, so this loses no real edge; it can
+    only make the detector MORE willing to call something unreachable,
+    which is the safe direction to be wrong in.
+
+    Two functions sharing one name is refused rather than silently
+    resolved by "last one wins": the call graph cannot decide which
+    definition a caller actually reaches, so reachability-by-name is not a
+    decidable question for it, and pretending it is by overwriting the
+    earlier entry could hide a real gap behind whichever definition
+    happened to be walked last.
+    """
+
+    tree = ast.parse(source, filename="erp_lock.py")
+    graph: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, _FUNCTION_DEF_TYPES):
+            continue
+        if node.name in graph:
+            raise AssertionError(
+                f"two function definitions named {node.name!r} in one "
+                "module -- the call graph cannot decide which one a caller "
+                "reaches, so reachability-by-name is not decidable for it"
+            )
+        graph[node.name] = _own_calls(node)
+    return graph
+
+
+def _reachable_from_cli(source: str) -> set[str]:
+    """Every function name reachable from `_run`'s dispatch body, transitively.
+
+    `_run` IS the CLI dispatch: `_build_parser`'s subcommands only ever reach
+    a validator through a branch of `_run`, so `_run`'s call graph closure is
+    exactly "reachable from a CLI subcommand" for this module.
+    """
+
+    graph = _call_graph(source)
+    seen: set[str] = set()
+    frontier = list(graph.get("_run", set()))
+    while frontier:
+        name = frontier.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        frontier.extend(graph.get(name, set()) - seen)
+    return seen
+
+
+def test_every_problems_function_is_reachable_from_a_cli_subcommand() -> None:
+    source = (ROOT / "scripts" / "erp_lock.py").read_text(encoding="utf-8")
+    reachable = _reachable_from_cli(source)
+    unreachable = _problems_function_names(source) - reachable
+    unexempted = sorted(unreachable - set(UNWIRED_PROBLEMS_EXEMPTIONS))
+    assert not unexempted, (
+        f"{unexempted} are defined but never called from `_run`'s CLI "
+        "dispatch, directly or transitively -- either wire a subcommand to "
+        "them or add a commented exemption stating why not"
+    )
+
+
+def test_the_unwired_problems_exemption_set_names_nothing_actually_reachable() -> None:
+    """A stale exemption is the same failure mode in a new place: a name that
+    reads as a considered decision but is not actually true of the code."""
+
+    source = (ROOT / "scripts" / "erp_lock.py").read_text(encoding="utf-8")
+    reachable = _reachable_from_cli(source)
+    stale = sorted(set(UNWIRED_PROBLEMS_EXEMPTIONS) & reachable)
+    assert not stale, f"{stale} are exempted as unwired but are in fact reachable"
+
+
+def test_the_unwired_problems_exemption_set_starts_empty() -> None:
+    assert UNWIRED_PROBLEMS_EXEMPTIONS == {}
+
+
+# ── sensitivity proof for the reachability guard itself, against a synthetic
+#    module — not the real file, so this proves the DETECTOR, independent of
+#    whatever erp_lock.py currently contains ──────────────────────────────
+
+_UNWIRED_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    if args.command == "beta":
+        return _report("beta", beta_problems(args))
+    return 1
+
+def beta_problems(x):
+    return []
+"""
+
+_ALL_WIRED_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    if args.command == "alpha":
+        return _report("alpha", alpha_problems(args))
+    if args.command == "beta":
+        return _report("beta", beta_problems(args))
+    return 1
+
+def beta_problems(x):
+    return []
+"""
+
+
+def test_the_detector_names_a_planted_unwired_validator() -> None:
+    reachable = _reachable_from_cli(_UNWIRED_SOURCE)
+    unreachable = _problems_function_names(_UNWIRED_SOURCE) - reachable
+    assert unreachable == {"alpha_problems"}, unreachable
+
+
+def test_the_detector_does_not_flag_a_validator_that_is_actually_wired() -> None:
+    reachable = _reachable_from_cli(_ALL_WIRED_SOURCE)
+    unreachable = _problems_function_names(_ALL_WIRED_SOURCE) - reachable
+    assert unreachable == set(), unreachable
+
+
+_ASYNC_UNWIRED_SOURCE = """
+async def fake_problems(x):
+    return []
+
+def _run(args):
+    if args.command == "beta":
+        return _report("beta", beta_problems(args))
+    return 1
+
+def beta_problems(x):
+    return []
+"""
+
+
+def test_an_async_def_validator_is_seen_and_reported_unreachable() -> None:
+    """`async def fake_problems` is a distinct AST node from `FunctionDef`; the
+    detector must not let that keyword be a silent escape from the audit."""
+
+    names = _problems_function_names(_ASYNC_UNWIRED_SOURCE)
+    assert "fake_problems" in names, "the async def was never even seen"
+    reachable = _reachable_from_cli(_ASYNC_UNWIRED_SOURCE)
+    assert "fake_problems" not in reachable
+    assert "fake_problems" in (names - reachable)
+
+
+# ── a `*_problems` name must never be REBOUND anywhere in the module — a
+#    name whose binding can move is a name whose reachability the detector
+#    above cannot decide by static inspection ───────────────────────────────
+
+
+def _rebound_problems_names(source: str) -> set[str]:
+    """Every actual `*_problems` VALIDATOR name (one this source defines with
+    `def`/`async def`) that is also assigned, bound as a loop/with/
+    comprehension target, taken as a parameter, caught by an `except ... as`
+    clause, declared `global`/`nonlocal`, or imported under an alias
+    anywhere else in the module — its own `def` is a binding, not a
+    rebinding, and is excluded.
+
+    `except X as name:` and `global`/`nonlocal name` are, deliberately on
+    Python's part, NOT `ast.Name` nodes — `ast.ExceptHandler.name` and
+    `ast.Global`/`ast.Nonlocal.names` hold plain strings, so a check that
+    only matches `ast.Name`+`Store` never sees either one, and
+    `except SomeError as off_index_lock_problems:` would rebind a real
+    validator name invisibly to this guard. Both are matched explicitly
+    here rather than by walking for `ast.Name` nodes, because there are
+    none to walk to.
+
+    Scoped to names `_problems_function_names` actually returns, not to
+    every identifier that happens to end in `_problems`: a local result
+    variable such as `_run`'s own `before_problems`/`after_problems` ends in
+    that suffix without naming, shadowing, or being confusable with any
+    validator, and flagging it would be a false positive, not a finding.
+    """
+
+    validator_names = _problems_function_names(source)
+    tree = ast.parse(source, filename="erp_lock.py")
+    rebound: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Store)
+            and node.id in validator_names
+        ):
+            rebound.add(node.id)
+        elif isinstance(node, ast.arg) and node.arg in validator_names:
+            rebound.add(node.arg)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                bound = alias.asname or alias.name
+                if bound in validator_names:
+                    rebound.add(bound)
+        elif (
+            isinstance(node, ast.ExceptHandler)
+            and node.name is not None
+            and node.name in validator_names
+        ):
+            rebound.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            for name in node.names:
+                if name in validator_names:
+                    rebound.add(name)
+    return rebound
+
+
+def test_no_problems_validator_name_is_ever_rebound_in_the_module() -> None:
+    source = (ROOT / "scripts" / "erp_lock.py").read_text(encoding="utf-8")
+    assert _rebound_problems_names(source) == set()
+
+
+_REBOUND_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    alpha_problems = lambda *_: []
+    return alpha_problems(args)
+"""
+
+_CLEAN_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    return alpha_problems(args)
+"""
+
+
+def test_the_rebinding_detector_names_a_planted_shadow() -> None:
+    assert _rebound_problems_names(_REBOUND_SOURCE) == {"alpha_problems"}
+
+
+def test_the_rebinding_detector_does_not_flag_a_clean_module() -> None:
+    assert _rebound_problems_names(_CLEAN_SOURCE) == set()
+
+
+_EXCEPT_REBOUND_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    try:
+        return alpha_problems(args)
+    except ValueError as alpha_problems:
+        return alpha_problems
+"""
+
+_EXCEPT_CLEAN_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    try:
+        return alpha_problems(args)
+    except ValueError as exc:
+        return exc
+"""
+
+
+def test_the_rebinding_detector_names_a_planted_except_as_shadow() -> None:
+    """`except X as name:` binds through a plain string on
+    `ast.ExceptHandler.name`, not an `ast.Name` node — this is what a
+    `Name`+`Store`-only check cannot see."""
+
+    assert _rebound_problems_names(_EXCEPT_REBOUND_SOURCE) == {"alpha_problems"}
+
+
+def test_the_rebinding_detector_does_not_flag_an_unrelated_except_name() -> None:
+    """POSITIVE CONTROL: an `except ... as` clause that binds a name which is
+    not a validator must not be flagged."""
+
+    assert _rebound_problems_names(_EXCEPT_CLEAN_SOURCE) == set()
+
+
+_LAMBDA_PARAM_REBOUND_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    _fn = lambda alpha_problems: alpha_problems
+    return _fn(args)
+"""
+
+_COMPREHENSION_TARGET_REBOUND_SOURCE = """
+def off_index_lock_problems(lock):
+    return []
+
+def _run(args):
+    return [off_index_lock_problems for off_index_lock_problems in args]
+"""
+
+_GENEXP_TARGET_REBOUND_SOURCE = """
+def off_index_lock_problems(lock):
+    return []
+
+def _run(args):
+    return list(off_index_lock_problems for off_index_lock_problems in args)
+"""
+
+
+def test_the_rebinding_detector_names_a_lambda_parameter_shadow() -> None:
+    """A lambda's parameters are `ast.arg` nodes inside `ast.Lambda.args`,
+    reached by the unrestricted `ast.walk(tree)` this function uses (unlike
+    `_own_calls`, this walk is never scope-limited) -- so a lambda
+    parameter shadowing a validator name must be seen exactly like a
+    `def`'s own parameter would be."""
+
+    assert _rebound_problems_names(_LAMBDA_PARAM_REBOUND_SOURCE) == {"alpha_problems"}
+
+
+def test_the_rebinding_detector_names_a_comprehension_target_shadow() -> None:
+    """`[x for off_index_lock_problems in ...]` binds its target as an
+    ordinary `ast.Name` in `ast.Store` context, which the existing
+    `Name`+`Store` branch already matches -- verified here rather than
+    assumed."""
+
+    assert _rebound_problems_names(_COMPREHENSION_TARGET_REBOUND_SOURCE) == {
+        "off_index_lock_problems"
+    }
+
+
+def test_the_rebinding_detector_names_a_generator_expression_target_shadow() -> None:
+    """Same shape as the comprehension target above, for a generator
+    expression's `for` target -- also an ordinary `ast.Name`/`ast.Store`."""
+
+    assert _rebound_problems_names(_GENEXP_TARGET_REBOUND_SOURCE) == {
+        "off_index_lock_problems"
+    }
+
+
+# ── a nested `def`'s calls belong to ITS name, not to every function that
+#    happens to contain it ──────────────────────────────────────────────────
+
+_NESTED_DEF_UNCALLED_SOURCE = """
+def beta_problems(x):
+    return []
+
+def _run(args):
+    def _helper():
+        return beta_problems(args)
+    return 1
+"""
+
+_NESTED_DEF_ACTUALLY_CALLED_SOURCE = """
+def beta_problems(x):
+    return []
+
+def _run(args):
+    def _helper():
+        return beta_problems(args)
+    return _helper()
+"""
+
+
+def test_a_call_inside_an_uncalled_nested_def_is_not_credited_to_the_outer_function() -> (
+    None
+):
+    """The nested `def _helper` is never itself called, so `beta_problems`
+    -- called only from inside it -- must not be reachable through `_run`."""
+
+    reachable = _reachable_from_cli(_NESTED_DEF_UNCALLED_SOURCE)
+    assert "beta_problems" not in reachable
+
+
+def test_a_call_inside_an_actually_called_nested_def_is_still_reachable() -> None:
+    """POSITIVE CONTROL: when `_run` actually calls the nested `_helper`,
+    `beta_problems` -- reachable through `_helper` -- must still be seen."""
+
+    reachable = _reachable_from_cli(_NESTED_DEF_ACTUALLY_CALLED_SOURCE)
+    assert "beta_problems" in reachable
+
+
+# ── the same "not credited to the enclosing scope" reasoning applies to a
+#    lambda body and a generator expression body -- neither runs merely
+#    because the enclosing function runs ────────────────────────────────────
+
+_LAMBDA_UNCALLED_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    _unused = lambda: alpha_problems(args)
+    return 1
+"""
+
+_DIRECT_CALL_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    return alpha_problems(args)
+"""
+
+_GENEXP_UNCALLED_SOURCE = """
+def beta_problems(x):
+    return []
+
+def _run(args):
+    _unused = (beta_problems(x) for x in args)
+    return 1
+"""
+
+_LISTCOMP_SOURCE = """
+def gamma_problems(x):
+    return []
+
+def _run(args):
+    return [gamma_problems(x) for x in args]
+"""
+
+
+def test_a_call_inside_a_never_invoked_lambda_is_not_credited() -> None:
+    """A `lambda` assigned but never called CREATES a callable; it does not
+    call `alpha_problems` -- the enclosing `_run` never does either here.
+    This module's call graph has no data-flow analysis of what a local
+    variable holds, so it cannot tell whether a later `_unused()` call
+    would invoke this particular lambda even if one were written -- which
+    is exactly why the lambda's body must never be credited to the
+    enclosing scope in the first place."""
+
+    reachable = _reachable_from_cli(_LAMBDA_UNCALLED_SOURCE)
+    assert "alpha_problems" not in reachable
+
+
+def test_the_same_call_made_directly_is_still_reachable() -> None:
+    """POSITIVE CONTROL for the lambda exclusion above: the identical call to
+    `alpha_problems`, written directly in `_run`'s own body rather than
+    inside a lambda, must still be credited and seen as reachable -- this
+    is what proves the lambda test above is excluding the LAMBDA, not
+    breaking ordinary direct calls."""
+
+    reachable = _reachable_from_cli(_DIRECT_CALL_SOURCE)
+    assert "alpha_problems" in reachable
+
+
+def test_a_call_inside_an_unconsumed_generator_expression_is_not_credited() -> None:
+    """A generator expression's body is lazy: writing `_unused = (... for
+    ... in ...)` does not itself call `beta_problems`, and nothing here
+    ever iterates the generator. Whether some LATER, unwritten line
+    consumes it is exactly the question this static, non-data-flow
+    detector cannot answer -- which is why the body is never credited to
+    the enclosing scope regardless."""
+
+    reachable = _reachable_from_cli(_GENEXP_UNCALLED_SOURCE)
+    assert "beta_problems" not in reachable
+
+
+def test_a_call_inside_a_list_comprehension_is_credited_because_it_is_eager() -> None:
+    """POSITIVE CONTROL distinguishing the eager comprehension forms from the
+    lazy generator expression: `[gamma_problems(x) for x in args]` runs in
+    full the instant this line executes, so the call genuinely happens and
+    must be credited to `_run`."""
+
+    reachable = _reachable_from_cli(_LISTCOMP_SOURCE)
+    assert "gamma_problems" in reachable

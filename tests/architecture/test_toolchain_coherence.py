@@ -45,8 +45,38 @@ Five independent invariants are asserted here:
      Makefile is not part of a reproducible toolchain when a clean checkout has
      no package that provides it.
   5. **Lock authority.** ``pyproject.toml`` names one exact Poetry version;
-     every CI installation and the committed lock header agree with it,
-     including the immutable action revision that installs it.
+     every CI installation agrees with it. Two installer forms are
+     recognised: the third-party ``snok/install-poetry`` action, pinned by an
+     immutable revision and fed the version through ``POETRY_VERSION``, and
+     this repository's own local ``.github/actions/setup-poetry`` composite
+     action, whose exact version lives in the ``poetry==`` line of its
+     hash-locked ``.github/bootstrap/poetry-requirements.txt`` instead of a
+     workflow-level env var. Both must name the one accepted version.
+     Recognising a form is not the same as requiring one: a *workflow FILE*
+     that appears, by a literal scan of its ``run:`` text, to run Poetry
+     through NEITHER recognised form must fail rather than be silently
+     absent from every check above — the exact way this file went vacuous
+     for ``erp-lock.yml`` the day that workflow switched installer forms and
+     nothing noticed.
+
+     Read that carefully, because it is an approximation, not a proof, and
+     overclaiming it is worse than stating it plainly: the sweep is
+     PER-FILE, not per-job — a workflow file with one recognised installer
+     step already reads as "covered" even if some OTHER job in that same
+     file later runs Poetry through an unrecognised form, because the two
+     predicates below return one bool for the whole file, not one per job.
+     And the sweep only sees a LITERAL ``poetry`` command word inside a
+     ``run:`` body — Poetry reached indirectly, through ``make lint``/``make
+     format-check``, a script, a container image that already has Poetry
+     baked in, or a reusable/composite action, is invisible to it and never
+     becomes a candidate for the "must have a recognised installer" check at
+     all. ``ci.yml`` funnels most of its own Poetry use through the
+     Makefile this way; it currently passes this guard only because its six
+     ``snok/install-poetry`` steps are ALSO present in the same file, not
+     because the guard confirmed anything about the ``make`` targets
+     themselves. Both of these are UNMONITORED REGIONS of this check —
+     pre-existing in the snok-only detector this replaces, not introduced by
+     the fix — named here rather than left to read as covered.
 
 Everything below is a pure function over supplied text, with the real-file
 tests as thin callers. That is what lets the sensitivity proof at the bottom
@@ -75,6 +105,7 @@ LOCK = ROOT / "poetry.lock"
 PRE_COMMIT = ROOT / ".pre-commit-config.yaml"
 MAKEFILE = ROOT / "Makefile"
 WORKFLOW_DIR = ROOT / ".github/workflows"
+BOOTSTRAP_REQUIREMENTS = ROOT / ".github/bootstrap/poetry-requirements.txt"
 
 # Required checks whose skip is indistinguishable from deleting their gate.
 REQUIRED_PRE_COMMIT_HOOK_IDS = frozenset({"ruff", "ruff-format", "semgrep"})
@@ -83,6 +114,12 @@ RUFF_PRE_COMMIT_REPO = "astral-sh/ruff-pre-commit"
 SEMGREP_PRE_COMMIT_REPO = "semgrep/pre-commit"
 SEMGREP_PRE_COMMIT_SHA = "c33ffee4d59183b43c9dac34963d1d74d430028e"
 POETRY_INSTALL_ACTION_SHA = "a783c322200f0519c7926aa6faa857c4e23e9263"
+
+# The repository's own local, non-versioned Poetry installer. It carries no
+# action revision to pin (it lives in this same commit, not an external
+# repository), so it is a second RECOGNISED installer form, not a second
+# entry in the revision-immutability check above.
+LOCAL_POETRY_ACTION = "./.github/actions/setup-poetry"
 
 # An exact pin: three numeric components and nothing else. Anything carrying a
 # caret, tilde, inequality, wildcard or comma is a RANGE, and a range is what
@@ -93,6 +130,12 @@ _EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 # The lookbehind keeps `.ruff_cache` and `ruff-format` (a pre-commit hook id,
 # not a command) from matching.
 _RUFF_COMMAND = re.compile(r"(?<![\w.\-])ruff\s+(?:check|format)\b")
+
+# `poetry` as a command word, e.g. `poetry install`/`poetry lock`/`poetry run`
+# — deliberately NOT `poetry.lock` (a dot, not whitespace, follows) or
+# `requires-poetry` (the lookbehind excludes a preceding word/dot/hyphen
+# character), so a file path or a TOML key does not count as "runs Poetry".
+_POETRY_COMMAND = re.compile(r"(?<![\w.\-])poetry\s")
 
 
 # ─── pure checkers ────────────────────────────────────────────────────────
@@ -402,6 +445,105 @@ def workflow_poetry_installer_revisions(workflow_text: str) -> list[str]:
     return revisions
 
 
+def workflow_uses_local_poetry_action(workflow_text: str) -> bool:
+    """True if a live step uses this repository's own setup-poetry action."""
+    pattern = re.compile(rf"uses:\s*{re.escape(LOCAL_POETRY_ACTION)}(?:\s+#.*)?")
+    for raw in workflow_text.splitlines():
+        _block, _key, content = _yaml_line(raw)
+        if _is_blank_or_comment(content):
+            continue
+        if pattern.fullmatch(content):
+            return True
+    return False
+
+
+def workflow_installs_poetry(workflow_text: str) -> bool:
+    """True if this workflow FILE contains a RECOGNISED Poetry-installing
+    step anywhere in it.
+
+    PER-FILE, not per-job: a `True` here means at least one job in the file
+    has a recognised installer step, not that every job that needs Poetry
+    has one. Two forms are recognised today: the third-party
+    `snok/install-poetry` action (any revision — immutability is checked
+    separately) and this repository's own local
+    `.github/actions/setup-poetry` composite action. A workflow file that
+    runs Poetry through neither is the exact gap `erp-lock.yml` fell into
+    when it switched installer forms and the installer registry (keyed only
+    on the snok form) silently stopped watching it — see `workflow_runs_poetry`
+    for the other half that closes that gap by making the drop-out fail
+    instead of disappear, and the module docstring's "Lock authority"
+    invariant for the two UNMONITORED REGIONS this file-level, literal-text
+    approximation does not see: a rogue job sharing a file with a compliant
+    one, and Poetry reached indirectly (`make`, a script, a container image,
+    a reusable/composite action) rather than by a literal `poetry` command.
+    """
+    if workflow_poetry_installer_versions(workflow_text):
+        return True
+    return workflow_uses_local_poetry_action(workflow_text)
+
+
+def workflow_runs_poetry(workflow_text: str) -> bool:
+    """True if this workflow FILE appears, by a literal scan, to execute
+    Poetry at all: installs it, or invokes the `poetry` command in a `run:`
+    body (`poetry install`, `poetry lock`, `poetry run ...`, etc — see
+    `_POETRY_COMMAND`).
+
+    This is deliberately broader than `workflow_installs_poetry`: every
+    workflow this returns True for is required (by
+    `test_every_ci_poetry_installer_uses_the_accepted_exact_version`) to also
+    satisfy `workflow_installs_poetry`, or the test fails. A workflow file
+    that runs Poetry through some unrecognised third form — the shape of
+    failure this whole module exists to catch — is exactly what this
+    predicate is for: it can be TRUE while `workflow_installs_poetry` is
+    FALSE, and that combination is the failure.
+
+    It is an APPROXIMATION, not a proof of absence: it sees only a literal
+    `poetry` word in `run:` text, so Poetry invoked through `make lint`,
+    a script, a container image, or a reusable/composite action returns
+    FALSE here and is never checked at all — see the module docstring's
+    "Lock authority" invariant, which names this as one of the two
+    UNMONITORED REGIONS of this check rather than leaving it to read as
+    covered.
+    """
+    if workflow_installs_poetry(workflow_text):
+        return True
+    commands = "\n".join(workflow_run_commands(workflow_text))
+    return _POETRY_COMMAND.search(commands) is not None
+
+
+def bootstrap_pinned_poetry_version(requirements_text: str) -> str | None:
+    """The exact Poetry version pinned by the local hash-locked bootstrap.
+
+    This is the source of truth for any workflow using
+    `.github/actions/setup-poetry`: that action reads its version from this
+    file, not from a workflow-level `POETRY_VERSION` env var, so this is
+    where the accepted version must be read from for those workflows.
+    """
+    match = re.search(r"^poetry==(\d+\.\d+\.\d+)\b", requirements_text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def bootstrap_poetry_disagreement(
+    pyproject_text: str, requirements_text: str
+) -> str | None:
+    """None if the bootstrap's pin agrees with `requires-poetry`; else why not.
+
+    Both name an exact Poetry version through independent mechanisms —
+    `pyproject.toml` by declaration, the bootstrap file by a hash-locked pip
+    requirement — and nothing forces them to agree except this check.
+    """
+    declared = declared_poetry_version(pyproject_text)
+    pinned = bootstrap_pinned_poetry_version(requirements_text)
+    if declared is None or pinned is None or declared == pinned:
+        return None
+    return (
+        f".github/bootstrap/poetry-requirements.txt pins poetry=={pinned} but "
+        f"pyproject.toml's requires-poetry names {declared} — a workflow "
+        "installing Poetry through the local action would get a different "
+        "Poetry than the one this repository's lock is generated by"
+    )
+
+
 def _swallowed_lines(lines: list[str]) -> set[int]:
     """Indices of lines inside a mapping carrying ``continue-on-error: true``."""
     swallowed: set[int] = set()
@@ -623,21 +765,37 @@ def test_pyproject_owns_the_exact_poetry_generator_version() -> None:
 
 
 def test_every_ci_poetry_installer_uses_the_accepted_exact_version() -> None:
-    """Lock-generating tooling is part of the checked-in build contract."""
-    installers = {
+    """Lock-generating tooling is part of the checked-in build contract.
+
+    Two recognised installer forms, each checked against the one accepted
+    version, PLUS a fail-closed sweep: any workflow that runs Poetry through
+    neither recognised form must fail this test, not silently sit outside
+    both checks the way `erp-lock.yml` did the moment it switched forms.
+    """
+    snok_installers = {
         path.name: workflow_poetry_installer_versions(path.read_text())
         for path in workflow_files()
     }
-    installers = {name: versions for name, versions in installers.items() if versions}
-    assert installers, "no workflow installs Poetry, so this proved nothing"
+    snok_installers = {
+        name: versions for name, versions in snok_installers.items() if versions
+    }
+    local_installers = {
+        path.name
+        for path in workflow_files()
+        if workflow_uses_local_poetry_action(path.read_text())
+    }
+    assert snok_installers or local_installers, (
+        "no workflow installs Poetry, so this proved nothing"
+    )
+
     expected = "${{ env.POETRY_VERSION }}"
     wrong = {
         name: versions
-        for name, versions in installers.items()
+        for name, versions in snok_installers.items()
         if any(version != expected for version in versions)
     }
     assert wrong == {}, (
-        "every install-poetry step must use the repository's accepted "
+        "every snok/install-poetry step must use the repository's accepted "
         f"Poetry {POETRY_VERSION} pin through {expected}: {wrong}"
     )
     revisions = {
@@ -654,7 +812,7 @@ def test_every_ci_poetry_installer_uses_the_accepted_exact_version() -> None:
         f"the Poetry installer itself must be immutable, not a mutable tag: {floating}"
     )
     for path in workflow_files():
-        if path.name not in installers:
+        if path.name not in snok_installers:
             continue
         match = re.search(
             r'^  POETRY_VERSION:\s*["\']?([^"\'\s#]+)["\']?(?:\s*#.*)?$',
@@ -665,6 +823,42 @@ def test_every_ci_poetry_installer_uses_the_accepted_exact_version() -> None:
         assert match.group(1) == POETRY_VERSION, (
             f"{path.name} pins Poetry {match.group(1)}, expected {POETRY_VERSION}"
         )
+
+    if local_installers:
+        disagreement = bootstrap_poetry_disagreement(
+            PYPROJECT.read_text(), BOOTSTRAP_REQUIREMENTS.read_text()
+        )
+        assert disagreement is None, disagreement
+        assert bootstrap_pinned_poetry_version(BOOTSTRAP_REQUIREMENTS.read_text()) == (
+            POETRY_VERSION
+        ), (
+            f"{sorted(local_installers)} install Poetry through the local "
+            "action, whose bootstrap pin must equal the repository's "
+            f"accepted Poetry {POETRY_VERSION}"
+        )
+
+    # THE FAIL-CLOSED HALF, at FILE granularity: every workflow FILE that
+    # appears, by a literal `run:`-text scan, to run Poetry at all — by
+    # installing it OR by invoking the `poetry` command — must match one of
+    # the two recognised installer forms above SOMEWHERE in that file. A
+    # workflow file that runs Poetry through a THIRD, unrecognised form must
+    # fail here rather than vanish from `snok_installers` and
+    # `local_installers` unnoticed — the failure this test exists to catch.
+    #
+    # This is a per-FILE approximation, not a per-job proof, and it sees only
+    # a literal `poetry` command word. See the module docstring's "Lock
+    # authority" invariant for the two UNMONITORED REGIONS this does not
+    # cover: a rogue job sharing a file with an already-recognised installer
+    # step, and Poetry reached indirectly (`make`, a script, a container
+    # image, a reusable/composite action) rather than by a literal command.
+    unrecognised = {
+        path.name: "runs Poetry without a recognised installer step (neither "
+        f"snok/install-poetry nor {LOCAL_POETRY_ACTION})"
+        for path in workflow_files()
+        if workflow_runs_poetry(path.read_text())
+        and not workflow_installs_poetry(path.read_text())
+    }
+    assert unrecognised == {}, unrecognised
 
 
 def test_semgrep_is_an_exact_isolated_required_hook() -> None:
@@ -940,6 +1134,86 @@ jobs:
         "snok/install-poetry@v1", f"snok/install-poetry@{POETRY_INSTALL_ACTION_SHA}"
     )
     assert workflow_poetry_installer_revisions(immutable) == [POETRY_INSTALL_ACTION_SHA]
+
+
+_WORKFLOW_WITH_THE_LOCAL_POETRY_ACTION = """\
+jobs:
+  resolve:
+    steps:
+      - name: Install the repository-pinned, importable Poetry
+        uses: ./.github/actions/setup-poetry
+      - name: Lock
+        run: poetry lock
+"""
+
+_WORKFLOW_THAT_RUNS_POETRY_WITH_NO_RECOGNISED_INSTALLER = """\
+jobs:
+  lint:
+    steps:
+      - name: Install Poetry from nowhere this module recognises
+        run: curl -sSL https://example.invalid/install.sh | sh
+      - name: Lock
+        run: poetry lock
+"""
+
+
+def test_sensitivity_the_local_poetry_action_is_a_recognised_installer() -> None:
+    """The exact form that made `installers` drop `erp-lock.yml` silently.
+
+    Before this fix, a workflow shaped exactly like this one matched NEITHER
+    `workflow_poetry_installer_versions` (snok-only) nor anything else, so it
+    quietly vanished from every assertion in
+    `test_every_ci_poetry_installer_uses_the_accepted_exact_version`.
+    """
+    assert (
+        workflow_uses_local_poetry_action(_WORKFLOW_WITH_THE_LOCAL_POETRY_ACTION)
+        is True
+    )
+    assert workflow_installs_poetry(_WORKFLOW_WITH_THE_LOCAL_POETRY_ACTION) is True
+    assert workflow_uses_local_poetry_action("jobs: {}") is False
+    assert workflow_installs_poetry("jobs: {}") is False
+
+
+def test_sensitivity_a_workflow_running_poetry_with_no_recognised_installer_is_visible() -> (
+    None
+):
+    """THE fail-closed half: runs Poetry, installs it through neither
+    recognised form — this must be visible as `runs_poetry and not
+    installs_poetry`, which is exactly what the real test refuses.
+    """
+    text = _WORKFLOW_THAT_RUNS_POETRY_WITH_NO_RECOGNISED_INSTALLER
+    assert workflow_runs_poetry(text) is True
+    assert workflow_installs_poetry(text) is False
+
+    # A workflow that neither installs nor runs Poetry is correctly silent —
+    # this is what stops the fail-closed sweep from flagging every workflow
+    # in the repository.
+    innocent = "jobs:\n  lint:\n    steps:\n      - run: pytest -q\n"
+    assert workflow_runs_poetry(innocent) is False
+
+
+def test_sensitivity_a_path_reference_is_not_a_poetry_command() -> None:
+    """`poetry.lock` and `requires-poetry` must not read as running Poetry."""
+    assert _POETRY_COMMAND.search("cp work/poetry.lock /tmp/poetry.lock.before") is None
+    assert _POETRY_COMMAND.search('requires-poetry = "2.4.1"') is None
+    assert _POETRY_COMMAND.search("poetry lock") is not None
+    assert _POETRY_COMMAND.search("poetry run pytest") is not None
+
+
+def test_sensitivity_a_bootstrap_pin_disagreeing_with_requires_poetry_is_reported() -> (
+    None
+):
+    pyproject = """
+[tool.poetry]
+requires-poetry = "2.4.1"
+"""
+    agreeing_bootstrap = "poetry==2.4.1 \\\n    --hash=sha256:deadbeef\n"
+    assert bootstrap_pinned_poetry_version(agreeing_bootstrap) == "2.4.1"
+    assert bootstrap_poetry_disagreement(pyproject, agreeing_bootstrap) is None
+
+    disagreeing_bootstrap = agreeing_bootstrap.replace("2.4.1", "2.4.2")
+    failure = bootstrap_poetry_disagreement(pyproject, disagreeing_bootstrap)
+    assert failure is not None and "2.4.2" in failure and "2.4.1" in failure
 
 
 def test_sensitivity_a_local_or_unpinned_semgrep_hook_is_visible() -> None:
