@@ -34,6 +34,7 @@ from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.position import Position
 from app.models.people.hr.position_assignment import PositionAssignment
 from app.models.person import Person
+from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.schemas.sync.sub_operational import (
     SubExpenseClaimItemPayload,
     SubExpenseClaimDecisionPayload,
@@ -204,6 +205,63 @@ def _payload(employee, source_claim_id=None, **overrides) -> SubExpenseClaimPayl
     )
     defaults.update(overrides)
     return SubExpenseClaimPayload(items=items, **defaults)
+
+
+def _grant_expense_approval_permission(db_session, *employees: Employee) -> None:
+    permission = db_session.scalar(
+        select(Permission).where(Permission.key == "expense:claims:approve:tier1")
+    )
+    if permission is None:
+        permission = Permission(
+            id=uuid.uuid4(),
+            key="expense:claims:approve:tier1",
+            is_active=True,
+        )
+        db_session.add(permission)
+        db_session.flush()
+
+    role = Role(
+        id=uuid.uuid4(),
+        name=f"sub_expense_approver_{uuid.uuid4().hex}",
+        is_active=True,
+    )
+    db_session.add(role)
+    db_session.flush()
+    db_session.add(
+        RolePermission(
+            id=uuid.uuid4(),
+            role_id=role.id,
+            permission_id=permission.id,
+        )
+    )
+    db_session.add_all(
+        [
+            PersonRole(
+                id=uuid.uuid4(),
+                person_id=employee.person_id,
+                role_id=role.id,
+            )
+            for employee in employees
+        ]
+    )
+    db_session.flush()
+
+
+def test_expense_approvers_exclude_requester_even_when_requester_is_eligible(
+    service,
+    db_session,
+    org_id,
+    employee,
+    manager,
+):
+    _grant_expense_approval_permission(db_session, employee, manager)
+
+    response = service.list_expense_approvers(
+        org_id,
+        requested_by_email=employee.person.email,
+    )
+
+    assert {item.employee_id for item in response.items} == {manager.employee_id}
 
 
 class TestCreateExpenseClaim:
