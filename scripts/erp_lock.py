@@ -88,6 +88,8 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
+import dependency_normalisation
+
 # ── the closed allowlist of movements ───────────────────────────────────────
 
 #: The ONLY movements this workflow may perform. A version outside this table
@@ -395,8 +397,11 @@ def _load_toml(path: Path) -> dict[str, Any]:
         return tomllib.load(handle)
 
 
-def _normalised(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+#: PEP 503 normalisation has exactly one owner now — `dependency_normalisation`
+#: (see that module's docstring for the divergent-hyphen-stripping bug this
+#: fixes). This used to be a locally-defined function; it is now an import
+#: alias so every existing `_normalised(...)` call site is unchanged.
+_normalised = dependency_normalisation.normalise_name
 
 
 # ── set-versions: move both pins, or refuse ─────────────────────────────────
