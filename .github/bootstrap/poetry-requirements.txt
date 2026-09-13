@@ -1,6 +1,18 @@
-# Hash-locked Poetry bootstrap — GENERATED, do not hand-edit.
-# Regenerate with .github/bootstrap/regenerate.sh (see that script for why
-# it must run in a linux/amd64 container for THIS interpreter).
+# Hash-locked Poetry bootstrap — GENERATED, do not hand-edit HERE.
+#
+# This file is copied byte-for-byte from
+# michaelayoade/dotmac_platform_control_plane's own
+# .github/bootstrap/poetry-requirements.txt. It is regenerated THERE, with
+# that repository's .github/bootstrap/regenerate.sh, and re-copied here —
+# ERP does not carry its own copy of the generator. Both repositories pin the
+# same Poetry version; a second generator for one pin is how two copies drift
+# into two different pins, so there is deliberately only one.
+#
+# sha256 of this exact file as copied from the source repository:
+#   8416ab4e2a619884937ed3be34ea1928829fee0df76773e25108e73acd97ab1f
+# A reader can confirm the copy against the source repository's tree without
+# needing this repository's tooling.
+#
 # Pinned installer: poetry==2.4.1
 #
 # Install with:

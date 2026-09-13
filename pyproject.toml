@@ -213,7 +213,6 @@ ignore = [
 "app/tools/**/*.py" = ["T20", "S"]  # one-off tools
 "tools/**/*.py" = ["T20", "S"]  # internal CLI tools (license gen, etc.)
 ".claude/hooks/**/*.py" = ["T20", "F841"]  # local workflow hooks
-".github/bootstrap/**/*.py" = ["T20"]  # generated-bootstrap tooling: writes the requirements file to stdout
 "app/tasks/data_health.py" = ["S608"]  # data health tasks: conditional SQL with hardcoded fragments
 
 [tool.ruff.lint.isort]
