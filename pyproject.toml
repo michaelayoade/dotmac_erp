@@ -97,7 +97,9 @@ dotmac-imports = {version = "0.1.0a2", source = "forgejo"}
 #
 # The kernel repin above (a83 -> a85) is DEMANDED by this pin, not bundled with
 # it: `dotmac-accounting 0.1.0a1` floors at `dotmac-kernel >= 0.1.0a85`, so the
-# lock cannot resolve at a83. `dotmac-files` needs no repin and stays at a2.
+# lock cannot resolve at a83. This accounting pin does not move `dotmac-files`;
+# that module's own pin, immediately above, moves independently and on its own
+# schedule.
 dotmac-accounting = {version = "0.1.0a1", source = "forgejo"}
 
 # Concurrency-safe document-series allocation and immutable allocation evidence.
