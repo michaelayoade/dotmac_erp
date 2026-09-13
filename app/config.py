@@ -212,8 +212,9 @@ class Settings:
         "DOTMAC_ACADEMY_ISSUING_AUTHORITY", "Dotmac Academy"
     )
     # Staff sync (ERP -> dotmac_sub staff accounts). Disabled unless enabled
-    # explicitly; the API key must carry rbac:assign, rbac:roles:read, and
-    # operations:service_team:membership.
+    # explicitly; the API key must carry sub:staff_access:read, rbac:assign,
+    # rbac:roles:read, operations:service_team:membership, and
+    # communications:nextcloud_talk_staff:manage.
     dotmac_sub_staff_sync_enabled: bool = (
         os.getenv("DOTMAC_SUB_STAFF_SYNC_ENABLED", "false").lower() == "true"
     )

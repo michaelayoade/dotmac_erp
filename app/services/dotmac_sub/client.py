@@ -1249,6 +1249,23 @@ class DotmacSubClient:
         transient subclass; auth/404 raise immediately.
         """
         status = response.status_code
+        if status == 403 and (
+            endpoint.endswith("/nextcloud-talk")
+            or endpoint.endswith("/nextcloud-talk/disable")
+        ):
+            detail = _response_detail(response)
+            message = (
+                "Self-Care API key is missing the "
+                "communications:nextcloud_talk_staff:manage scope required for ERP "
+                "Nextcloud Talk identity mapping."
+            )
+            if detail:
+                message = f"{message} Self-Care detail: {detail}"
+            raise DotmacSubPermanentSyncError(
+                message,
+                status_code=status,
+                context=_staff_sync_error_context(response),
+            )
         if status == 403 and endpoint.endswith("/erp-department"):
             detail = _response_detail(response)
             message = (
@@ -1334,6 +1351,7 @@ class DotmacSubClient:
         endpoint: str,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> Any:
         """Issue one logical request via the shared integration engine.
 
@@ -1365,6 +1383,7 @@ class DotmacSubClient:
                     endpoint,
                     params=params,
                     json_data=json,
+                    headers=headers,
                     handler_kwargs={"endpoint": endpoint},
                 )
             metric_status = "success"
@@ -1580,6 +1599,7 @@ class DotmacSubClient:
         email: str,
         first_name: str,
         last_name: str,
+        idempotency_key: str,
         role: str = "staff",
         roles: list[str] | None = None,
         send_invite: bool = True,
@@ -1599,7 +1619,9 @@ class DotmacSubClient:
                 "role": role,
                 "roles": roles,
                 "send_invite": send_invite,
+                "existing_account_policy": "reject",
             },
+            headers={"Idempotency-Key": idempotency_key},
         )
         return dict(result) if isinstance(result, dict) else {}
 
@@ -1649,6 +1671,36 @@ class DotmacSubClient:
                 "erp_organization_id": erp_organization_id,
                 "department": department,
             },
+        )
+        return dict(result) if isinstance(result, dict) else {}
+
+    def set_staff_account_nextcloud_talk(
+        self,
+        account_id: str,
+        *,
+        nextcloud_user_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Bind a Selfcare staff UUID to ERP's exact Nextcloud identity."""
+        result = self._request(
+            "PUT",
+            f"/staff-accounts/{account_id}/nextcloud-talk",
+            json={"nextcloud_user_id": nextcloud_user_id},
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        return dict(result) if isinstance(result, dict) else {}
+
+    def disable_staff_account_nextcloud_talk(
+        self,
+        account_id: str,
+        *,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Disable Talk mappings after ERP removes workforce access."""
+        result = self._request(
+            "POST",
+            f"/staff-accounts/{account_id}/nextcloud-talk/disable",
+            headers={"Idempotency-Key": idempotency_key},
         )
         return dict(result) if isinstance(result, dict) else {}
 

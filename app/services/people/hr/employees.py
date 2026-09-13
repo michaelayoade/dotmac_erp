@@ -933,8 +933,8 @@ class EmployeeService:
         )
 
         self._refresh_staff_access_projection(employee)
-        self._enqueue_mailcow_provisioning(employee)
-        if employee.dotmac_sub_access_enabled:
+        workforce_relay_requested = self._enqueue_mailcow_provisioning(employee)
+        if employee.dotmac_sub_access_enabled and not workforce_relay_requested:
             self._enqueue_staff_sync(employee)
 
         return employee
@@ -1614,12 +1614,17 @@ class EmployeeService:
                 exc_info=True,
             )
 
-    def _enqueue_mailcow_provisioning(self, employee: Employee) -> None:
-        """Queue idempotent mailbox creation after the employee transaction."""
+    def _enqueue_mailcow_provisioning(self, employee: Employee) -> bool:
+        """Queue the Mailcow-led workforce relay after employee commit.
+
+        Returns whether the relay owns downstream Nextcloud and Selfcare
+        sequencing. Broker failure still returns true: reconciliation must
+        retry the relay rather than bypass its ordering guarantees.
+        """
         from app.config import settings as app_settings
 
         if not getattr(app_settings, "mailcow_provisioning_enabled", False):
-            return
+            return False
         employee.mailcow_provisioning_requested_at = datetime.now(UTC)
         try:
             from app.tasks.email import run_employee_mailcow_provisioning
@@ -1634,6 +1639,7 @@ class EmployeeService:
                 employee.employee_id,
                 exc_info=True,
             )
+        return True
 
     def _refresh_staff_access_projection(self, employee: Employee) -> None:
         """Refresh ERP-owned Selfcare-facing staff access projections."""

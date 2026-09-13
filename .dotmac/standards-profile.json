@@ -92,7 +92,7 @@
       "outbound_transport": 20,
       "webhook_surface": 6,
       "provider_credential": 6,
-      "connector_task": 11,
+      "connector_task": 12,
       "sync_checkpoint": 17,
       "delivery_retry": 4
     },

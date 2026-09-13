@@ -18,12 +18,20 @@ from app.services.dotmac_sub.client import (
 
 
 class FakeClient:
-    def __init__(self, existing: dict | None = None):
+    def __init__(
+        self,
+        existing: dict | None = None,
+        *,
+        created_account_id: str = "00000000-0000-0000-0000-000000000123",
+    ):
         self.existing = existing
+        self.created_account_id = created_account_id
         self.created = []
         self.active_calls = []
         self.role_calls = []
         self.department_calls = []
+        self.talk_mapping_calls = []
+        self.talk_disable_calls = []
 
     def get_staff_account(self, email):
         return self.existing
@@ -31,7 +39,7 @@ class FakeClient:
     def create_staff_account(self, **kwargs):
         self.created.append(kwargs)
         return {
-            "id": "00000000-0000-0000-0000-000000000123",
+            "id": self.created_account_id,
             "email": kwargs["email"],
             "created": True,
         }
@@ -47,6 +55,14 @@ class FakeClient:
     def sync_staff_account_erp_department(self, account_id, **kwargs):
         self.department_calls.append((account_id, kwargs))
         return {"id": account_id, **kwargs}
+
+    def set_staff_account_nextcloud_talk(self, account_id, **kwargs):
+        self.talk_mapping_calls.append((account_id, kwargs))
+        return {"user_id": account_id, **kwargs}
+
+    def disable_staff_account_nextcloud_talk(self, account_id, **kwargs):
+        self.talk_disable_calls.append((account_id, kwargs))
+        return {"user_id": account_id, "disabled_mappings": 1}
 
     def close(self):
         pass
@@ -95,6 +111,7 @@ def _employee(
     access_enabled=True,
     roles=None,
     department=None,
+    nextcloud_user_id="tech@dotmac.io",
 ):
     department_id = getattr(department, "department_id", None)
     return SimpleNamespace(
@@ -112,6 +129,7 @@ def _employee(
         dotmac_sub_staff_synced_at=None,
         dotmac_sub_access_enabled=access_enabled,
         dotmac_sub_roles=roles or ["staff"],
+        person=SimpleNamespace(nextcloud_user_id=nextcloud_user_id),
     )
 
 
@@ -131,29 +149,66 @@ def db(monkeypatch):
     return session
 
 
-def test_missing_account_requires_administrator_without_calling_upsert(db):
+def test_missing_account_is_created_then_claimed_and_mapped(db):
     client = FakeClient(existing=None)
-    emp = _employee(EmployeeStatus.ACTIVE)
-    with pytest.raises(staff_sync.DotmacSubPermanentSyncError, match="administrator"):
-        staff_sync.sync_employee(db, emp, client=client)
-    assert emp.dotmac_sub_account_id is None
-    assert emp.dotmac_sub_staff_synced_at is None
-    assert not client.created
-    assert not client.role_calls
-    assert not client.active_calls
-    assert not client.department_calls
-
-
-def test_active_employee_with_inactive_account_projects_reactivation(db):
-    client = FakeClient(
-        existing={"id": "00000000-0000-0000-0000-000000000009", "is_active": False}
-    )
     emp = _employee(EmployeeStatus.ACTIVE)
 
     result = staff_sync.sync_employee(db, emp, client=client)
 
+    account_id = "00000000-0000-0000-0000-000000000123"
+    assert result == {"action": "created", "account_id": account_id}
+    assert emp.dotmac_sub_account_id == account_id
+    assert client.created == [
+        {
+            "email": "tech@dotmac.io",
+            "first_name": "Field",
+            "last_name": "Tech",
+            "roles": ["staff"],
+            "send_invite": True,
+            "idempotency_key": (
+                f"erp-staff-create:{emp.organization_id}:{emp.employee_id}"
+            ),
+        }
+    ]
+    assert client.role_calls == [(account_id, ["staff"])]
+    assert client.talk_mapping_calls == [
+        (
+            account_id,
+            {
+                "nextcloud_user_id": "tech@dotmac.io",
+                "idempotency_key": (
+                    f"erp-staff-talk:{emp.organization_id}:"
+                    f"{emp.employee_id}:tech@dotmac.io"
+                ),
+            },
+        )
+    ]
+
+
+def test_active_employee_waits_for_nextcloud_before_selfcare_creation(db):
+    client = FakeClient(existing=None)
+    emp = _employee(EmployeeStatus.ACTIVE, nextcloud_user_id=None)
+
+    result = staff_sync.sync_employee(db, emp, client=client)
+
+    assert result == {
+        "action": "skipped",
+        "reason": "employee Nextcloud account is not provisioned",
+    }
+    assert not client.created
+    assert not client.role_calls
+    assert not client.talk_mapping_calls
+
+
+def test_active_employee_with_inactive_account_projects_reactivation(db):
+    account_id = "00000000-0000-0000-0000-000000000009"
+    client = FakeClient(existing={"id": account_id, "is_active": False})
+    emp = _employee(EmployeeStatus.ACTIVE, account_id=account_id)
+
+    result = staff_sync.sync_employee(db, emp, client=client)
+
     assert result["action"] == "reactivation_projected"
-    assert client.active_calls == []
+    assert client.active_calls == [("00000000-0000-0000-0000-000000000009", True)]
     assert client.role_calls == [("00000000-0000-0000-0000-000000000009", ["staff"])]
     assert client.department_calls == [
         (
@@ -166,6 +221,7 @@ def test_active_employee_with_inactive_account_projects_reactivation(db):
             },
         )
     ]
+    assert len(client.talk_mapping_calls) == 1
     assert not client.created
 
 
@@ -181,6 +237,7 @@ def test_terminated_employee_account_is_disabled(db):
 
     assert result["action"] == "disabled"
     assert client.active_calls == [("00000000-0000-0000-0000-000000000009", False)]
+    assert len(client.talk_disable_calls) == 1
     assert client.department_calls == [
         (
             "00000000-0000-0000-0000-000000000009",
@@ -244,6 +301,7 @@ def test_active_employee_explicit_access_revocation_is_disabled(db):
 
     assert result["action"] == "disabled"
     assert client.active_calls == [("00000000-0000-0000-0000-000000000009", False)]
+    assert len(client.talk_disable_calls) == 1
     assert not client.role_calls
 
 
@@ -259,6 +317,8 @@ def test_active_employee_without_account_or_access_is_not_created(db):
     }
     assert not client.created
     assert not client.department_calls
+    assert not client.talk_mapping_calls
+    assert not client.talk_disable_calls
 
 
 def test_draft_employee_with_revoked_access_and_linked_account_is_disabled(db):
@@ -488,10 +548,9 @@ def test_reconcile_logs_department_context_for_permanent_mapping_error(
 
 
 @pytest.mark.parametrize("status", [EmployeeStatus.ACTIVE, EmployeeStatus.TERMINATED])
-@pytest.mark.parametrize("already_mapped", [False, True])
-def test_conflicting_owner_prevents_all_remote_mutations(db, status, already_mapped):
+def test_conflicting_owner_prevents_all_remote_mutations(db, status):
     account_id = str(uuid4())
-    emp = _employee(status, account_id=account_id if already_mapped else None)
+    emp = _employee(status, account_id=account_id)
     client = FakeClient(existing={"id": account_id, "is_active": True})
     db.scalar.return_value = uuid4()
 
@@ -504,26 +563,25 @@ def test_conflicting_owner_prevents_all_remote_mutations(db, status, already_map
     assert not client.role_calls
     assert not client.active_calls
     assert not client.department_calls
+    assert not client.talk_mapping_calls
+    assert not client.talk_disable_calls
     assert emp.dotmac_sub_staff_synced_at is None
     db.flush.assert_not_called()
 
 
-@pytest.mark.parametrize("source", ["lookup", "stored"])
 @pytest.mark.parametrize("invalid", [None, "", "None", "null", "invalid", 42, " " * 36])
-def test_invalid_account_ids_never_reach_mapping_or_followup_mutations(
-    db, source, invalid
-):
-    if source == "stored" and invalid is None:
+def test_invalid_account_ids_never_reach_mapping_or_followup_mutations(db, invalid):
+    if invalid is None:
         pytest.skip("NULL is an allowed unmapped employee, not an invalid stored ID")
-    emp = _employee(
-        EmployeeStatus.ACTIVE, account_id=invalid if source == "stored" else None
-    )
-    client = FakeClient(existing={"id": invalid} if source == "lookup" else None)
+    emp = _employee(EmployeeStatus.ACTIVE, account_id=invalid)
+    client = FakeClient(existing=None)
     with pytest.raises(staff_sync.DotmacSubPermanentSyncError, match="canonical UUID"):
         staff_sync.sync_employee(db, emp, client=client)
     assert not client.role_calls
     assert not client.active_calls
     assert not client.department_calls
+    assert not client.talk_mapping_calls
+    assert not client.talk_disable_calls
     assert emp.dotmac_sub_staff_synced_at is None
     db.flush.assert_not_called()
 
@@ -568,11 +626,15 @@ def test_sync_without_database_fails_closed():
     assert not client.active_calls
 
 
-def test_empty_lookup_response_is_invalid_instead_of_creating_account(db):
-    client = FakeClient(existing={})
+def test_empty_create_response_is_invalid_before_followup_mutations(db):
+    client = FakeClient(existing=None)
+    client.create_staff_account = MagicMock(return_value={})
     with pytest.raises(staff_sync.DotmacSubPermanentSyncError):
         staff_sync.sync_employee(db, _employee(EmployeeStatus.ACTIVE), client=client)
-    assert not client.created
+    client.create_staff_account.assert_called_once()
+    assert not client.role_calls
+    assert not client.department_calls
+    assert not client.talk_mapping_calls
 
 
 @pytest.mark.parametrize("status", [EmployeeStatus.ACTIVE, EmployeeStatus.TERMINATED])
@@ -584,3 +646,5 @@ def test_changed_email_does_not_authorize_a_different_account(db, status):
     assert not client.role_calls
     assert not client.department_calls
     assert not client.active_calls
+    assert not client.talk_mapping_calls
+    assert not client.talk_disable_calls

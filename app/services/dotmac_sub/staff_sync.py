@@ -1,8 +1,8 @@
 """
 Staff sync: mirror employee lifecycle into dotmac_sub staff accounts.
 
-ERP is the HR system of record. Active employees synchronize an existing,
-administrator-provisioned dotmac_sub SystemUser; on exit
+ERP is the HR system of record. Forward-provisioned active employees create a
+dotmac_sub SystemUser only after Mailcow and Nextcloud identities exist; on exit
 (TERMINATED / RESIGNED / RETIRED / SUSPENDED) the account is disabled —
 dotmac_sub revokes live sessions on deactivation.
 
@@ -46,7 +46,14 @@ _DISABLED_STATUSES = {
 
 
 def _staff_email(employee: Employee) -> str | None:
-    return employee.work_email or employee.personal_email
+    return employee.work_email
+
+
+def _nextcloud_user_id(employee: Employee) -> str | None:
+    person = getattr(employee, "person", None)
+    value = getattr(person, "nextcloud_user_id", None) if person else None
+    normalized = str(value or "").strip()
+    return normalized or None
 
 
 def _staff_roles(employee: Employee) -> list[str]:
@@ -163,8 +170,8 @@ def sync_employee(
 ) -> dict[str, Any]:
     """Claim ownership before remote mutations; caller commits the transaction.
 
-    Serialize syncs within the tenant, including email lookup before
-    the remote ID is known. Locks survive savepoint release until the
+    Serialize syncs within the tenant, including create-only account admission
+    before the remote ID is known. Locks survive savepoint release until the
     caller commits. A savepoint restores mapping/projection/timestamp changes on
     failure without rolling back the caller's unrelated work.
     """
@@ -256,40 +263,76 @@ def _sync_employee(
 
     try:
         account: dict[str, Any] | None = None
-        if not account_id and email:
-            account = client.get_staff_account(email)
-            if account is not None:
-                account_id = _account_id(account.get("id"))
-
         if account_id is not None:
             account_id = _claim_account(db, employee, account_id)
 
         if status in _ENABLED_STATUSES and access_enabled:
+            nextcloud_user_id = _nextcloud_user_id(employee)
+            if not nextcloud_user_id:
+                return {
+                    "action": "skipped",
+                    "reason": "employee Nextcloud account is not provisioned",
+                }
             roles = _staff_roles(employee)
+            created = False
             if not account_id:
-                # Selfcare POST /staff-accounts is an UPSERT: it may change an
-                # existing account's roles before returning its ID. Neither a
-                # prior GET nor an ERP lock can make that remote pair atomic.
-                # Require administrator provisioning until a create-only remote
-                # contract exists; never mutate an account we cannot claim first.
-                raise DotmacSubPermanentSyncError(
-                    "Selfcare account must be provisioned by an administrator "
-                    "before employee sync; automatic create-or-update cannot "
-                    "verify ownership before changing roles"
+                if not email:
+                    raise DotmacSubPermanentSyncError(
+                        "Employee work email is required for Selfcare account creation"
+                    )
+                first_name = str(employee.first_name or "").strip()
+                last_name = str(employee.last_name or "").strip()
+                if not first_name or not last_name:
+                    raise DotmacSubPermanentSyncError(
+                        "Employee first and last name are required for Selfcare "
+                        "account creation"
+                    )
+                account = client.create_staff_account(
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    roles=roles,
+                    send_invite=True,
+                    idempotency_key=(
+                        f"erp-staff-create:{employee.organization_id}:"
+                        f"{employee.employee_id}"
+                    ),
                 )
+                account_id = _claim_account(db, employee, account.get("id"))
+                created = bool(account.get("created", True))
             if account is None and email:
                 account = client.get_staff_account(email)
             _check_account_identity(account, account_id)
             client.set_staff_account_roles(account_id, roles=roles)
             if account and not account.get("is_active", True):
+                client.set_staff_account_active(account_id, is_active=True)
                 _sync_erp_department_membership(db, employee, account_id, client)
+                client.set_staff_account_nextcloud_talk(
+                    account_id,
+                    nextcloud_user_id=nextcloud_user_id,
+                    idempotency_key=(
+                        f"erp-staff-talk:{employee.organization_id}:"
+                        f"{employee.employee_id}:{nextcloud_user_id.casefold()}"
+                    ),
+                )
                 _mark_synced(employee)
                 _refresh_staff_access_projection(db, employee)
                 return {"action": "reactivation_projected", "account_id": account_id}
             _sync_erp_department_membership(db, employee, account_id, client)
+            client.set_staff_account_nextcloud_talk(
+                account_id,
+                nextcloud_user_id=nextcloud_user_id,
+                idempotency_key=(
+                    f"erp-staff-talk:{employee.organization_id}:"
+                    f"{employee.employee_id}:{nextcloud_user_id.casefold()}"
+                ),
+            )
             _mark_synced(employee)
             _refresh_staff_access_projection(db, employee)
-            return {"action": "noop", "account_id": account_id}
+            return {
+                "action": "created" if created else "noop",
+                "account_id": account_id,
+            }
 
         # Disabled lifecycle statuses or an explicit HR access revocation.
         if not account_id:
@@ -306,11 +349,25 @@ def _sync_employee(
             _sync_erp_department_membership(
                 db, employee, account_id, client, remove=True
             )
+            client.disable_staff_account_nextcloud_talk(
+                account_id,
+                idempotency_key=(
+                    f"erp-staff-talk-disable:{employee.organization_id}:"
+                    f"{employee.employee_id}"
+                ),
+            )
             _mark_synced(employee)
             _refresh_staff_access_projection(db, employee)
             return {"action": "noop", "account_id": account_id}
         _sync_erp_department_membership(db, employee, account_id, client, remove=True)
         client.set_staff_account_active(account_id, is_active=False)
+        client.disable_staff_account_nextcloud_talk(
+            account_id,
+            idempotency_key=(
+                f"erp-staff-talk-disable:{employee.organization_id}:"
+                f"{employee.employee_id}"
+            ),
+        )
         _mark_synced(employee)
         _refresh_staff_access_projection(db, employee)
         return {"action": "disabled", "account_id": account_id}
