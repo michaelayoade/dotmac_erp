@@ -102,16 +102,28 @@ def test_alembic_resolves_the_reviewed_numbering_revision() -> None:
 
 
 def test_erp_selects_exactly_the_numbering_tenant_plane() -> None:
-    """Numbering's OWN selection is tenant-only.
+    """Numbering's OWN selection is exactly one entry, and it is tenant-only.
 
-    This no longer asserts that numbering is the only module with a
-    selection in `ASSEMBLY_MODULE_PLANES` — `files` has since gained its own
-    (see `app/migration_planes.py`) — only that numbering's own entry is
-    exactly the tenant plane.
+    This is deliberately scoped to `module == "numbering"` rather than to the
+    whole of `ASSEMBLY_MODULE_PLANES`. Whole-tuple equality was wrong: it made
+    a test about numbering's plane fail whenever any OTHER module gained a
+    selection — coupling an unrelated change (`files` has since gained its
+    own, see `app/migration_planes.py`) to this test. Scoping by module keeps
+    the "exactly" where the test's name puts it — exactly one numbering
+    selection, exactly the tenant plane — without asserting anything about
+    modules this test isn't about. Plain membership would be too weak here:
+    it would still pass if numbering were (wrongly) declared twice, including
+    twice with two different plane sets, which is exactly the ambiguous state
+    `validate_module_plane_selections` below exists to catch.
     """
     from dotmac_numbering.manifest import module
 
-    assert EXPECTED_SELECTION in ASSEMBLY_MODULE_PLANES
+    numbering_selections = [
+        selection
+        for selection in ASSEMBLY_MODULE_PLANES
+        if selection.module == "numbering"
+    ]
+    assert numbering_selections == [EXPECTED_SELECTION]
     assert validate_module_plane_selections((module,), ASSEMBLY_MODULE_PLANES) == (
         EXPECTED_SELECTION,
     )
