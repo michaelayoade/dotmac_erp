@@ -163,7 +163,7 @@ def run_employee_mailcow_provisioning(
                 result.activation_token,
             )
             db.commit()
-        task_result = {
+        task_result: dict[str, Any] = {
             "employee_id": result.employee_id,
             "email": result.email,
             "created": result.created,
