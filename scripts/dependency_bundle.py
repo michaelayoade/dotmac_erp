@@ -1198,6 +1198,109 @@ def compute_candidate_plan_digest(
     return compute_plan_digest(surface)
 
 
+def _read_git_head_sha(repo_root: Path) -> str:
+    """Read `repo_root`'s ACTUAL current commit SHA from its own on-disk
+    git refs — no subprocess, no network, and no trust in a caller-supplied
+    string. `bind_bundle_to_candidate` calls this instead of accepting a
+    `candidate_sha` parameter, for the identical reason
+    `compute_candidate_plan_digest` replaced a bare digest parameter: a SHA
+    a caller supplies is a SHA a caller chooses.
+
+    Handles a plain `.git` directory (attached HEAD via `refs/heads/<name>`
+    or a loose ref, detached HEAD as a raw SHA, and a ref resolved through
+    `packed-refs` when there is no loose ref file) and the one-hop
+    `.git`-as-a-file worktree/submodule pointer form
+    (`gitdir: <path>`). Does NOT resolve a worktree's `commondir`
+    indirection for a branch ref kept only in the main checkout's
+    `packed-refs` — that is a stated, narrower limitation, not a silent
+    gap: refuses with a clear message rather than guessing.
+    """
+
+    sha = _resolve_git_head_sha(repo_root)
+    if sha == _NULL_SHA:
+        raise BundleVerificationError(
+            f"{repo_root}'s .git HEAD resolves to the all-zero null SHA, "
+            "which is never a real commit"
+        )
+    return sha
+
+
+def _resolve_git_head_sha(repo_root: Path) -> str:
+    git_path = repo_root / ".git"
+    if git_path.is_file():
+        try:
+            pointer = git_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise BundleVerificationError(f"cannot read {git_path}: {exc}") from exc
+        if not pointer.startswith("gitdir:"):
+            raise BundleVerificationError(
+                f"{git_path} is a file but does not name a gitdir: {pointer!r}"
+            )
+        target = pointer[len("gitdir:") :].strip()
+        target_path = Path(target)
+        git_dir = target_path if target_path.is_absolute() else (repo_root / target)
+        git_dir = git_dir.resolve()
+    elif git_path.is_dir():
+        git_dir = git_path
+    else:
+        raise BundleVerificationError(
+            f"{repo_root} is not a git checkout (no .git file or directory)"
+        )
+
+    head_path = git_dir / "HEAD"
+    try:
+        head_text = head_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise BundleVerificationError(f"cannot read {head_path}: {exc}") from exc
+
+    if _COMMIT_SHA.match(head_text):
+        return head_text
+    if not head_text.startswith("ref:"):
+        raise BundleVerificationError(
+            f"{head_path} is neither a commit SHA nor a ref pointer: {head_text!r}"
+        )
+    ref_name = head_text[len("ref:") :].strip()
+    if not ref_name:
+        raise BundleVerificationError(f"{head_path} names an empty ref")
+
+    ref_path = git_dir / ref_name
+    if ref_path.is_file():
+        try:
+            ref_text = ref_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise BundleVerificationError(f"cannot read {ref_path}: {exc}") from exc
+        if not _COMMIT_SHA.match(ref_text):
+            raise BundleVerificationError(
+                f"{ref_path} does not contain a 40-hex commit SHA: {ref_text!r}"
+            )
+        return ref_text
+
+    packed_refs_path = git_dir / "packed-refs"
+    if packed_refs_path.is_file():
+        try:
+            packed_text = packed_refs_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise BundleVerificationError(
+                f"cannot read {packed_refs_path}: {exc}"
+            ) from exc
+        for line in packed_text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or stripped.startswith("^"):
+                continue
+            parts = stripped.split(" ", 1)
+            if (
+                len(parts) == 2
+                and parts[1].strip() == ref_name
+                and _COMMIT_SHA.match(parts[0])
+            ):
+                return parts[0]
+
+    raise BundleVerificationError(
+        f"cannot resolve ref {ref_name!r} to a commit SHA under {git_dir} "
+        "(no loose ref file, and no matching entry in packed-refs)"
+    )
+
+
 # ── planned artifacts (the plan's own file/digest closure) ────────────────
 
 
@@ -2288,29 +2391,38 @@ class CandidateBinding:
 
 def bind_bundle_to_candidate(
     bundle_manifest: dict[str, Any],
-    candidate_sha: str,
+    run: RunMetadata,
     candidate_root: Path,
     permitted_off_index: Mapping[str, OffIndexPin] | None = None,
 ) -> CandidateBinding:
     """Bind a verified bundle to one candidate commit.
 
-    `candidate_root` names the candidate's own checked-out tree; this
-    function RECOMPUTES its plan digest itself, via
-    `compute_candidate_plan_digest` — it never accepts that digest as a
-    bare caller-supplied string. A caller that could pass any string here
-    could pass `bundle_manifest["plan_digest"]` straight back and get a
-    successful binding for ANY tree; recomputation is what makes that
-    impossible. Refuses if the candidate's digest disagrees with the
-    bundle's: a candidate whose private dependency surface does not match
-    gets no bundle, not a downgraded warning.
+    Three things this function derives or cross-checks itself, rather than
+    trusting a caller's assertion of any of them:
+
+    * The candidate's plan digest — via `compute_candidate_plan_digest`,
+      parsing `candidate_root`'s own checked-out files. A caller that could
+      pass any digest string here could pass `bundle_manifest["plan_digest"]`
+      straight back and get a successful binding for ANY tree.
+    * The candidate's commit SHA — via `_read_git_head_sha`, reading
+      `candidate_root`'s own `.git` refs. A caller that could assert any
+      SHA here could bind a real, verified bundle to an unrelated commit
+      it never actually checked out.
+    * That `run` — an ALREADY-VERIFIED `RunMetadata`, produced by a prior
+      `verify_run_metadata` call, never re-derived here from
+      `bundle_manifest`'s own raw `run` dict with a loose `int()` coercion
+      (which would accept `True` and truncate `1.9`) — actually
+      corresponds to THIS `bundle_manifest`'s own run record. Without that
+      cross-check, a valid `RunMetadata` verified against a DIFFERENT
+      bundle could be passed alongside this one and produce a binding that
+      mixes an unrelated run into it.
+
+    Refuses if the candidate's digest disagrees with the bundle's: a
+    candidate whose private dependency surface does not match gets no
+    bundle, not a downgraded warning.
     """
 
-    if not isinstance(candidate_sha, str) or not _COMMIT_SHA.match(candidate_sha):
-        raise BundleVerificationError("candidate_sha must be a 40-hex commit SHA")
-    if candidate_sha == _NULL_SHA:
-        raise BundleVerificationError(
-            "candidate_sha is the all-zero null SHA, which is never a real commit"
-        )
+    candidate_sha = _read_git_head_sha(candidate_root)
     candidate_plan_digest = compute_candidate_plan_digest(
         candidate_root, permitted_off_index
     )
@@ -2327,23 +2439,27 @@ def bind_bundle_to_candidate(
             "bundle; it must select or wait for one whose plan digest "
             "matches its own manifest+lock."
         )
-    run = bundle_manifest.get("run")
-    if not isinstance(run, dict) or "run_id" not in run or "artifact_id" not in run:
+    if not isinstance(run, RunMetadata):
         raise BundleVerificationError(
-            "bundle manifest carries no verified run metadata to bind against"
+            "run must be an already-verified RunMetadata (from "
+            "verify_run_metadata), not a raw dict"
         )
-    try:
-        run_id = int(run["run_id"])
-        artifact_id = int(run["artifact_id"])
-    except (TypeError, ValueError) as exc:
+    manifest_run = bundle_manifest.get("run")
+    if (
+        not isinstance(manifest_run, dict)
+        or manifest_run.get("run_id") != run.run_id
+        or manifest_run.get("artifact_id") != run.artifact_id
+    ):
         raise BundleVerificationError(
-            f"bundle manifest run metadata is not integer-shaped: {exc}"
-        ) from exc
+            "the verified run metadata does not correspond to this bundle "
+            "manifest's own run record; refusing to mix an unrelated run "
+            "into this binding"
+        )
     return CandidateBinding(
         candidate_sha=candidate_sha,
         plan_digest=candidate_plan_digest,
-        bundle_run_id=run_id,
-        bundle_artifact_id=artifact_id,
+        bundle_run_id=run.run_id,
+        bundle_artifact_id=run.artifact_id,
     )
 
 

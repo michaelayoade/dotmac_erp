@@ -1326,15 +1326,36 @@ def _valid_policy() -> dict:
     }
 
 
+#: The SHA `_write_git_head` bakes into every synthetic candidate checkout
+#: below — a fixed, known value so a test can assert
+#: `bind_bundle_to_candidate` returned exactly the SHA the candidate's own
+#: `.git/HEAD` names, not something asserted by the caller.
+_CANDIDATE_HEAD_SHA = "c" * 40
+
+
+def _write_git_head(root: Path, sha: str = _CANDIDATE_HEAD_SHA) -> None:
+    """A minimal, detached-HEAD-shaped `.git` directory: `.git/HEAD`
+    containing a raw 40-hex commit SHA directly, which is exactly what a
+    real detached-HEAD checkout (e.g. `actions/checkout`'s default) looks
+    like on disk. `_read_git_head_sha` reads this instead of accepting a
+    caller-asserted SHA."""
+
+    git_dir = root / ".git"
+    git_dir.mkdir(exist_ok=True)
+    (git_dir / "HEAD").write_text(sha + "\n", encoding="utf-8")
+
+
 def _candidate_root(tmp_path: Path) -> Path:
     """A real, on-disk candidate tree — `verify_run_metadata` and
-    `bind_bundle_to_candidate` now derive the candidate's plan digest
-    themselves by parsing this, rather than accepting a bare digest
-    string."""
+    `bind_bundle_to_candidate` now derive the candidate's plan digest (and,
+    for the latter, its commit SHA) themselves by reading this, rather
+    than accepting either as a bare caller-supplied value."""
 
     root = tmp_path / "candidate"
     root.mkdir(exist_ok=True)
-    return _project_root(root, BASE_PYPROJECT, BASE_LOCK)
+    project_root = _project_root(root, BASE_PYPROJECT, BASE_LOCK)
+    _write_git_head(project_root)
+    return project_root
 
 
 def _candidate_digest(candidate_root: Path) -> str:
@@ -1497,7 +1518,7 @@ def test_binding_refuses_a_digest_mismatch(tmp_path: Path) -> None:
     # hash) -- binding against it must be refused.
     mismatched_root = _candidate_root(tmp_path)
     with pytest.raises(db.BundleVerificationError, match="does not match"):
-        db.bind_bundle_to_candidate(manifest, "d" * 40, mismatched_root)
+        db.bind_bundle_to_candidate(manifest, _run(), mismatched_root)
 
 
 #: A real, on-disk manifest+lock pair whose extracted `DependencySurface`
@@ -1517,6 +1538,21 @@ _MATCHING_CANDIDATE_LOCK = BASE_LOCK.replace(
 )
 
 
+def _matching_candidate_root(tmp_path: Path, subdir: str) -> Path:
+    """A candidate tree whose extracted surface digest is guaranteed equal
+    to `_manifest_test_surface()`'s -- shared by every test below that
+    needs binding's DIGEST check to already have passed, so it can isolate
+    a different refusal (SHA/RunMetadata) instead."""
+
+    directory = tmp_path / subdir
+    directory.mkdir()
+    candidate_root = _project_root(
+        directory, _MATCHING_CANDIDATE_PYPROJECT, _MATCHING_CANDIDATE_LOCK
+    )
+    _write_git_head(candidate_root)
+    return candidate_root
+
+
 def test_binding_succeeds_when_digests_match(tmp_path: Path) -> None:
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
@@ -1527,19 +1563,101 @@ def test_binding_succeeds_when_digests_match(tmp_path: Path) -> None:
         archive_path=archive_path,
         run=_run(),
     )
-    matching_candidate_dir = tmp_path / "matching-candidate"
-    matching_candidate_dir.mkdir()
-    candidate_root = _project_root(
-        matching_candidate_dir,
-        _MATCHING_CANDIDATE_PYPROJECT,
-        _MATCHING_CANDIDATE_LOCK,
-    )
+    candidate_root = _matching_candidate_root(tmp_path, "matching-candidate")
     assert _candidate_digest(candidate_root) == manifest["plan_digest"], (
         "test fixture bug: the matching candidate must extract to the exact "
         "same surface as _manifest_test_surface()"
     )
-    binding = db.bind_bundle_to_candidate(manifest, "d" * 40, candidate_root)
+    binding = db.bind_bundle_to_candidate(manifest, _run(), candidate_root)
     assert binding.bundle_run_id == 111
+    assert binding.candidate_sha == _CANDIDATE_HEAD_SHA, (
+        "the binding must report the SHA read from the candidate's own "
+        ".git/HEAD, not an asserted value"
+    )
+
+
+def test_binding_refuses_a_candidate_with_no_git_checkout(tmp_path: Path) -> None:
+    """Finding 4: candidate_sha used to be a bare parameter the caller
+    asserted; it is now derived from candidate_root's own .git, and a
+    candidate that is not a git checkout at all must be refused rather
+    than silently accepted with no SHA to report."""
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
+    manifest = db.create_bundle_manifest(
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
+    )
+    no_git_root = tmp_path / "no-git-candidate"
+    no_git_root.mkdir()
+    _project_root(no_git_root, BASE_PYPROJECT, BASE_LOCK)  # no .git written
+    with pytest.raises(db.BundleVerificationError, match="not a git checkout"):
+        db.bind_bundle_to_candidate(manifest, _run(), no_git_root)
+
+
+def test_binding_refuses_a_null_sha_head(tmp_path: Path) -> None:
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
+    manifest = db.create_bundle_manifest(
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
+    )
+    null_sha_root = tmp_path / "null-sha-candidate"
+    null_sha_root.mkdir()
+    _project_root(null_sha_root, BASE_PYPROJECT, BASE_LOCK)
+    _write_git_head(null_sha_root, sha="0" * 40)
+    with pytest.raises(db.BundleVerificationError, match="null SHA"):
+        db.bind_bundle_to_candidate(manifest, _run(), null_sha_root)
+
+
+def test_binding_refuses_a_raw_dict_in_place_of_runmetadata(tmp_path: Path) -> None:
+    """Finding 4: bind_bundle_to_candidate used to re-derive run_id/
+    artifact_id from bundle_manifest["run"] itself with a loose int()
+    coercion (accepting True, truncating 1.9). It now requires the
+    ALREADY-VERIFIED RunMetadata object verify_run_metadata returns, and
+    refuses a raw dict outright rather than re-deriving trust from
+    unvalidated fields."""
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
+    manifest = db.create_bundle_manifest(
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
+    )
+    candidate_root = _matching_candidate_root(tmp_path, "matching-candidate")
+    with pytest.raises(
+        db.BundleVerificationError, match="already-verified RunMetadata"
+    ):
+        db.bind_bundle_to_candidate(manifest, {"run_id": 111}, candidate_root)
+
+
+def test_binding_refuses_a_runmetadata_for_an_unrelated_run(tmp_path: Path) -> None:
+    """Finding 4: a validly-shaped RunMetadata for a DIFFERENT run must not
+    be mixable with this bundle_manifest -- the two are cross-checked, not
+    merely type-checked."""
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
+    manifest = db.create_bundle_manifest(
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
+    )
+    unrelated_run = dataclasses.replace(_run(), run_id=999, artifact_run_id=999)
+    candidate_root = _matching_candidate_root(tmp_path, "matching-candidate")
+    with pytest.raises(db.BundleVerificationError, match="unrelated run"):
+        db.bind_bundle_to_candidate(manifest, unrelated_run, candidate_root)
 
 
 # ── no registry fallback: static proof over the module's own source ──────
