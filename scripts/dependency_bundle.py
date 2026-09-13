@@ -489,6 +489,17 @@ def _refuse_unknown_dependency_surfaces(manifest: dict[str, Any]) -> None:
             "are refused; this manifest is Poetry-only and a second "
             "dependency-declaration surface is unrecognised, not merged"
         )
+    if "dependency-groups" in manifest:
+        raise ManifestError(
+            "[dependency-groups] (PEP 735) is refused. erp_lock.py already "
+            "traverses this surface (`_pep508_requirement_lists`), because a "
+            "plain PEP 508 requirement string there can be a DIRECT "
+            "REFERENCE (`name @ https://...`) that bypasses total "
+            "classification the same way an off-index Poetry table does — "
+            "this module has no PEP 508 requirement-string classifier and "
+            "must refuse the surface outright rather than silently ignore "
+            "it, until it gains one"
+        )
 
 
 def _dependency_groups(

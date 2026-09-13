@@ -220,6 +220,26 @@ def test_requires_plugins_is_refused() -> None:
             db.extract_dependency_surface(root)
 
 
+def test_pep735_dependency_groups_is_refused_not_silently_dropped(
+    tmp_path: Path,
+) -> None:
+    """Finding 2: [dependency-groups] (PEP 735) is a top-level table of
+    plain PEP 508 requirement strings, so a direct-reference entry
+    (`name @ https://...`) there could bypass total classification the
+    same way an off-index Poetry table would -- and this module has no
+    PEP 508 classifier to examine it with. erp_lock.py already traverses
+    this surface for its own validation; this module must at least refuse
+    it, not silently ignore it and leave the digest unmoved."""
+
+    manifest = (
+        BASE_PYPROJECT
+        + '\n[dependency-groups]\ndev = ["evil-package @ https://evil.example.com/x.whl"]\n'
+    )
+    root = _project_root(tmp_path, manifest, BASE_LOCK)
+    with pytest.raises(db.ManifestError, match="dependency-groups"):
+        db.extract_dependency_surface(root)
+
+
 _OFF_INDEX_MANIFEST = base_pyproject(
     "dotmac-integration-client = { git = "
     '"https://github.com/michaelayoade/dotmac-integration-client.git", tag = "v0.2.0" }'
