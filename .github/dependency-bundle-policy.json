@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "$comment": "Reviewed canonical policy for the verified dependency-bundle trust chain. See docs/architecture/dependency-bundle-trust.md for the full trust model. A consumer reads THIS file from the verified trusted-workflow commit (github.sha of the producer/binder workflow run, itself pinned to protected main) -- NEVER from a candidate PR checkout, which could edit this file to name itself as trusted.",
+  "repository": {
+    "full_name": "michaelayoade/dotmac_erp",
+    "id": null,
+    "id_status": "UNRESOLVED -- this field MUST be the real, positive, immutable numeric GitHub repository ID for michaelayoade/dotmac_erp (obtainable via `gh api repos/michaelayoade/dotmac_erp --jq .id` or the repository's Settings page), not a placeholder. scripts/dependency_bundle.py::load_policy() deliberately REFUSES this file while `id` is not a positive integer. See docs/architecture/dependency-bundle-trust.md, section 'Unresolved: the repository ID field', for why the name alone is not enough (a repository can be renamed or transferred, but its numeric ID never changes) and for the human action needed to close this out."
+  },
+  "forgejo_source": {
+    "name": "forgejo",
+    "url": "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+  },
+  "producer_workflow_path": ".github/workflows/dependency-bundle-produce.yml",
+  "binder_workflow_path": ".github/workflows/dependency-bundle-bind.yml",
+  "environment_name": "forgejo-registry-read-main",
+  "target": {
+    "python": ">=3.11,<3.13",
+    "platform": "linux_x86_64"
+  },
+  "artifact_name_pattern": "erp-dependency-bundle-{plan_digest}",
+  "artifact_retention_days": 14,
+  "permitted_off_index_dependencies": {
+    "dotmac-integration-client": {
+      "url": "https://github.com/michaelayoade/dotmac-integration-client.git",
+      "tag": "v0.2.0",
+      "commit": "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042",
+      "note": "The one pre-existing, legitimate off-index dependency ERP's manifest carries -- see scripts/erp_lock.py's ALLOWED_OFF_INDEX_DEPENDENCIES for the identical pin, reasoned about there. It is not resolved through the forgejo index and is exempt from the plan digest's off-index refusals by this exact name/url/tag/commit only."
+    }
+  }
+}
