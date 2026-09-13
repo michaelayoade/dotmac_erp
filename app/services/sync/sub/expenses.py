@@ -193,8 +193,9 @@ class _ExpenseSyncMixin(_SubSyncBase):
     def list_expense_approvers(
         self, org_id: UUID, *, requested_by_email: str
     ) -> SubExpenseApproversResponse:
-        """Return active, permission-backed approvers visible to one requester."""
-        if self._resolve_employee_id(org_id, requested_by_email) is None:
+        """Return active, permission-backed approvers other than the requester."""
+        requester_id = self._resolve_employee_id(org_id, requested_by_email)
+        if requester_id is None:
             raise HTTPException(
                 status_code=422,
                 detail="The requesting employee could not be matched in ERP",
@@ -209,6 +210,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
             .where(
                 Employee.organization_id == org_id,
                 Person.organization_id == org_id,
+                Employee.employee_id != requester_id,
                 Employee.status.in_((EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE)),
                 Role.is_active.is_(True),
                 or_(
