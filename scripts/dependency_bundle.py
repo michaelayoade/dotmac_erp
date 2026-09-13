@@ -2128,6 +2128,22 @@ def extract_verified_bundle(
     an unsafe member, a hash mismatch, or an unexpected error — the staging
     directory is removed and NOTHING is written to `dest_dir`; a caller
     never observes a partially-extracted destination.
+
+    STATED, NARROW RACE (not claimed to be closed): existence is checked
+    both here and again immediately before the final rename, but there is
+    no portable, dependency-free "rename unless the destination exists"
+    primitive for a directory target in the Python standard library
+    (POSIX `renameat2(..., RENAME_NOREPLACE)` is Linux-only and is not
+    exposed by `os`). A concurrent process that creates an EMPTY `dest_dir`
+    in the narrow window between the second check and `os.rename` would
+    have it silently replaced, because POSIX `rename(2)` replacing an
+    empty directory target is not an OS-level error. This function is
+    atomic against sequential failure (a caller never sees a partial
+    result); it is not a mutual-exclusion primitive against a concurrent,
+    uncooperating writer targeting the SAME `dest_dir` — that is expected
+    not to happen (each destination is expected to be named for its own
+    bundle identity), and external locking is the caller's responsibility
+    if it might.
     """
 
     if dest_dir.exists():
@@ -2167,11 +2183,19 @@ def extract_verified_bundle(
         shutil.rmtree(staging_dir, ignore_errors=True)
         raise
 
+    if dest_dir.exists():
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        raise ExtractionError(
+            f"destination {dest_dir} was created concurrently while staging; "
+            "refusing to publish over it"
+        )
     try:
         os.rename(staging_dir, dest_dir)
-    except OSError:
+    except OSError as exc:
         shutil.rmtree(staging_dir, ignore_errors=True)
-        raise
+        raise ExtractionError(
+            f"cannot publish extracted bundle to {dest_dir}: {exc}"
+        ) from exc
     return extracted
 
 
@@ -2312,6 +2336,17 @@ def build_local_index(
     trusting that stale/partial state as resolver input on a retry. There
     is no retry-merge path now: a caller that needs to rebuild calls this
     again against a fresh `index_root`.
+
+    STATED, NARROW RACE (not claimed to be closed) — identical to
+    `extract_verified_bundle`'s: existence is checked both here and again
+    immediately before the final rename, but there is no portable,
+    dependency-free "rename unless the destination exists" primitive for a
+    directory target in the Python standard library. A concurrent process
+    that creates an EMPTY `index_root` in the narrow window before
+    `os.rename` would have it silently replaced. This function is atomic
+    against sequential failure; it is not a mutual-exclusion primitive
+    against a concurrent, uncooperating writer targeting the SAME
+    `index_root`.
     """
 
     if index_root.exists():
@@ -2420,6 +2455,12 @@ def build_local_index(
         shutil.rmtree(staging_root, ignore_errors=True)
         raise
 
+    if index_root.exists():
+        shutil.rmtree(staging_root, ignore_errors=True)
+        raise BundleVerificationError(
+            f"destination {index_root} was created concurrently while "
+            "staging; refusing to publish over it"
+        )
     try:
         os.rename(staging_root, index_root)
     except OSError as exc:
