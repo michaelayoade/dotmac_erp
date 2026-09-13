@@ -35,8 +35,13 @@ description: >-
 #    cold-cache network dependence, so this adds a wheel cache and bounded
 #    retries.
 #
-# The pinned version lives in .github/bootstrap/poetry-requirements.txt;
-# regenerate it with .github/bootstrap/regenerate.sh.
+# The pinned version lives in .github/bootstrap/poetry-requirements.txt.
+# That file is copied byte-for-byte from
+# michaelayoade/dotmac_platform_control_plane and is regenerated THERE,
+# with that repository's .github/bootstrap/regenerate.sh. This repository
+# deliberately carries no generator of its own: both repositories pin the
+# same Poetry, and a second generator for one pin is how two copies drift
+# into two different pins. See that file's own header for its sha256.
 
 runs:
   using: composite
@@ -99,7 +104,7 @@ runs:
           echo "::warning::poetry bootstrap attempt ${attempt} failed"
           sleep $((attempt * 5))
         done
-        echo "::error::poetry bootstrap failed after 3 attempts — if pip reported HASH MISMATCH this is NOT a network fault; regenerate ${req} with .github/bootstrap/regenerate.sh"
+        echo "::error::poetry bootstrap failed after 3 attempts — if pip reported HASH MISMATCH this is NOT a network fault; regenerate ${req} in michaelayoade/dotmac_platform_control_plane with that repository's .github/bootstrap/regenerate.sh and re-copy it here"
         exit 1
 
     - name: Assert Poetry is on PATH and importable by this job's python
