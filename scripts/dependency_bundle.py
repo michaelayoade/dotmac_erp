@@ -125,7 +125,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dependency_normalisation import normalise_name, normalise_repository_url
+from dependency_normalisation import (
+    normalise_name,
+    normalise_name_for_identity,
+    normalise_repository_url,
+)
 
 # ── errors ───────────────────────────────────────────────────────────────
 
@@ -337,18 +341,6 @@ def _normalise_name_for_manifest(name: str, *, where: str) -> str:
         return normalise_name(name)
     except ValueError as exc:
         raise ManifestError(f"{where}: {exc}") from exc
-
-
-def _normalised_or_none(name: str) -> str | None:
-    """`normalise_name`, tolerant: `None` for a name that does not
-    normalise at all, instead of raising. Used where the caller only needs
-    an equality comparison (a malformed name simply cannot match anything)
-    rather than a validation refusal of its own."""
-
-    try:
-        return normalise_name(name)
-    except ValueError:
-        return None
 
 
 # ── dependency-surface extraction ───────────────────────────────────────
@@ -927,21 +919,23 @@ def _verify_off_index_lock_entry(
     packages_raw = lock.get("package", [])
     # NAMED CONVERGENCE: this used to match the lock package name by RAW
     # equality against `dep.name`. `erp_lock.off_index_lock_problems`
-    # PEP-503-normalises both sides of the identical comparison
-    # (`_normalised(entry.get("name")) == _normalised(name)`), so
+    # PEP-503-normalises both sides of the identical comparison, so
     # `Dotmac_Integration_Client` in the lock would pass there and fail
-    # here. Converged onto the normalised comparison, using
-    # `dep.normalised_name` (already computed once, during classification)
-    # rather than re-normalising `dep.name`. A lock entry whose own `name`
-    # does not even normalise (invalid distribution-name grammar) simply
-    # does not match — it is not this function's job to validate the
-    # lock's name field, only to find the matching entry.
+    # here. Converged onto `normalise_name_for_identity` — the TOTAL,
+    # never-raising form (see `dependency_normalisation`'s "Two forms, for
+    # two genuinely different contracts"), because this IS an identity
+    # comparison against a lock-file name that may be malformed: a name
+    # that does not cleanly normalise must become a non-match, not a
+    # raised `ManifestError` from this specific comparison — the surrounding
+    # `len(matches) != 1` check already turns "no match" into the correct
+    # refusal.
+    dep_identity = normalise_name_for_identity(dep.name)
     matches = [
         p
         for p in packages_raw
         if isinstance(p, dict)
         and isinstance(p.get("name"), str)
-        and _normalised_or_none(p["name"]) == dep.normalised_name
+        and normalise_name_for_identity(p["name"]) == dep_identity
     ]
     if len(matches) != 1:
         raise ManifestError(

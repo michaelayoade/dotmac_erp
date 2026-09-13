@@ -1241,7 +1241,7 @@ def test_build_local_index_refuses_an_invalid_pep503_key_rather_than_crashing(
 def test_build_local_index_refuses_a_package_key_that_is_a_filesystem_path(
     tmp_path: Path,
 ) -> None:
-    """Finding 3: a key like `/tmp/bundle-escape` used to pass the
+    """Finding 3: a key like `/escaped/bundle-path` used to pass the
     "already normalised" check (normalise_name did not validate the input
     charset, so `/` passed straight through and the key compared equal to
     itself), then escape the staging directory entirely when joined via
@@ -2624,8 +2624,14 @@ def test_dependency_bundle_imports_the_shared_normaliser() -> None:
     assert db.normalise_name is dependency_normalisation.normalise_name
 
 
-def test_erp_lock_imports_the_shared_normaliser() -> None:
-    assert erp_lock._normalised is dependency_normalisation.normalise_name
+def test_erp_lock_imports_the_shared_TOTAL_normaliser() -> None:
+    """A regression this branch introduced and then fixed: erp_lock's
+    identity comparison must consume the TOTAL, never-raising form
+    (`normalise_name_for_identity`), not the validating `normalise_name` —
+    see `dependency_normalisation`'s "Two forms, for two genuinely
+    different contracts"."""
+
+    assert erp_lock._normalised is dependency_normalisation.normalise_name_for_identity
 
 
 @pytest.mark.parametrize(
@@ -2637,11 +2643,15 @@ def test_erp_lock_imports_the_shared_normaliser() -> None:
         "DOTMAC-KERNEL",
     ],
 )
-def test_both_scripts_now_agree_on_every_normalisation_vector(raw: str) -> None:
-    """Both scripts import the IDENTICAL function object, so agreement is
-    structural; this proves it holds for names that do not carry an edge
-    separator after collapsing (see the refusal test below for the ones
-    that do)."""
+def test_both_forms_agree_on_every_clean_normalisation_vector(raw: str) -> None:
+    """For a name that carries no edge separator and no invalid character,
+    the STRICT form (`normalise_name`) and the TOTAL form
+    (`normalise_name_for_identity`, which `erp_lock` consumes) compute the
+    IDENTICAL result — validation only ever ADDS a refusal on top of the
+    same collapse-and-lower-case logic, never changes it for input that
+    was always going to pass. This is what makes `erp_lock`'s behaviour
+    unchanged from before this branch touched it, for every name its real
+    call sites ever see."""
 
     assert db.normalise_name(raw) == erp_lock._normalised(raw)
 
@@ -2650,22 +2660,57 @@ def test_both_scripts_now_agree_on_every_normalisation_vector(raw: str) -> None:
     "raw",
     ["-dotmac-thing-", "dotmac-thing-", "-dotmac-thing", "Dotmac_Thing."],
 )
-def test_both_scripts_refuse_the_same_edge_separator_names(raw: str) -> None:
+def test_the_strict_form_refuses_an_edge_separator_name(raw: str) -> None:
     """PEP 503 normalisation does not strip an edge separator, and no valid
-    distribution name can carry one — an EARLIER version of this owner
-    stripped it instead, manufacturing a false equivalence between an
-    invalid name and a valid one. Both callers must refuse identically
-    (they share the one function object), not merely agree on a stripped
-    value."""
+    distribution name can carry one — refused outright by the strict,
+    validating form used for manifest/lock parsing and filesystem-key
+    derivation."""
 
     with pytest.raises(ValueError, match="starts or ends with a separator"):
         db.normalise_name(raw)
-    with pytest.raises(ValueError, match="starts or ends with a separator"):
-        erp_lock._normalised(raw)
 
 
-def test_the_shared_normaliser_refuses_an_edge_separator_name_rather_than_stripping_it() -> (
+@pytest.mark.parametrize(
+    "raw",
+    ["-dotmac-thing-", "dotmac-thing-", "-dotmac-thing", "Dotmac_Thing."],
+)
+def test_the_total_form_never_raises_and_simply_fails_to_match(raw: str) -> None:
+    """The SAME edge-separator names the strict form refuses must NOT raise
+    through `erp_lock._normalised` (the total form) — that is the exact
+    regression this branch introduced and then fixed: a candidate-supplied
+    `poetry.lock` package name reaching this comparison inside the
+    credentialed `erp-lock.yml` resolve workflow must never crash it. The
+    total form instead returns a value that simply does not equal the
+    clean, stripped identity — non-equality achieved by NOT normalising
+    away the very thing that makes the name invalid, never by raising."""
+
+    result = erp_lock._normalised(raw)
+    assert isinstance(result, str)
+    clean_identity = "dotmac-thing"
+    assert result != clean_identity, (
+        f"{raw!r} must not spuriously compare equal to {clean_identity!r}"
+    )
+
+
+def test_the_strict_normaliser_refuses_an_edge_separator_name_rather_than_stripping_it() -> (
     None
 ):
     with pytest.raises(ValueError, match="starts or ends with a separator"):
         dependency_normalisation.normalise_name("-dotmac-thing-")
+
+
+def test_the_total_normaliser_never_raises_for_an_invalid_filesystem_path() -> None:
+    """The other half of the regression: a caller-controlled string that is
+    a filesystem path (not a distribution name at all) must not crash the
+    TOTAL form either -- it is not this form's job to validate a charset,
+    only to answer an identity comparison without raising."""
+
+    result = dependency_normalisation.normalise_name_for_identity(
+        "/escaped/bundle-path"
+    )
+    assert result == "/escaped/bundle-path"
+
+
+def test_the_strict_normaliser_refuses_the_same_filesystem_path() -> None:
+    with pytest.raises(ValueError, match="not a valid distribution name"):
+        dependency_normalisation.normalise_name("/escaped/bundle-path")

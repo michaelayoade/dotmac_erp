@@ -387,9 +387,15 @@ def _load_toml(path: Path) -> dict[str, Any]:
 
 #: PEP 503 normalisation has exactly one owner now — `dependency_normalisation`
 #: (see that module's docstring for the divergent-hyphen-stripping bug this
-#: fixes). This used to be a locally-defined function; it is now an import
-#: alias so every existing `_normalised(...)` call site is unchanged.
-_normalised = dependency_normalisation.normalise_name
+#: fixes, and its "Two forms, for two genuinely different contracts"
+#: section for why this alias points at the TOTAL, never-raising form
+#: specifically). This used to be a locally-defined function; it is now an
+#: import alias so every existing `_normalised(...)` call site is
+#: unchanged — `normalise_name_for_identity` is behaviourally IDENTICAL to
+#: what this function computed before this branch touched it
+#: (`re.sub(r"[-_.]+", "-", name).lower()`, no validation), so no call site
+#: here gains a new way to raise.
+_normalised = dependency_normalisation.normalise_name_for_identity
 
 
 # ── set-versions: move both pins, or refuse ─────────────────────────────────

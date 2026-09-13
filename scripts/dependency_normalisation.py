@@ -70,6 +70,50 @@ moment it is joined with `Path.__truediv__`, because an absolute
 right-hand operand REPLACES the left side entirely. `normalise_name` now
 refuses any input containing a character outside `[A-Za-z0-9._-]` before
 doing anything else with it.
+
+## Two forms, for two genuinely different contracts — not one function with a caveat
+
+Adding that input-charset check to the ONE shared `normalise_name`
+introduced a real regression: `erp_lock.off_index_lock_problems` calls the
+shared normaliser on a package NAME taken from a candidate-supplied
+`poetry.lock`, inside the credentialed `erp-lock.yml` resolve workflow, to
+answer "is this the same package as the one I have pinned?". Before this
+module existed, that comparison could never raise — the old, local
+`_normalised` was pure regex substitution with no validation. Routing it
+through the new, validating `normalise_name` meant an unusual candidate
+lock-package name could raise an uncaught `ValueError` and crash a live
+credentialed job that used to merely compare and move on. That is a
+regression THIS branch introduced, not a pre-existing gap, and it must not
+ship.
+
+The fix is not a caller-side wrapper around one raising function — it is
+recognising that the two call sites were never answering the same
+question:
+
+* **Identity comparison** ("is this candidate-supplied name the SAME
+  package as this other name?") must be TOTAL: it must never raise,
+  because its input is untrusted and its job is to report a mismatch, not
+  to become one. A name it cannot cleanly interpret is a name that does
+  not match — and that answer falls out for free from NOT stripping or
+  validating, because an edge-separator or invalid-character name then
+  normalises to something that still carries the offending character and
+  therefore does not spuriously compare equal to a clean name either. This
+  is `normalise_name_for_identity`, below — behaviourally IDENTICAL to
+  `erp_lock`'s own pre-existing, pre-this-branch `_normalised`
+  (`re.sub(r"[-_.]+", "-", name).lower()`, no validation at all). `erp_lock`
+  consumes ONLY this form, so every one of its own call sites behaves
+  exactly as it did before this branch existed.
+* **Filesystem-key validation** ("is this string safe to use as a
+  PEP-503-normalised directory/file-name component?") must REFUSE anything
+  that is not a valid, already-normalised distribution name — because that
+  is what stops a string like `/tmp/bundle-escape` from being accepted as
+  "already normalised" and then escaping a staging directory when joined
+  with `Path.__truediv__` (an absolute right-hand operand replaces the
+  left side entirely). This remains `normalise_name`, below — the
+  validating form, consumed by `dependency_bundle.py`'s manifest/lock
+  parsing (which must refuse a malformed name in ADVERSARIAL, but not
+  identity-comparison, input) and by its local-index staging path (which
+  must refuse a malformed name used as a FILESYSTEM KEY).
 """
 
 from __future__ import annotations
@@ -87,6 +131,27 @@ _NAME_RUNS = re.compile(r"[-_.]+")
 _VALID_NAME_CHARACTERS = re.compile(r"\A[A-Za-z0-9._-]+\Z")
 
 
+def normalise_name_for_identity(name: str) -> str:
+    """PEP 503 separator-collapse and lower-casing — and NOTHING else.
+    NEVER RAISES, for any input.
+
+    Use this ONLY to answer "is this the same package as this other name?"
+    against input that may be untrusted or malformed (e.g. a
+    candidate-supplied `poetry.lock` package name) — see this module's
+    docstring, "Two forms, for two genuinely different contracts", for why
+    a total, never-raising comparison is the correct contract there, and
+    why NOT stripping an edge separator is what keeps a mis-shaped name
+    from spuriously comparing equal to a clean one even without raising.
+
+    Do NOT use this to derive a filesystem path segment, a cache key, or
+    any other context where an actually-invalid distribution name must be
+    refused outright rather than merely fail to match — use `normalise_name`
+    for that.
+    """
+
+    return _NAME_RUNS.sub("-", name).lower()
+
+
 def normalise_name(name: str) -> str:
     """PEP 503 normalisation: runs of `-`, `_`, `.` collapse to one `-`,
     lower-cased. Raises `ValueError` if `name` contains any character
@@ -94,6 +159,12 @@ def normalise_name(name: str) -> str:
     validates the INPUT charset"), or if the normalised result starts or
     ends with `-` (see "`normalise_name` does not strip — an edge separator
     is REFUSED").
+
+    Use this where an invalid distribution name must be REFUSED outright —
+    manifest/lock parsing, or deriving a filesystem-key component. Use
+    `normalise_name_for_identity` instead where the input may be untrusted
+    and the caller's job is to report a mismatch, never to raise — see this
+    module's docstring, "Two forms, for two genuinely different contracts".
     """
 
     if not name or not _VALID_NAME_CHARACTERS.match(name):
