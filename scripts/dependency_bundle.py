@@ -2009,7 +2009,6 @@ def extract_verified_bundle(
 # ── canonical bundle manifest ──────────────────────────────────────────
 
 
-@dataclass(frozen=True)
 def create_bundle_manifest(
     *,
     surface: DependencySurface,
