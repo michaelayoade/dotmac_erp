@@ -67,9 +67,9 @@
     {
       "id": "migration-bindings",
       "source_path": "app/migration_bindings.py",
-      "source_blob_sha256": "2bfdcde1f163b30c9875561dce9847d9c12957d6e44bcd32e484665207cb0b30",
+      "source_blob_sha256": "d81086b70cbab68962334c52bd1801fb1ccfee0991fbcfc2fd98e33851832056",
       "selector": "whole-file.v1",
-      "extract_sha256": "2bfdcde1f163b30c9875561dce9847d9c12957d6e44bcd32e484665207cb0b30"
+      "extract_sha256": "d81086b70cbab68962334c52bd1801fb1ccfee0991fbcfc2fd98e33851832056"
     }
   ]
 }
