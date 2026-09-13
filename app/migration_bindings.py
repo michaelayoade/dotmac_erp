@@ -91,7 +91,7 @@ ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
 #: ## ERP does not have one Alembic head, and must not expect one
 #:
 #: Every composed module lineage is an independent ROOT carrying its own branch
-#: label (`fi_0001_stored_files` -> `files`, `ac_0001_accounting` ->
+#: label (`fi_0002_selectable_planes` -> `files`, `ac_0001_accounting` ->
 #: `accounting`).  That is the design, not an accident: a module owns its own
 #: revision history so it can be released, pinned and upgraded without ERP
 #: rewriting its graph.  ERP's revision map therefore has as many heads as it
@@ -110,7 +110,7 @@ ASSEMBLY_PREREQUISITE_BINDINGS: Final[tuple[PrerequisiteBinding, ...]] = (
 #: module head moves only when its distribution is repinned, which is a reviewed
 #: change that must update this map in the same commit.
 COMPOSED_MODULE_LINEAGES: Final[dict[str, str]] = {
-    "files": "fi_0001_stored_files",
+    "files": "fi_0002_selectable_planes",
     "accounting": "ac_0001_accounting",
     "imports": "im_0001_import_runs",
     "numbering": "nu_0001_numbering",
