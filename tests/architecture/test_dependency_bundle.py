@@ -138,6 +138,11 @@ files = []
 type = "legacy"
 url = "https://pypi.org/simple"
 reference = "pypi"
+
+[metadata]
+lock-version = "2.1"
+python-versions = ">=3.11,<3.13"
+content-hash = "0000000000000000000000000000000000000000000000000000000000000000"
 """
 
 
@@ -296,10 +301,12 @@ def test_the_off_index_identity_moves_the_digest(tmp_path: Path) -> None:
 
 def _surface_with_dependency(dep: db.ForgejoDependency) -> db.DependencySurface:
     return db.DependencySurface(
-        schema_version=2,
+        schema_version=db.PLAN_SCHEMA_VERSION,
         forgejo_source_url=db.FORGEJO_LOCK_URL,
         target_python=">=3.11,<3.13",
         target_platform=db.TARGET_PLATFORM,
+        lock_format_version="2.1",
+        lock_python_versions=">=3.11,<3.13",
         dependencies=(dep,),
         off_index_dependencies=(),
         lock_packages=(),
@@ -308,10 +315,12 @@ def _surface_with_dependency(dep: db.ForgejoDependency) -> db.DependencySurface:
 
 def _surface_with_lock_package(pkg: db.LockPackage) -> db.DependencySurface:
     return db.DependencySurface(
-        schema_version=2,
+        schema_version=db.PLAN_SCHEMA_VERSION,
         forgejo_source_url=db.FORGEJO_LOCK_URL,
         target_python=">=3.11,<3.13",
         target_platform=db.TARGET_PLATFORM,
+        lock_format_version="2.1",
+        lock_python_versions=">=3.11,<3.13",
         dependencies=(),
         off_index_dependencies=(),
         lock_packages=(pkg,),
@@ -327,6 +336,7 @@ _BASE_DEP = db.ForgejoDependency(
     extras=(),
     optional=False,
     python_constraint=None,
+    group_optional=False,
 )
 
 _BASE_LOCK_PKG = db.LockPackage(
@@ -336,6 +346,8 @@ _BASE_LOCK_PKG = db.LockPackage(
     groups=("main",),
     optional=False,
     python_versions=">=3.11",
+    markers=None,
+    extras={},
     dependencies={},
     source_type="legacy",
     source_url=db.FORGEJO_LOCK_URL,
@@ -362,6 +374,10 @@ _BASE_LOCK_PKG = db.LockPackage(
         (
             "python constraint None->'>=3.12'",
             lambda dep: dataclasses.replace(dep, python_constraint=">=3.12"),
+        ),
+        (
+            "group_optional False->True",
+            lambda dep: dataclasses.replace(dep, group_optional=True),
         ),
     ],
 )
@@ -403,6 +419,14 @@ def test_each_forgejo_dependency_field_moves_the_digest(label, mutate) -> None:
                 files=({"file": pkg.files[0]["file"], "hash": "sha256:" + "b" * 64},),
             ),
         ),
+        (
+            "markers None->set",
+            lambda pkg: dataclasses.replace(pkg, markers="python_version < '3.13'"),
+        ),
+        (
+            "extras added",
+            lambda pkg: dataclasses.replace(pkg, extras={"speedups": ["orjson (>=3)"]}),
+        ),
     ],
 )
 def test_each_lock_package_field_moves_the_digest(label, mutate) -> None:
@@ -417,10 +441,12 @@ def test_each_lock_package_field_moves_the_digest(label, mutate) -> None:
 
 def test_forgejo_source_url_change_moves_the_digest() -> None:
     surface = db.DependencySurface(
-        schema_version=2,
+        schema_version=db.PLAN_SCHEMA_VERSION,
         forgejo_source_url=db.FORGEJO_LOCK_URL,
         target_python=">=3.11,<3.13",
         target_platform=db.TARGET_PLATFORM,
+        lock_format_version="2.1",
+        lock_python_versions=">=3.11,<3.13",
         dependencies=(),
         off_index_dependencies=(),
         lock_packages=(),
@@ -429,6 +455,26 @@ def test_forgejo_source_url_change_moves_the_digest() -> None:
         surface, forgejo_source_url=db.FORGEJO_LOCK_URL + "-alt"
     )
     before, after = db.compute_plan_digest(surface), db.compute_plan_digest(mutated)
+    assert before != after, f"before={before} after={after}"
+
+
+def test_lock_format_version_change_moves_the_digest(tmp_path: Path) -> None:
+    base_surface = _base_surface(tmp_path)
+    mutated = dataclasses.replace(base_surface, lock_format_version="1.1")
+    before, after = (
+        db.compute_plan_digest(base_surface),
+        db.compute_plan_digest(mutated),
+    )
+    assert before != after, f"before={before} after={after}"
+
+
+def test_lock_python_versions_change_moves_the_digest(tmp_path: Path) -> None:
+    base_surface = _base_surface(tmp_path)
+    mutated = dataclasses.replace(base_surface, lock_python_versions=">=3.9,<3.10")
+    before, after = (
+        db.compute_plan_digest(base_surface),
+        db.compute_plan_digest(mutated),
+    )
     assert before != after, f"before={before} after={after}"
 
 
@@ -601,74 +647,120 @@ def _run() -> db.RunMetadata:
     )
 
 
+#: `create_bundle_manifest` now reads and hashes REAL files rather than
+#: trusting a caller-reported summary, so these tests need a lock fixture
+#: whose declared hash is the hash of bytes the test can actually write —
+#: `_BASE_LOCK_PKG`'s fixed "aaaa...a" placeholder is not the hash of
+#: anything, and no real file could ever match it.
+_MANIFEST_TEST_WHEEL_NAME = "dotmac_kernel-0.1.0a1-py3-none-any.whl"
+_MANIFEST_TEST_WHEEL_BYTES = b"pretend wheel content for bundle-manifest tests"
+_MANIFEST_TEST_WHEEL_SHA256 = db.sha256_hex(_MANIFEST_TEST_WHEEL_BYTES)
+_MANIFEST_TEST_LOCK_PKG = dataclasses.replace(
+    _BASE_LOCK_PKG,
+    files=(
+        {
+            "file": _MANIFEST_TEST_WHEEL_NAME,
+            "hash": "sha256:" + _MANIFEST_TEST_WHEEL_SHA256,
+        },
+    ),
+)
+
+_SECOND_MANIFEST_TEST_WHEEL_NAME = "dotmac_ui-0.1.0a7-py3-none-any.whl"
+_SECOND_MANIFEST_TEST_WHEEL_BYTES = b"pretend second wheel content"
+_SECOND_MANIFEST_TEST_WHEEL_SHA256 = db.sha256_hex(_SECOND_MANIFEST_TEST_WHEEL_BYTES)
+_SECOND_MANIFEST_TEST_LOCK_PKG = dataclasses.replace(
+    _BASE_LOCK_PKG,
+    name="dotmac-ui",
+    normalised_name="dotmac-ui",
+    files=(
+        {
+            "file": _SECOND_MANIFEST_TEST_WHEEL_NAME,
+            "hash": "sha256:" + _SECOND_MANIFEST_TEST_WHEEL_SHA256,
+        },
+    ),
+)
+
+
+def _manifest_test_surface() -> db.DependencySurface:
+    return _surface_with_lock_package(_MANIFEST_TEST_LOCK_PKG)
+
+
+def _write_bytes(tmp_path: Path, name: str, content: bytes) -> Path:
+    path = tmp_path / name
+    path.write_bytes(content)
+    return path
+
+
+def _write_wheel(tmp_path: Path, content: bytes = _MANIFEST_TEST_WHEEL_BYTES) -> Path:
+    return _write_bytes(tmp_path, _MANIFEST_TEST_WHEEL_NAME, content)
+
+
+def _write_archive(tmp_path: Path, name: str = "bundle.zip") -> Path:
+    return _write_bytes(tmp_path, name, b"pretend outer archive bytes")
+
+
 def test_create_bundle_manifest_computes_plan_digest_and_sizes(tmp_path: Path) -> None:
-    surface = _base_surface(tmp_path)
-    planned = db.planned_artifacts(surface)
-    acquired = {
-        a.filename: db.AcquiredMember(a.filename, a.sha256, 4096) for a in planned
-    }
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
     manifest = db.create_bundle_manifest(
-        surface=surface, acquired_members=acquired, run=_run(), archive_sha256="b" * 64
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
     )
     assert manifest["plan_digest"] == db.compute_plan_digest(surface)
-    for name, record in manifest["members"].items():
-        assert record["size"] == 4096
-        assert record["sha256"] == acquired[name].sha256
+    assert manifest["archive_sha256"] == db.sha256_hex(archive_path.read_bytes())
+    record = manifest["members"][_MANIFEST_TEST_WHEEL_NAME]
+    assert record["size"] == len(_MANIFEST_TEST_WHEEL_BYTES)
+    assert record["sha256"] == _MANIFEST_TEST_WHEEL_SHA256
 
 
 def test_create_bundle_manifest_refuses_when_a_planned_file_was_not_acquired(
     tmp_path: Path,
 ) -> None:
-    surface = _base_surface(tmp_path)
-    planned = db.planned_artifacts(surface)
-    acquired = {
-        a.filename: db.AcquiredMember(a.filename, a.sha256, 4096) for a in planned[:-1]
-    }
+    surface = _manifest_test_surface()
+    archive_path = _write_archive(tmp_path)
     with pytest.raises(db.BundleVerificationError, match="not acquired"):
         db.create_bundle_manifest(
-            surface=surface,
-            acquired_members=acquired,
-            run=_run(),
-            archive_sha256="b" * 64,
+            surface=surface, acquired_files={}, archive_path=archive_path, run=_run()
         )
 
 
 def test_create_bundle_manifest_refuses_an_unaccounted_for_acquired_member(
     tmp_path: Path,
 ) -> None:
-    surface = _base_surface(tmp_path)
-    planned = db.planned_artifacts(surface)
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
+    extra_path = _write_bytes(tmp_path, "extra-unplanned-file.whl", b"extra")
     acquired = {
-        a.filename: db.AcquiredMember(a.filename, a.sha256, 4096) for a in planned
+        _MANIFEST_TEST_WHEEL_NAME: wheel_path,
+        "extra-unplanned-file.whl": extra_path,
     }
-    acquired["extra-unplanned-file.whl"] = db.AcquiredMember(
-        "extra-unplanned-file.whl", "c" * 64, 10
-    )
     with pytest.raises(db.BundleVerificationError, match="does not name them"):
         db.create_bundle_manifest(
             surface=surface,
-            acquired_members=acquired,
+            acquired_files=acquired,
+            archive_path=archive_path,
             run=_run(),
-            archive_sha256="b" * 64,
         )
 
 
 def test_create_bundle_manifest_refuses_a_digest_mismatch_between_plan_and_acquisition(
     tmp_path: Path,
 ) -> None:
-    surface = _base_surface(tmp_path)
-    planned = db.planned_artifacts(surface)
-    acquired = {
-        a.filename: db.AcquiredMember(a.filename, a.sha256, 4096) for a in planned
-    }
-    first_name = next(iter(acquired))
-    acquired[first_name] = db.AcquiredMember(first_name, "f" * 64, 4096)
+    surface = _manifest_test_surface()
+    wrong_path = _write_wheel(
+        tmp_path, content=b"the wrong bytes, not what the plan requires"
+    )
+    archive_path = _write_archive(tmp_path)
     with pytest.raises(db.BundleVerificationError, match="but the plan requires"):
         db.create_bundle_manifest(
             surface=surface,
-            acquired_members=acquired,
+            acquired_files={_MANIFEST_TEST_WHEEL_NAME: wrong_path},
+            archive_path=archive_path,
             run=_run(),
-            archive_sha256="b" * 64,
         )
 
 
@@ -679,25 +771,31 @@ def test_mixing_one_plans_digest_with_a_different_plans_files_is_refused(
     a file set that does not match it. Plan B here has a strictly SMALLER
     lock-package set (a genuinely different plan); acquiring exactly plan
     A's files and asking for a manifest under plan B's surface must fail
-    the closure check both ways."""
+    the closure check."""
 
-    surface_a = _base_surface(tmp_path)
-    surface_b = dataclasses.replace(
-        surface_a, lock_packages=surface_a.lock_packages[:-1]
+    surface_a = dataclasses.replace(
+        _manifest_test_surface(),
+        lock_packages=(_MANIFEST_TEST_LOCK_PKG, _SECOND_MANIFEST_TEST_LOCK_PKG),
     )
+    surface_b = dataclasses.replace(surface_a, lock_packages=(_MANIFEST_TEST_LOCK_PKG,))
     assert db.compute_plan_digest(surface_a) != db.compute_plan_digest(surface_b)
 
-    planned_a = db.planned_artifacts(surface_a)
+    wheel_a_path = _write_wheel(tmp_path)
+    wheel_b_path = _write_bytes(
+        tmp_path, _SECOND_MANIFEST_TEST_WHEEL_NAME, _SECOND_MANIFEST_TEST_WHEEL_BYTES
+    )
+    archive_path = _write_archive(tmp_path)
     acquired_a = {
-        a.filename: db.AcquiredMember(a.filename, a.sha256, 10) for a in planned_a
+        _MANIFEST_TEST_WHEEL_NAME: wheel_a_path,
+        _SECOND_MANIFEST_TEST_WHEEL_NAME: wheel_b_path,
     }
 
     # correct pairing succeeds
     manifest = db.create_bundle_manifest(
         surface=surface_a,
-        acquired_members=acquired_a,
+        acquired_files=acquired_a,
+        archive_path=archive_path,
         run=_run(),
-        archive_sha256="b" * 64,
     )
     assert manifest["plan_digest"] == db.compute_plan_digest(surface_a)
 
@@ -705,9 +803,9 @@ def test_mixing_one_plans_digest_with_a_different_plans_files_is_refused(
     with pytest.raises(db.BundleVerificationError):
         db.create_bundle_manifest(
             surface=surface_b,
-            acquired_members=acquired_a,
+            acquired_files=acquired_a,
+            archive_path=archive_path,
             run=_run(),
-            archive_sha256="b" * 64,
         )
 
 
@@ -963,10 +1061,22 @@ def _valid_policy() -> dict:
     }
 
 
-_DIGEST = "d" * 64
+def _candidate_root(tmp_path: Path) -> Path:
+    """A real, on-disk candidate tree — `verify_run_metadata` and
+    `bind_bundle_to_candidate` now derive the candidate's plan digest
+    themselves by parsing this, rather than accepting a bare digest
+    string."""
+
+    root = tmp_path / "candidate"
+    root.mkdir(exist_ok=True)
+    return _project_root(root, BASE_PYPROJECT, BASE_LOCK)
 
 
-def _valid_run_metadata() -> dict:
+def _candidate_digest(candidate_root: Path) -> str:
+    return db.compute_plan_digest(db.extract_dependency_surface(candidate_root))
+
+
+def _valid_run_metadata(candidate_digest: str) -> dict:
     return {
         "repository_full_name": "michaelayoade/dotmac_erp",
         "repository_id": 1141216651,
@@ -976,14 +1086,16 @@ def _valid_run_metadata() -> dict:
         "trusted_workflow_sha": "a" * 40,
         "artifact_id": 222,
         "artifact_run_id": 111,
-        "artifact_name": f"erp-dependency-bundle-{_DIGEST}",
+        "artifact_name": f"erp-dependency-bundle-{candidate_digest}",
         "environment_name": "forgejo-registry-read-main",
     }
 
 
-def test_valid_run_metadata_verifies() -> None:
+def test_valid_run_metadata_verifies(tmp_path: Path) -> None:
+    candidate_root = _candidate_root(tmp_path)
+    digest = _candidate_digest(candidate_root)
     result = db.verify_run_metadata(
-        _valid_run_metadata(), _valid_policy(), expected_plan_digest=_DIGEST
+        _valid_run_metadata(digest), _valid_policy(), candidate_root=candidate_root
     )
     assert result.run_id == 111
 
@@ -1004,71 +1116,82 @@ def test_valid_run_metadata_verifies() -> None:
     ],
 )
 def test_each_missing_run_metadata_field_refuses_independently(
-    missing_field: str,
+    missing_field: str, tmp_path: Path
 ) -> None:
-    metadata = _valid_run_metadata()
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
     del metadata[missing_field]
     with pytest.raises(db.BundleVerificationError, match="missing required fields"):
-        db.verify_run_metadata(metadata, _valid_policy(), expected_plan_digest=_DIGEST)
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
-def test_the_all_zero_null_sha_is_refused() -> None:
+def test_the_all_zero_null_sha_is_refused(tmp_path: Path) -> None:
     """Previously PASSED: `_COMMIT_SHA.match` alone accepts 40 zero
     characters as valid hex."""
 
-    metadata = _valid_run_metadata()
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
     metadata["trusted_workflow_sha"] = "0" * 40
     with pytest.raises(db.BundleVerificationError, match="null SHA"):
-        db.verify_run_metadata(metadata, _valid_policy(), expected_plan_digest=_DIGEST)
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
 @pytest.mark.parametrize(
     "field",
     ["run_id", "run_attempt", "artifact_id", "repository_id", "artifact_run_id"],
 )
-def test_a_negative_coordinate_is_refused(field: str) -> None:
+def test_a_negative_coordinate_is_refused(field: str, tmp_path: Path) -> None:
     """Previously PASSED: only presence was checked, not sign."""
 
-    metadata = _valid_run_metadata()
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
     metadata[field] = -1
     with pytest.raises(db.BundleVerificationError, match="positive integer"):
-        db.verify_run_metadata(metadata, _valid_policy(), expected_plan_digest=_DIGEST)
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
-def test_the_binder_workflow_path_is_refused_a_producer_is_required() -> None:
+def test_the_binder_workflow_path_is_refused_a_producer_is_required(
+    tmp_path: Path,
+) -> None:
     """Previously PASSED: either path was accepted."""
 
-    metadata = _valid_run_metadata()
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
     metadata["workflow_path"] = ".github/workflows/dependency-bundle-bind.yml"
     with pytest.raises(db.BundleVerificationError, match="PRODUCER"):
-        db.verify_run_metadata(metadata, _valid_policy(), expected_plan_digest=_DIGEST)
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
-def test_an_artifact_name_unrelated_to_the_plan_digest_is_refused() -> None:
+def test_an_artifact_name_unrelated_to_the_plan_digest_is_refused(
+    tmp_path: Path,
+) -> None:
     """Previously PASSED: artifact_name was never checked at all."""
 
-    metadata = _valid_run_metadata()
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
     metadata["artifact_name"] = "unrelated-artifact"
     with pytest.raises(db.BundleVerificationError, match="does not match the expected"):
-        db.verify_run_metadata(metadata, _valid_policy(), expected_plan_digest=_DIGEST)
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
-def test_wrong_environment_is_refused() -> None:
+def test_wrong_environment_is_refused(tmp_path: Path) -> None:
     """Previously PASSED: environment was never checked at all."""
 
-    metadata = _valid_run_metadata()
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
     metadata["environment_name"] = "some-other-env"
     with pytest.raises(db.BundleVerificationError, match="environment_name"):
-        db.verify_run_metadata(metadata, _valid_policy(), expected_plan_digest=_DIGEST)
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
-def test_artifact_belonging_to_a_different_run_is_refused() -> None:
+def test_artifact_belonging_to_a_different_run_is_refused(tmp_path: Path) -> None:
     """Previously PASSED: artifact ownership was never checked at all."""
 
-    metadata = _valid_run_metadata()
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
     metadata["artifact_run_id"] = 999
     with pytest.raises(db.BundleVerificationError, match="does not belong"):
-        db.verify_run_metadata(metadata, _valid_policy(), expected_plan_digest=_DIGEST)
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
 def test_verify_run_metadata_docstring_states_it_is_local_only() -> None:
@@ -1079,31 +1202,63 @@ def test_verify_run_metadata_docstring_states_it_is_local_only() -> None:
 # ── candidate binding ──────────────────────────────────────────────────
 
 
-def test_binding_refuses_a_digest_mismatch() -> None:
-    surface = _surface_with_lock_package(_BASE_LOCK_PKG)
-    planned = db.planned_artifacts(surface)
-    acquired = {
-        a.filename: db.AcquiredMember(a.filename, a.sha256, 10) for a in planned
-    }
+def test_binding_refuses_a_digest_mismatch(tmp_path: Path) -> None:
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
     manifest = db.create_bundle_manifest(
-        surface=surface, acquired_members=acquired, run=_run(), archive_sha256="b" * 64
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
     )
+    # `_candidate_root` extracts to a DIFFERENT surface than `surface`
+    # (a direct dotmac-kernel dependency with a different pinned wheel
+    # hash) -- binding against it must be refused.
+    mismatched_root = _candidate_root(tmp_path)
     with pytest.raises(db.BundleVerificationError, match="does not match"):
-        db.bind_bundle_to_candidate(manifest, "d" * 40, "f" * 64)
+        db.bind_bundle_to_candidate(manifest, "d" * 40, mismatched_root)
 
 
-def test_binding_succeeds_when_digests_match() -> None:
-    surface = _surface_with_lock_package(_BASE_LOCK_PKG)
-    planned = db.planned_artifacts(surface)
-    acquired = {
-        a.filename: db.AcquiredMember(a.filename, a.sha256, 10) for a in planned
-    }
+#: A real, on-disk manifest+lock pair whose extracted `DependencySurface`
+#: is EXACTLY `_manifest_test_surface()`'s: no direct forgejo dependency
+#: (the manifest declares none), one transitive forgejo lock package
+#: (`dotmac-kernel`) whose wheel filename/hash matches
+#: `_MANIFEST_TEST_LOCK_PKG` exactly. `extract_dependency_surface` does not
+#: require a forgejo lock package to have a matching manifest dependency —
+#: only the reverse — so this is a legitimate, real shape, not a fabricated
+#: one.
+_MATCHING_CANDIDATE_PYPROJECT = base_pyproject().replace(
+    'dotmac-kernel = {version = "0.1.0a1", source = "forgejo"}\n', ""
+)
+_MATCHING_CANDIDATE_LOCK = BASE_LOCK.replace(
+    'hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"',
+    f'hash = "sha256:{_MANIFEST_TEST_WHEEL_SHA256}"',
+)
+
+
+def test_binding_succeeds_when_digests_match(tmp_path: Path) -> None:
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
     manifest = db.create_bundle_manifest(
-        surface=surface, acquired_members=acquired, run=_run(), archive_sha256="b" * 64
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
     )
-    binding = db.bind_bundle_to_candidate(
-        manifest, "d" * 40, db.compute_plan_digest(surface)
+    matching_candidate_dir = tmp_path / "matching-candidate"
+    matching_candidate_dir.mkdir()
+    candidate_root = _project_root(
+        matching_candidate_dir,
+        _MATCHING_CANDIDATE_PYPROJECT,
+        _MATCHING_CANDIDATE_LOCK,
     )
+    assert _candidate_digest(candidate_root) == manifest["plan_digest"], (
+        "test fixture bug: the matching candidate must extract to the exact "
+        "same surface as _manifest_test_surface()"
+    )
+    binding = db.bind_bundle_to_candidate(manifest, "d" * 40, candidate_root)
     assert binding.bundle_run_id == 111
 
 
@@ -1299,7 +1454,7 @@ def _refuses_db_off_index(declared_url: str) -> bool:
     spec = {"git": declared_url, "tag": _OFF_INDEX_PIN_TAG}
     try:
         db._classify_off_index_spec(
-            _OFF_INDEX_PIN_NAME, spec, "main", {_OFF_INDEX_PIN_NAME: pin}
+            _OFF_INDEX_PIN_NAME, spec, "main", False, {_OFF_INDEX_PIN_NAME: pin}
         )
     except db.DependencyBundleError:
         return True
@@ -1347,7 +1502,7 @@ def test_classify_off_index_spec_refuses_a_non_dict_spec_rather_than_crashing() 
     )
     with pytest.raises(db.ManifestError, match="must be a table"):
         db._classify_off_index_spec(
-            _OFF_INDEX_PIN_NAME, 123, "main", {_OFF_INDEX_PIN_NAME: pin}
+            _OFF_INDEX_PIN_NAME, 123, "main", False, {_OFF_INDEX_PIN_NAME: pin}
         )
     # erp_lock's own equivalent guard, for comparison: a named problem, not a raise.
     erp_pin = erp_lock.OffIndexPin(
