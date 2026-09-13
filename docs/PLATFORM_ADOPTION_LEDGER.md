@@ -53,13 +53,19 @@ ratchet is lowered in the same change. The exact contract is
 
 ## Tax C2 — released contract and storage composed, authority unchanged
 
-ERP pins `dotmac-tax==0.1.0a3` from the private index and composes the module's
-tenant-only `tx` lineage at `tx_0003_result_fingerprint`. The external release
-oracle is Starter run `32898397980`; annotated tag
-`dotmac-tax-v0.1.0a3` peels to
-`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`, and generated release-record PR
-#443 merged at `fca290ac7a32755e9ab000661e8bc6a35c138173` with post-merge CI and
-Engineering Standards green.
+ERP pins `dotmac-tax` from the private index at the exact version
+`app/services/finance/tax/adoption/composition.py`'s `CONTRACT_VERSION`
+names — that constant, not this line, is the authority, since it moves only
+on its own release-run/peeled-tag evidence — and composes the module's
+tenant-only `tx` lineage at `tx_0003_result_fingerprint`. At this writing that
+is `0.1.0a4`: the external release oracle is Starter run `34711205539`
+(conclusion success; `build`/`publish`/`verify` all green), and annotated tag
+`dotmac-tax-v0.1.0a4` peels to the identical `head_sha`,
+`fb7fb252c6fba8e15d7c39ed18f8057057adfbab`. (Historical: C2 first pinned
+`0.1.0a3` via Starter run `32898397980`, annotated tag `dotmac-tax-v0.1.0a3`
+peeling to `531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`, with generated
+release-record PR #443 merged at `fca290ac7a32755e9ab000661e8bc6a35c138173`
+and post-merge CI and Engineering Standards green.)
 
 C2 deletes ERP's temporary determination-result mirror and consumes the
 released public `TaxDeterminationSetV1`/component/line contract directly. ERP

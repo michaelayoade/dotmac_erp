@@ -444,8 +444,11 @@ def test_app_import_loads_only_pure_contract_kernel_modules(tmp_path: Path) -> N
             "'postgresql+psycopg://postgres:postgres@127.0.0.1:9/"
             "dotmac_erp_test?connect_timeout=1')",
             # Snapshot the pure-contract closure: the E4 boundary adapter's
-            # import (money) plus the package __init__ it necessarily runs.
+            # money import plus Files a4's public, engine-free savepoint
+            # wrapper. Importing dotmac_files.manifest executes the package
+            # __init__, which imports its service and therefore this wrapper.
             "import dotmac_kernel.money  # noqa: F401",
+            "import dotmac_kernel.transactions  # noqa: F401",
             "allowed = {n for n in sys.modules",
             f"           if n == {KERNEL_PACKAGE!r}",
             f"           or n.startswith({KERNEL_PACKAGE + '.'!r})}}",

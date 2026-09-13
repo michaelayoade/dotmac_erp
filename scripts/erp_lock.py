@@ -1,7 +1,12 @@
 """The refusals `.github/workflows/erp-lock.yml` needs, out of the YAML.
 
-ERP must repin `dotmac-files` 0.1.0a2 -> 0.1.0a4 and `dotmac-tax`
-0.1.0a3 -> 0.1.0a4. Both are published to the same PRIVATE Forgejo index that
+ERP repinned `dotmac-files` 0.1.0a2 -> 0.1.0a4 and `dotmac-tax`
+0.1.0a3 -> 0.1.0a4 through this workflow: protected run 34768603169 performed
+that specific, one-shot movement and its artifact is what is applied in the
+tree today. `ALLOWED_MOVEMENTS` below still names that exact "from" version on
+each side, so a re-dispatch against a tree that no longer declares it fails
+the refusal check by design, not by accident. Both packages are published to
+the same PRIVATE Forgejo index that
 `dotmac_vendor_control_plane`'s `kernel-lock.yml` / `scripts/kernel_lock.py`
 resolve `dotmac-kernel` against, and a lock entry for a privately-published
 distribution is the one part of a pin change that cannot be written by hand:
@@ -88,7 +93,12 @@ from typing import Any
 #: The ONLY movements this workflow may perform. A version outside this table
 #: — for either side of either package — is refused BY NAME, not silently
 #: coerced or ignored. Extending this table is a reviewed diff to this file,
-#: never a workflow input.
+#: never a workflow input. Both movements below are now historical: protected
+#: run 34768603169 already performed them and the "from" side is no longer
+#: what the tree declares, so a re-dispatch fails the refusal check that
+#: compares against the currently declared version — that failure is the
+#: intended behaviour of a one-shot movement, not a bug to route around by
+#: editing this table.
 ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {
     "dotmac-files": ("0.1.0a2", "0.1.0a4"),
     "dotmac-tax": ("0.1.0a3", "0.1.0a4"),

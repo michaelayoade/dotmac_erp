@@ -2,13 +2,19 @@
 
 Status: **C2 composed and disabled; no tax authority has moved**
 ERP C2 base: `7b62974b366eead1b32bead380e47d9cf10ec4c7`
-Released module: `dotmac-tax 0.1.0a3`
-Release run: `32898397980`; annotated tag `dotmac-tax-v0.1.0a3`
-peels to Starter `531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`.
-Release record PR #443 merged at
-`fca290ac7a32755e9ab000661e8bc6a35c138173`; its post-merge CI and
-Engineering Standards passed. ERP pins that exact artifact and composes
-`tx_0003_result_fingerprint`, while `TAX_COMPOSITION_ENABLED` remains false.
+Released module: the exact version named by
+`app/services/finance/tax/adoption/composition.py`'s `CONTRACT_VERSION` —
+that constant, not this paragraph, is the authority, since it moves only on
+its own release-run/peeled-tag evidence and this document does not track it.
+At this writing that is `dotmac-tax 0.1.0a4`: release run `34711205539`
+(conclusion success; `build`/`publish`/`verify` all green); annotated tag
+`dotmac-tax-v0.1.0a4` peels to the identical `head_sha`,
+`fb7fb252c6fba8e15d7c39ed18f8057057adfbab`. (Historical: the a3 release was
+run `32898397980`, tag `dotmac-tax-v0.1.0a3` peeling to Starter
+`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`, record PR #443 merged at
+`fca290ac7a32755e9ab000661e8bc6a35c138173`.) ERP pins that exact artifact and
+composes `tx_0003_result_fingerprint`, while `TAX_COMPOSITION_ENABLED` remains
+false.
 
 ## Outcome
 

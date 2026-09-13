@@ -1238,10 +1238,10 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     CompositionStep(
         distribution="dotmac-files",
         tranche=0,
-        kernel_floor="0.1.0a61",
+        kernel_floor="0.1.0a98",
         schema="mod_files",
         lineage_branch="files",
-        lineage_head="fi_0001_stored_files",
+        lineage_head="fi_0002_selectable_planes",
         requires_effects=(_TENANT, _ROLES),
     ),
     CompositionStep(
@@ -1265,7 +1265,7 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     CompositionStep(
         distribution="dotmac-tax",
         tranche=0,
-        kernel_floor="0.1.0a85",
+        kernel_floor="0.1.0a98",
         schema="mod_tax",
         lineage_branch="tax",
         lineage_head="tx_0003_result_fingerprint",
@@ -1543,11 +1543,14 @@ COMPOSITION_PLAN: Final[tuple[CompositionStep, ...]] = (
     ),
 )
 
-#: The highest kernel floor the SELECTED set demands, from `dotmac-people` a2.
-#: ERP pins that exact 0.1.0a98 floor, so every selected release is loadable.
-#: This is a measured property of the plan, restated as a constant so the
-#: repin is a visible obligation rather than something discovered by a
-#: resolver error.
+#: The highest kernel floor any step in COMPOSITION_PLAN demands (see each
+#: step's own `kernel_floor` for which one and why — deliberately not named
+#: here, since more than one step can share the maximum and this comment
+#: would otherwise go stale every time the set of steps at that maximum
+#: changes). ERP pins that exact floor, so every selected release is
+#: loadable. This is a measured property of the plan, restated as a constant
+#: so the repin is a visible obligation rather than something discovered by
+#: a resolver error.
 KERNEL_FLOOR_DEMANDED_BY_SELECTION: Final = "0.1.0a98"
 
 #: Effects a selected module needs that this assembly does not supply. Each is
