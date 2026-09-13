@@ -1734,25 +1734,54 @@ def _problems_function_names(source: str) -> set[str]:
     }
 
 
+#: Scopes whose body does NOT execute merely because the enclosing function
+#: runs -- a call inside one of these is only made if and when that scope is
+#: itself separately invoked/consumed, exactly like a nested `def`.
+#:
+#: `ast.Lambda` is the function-definition case with no name of its own: a
+#: `lambda: foo()` assigned to a variable creates a callable, it does not
+#: CALL `foo`. `ast.GeneratorExp` is the same shape for a different reason --
+#: its body is a suspended coroutine-like iterator; `(foo(x) for x in xs)`
+#: calls nothing until something iterates the generator, which may never
+#: happen (Python evaluates only the OUTERMOST iterable, `xs`, eagerly; the
+#: element expression and any nested `for`/`if` clauses are lazy).
+#:
+#: `ast.ListComp`/`ast.SetComp`/`ast.DictComp` are deliberately NOT included
+#: here even though they are also, technically, their own scope: unlike a
+#: generator expression, a list/set/dict comprehension is fully evaluated —
+#: eagerly, in full — the moment control reaches it, so `[foo(x) for x in
+#: xs]` really does call `foo` every time this line runs. Excluding them too
+#: would be excluding something that provably always executes, which is not
+#: "failing closed" but simply wrong; a real call there must stay credited.
+_LAZY_SCOPE_TYPES = (ast.Lambda, ast.GeneratorExp)
+
+
 def _own_calls(node: ast.AST) -> set[str]:
     """Bare-name calls made directly in `node`'s own body -- NOT descending
-    into a nested function definition's body.
+    into a nested function definition's body, nor into a lazy scope's.
 
     A call inside a nested `def` is only made if and when that nested
     function is itself called; crediting it unconditionally to the
     ENCLOSING function would manufacture a reachability edge that does not
     exist statically (the enclosing function might never call the nested
-    one, or might pass it around instead of calling it). `ast.walk` over
-    the whole subtree does not distinguish these cases, so this walks by
-    hand and stops at every nested function boundary; `ast.walk(tree)` at
-    the top level still visits that nested `def` as its own node, so its
-    OWN calls are still counted -- just only credited to ITS name, not to
-    every function that happens to contain it.
+    one, or might pass it around instead of calling it). The same is true,
+    for the same reason, of a call written inside a `lambda` or a generator
+    expression that this scope merely CREATES rather than invokes/consumes
+    -- see `_LAZY_SCOPE_TYPES` for why those two specifically, and not an
+    eager list/set/dict comprehension. `ast.walk` over the whole subtree
+    does not distinguish any of these cases, so this walks by hand and
+    stops at every nested-def and lazy-scope boundary; `ast.walk(tree)` at
+    the top level still visits a nested `def` as its own node, so ITS own
+    calls are still counted -- just only credited to ITS name, not to every
+    function that happens to contain it. A `lambda`/generator expression has
+    no name to credit calls to at all, so its calls are simply dropped,
+    exactly as "not reachable through this scope" requires.
     """
 
     found: set[str] = set()
+    _skip_types = _FUNCTION_DEF_TYPES + _LAZY_SCOPE_TYPES
     for child in ast.iter_child_nodes(node):
-        if isinstance(child, _FUNCTION_DEF_TYPES):
+        if isinstance(child, _skip_types):
             continue
         if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
             found.add(child.func.id)
@@ -2040,6 +2069,62 @@ def test_the_rebinding_detector_does_not_flag_an_unrelated_except_name() -> None
     assert _rebound_problems_names(_EXCEPT_CLEAN_SOURCE) == set()
 
 
+_LAMBDA_PARAM_REBOUND_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    _fn = lambda alpha_problems: alpha_problems
+    return _fn(args)
+"""
+
+_COMPREHENSION_TARGET_REBOUND_SOURCE = """
+def off_index_lock_problems(lock):
+    return []
+
+def _run(args):
+    return [off_index_lock_problems for off_index_lock_problems in args]
+"""
+
+_GENEXP_TARGET_REBOUND_SOURCE = """
+def off_index_lock_problems(lock):
+    return []
+
+def _run(args):
+    return list(off_index_lock_problems for off_index_lock_problems in args)
+"""
+
+
+def test_the_rebinding_detector_names_a_lambda_parameter_shadow() -> None:
+    """A lambda's parameters are `ast.arg` nodes inside `ast.Lambda.args`,
+    reached by the unrestricted `ast.walk(tree)` this function uses (unlike
+    `_own_calls`, this walk is never scope-limited) -- so a lambda
+    parameter shadowing a validator name must be seen exactly like a
+    `def`'s own parameter would be."""
+
+    assert _rebound_problems_names(_LAMBDA_PARAM_REBOUND_SOURCE) == {"alpha_problems"}
+
+
+def test_the_rebinding_detector_names_a_comprehension_target_shadow() -> None:
+    """`[x for off_index_lock_problems in ...]` binds its target as an
+    ordinary `ast.Name` in `ast.Store` context, which the existing
+    `Name`+`Store` branch already matches -- verified here rather than
+    assumed."""
+
+    assert _rebound_problems_names(_COMPREHENSION_TARGET_REBOUND_SOURCE) == {
+        "off_index_lock_problems"
+    }
+
+
+def test_the_rebinding_detector_names_a_generator_expression_target_shadow() -> None:
+    """Same shape as the comprehension target above, for a generator
+    expression's `for` target -- also an ordinary `ast.Name`/`ast.Store`."""
+
+    assert _rebound_problems_names(_GENEXP_TARGET_REBOUND_SOURCE) == {
+        "off_index_lock_problems"
+    }
+
+
 # ── a nested `def`'s calls belong to ITS name, not to every function that
 #    happens to contain it ──────────────────────────────────────────────────
 
@@ -2080,3 +2165,88 @@ def test_a_call_inside_an_actually_called_nested_def_is_still_reachable() -> Non
 
     reachable = _reachable_from_cli(_NESTED_DEF_ACTUALLY_CALLED_SOURCE)
     assert "beta_problems" in reachable
+
+
+# ── the same "not credited to the enclosing scope" reasoning applies to a
+#    lambda body and a generator expression body -- neither runs merely
+#    because the enclosing function runs ────────────────────────────────────
+
+_LAMBDA_UNCALLED_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    _unused = lambda: alpha_problems(args)
+    return 1
+"""
+
+_DIRECT_CALL_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    return alpha_problems(args)
+"""
+
+_GENEXP_UNCALLED_SOURCE = """
+def beta_problems(x):
+    return []
+
+def _run(args):
+    _unused = (beta_problems(x) for x in args)
+    return 1
+"""
+
+_LISTCOMP_SOURCE = """
+def gamma_problems(x):
+    return []
+
+def _run(args):
+    return [gamma_problems(x) for x in args]
+"""
+
+
+def test_a_call_inside_a_never_invoked_lambda_is_not_credited() -> None:
+    """A `lambda` assigned but never called CREATES a callable; it does not
+    call `alpha_problems` -- the enclosing `_run` never does either here.
+    This module's call graph has no data-flow analysis of what a local
+    variable holds, so it cannot tell whether a later `_unused()` call
+    would invoke this particular lambda even if one were written -- which
+    is exactly why the lambda's body must never be credited to the
+    enclosing scope in the first place."""
+
+    reachable = _reachable_from_cli(_LAMBDA_UNCALLED_SOURCE)
+    assert "alpha_problems" not in reachable
+
+
+def test_the_same_call_made_directly_is_still_reachable() -> None:
+    """POSITIVE CONTROL for the lambda exclusion above: the identical call to
+    `alpha_problems`, written directly in `_run`'s own body rather than
+    inside a lambda, must still be credited and seen as reachable -- this
+    is what proves the lambda test above is excluding the LAMBDA, not
+    breaking ordinary direct calls."""
+
+    reachable = _reachable_from_cli(_DIRECT_CALL_SOURCE)
+    assert "alpha_problems" in reachable
+
+
+def test_a_call_inside_an_unconsumed_generator_expression_is_not_credited() -> None:
+    """A generator expression's body is lazy: writing `_unused = (... for
+    ... in ...)` does not itself call `beta_problems`, and nothing here
+    ever iterates the generator. Whether some LATER, unwritten line
+    consumes it is exactly the question this static, non-data-flow
+    detector cannot answer -- which is why the body is never credited to
+    the enclosing scope regardless."""
+
+    reachable = _reachable_from_cli(_GENEXP_UNCALLED_SOURCE)
+    assert "beta_problems" not in reachable
+
+
+def test_a_call_inside_a_list_comprehension_is_credited_because_it_is_eager() -> None:
+    """POSITIVE CONTROL distinguishing the eager comprehension forms from the
+    lazy generator expression: `[gamma_problems(x) for x in args]` runs in
+    full the instant this line executes, so the call genuinely happens and
+    must be credited to `_run`."""
+
+    reachable = _reachable_from_cli(_LISTCOMP_SOURCE)
+    assert "gamma_problems" in reachable
