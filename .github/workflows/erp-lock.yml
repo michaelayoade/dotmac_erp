@@ -397,6 +397,16 @@ jobs:
           python scripts/erp_lock.py wheel-only \
             --lock /tmp/poetry.lock.before
 
+      - name: No off-index dependency in this resolution's own lock is wrong already
+        run: |
+          set -euo pipefail
+          # Same positioning reasoning as the wheel-only gate above: run
+          # BEFORE `poetry lock`, this refuses an off-index pin that is
+          # already wrong in the ref's own lock, before any resolution runs;
+          # run after, it can only report a wrongness that was already there.
+          python scripts/erp_lock.py off-index-lock \
+            --lock /tmp/poetry.lock.before
+
       - name: Resolve both pins, with no way to ask for more
         working-directory: work
         env:
@@ -455,6 +465,14 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/erp_lock.py wheel-only --lock work/poetry.lock
+
+      - name: And no off-index dependency in the resolved lock is wrong
+        run: |
+          set -euo pipefail
+          # Resolution cannot have changed the pinned off-index dependency's
+          # identity out from under the manifest-guard check earlier in this
+          # job; this re-checks the lock Poetry actually wrote.
+          python scripts/erp_lock.py off-index-lock --lock work/poetry.lock
 
       - name: The lock's hashes are the bytes the index published
         env:
