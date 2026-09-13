@@ -546,6 +546,20 @@ def checkout_problems(root: Path) -> list[str]:
     return problems
 
 
+def protected_main_problems(
+    ref: str, main_sha: str, workflow_ref: str, workflow_sha: str
+) -> list[str]:
+    """Require candidate, workflow and fetched protected main to agree."""
+    problems: list[str] = []
+    if workflow_ref != "refs/heads/main":
+        problems.append("the workflow source is not protected main")
+    if ref != workflow_sha:
+        problems.append("the candidate does not equal the workflow SHA")
+    if workflow_sha != main_sha:
+        problems.append("the workflow SHA is stale relative to origin/main")
+    return problems
+
+
 # ── manifest-guard: the dependency traversal ────────────────────────────────
 
 
@@ -1440,7 +1454,7 @@ def build_evidence(
     manifest: Path,
     lock: Path,
     coordinates: dict[str, str],
-    credential: str,
+    credential_proof: Path,
 ) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
     written: dict[str, bytes] = {
@@ -1449,6 +1463,9 @@ def build_evidence(
     }
     for name, payload in written.items():
         (out / name).write_bytes(payload)
+    if credential_proof.read_text(encoding="utf-8") != "credential scan clean\n":
+        raise Refusal("credential proof is not the exact clean attestation")
+    (out / "credential-scan.ok").write_text("credential scan clean\n", encoding="utf-8")
 
     digests = {name: sha256_hex(payload) for name, payload in written.items()}
     with (out / "poetry.lock").open("rb") as handle:
@@ -1463,8 +1480,17 @@ def build_evidence(
         if path.is_file()
     }
     (out / "SHA256SUMS").write_text(sha256sums(everything), encoding="utf-8")
-    return credential_sightings(
-        [path for path in out.iterdir() if path.is_file()], credential
+    return []
+
+
+def write_credential_attestation(
+    out: Path, paths: Iterable[Path], credential: str
+) -> None:
+    """Scan while the credential is held; persist only a fixed clean fact."""
+    if credential_sightings(paths, credential):
+        raise Refusal("the credential reached the acquired bundle")
+    out.joinpath("credential-scan.ok").write_text(
+        "credential scan clean\n", encoding="utf-8"
     )
 
 
@@ -1531,6 +1557,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     fetch_bundle.add_argument("--out", type=Path, required=True)
 
+    credential_scan = subcommands.add_parser("credential-scan")
+    credential_scan.add_argument("--root", type=Path, action="append", required=True)
+    credential_scan.add_argument("--out", type=Path, required=True)
+
+    protected_main = subcommands.add_parser("protected-main")
+    protected_main.add_argument("--ref", required=True)
+    protected_main.add_argument("--main-sha", required=True)
+    protected_main.add_argument("--workflow-ref", required=True)
+    protected_main.add_argument("--workflow-sha", required=True)
+
     aim = subcommands.add_parser("mirror-manifest")
     aim.add_argument("--manifest", type=Path, required=True)
     aim.add_argument("--mirror-url", required=True)
@@ -1560,6 +1596,7 @@ def _build_parser() -> argparse.ArgumentParser:
     evidence.add_argument("--out", type=Path, required=True)
     evidence.add_argument("--manifest", type=Path, required=True)
     evidence.add_argument("--lock", type=Path, required=True)
+    evidence.add_argument("--credential-proof", type=Path, required=True)
     evidence.add_argument("--coordinate", action="append", default=[])
     return parser
 
@@ -1609,6 +1646,22 @@ def _run(args: argparse.Namespace) -> int:
         for name, digest in sorted(digests.items()):
             print(f"{name}  {digest}")
         return 0
+    if args.command == "credential-scan":
+        credential = os.environ.get(CREDENTIAL_ENV, "")
+        write_credential_attestation(
+            args.out,
+            [path for root in args.root for path in root.rglob("*") if path.is_file()],
+            credential,
+        )
+        print("credential scan clean")
+        return 0
+    if args.command == "protected-main":
+        return _report(
+            "protected main candidate",
+            protected_main_problems(
+                args.ref, args.main_sha, args.workflow_ref, args.workflow_sha
+            ),
+        )
     if args.command == "mirror-manifest":
         args.manifest.write_text(
             point_at_mirror(args.manifest.read_text(encoding="utf-8"), args.mirror_url),
@@ -1683,10 +1736,9 @@ def _run(args: argparse.Namespace) -> int:
         )
     if args.command != "evidence":
         raise Refusal(f"unknown command {args.command!r}")
-    credential = os.environ.get(CREDENTIAL_ENV, "")
     coordinates = dict(item.split("=", 1) for item in args.coordinate if "=" in item)
     sightings = build_evidence(
-        args.out, args.manifest, args.lock, coordinates, credential
+        args.out, args.manifest, args.lock, coordinates, args.credential_proof
     )
     return _report("the credential reached the evidence", sightings)
 

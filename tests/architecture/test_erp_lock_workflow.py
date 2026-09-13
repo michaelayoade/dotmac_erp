@@ -70,6 +70,7 @@ from erp_lock import (  # noqa: E402
     movement_problems,
     pair_binding,
     point_at_mirror,
+    protected_main_problems,
     replace_version,
     restore_index_url,
     set_content_hash,
@@ -516,6 +517,33 @@ def test_a_checkout_without_one_is_clean() -> None:
     assert checkout_problems(ROOT) == []
 
 
+def test_a_branch_only_candidate_sha_is_refused() -> None:
+    main = "a" * 40
+    branch_only = "b" * 40
+    assert protected_main_problems(branch_only, main, "refs/heads/main", main)
+
+
+def test_a_stale_main_candidate_sha_is_refused() -> None:
+    old_main = "a" * 40
+    current_main = "b" * 40
+    assert protected_main_problems(old_main, current_main, "refs/heads/main", old_main)
+
+
+def test_a_branch_dispatch_source_is_refused() -> None:
+    main = "a" * 40
+    assert protected_main_problems(main, main, "refs/heads/feature", main)
+
+
+def test_exact_protected_main_candidate_is_accepted() -> None:
+    main = "a" * 40
+    assert protected_main_problems(main, main, "refs/heads/main", main) == []
+
+
+def test_a_candidate_mismatching_workflow_sha_is_refused() -> None:
+    main = "a" * 40
+    assert protected_main_problems("b" * 40, main, "refs/heads/main", main)
+
+
 # ── the index is data: every link it supplies is validated ─────────────────
 
 _PAGE = f"{LOCK_INDEX_URL}/dotmac-files/"
@@ -728,9 +756,9 @@ def test_wheel_dependency_problems_names_a_wheel_only_dependency() -> None:
         {"dotmac-kernel": ">=0.1.0a56"},
         ["dotmac-kernel (>=0.1.0a56)", "sqlalchemy (>=2.0)"],
     )
-    assert any(
-        "sqlalchemy" in p and "absent from the lock" in p for p in problems
-    ), problems
+    assert any("sqlalchemy" in p and "absent from the lock" in p for p in problems), (
+        problems
+    )
 
 
 # ── the mirror swap, and putting the real URL back ──────────────────────────
@@ -807,13 +835,15 @@ def _generated(tmp_path: Path) -> Path:
     manifest.write_text('[tool.poetry]\nname = "x"\n')
     lock = tmp_path / "poetry.lock"
     lock.write_text(_LOCK_TOML)
+    proof = tmp_path / "credential-scan.ok"
+    proof.write_text("credential scan clean\n")
     out = tmp_path / "evidence"
     sightings = build_evidence(
         out,
         manifest,
         lock,
         {"ref": "a" * 40, "dotmac_files_version": "0.1.0a4", "workflow_run": "123"},
-        CREDENTIAL,
+        proof,
     )
     assert sightings == []
     return out
@@ -853,15 +883,16 @@ def test_applying_one_half_of_the_pair_changes_the_binding(tmp_path: Path) -> No
         assert pair_binding(other) != baseline
 
 
-def test_a_credential_in_the_pair_is_a_refusal_not_a_scrub(tmp_path: Path) -> None:
+def test_a_credential_in_the_pair_is_not_scrubbed(tmp_path: Path) -> None:
     manifest = tmp_path / "pyproject.toml"
     manifest.write_text(f'[tool.poetry]\nname = "{CREDENTIAL}"\n')
     lock = tmp_path / "poetry.lock"
     lock.write_text(_LOCK_TOML)
-    sightings = build_evidence(
-        tmp_path / "evidence", manifest, lock, {"ref": "a" * 40}, CREDENTIAL
-    )
-    assert any("pyproject.toml" in s for s in sightings), sightings
+    proof = tmp_path / "credential-scan.ok"
+    proof.write_text("credential scan clean\n")
+    out = tmp_path / "evidence"
+    build_evidence(out, manifest, lock, {"ref": "a" * 40}, proof)
+    assert CREDENTIAL in (out / "pyproject.toml").read_text()
 
 
 def test_sha256sums_is_the_format_sha256sum_c_reads() -> None:
@@ -1152,6 +1183,15 @@ def test_no_job_holds_the_credential_before_the_tree_is_judged() -> None:
             assert all(i > guard for i in held), (name, guard, held)
         else:
             assert _needs(name) & guarded, name
+
+
+def test_protected_main_is_decided_by_the_script_before_credentials() -> None:
+    steps = _jobs()["acquire"]
+    decision = next(
+        i for i, s in enumerate(steps) if "erp_lock.py protected-main" in _commands(s)
+    )
+    holders = [i for i, s in enumerate(steps) if "secrets.FORGEJO_READ_TOKEN" in s]
+    assert holders and decision < min(holders)
 
 
 def test_the_ref_under_resolution_is_only_ever_read_from_work() -> None:
