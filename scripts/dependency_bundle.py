@@ -18,9 +18,11 @@ branch reaching the registry itself.
 This module is the shared mechanics for that end state: computing the
 PLAN DIGEST that says "this exact private dependency surface" without ever
 running Poetry or reaching a network; verifying that a GitHub Actions
-artifact and the run that produced it are what a policy says they must be;
-verifying and safely extracting the bundle archive; and materialising it as
-a local, offline PEP 503 index a candidate's resolver can point at.
+artifact and the run that produced it are what a policy says they must be
+(LOCALLY — see `verify_run_metadata`'s docstring for exactly what is and is
+not covered); verifying and safely extracting the bundle archive; and
+materialising it as a local, offline PEP 503 index a candidate's resolver
+can point at.
 
 Nothing in this repository calls this module yet (see the docstring section
 "Named duplication debt, and its retirement condition" below, and
@@ -41,47 +43,56 @@ takes "trust me, this is the digest" from an unverified caller.
 See `compute_plan_digest` for the exact construction:
 `SHA256(b"dotmac.erp-dependency-plan.v1\\0" + canonical_json_bytes)`.
 
+Classification of every dependency form is TOTAL: `_classify_dependency`
+returns exactly one of `PublicDependency`, `ForgejoDependency`, or
+`ApprovedOffIndexDependency`, or raises `ManifestError` — nothing vanishes
+silently. `[tool.poetry.requires-plugins]` is refused outright, for the same
+reason `erp_lock.py` refuses it: Poetry loads and imports plugins BEFORE it
+resolves anything, which would be arbitrary candidate-controlled code
+running in a future credential-bearing producer step.
+
 ## Named duplication debt, and its retirement condition
 
-`scripts/erp_lock.py` already owns generic acquisition (`fetch`,
-`curl_argv`), hashing (`sha256_hex`), origin/path-prefix URL validation
-(`approved_artifact_url`), and credential scanning (`credential_sightings`)
-for the SAME private Forgejo index this module targets. The independent
-planning pass that decided this slice's scope originally called for moving
-those generic pieces out of `erp_lock.py` into this module. That move is
-DELIBERATELY NOT done in this slice: `erp_lock.py` backs
+`scripts/erp_lock.py` already owns generic acquisition orchestration
+(`fetch`, `curl_argv`), hashing (`sha256_hex`), origin/path-prefix URL
+validation (`approved_artifact_url`), and credential scanning
+(`credential_encodings`/`credential_sightings`) for the SAME private Forgejo
+index this module targets. Moving that acquisition ORCHESTRATION out of
+`erp_lock.py` is DELIBERATELY NOT done in this slice: it backs
 `.github/workflows/erp-lock.yml`, which PR #563 currently depends on, and
-refactoring security-critical, credential-adjacent code out from under an
-in-flight PR is not worth the destabilisation risk here.
+refactoring credential-adjacent orchestration out from under an in-flight PR
+is not worth the destabilisation risk here.
 
-Instead, this module implements its own fresh copies of the overlapping
-generic mechanics: `sha256_hex` (digest computation), `approved_artifact_url`
-(index-supplied-link origin/path-prefix/traversal validation), and
-`credential_encodings`/`scan_for_credential` (credential-string scanning) —
-see `erp_lock.sha256_hex`, `erp_lock.approved_artifact_url`, and
-`erp_lock.credential_encodings`/`erp_lock.credential_sightings` for the
-originals. **This is a named, deliberate duplication, not an oversight**, and
-it is ENFORCED, not just documented:
+What is NOT acceptable is a duplicated PURE function — one with no
+credential, no I/O orchestration, just semantics — silently drifting between
+the two copies. That already happened once: `dependency_bundle`'s PEP 503
+name normaliser stripped a leading/trailing separator and `erp_lock`'s did
+not, so the two scripts could disagree about a package's identity. The fix
+is `scripts/dependency_normalisation.py`: the ONE owner of that semantics,
+imported by both scripts. `sha256_hex`, `approved_artifact_url`, and the
+credential-scanning pair remain named, tracked, deliberate ORCHESTRATION
+copies — they exist because moving `erp_lock.py`'s CREDENTIALED job shape is
+out of scope here, not because nobody decided.
+
+Both are enforced, not just documented:
 
 * `docs/architecture/dependency-bundle-duplication-inventory.json` is the
-  canonical, machine-readable list of every duplicated behaviour and its two
-  locations.
-* `tests/architecture/test_dependency_bundle.py` drives BOTH this module's
-  and `erp_lock`'s implementation of each duplicated behaviour through ONE
-  shared table of adversarial input vectors, asserts they agree on every
-  vector, asserts every entry's two symbols still exist (a stale entry
-  describing something already unified fails), and asserts the inventory's
-  entry set is a SUBSET of a hardcoded baseline — it may only shrink, never
-  grow. A new duplicated behaviour added without shrinking somewhere else
-  fails that test.
+  canonical, machine-readable list of every accepted duplicated
+  ORCHESTRATION helper and its two locations.
+* `tests/architecture/test_dependency_bundle.py` drives BOTH implementations
+  of each LISTED duplicated helper through one shared table of adversarial
+  vectors, asserts every listed entry's two symbols still exist, asserts the
+  inventory's entry set is a SUBSET of a hardcoded baseline (shrink-only),
+  AND separately scans every function defined in either module for a
+  near-duplicate in the other that is NOT on the list — an unlisted
+  duplicate fails the build, whether it is old or newly introduced.
 
 Retirement condition: the consumer-cutover slice that points
 `.github/workflows/erp-lock.yml` and any new bundle-producer/binder workflow
-at this module moves `erp_lock.py` onto the shared functions here, deletes
-its own copies, and removes the corresponding entries from the duplication
-inventory. When the inventory is empty, the non-growing guard stands
-permanently at zero and the private-index-facing security mechanics have
-exactly one owner again.
+at this module moves `erp_lock.py`'s remaining listed orchestration helpers
+onto the shared functions here, deletes its own copies, and removes the
+corresponding entries from the duplication inventory. When the inventory is
+empty, the non-growing guard stands permanently at zero.
 
 ## No registry fallback
 
@@ -99,16 +110,21 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 import re
+import shutil
 import stat
 import sys
+import tempfile
 import tomllib
 import urllib.parse
 import zipfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from dependency_normalisation import normalise_name
 
 # ── errors ───────────────────────────────────────────────────────────────
 
@@ -129,7 +145,7 @@ class ManifestError(DependencyBundleError):
 
 class PolicyError(DependencyBundleError):
     """`.github/dependency-bundle-policy.json` is missing, malformed, or
-    (today) genuinely unresolved — see `load_policy`."""
+    genuinely unresolved — see `load_policy`."""
 
 
 class BundleVerificationError(DependencyBundleError):
@@ -152,10 +168,10 @@ PLAN_DIGEST_DOMAIN = b"dotmac.erp-dependency-plan.v1\0"
 #: The plan document's own schema version, carried inside the hashed JSON so
 #: a future incompatible change to the document shape changes every digest
 #: rather than colliding with the old scheme.
-PLAN_SCHEMA_VERSION = 1
+PLAN_SCHEMA_VERSION = 2
 
 #: The bundle manifest's own schema version (see `create_bundle_manifest`).
-MANIFEST_SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSION = 2
 
 #: The one named Poetry source this repository's manifest declares for its
 #: private packages. See `pyproject.toml`'s `[[tool.poetry.source]]`.
@@ -198,14 +214,25 @@ _EXACT_VERSION = re.compile(
     r"\A[0-9]+(\.[0-9]+)*((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?\Z"
 )
 
-#: PEP 503 name normalisation: runs of `-`, `_`, `.` collapse to one `-`,
-#: lower-cased.
-_NAME_RUNS = re.compile(r"[-_.]+")
-
 #: Poetry dependency-spec keys this module recognises on a forgejo-sourced
 #: dependency table. Anything else is an unrecognised dependency form and is
 #: refused rather than silently ignored.
-_FORGEJO_SPEC_KEYS = frozenset({"version", "source", "markers", "extras", "optional"})
+_FORGEJO_SPEC_KEYS = frozenset(
+    {"version", "source", "markers", "extras", "optional", "python"}
+)
+
+#: Off-index dependency forms — any of these keys means Poetry would resolve
+#: the package from somewhere other than the named index (running arbitrary
+#: VCS/build-backend code to do it). Every one of these keys is refused
+#: UNLESS the dependency is `dotmac-integration-client` at its exact pinned
+#: identity — see `ApprovedOffIndexDependency` and `load_policy`.
+_OFF_INDEX_KEYS = ("git", "path", "url", "file")
+
+#: Keys a pinned off-index dependency's manifest spec may carry, and nothing
+#: else. `rev`/`branch` are refused by their absence: a branch is a mutable
+#: pointer, and a `rev` beside a `tag` would give two answers to which
+#: commit.
+_OFF_INDEX_PERMITTED_SPEC_KEYS = frozenset({"git", "tag"})
 
 #: Per-member size cap during safe extraction — generous for a wheel/sdist
 #: bundle, but bounded, so a crafted "small on disk, huge when read" member
@@ -213,6 +240,15 @@ _FORGEJO_SPEC_KEYS = frozenset({"version", "source", "markers", "extras", "optio
 #: declared size and the actual bytes read (the latter is the zip-bomb
 #: guard: a lying declared size does not buy more).
 MAX_MEMBER_BYTES = 200 * 1024 * 1024
+
+#: Aggregate caps, independent of the per-member cap above: a bundle with
+#: many small, individually-legal members can still exhaust the extraction
+#: host on count or total size, and a highly-compressed member can pass the
+#: per-member declared-size check while unpacking to something absurd
+#: relative to what was actually transferred.
+MAX_MEMBER_COUNT = 512
+MAX_TOTAL_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024
+MAX_COMPRESSION_RATIO = 100
 
 #: The CI/runtime target this module's plan documents record. Derived from
 #: this repository's own committed configuration, not invented: CI runs on
@@ -222,14 +258,9 @@ MAX_MEMBER_BYTES = 200 * 1024 * 1024
 TARGET_PLATFORM = "linux_x86_64"
 
 _SHA256_HEX = re.compile(r"\A[0-9a-f]{64}\Z")
+_SHA256_PREFIXED = re.compile(r"\Asha256:([0-9a-f]{64})\Z")
 _COMMIT_SHA = re.compile(r"\A[0-9a-f]{40}\Z")
-
-
-def normalise_name(name: str) -> str:
-    """PEP 503 normalisation: this is the identity a plan digest hashes on,
-    never the literal spelling in the manifest."""
-
-    return _NAME_RUNS.sub("-", name).strip("-").lower()
+_NULL_SHA = "0" * 40
 
 
 def _is_exact_version(value: Any) -> bool:
@@ -238,6 +269,19 @@ def _is_exact_version(value: Any) -> bool:
 
 def _mentions_forgejo_host(url: Any) -> bool:
     return isinstance(url, str) and FORGEJO_HOST in url
+
+
+def _bare_sha256(value: str) -> str:
+    """`poetry.lock` file hashes are written `sha256:<hex>`. Refuses
+    anything else rather than guessing at a bare-hex or other-algorithm
+    form."""
+
+    match = _SHA256_PREFIXED.match(value)
+    if not match:
+        raise ManifestError(
+            f"lock file hash {value!r} is not in the expected 'sha256:<64-hex>' form"
+        )
+    return match.group(1)
 
 
 # ── dependency-surface extraction ───────────────────────────────────────
@@ -253,6 +297,46 @@ class ForgejoDependency:
     version: str
     markers: str | None
     extras: tuple[str, ...]
+    optional: bool
+    python_constraint: str | None
+
+
+@dataclass(frozen=True)
+class OffIndexPin:
+    """The full, reviewed identity of one permitted off-index dependency —
+    see `docs/architecture/dependency-bundle-trust.md` and
+    `.github/dependency-bundle-policy.json`'s
+    `permitted_off_index_dependencies`."""
+
+    url: str
+    tag: str
+    commit: str
+
+
+@dataclass(frozen=True)
+class ApprovedOffIndexDependency:
+    """One manifest dependency resolved against the policy's off-index
+    allowlist rather than the Forgejo index — included in the plan document
+    so an off-index addition can never be silent, and so a change to WHICH
+    off-index identity is pinned changes the digest."""
+
+    name: str
+    normalised_name: str
+    group: str
+    url: str
+    tag: str
+    resolved_commit: str
+
+
+@dataclass(frozen=True)
+class PublicDependency:
+    """A dependency resolved from the default (public) index. Recorded only
+    so classification is provably total; it never enters the plan digest —
+    see the module docstring and `docs/architecture/dependency-bundle-trust.md`
+    for why a public package's presence/version/hash must not move it."""
+
+    name: str
+    group: str
 
 
 @dataclass(frozen=True)
@@ -266,6 +350,8 @@ class LockPackage:
     normalised_name: str
     version: str
     groups: tuple[str, ...]
+    optional: bool
+    python_versions: str
     dependencies: dict[str, Any]
     source_type: str
     source_url: str
@@ -283,6 +369,7 @@ class DependencySurface:
     target_python: str
     target_platform: str
     dependencies: tuple[ForgejoDependency, ...]
+    off_index_dependencies: tuple[ApprovedOffIndexDependency, ...]
     lock_packages: tuple[LockPackage, ...]
 
 
@@ -305,6 +392,13 @@ def _refuse_unknown_dependency_surfaces(manifest: dict[str, Any]) -> None:
         raise ManifestError(
             "legacy [tool.poetry.dev-dependencies] is refused; this module "
             "only recognises [tool.poetry.group.<name>.dependencies]"
+        )
+    if "requires-plugins" in poetry:
+        raise ManifestError(
+            "[tool.poetry.requires-plugins] is refused; Poetry loads and "
+            "imports plugins BEFORE it resolves anything, which is arbitrary "
+            "candidate-controlled code execution in a future credential-"
+            "bearing producer step (see erp_lock.py's identical refusal)"
         )
     project = manifest.get("project", {})
     if isinstance(project, dict) and (
@@ -337,44 +431,9 @@ def _dependency_groups(poetry: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return groups
 
 
-def _classify_dependency(name: str, spec: Any, group: str) -> ForgejoDependency | None:
-    if name == "python":
-        return None
-    if isinstance(spec, str):
-        return None
-    if isinstance(spec, list):
-        # A multiple-constraint list (markers-based alternatives). None of
-        # ERP's forgejo dependencies use this form; refuse it for a
-        # forgejo-flavoured entry rather than silently picking one branch.
-        for item in spec:
-            if isinstance(item, dict) and item.get("source") == FORGEJO_SOURCE_NAME:
-                raise ManifestError(
-                    f"{group}.{name}: a multiple-constraint dependency list "
-                    "naming source='forgejo' is an unrecognised dependency "
-                    "form; this module refuses rather than guesses which "
-                    "branch is authoritative"
-                )
-        return None
-    if not isinstance(spec, dict):
-        raise ManifestError(
-            f"{group}.{name}: dependency spec must be a string, table, or "
-            f"list, got {type(spec).__name__}"
-        )
-    url_value = spec.get("url")
-    if spec.get("source") is None and _mentions_forgejo_host(url_value):
-        raise ManifestError(
-            f"{group}.{name}: direct registry URL {url_value!r} bypasses "
-            "the declared 'forgejo' source; a private package must be "
-            "resolved through the named source, never a direct URL"
-        )
-    source = spec.get("source")
-    if source is None:
-        return None
-    if source != FORGEJO_SOURCE_NAME:
-        raise ManifestError(
-            f"{group}.{name}: unrecognised dependency source {source!r}; "
-            f"only {FORGEJO_SOURCE_NAME!r} is a known private source"
-        )
+def _classify_forgejo_spec(
+    name: str, spec: dict[str, Any], group: str
+) -> ForgejoDependency:
     unexpected = set(spec) - _FORGEJO_SPEC_KEYS
     if unexpected:
         raise ManifestError(
@@ -395,6 +454,12 @@ def _classify_dependency(name: str, spec: Any, group: str) -> ForgejoDependency 
         isinstance(e, str) for e in extras_value
     ):
         raise ManifestError(f"{group}.{name}: extras must be a list of strings")
+    optional_value = spec.get("optional", False)
+    if not isinstance(optional_value, bool):
+        raise ManifestError(f"{group}.{name}: optional must be a boolean")
+    python_constraint = spec.get("python")
+    if python_constraint is not None and not isinstance(python_constraint, str):
+        raise ManifestError(f"{group}.{name}: python must be a string")
     return ForgejoDependency(
         name=name,
         normalised_name=normalise_name(name),
@@ -402,7 +467,126 @@ def _classify_dependency(name: str, spec: Any, group: str) -> ForgejoDependency 
         version=str(version),
         markers=markers,
         extras=tuple(sorted(extras_value)),
+        optional=optional_value,
+        python_constraint=python_constraint,
     )
+
+
+def _classify_off_index_spec(
+    name: str,
+    spec: dict[str, Any],
+    group: str,
+    permitted_off_index: Mapping[str, OffIndexPin],
+) -> ApprovedOffIndexDependency:
+    pin = permitted_off_index.get(name)
+    if pin is None:
+        present_keys = sorted(set(spec) & set(_OFF_INDEX_KEYS))
+        raise ManifestError(
+            f"{group}.{name}: off-index dependency form ({', '.join(present_keys)}) "
+            "is not permitted; resolving it would read or execute something "
+            "the index does not name, and this name is not on the policy's "
+            "off-index allowlist"
+        )
+    unexpected = set(spec) - _OFF_INDEX_PERMITTED_SPEC_KEYS
+    if unexpected:
+        raise ManifestError(
+            f"{group}.{name}: pinned off-index dependency carries "
+            f"unrecognised keys {sorted(unexpected)}; only "
+            f"{sorted(_OFF_INDEX_PERMITTED_SPEC_KEYS)} are permitted"
+        )
+    missing = _OFF_INDEX_PERMITTED_SPEC_KEYS - set(spec)
+    if missing:
+        raise ManifestError(
+            f"{group}.{name}: pinned off-index dependency is missing {sorted(missing)}"
+        )
+    if spec["git"] != pin.url:
+        raise ManifestError(
+            f"{group}.{name}: names git url {spec['git']!r}, not the exact "
+            f"pinned {pin.url!r}"
+        )
+    if spec["tag"] != pin.tag:
+        raise ManifestError(
+            f"{group}.{name}: names tag {spec['tag']!r}, not the exact "
+            f"pinned {pin.tag!r}"
+        )
+    return ApprovedOffIndexDependency(
+        name=name,
+        normalised_name=normalise_name(name),
+        group=group,
+        url=pin.url,
+        tag=pin.tag,
+        resolved_commit=pin.commit,
+    )
+
+
+def _classify_dependency(
+    name: str,
+    spec: Any,
+    group: str,
+    permitted_off_index: Mapping[str, OffIndexPin],
+) -> ForgejoDependency | ApprovedOffIndexDependency | PublicDependency:
+    """Classify ONE dependency declaration into exactly one of three
+    outcomes — public, approved Forgejo, or approved off-index — or raise
+    `ManifestError`. Nothing is ever silently dropped: every code path below
+    either returns one of the three dataclasses or raises.
+    """
+
+    if name == "python":
+        return PublicDependency(name=name, group=group)
+
+    if isinstance(spec, str):
+        if "://" in spec or spec.strip().startswith("@"):
+            raise ManifestError(
+                f"{group}.{name}: the plain constraint {spec!r} is a direct "
+                "reference, which reaches outside the index exactly as a "
+                "url/file/path/git table does"
+            )
+        return PublicDependency(name=name, group=group)
+
+    if isinstance(spec, list):
+        for index, item in enumerate(spec):
+            classified = _classify_dependency(
+                f"{name}[{index}]", item, group, permitted_off_index
+            )
+            if not isinstance(classified, PublicDependency):
+                raise ManifestError(
+                    f"{group}.{name}[{index}]: a multiple-constraint "
+                    "dependency list naming a private or off-index form is "
+                    "an unrecognised dependency shape; this module refuses "
+                    "rather than guessing which branch is authoritative"
+                )
+        return PublicDependency(name=name, group=group)
+
+    if not isinstance(spec, dict):
+        raise ManifestError(
+            f"{group}.{name}: dependency spec must be a string, table, or "
+            f"list, got {type(spec).__name__}"
+        )
+
+    source = spec.get("source")
+    url_value = spec.get("url")
+
+    if source is None and _mentions_forgejo_host(url_value):
+        raise ManifestError(
+            f"{group}.{name}: direct registry URL {url_value!r} bypasses "
+            "the declared 'forgejo' source; a private package must be "
+            "resolved through the named source, never a direct URL"
+        )
+
+    off_index_keys_present = [key for key in _OFF_INDEX_KEYS if key in spec]
+    if source is None and off_index_keys_present:
+        return _classify_off_index_spec(name, spec, group, permitted_off_index)
+
+    if source is None:
+        return PublicDependency(name=name, group=group)
+
+    if source != FORGEJO_SOURCE_NAME:
+        raise ManifestError(
+            f"{group}.{name}: unrecognised dependency source {source!r}; "
+            f"only {FORGEJO_SOURCE_NAME!r} is a known private source"
+        )
+
+    return _classify_forgejo_spec(name, spec, group)
 
 
 def _forgejo_source_url(poetry: dict[str, Any]) -> str:
@@ -484,12 +668,22 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
         if not isinstance(name, str) or not isinstance(version, str):
             raise ManifestError(f"lock package entry missing name/version: {pkg!r}")
         groups_raw = pkg.get("groups", [])
+        optional_value = pkg.get("optional", False)
+        if not isinstance(optional_value, bool):
+            raise ManifestError(f"lock package {name!r} has a non-boolean optional")
+        python_versions = pkg.get("python-versions", "")
+        if not isinstance(python_versions, str):
+            raise ManifestError(
+                f"lock package {name!r} has a non-string python-versions"
+            )
         packages.append(
             LockPackage(
                 name=name,
                 normalised_name=normalise_name(name),
                 version=version,
                 groups=tuple(sorted(str(g) for g in groups_raw)),
+                optional=optional_value,
+                python_versions=python_versions,
                 dependencies=dict(pkg.get("dependencies", {}) or {}),
                 source_type=str(source["type"]),
                 source_url=str(source["url"]),
@@ -500,14 +694,95 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
     return packages
 
 
-def extract_dependency_surface(project_root: Path) -> DependencySurface:
+def _verify_off_index_lock_entry(
+    dep: ApprovedOffIndexDependency, lock: dict[str, Any]
+) -> None:
+    """The manifest names a TAG; the lock records what that tag RESOLVED to.
+    Requiring `reference` to equal the pinned tag AND `resolved_reference`
+    to equal the pinned commit is what makes manifest, policy, and lock
+    agree — a tag moved upstream between review and lock generation is
+    refused rather than silently adopted."""
+
+    packages_raw = lock.get("package", [])
+    matches = [
+        p for p in packages_raw if isinstance(p, dict) and p.get("name") == dep.name
+    ]
+    if len(matches) != 1:
+        raise ManifestError(
+            f"approved off-index dependency {dep.name!r} must have exactly "
+            f"one poetry.lock entry, found {len(matches)}"
+        )
+    source = matches[0].get("source") or {}
+    if (
+        source.get("type") != "git"
+        or source.get("url") != dep.url
+        or source.get("reference") != dep.tag
+        or source.get("resolved_reference") != dep.resolved_commit
+    ):
+        raise ManifestError(
+            f"approved off-index dependency {dep.name!r}'s lock source does "
+            f"not match its pinned identity: {source!r}"
+        )
+    if not _COMMIT_SHA.match(str(source.get("resolved_reference", ""))):
+        raise ManifestError(
+            f"approved off-index dependency {dep.name!r}'s lock "
+            "resolved_reference is not a 40-hex commit"
+        )
+
+
+def load_permitted_off_index_dependencies(
+    policy: dict[str, Any],
+) -> dict[str, OffIndexPin]:
+    """Parse policy's `permitted_off_index_dependencies` into `OffIndexPin`s.
+
+    This is what makes the policy's off-index allowlist NON-inert: before
+    this function existed and was wired into `extract_dependency_surface`,
+    the policy file's allowlist was reviewed prose that nothing read.
+    """
+
+    raw = policy.get("permitted_off_index_dependencies", {})
+    if not isinstance(raw, dict):
+        raise PolicyError("policy permitted_off_index_dependencies must be a table")
+    result: dict[str, OffIndexPin] = {}
+    for name, entry in raw.items():
+        if not isinstance(entry, dict):
+            raise PolicyError(
+                f"policy permitted_off_index_dependencies.{name} must be a table"
+            )
+        missing = {"url", "tag", "commit"} - set(entry)
+        if missing:
+            raise PolicyError(
+                f"policy permitted_off_index_dependencies.{name} is missing "
+                f"{sorted(missing)}"
+            )
+        commit = entry["commit"]
+        if not isinstance(commit, str) or not _COMMIT_SHA.match(commit):
+            raise PolicyError(
+                f"policy permitted_off_index_dependencies.{name}.commit must "
+                "be a 40-hex commit SHA"
+            )
+        result[name] = OffIndexPin(url=entry["url"], tag=entry["tag"], commit=commit)
+    return result
+
+
+def extract_dependency_surface(
+    project_root: Path, permitted_off_index: Mapping[str, OffIndexPin] | None = None
+) -> DependencySurface:
     """Parse, validate, and extract the private dependency surface from
     `project_root`'s `pyproject.toml` + `poetry.lock`.
+
+    `permitted_off_index` is the policy's off-index allowlist (see
+    `load_permitted_off_index_dependencies`) — defaults to empty, meaning
+    every off-index dependency form is refused; a caller that wants ERP's
+    real, pinned `dotmac-integration-client` exemption must pass it in
+    explicitly, from a loaded policy, never invent it.
 
     Raises `ManifestError` for every unrecognised or disagreeing shape this
     module's docstring and `docs/architecture/dependency-bundle-trust.md`
     enumerate. Never returns a partial surface on a refusal.
     """
+
+    permitted_off_index = permitted_off_index or {}
 
     if (project_root / "poetry.toml").exists():
         raise ManifestError(
@@ -523,24 +798,31 @@ def extract_dependency_surface(project_root: Path) -> DependencySurface:
     groups = _dependency_groups(poetry)
 
     dependencies: list[ForgejoDependency] = []
+    off_index_dependencies: list[ApprovedOffIndexDependency] = []
     seen_by_normalised_name: dict[str, str] = {}
     for group_name, table in groups.items():
         if not isinstance(table, dict):
             raise ManifestError(f"[{group_name}].dependencies must be a table")
         for dep_name, spec in table.items():
-            dep = _classify_dependency(dep_name, spec, group_name)
-            if dep is None:
+            classified = _classify_dependency(
+                dep_name, spec, group_name, permitted_off_index
+            )
+            if isinstance(classified, PublicDependency):
                 continue
-            prior = seen_by_normalised_name.get(dep.normalised_name)
+            identity_name = classified.normalised_name
+            prior = seen_by_normalised_name.get(identity_name)
             if prior is not None:
                 raise ManifestError(
-                    f"forgejo dependency {dep.normalised_name!r} is declared "
-                    f"more than once ({prior!r} and {dep_name!r} in group "
+                    f"dependency {identity_name!r} is declared more than "
+                    f"once ({prior!r} and {dep_name!r} in group "
                     f"{group_name!r}); a duplicate declaration is refused, "
                     "not merged"
                 )
-            seen_by_normalised_name[dep.normalised_name] = dep_name
-            dependencies.append(dep)
+            seen_by_normalised_name[identity_name] = dep_name
+            if isinstance(classified, ForgejoDependency):
+                dependencies.append(classified)
+            else:
+                off_index_dependencies.append(classified)
 
     lock_packages = _lock_packages(lock)
     lock_by_name = {p.normalised_name: p for p in lock_packages}
@@ -558,6 +840,9 @@ def extract_dependency_surface(project_root: Path) -> DependencySurface:
                 "lock disagree"
             )
 
+    for off_index_dep in off_index_dependencies:
+        _verify_off_index_lock_entry(off_index_dep, lock)
+
     target_python = poetry.get("dependencies", {}).get("python")
     if not isinstance(target_python, str) or not target_python:
         raise ManifestError("[tool.poetry.dependencies].python must be a string")
@@ -568,6 +853,7 @@ def extract_dependency_surface(project_root: Path) -> DependencySurface:
         target_python=target_python,
         target_platform=TARGET_PLATFORM,
         dependencies=tuple(dependencies),
+        off_index_dependencies=tuple(off_index_dependencies),
         lock_packages=tuple(lock_packages),
     )
 
@@ -605,9 +891,24 @@ def build_plan_document(surface: DependencySurface) -> dict[str, Any]:
                 "version": dep.version,
                 "markers": dep.markers,
                 "extras": list(dep.extras),
+                "optional": dep.optional,
+                "python": dep.python_constraint,
             }
             for dep in sorted(
                 surface.dependencies, key=lambda d: (d.group, d.normalised_name)
+            )
+        ],
+        "off_index": [
+            {
+                "name": dep.normalised_name,
+                "group": dep.group,
+                "url": dep.url,
+                "tag": dep.tag,
+                "resolved_commit": dep.resolved_commit,
+            }
+            for dep in sorted(
+                surface.off_index_dependencies,
+                key=lambda d: (d.group, d.normalised_name),
             )
         ],
         "lock_packages": [
@@ -615,6 +916,8 @@ def build_plan_document(surface: DependencySurface) -> dict[str, Any]:
                 "name": pkg.normalised_name,
                 "version": pkg.version,
                 "groups": list(pkg.groups),
+                "optional": pkg.optional,
+                "python_versions": pkg.python_versions,
                 "dependencies": pkg.dependencies,
                 "source": {
                     "type": pkg.source_type,
@@ -638,6 +941,47 @@ def compute_plan_digest(surface: DependencySurface) -> str:
 
     payload = PLAN_DIGEST_DOMAIN + canonical_json_bytes(build_plan_document(surface))
     return hashlib.sha256(payload).hexdigest()
+
+
+# ── planned artifacts (the plan's own file/digest closure) ────────────────
+
+
+@dataclass(frozen=True)
+class PlannedArtifact:
+    """One file the plan says must be acquired from the private index —
+    derived from `DependencySurface.lock_packages`, never supplied
+    independently."""
+
+    package_normalised_name: str
+    filename: str
+    sha256: str
+
+
+def planned_artifacts(surface: DependencySurface) -> tuple[PlannedArtifact, ...]:
+    """Every `(filename, sha256)` the plan requires, across every forgejo
+    lock package. This is the plan-side half of the closure `
+    create_bundle_manifest` enforces against the acquired archive."""
+
+    artifacts: list[PlannedArtifact] = []
+    seen: dict[str, PlannedArtifact] = {}
+    for pkg in surface.lock_packages:
+        for f in pkg.files:
+            digest = _bare_sha256(f["hash"])
+            artifact = PlannedArtifact(
+                package_normalised_name=pkg.normalised_name,
+                filename=f["file"],
+                sha256=digest,
+            )
+            prior = seen.get(artifact.filename)
+            if prior is not None and prior != artifact:
+                raise ManifestError(
+                    f"the plan names {artifact.filename!r} twice with "
+                    f"disagreeing digests ({prior.sha256} vs {digest}); "
+                    "ambiguous plan"
+                )
+            seen[artifact.filename] = artifact
+            artifacts.append(artifact)
+    return tuple(sorted(set(artifacts), key=lambda a: a.filename))
 
 
 # ── policy ───────────────────────────────────────────────────────────────
@@ -664,11 +1008,7 @@ def load_policy(path: Path) -> dict[str, Any]:
     """Load and validate `.github/dependency-bundle-policy.json`.
 
     Refuses to return a policy whose `repository.id` is not a real, positive
-    integer immutable GitHub repository ID. **That is the current state of
-    the committed policy file** — see
-    `docs/architecture/dependency-bundle-trust.md` § "Unresolved: the
-    repository ID field" — and this refusal is intentional: nothing may
-    treat that file as trustworthy while the ID is unfilled.
+    integer immutable GitHub repository ID.
     """
 
     try:
@@ -716,7 +1056,15 @@ def load_policy(path: Path) -> dict[str, Any]:
     return data
 
 
-# ── GitHub run/artifact metadata verification ────────────────────────────
+# ── GitHub run/artifact metadata verification (LOCAL ONLY) ────────────────
+#
+# Everything in this section validates a metadata DICT the caller already
+# fetched. It proves internal consistency and agreement with policy; it does
+# NOT prove the dict is what GitHub actually says right now — that requires
+# calling the GitHub API (or otherwise obtaining a provenance attestation)
+# and is explicitly STEP 2, out of scope for this module. Treat a pass here
+# as "this metadata, if genuine, describes an acceptable run" — never as
+# "this metadata is genuine".
 
 _RUN_METADATA_FIELDS = (
     "repository_full_name",
@@ -727,13 +1075,24 @@ _RUN_METADATA_FIELDS = (
     "trusted_workflow_sha",
     "artifact_id",
     "artifact_name",
+    "artifact_run_id",
+    "environment_name",
+)
+
+_POSITIVE_INT_FIELDS = (
+    "repository_id",
+    "run_id",
+    "run_attempt",
+    "artifact_id",
+    "artifact_run_id",
 )
 
 
 @dataclass(frozen=True)
 class RunMetadata:
-    """The verified identity of the GitHub Actions run and artifact a
-    bundle came from."""
+    """The verified-LOCALLY identity of the GitHub Actions run and artifact
+    a bundle claims to come from. See this section's module-level note:
+    this is not provenance."""
 
     repository_full_name: str
     repository_id: int
@@ -743,16 +1102,26 @@ class RunMetadata:
     trusted_workflow_sha: str
     artifact_id: int
     artifact_name: str
+    artifact_run_id: int
+    environment_name: str
 
 
 def verify_run_metadata(
-    metadata: dict[str, Any], policy: dict[str, Any]
+    metadata: dict[str, Any], policy: dict[str, Any], *, expected_plan_digest: str
 ) -> RunMetadata:
     """Verify already-fetched GitHub API run/artifact metadata against
-    policy. This function makes NO network call itself — the caller (a
-    workflow step, using the GitHub CLI or REST API against the run's own
-    credentials) fetches the JSON; this only verifies it. A missing field
-    refuses independently of every other field's presence.
+    policy — LOCAL validation only, described in this section's module-level
+    docstring note. This function makes NO network call itself.
+
+    Requires: the PRODUCER workflow specifically (never the binder path —
+    a binder run is a consumer, not a source of a bundle to trust);
+    positive run/attempt/artifact/repository coordinates; a non-null commit
+    SHA; the artifact's OWN run id matching the run id claimed (so an
+    artifact from a different, unrelated run cannot be attached to this
+    run's identity); the exact required environment name; and an artifact
+    name matching policy's pattern for `expected_plan_digest` — the plan
+    digest the CALLER independently computed from its own candidate surface,
+    never taken from the metadata itself.
     """
 
     missing = [
@@ -768,43 +1137,76 @@ def verify_run_metadata(
             f"{metadata['repository_full_name']!r} does not match policy "
             f"{policy['repository']['full_name']!r}"
         )
+    for field in _POSITIVE_INT_FIELDS:
+        try:
+            value = int(metadata[field])
+        except (TypeError, ValueError) as exc:
+            raise BundleVerificationError(
+                f"run metadata field {field!r} is not integer-shaped: {exc}"
+            ) from exc
+        if isinstance(metadata[field], bool) or value <= 0:
+            raise BundleVerificationError(
+                f"run metadata field {field!r} must be a positive integer, "
+                f"got {metadata[field]!r}"
+            )
     if int(metadata["repository_id"]) != int(policy["repository"]["id"]):
         raise BundleVerificationError(
             "run metadata repository_id does not match policy's immutable "
             "numeric repository ID; a name match alone is not enough "
             "because a repository can be renamed or transferred"
         )
-    if metadata["workflow_path"] not in (
-        policy["producer_workflow_path"],
-        policy["binder_workflow_path"],
-    ):
+    if metadata["workflow_path"] != policy["producer_workflow_path"]:
         raise BundleVerificationError(
             f"run metadata workflow_path {metadata['workflow_path']!r} is "
-            "neither the policy's producer nor binder workflow path"
+            "not the policy's PRODUCER workflow path; only a producer run "
+            "may be the source of a bundle"
         )
     trusted_sha = str(metadata["trusted_workflow_sha"])
+    if trusted_sha == _NULL_SHA:
+        raise BundleVerificationError(
+            "trusted_workflow_sha is the all-zero null SHA, which is never "
+            "a real commit"
+        )
     if not _COMMIT_SHA.match(trusted_sha):
         raise BundleVerificationError(
             f"trusted_workflow_sha must be a 40-hex commit SHA, got {trusted_sha!r}"
         )
-    try:
-        run_id = int(metadata["run_id"])
-        run_attempt = int(metadata["run_attempt"])
-        artifact_id = int(metadata["artifact_id"])
-        repository_id = int(metadata["repository_id"])
-    except (TypeError, ValueError) as exc:
+    if int(metadata["artifact_run_id"]) != int(metadata["run_id"]):
         raise BundleVerificationError(
-            f"run metadata carries a non-integer identifier: {exc}"
-        ) from exc
+            "artifact_run_id does not match run_id; the artifact does not "
+            "belong to the claimed run"
+        )
+    if metadata["environment_name"] != policy["environment_name"]:
+        raise BundleVerificationError(
+            f"run metadata environment_name {metadata['environment_name']!r} "
+            f"does not match policy {policy['environment_name']!r}"
+        )
+    if not isinstance(expected_plan_digest, str) or not _SHA256_HEX.match(
+        expected_plan_digest
+    ):
+        raise BundleVerificationError(
+            "expected_plan_digest must be a 64-hex sha256 string"
+        )
+    expected_artifact_name = policy["artifact_name_pattern"].format(
+        plan_digest=expected_plan_digest
+    )
+    if metadata["artifact_name"] != expected_artifact_name:
+        raise BundleVerificationError(
+            f"run metadata artifact_name {metadata['artifact_name']!r} does "
+            f"not match the expected {expected_artifact_name!r} for this "
+            "plan digest"
+        )
     return RunMetadata(
         repository_full_name=str(metadata["repository_full_name"]),
-        repository_id=repository_id,
+        repository_id=int(metadata["repository_id"]),
         workflow_path=str(metadata["workflow_path"]),
-        run_id=run_id,
-        run_attempt=run_attempt,
+        run_id=int(metadata["run_id"]),
+        run_attempt=int(metadata["run_attempt"]),
         trusted_workflow_sha=trusted_sha,
-        artifact_id=artifact_id,
+        artifact_id=int(metadata["artifact_id"]),
         artifact_name=str(metadata["artifact_name"]),
+        artifact_run_id=int(metadata["artifact_run_id"]),
+        environment_name=str(metadata["environment_name"]),
     )
 
 
@@ -946,7 +1348,7 @@ def scan_for_credential(paths: Iterable[Path], credential: str) -> list[str]:
     return found
 
 
-# ── archive digest + safe extraction ──────────────────────────────────────
+# ── archive digest ─────────────────────────────────────────────────────
 
 
 def verify_archive_digest(archive_path: Path, expected_sha256: str) -> str:
@@ -973,6 +1375,9 @@ def verify_archive_digest(archive_path: Path, expected_sha256: str) -> str:
     return digest
 
 
+# ── safe, private, atomic extraction ───────────────────────────────────
+
+
 def _is_within(base: Path, target: Path) -> bool:
     try:
         target.relative_to(base)
@@ -981,33 +1386,51 @@ def _is_within(base: Path, target: Path) -> bool:
     return True
 
 
-def safe_extract_zip(
-    archive_path: Path, dest_dir: Path, expected_members: dict[str, int]
+def _extract_zip_members(
+    archive_path: Path, staging_dir: Path, expected_members: dict[str, int]
 ) -> list[str]:
-    """Extract `archive_path` into `dest_dir`, refusing anything the verified
-    bundle manifest did not name.
+    """Extract `archive_path` into `staging_dir`, refusing anything the
+    verified bundle manifest did not name.
+
+    PRIVATE: this writes into a caller-supplied staging directory and
+    performs no publication step and no cleanup of its own — callers MUST
+    go through `extract_verified_bundle`, which stages, verifies, and
+    publishes atomically, and which cleans up a failed staging directory.
+    Nothing outside this module should extract a ZIP without going through
+    that verified path.
 
     `expected_members` is the exact `{member_name: declared_uncompressed_size}`
     mapping taken from the already-verified bundle manifest — never derived
     from the archive itself. Refuses: a duplicate member name, an absolute
-    path, a `..` traversal segment, a symlink, a member whose name is not in
-    `expected_members`, an `expected_members` entry the archive does not
-    contain, a size mismatch against the declared/verified size, a member
-    over `MAX_MEMBER_BYTES`, and — during extraction, independent of the
+    path, a `..` traversal segment, a symlink, a member whose RESOLVED
+    target collides with another member's (e.g. `a.whl` and `./a.whl`), a
+    member whose name is not in `expected_members`, an `expected_members`
+    entry the archive does not contain, a size mismatch against the
+    declared/verified size, a member over `MAX_MEMBER_BYTES`, more than
+    `MAX_MEMBER_COUNT` members, more than `MAX_TOTAL_UNCOMPRESSED_BYTES` in
+    aggregate, a member whose compression ratio exceeds
+    `MAX_COMPRESSION_RATIO`, and — during extraction, independent of the
     declared size — any member whose actual bytes exceed the declared size
-    (the zip-bomb guard: a lying declared size buys nothing).
+    (the zip-bomb guard: a lying declared size does not buy more).
     """
 
-    dest_dir = dest_dir.resolve()
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    staging_dir = staging_dir.resolve()
+    staging_dir.mkdir(parents=True, exist_ok=True)
     extracted: list[str] = []
     with zipfile.ZipFile(archive_path) as archive:
         infos = archive.infolist()
+        if len(infos) > MAX_MEMBER_COUNT:
+            raise ExtractionError(
+                f"archive contains {len(infos)} members, exceeding the "
+                f"{MAX_MEMBER_COUNT}-member cap"
+            )
         names = [info.filename for info in infos]
         if len(names) != len(set(names)):
             raise ExtractionError("archive contains a duplicate member name")
 
         seen_lower: dict[str, str] = {}
+        seen_resolved: dict[Path, str] = {}
+        total_declared_size = 0
         for info in infos:
             name = info.filename
             if name not in expected_members:
@@ -1033,12 +1456,20 @@ def safe_extract_zip(
                 raise ExtractionError(
                     f"archive member {name!r} contains a path-traversal segment"
                 )
-            resolved_target = (dest_dir / name).resolve()
-            if not _is_within(dest_dir, resolved_target):
+            resolved_target = (staging_dir / name).resolve()
+            if not _is_within(staging_dir, resolved_target):
                 raise ExtractionError(
                     f"archive member {name!r} resolves outside the "
                     "destination directory"
                 )
+            if resolved_target in seen_resolved:
+                raise ExtractionError(
+                    f"archive members {seen_resolved[resolved_target]!r} and "
+                    f"{name!r} resolve to the SAME target path "
+                    f"({resolved_target}); a platform-separator or "
+                    "relative-segment alias is refused"
+                )
+            seen_resolved[resolved_target] = name
 
             mode = info.external_attr >> 16
             if stat.S_ISLNK(mode):
@@ -1055,6 +1486,20 @@ def safe_extract_zip(
                     f"archive member {name!r} declares {declared_size} bytes, "
                     f"exceeding the {MAX_MEMBER_BYTES}-byte per-member cap"
                 )
+            if info.compress_size > 0:
+                ratio = declared_size / info.compress_size
+                if ratio > MAX_COMPRESSION_RATIO:
+                    raise ExtractionError(
+                        f"archive member {name!r} has a compression ratio of "
+                        f"{ratio:.1f}, exceeding the {MAX_COMPRESSION_RATIO}x "
+                        "cap; refusing as a suspected zip bomb"
+                    )
+            total_declared_size += declared_size
+            if total_declared_size > MAX_TOTAL_UNCOMPRESSED_BYTES:
+                raise ExtractionError(
+                    "archive's aggregate declared uncompressed size exceeds "
+                    f"the {MAX_TOTAL_UNCOMPRESSED_BYTES}-byte cap"
+                )
 
         for expected_name in expected_members:
             if expected_name not in names:
@@ -1063,8 +1508,9 @@ def safe_extract_zip(
                     f"{expected_name!r}, which the archive does not contain"
                 )
 
+        running_total = 0
         for info in infos:
-            target = dest_dir / info.filename
+            target = staging_dir / info.filename
             target.parent.mkdir(parents=True, exist_ok=True)
             written = 0
             with archive.open(info) as source, open(target, "wb") as sink:
@@ -1073,12 +1519,19 @@ def safe_extract_zip(
                     if not chunk:
                         break
                     written += len(chunk)
+                    running_total += len(chunk)
                     if written > MAX_MEMBER_BYTES:
                         raise ExtractionError(
                             f"archive member {info.filename!r} exceeded the "
                             f"{MAX_MEMBER_BYTES}-byte cap while extracting "
                             "(declared size cannot be trusted; this is the "
                             "zip-bomb guard)"
+                        )
+                    if running_total > MAX_TOTAL_UNCOMPRESSED_BYTES:
+                        raise ExtractionError(
+                            "aggregate extracted bytes exceeded "
+                            f"{MAX_TOTAL_UNCOMPRESSED_BYTES}; refusing (zip-"
+                            "bomb guard)"
                         )
                     sink.write(chunk)
             if written != info.file_size:
@@ -1092,8 +1545,8 @@ def safe_extract_zip(
 
 def verify_member_hashes(dest_dir: Path, expected_hashes: dict[str, str]) -> None:
     """Verify every extracted file's content hash against the verified
-    bundle manifest's per-member hash. Independent of `safe_extract_zip`'s
-    size checks — this is the content proof, not the shape proof."""
+    bundle manifest's per-member hash. Independent of extraction's size
+    checks — this is the content proof, not the shape proof."""
 
     for name, expected_hex in expected_hashes.items():
         if not isinstance(expected_hex, str) or not _SHA256_HEX.match(expected_hex):
@@ -1105,7 +1558,7 @@ def verify_member_hashes(dest_dir: Path, expected_hashes: dict[str, str]) -> Non
             raise BundleVerificationError(
                 f"expected extracted member {name!r} is missing on disk"
             )
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digest = sha256_hex(path.read_bytes())
         if digest != expected_hex:
             raise BundleVerificationError(
                 f"extracted member {name!r} hash mismatch: expected "
@@ -1113,40 +1566,162 @@ def verify_member_hashes(dest_dir: Path, expected_hashes: dict[str, str]) -> Non
             )
 
 
+def extract_verified_bundle(
+    archive_path: Path, dest_dir: Path, bundle_manifest: dict[str, Any]
+) -> list[str]:
+    """The ONLY sanctioned way to extract a bundle archive.
+
+    Extracts into a FRESH, EXCLUSIVE staging directory (never `dest_dir`
+    directly), verifies every member's size (via `_extract_zip_members`)
+    and content hash (via `verify_member_hashes`) THERE, and only then
+    publishes the complete, verified tree to `dest_dir` with a single atomic
+    rename. `dest_dir` must not already exist — this function materialises a
+    fresh tree, it does not merge into or overwrite one. On ANY failure —
+    an unsafe member, a hash mismatch, or an unexpected error — the staging
+    directory is removed and NOTHING is written to `dest_dir`; a caller
+    never observes a partially-extracted destination.
+    """
+
+    if dest_dir.exists():
+        raise ExtractionError(
+            f"destination {dest_dir} already exists; extract_verified_bundle "
+            "materialises a fresh tree and refuses to merge into or "
+            "overwrite one"
+        )
+    members = bundle_manifest.get("members")
+    if not isinstance(members, dict) or not members:
+        raise BundleVerificationError("bundle manifest carries no members to extract")
+    expected_sizes: dict[str, int] = {}
+    expected_hashes: dict[str, str] = {}
+    for name, record in members.items():
+        if (
+            not isinstance(record, dict)
+            or not isinstance(record.get("size"), int)
+            or isinstance(record.get("size"), bool)
+            or record["size"] <= 0
+            or not isinstance(record.get("sha256"), str)
+            or not _SHA256_HEX.match(record["sha256"])
+        ):
+            raise BundleVerificationError(
+                f"bundle manifest member {name!r} is malformed: {record!r}"
+            )
+        expected_sizes[name] = record["size"]
+        expected_hashes[name] = record["sha256"]
+
+    dest_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = Path(
+        tempfile.mkdtemp(prefix=f".{dest_dir.name}.staging.", dir=str(dest_dir.parent))
+    )
+    try:
+        extracted = _extract_zip_members(archive_path, staging_dir, expected_sizes)
+        verify_member_hashes(staging_dir, expected_hashes)
+    except BaseException:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
+
+    try:
+        os.rename(staging_dir, dest_dir)
+    except OSError:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
+    return extracted
+
+
 # ── canonical bundle manifest ──────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class AcquiredMember:
+    """One file the producer job actually downloaded and hashed, before it
+    is bound into a manifest against the plan."""
+
+    filename: str
+    sha256: str
+    size: int
 
 
 def create_bundle_manifest(
     *,
-    plan_digest: str,
+    surface: DependencySurface,
+    acquired_members: Mapping[str, AcquiredMember],
     run: RunMetadata,
     archive_sha256: str,
-    member_hashes: dict[str, str],
     schema_version: int = MANIFEST_SCHEMA_VERSION,
 ) -> dict[str, Any]:
-    """Build the canonical bundle manifest — the one document a binder
-    trusts in place of re-deriving everything from scratch. Every input is
-    independently shape-checked; nothing here silently defaults a missing
-    field."""
+    """Build the canonical bundle manifest by COMPUTING every binding from
+    `surface` and `acquired_members` — never accepting a bare plan digest or
+    member-hash mapping as independent, uncorrelated scalars.
 
-    if not _SHA256_HEX.match(plan_digest):
-        raise BundleVerificationError("plan_digest must be a 64-hex sha256 string")
+    This is what makes "plan A's digest attached to plan B's files" a
+    structural impossibility rather than something every individual check
+    happens to miss: `plan_digest` is derived from `surface` itself, and the
+    manifest requires EXACT plan-to-member closure against that SAME
+    surface's `planned_artifacts` — every planned `(filename, sha256)` must
+    be present in `acquired_members` with an agreeing digest, and every
+    acquired member must be named by the plan. There is only one surface
+    input, so there is no seam at which a second plan's identity could be
+    substituted for the files.
+    """
+
     if not _SHA256_HEX.match(archive_sha256):
         raise BundleVerificationError("archive_sha256 must be a 64-hex sha256 string")
-    if not member_hashes:
+
+    planned = planned_artifacts(surface)
+    if not planned:
         raise BundleVerificationError(
-            "a bundle manifest must name at least one contained member"
+            "a dependency surface with no forgejo-hosted files cannot "
+            "produce a bundle manifest"
         )
-    for name, digest in member_hashes.items():
-        if not isinstance(digest, str) or not _SHA256_HEX.match(digest):
+    planned_by_filename = {artifact.filename: artifact for artifact in planned}
+    planned_names = set(planned_by_filename)
+    acquired_names = set(acquired_members)
+
+    missing = planned_names - acquired_names
+    if missing:
+        raise BundleVerificationError(
+            f"the plan requires {sorted(missing)}, which were not acquired"
+        )
+    extra = acquired_names - planned_names
+    if extra:
+        raise BundleVerificationError(
+            f"{sorted(extra)} were acquired but the plan does not name them; "
+            "every acquired member must be accounted for by the plan"
+        )
+
+    members: dict[str, dict[str, Any]] = {}
+    for filename, planned_artifact in sorted(planned_by_filename.items()):
+        acquired = acquired_members[filename]
+        if not isinstance(acquired.sha256, str) or not _SHA256_HEX.match(
+            acquired.sha256
+        ):
             raise BundleVerificationError(
-                f"member {name!r} hash must be a 64-hex sha256 string"
+                f"{filename!r} was acquired with a malformed digest {acquired.sha256!r}"
             )
+        if acquired.sha256 != planned_artifact.sha256:
+            raise BundleVerificationError(
+                f"{filename!r} was acquired with digest {acquired.sha256}, "
+                f"but the plan requires {planned_artifact.sha256}"
+            )
+        if (
+            not isinstance(acquired.size, int)
+            or isinstance(acquired.size, bool)
+            or acquired.size <= 0
+        ):
+            raise BundleVerificationError(
+                f"{filename!r} carries a non-positive size {acquired.size!r}"
+            )
+        members[filename] = {
+            "sha256": acquired.sha256,
+            "size": acquired.size,
+            "package": planned_artifact.package_normalised_name,
+        }
+
+    plan_digest = compute_plan_digest(surface)
     return {
         "schema_version": schema_version,
         "plan_digest": plan_digest,
         "archive_sha256": archive_sha256,
-        "members": dict(sorted(member_hashes.items())),
+        "members": members,
         "run": {
             "repository_full_name": run.repository_full_name,
             "repository_id": run.repository_id,
@@ -1156,6 +1731,8 @@ def create_bundle_manifest(
             "trusted_workflow_sha": run.trusted_workflow_sha,
             "artifact_id": run.artifact_id,
             "artifact_name": run.artifact_name,
+            "artifact_run_id": run.artifact_run_id,
+            "environment_name": run.environment_name,
         },
     }
 
@@ -1177,18 +1754,18 @@ def build_local_index(
 
     root_dir = index_root / "simple"
     root_dir.mkdir(parents=True, exist_ok=True)
-    for normalised_name, files in packages.items():
-        if normalised_name != normalise_name(normalised_name):
+    for normalised_pkg_name, files in packages.items():
+        if normalised_pkg_name != normalise_name(normalised_pkg_name):
             raise BundleVerificationError(
-                f"package key {normalised_name!r} is not PEP-503-normalised"
+                f"package key {normalised_pkg_name!r} is not PEP-503-normalised"
             )
-        pkg_dir = root_dir / normalised_name
+        pkg_dir = root_dir / normalised_pkg_name
         pkg_dir.mkdir(parents=True, exist_ok=True)
         anchors = []
-        for filename, sha256_hex, source_path in sorted(files, key=lambda t: t[0]):
-            if not _SHA256_HEX.match(sha256_hex):
+        for filename, digest_hex, source_path in sorted(files, key=lambda t: t[0]):
+            if not _SHA256_HEX.match(digest_hex):
                 raise BundleVerificationError(
-                    f"{filename!r} carries a malformed sha256 {sha256_hex!r}"
+                    f"{filename!r} carries a malformed sha256 {digest_hex!r}"
                 )
             if not source_path.is_file():
                 raise BundleVerificationError(
@@ -1196,7 +1773,7 @@ def build_local_index(
                 )
             (pkg_dir / filename).write_bytes(source_path.read_bytes())
             anchors.append(
-                f'<a href="{filename}#sha256={sha256_hex}">{filename}</a><br/>'
+                f'<a href="{filename}#sha256={digest_hex}">{filename}</a><br/>'
             )
         (pkg_dir / "index.html").write_text(
             "<!DOCTYPE html><html><body>\n" + "\n".join(anchors) + "\n</body></html>\n",
@@ -1233,8 +1810,8 @@ def bind_bundle_to_candidate(
 
     `candidate_plan_digest` must be independently recomputed by the caller
     from the CANDIDATE's own checked-out `pyproject.toml`/`poetry.lock`
-    (`compute_plan_digest(extract_dependency_surface(candidate_root))`) —
-    never taken as a bare string from the candidate. Refuses if the
+    (`compute_plan_digest(extract_dependency_surface(candidate_root, ...))`)
+    — never taken as a bare string from the candidate. Refuses if the
     candidate's digest disagrees with the bundle's: a candidate whose
     private dependency surface does not match gets no bundle, not a
     downgraded warning.
@@ -1285,7 +1862,11 @@ def bind_bundle_to_candidate(
 
 
 def _cmd_plan_digest(args: argparse.Namespace) -> int:
-    surface = extract_dependency_surface(Path(args.project_root))
+    permitted_off_index = {}
+    if args.policy:
+        policy = load_policy(Path(args.policy))
+        permitted_off_index = load_permitted_off_index_dependencies(policy)
+    surface = extract_dependency_surface(Path(args.project_root), permitted_off_index)
     digest = compute_plan_digest(surface)
     if args.document:
         print(json.dumps(build_plan_document(surface), sort_keys=True, indent=2))
@@ -1320,6 +1901,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="compute the plan digest for a project's pyproject.toml + poetry.lock",
     )
     plan_digest.add_argument("project_root", help="directory containing both files")
+    plan_digest.add_argument(
+        "--policy",
+        help="path to .github/dependency-bundle-policy.json, for the "
+        "off-index allowlist",
+    )
     plan_digest.add_argument(
         "--document",
         action="store_true",
